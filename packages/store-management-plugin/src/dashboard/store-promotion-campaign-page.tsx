@@ -1,6 +1,7 @@
 import {
     Alert,
     AlertDescription,
+    AnyRoute,
     Badge,
     Button,
     DashboardRouteDefinition,
@@ -10,6 +11,11 @@ import {
     DialogFooter,
     DialogHeader,
     DialogTitle,
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
     Input,
     Label,
     Page,
@@ -32,6 +38,9 @@ import {
     SheetTitle,
     Skeleton,
     Switch,
+    Tabs,
+    TabsList,
+    TabsTrigger,
     UnsavedChangesConfirmation,
     api,
     toast,
@@ -43,19 +52,43 @@ import {
 import {
     BadgePercent,
     Ban,
+    BarChart3,
+    CalendarClock,
+    ChevronLeft,
+    ChevronRight,
     Download,
     Flame,
+    ListChecks,
+    MoreHorizontal,
     Pencil,
     Plus,
     RefreshCw,
+    Search,
     ShieldAlert,
+    TicketCheck,
     Trash2,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 import {
+    CouponKindFilter,
+    CouponLedgerEventFilter,
+    CouponRouteSearch,
+    CouponStatusFilter,
+    CouponView,
+    couponIssuanceStatus,
+    couponKindFilters,
+    couponLedgerEvents,
+    couponStatusFilters,
+    couponViews,
+    normalizeCouponRouteSearch,
+} from './store-promotion-campaign-route';
+import {
     StoreCouponDailyReportResult,
+    StoreCouponFormOptionsResult,
     StoreCouponKind,
+    StoreCouponLedgerResult,
+    StoreFlashSalesResult,
     StorePromotionCampaignsResult,
     StorePromotionProductsResult,
     createStoreCouponCampaignMutation,
@@ -64,8 +97,11 @@ import {
     revokeStoreCouponCampaignOutstandingMutation,
     setStorePromotionEnabledMutation,
     stopStoreCouponIssuanceMutation,
+    storeCouponCampaignsQuery,
     storeCouponDailyReportQuery,
-    storePromotionCampaignsQuery,
+    storeCouponFormOptionsQuery,
+    storeCouponLedgerQuery,
+    storeFlashSalesQuery,
     storePromotionProductsQuery,
     updateStorePromotionNameMutation,
 } from './store-promotion-campaign.graphql';
@@ -131,11 +167,22 @@ const couponLedgerEventLabels = {
     REFUND_SETTLED: '退款完成',
 } as const;
 
-function CampaignMetric({ label, value }: { label: string; value: string | number }) {
+function CampaignMetric({
+    label,
+    value,
+    detail,
+}: {
+    label: string;
+    value: string | number;
+    detail?: string;
+}) {
     return (
-        <div>
-            <span className="block text-muted-foreground">{label}</span>
-            <strong className="mt-1 block text-sm">{value}</strong>
+        <div className="min-w-0">
+            <span className="block text-[11px] font-medium text-muted-foreground">{label}</span>
+            <strong className="mt-1 block truncate text-sm tabular-nums">{value}</strong>
+            {detail ? (
+                <small className="mt-0.5 block truncate text-[11px] text-muted-foreground">{detail}</small>
+            ) : null}
         </div>
     );
 }
@@ -193,116 +240,164 @@ function CouponReport({
     const dailyFinancialTotals = mergeFinancialTotals(dailyMetrics);
 
     return (
-        <div className="space-y-4">
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-                <ReportMetric label="累计发放" value={`${totals.claimed} 张`} />
-                <ReportMetric
-                    label="当前已用"
-                    value={`${totals.used} 张`}
-                    detail={`占发放 ${formatRate(totals.used, totals.claimed)}`}
-                />
-                <ReportMetric
-                    label="当前可用"
-                    value={`${totals.available} 张`}
-                    detail={`购物车锁定 ${totals.locked} 张`}
-                />
-                <ReportMetric label="历史核销订单" value={`${totals.orders} 单`} />
-                <ReportMetric
-                    label="历史优惠金额"
-                    value={formatFinancialValues(financialTotals, 'discountAmountTotal')}
-                />
-                <ReportMetric
-                    label="优惠券归因订单金额"
-                    value={formatFinancialValues(financialTotals, 'assistedRevenueTotal')}
-                    detail={`含后续退款订单 · 产出比 ${formatFinancialMultiples(financialTotals)}`}
-                />
-            </div>
-            <div className="flex items-center justify-between gap-3">
-                <p className="text-xs text-muted-foreground">
-                    当前共 {coupons.length} 个优惠券活动、{totals.orders} 个历史核销订单，其中{' '}
-                    {totals.refundedOrders}{' '}
-                    个发生全额退款；数据来自领取记录和订单优惠分摊。跨活动合计按券归因，
-                    叠加多张券的同一订单会分别计入对应活动。
-                </p>
-                <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    disabled={!coupons.length}
-                    onClick={() => exportCouponReport(coupons, currencyCode)}
+        <div className="space-y-6">
+            <div className="grid gap-4 xl:grid-cols-2">
+                <section
+                    className="rounded-xl border border-primary/20 bg-primary/5 p-5 dark:bg-primary/10"
+                    aria-labelledby="coupon-usage-title"
                 >
-                    <Download className="size-4" />
-                    导出 CSV
-                </Button>
+                    <div className="flex items-start gap-3">
+                        <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                            <TicketCheck className="size-4" aria-hidden="true" />
+                        </span>
+                        <div>
+                            <h3 id="coupon-usage-title" className="text-sm font-semibold">
+                                发放与使用
+                            </h3>
+                            <p className="mt-1 text-xs text-muted-foreground">当前券库存和历史核销概况</p>
+                        </div>
+                    </div>
+                    <div className="mt-5 grid grid-cols-2 gap-x-5 gap-y-5 sm:grid-cols-4">
+                        <ReportMetric label="累计发放" value={`${totals.claimed} 张`} />
+                        <ReportMetric
+                            label="当前已用"
+                            value={`${totals.used} 张`}
+                            detail={`使用率 ${formatRate(totals.used, totals.claimed)}`}
+                        />
+                        <ReportMetric
+                            label="当前可用"
+                            value={`${totals.available} 张`}
+                            detail={`锁定 ${totals.locked} 张`}
+                        />
+                        <ReportMetric
+                            label="核销订单"
+                            value={`${totals.orders} 单`}
+                            detail={`退款 ${totals.refundedOrders} 单`}
+                        />
+                    </div>
+                </section>
+                <section
+                    className="rounded-xl border border-success/20 bg-success/5 p-5 dark:bg-success/10"
+                    aria-labelledby="coupon-value-title"
+                >
+                    <div className="flex items-start gap-3">
+                        <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-success/10 text-success-text dark:bg-success/20">
+                            <BarChart3 className="size-4" aria-hidden="true" />
+                        </span>
+                        <div>
+                            <h3 id="coupon-value-title" className="text-sm font-semibold">
+                                成交贡献
+                            </h3>
+                            <p className="mt-1 text-xs text-muted-foreground">优惠成本与归因订单金额</p>
+                        </div>
+                    </div>
+                    <div className="mt-5 grid grid-cols-2 gap-5">
+                        <ReportMetric
+                            label="历史优惠金额"
+                            value={formatFinancialValues(financialTotals, 'discountAmountTotal')}
+                        />
+                        <ReportMetric
+                            label="带动成交"
+                            value={formatFinancialValues(financialTotals, 'assistedRevenueTotal')}
+                            detail={`产出比 ${formatFinancialMultiples(financialTotals)}`}
+                        />
+                    </div>
+                </section>
             </div>
-            <div className="overflow-x-auto rounded-lg border">
-                <table className="w-full min-w-[1450px] text-left text-sm">
-                    <thead className="border-b bg-muted/30 text-xs text-muted-foreground">
-                        <tr>
-                            <ReportHeading>活动</ReportHeading>
-                            <ReportHeading>类型</ReportHeading>
-                            <ReportHeading>发放状态</ReportHeading>
-                            <ReportHeading align="right">发放</ReportHeading>
-                            <ReportHeading align="right">可用</ReportHeading>
-                            <ReportHeading align="right">锁定</ReportHeading>
-                            <ReportHeading align="right">当前已用</ReportHeading>
-                            <ReportHeading align="right">当前已用率</ReportHeading>
-                            <ReportHeading align="right">当前返还</ReportHeading>
-                            <ReportHeading align="right">当前过期</ReportHeading>
-                            <ReportHeading align="right">当前作废</ReportHeading>
-                            <ReportHeading align="right">历史核销订单</ReportHeading>
-                            <ReportHeading align="right">退款订单</ReportHeading>
-                            <ReportHeading align="right">历史优惠金额</ReportHeading>
-                            <ReportHeading align="right">优惠券归因订单金额</ReportHeading>
-                            <ReportHeading align="right">优惠产出比</ReportHeading>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {coupons.map(coupon => (
-                            <tr key={coupon.id} className="border-b last:border-0">
-                                <td className="max-w-60 px-3 py-3 font-medium">{coupon.name}</td>
-                                <td className="px-3 py-3">{couponKindLabels[coupon.kind]}</td>
-                                <td className="px-3 py-3">
-                                    <Badge variant={couponIssuanceIsActive(coupon) ? 'default' : 'secondary'}>
-                                        {couponIssuanceStatusLabel(coupon)}
-                                    </Badge>
-                                </td>
-                                <ReportCell>{coupon.claimedCount}</ReportCell>
-                                <ReportCell>{coupon.availableCount}</ReportCell>
-                                <ReportCell>{coupon.lockedCount}</ReportCell>
-                                <ReportCell>{coupon.usedCount}</ReportCell>
-                                <ReportCell>{formatRate(coupon.usedCount, coupon.claimedCount)}</ReportCell>
-                                <ReportCell>{coupon.returnedCount}</ReportCell>
-                                <ReportCell>{coupon.expiredCount}</ReportCell>
-                                <ReportCell>{coupon.revokedCount}</ReportCell>
-                                <ReportCell>{coupon.redeemedOrderCount}</ReportCell>
-                                <ReportCell>{coupon.refundedOrderCount}</ReportCell>
-                                <ReportCell>
-                                    {formatFinancialValues(coupon.financialTotals, 'discountAmountTotal')}
-                                </ReportCell>
-                                <ReportCell>
-                                    {formatFinancialValues(coupon.financialTotals, 'assistedRevenueTotal')}
-                                </ReportCell>
-                                <ReportCell>{formatFinancialMultiples(coupon.financialTotals)}</ReportCell>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-                {!coupons.length ? (
-                    <p className="px-4 py-8 text-center text-sm text-muted-foreground">
-                        暂无可统计的优惠券活动。
-                    </p>
-                ) : null}
-            </div>
-            <div className="space-y-3 rounded-lg border p-4">
+
+            <section className="space-y-3" aria-labelledby="coupon-campaign-report-title">
                 <div>
-                    <h3 className="text-sm font-semibold">每日发放与使用趋势</h3>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                        日期区间统计事件发生量；开始和结束日期均包含在内，单次最多查询 366 天。
-                        成交金额按优惠券归因，同一订单叠加多张券时会分别归因。
+                    <h3 id="coupon-campaign-report-title" className="text-sm font-semibold">
+                        按活动查看
+                    </h3>
+                    <p className="mt-1 max-w-3xl text-xs leading-relaxed text-muted-foreground">
+                        数据来自领取记录和订单优惠分摊；叠加多张券时，同一订单会分别归因到对应活动。
                     </p>
                 </div>
-                <div className="grid gap-3 md:grid-cols-3">
+                <div className="overflow-x-auto rounded-lg border">
+                    <table className="w-full min-w-[1120px] text-left text-sm">
+                        <thead className="border-b bg-muted/30 text-xs text-muted-foreground">
+                            <tr>
+                                <ReportHeading>活动</ReportHeading>
+                                <ReportHeading>发放状态</ReportHeading>
+                                <ReportHeading align="right">发放</ReportHeading>
+                                <ReportHeading align="right">可用</ReportHeading>
+                                <ReportHeading align="right">当前已用</ReportHeading>
+                                <ReportHeading align="right">核销订单</ReportHeading>
+                                <ReportHeading align="right">历史优惠金额</ReportHeading>
+                                <ReportHeading align="right">带动成交</ReportHeading>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {coupons.map(coupon => (
+                                <tr
+                                    key={coupon.id}
+                                    className="border-b transition-colors last:border-0 hover:bg-muted/20"
+                                >
+                                    <td className="max-w-72 px-3 py-3">
+                                        <span className="block truncate font-medium">{coupon.name}</span>
+                                        <small className="mt-0.5 block text-muted-foreground">
+                                            {couponKindLabels[coupon.kind]}
+                                        </small>
+                                    </td>
+                                    <td className="px-3 py-3">
+                                        <Badge variant={couponStatusBadgeVariant(coupon)}>
+                                            {couponIssuanceStatusLabel(coupon)}
+                                        </Badge>
+                                    </td>
+                                    <ReportCell>{coupon.claimedCount}</ReportCell>
+                                    <ReportCell detail={`锁定 ${coupon.lockedCount}`}>
+                                        {coupon.availableCount}
+                                    </ReportCell>
+                                    <ReportCell
+                                        detail={[
+                                            `使用率 ${formatRate(coupon.usedCount, coupon.claimedCount)}`,
+                                            `返还 ${coupon.returnedCount}`,
+                                            `过期 ${coupon.expiredCount}`,
+                                            `作废 ${coupon.revokedCount}`,
+                                        ].join(' · ')}
+                                    >
+                                        {coupon.usedCount}
+                                    </ReportCell>
+                                    <ReportCell detail={`退款 ${coupon.refundedOrderCount}`}>
+                                        {coupon.redeemedOrderCount}
+                                    </ReportCell>
+                                    <ReportCell>
+                                        {formatFinancialValues(coupon.financialTotals, 'discountAmountTotal')}
+                                    </ReportCell>
+                                    <ReportCell
+                                        detail={`产出比 ${formatFinancialMultiples(coupon.financialTotals)}`}
+                                    >
+                                        {formatFinancialValues(
+                                            coupon.financialTotals,
+                                            'assistedRevenueTotal',
+                                        )}
+                                    </ReportCell>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                    {!coupons.length ? (
+                        <p className="px-4 py-8 text-center text-sm text-muted-foreground">
+                            暂无可统计的优惠券活动。
+                        </p>
+                    ) : null}
+                </div>
+            </section>
+
+            <section
+                className="space-y-4 rounded-xl border bg-card p-4 sm:p-5"
+                aria-labelledby="coupon-daily-title"
+            >
+                <div>
+                    <h3 id="coupon-daily-title" className="text-sm font-semibold">
+                        每日发放与使用趋势
+                    </h3>
+                    <p className="mt-1 max-w-3xl text-xs leading-relaxed text-muted-foreground">
+                        按日期查询领取、核销和退款变化；开始和结束日期均包含在内，单次最多查询 366 天。
+                    </p>
+                </div>
+                <div className="grid gap-3 rounded-lg border bg-muted/20 p-4 md:grid-cols-3">
                     <FormField label="开始日期">
                         <Input
                             type="date"
@@ -340,19 +435,29 @@ function CouponReport({
                         </Select>
                     </FormField>
                 </div>
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                    <ReportMetric label="区间发放" value={`${dailyTotals.claimed} 张`} />
-                    <ReportMetric label="区间核销订单" value={`${dailyTotals.redeemed} 单`} />
-                    <ReportMetric label="区间退款订单" value={`${dailyTotals.refunded} 单`} />
-                    <ReportMetric
-                        label="区间优惠金额"
-                        value={formatFinancialValues(dailyFinancialTotals, 'discountAmountTotal')}
-                    />
-                    <ReportMetric
-                        label="区间归因订单金额"
-                        value={formatFinancialValues(dailyFinancialTotals, 'assistedRevenueTotal')}
-                        detail={`产出比 ${formatFinancialMultiples(dailyFinancialTotals)}`}
-                    />
+                <div className="grid gap-px overflow-hidden rounded-lg border bg-border sm:grid-cols-2 lg:grid-cols-5">
+                    <div className="bg-card p-4">
+                        <ReportMetric label="区间发放" value={`${dailyTotals.claimed} 张`} />
+                    </div>
+                    <div className="bg-card p-4">
+                        <ReportMetric label="区间核销订单" value={`${dailyTotals.redeemed} 单`} />
+                    </div>
+                    <div className="bg-card p-4">
+                        <ReportMetric label="区间退款订单" value={`${dailyTotals.refunded} 单`} />
+                    </div>
+                    <div className="bg-card p-4">
+                        <ReportMetric
+                            label="区间优惠金额"
+                            value={formatFinancialValues(dailyFinancialTotals, 'discountAmountTotal')}
+                        />
+                    </div>
+                    <div className="bg-card p-4">
+                        <ReportMetric
+                            label="区间归因订单金额"
+                            value={formatFinancialValues(dailyFinancialTotals, 'assistedRevenueTotal')}
+                            detail={`产出比 ${formatFinancialMultiples(dailyFinancialTotals)}`}
+                        />
+                    </div>
                 </div>
                 <div className="flex justify-end">
                     <Button
@@ -416,24 +521,32 @@ function CouponReport({
                                 当前日期区间没有优惠券发放或使用数据。
                             </p>
                         ) : null}
-                        {reportPending ? (
-                            <p className="px-4 py-8 text-center text-sm text-muted-foreground">
-                                正在加载区间报表…
-                            </p>
-                        ) : null}
+                        {reportPending ? <ReportTableSkeleton /> : null}
                     </div>
                 )}
-            </div>
+            </section>
         </div>
     );
 }
 
 function ReportMetric({ label, value, detail }: { label: string; value: string; detail?: string }) {
     return (
-        <div className="rounded-lg border bg-card p-4">
-            <span className="text-xs text-muted-foreground">{label}</span>
-            <strong className="mt-1 block text-xl">{value}</strong>
-            {detail ? <small className="mt-1 block text-muted-foreground">{detail}</small> : null}
+        <div className="min-w-0">
+            <span className="text-xs font-medium text-muted-foreground">{label}</span>
+            <strong className="mt-1.5 block truncate text-xl font-semibold tracking-tight tabular-nums">
+                {value}
+            </strong>
+            {detail ? <small className="mt-1 block text-xs text-muted-foreground">{detail}</small> : null}
+        </div>
+    );
+}
+
+function ReportTableSkeleton() {
+    return (
+        <div className="space-y-3 p-4" aria-label="正在加载区间报表">
+            <Skeleton className="h-8 w-full" />
+            <Skeleton className="h-8 w-full" />
+            <Skeleton className="h-8 w-4/5" />
         </div>
     );
 }
@@ -454,8 +567,491 @@ function ReportHeading({
     );
 }
 
-function ReportCell({ children }: { children: React.ReactNode }) {
-    return <td className="whitespace-nowrap px-3 py-3 text-right tabular-nums">{children}</td>;
+function ReportCell({ children, detail }: { children: React.ReactNode; detail?: string }) {
+    return (
+        <td className="whitespace-nowrap px-3 py-3 text-right tabular-nums">
+            <span className="block">{children}</span>
+            {detail ? (
+                <small className="mt-0.5 block text-[11px] text-muted-foreground">{detail}</small>
+            ) : null}
+        </td>
+    );
+}
+
+function CouponCampaignList({
+    coupons,
+    search,
+    kind,
+    status,
+    actionPending,
+    onCreate,
+    onEdit,
+    onAction,
+    onSearchChange,
+    onKindChange,
+    onStatusChange,
+}: {
+    coupons: StorePromotionCampaignsResult['storeCouponCampaigns'];
+    search: string;
+    kind: CouponKindFilter;
+    status: CouponStatusFilter;
+    actionPending: boolean;
+    onCreate: () => void;
+    onEdit: (promotion: { id: string; name: string }) => void;
+    onAction: (action: SensitivePromotionAction) => void;
+    onSearchChange: (value: string) => void;
+    onKindChange: (value: CouponKindFilter) => void;
+    onStatusChange: (value: CouponStatusFilter) => void;
+}) {
+    const normalizedSearch = search.trim().toLocaleLowerCase('zh-CN');
+    const filteredCoupons = coupons.filter(coupon => {
+        const matchesSearch =
+            !normalizedSearch || coupon.name.toLocaleLowerCase('zh-CN').includes(normalizedSearch);
+        const matchesKind = kind === 'ALL' || coupon.kind === kind;
+        const matchesStatus = status === 'ALL' || couponIssuanceStatus(coupon) === status;
+        return matchesSearch && matchesKind && matchesStatus;
+    });
+    const hasFilters = Boolean(normalizedSearch || kind !== 'ALL' || status !== 'ALL');
+
+    return (
+        <section className="space-y-4" aria-labelledby="coupon-campaign-list-title">
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                    <h3 id="coupon-campaign-list-title" className="text-sm font-semibold">
+                        优惠券活动
+                    </h3>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                        先看发放状态和使用表现，需要时再进入敏感操作。
+                    </p>
+                </div>
+                <span className="text-xs tabular-nums text-muted-foreground">
+                    显示 {filteredCoupons.length} / {coupons.length} 个活动
+                </span>
+            </div>
+
+            <div className="grid gap-3 rounded-xl border bg-muted/20 p-3 md:grid-cols-[minmax(14rem,1fr)_12rem_12rem]">
+                <div className="relative">
+                    <Search
+                        className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                        aria-hidden="true"
+                    />
+                    <Input
+                        value={search}
+                        className="pl-9"
+                        maxLength={120}
+                        aria-label="搜索优惠券活动"
+                        placeholder="搜索活动名称"
+                        onChange={event => onSearchChange(event.target.value)}
+                    />
+                </div>
+                <Select
+                    value={status}
+                    onValueChange={value =>
+                        value && couponStatusFilters.includes(value) && onStatusChange(value)
+                    }
+                >
+                    <SelectTrigger className="w-full" aria-label="筛选发放状态">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="ALL">全部状态</SelectItem>
+                        <SelectItem value="ACTIVE">发放中</SelectItem>
+                        <SelectItem value="SCHEDULED">待开始</SelectItem>
+                        <SelectItem value="EXHAUSTED">已领完</SelectItem>
+                        <SelectItem value="STOPPED">已停止或停用</SelectItem>
+                    </SelectContent>
+                </Select>
+                <Select
+                    value={kind}
+                    onValueChange={value => value && couponKindFilters.includes(value) && onKindChange(value)}
+                >
+                    <SelectTrigger className="w-full" aria-label="筛选优惠券类型">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="ALL">全部类型</SelectItem>
+                        {(Object.keys(couponKindLabels) as StoreCouponKind[]).map(couponKind => (
+                            <SelectItem key={couponKind} value={couponKind}>
+                                {couponKindLabels[couponKind]}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </div>
+
+            {filteredCoupons.length ? (
+                <div className="space-y-3">
+                    {filteredCoupons.map(coupon => (
+                        <article
+                            key={coupon.id}
+                            className={`rounded-xl border border-l-4 bg-card p-4 transition-colors hover:bg-muted/20 sm:p-5 ${couponStatusAccentClass(coupon)}`}
+                        >
+                            <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                                <div className="min-w-0 flex-1">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <Badge variant={couponStatusBadgeVariant(coupon)}>
+                                            {couponIssuanceStatusLabel(coupon)}
+                                        </Badge>
+                                        <Badge variant="outline">{couponKindLabels[coupon.kind]}</Badge>
+                                    </div>
+                                    <h4 className="mt-3 truncate text-base font-semibold tracking-tight">
+                                        {coupon.name}
+                                    </h4>
+                                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                                        {couponSummary(coupon)}
+                                    </p>
+                                    <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs text-muted-foreground">
+                                        <span className="inline-flex items-center gap-1.5">
+                                            <CalendarClock className="size-3.5" aria-hidden="true" />
+                                            {formatDateRange(coupon.claimStartsAt, coupon.claimEndsAt)}
+                                        </span>
+                                        <span className="inline-flex items-center gap-1.5">
+                                            <TicketCheck className="size-3.5" aria-hidden="true" />
+                                            {coupon.remainingIssueCount == null
+                                                ? '发放数量不限'
+                                                : `剩余可发 ${coupon.remainingIssueCount} 张`}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+                                    <Button
+                                        type="button"
+                                        size="icon-sm"
+                                        variant="ghost"
+                                        aria-label={`修改优惠券名称：${coupon.name}`}
+                                        disabled={actionPending}
+                                        onClick={() => onEdit({ id: coupon.id, name: coupon.name })}
+                                    >
+                                        <Pencil className="size-4" />
+                                    </Button>
+                                    {couponIssuanceCanBeStopped(coupon) ? (
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="outline"
+                                            disabled={actionPending}
+                                            onClick={() =>
+                                                onAction({
+                                                    kind: 'STOP_ISSUANCE',
+                                                    id: coupon.id,
+                                                    name: coupon.name,
+                                                    claimedCount: coupon.claimedCount,
+                                                })
+                                            }
+                                        >
+                                            停止发放
+                                        </Button>
+                                    ) : null}
+                                    {coupon.availableCount + coupon.returnedCount + coupon.lockedCount > 0 ||
+                                    coupon.claimedCount === 0 ? (
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger
+                                                render={
+                                                    <Button
+                                                        type="button"
+                                                        size="icon-sm"
+                                                        variant="ghost"
+                                                        aria-label={`更多优惠券操作：${coupon.name}`}
+                                                        disabled={actionPending}
+                                                    />
+                                                }
+                                            >
+                                                <MoreHorizontal className="size-4" />
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end" className="min-w-44">
+                                                {coupon.availableCount +
+                                                    coupon.returnedCount +
+                                                    coupon.lockedCount >
+                                                0 ? (
+                                                    <DropdownMenuItem
+                                                        className="text-destructive"
+                                                        onClick={() =>
+                                                            onAction({
+                                                                kind: 'REVOKE_OUTSTANDING',
+                                                                id: coupon.id,
+                                                                name: coupon.name,
+                                                                affectedCount:
+                                                                    coupon.availableCount +
+                                                                    coupon.returnedCount +
+                                                                    coupon.lockedCount,
+                                                            })
+                                                        }
+                                                    >
+                                                        <Ban className="size-4" />
+                                                        作废未使用券
+                                                    </DropdownMenuItem>
+                                                ) : null}
+                                                {coupon.availableCount +
+                                                    coupon.returnedCount +
+                                                    coupon.lockedCount >
+                                                    0 && coupon.claimedCount === 0 ? (
+                                                    <DropdownMenuSeparator />
+                                                ) : null}
+                                                {coupon.claimedCount === 0 ? (
+                                                    <DropdownMenuItem
+                                                        className="text-destructive"
+                                                        onClick={() =>
+                                                            onAction({
+                                                                kind: 'DELETE_COUPON',
+                                                                id: coupon.id,
+                                                                name: coupon.name,
+                                                            })
+                                                        }
+                                                    >
+                                                        <Trash2 className="size-4" />
+                                                        删除活动
+                                                    </DropdownMenuItem>
+                                                ) : null}
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
+                                    ) : null}
+                                </div>
+                            </div>
+
+                            <div className="mt-4 grid grid-cols-1 gap-px overflow-hidden rounded-lg border bg-border sm:grid-cols-3">
+                                <div className="bg-card p-3.5">
+                                    <CampaignMetric
+                                        label="累计领取"
+                                        value={`${coupon.claimedCount} 张`}
+                                        detail={
+                                            coupon.issueLimit == null
+                                                ? '发放总量不限'
+                                                : `计划发放 ${coupon.issueLimit} 张`
+                                        }
+                                    />
+                                </div>
+                                <div className="bg-card p-3.5">
+                                    <CampaignMetric
+                                        label="当前可用"
+                                        value={`${coupon.availableCount} 张`}
+                                        detail={`购物车锁定 ${coupon.lockedCount} 张`}
+                                    />
+                                </div>
+                                <div className="bg-card p-3.5">
+                                    <CampaignMetric
+                                        label="已使用"
+                                        value={`${coupon.usedCount} 张`}
+                                        detail={`使用率 ${formatRate(coupon.usedCount, coupon.claimedCount)}`}
+                                    />
+                                </div>
+                            </div>
+
+                            {coupon.claimedCount > 0 ? (
+                                <p className="mt-3 text-[11px] text-muted-foreground">
+                                    已产生发放记录，活动不可删除；停止发放不会影响客户已领取的优惠券。
+                                </p>
+                            ) : null}
+                        </article>
+                    ))}
+                </div>
+            ) : !coupons.length ? (
+                <div className="flex flex-col items-center rounded-xl border border-dashed px-6 py-12 text-center">
+                    <div className="flex size-10 items-center justify-center rounded-lg bg-muted">
+                        <BadgePercent className="size-5 text-muted-foreground" aria-hidden="true" />
+                    </div>
+                    <h4 className="mt-4 text-sm font-semibold">还没有优惠券活动</h4>
+                    <p className="mt-1 max-w-sm text-xs leading-relaxed text-muted-foreground">
+                        创建第一张券后，可在这里查看发放状态、使用表现和成交贡献。
+                    </p>
+                    <Button type="button" size="sm" className="mt-4" onClick={onCreate}>
+                        <Plus className="size-4" />
+                        新建优惠券活动
+                    </Button>
+                </div>
+            ) : (
+                <div className="flex flex-col items-center rounded-xl border border-dashed px-6 py-10 text-center">
+                    <Search className="size-5 text-muted-foreground" aria-hidden="true" />
+                    <h4 className="mt-3 text-sm font-semibold">没有符合条件的活动</h4>
+                    <p className="mt-1 max-w-sm text-xs leading-relaxed text-muted-foreground">
+                        调整搜索词或筛选条件后再试。
+                    </p>
+                    {hasFilters ? (
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="mt-4"
+                            onClick={() => {
+                                onSearchChange('');
+                                onKindChange('ALL');
+                                onStatusChange('ALL');
+                            }}
+                        >
+                            清除筛选
+                        </Button>
+                    ) : null}
+                </div>
+            )}
+        </section>
+    );
+}
+
+function CouponLedger({
+    ledger,
+    campaigns,
+    currencyCode,
+    campaignId,
+    eventType,
+    page,
+    pageSize,
+    onCampaignChange,
+    onEventTypeChange,
+    onPageChange,
+}: {
+    ledger: StoreCouponLedgerResult['storeCouponLedger'];
+    campaigns: StoreCouponLedgerResult['storeCouponCampaigns'];
+    currencyCode: string;
+    campaignId: string;
+    eventType: CouponLedgerEventFilter;
+    page: number;
+    pageSize: number;
+    onCampaignChange: (value: string) => void;
+    onEventTypeChange: (value: CouponLedgerEventFilter) => void;
+    onPageChange: (value: number) => void;
+}) {
+    const pageCount = Math.max(1, Math.ceil(ledger.totalItems / pageSize));
+
+    return (
+        <section className="space-y-4" aria-labelledby="coupon-ledger-title">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                    <h3 id="coupon-ledger-title" className="text-sm font-semibold">
+                        优惠券使用流水
+                    </h3>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                        记录领取、锁定、核销、返还、过期和退款事件。
+                    </p>
+                </div>
+                <span className="text-xs tabular-nums text-muted-foreground">共 {ledger.totalItems} 条</span>
+            </div>
+            <div className="grid gap-3 rounded-xl border border-warning/20 bg-warning/5 p-3 dark:bg-warning/10 sm:grid-cols-2">
+                <FormField label="优惠券活动">
+                    <Select value={campaignId} onValueChange={value => value && onCampaignChange(value)}>
+                        <SelectTrigger className="w-full">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="ALL">全部活动</SelectItem>
+                            {campaigns.map(campaign => (
+                                <SelectItem key={campaign.id} value={campaign.id}>
+                                    {campaign.name}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </FormField>
+                <FormField label="事件类型">
+                    <Select
+                        value={eventType}
+                        onValueChange={value =>
+                            value && couponLedgerEvents.includes(value) && onEventTypeChange(value)
+                        }
+                    >
+                        <SelectTrigger className="w-full">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="ALL">全部事件</SelectItem>
+                            {couponLedgerEvents
+                                .filter(event => event !== 'ALL')
+                                .map(event => (
+                                    <SelectItem key={event} value={event}>
+                                        {couponLedgerEventLabels[event]}
+                                    </SelectItem>
+                                ))}
+                        </SelectContent>
+                    </Select>
+                </FormField>
+            </div>
+            <div className="overflow-x-auto rounded-lg border">
+                <table className="w-full min-w-[820px] text-left text-sm">
+                    <thead className="border-b bg-muted/30 text-xs text-muted-foreground">
+                        <tr>
+                            <th className="px-3 py-2 font-medium">时间</th>
+                            <th className="px-3 py-2 font-medium">事件</th>
+                            <th className="px-3 py-2 font-medium">优惠券</th>
+                            <th className="px-3 py-2 font-medium">客户</th>
+                            <th className="px-3 py-2 font-medium">订单</th>
+                            <th className="px-3 py-2 text-right font-medium">优惠金额</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {ledger.items.map(entry => (
+                            <tr
+                                key={entry.id}
+                                className="border-b transition-colors last:border-0 hover:bg-muted/20"
+                            >
+                                <td className="whitespace-nowrap px-3 py-3 text-xs">
+                                    {new Date(entry.createdAt).toLocaleString()}
+                                </td>
+                                <td className="px-3 py-3">
+                                    <Badge variant={couponLedgerBadgeVariant(entry.eventType)}>
+                                        {couponLedgerEventLabels[entry.eventType]}
+                                    </Badge>
+                                </td>
+                                <td className="max-w-64 px-3 py-3 font-medium">
+                                    <span className="block truncate">{entry.campaignName}</span>
+                                </td>
+                                <td className="px-3 py-3">
+                                    <div>{entry.customerName}</div>
+                                    <small className="text-muted-foreground">{entry.customerEmail}</small>
+                                </td>
+                                <td className="px-3 py-3">
+                                    {entry.orderCode ?? '—'}
+                                    {entry.refundId ? (
+                                        <small className="block text-muted-foreground">
+                                            退款 #{entry.refundId}
+                                        </small>
+                                    ) : null}
+                                </td>
+                                <td className="whitespace-nowrap px-3 py-3 text-right tabular-nums">
+                                    {entry.discountAmount == null
+                                        ? '—'
+                                        : formatMoney(entry.discountAmount, currencyCode)}
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+                {!ledger.items.length ? (
+                    <div className="px-4 py-10 text-center">
+                        <p className="text-sm font-medium">暂无优惠券流水</p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                            客户领取或使用优惠券后，相关事件会显示在这里。
+                        </p>
+                    </div>
+                ) : null}
+            </div>
+            <div className="flex flex-col gap-3 border-t pt-4 text-sm sm:flex-row sm:items-center sm:justify-between">
+                <span className="text-xs tabular-nums text-muted-foreground">
+                    第 {Math.min(page, pageCount)} / {pageCount} 页，每页 {pageSize} 条
+                </span>
+                <div className="flex items-center gap-2">
+                    <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={page <= 1}
+                        onClick={() => onPageChange(page - 1)}
+                    >
+                        <ChevronLeft className="size-4" />
+                        上一页
+                    </Button>
+                    <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={page >= pageCount}
+                        onClick={() => onPageChange(page + 1)}
+                    >
+                        下一页
+                        <ChevronRight className="size-4" />
+                    </Button>
+                </div>
+            </div>
+        </section>
+    );
 }
 
 export const storeCouponCampaignRoute: DashboardRouteDefinition = {
@@ -469,8 +1065,9 @@ export const storeCouponCampaignRoute: DashboardRouteDefinition = {
         requiresPermission: ['ReadPromotion'],
     },
     path: '/store-coupons',
+    validateSearch: search => normalizeCouponRouteSearch(search),
     loader: () => ({ breadcrumb: () => '优惠券' }),
-    component: () => <StorePromotionCampaignPage mode="COUPONS" />,
+    component: route => <StorePromotionCampaignPage mode="COUPONS" route={route} />,
 };
 
 export const storeFlashSaleRoute: DashboardRouteDefinition = {
@@ -485,29 +1082,103 @@ export const storeFlashSaleRoute: DashboardRouteDefinition = {
     },
     path: '/store-flash-sales',
     loader: () => ({ breadcrumb: () => '限时秒杀' }),
-    component: () => <StorePromotionCampaignPage mode="FLASH_SALES" />,
+    component: route => <StorePromotionCampaignPage mode="FLASH_SALES" route={route} />,
 };
 
 /** Keeps existing bookmarks working while the two business areas use separate navigation. */
 export const storePromotionCampaignRoute: DashboardRouteDefinition = {
     path: '/store-promotion-campaigns',
+    validateSearch: search => normalizeCouponRouteSearch(search),
     loader: () => ({ breadcrumb: () => '优惠券' }),
-    component: () => <StorePromotionCampaignPage mode="COUPONS" />,
+    component: route => <LegacyCouponRouteRedirect route={route} />,
 };
 
-function StorePromotionCampaignPage({ mode }: { mode: 'COUPONS' | 'FLASH_SALES' }) {
+function LegacyCouponRouteRedirect({ route }: { route: AnyRoute }) {
+    const navigate = route.useNavigate();
+    const search = useRef(normalizeCouponRouteSearch(route.useSearch())).current;
+
+    useEffect(() => {
+        void navigate({ to: '/store-coupons', search: { ...search, view: 'campaigns' }, replace: true });
+    }, [navigate, search]);
+
+    return (
+        <Page pageId="store-coupons-redirect">
+            <PageTitle>优惠券</PageTitle>
+            <PageLayout>
+                <PageBlock column="full" blockId="store-coupon-redirect" title="正在打开优惠券管理">
+                    <div className="space-y-3 py-3" aria-label="正在跳转到优惠券管理">
+                        <Skeleton className="h-10 w-full max-w-xl" />
+                        <Skeleton className="h-24 w-full" />
+                    </div>
+                </PageBlock>
+            </PageLayout>
+        </Page>
+    );
+}
+
+function StorePromotionCampaignPage({ mode, route }: { mode: 'COUPONS' | 'FLASH_SALES'; route: AnyRoute }) {
     const { activeChannel } = useChannel();
     const queryClient = useQueryClient();
-    const queryKey = ['store-promotion-campaigns', activeChannel?.id];
-    const [reportFilter, setReportFilter] = useState<CouponReportFilter>(defaultCouponReportFilter);
+    const navigate = route.useNavigate();
+    const routeSearch = normalizeCouponRouteSearch(route.useSearch());
+    const view = routeSearch.view;
+    const reportFilter: CouponReportFilter = {
+        from: routeSearch.from,
+        to: routeSearch.to,
+        campaignId: routeSearch.campaignId,
+    };
     const [couponOpen, setCouponOpen] = useState(false);
     const [flashOpen, setFlashOpen] = useState(false);
     const [sensitiveAction, setSensitiveAction] = useState<SensitivePromotionAction | null>(null);
     const [editingName, setEditingName] = useState<{ id: string; name: string } | null>(null);
-    const query = useQuery({
-        queryKey,
-        queryFn: () => api.query<StorePromotionCampaignsResult>(storePromotionCampaignsQuery),
-        enabled: Boolean(activeChannel?.id),
+    const previousChannelId = useRef(activeChannel?.id);
+    const couponCampaignsQueryKey = ['store-coupon-campaigns', activeChannel?.id] as const;
+    const couponLedgerQueryKey = ['store-coupon-ledger', activeChannel?.id] as const;
+    const couponDailyReportQueryKey = ['store-coupon-daily-report', activeChannel?.id] as const;
+    const flashSalesQueryKey = ['store-flash-sales', activeChannel?.id] as const;
+    const updateCouponSearch = (updates: Partial<CouponRouteSearch>, replace = true) => {
+        const search = normalizeCouponRouteSearch({ ...routeSearch, ...updates });
+        void navigate({ to: '/store-coupons', search, replace });
+    };
+
+    useEffect(() => {
+        if (
+            previousChannelId.current &&
+            activeChannel?.id &&
+            previousChannelId.current !== activeChannel.id &&
+            routeSearch.page !== 1
+        ) {
+            updateCouponSearch({ page: 1 });
+        }
+        previousChannelId.current = activeChannel?.id;
+    }, [activeChannel?.id, routeSearch.page]);
+
+    const couponQuery = useQuery({
+        queryKey: couponCampaignsQueryKey,
+        queryFn: () => api.query<StorePromotionCampaignsResult>(storeCouponCampaignsQuery),
+        enabled: mode === 'COUPONS' && view !== 'ledger' && Boolean(activeChannel?.id),
+    });
+    const ledgerPageSize = 20;
+    const ledgerQuery = useQuery({
+        queryKey: [...couponLedgerQueryKey, routeSearch.campaignId, routeSearch.eventType, routeSearch.page],
+        queryFn: () =>
+            api.query<StoreCouponLedgerResult>(storeCouponLedgerQuery, {
+                skip: (routeSearch.page - 1) * ledgerPageSize,
+                take: ledgerPageSize,
+                campaignId: routeSearch.campaignId === 'ALL' ? null : routeSearch.campaignId,
+                eventType: routeSearch.eventType === 'ALL' ? null : routeSearch.eventType,
+            }),
+        enabled: mode === 'COUPONS' && view === 'ledger' && Boolean(activeChannel?.id),
+    });
+    const flashSalesQuery = useQuery({
+        queryKey: flashSalesQueryKey,
+        queryFn: () => api.query<StoreFlashSalesResult>(storeFlashSalesQuery),
+        enabled: mode === 'FLASH_SALES' && Boolean(activeChannel?.id),
+    });
+    const couponFormOptionsQuery = useQuery({
+        queryKey: ['store-coupon-form-options', activeChannel?.id],
+        queryFn: () => api.query<StoreCouponFormOptionsResult>(storeCouponFormOptionsQuery),
+        enabled: mode === 'COUPONS' && couponOpen && Boolean(activeChannel?.id),
     });
     const reportValidationError = couponReportFilterError(reportFilter);
     const reportQuery = useQuery({
@@ -524,16 +1195,23 @@ function StorePromotionCampaignPage({ mode }: { mode: 'COUPONS' | 'FLASH_SALES' 
                 to: reportDateExclusiveEnd(reportFilter.to),
                 campaignId: reportFilter.campaignId === 'ALL' ? null : reportFilter.campaignId,
             }),
-        enabled: mode === 'COUPONS' && Boolean(activeChannel?.id) && !reportValidationError,
+        enabled:
+            mode === 'COUPONS' && view === 'report' && Boolean(activeChannel?.id) && !reportValidationError,
     });
-    const refresh = async () => {
-        await Promise.all([
-            queryClient.invalidateQueries({ queryKey }),
-            queryClient.invalidateQueries({
-                queryKey: ['store-coupon-daily-report', activeChannel?.id],
-            }),
-        ]);
-    };
+    const invalidateCouponCampaigns = () =>
+        queryClient.invalidateQueries({ queryKey: couponCampaignsQueryKey });
+    const invalidateCouponLedger = () => queryClient.invalidateQueries({ queryKey: couponLedgerQueryKey });
+    const invalidateCouponReport = () =>
+        queryClient.invalidateQueries({ queryKey: couponDailyReportQueryKey });
+    const invalidateFlashSales = () => queryClient.invalidateQueries({ queryKey: flashSalesQueryKey });
+
+    useEffect(() => {
+        const totalItems = ledgerQuery.data?.storeCouponLedger.totalItems;
+        if (view !== 'ledger' || totalItems == null) return;
+        const lastPage = Math.max(1, Math.ceil(totalItems / ledgerPageSize));
+        if (routeSearch.page > lastPage) updateCouponSearch({ page: lastPage });
+    }, [ledgerQuery.data?.storeCouponLedger.totalItems, routeSearch.page, view]);
+
     const sensitiveMutation = useMutation({
         mutationFn: ({ action, password }: { action: SensitivePromotionAction; password: string }) => {
             if (action.kind === 'TOGGLE') {
@@ -569,7 +1247,15 @@ function StorePromotionCampaignPage({ mode }: { mode: 'COUPONS' | 'FLASH_SALES' 
                 toast.success('活动已删除');
             }
             setSensitiveAction(null);
-            await refresh();
+            if (variables.action.kind === 'TOGGLE' || variables.action.kind === 'DELETE_FLASH_SALE') {
+                await invalidateFlashSales();
+                return;
+            }
+            const invalidations: Array<Promise<unknown>> = [invalidateCouponCampaigns()];
+            if (variables.action.kind === 'REVOKE_OUTSTANDING') {
+                invalidations.push(invalidateCouponLedger(), invalidateCouponReport());
+            }
+            await Promise.all(invalidations);
         },
         onError: error => toast.error(errorMessage(error)),
     });
@@ -579,10 +1265,15 @@ function StorePromotionCampaignPage({ mode }: { mode: 'COUPONS' | 'FLASH_SALES' 
         onSuccess: async () => {
             toast.success('活动名称已更新');
             setEditingName(null);
-            await refresh();
+            await (mode === 'COUPONS' ? invalidateCouponCampaigns() : invalidateFlashSales());
         },
         onError: error => toast.error(errorMessage(error)),
     });
+    const coupons = couponQuery.data?.storeCouponCampaigns ?? [];
+    const ledger = ledgerQuery.data?.storeCouponLedger ?? { items: [], totalItems: 0 };
+    const couponCount =
+        couponQuery.data?.storeCouponCampaigns.length ?? ledgerQuery.data?.storeCouponCampaigns.length;
+    const couponViewCopy = couponPageCopy(view);
 
     return (
         <Page pageId={mode === 'COUPONS' ? 'store-coupons' : 'store-flash-sales'}>
@@ -590,10 +1281,35 @@ function StorePromotionCampaignPage({ mode }: { mode: 'COUPONS' | 'FLASH_SALES' 
             <PageActionBar>
                 <PageActionBarRight>
                     {mode === 'COUPONS' ? (
-                        <Button onClick={() => setCouponOpen(true)}>
-                            <BadgePercent className="size-4" aria-hidden="true" />
-                            新建优惠券活动
-                        </Button>
+                        view === 'campaigns' ? (
+                            <Button onClick={() => setCouponOpen(true)}>
+                                <BadgePercent className="size-4" aria-hidden="true" />
+                                新建优惠券活动
+                            </Button>
+                        ) : view === 'report' ? (
+                            <Button
+                                variant="outline"
+                                disabled={!coupons.length || couponQuery.isPending}
+                                onClick={() =>
+                                    exportCouponReport(coupons, activeChannel?.defaultCurrencyCode ?? 'CNY')
+                                }
+                            >
+                                <Download className="size-4" aria-hidden="true" />
+                                导出活动报表
+                            </Button>
+                        ) : (
+                            <Button
+                                variant="outline"
+                                disabled={ledgerQuery.isFetching}
+                                onClick={() => void ledgerQuery.refetch()}
+                            >
+                                <RefreshCw
+                                    className={`size-4 ${ledgerQuery.isFetching ? 'animate-spin' : ''}`}
+                                    aria-hidden="true"
+                                />
+                                刷新流水
+                            </Button>
+                        )
                     ) : (
                         <Button onClick={() => setFlashOpen(true)}>
                             <Flame className="size-4" aria-hidden="true" />
@@ -604,241 +1320,133 @@ function StorePromotionCampaignPage({ mode }: { mode: 'COUPONS' | 'FLASH_SALES' 
             </PageActionBar>
             <PageLayout>
                 {mode === 'COUPONS' ? (
-                    <>
-                        <PageBlock
-                            column="full"
-                            blockId="store-coupon-campaigns"
-                            title="优惠券"
-                            description="创建满减、消费折扣、分类折扣和单品折扣券；客户在前台领取，结算时由真实 Promotion 规则计算。"
-                        >
-                            <CampaignState query={query} onRetry={() => void query.refetch()}>
-                                <div className="grid gap-3 lg:grid-cols-2">
-                                    {query.data?.storeCouponCampaigns.map(coupon => (
-                                        <div key={coupon.id} className="rounded-lg border p-4">
-                                            <div className="flex items-start justify-between gap-4">
-                                                <div className="min-w-0">
-                                                    <div className="flex flex-wrap items-center gap-2">
-                                                        <strong className="truncate text-sm">
-                                                            {coupon.name}
-                                                        </strong>
-                                                        <Badge variant="outline">
-                                                            {couponKindLabels[coupon.kind]}
-                                                        </Badge>
-                                                        <Badge
-                                                            variant={
-                                                                couponIssuanceIsActive(coupon)
-                                                                    ? 'default'
-                                                                    : 'secondary'
-                                                            }
-                                                        >
-                                                            {couponIssuanceStatusLabel(coupon)}
-                                                        </Badge>
-                                                    </div>
-                                                    <p className="mt-1 text-xs text-muted-foreground">
-                                                        {couponSummary(coupon)}
-                                                    </p>
-                                                    <p className="mt-1 text-xs text-muted-foreground">
-                                                        领取 {coupon.claimedCount} · 已用 {coupon.usedCount} ·
-                                                        返还 {coupon.returnedCount} · 过期{' '}
-                                                        {coupon.expiredCount}
-                                                    </p>
-                                                </div>
-                                                <div className="flex flex-wrap items-center justify-end gap-2">
-                                                    <Button
-                                                        type="button"
-                                                        size="icon-sm"
-                                                        variant="ghost"
-                                                        aria-label="修改优惠券名称"
-                                                        onClick={() =>
-                                                            setEditingName({
-                                                                id: coupon.id,
-                                                                name: coupon.name,
-                                                            })
-                                                        }
-                                                    >
-                                                        <Pencil className="size-4" />
-                                                    </Button>
-                                                    {couponIssuanceCanBeStopped(coupon) ? (
-                                                        <Button
-                                                            type="button"
-                                                            size="sm"
-                                                            variant="outline"
-                                                            onClick={() =>
-                                                                setSensitiveAction({
-                                                                    kind: 'STOP_ISSUANCE',
-                                                                    id: coupon.id,
-                                                                    name: coupon.name,
-                                                                    claimedCount: coupon.claimedCount,
-                                                                })
-                                                            }
-                                                        >
-                                                            停止发放
-                                                        </Button>
-                                                    ) : null}
-                                                    {coupon.availableCount +
-                                                        coupon.returnedCount +
-                                                        coupon.lockedCount >
-                                                    0 ? (
-                                                        <Button
-                                                            type="button"
-                                                            size="sm"
-                                                            variant="outline"
-                                                            onClick={() =>
-                                                                setSensitiveAction({
-                                                                    kind: 'REVOKE_OUTSTANDING',
-                                                                    id: coupon.id,
-                                                                    name: coupon.name,
-                                                                    affectedCount:
-                                                                        coupon.availableCount +
-                                                                        coupon.returnedCount +
-                                                                        coupon.lockedCount,
-                                                                })
-                                                            }
-                                                        >
-                                                            <Ban className="size-4" />
-                                                            作废未使用券
-                                                        </Button>
-                                                    ) : null}
-                                                    {coupon.claimedCount === 0 ? (
-                                                        <Button
-                                                            type="button"
-                                                            size="icon-sm"
-                                                            variant="ghost"
-                                                            aria-label="删除优惠券"
-                                                            onClick={() =>
-                                                                setSensitiveAction({
-                                                                    kind: 'DELETE_COUPON',
-                                                                    id: coupon.id,
-                                                                    name: coupon.name,
-                                                                })
-                                                            }
-                                                        >
-                                                            <Trash2 className="size-4" />
-                                                        </Button>
-                                                    ) : null}
-                                                </div>
-                                            </div>
-                                            <div className="mt-3 grid grid-cols-2 gap-2 border-t pt-3 text-xs sm:grid-cols-4">
-                                                <CampaignMetric
-                                                    label="可用券"
-                                                    value={coupon.availableCount}
-                                                />
-                                                <CampaignMetric
-                                                    label="核销订单"
-                                                    value={coupon.redeemedOrderCount}
-                                                />
-                                                <CampaignMetric
-                                                    label="优惠金额"
-                                                    value={formatMoney(
-                                                        coupon.discountAmountTotal,
-                                                        activeChannel?.defaultCurrencyCode ?? 'CNY',
-                                                    )}
-                                                />
-                                                <CampaignMetric
-                                                    label="带动成交"
-                                                    value={formatMoney(
-                                                        coupon.assistedRevenueTotal,
-                                                        activeChannel?.defaultCurrencyCode ?? 'CNY',
-                                                    )}
-                                                />
-                                            </div>
-                                            {coupon.claimedCount > 0 ? (
-                                                <p className="mt-3 text-xs text-muted-foreground">
-                                                    已产生发放记录，活动不可删除；可以停止发放或作废未使用券。
-                                                </p>
+                    <PageBlock
+                        column="full"
+                        blockId="store-coupon-center"
+                        title={couponViewCopy.title}
+                        description={couponViewCopy.description}
+                    >
+                        <div className="space-y-6">
+                            <Tabs
+                                value={view}
+                                onValueChange={value => {
+                                    if (couponViews.includes(value as CouponView)) {
+                                        updateCouponSearch({ view: value as CouponView }, false);
+                                    }
+                                }}
+                            >
+                                <nav aria-label="优惠券模块" className="overflow-x-auto pb-1">
+                                    <TabsList className="flex h-auto min-w-max justify-start gap-1 p-1">
+                                        <TabsTrigger
+                                            value="campaigns"
+                                            className="min-w-36 shrink-0 gap-2 py-2.5"
+                                        >
+                                            <BadgePercent
+                                                className="size-4 text-primary"
+                                                aria-hidden="true"
+                                            />
+                                            活动管理
+                                            {couponCount != null ? (
+                                                <Badge variant="outline" className="ml-1 tabular-nums">
+                                                    {couponCount}
+                                                </Badge>
                                             ) : null}
-                                        </div>
-                                    ))}
-                                    {!query.data?.storeCouponCampaigns.length ? (
-                                        <p className="text-sm text-muted-foreground">还没有优惠券。</p>
-                                    ) : null}
-                                </div>
-                            </CampaignState>
-                        </PageBlock>
+                                        </TabsTrigger>
+                                        <TabsTrigger
+                                            value="report"
+                                            className="min-w-36 shrink-0 gap-2 py-2.5"
+                                        >
+                                            <BarChart3
+                                                className="size-4 text-success-text"
+                                                aria-hidden="true"
+                                            />
+                                            经营报表
+                                        </TabsTrigger>
+                                        <TabsTrigger
+                                            value="ledger"
+                                            className="min-w-36 shrink-0 gap-2 py-2.5"
+                                        >
+                                            <ListChecks
+                                                className="size-4 text-warning-text"
+                                                aria-hidden="true"
+                                            />
+                                            使用流水
+                                            {ledgerQuery.data ? (
+                                                <Badge variant="outline" className="ml-1 tabular-nums">
+                                                    {ledger.totalItems}
+                                                </Badge>
+                                            ) : null}
+                                        </TabsTrigger>
+                                    </TabsList>
+                                </nav>
+                            </Tabs>
 
-                        <PageBlock
-                            column="full"
-                            blockId="store-coupon-report"
-                            title="优惠券经营报表"
-                            description="按活动统计发放、可用、锁定、核销、返还、过期、作废、优惠金额和带动成交。"
-                        >
-                            <CampaignState query={query} onRetry={() => void query.refetch()}>
-                                <CouponReport
-                                    coupons={query.data?.storeCouponCampaigns ?? []}
-                                    currencyCode={activeChannel?.defaultCurrencyCode ?? 'CNY'}
-                                    dailyMetrics={reportQuery.data?.storeCouponDailyReport ?? []}
-                                    filter={reportFilter}
-                                    reportPending={reportQuery.isPending || reportQuery.isFetching}
-                                    reportError={reportValidationError ?? reportQuery.error}
-                                    onFilterChange={setReportFilter}
-                                />
-                            </CampaignState>
-                        </PageBlock>
+                            {view === 'campaigns' ? (
+                                <CampaignState query={couponQuery} onRetry={() => void couponQuery.refetch()}>
+                                    <div>
+                                        <CouponCampaignList
+                                            coupons={coupons}
+                                            search={routeSearch.q}
+                                            kind={routeSearch.kind}
+                                            status={routeSearch.status}
+                                            actionPending={sensitiveMutation.isPending}
+                                            onCreate={() => setCouponOpen(true)}
+                                            onEdit={setEditingName}
+                                            onAction={setSensitiveAction}
+                                            onSearchChange={q => updateCouponSearch({ q })}
+                                            onKindChange={kind => updateCouponSearch({ kind })}
+                                            onStatusChange={status => updateCouponSearch({ status })}
+                                        />
+                                    </div>
+                                </CampaignState>
+                            ) : null}
 
-                        <PageBlock
-                            column="full"
-                            blockId="store-coupon-ledger"
-                            title="优惠券使用流水"
-                            description={`记录领取、锁定、核销、返还、过期和退款事件，共 ${query.data?.storeCouponLedger.totalItems ?? 0} 条。`}
-                        >
-                            <CampaignState query={query} onRetry={() => void query.refetch()}>
-                                <div className="overflow-x-auto">
-                                    <table className="w-full min-w-[760px] text-left text-sm">
-                                        <thead className="border-b text-xs text-muted-foreground">
-                                            <tr>
-                                                <th className="px-2 py-2 font-medium">时间</th>
-                                                <th className="px-2 py-2 font-medium">事件</th>
-                                                <th className="px-2 py-2 font-medium">优惠券</th>
-                                                <th className="px-2 py-2 font-medium">客户</th>
-                                                <th className="px-2 py-2 font-medium">订单</th>
-                                                <th className="px-2 py-2 text-right font-medium">优惠金额</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {query.data?.storeCouponLedger.items.map(entry => (
-                                                <tr key={entry.id} className="border-b last:border-0">
-                                                    <td className="px-2 py-3 text-xs">
-                                                        {new Date(entry.createdAt).toLocaleString()}
-                                                    </td>
-                                                    <td className="px-2 py-3">
-                                                        <Badge variant="outline">
-                                                            {couponLedgerEventLabels[entry.eventType]}
-                                                        </Badge>
-                                                    </td>
-                                                    <td className="px-2 py-3">{entry.campaignName}</td>
-                                                    <td className="px-2 py-3">
-                                                        <div>{entry.customerName}</div>
-                                                        <small className="text-muted-foreground">
-                                                            {entry.customerEmail}
-                                                        </small>
-                                                    </td>
-                                                    <td className="px-2 py-3">
-                                                        {entry.orderCode ?? '—'}
-                                                        {entry.refundId ? (
-                                                            <small className="block text-muted-foreground">
-                                                                退款 #{entry.refundId}
-                                                            </small>
-                                                        ) : null}
-                                                    </td>
-                                                    <td className="px-2 py-3 text-right">
-                                                        {entry.discountAmount == null
-                                                            ? '—'
-                                                            : formatMoney(
-                                                                  entry.discountAmount,
-                                                                  activeChannel?.defaultCurrencyCode ?? 'CNY',
-                                                              )}
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                    {!query.data?.storeCouponLedger.items.length ? (
-                                        <p className="py-4 text-sm text-muted-foreground">暂无优惠券流水。</p>
-                                    ) : null}
-                                </div>
-                            </CampaignState>
-                        </PageBlock>
-                    </>
+                            {view === 'report' ? (
+                                <CampaignState query={couponQuery} onRetry={() => void couponQuery.refetch()}>
+                                    <div>
+                                        <CouponReport
+                                            coupons={coupons}
+                                            currencyCode={activeChannel?.defaultCurrencyCode ?? 'CNY'}
+                                            dailyMetrics={reportQuery.data?.storeCouponDailyReport ?? []}
+                                            filter={reportFilter}
+                                            reportPending={reportQuery.isPending || reportQuery.isFetching}
+                                            reportError={reportValidationError ?? reportQuery.error}
+                                            onFilterChange={filter =>
+                                                updateCouponSearch({
+                                                    from: filter.from,
+                                                    to: filter.to,
+                                                    campaignId: filter.campaignId,
+                                                })
+                                            }
+                                        />
+                                    </div>
+                                </CampaignState>
+                            ) : null}
+
+                            {view === 'ledger' ? (
+                                <CampaignState query={ledgerQuery} onRetry={() => void ledgerQuery.refetch()}>
+                                    <div>
+                                        <CouponLedger
+                                            ledger={ledger}
+                                            campaigns={ledgerQuery.data?.storeCouponCampaigns ?? []}
+                                            currencyCode={activeChannel?.defaultCurrencyCode ?? 'CNY'}
+                                            campaignId={routeSearch.campaignId}
+                                            eventType={routeSearch.eventType}
+                                            page={routeSearch.page}
+                                            pageSize={ledgerPageSize}
+                                            onCampaignChange={campaignId =>
+                                                updateCouponSearch({ campaignId, page: 1 })
+                                            }
+                                            onEventTypeChange={eventType =>
+                                                updateCouponSearch({ eventType, page: 1 })
+                                            }
+                                            onPageChange={page => updateCouponSearch({ page }, false)}
+                                        />
+                                    </div>
+                                </CampaignState>
+                            ) : null}
+                        </div>
+                    </PageBlock>
                 ) : null}
 
                 {mode === 'FLASH_SALES' ? (
@@ -848,9 +1456,9 @@ function StorePromotionCampaignPage({ mode }: { mode: 'COUPONS' | 'FLASH_SALES' 
                         title="限时秒杀"
                         description="活动时间内同时影响首页展示和购物车结算，不能只改前端显示价格。"
                     >
-                        <CampaignState query={query} onRetry={() => void query.refetch()}>
+                        <CampaignState query={flashSalesQuery} onRetry={() => void flashSalesQuery.refetch()}>
                             <div className="space-y-3">
-                                {query.data?.storeFlashSales.map(sale => (
+                                {flashSalesQuery.data?.storeFlashSales.map(sale => (
                                     <div
                                         key={sale.id}
                                         className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center"
@@ -907,7 +1515,7 @@ function StorePromotionCampaignPage({ mode }: { mode: 'COUPONS' | 'FLASH_SALES' 
                                         </Button>
                                     </div>
                                 ))}
-                                {!query.data?.storeFlashSales.length ? (
+                                {!flashSalesQuery.data?.storeFlashSales.length ? (
                                     <p className="text-sm text-muted-foreground">还没有秒杀活动。</p>
                                 ) : null}
                             </div>
@@ -919,11 +1527,13 @@ function StorePromotionCampaignPage({ mode }: { mode: 'COUPONS' | 'FLASH_SALES' 
             {mode === 'COUPONS' ? (
                 <CouponEditor
                     open={couponOpen}
-                    collections={query.data?.collections.items ?? []}
+                    collections={couponFormOptionsQuery.data?.collections.items ?? []}
+                    collectionsPending={couponFormOptionsQuery.isPending}
+                    collectionsError={couponFormOptionsQuery.error}
                     onClose={() => setCouponOpen(false)}
                     onSaved={async () => {
                         setCouponOpen(false);
-                        await refresh();
+                        await invalidateCouponCampaigns();
                     }}
                 />
             ) : (
@@ -932,7 +1542,7 @@ function StorePromotionCampaignPage({ mode }: { mode: 'COUPONS' | 'FLASH_SALES' 
                     onClose={() => setFlashOpen(false)}
                     onSaved={async () => {
                         setFlashOpen(false);
-                        await refresh();
+                        await invalidateFlashSales();
                     }}
                 />
             )}
@@ -1127,11 +1737,15 @@ function sensitiveActionCopy(action: SensitivePromotionAction) {
 function CouponEditor({
     open,
     collections,
+    collectionsPending,
+    collectionsError,
     onClose,
     onSaved,
 }: {
     open: boolean;
     collections: Array<{ id: string; name: string }>;
+    collectionsPending: boolean;
+    collectionsError: unknown;
     onClose: () => void;
     onSaved: () => Promise<void>;
 }) {
@@ -1235,22 +1849,37 @@ function CouponEditor({
                             )}
                             {draft.kind === 'COLLECTION_PERCENTAGE' ? (
                                 <FormField label="适用分类" className="sm:col-span-2">
-                                    <div className="flex max-h-36 flex-wrap gap-2 overflow-y-auto rounded-md border p-3">
-                                        {collections.map(collection => (
-                                            <Button
-                                                key={collection.id}
-                                                type="button"
-                                                size="sm"
-                                                variant={
-                                                    draft.collectionIds.includes(collection.id)
-                                                        ? 'default'
-                                                        : 'outline'
-                                                }
-                                                onClick={() => toggleCollection(collection.id)}
-                                            >
-                                                {collection.name}
-                                            </Button>
-                                        ))}
+                                    <div className="flex min-h-14 max-h-36 flex-wrap gap-2 overflow-y-auto rounded-md border p-3">
+                                        {collectionsPending ? (
+                                            <div className="w-full space-y-2" aria-label="正在加载商品分类">
+                                                <Skeleton className="h-8 w-full" />
+                                                <Skeleton className="h-8 w-3/5" />
+                                            </div>
+                                        ) : collectionsError ? (
+                                            <p className="text-sm text-destructive">
+                                                商品分类加载失败，请关闭后重试。
+                                            </p>
+                                        ) : collections.length ? (
+                                            collections.map(collection => (
+                                                <Button
+                                                    key={collection.id}
+                                                    type="button"
+                                                    size="sm"
+                                                    variant={
+                                                        draft.collectionIds.includes(collection.id)
+                                                            ? 'default'
+                                                            : 'outline'
+                                                    }
+                                                    onClick={() => toggleCollection(collection.id)}
+                                                >
+                                                    {collection.name}
+                                                </Button>
+                                            ))
+                                        ) : (
+                                            <p className="text-sm text-muted-foreground">
+                                                当前店铺还没有商品分类。
+                                            </p>
+                                        )}
                                     </div>
                                 </FormField>
                             ) : null}
@@ -1714,16 +2343,6 @@ function defaultDateRange() {
     return { startsAt: toLocalDateTime(start), endsAt: toLocalDateTime(end) };
 }
 
-function defaultCouponReportFilter(): CouponReportFilter {
-    const to = new Date();
-    const from = new Date(to.getTime() - 29 * 24 * 60 * 60 * 1_000);
-    return {
-        from: toLocalDate(from),
-        to: toLocalDate(to),
-        campaignId: 'ALL',
-    };
-}
-
 function couponReportFilterError(filter: CouponReportFilter): Error | null {
     if (!filter.from || !filter.to) return new Error('请选择完整的报表日期区间');
     const from = Date.parse(`${filter.from}T00:00:00.000Z`);
@@ -1794,10 +2413,6 @@ function toLocalDateTime(value: Date): string {
     const local = new Date(value.getTime() - value.getTimezoneOffset() * 60_000);
     return local.toISOString().slice(0, 16);
 }
-function toLocalDate(value: Date): string {
-    const local = new Date(value.getTime() - value.getTimezoneOffset() * 60_000);
-    return local.toISOString().slice(0, 10);
-}
 function formatDateRange(startsAt: string | null, endsAt: string | null): string {
     return `${startsAt ? new Date(startsAt).toLocaleString() : '立即'} 至 ${endsAt ? new Date(endsAt).toLocaleString() : '长期'}`;
 }
@@ -1845,36 +2460,70 @@ function formatRate(value: number, total: number): string {
 function formatMultiple(value: number, cost: number): string {
     return cost > 0 ? `${(value / cost).toFixed(2)}×` : '—';
 }
-function couponIssuanceIsActive(
-    coupon: StorePromotionCampaignsResult['storeCouponCampaigns'][number],
-): boolean {
-    const now = Date.now();
-    return Boolean(
-        coupon.enabled &&
-        (!coupon.claimStartsAt || Date.parse(coupon.claimStartsAt) <= now) &&
-        (!coupon.claimEndsAt || Date.parse(coupon.claimEndsAt) > now) &&
-        (coupon.remainingIssueCount == null || coupon.remainingIssueCount > 0),
-    );
+function couponPageCopy(view: CouponView): { title: string; description: string } {
+    if (view === 'report') {
+        return {
+            title: '优惠券经营报表',
+            description: '查看发放使用、优惠成本和成交贡献，不混入活动操作。',
+        };
+    }
+    if (view === 'ledger') {
+        return {
+            title: '优惠券使用流水',
+            description: '按活动和事件追踪领取、锁定、核销、返还、过期与退款。',
+        };
+    }
+    return {
+        title: '优惠券活动管理',
+        description: '创建、筛选和维护优惠券活动，敏感操作统一进行密码确认。',
+    };
 }
+
+function couponStatusBadgeVariant(
+    coupon: StorePromotionCampaignsResult['storeCouponCampaigns'][number],
+): 'success' | 'default' | 'warning' | 'secondary' {
+    const status = couponIssuanceStatus(coupon);
+    if (status === 'ACTIVE') return 'success';
+    if (status === 'SCHEDULED') return 'default';
+    if (status === 'EXHAUSTED') return 'warning';
+    return 'secondary';
+}
+
+function couponStatusAccentClass(
+    coupon: StorePromotionCampaignsResult['storeCouponCampaigns'][number],
+): string {
+    const status = couponIssuanceStatus(coupon);
+    if (status === 'ACTIVE') return 'border-l-success';
+    if (status === 'SCHEDULED') return 'border-l-primary';
+    if (status === 'EXHAUSTED') return 'border-l-warning';
+    return 'border-l-muted-foreground/40';
+}
+
+function couponLedgerBadgeVariant(
+    eventType: StoreCouponLedgerResult['storeCouponLedger']['items'][number]['eventType'],
+): 'success' | 'default' | 'warning' | 'destructive' | 'secondary' | 'outline' {
+    if (eventType === 'REDEEMED') return 'success';
+    if (eventType === 'CLAIMED' || eventType === 'LOCKED') return 'default';
+    if (eventType === 'RETURNED' || eventType === 'REFUND_SETTLED') return 'warning';
+    if (eventType === 'REVOKED') return 'destructive';
+    if (eventType === 'EXPIRED') return 'secondary';
+    return 'outline';
+}
+
 function couponIssuanceCanBeStopped(
     coupon: StorePromotionCampaignsResult['storeCouponCampaigns'][number],
 ): boolean {
-    const now = Date.now();
-    return Boolean(
-        coupon.enabled &&
-        (!coupon.claimEndsAt || Date.parse(coupon.claimEndsAt) > now) &&
-        (coupon.remainingIssueCount == null || coupon.remainingIssueCount > 0),
-    );
+    const status = couponIssuanceStatus(coupon);
+    return status === 'ACTIVE' || status === 'SCHEDULED';
 }
 function couponIssuanceStatusLabel(
     coupon: StorePromotionCampaignsResult['storeCouponCampaigns'][number],
 ): string {
-    const now = Date.now();
-    if (!coupon.enabled) return '活动已停用';
-    if (coupon.remainingIssueCount === 0) return '已领完';
-    if (coupon.claimEndsAt && Date.parse(coupon.claimEndsAt) <= now) return '已停止发放';
-    if (coupon.claimStartsAt && Date.parse(coupon.claimStartsAt) > now) return '待开始';
-    return '发放中';
+    const status = couponIssuanceStatus(coupon);
+    if (status === 'ACTIVE') return '发放中';
+    if (status === 'SCHEDULED') return '待开始';
+    if (status === 'EXHAUSTED') return '已领完';
+    return coupon.enabled ? '已停止发放' : '活动已停用';
 }
 function exportCouponReport(
     coupons: StorePromotionCampaignsResult['storeCouponCampaigns'],

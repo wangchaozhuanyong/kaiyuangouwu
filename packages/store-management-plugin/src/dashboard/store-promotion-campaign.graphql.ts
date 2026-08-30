@@ -1,7 +1,7 @@
 import { gql } from 'graphql-tag';
 
-export const storePromotionCampaignsQuery = gql`
-    query StorePromotionCampaigns {
+export const storeCouponCampaignsQuery = gql`
+    query StoreCouponCampaigns {
         storeCouponCampaigns {
             id
             name
@@ -43,7 +43,23 @@ export const storePromotionCampaignsQuery = gql`
                 assistedRevenueTotal
             }
         }
-        storeCouponLedger(options: { take: 50 }) {
+    }
+`;
+
+export const storeCouponLedgerQuery = gql`
+    query StoreCouponLedger(
+        $skip: Int!
+        $take: Int!
+        $campaignId: ID
+        $eventType: StoreCouponLedgerEventType
+    ) {
+        storeCouponCampaigns {
+            id
+            name
+        }
+        storeCouponLedger(
+            options: { skip: $skip, take: $take, campaignId: $campaignId, eventType: $eventType }
+        ) {
             totalItems
             items {
                 id
@@ -63,6 +79,11 @@ export const storePromotionCampaignsQuery = gql`
                 note
             }
         }
+    }
+`;
+
+export const storeFlashSalesQuery = gql`
+    query StoreFlashSales {
         storeFlashSales {
             id
             name
@@ -79,6 +100,11 @@ export const storePromotionCampaignsQuery = gql`
                 currencyCode
             }
         }
+    }
+`;
+
+export const storeCouponFormOptionsQuery = gql`
+    query StoreCouponFormOptions {
         collections(options: { take: 200, sort: { name: ASC } }) {
             items {
                 id
@@ -286,8 +312,18 @@ export interface StoreFlashSaleRecord {
 
 export interface StorePromotionCampaignsResult {
     storeCouponCampaigns: StoreCouponRecord[];
+}
+
+export interface StoreCouponLedgerResult {
+    storeCouponCampaigns: Array<Pick<StoreCouponRecord, 'id' | 'name'>>;
     storeCouponLedger: { items: StoreCouponLedgerRecord[]; totalItems: number };
+}
+
+export interface StoreFlashSalesResult {
     storeFlashSales: StoreFlashSaleRecord[];
+}
+
+export interface StoreCouponFormOptionsResult {
     collections: { items: Array<{ id: string; name: string }> };
 }
 

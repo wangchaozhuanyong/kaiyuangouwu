@@ -5,13 +5,14 @@ const pageSource = readFileSync(new URL('./pages/ai-image-studio-page.tsx', impo
 const stylesheet = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
 
 describe('AI Image Studio compact generation flow', () => {
-    it('starts with consent enabled and creates text-only generations', () => {
-        expect(pageSource).toContain('const [termsAccepted, setTermsAccepted] = useState(true)');
+    it('requires explicit consent before creating generations', () => {
+        expect(pageSource).toContain('const [termsAccepted, setTermsAccepted] = useState(false)');
         expect(pageSource).toContain('termsAccepted &&');
         expect(pageSource).toContain('termsAccepted,');
-        expect(pageSource).toContain('referenceAssetId: null');
-        expect(pageSource).toContain("referenceMode: 'NONE'");
-        expect(pageSource).not.toContain('type="file"');
+        expect(pageSource).toContain('referenceAssetId: referenceAsset?.id ?? null');
+        expect(pageSource).toContain('referenceMode,');
+        expect(pageSource).toContain('api.uploadImageReference');
+        expect(pageSource).toContain('type="file"');
     });
 
     it('opens configured terms from the compact consent row', () => {

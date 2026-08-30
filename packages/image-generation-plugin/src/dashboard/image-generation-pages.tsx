@@ -2134,17 +2134,27 @@ export function ProviderCredentialEditorSheet({
                     modelCodes: draft.modelCodes,
                 },
             });
-            if (!testAfterSave) return { testResult: null };
+            const savedCredential = savedResult.saveImageProviderCredential;
+            if (!testAfterSave) {
+                return { testResult: null, savedEnabled: savedCredential.credentialEnabled };
+            }
             const testResult = await api.mutate<{
                 testImageProviderCredential: { ok: boolean; message: string };
             }>(testImageProviderMutation, { id: savedResult.saveImageProviderCredential.id });
-            return { testResult: testResult.testImageProviderCredential };
+            return {
+                testResult: testResult.testImageProviderCredential,
+                savedEnabled: savedCredential.credentialEnabled,
+            };
         },
         onSuccess: result => {
             if (result.testResult) {
                 (result.testResult.ok ? toast.success : toast.error)(result.testResult.message);
             } else {
-                toast.success(`${draft.name || providerName(draft.scope)} 已保存`);
+                if (draft.enabled && !result.savedEnabled) {
+                    toast.success(`${draft.name || providerName(draft.scope)} 已保存，请测试通过后再启用`);
+                } else {
+                    toast.success(`${draft.name || providerName(draft.scope)} 已保存`);
+                }
             }
             onChanged();
             onClose();
