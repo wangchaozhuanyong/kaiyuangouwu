@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
     PUBLIC_QUERY_CACHE_KEY,
     PUBLIC_QUERY_CACHE_MAX_AGE,
+    ROUTE_QUERY_STALE_TIME,
     createStorefrontQueryClient,
     persistPublicQueryCache,
     publicQueryMeta,
@@ -22,12 +23,14 @@ function memoryStorage() {
 }
 
 describe('public React Query session cache', () => {
-    it('always refreshes public data when the page mounts or regains focus', () => {
+    it('respects stale time when the page mounts or regains focus', () => {
         const queryDefaults = createStorefrontQueryClient().getDefaultOptions().queries;
 
+        expect(ROUTE_QUERY_STALE_TIME).toBe(60_000);
+        expect(queryDefaults?.staleTime).toBe(ROUTE_QUERY_STALE_TIME);
         expect(queryDefaults?.refetchOnMount).toBe(storefrontRefetchPolicy);
         expect(queryDefaults?.refetchOnWindowFocus).toBe(storefrontRefetchPolicy);
-        expect(storefrontRefetchPolicy({ meta: publicQueryMeta() })).toBe('always');
+        expect(storefrontRefetchPolicy({ meta: publicQueryMeta() })).toBe(true);
         expect(storefrontRefetchPolicy({})).toBe(true);
     });
 

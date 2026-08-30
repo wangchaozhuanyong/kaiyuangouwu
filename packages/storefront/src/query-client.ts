@@ -1,7 +1,7 @@
 import { DehydratedState, QueryClient, dehydrate, hydrate } from '@tanstack/react-query';
 
 export const PUBLIC_QUERY_STALE_TIME = 60_000;
-export const ROUTE_QUERY_STALE_TIME = 30_000;
+export const ROUTE_QUERY_STALE_TIME = 60_000;
 export const PUBLIC_QUERY_GC_TIME = 30 * 60_000;
 export const PUBLIC_QUERY_CACHE_MAX_AGE = 5 * 60_000;
 export const PUBLIC_QUERY_CACHE_KEY = 'vendure-storefront-public-query-cache:v2';
@@ -38,8 +38,9 @@ export function publicQueryMeta() {
     return { persistPublic: true } as const;
 }
 
-export function storefrontRefetchPolicy(query: { meta?: Record<string, unknown> }): true | 'always' {
-    return query.meta?.persistPublic === true ? 'always' : true;
+export function storefrontRefetchPolicy(_query: { meta?: Record<string, unknown> }): true {
+    // Let React Query refetch only stale queries instead of forcing every persisted query to refresh.
+    return true;
 }
 
 export function persistPublicQueryCache(
