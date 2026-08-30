@@ -132,7 +132,7 @@ export function SharePosterModal({
 
             // 4. 价格与商品名称
             ctx.fillStyle = '#d33c30';
-            ctx.font = 'bold 22px "Inter", -apple-system, sans-serif';
+            ctx.font = 'bold 22px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
             ctx.fillText(formattedPrice, 24, 348);
 
             ctx.fillStyle = '#0f172a';

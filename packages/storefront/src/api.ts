@@ -1,3 +1,4 @@
+import { consumeStorefrontRealtimeStream, StorefrontRealtimeEvent } from './realtime-updates';
 import {
     ActiveCustomer,
     AfterSalesRequest,
@@ -476,6 +477,37 @@ export class ShopApi {
     ) {
         this.authTokenStorageKey = authTokenStorageKey(market.code);
         this.authToken = readSessionAuthToken(this.authTokenStorageKey);
+    }
+
+    async watchRealtime(
+        onEvent: (event: StorefrontRealtimeEvent) => void,
+        signal: AbortSignal,
+    ): Promise<void> {
+        let retryDelayMs = 1_000;
+        while (!signal.aborted) {
+            try {
+                const headers: Record<string, string> = { accept: 'text/event-stream' };
+                if (SEND_CLIENT_CHANNEL_TOKEN) headers['vendure-token'] = this.market.code;
+                if (this.authToken) headers.authorization = `Bearer ${this.authToken}`;
+                const response = await fetch(storefrontRealtimeUrl(), {
+                    method: 'GET',
+                    credentials: 'include',
+                    headers,
+                    cache: 'no-store',
+                    signal,
+                });
+                if (!response.ok || !response.body) {
+                    throw new Error(`Storefront realtime connection failed (${response.status})`);
+                }
+                retryDelayMs = 1_000;
+                await consumeStorefrontRealtimeStream(response.body, onEvent);
+                if (!signal.aborted) throw new Error('Storefront realtime connection closed');
+            } catch (error) {
+                if (signal.aborted || (error instanceof DOMException && error.name === 'AbortError')) return;
+                await abortableDelay(retryDelayMs, signal);
+                retryDelayMs = Math.min(retryDelayMs * 2, 30_000);
+            }
+        }
     }
 
     async storefrontConfig(signal?: AbortSignal): Promise<StorefrontConfig> {
@@ -1241,6 +1273,38 @@ export class ShopApi {
                             siteIntroEn
                             serviceTextZh
                             serviceTextEn
+                            featureOneTitleZh
+                            featureOneTitleEn
+                            featureOneTextZh
+                            featureOneTextEn
+                            featureTwoTitleZh
+                            featureTwoTitleEn
+                            featureTwoTextZh
+                            featureTwoTextEn
+                            featureThreeTitleZh
+                            featureThreeTitleEn
+                            featureThreeTextZh
+                            featureThreeTextEn
+                            qrEyebrowZh
+                            qrEyebrowEn
+                            qrTitleZh
+                            qrTitleEn
+                            qrDescriptionZh
+                            qrDescriptionEn
+                            sceneOneZh
+                            sceneOneEn
+                            sceneTwoZh
+                            sceneTwoEn
+                            sceneThreeZh
+                            sceneThreeEn
+                            sceneFourZh
+                            sceneFourEn
+                            ctaTextZh
+                            ctaTextEn
+                            footerTitleZh
+                            footerTitleEn
+                            footerTextZh
+                            footerTextEn
                             foregroundColor
                             accentColor
                             overlayOpacity
@@ -2175,4 +2239,29 @@ export class ShopApi {
             );
         }
     }
+}
+
+function storefrontRealtimeUrl(): string {
+    const url = new URL(API_URL, window.location.href);
+    url.search = '';
+    url.hash = '';
+    url.pathname = url.pathname.replace(/\/shop-api\/?$/u, '/storefront-realtime/events');
+    if (!url.pathname.endsWith('/storefront-realtime/events')) {
+        url.pathname = '/storefront-realtime/events';
+    }
+    url.searchParams.set('client', 'storefront');
+    return url.toString();
+}
+
+function abortableDelay(durationMs: number, signal: AbortSignal): Promise<void> {
+    return new Promise(resolve => {
+        if (signal.aborted) return resolve();
+        const timer = window.setTimeout(finish, durationMs);
+        signal.addEventListener('abort', finish, { once: true });
+        function finish() {
+            window.clearTimeout(timer);
+            signal.removeEventListener('abort', finish);
+            resolve();
+        }
+    });
 }

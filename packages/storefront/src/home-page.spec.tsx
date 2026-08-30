@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
-import { buildHomeNoticeItems, HomePage, NoticeDetailSheet } from './pages/home-page';
+import { buildHomeNoticeItems, CurrencySelectionSheet, HomePage, NoticeDetailSheet } from './pages/home-page';
 import { StorefrontContext } from './StorefrontContext';
 import { MarketConfig, Product, StorefrontContentBlock } from './types';
 
@@ -156,6 +156,11 @@ const baseProps = {
     addingVariantId: null,
     claimedCampaignIds: [],
     couponLoading: false,
+    availableCurrencyCodes: ['MYR', 'USDT'],
+    currencySelectorEnabled: true,
+    displayCurrencyCode: 'MYR',
+    currencyLoading: false,
+    onCurrencyChange: vi.fn(),
     onCategorySelect: vi.fn(),
     onAdd: vi.fn(),
     onToggleLanguage: vi.fn(),
@@ -306,6 +311,38 @@ describe('HomePage mobile header layout', () => {
         );
         expect(stylesheet).not.toMatch(/\.home-topbar > \.search-trigger/);
     });
+
+    it('uses a compact dialog trigger for the selected currency', () => {
+        const markup = renderHome({ displayCurrencyCode: 'USDT' });
+        const stylesheet = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
+
+        expect(markup).toContain('class="currency-select"');
+        expect(markup).toContain('aria-haspopup="dialog"');
+        expect(markup).toContain('aria-expanded="false"');
+        expect(markup).toContain('<span>USDT</span>');
+        expect(markup).not.toContain('<select');
+        expect(stylesheet).toMatch(/\.currency-select\s*\{[^}]*min-width:\s*58px;/);
+    });
+});
+
+describe('CurrencySelectionSheet', () => {
+    it('shows every currency and identifies the selected USDT reference option', () => {
+        const markup = renderToStaticMarkup(
+            <CurrencySelectionSheet
+                currencyCodes={['MYR', 'USDT']}
+                selectedCurrencyCode="USDT"
+                currencyLoading={false}
+                language="zh"
+                onSelect={vi.fn()}
+                onClose={vi.fn()}
+            />,
+        );
+
+        expect(markup).toContain('class="sheet currency-sheet"');
+        expect(markup).toContain('role="radiogroup"');
+        expect(markup).toContain('role="radio" aria-checked="true"');
+        expect(markup).toContain('参考价格，结算币种不变');
+    });
 });
 
 describe('HomePage desktop intro layout', () => {
@@ -408,6 +445,49 @@ describe('HomePage notices', () => {
         );
 
         expect(items.map(item => item.id)).toEqual(['system-newer', 'system-older']);
+    });
+
+    it('shows system announcements together with store notices', () => {
+        const noticeBlock: StorefrontContentBlock = {
+            ...heroBlock,
+            id: 'notice-block',
+            code: 'homepage-notice',
+            type: 'NOTICE',
+            imageUrl: null,
+            title: '网店公告',
+            subtitle: '',
+            body: '',
+            ctaLabel: '',
+            items: [
+                {
+                    id: 'store-notice-1',
+                    enabled: true,
+                    position: 0,
+                    imageUrl: null,
+                    targetType: 'NONE',
+                    targetValue: null,
+                    label: '店铺发货通知',
+                    description: '今日订单将在明日发货。',
+                },
+            ],
+        };
+
+        const items = buildHomeNoticeItems(
+            [
+                {
+                    id: 'system-notice-1',
+                    title: '系统维护',
+                    content: '今晚进行系统维护。',
+                    linkUrl: null,
+                    startsAt: null,
+                    endsAt: null,
+                },
+            ],
+            noticeBlock,
+            'zh',
+        );
+
+        expect(items.map(item => item.id)).toEqual(['system-system-notice-1', 'store-notice-1']);
     });
 
     it('keeps a notice without a link clickable so the full content can be opened', () => {

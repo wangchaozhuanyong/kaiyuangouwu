@@ -61,25 +61,52 @@ describe('category navigation scrolling', () => {
 
 describe('category navigation responsive spacing', () => {
     const stylesheet = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
+    const categoryPageSource = readFileSync(new URL('./pages/category-page.tsx', import.meta.url), 'utf8');
 
-    it('uses one compact row for the desktop category header', () => {
-        expect(stylesheet).toMatch(/\.category-topbar\s*\{[^}]*height:\s*72px;[^}]*padding:\s*0 32px;/);
+    it('keeps client plugin spacing symmetric at every insertion point', () => {
+        const symmetricPluginSpacing = new RegExp(
+            String.raw`\.category-client-plugin-slot\s*\{[^}]*` +
+                String.raw`--client-plugin-slot-block-space:\s*8px;[^}]*` +
+                String.raw`padding-block:\s*var\(--client-plugin-slot-block-space\);[^}]*` +
+                String.raw`padding-inline:\s*var\(--client-plugin-slot-inline-space\);`,
+        );
+        expect(stylesheet).toMatch(symmetricPluginSpacing);
+        expect(stylesheet).not.toMatch(
+            /\.category-client-plugin-slot\.is-[^{]+\{[^}]*(?:padding-top|padding-bottom):/,
+        );
         expect(stylesheet).toMatch(
-            /\.category-topbar > \.search-trigger\s*\{[^}]*top:\s*14px;[^}]*right:\s*32px;[^}]*left:\s*calc\(50% \+ 226px\);/,
+            /\.business-services-page \.category-client-plugin-slot\s*\{[^}]*--client-plugin-slot-block-space:\s*10px;[^}]*--client-plugin-slot-inline-space:\s*12px;/,
+        );
+    });
+
+    it('uses a polished full-width search bar for the category header', () => {
+        expect(categoryPageSource).not.toContain('category-title-lockup');
+        expect(categoryPageSource).not.toContain("{isZh ? '选购商品' : 'Shop'}");
+        expect(stylesheet).toMatch(
+            /\.category-topbar\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);[^}]*padding-inline:\s*12px;/,
+        );
+        expect(stylesheet).toMatch(
+            /\.search-trigger\s*\{[^}]*border-radius:\s*var\(--radius-md\);[^}]*box-shadow:/,
+        );
+        expect(stylesheet).toMatch(
+            /\.category-topbar > \.search-trigger\s*\{[^}]*width:\s*100%;[^}]*height:\s*44px;/,
+        );
+        expect(stylesheet).toMatch(
+            /@media \(min-width:\s*640px\)[\s\S]*?\.category-topbar\s*\{[^}]*height:\s*128px;[^}]*padding:\s*72px 24px 12px;/,
         );
     });
 
     it('keeps the desktop navigation stack and content height calculations aligned', () => {
-        expect(stylesheet).toMatch(/\.category-page\s*\{[^}]*--category-content-sticky-top:\s*153px;/);
+        expect(stylesheet).toMatch(/\.category-page\s*\{[^}]*--category-content-sticky-top:\s*209px;/);
         expect(stylesheet).toMatch(/\.primary-category-switcher\s*\{[^}]*height:\s*80px;/);
         expect(
             stylesheet.match(/min-height:\s*calc\(100dvh - var\(--category-content-sticky-top\)\);/g),
         ).toHaveLength(3);
     });
 
-    it('does not reserve an empty third column on narrow mobile screens', () => {
+    it('keeps the search bar full width on narrow mobile screens', () => {
         expect(stylesheet).toMatch(
-            /@media \(max-width:\s*370px\)[\s\S]*?\.category-topbar\s*\{[^}]*grid-template-columns:\s*max-content minmax\(0, 1fr\);[^}]*gap:\s*8px;/,
+            /@media \(max-width:\s*370px\)[\s\S]*?\.category-topbar\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);[^}]*gap:\s*0;/,
         );
     });
 

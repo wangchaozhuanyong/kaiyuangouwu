@@ -1,6 +1,6 @@
-import type { StorefrontContentBlock, StorefrontContentItem } from './types';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
+import type { StorefrontContentBlock, StorefrontContentItem } from './types';
 
 import { BusinessServicesPage } from './pages/business-services-page';
 import { StorefrontContext } from './StorefrontContext';
@@ -45,20 +45,62 @@ function businessPluginBlock(): StorefrontContentBlock {
     };
 }
 
-function renderPage(contentBlocks: StorefrontContentBlock[]) {
+function navigationBlock(servicesLabel: string): StorefrontContentBlock {
+    return {
+        id: 'navigation',
+        code: 'storefront-navigation',
+        type: 'NAVIGATION',
+        enabled: true,
+        position: 10_000,
+        startsAt: null,
+        endsAt: null,
+        imageUrl: null,
+        backgroundColor: null,
+        textColor: null,
+        targetType: 'NONE',
+        targetValue: null,
+        settings: null,
+        title: '客户端导航',
+        subtitle: '',
+        body: '',
+        ctaLabel: '',
+        items: [
+            {
+                id: 'services-navigation-item',
+                enabled: true,
+                position: 0,
+                imageUrl: null,
+                targetType: 'PAGE',
+                targetValue: '/services',
+                settings: null,
+                label: servicesLabel,
+                description: '',
+            },
+        ],
+    };
+}
+
+function renderPage(contentBlocks: StorefrontContentBlock[], language: 'zh' | 'en' = 'zh') {
     return renderToStaticMarkup(
-        <StorefrontContext.Provider value={{ contentBlocks, language: 'zh', onNavigate: () => undefined }}>
+        <StorefrontContext.Provider value={{ contentBlocks, language, onNavigate: () => undefined }}>
             <BusinessServicesPage />
         </StorefrontContext.Provider>,
     );
 }
 
 describe('business services page', () => {
-    it('shows the default page name and an empty state before services are enabled', () => {
+    it('shows the centered default navigation name and an empty state before services are enabled', () => {
         const markup = renderPage([]);
 
-        expect(markup).toContain('商业服务');
+        expect(markup).toContain('<h1 class="business-services-page-title">智能服务</h1>');
+        expect(markup).not.toContain('business-services-title-icon');
         expect(markup).toContain('商业服务正在陆续开放');
+    });
+
+    it('keeps the page title synchronized with the configured bottom navigation label', () => {
+        const markup = renderPage([navigationBlock('AI 智能服务')]);
+
+        expect(markup).toContain('<h1 class="business-services-page-title">AI 智能服务</h1>');
     });
 
     it('renders enabled plugins in the business-services main position', () => {
@@ -66,5 +108,34 @@ describe('business services page', () => {
 
         expect(markup).toContain('选购遇到问题？');
         expect(markup).not.toContain('商业服务正在陆续开放');
+    });
+
+    it('renders the managed title and description for the active storefront language', () => {
+        const chineseBlock = businessPluginBlock();
+        chineseBlock.settings = { businessServicesCopyVersion: 1 };
+        chineseBlock.title = '定制商业服务';
+        chineseBlock.body = '从这里开始使用店铺工具。';
+
+        const englishBlock = {
+            ...chineseBlock,
+            title: 'Services for your business',
+            body: 'Start using store tools here.',
+        };
+
+        expect(renderPage([chineseBlock])).toContain('定制商业服务');
+        expect(renderPage([chineseBlock])).toContain('从这里开始使用店铺工具。');
+        expect(renderPage([englishBlock], 'en')).toContain('Services for your business');
+        expect(renderPage([englishBlock], 'en')).toContain('Start using store tools here.');
+    });
+
+    it('keeps the built-in copy until the existing plugin block is saved from the new editor', () => {
+        const legacyBlock = businessPluginBlock();
+        legacyBlock.title = '客户端插件配置';
+        legacyBlock.body = '';
+
+        const markup = renderPage([legacyBlock]);
+
+        expect(markup).toContain('发现更多商业能力');
+        expect(markup).not.toContain('客户端插件配置');
     });
 });

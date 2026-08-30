@@ -1,8 +1,8 @@
-import type { RouteState, SortMode } from '../storefront-router';
 import { keepPreviousData, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { ArrowUpDown, ChevronUp, LayoutGrid, Search, SlidersHorizontal, WifiOff } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { RouteState, SortMode } from '../storefront-router';
 
 import { ShopApi } from '../api';
 import { minimumProductPrice, priceInputToMinorUnits, sortCategoryProducts } from '../catalog-page-utils';
@@ -253,19 +253,21 @@ export function CategoryPage() {
         <main className="page category-page">
             <div className="category-navigation-shell">
                 <header className="topbar category-topbar">
-                    <div className="category-title-lockup">
-                        <span className="category-title-icon-pill" aria-hidden="true">
-                            <LayoutGrid size={15} />
-                        </span>
-                        <h1 className="category-title-text">{isZh ? '选购商品' : 'Shop'}</h1>
-                    </div>
                     <button
                         className="search-trigger"
                         type="button"
+                        aria-label={isZh ? '搜索商品、品牌或分类' : 'Search products, brands, or categories'}
                         onClick={() => navigateTo({ name: 'search' })}
                     >
-                        <Search aria-hidden="true" />
-                        <span>{isZh ? '搜索商品、分类' : 'Search products'}</span>
+                        <span className="search-trigger-icon" aria-hidden="true">
+                            <Search />
+                        </span>
+                        <span className="search-trigger-placeholder">
+                            {isZh ? '搜索商品、品牌或分类' : 'Search products, brands, or categories'}
+                        </span>
+                        <span className="search-trigger-action" aria-hidden="true">
+                            {isZh ? '搜索' : 'Search'}
+                        </span>
                     </button>
                 </header>
 

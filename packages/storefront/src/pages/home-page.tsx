@@ -3,6 +3,7 @@ import {
     Badge,
     Bell,
     Check,
+    ChevronDown,
     ChevronRight,
     CircleCheck,
     Clock3,
@@ -102,6 +103,8 @@ interface HomepageCouponHubProps {
     onToast?: (message: string) => void;
 }
 
+const homepageSectionShellClassName = 'homepage-module-shell is-section-start';
+
 export interface HomeNoticeItem {
     id: string;
     summary: string;
@@ -135,8 +138,6 @@ export function buildHomeNoticeItems(
             },
         ];
     });
-    if (systemNoticeItems.length) return systemNoticeItems;
-
     const managedNoticeItems = (noticeBlock?.items ?? []).flatMap(item => {
         const label = item.label.trim();
         const description = item.description.trim();
@@ -154,13 +155,17 @@ export function buildHomeNoticeItems(
             },
         ];
     });
-    if (managedNoticeItems.length || !noticeBlock || noticeBlock.items.length) return managedNoticeItems;
+    if (managedNoticeItems.length || !noticeBlock || noticeBlock.items.length) {
+        return [...systemNoticeItems, ...managedNoticeItems];
+    }
 
     const title = noticeBlock.title.trim();
     const subtitle = noticeBlock.subtitle.trim();
     const body = noticeBlock.body.trim();
-    if (!title && !subtitle && !body) return [];
+    if (!title && !subtitle && !body) return systemNoticeItems;
+    if (systemNoticeItems.length && !subtitle && !body) return systemNoticeItems;
     return [
+        ...systemNoticeItems,
         {
             id: noticeBlock.id,
             summary: title || body || subtitle,
@@ -225,6 +230,70 @@ export function NoticeDetailSheet({
                         </button>
                     </div>
                 ) : null}
+            </div>
+        </Sheet>
+    );
+}
+
+export function CurrencySelectionSheet({
+    currencyCodes,
+    selectedCurrencyCode,
+    currencyLoading,
+    language,
+    onSelect,
+    onClose,
+}: {
+    currencyCodes: string[];
+    selectedCurrencyCode: string;
+    currencyLoading: boolean;
+    language: StorefrontLanguage;
+    onSelect: (currencyCode: string) => void;
+    onClose: () => void;
+}) {
+    const isZh = language === 'zh';
+
+    return (
+        <Sheet
+            title={isZh ? '选择显示币种' : 'Choose display currency'}
+            language={language}
+            onClose={onClose}
+            className="currency-sheet"
+        >
+            <div
+                className="currency-sheet-options"
+                role="radiogroup"
+                aria-label={isZh ? '显示币种' : 'Display currency'}
+                aria-busy={currencyLoading}
+            >
+                {currencyCodes.map(currencyCode => {
+                    const selected = currencyCode === selectedCurrencyCode;
+                    return (
+                        <button
+                            key={currencyCode}
+                            className={`currency-sheet-option${selected ? ' is-selected' : ''}`}
+                            type="button"
+                            role="radio"
+                            aria-checked={selected}
+                            disabled={currencyLoading}
+                            onClick={() => {
+                                onSelect(currencyCode);
+                                onClose();
+                            }}
+                        >
+                            <span className="currency-sheet-option-copy">
+                                <strong>{currencyCode}</strong>
+                                {currencyCode === 'USDT' ? (
+                                    <small>
+                                        {isZh
+                                            ? '参考价格，结算币种不变'
+                                            : 'Reference price; settlement currency is unchanged'}
+                                    </small>
+                                ) : null}
+                            </span>
+                            {selected ? <Check aria-hidden="true" /> : null}
+                        </button>
+                    );
+                })}
             </div>
         </Sheet>
     );
@@ -447,6 +516,7 @@ export function HomePage() {
     const [heroInteractionPaused, setHeroInteractionPaused] = useState(false);
     const [noticeIndex, setNoticeIndex] = useState(0);
     const [openNoticeId, setOpenNoticeId] = useState<string | null>(null);
+    const [currencySheetOpen, setCurrencySheetOpen] = useState(false);
     const [heroGestureActive, setHeroGestureActive] = useState(false);
     const [heroAutoplayStopped, setHeroAutoplayStopped] = useState(false);
     const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
@@ -763,20 +833,19 @@ export function HomePage() {
                 </button>
                 <div className="topbar-actions">
                     {currencySelectorEnabled && availableCurrencyCodes.length > 1 ? (
-                        <select
+                        <button
                             className="currency-select"
-                            value={displayCurrencyCode}
+                            type="button"
                             disabled={currencyLoading}
-                            onChange={event => onCurrencyChange(event.target.value)}
+                            onClick={() => setCurrencySheetOpen(true)}
                             aria-label={isZh ? '选择显示币种' : 'Choose display currency'}
                             title={isZh ? '选择显示币种' : 'Choose display currency'}
+                            aria-haspopup="dialog"
+                            aria-expanded={currencySheetOpen}
                         >
-                            {availableCurrencyCodes.map(currencyCode => (
-                                <option key={currencyCode} value={currencyCode}>
-                                    {currencyCode === 'USDT' ? 'USDT（参考价）' : currencyCode}
-                                </option>
-                            ))}
-                        </select>
+                            <span>{displayCurrencyCode}</span>
+                            <ChevronDown aria-hidden="true" />
+                        </button>
                     ) : null}
                     <button
                         className="language-button"
@@ -789,6 +858,17 @@ export function HomePage() {
                     <NoticeButton language={language} onClick={onNotifications} />
                 </div>
             </header>
+
+            {currencySheetOpen ? (
+                <CurrencySelectionSheet
+                    currencyCodes={availableCurrencyCodes}
+                    selectedCurrencyCode={displayCurrencyCode}
+                    currencyLoading={currencyLoading}
+                    language={language}
+                    onSelect={onCurrencyChange}
+                    onClose={() => setCurrencySheetOpen(false)}
+                />
+            ) : null}
 
             {openNoticeItem ? (
                 <NoticeDetailSheet
@@ -895,7 +975,9 @@ export function HomePage() {
                                             fetchPriority={heroIndex === 0 ? 'high' : 'auto'}
                                         />
                                     </button>
-                                    {showHeroImageOverlay ? <div className="hero-rich-overlay-shade" /> : null}
+                                    {showHeroImageOverlay ? (
+                                        <div className="hero-rich-overlay-shade" />
+                                    ) : null}
 
                                     {/* Dynamic Content Overlay with 3D Cyber Layout */}
                                     {(() => {
@@ -1056,7 +1138,7 @@ export function HomePage() {
 
                         {hasHomepageModule('COUPONS') && couponCards.length > 0 && (
                             <div
-                                className="homepage-module-shell"
+                                className={homepageSectionShellClassName}
                                 style={{ order: homepageModuleOrder('COUPONS') }}
                             >
                                 <HomepageCouponHub
@@ -1086,7 +1168,7 @@ export function HomePage() {
                         {managedSections.map(block => (
                             <div
                                 key={block.id}
-                                className="homepage-module-shell"
+                                className={homepageSectionShellClassName}
                                 style={{ order: homepageModuleOrder(block.type, block.id) }}
                             >
                                 <ManagedContentSection
@@ -1103,7 +1185,10 @@ export function HomePage() {
                         ))}
 
                         {!products.length && (
-                            <div className="homepage-module-shell" style={{ order: homepageModules.length }}>
+                            <div
+                                className={homepageSectionShellClassName}
+                                style={{ order: homepageModules.length }}
+                            >
                                 <EmptyState
                                     icon={<ShoppingBag />}
                                     title={isZh ? '暂无在售商品' : 'No products are available'}
@@ -1118,7 +1203,7 @@ export function HomePage() {
 
                         {hasHomepageModule('FLASH_SALE') && flashSaleItems.length ? (
                             <div
-                                className="homepage-module-shell"
+                                className={homepageSectionShellClassName}
                                 style={{ order: homepageModuleOrder('FLASH_SALE') }}
                             >
                                 <FlashSaleSection
@@ -1136,7 +1221,7 @@ export function HomePage() {
 
                         {hasHomepageModule('BEST_SELLERS') && bestSellerProducts.length ? (
                             <div
-                                className="homepage-module-shell"
+                                className={homepageSectionShellClassName}
                                 style={{ order: homepageModuleOrder('BEST_SELLERS') }}
                             >
                                 <ProductSection
@@ -1156,7 +1241,7 @@ export function HomePage() {
 
                         {hasHomepageModule('RECOMMENDATIONS') && recommendationProducts.length ? (
                             <div
-                                className="homepage-module-shell"
+                                className={homepageSectionShellClassName}
                                 style={{ order: homepageModuleOrder('RECOMMENDATIONS') }}
                             >
                                 <ProductSection

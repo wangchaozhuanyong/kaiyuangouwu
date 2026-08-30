@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
@@ -20,6 +21,8 @@ const authPageProps = {
     onBack: vi.fn(),
     onContentTarget: vi.fn(),
 };
+
+const stylesheet = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
 
 vi.mock('@tanstack/react-router', () => ({ useNavigate: () => vi.fn() }));
 
@@ -148,7 +151,8 @@ describe('auth password visibility controls', () => {
         expect(markup).toContain('auth-register-ai-campaign-v2-480.webp');
         expect(markup).not.toContain('auth-login-ai-campaign-v2');
         expect(markup).toContain('创建专属 AI 效率中心');
-        expect(markup).toContain('智联云端 · 桥接未来');
+        expect(markup).toContain('auth-hero-message-managed');
+        expect(markup).not.toContain('auth-brand-lockup');
         expect(markup.match(/aria-label="显示密码"/g)).toHaveLength(2);
         expect(markup).toMatch(/name="fullName"/);
         expect(markup).not.toMatch(/name="firstName"|name="lastName"/);
@@ -199,6 +203,27 @@ describe('auth password visibility controls', () => {
         expect(markup).toContain('后台卖点3');
         expect(markup).toContain('--auth-hero-overlay-color:#010203');
         expect(markup).toContain('--auth-hero-accent-color:#abcdef');
+    });
+
+    it('matches the dashboard mobile preview composition for managed auth visuals', () => {
+        expect(stylesheet).toMatch(
+            /\.auth-page\s*\{[^}]*--auth-hero-height:\s*clamp\(210px,\s*58\.974vw,\s*230px\);[^}]*overflow:\s*visible;/,
+        );
+        expect(stylesheet).toMatch(
+            /\.auth-hero-message-managed\s*\{[^}]*bottom:\s*20px;[^}]*display:\s*flex;[^}]*align-items:\s*center;/,
+        );
+        expect(stylesheet).toMatch(
+            /\.auth-hero-eyebrow\s*\{[^}]*border-radius:\s*999px;[^}]*color:\s*var\(--auth-hero-accent-color\);/,
+        );
+        expect(stylesheet).toMatch(
+            /\.auth-hero-tags > span\s*\{[^}]*border-radius:\s*999px;[^}]*background:\s*rgba\(0,\s*0,\s*0,\s*0\.25\);/,
+        );
+        expect(stylesheet).toMatch(
+            /\.login-content\s*\{[^}]*min-height:\s*calc\(100dvh - var\(--auth-hero-height\)\);[^}]*margin-top:\s*0;/,
+        );
+        expect(stylesheet).not.toMatch(
+            /@media \(max-width:\s*1023px\) and \(max-height:\s*740px\)[\s\S]*?\.auth-hero-tags\s*\{[^}]*display:\s*none;/,
+        );
     });
 });
 

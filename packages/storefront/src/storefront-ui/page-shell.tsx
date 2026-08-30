@@ -416,11 +416,13 @@ export function Sheet({
     title,
     language,
     onClose,
+    className,
     children,
 }: {
     title: string;
     language: StorefrontLanguage;
     onClose: () => void;
+    className?: string;
     children: ReactNode;
 }) {
     const dialogRef = useRef<HTMLElement>(null);
@@ -494,7 +496,7 @@ export function Sheet({
     }, []);
 
     const content = (
-        <div className="sheet-layer" role="presentation">
+        <div className={`sheet-layer${className ? ` ${className}-layer` : ''}`} role="presentation">
             <button
                 className="sheet-mask"
                 type="button"
@@ -503,7 +505,7 @@ export function Sheet({
             />
             <section
                 ref={dialogRef}
-                className="sheet"
+                className={`sheet${className ? ` ${className}` : ''}`}
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby={titleId}

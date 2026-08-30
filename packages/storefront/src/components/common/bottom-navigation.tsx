@@ -93,7 +93,7 @@ function defaultNavigationItems(language: StorefrontLanguage): BottomNavigationI
         },
         {
             key: 'default-services',
-            label: isZh ? '商业服务' : 'Services',
+            label: isZh ? '智能服务' : 'Intelligent services',
             target: '/services',
             routeName: 'services',
         },

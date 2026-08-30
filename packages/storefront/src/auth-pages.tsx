@@ -1087,30 +1087,37 @@ function AuthLayout({
                         <ArrowLeft aria-hidden="true" />
                     </button>
                 </header>
-                <div className={`auth-hero-message${heroMessage ? '' : ' auth-hero-message-brand-only'}`}>
+                <div
+                    className={`auth-hero-message${
+                        heroMessage ? ' auth-hero-message-managed' : ' auth-hero-message-brand-only'
+                    }`}
+                >
                     <div className="auth-hero-kicker">
-                        <div className="auth-brand-lockup">
-                            <div className="auth-brand-main">
-                                {logoUrl ? (
-                                    <img
-                                        className="auth-brand-mark"
-                                        src={storefrontWebpUrl(logoUrl, 'thumbnail')}
-                                        alt={storefrontName}
-                                    />
-                                ) : (
-                                    <span className="auth-brand-mark" aria-hidden="true">
-                                        桥
-                                    </span>
-                                )}
-                                <strong>{storefrontName}</strong>
+                        {heroMessage ? (
+                            <span className="auth-hero-eyebrow">{heroMessage.eyebrow}</span>
+                        ) : (
+                            <div className="auth-brand-lockup">
+                                <div className="auth-brand-main">
+                                    {logoUrl ? (
+                                        <img
+                                            className="auth-brand-mark"
+                                            src={storefrontWebpUrl(logoUrl, 'thumbnail')}
+                                            alt={storefrontName}
+                                        />
+                                    ) : (
+                                        <span className="auth-brand-mark" aria-hidden="true">
+                                            桥
+                                        </span>
+                                    )}
+                                    <strong>{storefrontName}</strong>
+                                </div>
+                                <small>
+                                    {language === 'zh'
+                                        ? '智联云端 · 桥接未来'
+                                        : 'Cloud intelligence · Bridging tomorrow'}
+                                </small>
                             </div>
-                            <small>
-                                {language === 'zh'
-                                    ? '智联云端 · 桥接未来'
-                                    : 'Cloud intelligence · Bridging tomorrow'}
-                            </small>
-                        </div>
-                        {heroMessage && <span className="auth-hero-eyebrow">{heroMessage.eyebrow}</span>}
+                        )}
                     </div>
                     {heroMessage && (
                         <>
