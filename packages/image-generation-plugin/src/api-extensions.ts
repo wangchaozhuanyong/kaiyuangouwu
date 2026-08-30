@@ -148,6 +148,7 @@ const commonTypes = gql`
         optimizedPrompt: String!
         promptSpec: JSON!
         source: String!
+        optimizerModelId: String
         recommendedModelCode: String!
         recommendationReason: String!
         promptSkillHash: String!
@@ -235,6 +236,7 @@ export const shopApiExtensions = gql`
     type ImageStudioConfig {
         enabled: Boolean!
         promptOptimizationEnabled: Boolean!
+        promptOptimizerModelIds: [String!]!
         promptRateLimitPerMinute: Int!
         promptDailyFreeLimit: Int!
         promptDailyFreeUnlimited: Boolean!
@@ -570,6 +572,7 @@ export const adminApiExtensions = gql`
         saveImageModel(input: SaveImageModelInput!): ImageStudioModel!
         activateImagePromptSkillRelease(id: ID!): ImagePromptSkillRelease!
         retryUnknownImageOutput(outputId: ID!): ImageGenerationOutput!
+        reconcileStaleImageGenerationOutputs: Int!
         refundImageOutput(outputId: ID!, reason: String!): ImageGenerationOutput!
     }
 `;

@@ -86,6 +86,24 @@ export class ImageProviderRouterService {
         return (await query.getCount()) > 0;
     }
 
+    async availablePromptModelIds(ctx: RequestContext, scope: ImageProviderScope): Promise<string[]> {
+        const credentials = await this.connection
+            .getRepository(ctx, ImageProviderCredential)
+            .createQueryBuilder('credential')
+            .where('credential.scope = :scope', { scope })
+            .andWhere('credential.enabled = :enabled', { enabled: true })
+            .andWhere('credential.archivedAt IS NULL')
+            .andWhere('credential.healthStatus = :health', { health: 'HEALTHY' })
+            .andWhere('(credential.cooldownUntil IS NULL OR credential.cooldownUntil <= :now)', {
+                now: new Date(),
+            })
+            .andWhere('credential.purpose IN (:...purposes)', { purposes: ['PROMPT', 'BOTH'] })
+            .orderBy('credential.priority', 'ASC')
+            .addOrderBy('credential.id', 'ASC')
+            .getMany();
+        return [...new Set(credentials.map(credential => credential.textModelId.trim()).filter(Boolean))];
+    }
+
     async recordFailure(
         ctx: RequestContext,
         credential: ImageProviderCredential,

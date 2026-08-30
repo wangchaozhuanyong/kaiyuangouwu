@@ -107,8 +107,8 @@ describe('ImageGenerationConfigService prompt Skill bootstrap', () => {
 
 describe('ImageGenerationConfigService prompt provider availability', () => {
     it('keeps prompt optimization available when only Gemini has a healthy prompt Key', async () => {
-        const hasAvailable = vi.fn((_ctx: unknown, input: { scope: string; purpose: string }) =>
-            Promise.resolve(input.scope === 'GEMINI' && input.purpose === 'PROMPT'),
+        const availablePromptModelIds = vi.fn((_ctx: unknown, scope: string) =>
+            Promise.resolve(scope === 'GEMINI' ? ['gemini-2.5-flash'] : []),
         );
         const service = new ImageGenerationConfigService(
             {},
@@ -116,7 +116,7 @@ describe('ImageGenerationConfigService prompt provider availability', () => {
             {} as never,
             {} as never,
             {} as never,
-            { hasAvailable } as never,
+            { availablePromptModelIds } as never,
             { sourceHash: 'hash' } as never,
         );
         vi.spyOn(service as never, 'synchronizeActiveSkillRelease').mockResolvedValue(undefined);
@@ -142,14 +142,9 @@ describe('ImageGenerationConfigService prompt provider availability', () => {
         } as never);
 
         expect(result.promptOptimizationEnabled).toBe(true);
-        expect(hasAvailable).toHaveBeenCalledWith(
-            expect.anything(),
-            expect.objectContaining({ scope: 'OPENAI', purpose: 'PROMPT' }),
-        );
-        expect(hasAvailable).toHaveBeenCalledWith(
-            expect.anything(),
-            expect.objectContaining({ scope: 'GEMINI', purpose: 'PROMPT' }),
-        );
+        expect(result.promptOptimizerModelIds).toEqual(['gemini-2.5-flash']);
+        expect(availablePromptModelIds).toHaveBeenCalledWith(expect.anything(), 'OPENAI');
+        expect(availablePromptModelIds).toHaveBeenCalledWith(expect.anything(), 'GEMINI');
     });
 
     it('returns model and prompt prices in the active settlement currency', async () => {
@@ -159,7 +154,10 @@ describe('ImageGenerationConfigService prompt provider availability', () => {
             {} as never,
             {} as never,
             {} as never,
-            { hasAvailable: vi.fn(() => Promise.resolve(true)) } as never,
+            {
+                hasAvailable: vi.fn(() => Promise.resolve(true)),
+                availablePromptModelIds: vi.fn(() => Promise.resolve(['gpt-5.4-mini'])),
+            } as never,
             { sourceHash: 'hash' } as never,
         );
         vi.spyOn(service as never, 'synchronizeActiveSkillRelease').mockResolvedValue(undefined);
@@ -204,6 +202,7 @@ describe('ImageGenerationConfigService prompt provider availability', () => {
 
         expect(result.paidPromptOptimizationPrice).toBe(60);
         expect(result.paidPromptOptimizationCurrencyCode).toBe('MYR');
+        expect(result.promptOptimizerModelIds).toEqual(['gpt-5.4-mini']);
         expect(result.models[0]).toMatchObject({
             unitPrice: 60,
             currencyCode: 'MYR',

@@ -208,16 +208,16 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
             })),
         );
         const availableModels = readiness.filter(item => item.available).map(item => item.model);
-        const optimizerAvailable = (
-            await Promise.all(
-                PROVIDER_SCOPES.map(scope =>
-                    this.providerRouter.hasAvailable(ctx, {
-                        scope,
-                        purpose: 'PROMPT',
-                    }),
-                ),
-            )
-        ).some(Boolean);
+        const promptOptimizerModelIds = [
+            ...new Set(
+                (
+                    await Promise.all(
+                        PROVIDER_SCOPES.map(scope => this.providerRouter.availablePromptModelIds(ctx, scope)),
+                    )
+                ).flat(),
+            ),
+        ];
+        const optimizerAvailable = promptOptimizerModelIds.length > 0;
         const promptPrice = quoteImageMoney(
             ctx,
             config.paidPromptOptimizationPrice,
@@ -226,6 +226,7 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
         return {
             enabled: config.enabled && availableModels.length > 0,
             promptOptimizationEnabled: config.promptOptimizationEnabled && optimizerAvailable,
+            promptOptimizerModelIds,
             promptRateLimitPerMinute: config.promptRateLimitPerMinute,
             promptDailyFreeLimit: config.promptDailyFreeLimit,
             promptDailyFreeUnlimited: config.promptDailyFreeUnlimited,
@@ -933,7 +934,6 @@ function validateModelInput(input: SaveImageModelInput): (typeof launchModelDefi
     }
     return definition;
 }
-
 function shopModelView(ctx: RequestContext, model: ImageModelConfig) {
     const unitPrice = quoteImageMoney(ctx, model.unitPrice, model.currencyCode);
     const unitPrice2K = quoteImageMoney(ctx, model.unitPrice2K, model.currencyCode);

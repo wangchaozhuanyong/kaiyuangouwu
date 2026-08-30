@@ -264,6 +264,12 @@ export class ImageGenerationAdminResolver {
 
     @Mutation()
     @Allow(manageImageGenerationPermission.Update)
+    reconcileStaleImageGenerationOutputs(@Ctx() ctx: RequestContext) {
+        return this.generations.reconcileStaleOutputs(ctx);
+    }
+
+    @Mutation()
+    @Allow(manageImageGenerationPermission.Update)
     refundImageOutput(
         @Ctx() ctx: RequestContext,
         @Args('outputId') outputId: ID,

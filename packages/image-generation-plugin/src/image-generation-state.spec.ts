@@ -1,6 +1,47 @@
 import { describe, expect, it } from 'vitest';
 
-import { decideImageOutputFailure, deriveImageJobSettlement } from './image-generation-state';
+import {
+    decideImageOutputFailure,
+    deriveImageJobSettlement,
+    hasStaleImageOutput,
+} from './image-generation-state';
+
+describe('hasStaleImageOutput', () => {
+    const cutoff = new Date('2026-08-30T05:00:00.000Z');
+
+    it('detects stale running and unknown outputs', () => {
+        expect(
+            hasStaleImageOutput(
+                [{ state: 'RUNNING', updatedAt: new Date('2026-08-30T04:59:00.000Z') }],
+                cutoff,
+            ),
+        ).toBe(true);
+        expect(
+            hasStaleImageOutput(
+                [{ state: 'UNKNOWN', unknownAt: new Date('2026-08-30T04:59:00.000Z') }],
+                cutoff,
+            ),
+        ).toBe(true);
+    });
+
+    it('falls back to updatedAt for legacy unknown rows and ignores fresh or terminal outputs', () => {
+        expect(
+            hasStaleImageOutput(
+                [{ state: 'UNKNOWN', unknownAt: null, updatedAt: new Date('2026-08-30T04:59:00.000Z') }],
+                cutoff,
+            ),
+        ).toBe(true);
+        expect(
+            hasStaleImageOutput(
+                [
+                    { state: 'UNKNOWN', unknownAt: new Date('2026-08-30T05:01:00.000Z') },
+                    { state: 'SUCCEEDED', updatedAt: new Date('2026-08-30T04:00:00.000Z') },
+                ],
+                cutoff,
+            ),
+        ).toBe(false);
+    });
+});
 
 describe('deriveImageJobSettlement', () => {
     it('prioritizes active and unknown output states', () => {

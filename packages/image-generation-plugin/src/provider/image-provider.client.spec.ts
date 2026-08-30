@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { IMAGE_GENERATION_DELIVERY_TIMEOUT_MS } from '../constants';
 import { ImageProviderCredential } from '../entities/image-provider-credential.entity';
 import { type ImageProviderCipherService } from '../security/image-provider-cipher.service';
 
@@ -10,7 +11,10 @@ import {
     RetryableImageProviderError,
 } from './image-provider.client';
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+});
 
 describe('ImageProviderClient', () => {
     const safeUrls = {
@@ -432,6 +436,97 @@ describe('ImageProviderClient', () => {
                 }),
             }),
         );
+    });
+
+    it('keeps an image request open beyond the ordinary 120-second API timeout', async () => {
+        vi.useFakeTimers();
+        const requestState: { signal?: AbortSignal } = {};
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(
+                (_url: URL, init: RequestInit) =>
+                    new Promise<Response>((_resolve, reject) => {
+                        requestState.signal = init.signal as AbortSignal;
+                        requestState.signal.addEventListener('abort', () => {
+                            const abortError = new Error('aborted');
+                            abortError.name = 'AbortError';
+                            reject(abortError);
+                        });
+                    }),
+            ),
+        );
+        const client = new ImageProviderClient(cipher, safeUrls);
+
+        const result: Promise<Error> = client
+            .generate(credential, 'OPENAI_IMAGES', {
+                providerModelId: 'gpt-image-2',
+                prompt: 'product photo',
+                aspectRatio: '1:1',
+                idempotencyKey: 'image-job-long-running',
+            })
+            .then(
+                () => {
+                    throw new Error('Expected the provider request to time out');
+                },
+                reason => reason as Error,
+            );
+        await vi.advanceTimersByTimeAsync(0);
+        await vi.advanceTimersByTimeAsync(120_000);
+
+        expect(requestState.signal?.aborted).toBe(false);
+
+        await vi.advanceTimersByTimeAsync(IMAGE_GENERATION_DELIVERY_TIMEOUT_MS - 120_000);
+        const timeoutError = await result;
+        expect(timeoutError).toBeInstanceOf(AmbiguousImageProviderError);
+        expect(timeoutError.message).toBe('中转站在 10 分钟内未返回完整生图结果');
+    });
+
+    it('accepts a Gemini stream whose image body arrives after 120 seconds', async () => {
+        vi.useFakeTimers();
+        const encoded = Buffer.from('delayed-stream-image'.repeat(16)).toString('base64');
+        const body = new ReadableStream<Uint8Array>({
+            start(controller) {
+                setTimeout(() => {
+                    controller.enqueue(
+                        new TextEncoder().encode(
+                            `data: ${JSON.stringify({
+                                responseId: 'gemini-delayed-stream-1',
+                                candidates: [
+                                    {
+                                        content: {
+                                            parts: [{ inlineData: { mimeType: 'image/png', data: encoded } }],
+                                        },
+                                    },
+                                ],
+                            })}\n\ndata: [DONE]\n\n`,
+                        ),
+                    );
+                    controller.close();
+                }, 121_000);
+            },
+        });
+        vi.stubGlobal(
+            'fetch',
+            vi
+                .fn()
+                .mockResolvedValue(
+                    new Response(body, { status: 200, headers: { 'content-type': 'text/event-stream' } }),
+                ),
+        );
+        const client = new ImageProviderClient(cipher, safeUrls);
+
+        const result = client.generate(credential, 'GEMINI_NATIVE_STREAM', {
+            providerModelId: 'gemini-3.1-flash-image',
+            prompt: 'product photo',
+            aspectRatio: '1:1',
+            idempotencyKey: 'image-job-delayed-stream',
+        });
+        await vi.advanceTimersByTimeAsync(121_000);
+
+        await expect(result).resolves.toMatchObject({
+            mimeType: 'image/png',
+            providerRequestId: 'gemini-delayed-stream-1',
+        });
     });
 
     it('verifies a relay model through the read-only metadata endpoint', async () => {

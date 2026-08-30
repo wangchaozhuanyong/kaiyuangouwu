@@ -386,6 +386,12 @@ export const retryImageOutputMutation = gql`
     }
 `;
 
+export const reconcileStaleImageOutputsMutation = gql`
+    mutation ReconcileStaleImageOutputs {
+        reconcileStaleImageGenerationOutputs
+    }
+`;
+
 export const refundImageOutputMutation = gql`
     mutation RefundImageOutput($outputId: ID!, $reason: String!) {
         refundImageOutput(outputId: $outputId, reason: $reason) {

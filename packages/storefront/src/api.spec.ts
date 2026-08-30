@@ -117,6 +117,63 @@ describe('ShopApi storefront mutations', () => {
         expect(request.query).toContain('imageStudioWallet { availableBalance currencyCode }');
     });
 
+    it('requests the configured prompt optimizer models and the model used by optimization', async () => {
+        const configFetch = mockGraphQlResponse({
+            imageStudioConfig: { promptOptimizerModelIds: ['gpt-5.4-mini'] },
+        });
+
+        await new ShopApi(market).imageStudioConfig();
+
+        const configRequest = JSON.parse(jsonRequestBody(configFetch.mock.calls[0][1])) as {
+            query: string;
+        };
+        expect(configRequest.query).toContain('promptOptimizerModelIds');
+
+        const optimizeFetch = mockGraphQlResponse({
+            optimizeImagePrompt: {
+                originalPrompt: '白色保温杯',
+                optimizedPrompt: '白色保温杯商品图',
+                optimizerModelId: 'gpt-5.4-mini',
+            },
+        });
+
+        await new ShopApi(market).optimizeImagePrompt('白色保温杯', 'NONE');
+
+        const optimizeRequest = JSON.parse(jsonRequestBody(optimizeFetch.mock.calls[0][1])) as {
+            query: string;
+        };
+        expect(optimizeRequest.query).toContain('optimizerModelId');
+    });
+
+    it('passes the selected image ratio, quantity, and resolution to generation unchanged', async () => {
+        const fetchMock = mockGraphQlResponse({ createImageGeneration: { id: 'image-job-1' } });
+        const input = {
+            modelCode: 'OPENAI_HIGH_QUALITY',
+            prompt: '白色保温杯商品图',
+            optimizedPrompt: null,
+            referenceAssetId: null,
+            referenceMode: 'NONE' as const,
+            aspectRatio: '16:9',
+            resolution: '4K' as const,
+            quantity: 3,
+            expectedUnitPrice: 100,
+            expectedChargeAmount: 300,
+            currencyCode: 'CNY',
+            idempotencyKey: 'image-generation-settings-0001',
+            termsAccepted: true,
+        };
+
+        await new ShopApi(market).createImageGeneration(input);
+
+        const request = JSON.parse(jsonRequestBody(fetchMock.mock.calls[0][1])) as {
+            variables: { input: Record<string, unknown> };
+        };
+        expect(request.variables.input).toMatchObject({
+            aspectRatio: '16:9',
+            resolution: '4K',
+            quantity: 3,
+        });
+    });
     it('switches the active checkout order to the selected settlement currency', async () => {
         const order = {
             __typename: 'Order',

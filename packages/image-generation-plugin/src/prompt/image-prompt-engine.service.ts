@@ -231,6 +231,7 @@ export class ImagePromptEngineService {
             optimizedPrompt: record.optimizedPrompt,
             promptSpec: record.promptSpec,
             source: record.source,
+            optimizerModelId: record.optimizerModelId,
             recommendedModelCode: record.recommendedModelCode,
             recommendationReason: record.recommendationReason,
             promptSkillHash: record.promptSkillHash,

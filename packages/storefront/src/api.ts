@@ -1396,7 +1396,7 @@ export class ShopApi {
             `
                 query ImageStudioConfig {
                     imageStudioConfig {
-                        enabled promptOptimizationEnabled promptRateLimitPerMinute promptDailyFreeLimit promptDailyFreeUnlimited
+                        enabled promptOptimizationEnabled promptOptimizerModelIds promptRateLimitPerMinute promptDailyFreeLimit promptDailyFreeUnlimited
                         paidPromptOptimizationEnabled paidPromptOptimizationPrice paidPromptOptimizationCurrencyCode
                         defaultModelCode termsVersion termsZh termsEn
                         outputRetentionDays referenceRetentionHours maxReferenceBytes maxReferencePixels maxQuantity
@@ -1474,7 +1474,7 @@ export class ShopApi {
             `
                 mutation OptimizeImagePrompt($input: OptimizeImagePromptInput!) {
                     optimizeImagePrompt(input: $input) {
-                        originalPrompt optimizedPrompt promptSpec source recommendedModelCode recommendationReason promptSkillHash
+                        originalPrompt optimizedPrompt promptSpec source optimizerModelId recommendedModelCode recommendationReason promptSkillHash
                         billingMode chargedAmount currencyCode inputTokens outputTokens totalTokens actualCostMicrounits costCurrency
                         promptQuota {
                             paidEnabled paidPrice currencyCode

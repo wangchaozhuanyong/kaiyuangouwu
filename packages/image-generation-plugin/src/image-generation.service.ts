@@ -24,6 +24,7 @@ import {
 } from 'typeorm';
 
 import {
+    IMAGE_UNKNOWN_MAX_AGE_MS,
     MAX_ACTIVE_GENERATION_JOBS,
     MAX_ACTIVE_REFERENCE_ASSETS,
     MAX_ACTIVE_REFERENCE_BYTES,
@@ -51,7 +52,7 @@ import {
     modelReady,
     providerScopeForModel,
 } from './image-generation-config.service';
-import { deriveImageJobSettlement } from './image-generation-state';
+import { deriveImageJobSettlement, hasStaleImageOutput } from './image-generation-state';
 import { isImageResolution, resolutionPrice, supportsNativeResolution } from './image-resolution';
 import { ImageUsageQuotaService } from './image-usage-quota.service';
 import { ImagePromptEngineService, startOfBeijingDay } from './prompt/image-prompt-engine.service';
@@ -414,26 +415,47 @@ export class ImageGenerationService {
 
     async findMine(ctx: RequestContext, id: ID) {
         const customer = await this.activeCustomer(ctx);
-        const job = await this.connection.getRepository(ctx, ImageGenerationJob).findOne({
+        const repository = this.connection.getRepository(ctx, ImageGenerationJob);
+        let job = await repository.findOne({
             where: { id, channelId: ctx.channelId, customerId: customer.id, customerDeletedAt: IsNull() },
             relations: { outputs: { asset: true }, referenceAsset: true },
             order: { outputs: { outputIndex: 'ASC' } },
         });
         if (!job) throw new UserInputError('找不到生图任务');
+        const cutoff = this.staleOutputCutoff();
+        if (hasStaleImageOutput(job.outputs, cutoff)) {
+            await this.reconcileStaleOutputs(ctx, cutoff);
+            job = await repository.findOne({
+                where: {
+                    id,
+                    channelId: ctx.channelId,
+                    customerId: customer.id,
+                    customerDeletedAt: IsNull(),
+                },
+                relations: { outputs: { asset: true }, referenceAsset: true },
+                order: { outputs: { outputIndex: 'ASC' } },
+            });
+            if (!job) throw new UserInputError('找不到生图任务');
+        }
         return this.jobView(job, customer.id);
     }
 
     async findMineList(ctx: RequestContext, skip = 0, take = 20) {
         const customer = await this.activeCustomer(ctx);
-        const [items, totalItems] = await this.connection
-            .getRepository(ctx, ImageGenerationJob)
-            .findAndCount({
-                where: { channelId: ctx.channelId, customerId: customer.id, customerDeletedAt: IsNull() },
-                relations: { outputs: { asset: true }, referenceAsset: true },
-                order: { createdAt: 'DESC', outputs: { outputIndex: 'ASC' } },
-                skip: Math.max(0, Math.floor(skip || 0)),
-                take: Math.min(50, Math.max(1, Math.floor(take || 20))),
-            });
+        const repository = this.connection.getRepository(ctx, ImageGenerationJob);
+        const options = {
+            where: { channelId: ctx.channelId, customerId: customer.id, customerDeletedAt: IsNull() },
+            relations: { outputs: { asset: true }, referenceAsset: true },
+            order: { createdAt: 'DESC', outputs: { outputIndex: 'ASC' } },
+            skip: Math.max(0, Math.floor(skip || 0)),
+            take: Math.min(50, Math.max(1, Math.floor(take || 20))),
+        } as const;
+        let [items, totalItems] = await repository.findAndCount(options);
+        const cutoff = this.staleOutputCutoff();
+        if (items.some(job => hasStaleImageOutput(job.outputs, cutoff))) {
+            await this.reconcileStaleOutputs(ctx, cutoff);
+            [items, totalItems] = await repository.findAndCount(options);
+        }
         return { items: items.map(job => this.jobView(job, customer.id)), totalItems };
     }
 
@@ -534,6 +556,7 @@ export class ImageGenerationService {
     }
 
     async adminJobs(ctx: RequestContext, skip = 0, take = 50, state?: string | null) {
+        await this.reconcileStaleOutputs(ctx);
         const [items, totalItems] = await this.connection
             .getRepository(ctx, ImageGenerationJob)
             .findAndCount({
@@ -547,6 +570,7 @@ export class ImageGenerationService {
     }
 
     async adminUsageRecords(ctx: RequestContext, input: ImageAiUsageRecordListInput = {}) {
+        await this.reconcileStaleOutputs(ctx);
         const options = normalizeUsageRecordInput(input);
         const prefetch = options.skip + options.take;
         let imageItems: ImageGenerationJob[] = [];
@@ -1064,7 +1088,7 @@ export class ImageGenerationService {
             .innerJoinAndSelect('output.job', 'job')
             .where('job.channelId = :channelId', { channelId: ctx.channelId })
             .andWhere('output.state = :state', { state: 'UNKNOWN' })
-            .andWhere('output.unknownAt <= :cutoff', { cutoff })
+            .andWhere('COALESCE(output.unknownAt, output.updatedAt) <= :cutoff', { cutoff })
             .take(100)
             .getMany();
         for (const output of outputs) {
@@ -1079,6 +1103,33 @@ export class ImageGenerationService {
             if (released) await this.refreshJob(ctx, output.jobId);
         }
         return outputs.filter(output => output.walletSettled).length;
+    }
+
+    async reconcileStaleOutputs(ctx: RequestContext, cutoff = this.staleOutputCutoff()): Promise<number> {
+        const repository = this.connection.getRepository(ctx, ImageGenerationOutput);
+        const staleRunning = await repository
+            .createQueryBuilder('output')
+            .innerJoin('output.job', 'job')
+            .where('job.channelId = :channelId', { channelId: ctx.channelId })
+            .andWhere('output.state = :state', { state: 'RUNNING' })
+            .andWhere('output.updatedAt <= :cutoff', { cutoff })
+            .take(100)
+            .getMany();
+        for (const output of staleRunning) {
+            await repository.update(
+                { id: output.id, state: 'RUNNING', walletSettled: false },
+                {
+                    state: 'UNKNOWN',
+                    unknownAt: output.updatedAt,
+                    errorMessage: '生图任务超过 15 分钟仍未返回结果，系统正在核对并释放费用',
+                },
+            );
+        }
+        return this.releaseUnknownOlderThan(ctx, cutoff);
+    }
+
+    private staleOutputCutoff(): Date {
+        return new Date(Date.now() - IMAGE_UNKNOWN_MAX_AGE_MS);
     }
 
     private validateCreateInput(input: CreateImageGenerationInput) {
