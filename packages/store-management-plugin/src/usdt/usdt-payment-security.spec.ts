@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { StorefrontUsdtPaymentIntent } from '../entities/storefront-usdt-payment-intent.entity';
 
@@ -10,16 +10,23 @@ import {
 } from './usdt-payment-proof';
 import { USDT_TRC20_CONTRACT_ADDRESS } from './usdt-payment.constants';
 import { createMatchKey, findMatchingTransfer } from './usdt-payment.service';
-import { formatUsdtBaseUnits, parseConfirmedUsdtTransfer } from './usdt-trc20-client';
+import {
+    formatUsdtBaseUnits,
+    parseConfirmedUsdtEvent,
+    parseConfirmedUsdtTransfer,
+} from './usdt-trc20-client';
 import {
     fingerprintReceivingAddress,
     isValidTronMainnetAddress,
     loadUsdtWalletConfiguration,
+    UsdtWalletConfigurationService,
 } from './usdt-wallet-configuration.service';
 
 const address = USDT_TRC20_CONTRACT_ADDRESS;
 
 describe('USDT payment security', () => {
+    afterEach(() => vi.unstubAllEnvs());
+
     it('validates the TRON Base58Check checksum instead of trusting the T prefix', () => {
         expect(isValidTronMainnetAddress(address)).toBe(true);
         expect(isValidTronMainnetAddress(`${address.slice(0, -1)}2`)).toBe(false);
@@ -136,6 +143,48 @@ describe('USDT payment security', () => {
             ),
         ).toBeNull();
         expect(formatUsdtBaseUnits('1')).toBe('0.000001');
+    });
+
+    it('parses only official USDT Transfer events for manual refund evidence', () => {
+        const recipient = 'T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb';
+        const event = {
+            transaction_id: 'b'.repeat(64),
+            contract_address: USDT_TRC20_CONTRACT_ADDRESS,
+            event_name: 'Transfer',
+            block_timestamp: Date.now(),
+            result: {
+                from: USDT_TRC20_CONTRACT_ADDRESS,
+                to: recipient,
+                value: '3250000',
+            },
+        };
+
+        expect(parseConfirmedUsdtEvent(event)).toMatchObject({
+            transactionId: 'b'.repeat(64),
+            from: USDT_TRC20_CONTRACT_ADDRESS,
+            to: recipient,
+            amount: '3.250000',
+        });
+        expect(parseConfirmedUsdtEvent({ ...event, contract_address: recipient })).toBeNull();
+        expect(parseConfirmedUsdtEvent({ ...event, event_name: 'Approval' })).toBeNull();
+    });
+
+    it('keeps encrypted wallets readable during reviewed key rotation', () => {
+        const previousKey = 'previous-production-wallet-key-that-is-long-enough';
+        const currentKey = 'current-production-wallet-key-that-is-long-enough';
+        vi.stubEnv('USDT_WALLET_ENCRYPTION_KEY', previousKey);
+        const ciphertext = new UsdtWalletConfigurationService().encryptReceivingAddress(address);
+        expect(ciphertext).toMatch(/^v2:[a-f0-9]{16}:/u);
+        expect(ciphertext).not.toContain(address);
+
+        vi.stubEnv('USDT_WALLET_ENCRYPTION_KEY', currentKey);
+        vi.stubEnv('USDT_WALLET_ENCRYPTION_PREVIOUS_KEYS', previousKey);
+        expect(new UsdtWalletConfigurationService().decryptReceivingAddress(ciphertext)).toBe(address);
+
+        vi.stubEnv('USDT_WALLET_ENCRYPTION_PREVIOUS_KEYS', '');
+        expect(() => new UsdtWalletConfigurationService().decryptReceivingAddress(ciphertext)).toThrow(
+            'key is unavailable',
+        );
     });
 
     it('matches only the exact unique amount inside the locked payment window', () => {

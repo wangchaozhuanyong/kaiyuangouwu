@@ -35,6 +35,9 @@ import { ReferralWithdrawal } from './entities/referral-withdrawal.entity';
 import { StoreAdministratorAccess } from './entities/store-administrator-access.entity';
 import { StoreCouponCampaignConfig } from './entities/store-coupon-campaign-config.entity';
 import { StoreProfile } from './entities/store-profile.entity';
+import { StoreUsdtManualRefund } from './entities/store-usdt-manual-refund.entity';
+import { StoreUsdtWalletAudit } from './entities/store-usdt-wallet-audit.entity';
+import { StoreUsdtWallet } from './entities/store-usdt-wallet.entity';
 import { StorefrontDailyVisitor } from './entities/storefront-daily-visitor.entity';
 import { StorefrontPromotionPage } from './entities/storefront-promotion-page.entity';
 import { StorefrontUsdtCheckoutQuote } from './entities/storefront-usdt-checkout-quote.entity';
@@ -91,6 +94,7 @@ import {
     refreshStoreUsdtRatesTask,
     syncAutomaticStoreCurrencyPricesTask,
 } from './store-currency-tasks';
+import { StorePaymentReportingService } from './store-payment-reporting.service';
 import { StoreProfileAdminResolver } from './store-profile.resolver';
 import { StoreProfileService } from './store-profile.service';
 import { StoreProvisioningResolver } from './store-provisioning.resolver';
@@ -106,6 +110,8 @@ import { SystemAnnouncementService } from './system-announcement.service';
 import { StorefrontPromotionPluginOptions } from './types';
 // eslint-disable-next-line import/order -- organize-imports sorts this sibling file before the usdt directory.
 import { UsdtOtcRateService } from './usdt-otc-rate.service';
+import { StoreUsdtWalletService } from './usdt/store-usdt-wallet.service';
+import { loadReviewedRefundSenders, UsdtManualRefundService } from './usdt/usdt-manual-refund.service';
 import { usdtTrc20PaymentHandler } from './usdt/usdt-payment-handler';
 import {
     configureUsdtPaymentProofSecret,
@@ -115,6 +121,7 @@ import { USDT_TRC20_PAYMENT_METHOD_CODE } from './usdt/usdt-payment.constants';
 import { UsdtPaymentService } from './usdt/usdt-payment.service';
 import { UsdtTrc20Client } from './usdt/usdt-trc20-client';
 import {
+    assertProductionUsdtSecretIsolation,
     loadUsdtWalletConfiguration,
     UsdtWalletConfigurationService,
 } from './usdt/usdt-wallet-configuration.service';
@@ -143,6 +150,9 @@ import {
         StorefrontDailyVisitor,
         StorefrontUsdtCheckoutQuote,
         StorefrontUsdtPaymentIntent,
+        StoreUsdtManualRefund,
+        StoreUsdtWallet,
+        StoreUsdtWalletAudit,
     ],
     controllers: [StorefrontPromotionController],
     providers: [
@@ -153,10 +163,13 @@ import {
         StorefrontActivationService,
         StoreCommerceSettingsService,
         StoreCurrencySettingsService,
+        StorePaymentReportingService,
         UsdtOtcRateService,
         UsdtWalletConfigurationService,
+        StoreUsdtWalletService,
         UsdtTrc20Client,
         UsdtPaymentService,
+        UsdtManualRefundService,
         StoreProvisioningService,
         StorefrontEntryMiddleware,
         StorefrontPromotionAccessService,
@@ -276,6 +289,7 @@ export class StoreManagementPlugin implements NestModule, OnApplicationBootstrap
         private readonly paymentMethodService: PaymentMethodService,
         private readonly channelService: ChannelService,
         private readonly usdtWalletConfiguration: UsdtWalletConfigurationService,
+        private readonly storeUsdtWallets: StoreUsdtWalletService,
     ) {}
 
     static init(options: StorefrontPromotionPluginOptions = {}): typeof StoreManagementPlugin {
@@ -297,12 +311,18 @@ export class StoreManagementPlugin implements NestModule, OnApplicationBootstrap
             ),
         };
         configureReferralPaymentProofSecret(signingSecret || 'development-referral-payment-proof-secret');
-        const usdtWallet = loadUsdtWalletConfiguration(process.env, production);
+        loadUsdtWalletConfiguration(process.env, production);
         const usdtPaymentProofSecret = process.env.USDT_PAYMENT_PROOF_SECRET?.trim() || '';
-        if (production && usdtWallet.enabled && !isAcceptableUsdtPaymentProofSecret(usdtPaymentProofSecret)) {
+        if (production && !isAcceptableUsdtPaymentProofSecret(usdtPaymentProofSecret)) {
             throw new Error(
-                'USDT_PAYMENT_PROOF_SECRET must be a non-placeholder secret of at least 32 characters when USDT receiving is enabled',
+                'USDT_PAYMENT_PROOF_SECRET must be a non-placeholder secret of at least 32 characters in production',
             );
+        }
+        if (production) {
+            assertProductionUsdtSecretIsolation(process.env, usdtPaymentProofSecret);
+        }
+        if (production && !loadReviewedRefundSenders(process.env).length) {
+            throw new Error('USDT_REFUND_SENDER_ADDRESSES must contain at least one reviewed TRON wallet');
         }
         configureUsdtPaymentProofSecret(usdtPaymentProofSecret || 'development-usdt-payment-proof-secret');
         return StoreManagementPlugin;
@@ -354,18 +374,17 @@ export class StoreManagementPlugin implements NestModule, OnApplicationBootstrap
     private async ensureUsdtPaymentMethod(): Promise<void> {
         const ctx = await this.requestContextService.create({ apiType: 'admin' });
         const repository = this.connection.rawConnection.getRepository(PaymentMethod);
-        const walletConfigured = this.usdtWalletConfiguration.get().enabled;
+        const channels = await this.connection.getRepository(ctx, Channel).find();
+        await this.storeUsdtWallets.rotateEncryptionKey(ctx);
+        await this.storeUsdtWallets.seedLegacyWallet(ctx, channels, this.usdtWalletConfiguration.get());
+        const configuredChannelIds = new Set(
+            (await this.storeUsdtWallets.list(ctx))
+                .filter(wallet => wallet.configured)
+                .map(wallet => String(wallet.channelId)),
+        );
         let paymentMethod = await repository.findOne({
             where: { code: USDT_TRC20_PAYMENT_METHOD_CODE },
         });
-        if (!walletConfigured) {
-            if (paymentMethod?.enabled) {
-                paymentMethod.enabled = false;
-                await repository.save(paymentMethod, { reload: false });
-            }
-            return;
-        }
-        const channels = await this.connection.getRepository(ctx, Channel).find();
         if (!paymentMethod) {
             paymentMethod = await this.paymentMethodService.create(ctx, {
                 code: USDT_TRC20_PAYMENT_METHOD_CODE,
@@ -388,12 +407,28 @@ export class StoreManagementPlugin implements NestModule, OnApplicationBootstrap
             paymentMethod.enabled = true;
             await repository.save(paymentMethod, { reload: false });
         }
-        await this.channelService.assignToChannels(
-            ctx,
-            PaymentMethod,
-            paymentMethod.id,
-            channels.map(channel => channel.id),
-        );
+        const assignedChannelIds = channels
+            .filter(channel => configuredChannelIds.has(String(channel.id)))
+            .map(channel => channel.id);
+        const unassignedChannelIds = channels
+            .filter(channel => !configuredChannelIds.has(String(channel.id)))
+            .map(channel => channel.id);
+        if (assignedChannelIds.length) {
+            await this.channelService.assignToChannels(
+                ctx,
+                PaymentMethod,
+                paymentMethod.id,
+                assignedChannelIds,
+            );
+        }
+        if (unassignedChannelIds.length) {
+            await this.channelService.removeFromChannels(
+                ctx,
+                PaymentMethod,
+                paymentMethod.id,
+                unassignedChannelIds,
+            );
+        }
     }
 
     private async ensurePrimaryStoreAdminPermissions(): Promise<void> {

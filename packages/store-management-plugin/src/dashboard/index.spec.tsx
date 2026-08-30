@@ -20,6 +20,7 @@ vi.mock('./store-promotion-campaign-page', () => ({
     storePromotionCampaignRoute: {},
 }));
 vi.mock('./system-announcement-page', () => ({ systemAnnouncementRoute: {} }));
+vi.mock('./usdt-payment-management-page', () => ({ usdtPaymentManagementRoute: {} }));
 
 describe('store management dashboard extension', () => {
     beforeEach(() => {

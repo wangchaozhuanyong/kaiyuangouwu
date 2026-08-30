@@ -4,7 +4,8 @@ import {
     ContentTranslationService,
     PreparedLocalizedContentField,
 } from '@vendure/content-translation-plugin';
-import { RequestContext, TransactionalConnection, UserInputError } from '@vendure/core';
+import { Channel, RequestContext, TransactionalConnection, UserInputError } from '@vendure/core';
+import { In } from 'typeorm';
 
 import { SystemAnnouncement } from './entities/system-announcement.entity';
 import {
@@ -22,6 +23,7 @@ export class SystemAnnouncementService {
 
     findAll(ctx: RequestContext): Promise<SystemAnnouncement[]> {
         return this.connection.getRepository(ctx, SystemAnnouncement).find({
+            relations: { channels: true },
             order: { priority: 'DESC', createdAt: 'DESC' },
         });
     }
@@ -31,9 +33,15 @@ export class SystemAnnouncementService {
         const announcements = await this.connection
             .getRepository(ctx, SystemAnnouncement)
             .createQueryBuilder('announcement')
+            .leftJoin('announcement.channels', 'targetChannel')
             .where('announcement.enabled = :enabled', { enabled: true })
             .andWhere('(announcement.startsAt IS NULL OR announcement.startsAt <= :now)', { now })
             .andWhere('(announcement.endsAt IS NULL OR announcement.endsAt > :now)', { now })
+            .andWhere('(announcement.targetMode = :allMode OR targetChannel.id = :channelId)', {
+                allMode: 'ALL',
+                channelId: ctx.channelId,
+            })
+            .distinct(true)
             .orderBy('announcement.priority', 'DESC')
             .addOrderBy('announcement.createdAt', 'DESC')
             .take(20)
@@ -50,7 +58,7 @@ export class SystemAnnouncementService {
     }
 
     async create(ctx: RequestContext, input: CreateSystemAnnouncementInput): Promise<SystemAnnouncement> {
-        const { values, prepared } = await this.normalize(input);
+        const { values, prepared } = await this.normalize(ctx, input);
         const repository = this.connection.getRepository(ctx, SystemAnnouncement);
         const saved = await repository.save(repository.create(values));
         await this.recordTranslationState(ctx, saved, prepared);
@@ -59,9 +67,12 @@ export class SystemAnnouncementService {
 
     async update(ctx: RequestContext, input: UpdateSystemAnnouncementInput): Promise<SystemAnnouncement> {
         const repository = this.connection.getRepository(ctx, SystemAnnouncement);
-        const announcement = await repository.findOne({ where: { id: input.id } });
+        const announcement = await repository.findOne({
+            where: { id: input.id },
+            relations: { channels: true },
+        });
         if (!announcement) throw new UserInputError('找不到该系统公告');
-        const { values, prepared } = await this.normalize(input, announcement);
+        const { values, prepared } = await this.normalize(ctx, input, announcement);
         Object.assign(announcement, values);
         const saved = await repository.save(announcement);
         await this.recordTranslationState(ctx, saved, prepared);
@@ -77,6 +88,7 @@ export class SystemAnnouncementService {
     }
 
     private async normalize(
+        ctx: RequestContext,
         input: CreateSystemAnnouncementInput | UpdateSystemAnnouncementInput,
         existing?: SystemAnnouncement,
     ) {
@@ -114,6 +126,24 @@ export class SystemAnnouncementService {
         if (linkUrl && !isSafeAnnouncementLink(linkUrl)) {
             throw new UserInputError('跳转链接只能使用 HTTPS、HTTP 或站内相对路径');
         }
+        const targetMode = input.targetMode ?? existing?.targetMode ?? 'ALL';
+        if (!['ALL', 'SINGLE', 'MULTIPLE'].includes(targetMode)) {
+            throw new UserInputError('公告发布范围不正确');
+        }
+        const channelIds = Array.from(new Set((input.channelIds ?? []).map(id => String(id))));
+        if (targetMode === 'SINGLE' && channelIds.length !== 1) {
+            throw new UserInputError('指定单个网店时必须选择 1 个网店');
+        }
+        if (targetMode === 'MULTIPLE' && channelIds.length < 2) {
+            throw new UserInputError('指定多个网店时至少选择 2 个网店');
+        }
+        const channels =
+            targetMode === 'ALL'
+                ? []
+                : await this.connection.getRepository(ctx, Channel).find({ where: { id: In(channelIds) } });
+        if (targetMode !== 'ALL' && channels.length !== channelIds.length) {
+            throw new UserInputError('所选网店不存在或已被删除');
+        }
         return {
             prepared,
             values: {
@@ -126,6 +156,8 @@ export class SystemAnnouncementService {
                 linkUrl,
                 startsAt,
                 endsAt,
+                targetMode,
+                channels,
             },
         };
     }

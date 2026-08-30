@@ -1,5 +1,7 @@
-import { DeepPartial, VendureEntity } from '@vendure/core';
-import { Column, Entity, Index } from 'typeorm';
+import type { SystemAnnouncementTargetMode } from '../types';
+
+import { Channel, DeepPartial, VendureEntity } from '@vendure/core';
+import { Column, Entity, Index, JoinTable, ManyToMany } from 'typeorm';
 
 @Entity({ name: 'system_announcement' })
 @Index('IDX_system_announcement_schedule', ['enabled', 'startsAt', 'endsAt', 'priority'])
@@ -13,6 +15,17 @@ export class SystemAnnouncement extends VendureEntity {
 
     @Column('integer', { default: 0 })
     priority: number;
+
+    @Column('varchar', { length: 16, default: 'ALL' })
+    targetMode: SystemAnnouncementTargetMode;
+
+    @ManyToMany(() => Channel)
+    @JoinTable({
+        name: 'system_announcement_channels_channel',
+        joinColumn: { name: 'systemAnnouncementId', referencedColumnName: 'id' },
+        inverseJoinColumn: { name: 'channelId', referencedColumnName: 'id' },
+    })
+    channels: Channel[];
 
     @Column('varchar', { length: 120 })
     titleZh: string;

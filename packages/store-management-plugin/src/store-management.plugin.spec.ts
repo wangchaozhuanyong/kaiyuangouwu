@@ -32,6 +32,9 @@ describe('StoreManagementPlugin promotion options', () => {
 
     it('enables secure cookies and removes development host bypasses by default in production', () => {
         vi.stubEnv('NODE_ENV', 'production');
+        vi.stubEnv('USDT_PAYMENT_PROOF_SECRET', 'production-usdt-proof-secret-that-is-long-enough');
+        vi.stubEnv('USDT_WALLET_ENCRYPTION_KEY', 'production-wallet-encryption-key-that-is-long-enough');
+        vi.stubEnv('USDT_REFUND_SENDER_ADDRESSES', 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t');
 
         StoreManagementPlugin.init({
             signingSecret: 'production-promotion-secret-that-is-long-enough',
@@ -42,6 +45,35 @@ describe('StoreManagementPlugin promotion options', () => {
             secureCookie: true,
             bypassHosts: [],
         });
+    });
+
+    it('requires payment proofs and every wallet encryption key to use independent secrets', () => {
+        const sharedSecret = 'production-shared-usdt-secret-that-is-long-enough';
+        vi.stubEnv('NODE_ENV', 'production');
+        vi.stubEnv('USDT_PAYMENT_PROOF_SECRET', sharedSecret);
+        vi.stubEnv('USDT_WALLET_ENCRYPTION_KEY', sharedSecret);
+        vi.stubEnv('USDT_REFUND_SENDER_ADDRESSES', 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t');
+
+        expect(() =>
+            StoreManagementPlugin.init({
+                signingSecret: 'production-promotion-secret-that-is-long-enough',
+            }),
+        ).toThrow('independent secrets');
+    });
+
+    it('rejects a previous wallet key that repeats the current production key', () => {
+        const walletKey = 'production-wallet-encryption-key-that-is-long-enough';
+        vi.stubEnv('NODE_ENV', 'production');
+        vi.stubEnv('USDT_PAYMENT_PROOF_SECRET', 'production-usdt-proof-secret-that-is-long-enough');
+        vi.stubEnv('USDT_WALLET_ENCRYPTION_KEY', walletKey);
+        vi.stubEnv('USDT_WALLET_ENCRYPTION_PREVIOUS_KEYS', walletKey);
+        vi.stubEnv('USDT_REFUND_SENDER_ADDRESSES', 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t');
+
+        expect(() =>
+            StoreManagementPlugin.init({
+                signingSecret: 'production-promotion-secret-that-is-long-enough',
+            }),
+        ).toThrow('must not repeat');
     });
 
     it('upgrades store administrators with referral permissions without granting them to employees', async () => {
@@ -56,7 +88,15 @@ describe('StoreManagementPlugin promotion options', () => {
             save: vi.fn().mockImplementation(role => Promise.resolve(role)),
         };
         const paymentMethodRepository = {
-            findOne: vi.fn().mockResolvedValue({ id: 'referral-payment-method' }),
+            findOne: vi
+                .fn()
+                .mockImplementation(({ where }) =>
+                    Promise.resolve(
+                        where.code === 'usdt-trc20'
+                            ? { id: 'usdt-payment-method', enabled: true }
+                            : { id: 'referral-payment-method', enabled: true },
+                    ),
+                ),
         };
         const connection = {
             getRepository: vi.fn((_ctx, entity) => {
@@ -76,8 +116,16 @@ describe('StoreManagementPlugin promotion options', () => {
             connection as any,
             { create: vi.fn().mockResolvedValue({}) } as any,
             { create: vi.fn() } as any,
-            { assignToChannels: vi.fn().mockResolvedValue(undefined) } as any,
+            {
+                assignToChannels: vi.fn().mockResolvedValue(undefined),
+                removeFromChannels: vi.fn().mockResolvedValue(undefined),
+            } as any,
             { get: vi.fn().mockReturnValue({ enabled: false }) } as any,
+            {
+                rotateEncryptionKey: vi.fn().mockResolvedValue(0),
+                seedLegacyWallet: vi.fn().mockResolvedValue(undefined),
+                list: vi.fn().mockResolvedValue([]),
+            } as any,
         );
 
         await plugin.onApplicationBootstrap();

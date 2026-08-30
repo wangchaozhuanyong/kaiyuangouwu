@@ -1,6 +1,6 @@
-import type { StorefrontContentBlock, StorefrontContentItem } from './types';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
+import type { StorefrontContentBlock, StorefrontContentItem } from './types';
 
 import { BusinessServicesPage } from './pages/business-services-page';
 import { StorefrontContext } from './StorefrontContext';
@@ -45,9 +45,9 @@ function businessPluginBlock(): StorefrontContentBlock {
     };
 }
 
-function renderPage(contentBlocks: StorefrontContentBlock[]) {
+function renderPage(contentBlocks: StorefrontContentBlock[], language: 'zh' | 'en' = 'zh') {
     return renderToStaticMarkup(
-        <StorefrontContext.Provider value={{ contentBlocks, language: 'zh', onNavigate: () => undefined }}>
+        <StorefrontContext.Provider value={{ contentBlocks, language, onNavigate: () => undefined }}>
             <BusinessServicesPage />
         </StorefrontContext.Provider>,
     );
@@ -66,5 +66,34 @@ describe('business services page', () => {
 
         expect(markup).toContain('选购遇到问题？');
         expect(markup).not.toContain('商业服务正在陆续开放');
+    });
+
+    it('renders the managed title and description for the active storefront language', () => {
+        const chineseBlock = businessPluginBlock();
+        chineseBlock.settings = { businessServicesCopyVersion: 1 };
+        chineseBlock.title = '定制商业服务';
+        chineseBlock.body = '从这里开始使用店铺工具。';
+
+        const englishBlock = {
+            ...chineseBlock,
+            title: 'Services for your business',
+            body: 'Start using store tools here.',
+        };
+
+        expect(renderPage([chineseBlock])).toContain('定制商业服务');
+        expect(renderPage([chineseBlock])).toContain('从这里开始使用店铺工具。');
+        expect(renderPage([englishBlock], 'en')).toContain('Services for your business');
+        expect(renderPage([englishBlock], 'en')).toContain('Start using store tools here.');
+    });
+
+    it('keeps the built-in copy until the existing plugin block is saved from the new editor', () => {
+        const legacyBlock = businessPluginBlock();
+        legacyBlock.title = '客户端插件配置';
+        legacyBlock.body = '';
+
+        const markup = renderPage([legacyBlock]);
+
+        expect(markup).toContain('发现更多商业能力');
+        expect(markup).not.toContain('客户端插件配置');
     });
 });

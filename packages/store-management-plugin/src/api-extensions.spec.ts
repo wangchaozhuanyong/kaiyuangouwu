@@ -85,6 +85,70 @@ describe('store management API extensions', () => {
             );
         }
     });
+
+    it('exposes scoped announcements and Channel USDT administration only through the Admin API', () => {
+        const adminQuery = adminApiExtensions.definitions.find(
+            definition => definition.kind === Kind.OBJECT_TYPE_EXTENSION && definition.name.value === 'Query',
+        );
+        const adminMutation = adminApiExtensions.definitions.find(
+            definition =>
+                definition.kind === Kind.OBJECT_TYPE_EXTENSION && definition.name.value === 'Mutation',
+        );
+        const announcement = adminApiExtensions.definitions.find(
+            definition =>
+                definition.kind === Kind.OBJECT_TYPE_DEFINITION &&
+                definition.name.value === 'SystemAnnouncement',
+        );
+        const updateAnnouncementInput = adminApiExtensions.definitions.find(
+            definition =>
+                definition.kind === Kind.INPUT_OBJECT_TYPE_DEFINITION &&
+                definition.name.value === 'UpdateSystemAnnouncementInput',
+        );
+        const shopQuery = shopApiExtensions.definitions.find(
+            definition => definition.kind === Kind.OBJECT_TYPE_EXTENSION && definition.name.value === 'Query',
+        );
+
+        if (
+            adminQuery?.kind !== Kind.OBJECT_TYPE_EXTENSION ||
+            adminMutation?.kind !== Kind.OBJECT_TYPE_EXTENSION ||
+            announcement?.kind !== Kind.OBJECT_TYPE_DEFINITION ||
+            updateAnnouncementInput?.kind !== Kind.INPUT_OBJECT_TYPE_DEFINITION ||
+            shopQuery?.kind !== Kind.OBJECT_TYPE_EXTENSION
+        ) {
+            throw new Error('Expected API extension types are missing');
+        }
+        expect(adminQuery.fields?.map(field => field.name.value)).toEqual(
+            expect.arrayContaining([
+                'myStoreUsdtWallet',
+                'myStoreUsdtPaymentStats',
+                'storeUsdtWallets',
+                'storeUsdtPaymentStats',
+                'myStorePaymentStats',
+                'myStorePaymentDetails',
+                'myStoreUsdtManualRefunds',
+                'storePaymentStats',
+                'storePaymentDetails',
+                'storeUsdtManualRefunds',
+            ]),
+        );
+        expect(adminMutation.fields?.map(field => field.name.value)).toEqual(
+            expect.arrayContaining([
+                'submitMyStoreUsdtWallet',
+                'reviewStoreUsdtWallet',
+                'recordStoreUsdtManualRefund',
+            ]),
+        );
+        expect(announcement.fields?.map(field => field.name.value)).toEqual(
+            expect.arrayContaining(['targetMode', 'channels']),
+        );
+        expect(announcement.fields?.map(field => field.name.value)).toHaveLength(
+            new Set(announcement.fields?.map(field => field.name.value)).size,
+        );
+        expect(updateAnnouncementInput.fields?.map(field => field.name.value)).toEqual(
+            expect.arrayContaining(['targetMode', 'channelIds']),
+        );
+        expect(shopQuery.fields?.map(field => field.name.value)).not.toContain('storeUsdtWallets');
+    });
 });
 
 function namedType(type: TypeNode): string {

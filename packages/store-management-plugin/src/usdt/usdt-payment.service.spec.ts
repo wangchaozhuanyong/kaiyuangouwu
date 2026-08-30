@@ -51,6 +51,7 @@ describe('UsdtPaymentService', () => {
         expect(intent).toMatchObject({
             receivingAddress,
             receivingAddressFingerprint,
+            network: 'TRC20',
             tokenContractAddress: USDT_TRC20_CONTRACT_ADDRESS,
             status: 'PENDING',
         });
@@ -67,6 +68,7 @@ describe('UsdtPaymentService', () => {
             createdAt: new Date('2026-08-26T02:00:00.000Z'),
             expiresAt: new Date('2026-08-26T02:10:00.000Z'),
             expectedUsdtAmount: '13.850123',
+            network: 'TRC20',
             receivingAddress,
             receivingAddressFingerprint,
             tokenContractAddress: USDT_TRC20_CONTRACT_ADDRESS,

@@ -74,6 +74,9 @@ import { AlignReferralPosterTemplateDefaults1787864400000 } from './178786440000
 import { AddCatalogSuppliers1787868000000 } from './1787868000000-add-catalog-suppliers';
 import { AddImagePricingSnapshots1787871600000 } from './1787871600000-add-image-pricing-snapshots';
 import { AlignCatalogSupplierSchema1787875200000 } from './1787875200000-align-catalog-supplier-schema';
+import { ScopeSystemAnnouncements1787878800000 } from './1787878800000-scope-system-announcements';
+import { AddChannelUsdtWallets1787882400000 } from './1787882400000-add-channel-usdt-wallets';
+import { AddUsdtManualRefunds1787886000000 } from './1787886000000-add-usdt-manual-refunds';
 
 export const devServerMigrations = [
     CommerceFulfillment1786514145999,
@@ -152,4 +155,7 @@ export const devServerMigrations = [
     AddCatalogSuppliers1787868000000,
     AddImagePricingSnapshots1787871600000,
     AlignCatalogSupplierSchema1787875200000,
+    ScopeSystemAnnouncements1787878800000,
+    AddChannelUsdtWallets1787882400000,
+    AddUsdtManualRefunds1787886000000,
 ];

@@ -1,9 +1,12 @@
+import { BriefcaseBusiness, Puzzle, Sparkles } from 'lucide-react';
 import type { RouteState } from '../storefront-router';
 import type { StorefrontContentBlock, StorefrontLanguage } from '../types';
-import { BriefcaseBusiness, Puzzle, Sparkles } from 'lucide-react';
 
 import { ClientPluginSlot, resolveClientPlugins } from '../client-plugins/client-plugin-registry';
 import { useStorefront } from '../StorefrontContext';
+
+const CLIENT_PLUGIN_BLOCK_CODE = 'storefront-client-plugins';
+const BUSINESS_SERVICES_COPY_VERSION = 1;
 
 interface BusinessServicesPageProps {
     contentBlocks: StorefrontContentBlock[];
@@ -14,7 +17,19 @@ interface BusinessServicesPageProps {
 export function BusinessServicesPage() {
     const { contentBlocks, language, onNavigate } = useStorefront<BusinessServicesPageProps>();
     const isZh = language === 'zh';
-    const clientPluginBlock = contentBlocks.find(block => block.type === 'CLIENT_PLUGINS');
+    const clientPluginBlock = contentBlocks.find(
+        block => block.type === 'CLIENT_PLUGINS' && block.code === CLIENT_PLUGIN_BLOCK_CODE,
+    );
+    const hasManagedCopy =
+        clientPluginBlock?.settings?.businessServicesCopyVersion === BUSINESS_SERVICES_COPY_VERSION;
+    const heroTitle =
+        (hasManagedCopy ? clientPluginBlock?.title.trim() : '') ||
+        (isZh ? '发现更多商业能力' : 'Discover more business capabilities');
+    const heroDescription =
+        (hasManagedCopy ? clientPluginBlock?.body.trim() : '') ||
+        (isZh
+            ? '这里展示店铺为你开放的工具、服务和专属权益。'
+            : 'Explore tools, services, and benefits enabled by this store.');
     const plugins = resolveClientPlugins(clientPluginBlock, 'BUSINESS_SERVICES_MAIN');
 
     return (
@@ -33,14 +48,8 @@ export function BusinessServicesPage() {
                     <Sparkles />
                 </span>
                 <div>
-                    <h2 id="business-services-heading">
-                        {isZh ? '发现更多商业能力' : 'Discover more business capabilities'}
-                    </h2>
-                    <p>
-                        {isZh
-                            ? '这里展示店铺为你开放的工具、服务和专属权益。'
-                            : 'Explore tools, services, and benefits enabled by this store.'}
-                    </p>
+                    <h2 id="business-services-heading">{heroTitle}</h2>
+                    <p>{heroDescription}</p>
                 </div>
             </section>
 

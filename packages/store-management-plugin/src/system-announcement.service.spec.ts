@@ -47,10 +47,16 @@ describe('SystemAnnouncementService', () => {
         ]);
         const service = serviceWith(repository);
 
-        await expect(service.findActive({ languageCode: 'en' } as any)).resolves.toEqual([]);
+        await expect(
+            service.findActive({ languageCode: 'en', channelId: 'channel-1' } as any),
+        ).resolves.toEqual([]);
         expect(repository.queryBuilder.where).toHaveBeenCalledWith('announcement.enabled = :enabled', {
             enabled: true,
         });
+        expect(repository.queryBuilder.andWhere).toHaveBeenCalledWith(
+            '(announcement.targetMode = :allMode OR targetChannel.id = :channelId)',
+            { allMode: 'ALL', channelId: 'channel-1' },
+        );
     });
 
     it('rejects unsafe announcement links', async () => {
@@ -63,9 +69,24 @@ describe('SystemAnnouncementService', () => {
             }),
         ).rejects.toThrow('跳转链接');
     });
+
+    it('requires two valid Channels for a multiple-store announcement', async () => {
+        const repository = repositoryHarness();
+        const channelRepository = { find: vi.fn().mockResolvedValue([{ id: 'channel-1' }]) };
+        const service = serviceWith(repository, channelRepository);
+
+        await expect(
+            service.create({ languageCode: 'zh_Hans' } as any, {
+                titleZh: '指定网店公告',
+                contentZh: '只有指定网店可见',
+                targetMode: 'MULTIPLE',
+                channelIds: ['channel-1'],
+            }),
+        ).rejects.toThrow('至少选择 2 个网店');
+    });
 });
 
-function serviceWith(repository: ReturnType<typeof repositoryHarness>) {
+function serviceWith(repository: ReturnType<typeof repositoryHarness>, channelRepository: any = repository) {
     const translations = {
         prepareLocalizedFields: vi.fn(async fields =>
             fields.map((field: any) => ({
@@ -79,19 +100,35 @@ function serviceWith(repository: ReturnType<typeof repositoryHarness>) {
         ),
         recordPreparedFields: vi.fn(async () => undefined),
     };
-    return new SystemAnnouncementService({ getRepository: () => repository } as any, translations as any);
+    return new SystemAnnouncementService(
+        {
+            getRepository: (_ctx: unknown, entity: { name?: string }) =>
+                entity.name === 'Channel' ? channelRepository : repository,
+        } as any,
+        translations as any,
+    );
 }
 
 function repositoryHarness(activeAnnouncements: any[] = []) {
     const queryBuilder = {
+        leftJoin: vi.fn(),
         where: vi.fn(),
         andWhere: vi.fn(),
+        distinct: vi.fn(),
         orderBy: vi.fn(),
         addOrderBy: vi.fn(),
         take: vi.fn(),
         getMany: vi.fn(async () => activeAnnouncements),
     };
-    for (const method of ['where', 'andWhere', 'orderBy', 'addOrderBy', 'take'] as const) {
+    for (const method of [
+        'leftJoin',
+        'where',
+        'andWhere',
+        'distinct',
+        'orderBy',
+        'addOrderBy',
+        'take',
+    ] as const) {
         queryBuilder[method].mockReturnValue(queryBuilder);
     }
     return {

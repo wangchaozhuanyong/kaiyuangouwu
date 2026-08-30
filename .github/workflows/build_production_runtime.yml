@@ -144,6 +144,9 @@ jobs:
                   SUPERADMIN_PASSWORD: build-check-admin-password
                   COOKIE_SECRET: build-check-cookie-secret-000000000000000000000000
                   ORDER_CONFIRMATION_TOKEN_SECRET: build-check-order-token-secret-000000000000000000000000
+                  USDT_PAYMENT_PROOF_SECRET: build-check-usdt-proof-secret-000000000000000000000000
+                  USDT_WALLET_ENCRYPTION_KEY: build-check-usdt-wallet-key-000000000000000000000000
+                  USDT_REFUND_SENDER_ADDRESSES: TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t
                   STOREFRONT_PROMOTION_GATE_ENABLED: 'true'
                   STOREFRONT_ENTRY_SECRET: build-check-entry-secret-000000000000000000000000
                   DB: postgres

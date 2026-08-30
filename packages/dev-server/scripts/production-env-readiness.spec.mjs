@@ -28,6 +28,10 @@ function readyEnvironment(overrides = {}) {
         ORDER_CONFIRMATION_EMAIL_TOKEN_TTL_SECONDS: '604800',
         STOREFRONT_PROMOTION_GATE_ENABLED: 'true',
         STOREFRONT_ENTRY_SECRET: 'promotion-entry-secret-that-is-longer-than-thirty-two-characters',
+        USDT_PAYMENT_PROOF_SECRET: 'usdt-proof-secret-that-is-longer-than-thirty-two-characters',
+        USDT_WALLET_ENCRYPTION_KEY: 'usdt-wallet-key-that-is-longer-than-thirty-two-characters',
+        USDT_WALLET_ENCRYPTION_PREVIOUS_KEYS: '',
+        USDT_REFUND_SENDER_ADDRESSES: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
         DB: 'postgres',
         DB_HOST: 'database.internal',
         DB_PORT: '5432',
@@ -84,7 +88,7 @@ const confirmedSingleHostControls = {
 void test('passes a complete server production environment', () => {
     const report = evaluateProductionEnvironment(readyEnvironment(), 'server', confirmedControls);
     assert.equal(report.ready, true);
-    assert.deepEqual(report.summary, { pass: 32, manual: 0, blocker: 0 });
+    assert.deepEqual(report.summary, { pass: 33, manual: 0, blocker: 0 });
 });
 
 void test('uses different migration expectations for worker and migration roles', () => {
@@ -122,6 +126,7 @@ void test('blocks local services, placeholders, unsafe routing and default crede
             STORE_DOMAIN_BYPASS_HOSTS: 'localhost',
             STOREFRONT_PROMOTION_GATE_ENABLED: 'false',
             STOREFRONT_ENTRY_SECRET: 'replace-with-a-secret',
+            USDT_WALLET_ENCRYPTION_KEY: 'replace-with-a-secret',
             IS_INSTRUMENTED: 'false',
         }),
         'server',
@@ -145,6 +150,7 @@ void test('blocks local services, placeholders, unsafe routing and default crede
     assert.ok(blockers.has('smtp-transport'));
     assert.ok(blockers.has('domain-routing'));
     assert.ok(blockers.has('storefront-promotion-gate'));
+    assert.ok(blockers.has('usdt-wallet-security'));
     assert.ok(blockers.has('observability-export'));
 });
 
@@ -204,7 +210,7 @@ void test('allows a verified single-host database and system monitoring profile'
     );
 
     assert.equal(report.ready, true);
-    assert.deepEqual(report.summary, { pass: 33, manual: 0, blocker: 0 });
+    assert.deepEqual(report.summary, { pass: 34, manual: 0, blocker: 0 });
 });
 
 void test('blocks a missing or placeholder auto-card encryption key', () => {
@@ -257,6 +263,33 @@ void test('blocks production without a configured customer-content translation p
             report.checks.some(
                 check => check.id === 'content-translation-provider' && check.status === 'blocker',
             ),
+            true,
+        );
+    }
+});
+
+void test('blocks unsafe USDT settlement, wallet encryption and refund allowlist settings', () => {
+    for (const overrides of [
+        { USDT_PAYMENT_PROOF_SECRET: 'replace-with-proof-secret' },
+        { USDT_WALLET_ENCRYPTION_KEY: '' },
+        { USDT_WALLET_ENCRYPTION_PREVIOUS_KEYS: 'short-previous-key' },
+        {
+            USDT_WALLET_ENCRYPTION_KEY: 'usdt-proof-secret-that-is-longer-than-thirty-two-characters',
+        },
+        {
+            USDT_WALLET_ENCRYPTION_PREVIOUS_KEYS: 'usdt-wallet-key-that-is-longer-than-thirty-two-characters',
+        },
+        { USDT_REFUND_SENDER_ADDRESSES: '' },
+        { USDT_REFUND_SENDER_ADDRESSES: 'not-a-tron-address' },
+    ]) {
+        const report = evaluateProductionEnvironment(
+            readyEnvironment(overrides),
+            'server',
+            confirmedControls,
+        );
+        assert.equal(report.ready, false);
+        assert.equal(
+            report.checks.some(check => check.id === 'usdt-wallet-security' && check.status === 'blocker'),
             true,
         );
     }

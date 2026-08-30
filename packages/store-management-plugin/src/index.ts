@@ -9,6 +9,9 @@ export { ReferralWallet } from './entities/referral-wallet.entity.js';
 export { ReferralWithdrawal } from './entities/referral-withdrawal.entity.js';
 export { StoreAdministratorAccess } from './entities/store-administrator-access.entity.js';
 export { StoreProfile } from './entities/store-profile.entity.js';
+export { StoreUsdtManualRefund } from './entities/store-usdt-manual-refund.entity.js';
+export { StoreUsdtWalletAudit } from './entities/store-usdt-wallet-audit.entity.js';
+export { StoreUsdtWallet } from './entities/store-usdt-wallet.entity.js';
 export { StorefrontPromotionPage } from './entities/storefront-promotion-page.entity.js';
 export { StorefrontUsdtCheckoutQuote } from './entities/storefront-usdt-checkout-quote.entity.js';
 export { StorefrontUsdtPaymentIntent } from './entities/storefront-usdt-payment-intent.entity.js';
@@ -49,6 +52,7 @@ export {
     convertMinorPrice,
 } from './store-currency-settings.service.js';
 export { StoreManagementPlugin } from './store-management.plugin.js';
+export { StorePaymentReportingService } from './store-payment-reporting.service.js';
 export { StoreProfileService } from './store-profile.service.js';
 export { StoreProvisioningService, storeAdministratorPermissions } from './store-provisioning.service.js';
 export { isOperationalStorefront } from './storefront-activation.service.js';
@@ -85,3 +89,5 @@ export type {
     UpdateStorefrontPromotionDraftInput,
     UpdateSystemAnnouncementInput,
 } from './types.js';
+export { StoreUsdtWalletService } from './usdt/store-usdt-wallet.service.js';
+export { UsdtManualRefundService } from './usdt/usdt-manual-refund.service.js';

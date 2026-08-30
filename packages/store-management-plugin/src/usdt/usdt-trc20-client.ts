@@ -1,7 +1,11 @@
 import { Injectable } from '@nestjs/common';
+import { createHash } from 'node:crypto';
 
 import { USDT_TRC20_CONTRACT_ADDRESS, USDT_TRC20_DECIMALS } from './usdt-payment.constants';
-import { UsdtWalletConfigurationService } from './usdt-wallet-configuration.service';
+import {
+    isValidTronMainnetAddress,
+    UsdtWalletConfigurationService,
+} from './usdt-wallet-configuration.service';
 
 const TRONGRID_BASE_URL = 'https://api.trongrid.io';
 const MAX_TRANSFER_PAGES = 5;
@@ -10,6 +14,19 @@ interface TronGridTransferResponse {
     data?: TronGridTransferRecord[];
     meta?: { fingerprint?: string };
     success?: boolean;
+}
+
+interface TronGridEventResponse {
+    data?: TronGridEventRecord[];
+    success?: boolean;
+}
+
+interface TronGridEventRecord {
+    transaction_id?: string;
+    contract_address?: string;
+    event_name?: string;
+    block_timestamp?: number;
+    result?: Record<string, unknown>;
 }
 
 interface TronGridTransferRecord {
@@ -49,14 +66,16 @@ export interface SolidifiedTronTransaction {
 export class UsdtTrc20Client {
     constructor(private readonly walletConfiguration: UsdtWalletConfigurationService) {}
 
-    async incomingTransfers(minTimestamp: Date): Promise<ConfirmedTrc20Transfer[]> {
-        const wallet = this.walletConfiguration.requireConfigured();
+    async incomingTransfers(receivingAddress: string, minTimestamp: Date): Promise<ConfirmedTrc20Transfer[]> {
+        if (!isValidTronMainnetAddress(receivingAddress)) {
+            throw new Error('Cannot scan an invalid TRON receiving address');
+        }
         const records: ConfirmedTrc20Transfer[] = [];
         let fingerprint: string | undefined;
 
         for (let page = 0; page < MAX_TRANSFER_PAGES; page += 1) {
             const url = new URL(
-                `/v1/accounts/${encodeURIComponent(wallet.receivingAddress)}/transactions/trc20`,
+                `/v1/accounts/${encodeURIComponent(receivingAddress)}/transactions/trc20`,
                 TRONGRID_BASE_URL,
             );
             url.searchParams.set('only_confirmed', 'true');
@@ -75,7 +94,7 @@ export class UsdtTrc20Client {
             const payload = (await response.json()) as TronGridTransferResponse;
             if (payload.success === false) throw new Error('TronGrid rejected the transfer query');
             for (const record of payload.data ?? []) {
-                const transfer = parseConfirmedUsdtTransfer(record, wallet.receivingAddress);
+                const transfer = parseConfirmedUsdtTransfer(record, receivingAddress);
                 if (transfer) records.push(transfer);
             }
             fingerprint = payload.meta?.fingerprint;
@@ -107,6 +126,33 @@ export class UsdtTrc20Client {
             return null;
         }
         return { transactionId, blockNumber: Number(receipt.blockNumber) };
+    }
+
+    async solidifiedUsdtTransfer(
+        transactionId: string,
+    ): Promise<(ConfirmedTrc20Transfer & SolidifiedTronTransaction) | null> {
+        const solidified = await this.solidifiedTransaction(transactionId);
+        if (!solidified) return null;
+
+        const url = new URL(
+            `/v1/transactions/${encodeURIComponent(transactionId)}/events`,
+            TRONGRID_BASE_URL,
+        );
+        url.searchParams.set('only_confirmed', 'true');
+        url.searchParams.set('event_name', 'Transfer');
+        url.searchParams.set('contract_address', USDT_TRC20_CONTRACT_ADDRESS);
+        url.searchParams.set('limit', '200');
+        const response = await fetch(url, {
+            headers: { accept: 'application/json', ...this.walletConfiguration.tronGridHeaders() },
+            signal: AbortSignal.timeout(10_000),
+        });
+        if (!response.ok) throw new Error(`TronGrid transaction event query failed (${response.status})`);
+        const payload = (await response.json()) as TronGridEventResponse;
+        if (payload.success === false) throw new Error('TronGrid rejected the transaction event query');
+        const transfer = (payload.data ?? [])
+            .map(event => parseConfirmedUsdtEvent(event))
+            .find(candidate => candidate?.transactionId === transactionId.toLowerCase());
+        return transfer ? { ...transfer, ...solidified, transactionId: transfer.transactionId } : null;
     }
 }
 
@@ -145,6 +191,74 @@ export function formatUsdtBaseUnits(value: string): string {
     const whole = baseUnits / BigInt(1_000_000);
     const fractional = (baseUnits % BigInt(1_000_000)).toString().padStart(6, '0');
     return `${whole}.${fractional}`;
+}
+
+export function parseConfirmedUsdtEvent(record: TronGridEventRecord): ConfirmedTrc20Transfer | null {
+    const transactionId = record.transaction_id?.trim().toLowerCase() ?? '';
+    const contractAddress = normalizeTronAddress(record.contract_address);
+    const from = eventField(record.result, 'from', '0');
+    const to = eventField(record.result, 'to', '1');
+    const value = eventField(record.result, 'value', '2');
+    const normalizedFrom = normalizeTronAddress(from);
+    const normalizedTo = normalizeTronAddress(to);
+    const blockTimestamp = Number(record.block_timestamp);
+    if (
+        !/^[a-f0-9]{64}$/u.test(transactionId) ||
+        record.event_name !== 'Transfer' ||
+        contractAddress !== USDT_TRC20_CONTRACT_ADDRESS ||
+        !normalizedFrom ||
+        !normalizedTo ||
+        !value ||
+        !/^\d+$/u.test(value) ||
+        !Number.isFinite(blockTimestamp) ||
+        blockTimestamp <= 0
+    ) {
+        return null;
+    }
+    return {
+        transactionId,
+        from: normalizedFrom,
+        to: normalizedTo,
+        amount: formatUsdtBaseUnits(value),
+        blockTimestamp: new Date(blockTimestamp),
+    };
+}
+
+function eventField(
+    result: Record<string, unknown> | undefined,
+    namedKey: string,
+    indexedKey: string,
+): string | null {
+    const value = result?.[namedKey] ?? result?.[indexedKey];
+    return typeof value === 'string' ? value.trim() : null;
+}
+
+function normalizeTronAddress(value: string | null | undefined): string | null {
+    if (!value) return null;
+    if (isValidTronMainnetAddress(value)) return value;
+    const hex = value.toLowerCase().replace(/^0x/u, '');
+    const payloadHex = hex.length === 40 ? `41${hex}` : hex;
+    if (!/^41[a-f0-9]{40}$/u.test(payloadHex)) return null;
+    const payload = Buffer.from(payloadHex, 'hex');
+    const checksum = doubleSha256(payload).subarray(0, 4);
+    return encodeBase58(Buffer.concat([payload, checksum]));
+}
+
+function encodeBase58(value: Buffer): string {
+    let numeric = BigInt(`0x${value.toString('hex')}`);
+    let encoded = '';
+    while (numeric > 0) {
+        const remainder = Number(numeric % BigInt(58));
+        encoded = `${'123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'[remainder]}${encoded}`;
+        numeric /= BigInt(58);
+    }
+    let leadingZeroCount = 0;
+    while (leadingZeroCount < value.length && value[leadingZeroCount] === 0) leadingZeroCount += 1;
+    return `${'1'.repeat(leadingZeroCount)}${encoded}`;
+}
+
+function doubleSha256(value: Buffer): Buffer {
+    return createHash('sha256').update(createHash('sha256').update(value).digest()).digest();
 }
 
 function deduplicateTransfers(transfers: ConfirmedTrc20Transfer[]): ConfirmedTrc20Transfer[] {

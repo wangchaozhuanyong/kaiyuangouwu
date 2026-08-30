@@ -16,34 +16,36 @@
 - 确认收款地址、官方 USDT 合约、精确金额、到账时间及交易哈希均正确后，自动把 Vendure 付款结算并将订单推进到待发货。
 - 客户端不能提交“我已付款”来改变订单状态；只有服务器生成的短时 HMAC 凭证能够创建已结算付款。
 
-## 收款钱包防篡改
+## Channel 收款钱包与防篡改
 
-收款地址只读取服务器环境变量 `STOREFRONT_USDT_TRC20_RECEIVING_ADDRESS`，没有 Admin API、Shop API 或 Dashboard 修改入口。生产环境启用地址时，还必须提供 `STOREFRONT_USDT_TRC20_ADDRESS_SHA256`；地址与固定指纹不一致会拒绝启动。
+- 每个 Channel 在商家后台提交自己的 TRON 主网地址；提交后只进入 `PENDING`，不能立即收款。
+- 平台 SuperAdmin 必须核对地址归属后审核。通过后才启用，并只把 USDT 支付方式分配给该 Channel。
+- 待审和启用地址均使用独立的 `USDT_WALLET_ENCRYPTION_KEY` 做 AES-256-GCM 加密；审计表只保存地址指纹，不保存明文。
+- 每个付款报价保存当时的网络、官方 USDT 合约、收款地址和指纹快照。以后更换 Channel 钱包不会破坏旧订单的到账核验。
+- 轮换加密密钥时，把旧密钥临时放入 `USDT_WALLET_ENCRYPTION_PREVIOUS_KEYS`。API 启动时会在数据库事务中自动重加密旧密文并写入 `REENCRYPTED` 审计；确认启动成功并完成备份后，再移除旧密钥。
+- `STOREFRONT_USDT_TRC20_RECEIVING_ADDRESS` 只用于旧部署迁移：首次启动会导入尚未配置的 Channel。新部署应留空并从 Dashboard 提交。
 
-离线生成指纹示例：
-
-```bash
-STOREFRONT_USDT_TRC20_RECEIVING_ADDRESS=T... bun -e 'import { createHash } from "node:crypto"; const address = process.env.STOREFRONT_USDT_TRC20_RECEIVING_ADDRESS ?? ""; console.log(createHash("sha256").update(`storefront-usdt-wallet:v1:${address}`).digest("hex"))'
-```
-
-必须由第二名发布审核人员对照钱包 App 中的完整地址、环境变量地址和页面显示的前 16 位校验码。拥有服务器代码和全部部署密钥的攻击者仍可修改程序本身，因此生产主机权限、CI/CD 审批和密钥管理仍然属于安全边界。
+钱包 App、Dashboard 待审完整地址和地址指纹必须由第二名审核人员交叉核对。拥有生产代码和全部部署密钥的攻击者仍可修改程序本身，因此生产主机权限、CI/CD 审批和密钥管理仍然属于安全边界。
 
 ## 正式开放前必须配置
 
-1. 填写公开的 TRC20 收款地址；不要把私钥、助记词或钱包密码放入服务器。
-2. 生成并独立复核地址 SHA-256 指纹。
-3. 生成独立的 `USDT_PAYMENT_PROOF_SECRET`，API 与 Worker 必须使用同一个值。
-4. 建议申请只读 `TRONGRID_API_KEY`，API 与 Worker 使用同一个收款地址配置。
-5. 使用候选产物的专用迁移入口执行数据库迁移，确认
-   `AddUsdtRateSchedule1787788800000` 已应用后再启动 Vendure Worker；管理后台随后可把采集间隔设为
-   `60` 分钟（每 1 小时）。没有 Worker 就不会自动采集汇率或补扫到账。
-6. 使用小额真实 USDT 完成一次端到端验收，确认订单只进入“待发货”，不会直接标记为“已发货”。
+1. 在生产 Secret Manager 生成互不相同的 `USDT_PAYMENT_PROOF_SECRET` 与 `USDT_WALLET_ENCRYPTION_KEY`；API 与 Worker 必须读取一致的值。不得把密钥写入仓库、发布日志或聊天记录。
+2. 把经过财务与安全审核的退款付款钱包配置到 `USDT_REFUND_SENDER_ADDRESSES`。只配置公钥地址，不得配置私钥、助记词或钱包密码。
+3. 建议申请只读 `TRONGRID_API_KEY`，供 API 与 Worker 查询到账和退款交易凭证。
+4. 使用候选产物的专用迁移入口执行数据库迁移，并确认 `ScopeSystemAnnouncements1787878800000`、`AddChannelUsdtWallets1787882400000`、`AddUsdtManualRefunds1787886000000` 均已应用。
+5. 由每个商家提交收款地址，再由 SuperAdmin 对照钱包 App 完整地址审核；驳回更换地址时，原启用地址仍继续可用。
+6. 启动 Vendure Worker。没有 Worker 就不会自动采集汇率或补扫到账。
+7. 先在生产副本验证数据库升级和回滚，再使用小额真实 USDT 完成付款与退款各一次端到端验收。
+
+生产进程会拒绝长度不足、占位值、重复的新旧钱包密钥，以及与支付签名密钥相同的钱包密钥。暂时不具备小额实付条件时，可先完成备份恢复演练、迁移验证、密钥预检和 Channel 钱包双人复核；付款方式在 Channel 钱包审核通过前不会向该 Channel 开放。
 
 ## 需要人工处理的情况
 
 - 少付、多付、锁价超时后到账、发错网络或订单金额在付款前发生变化。
 - 区块交易已经到账，但 Vendure 订单因优惠券失效等原因无法按原金额结算；系统会标记为 `MANUAL_REVIEW`，不会重复入账。
-- 退款不会自动从钱包转出，避免服务器持有私钥；必须人工复核后从安全钱包处理。
+- 退款不会自动从钱包转出，服务器不持有私钥。操作员必须先从安全钱包人工转账，再登记法币退款金额、实际 USDT、客户地址和交易哈希。
+- 系统只接受已经固化成功的官方 USDT `Transfer` 事件，并逐项核对精确数量、客户地址和已审核付款钱包；交易哈希不能与入账凭证重复，也不能重复登记退款。
+- 登记成功后，Vendure 退款与链上审计记录在同一数据库事务中落库；支付报表按 Channel、支付方式、币种和时间范围展示实收、退款与净收，并提供分页明细。
 
 ## OKX 数据源注意事项
 

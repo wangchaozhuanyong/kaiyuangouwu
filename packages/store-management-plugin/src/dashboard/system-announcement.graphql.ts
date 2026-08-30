@@ -8,6 +8,11 @@ export const systemAnnouncementsQuery = gql`
             updatedAt
             enabled
             priority
+            targetMode
+            channels {
+                id
+                code
+            }
             titleZh
             titleEn
             contentZh
@@ -51,6 +56,8 @@ export interface SystemAnnouncementRecord {
     updatedAt: string;
     enabled: boolean;
     priority: number;
+    targetMode: 'ALL' | 'SINGLE' | 'MULTIPLE';
+    channels: Array<{ id: string; code: string }>;
     titleZh: string;
     titleEn: string;
     contentZh: string;

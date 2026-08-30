@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -21,6 +22,7 @@ const operationsControls = [
     ...profileOperationsControls['single-host'],
 ];
 const placeholderPattern = /^(?:abc|admin|changeme|example|password|superadmin|vendure-dev|replace[-_])/iu;
+const base58Alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
 
 function normalized(value) {
     return String(value ?? '').trim();
@@ -85,6 +87,27 @@ function isPublicHostname(value) {
 function isConfiguredSecret(value, minimumLength) {
     const secret = normalized(value);
     return secret.length >= minimumLength && !placeholderPattern.test(secret);
+}
+
+function isTronMainnetAddress(value) {
+    if (!/^T[1-9A-HJ-NP-Za-km-z]{33}$/u.test(value)) return false;
+    let numeric = 0n;
+    for (const character of value) {
+        const digit = base58Alphabet.indexOf(character);
+        if (digit < 0) return false;
+        numeric = numeric * 58n + BigInt(digit);
+    }
+    let hex = numeric.toString(16);
+    if (hex.length % 2) hex = `0${hex}`;
+    const payload = Buffer.from(hex, 'hex');
+    if (payload.length !== 25 || payload[0] !== 0x41) return false;
+    const body = payload.subarray(0, 21);
+    const checksum = payload.subarray(21);
+    const expected = createHash('sha256')
+        .update(createHash('sha256').update(body).digest())
+        .digest()
+        .subarray(0, 4);
+    return checksum.equals(expected);
 }
 
 function isPersistentDirectory(value) {
@@ -396,6 +419,33 @@ export function evaluateProductionEnvironment(env, role, controls = {}) {
             isConfiguredSecret(env.STOREFRONT_ENTRY_SECRET, 32)
                 ? 'enabled'
                 : 'gate is disabled or signing secret is missing, short, or a placeholder',
+    });
+    const refundSenders = normalized(env.USDT_REFUND_SENDER_ADDRESSES)
+        .split(',')
+        .map(value => value.trim())
+        .filter(Boolean);
+    const previousWalletKeys = normalized(env.USDT_WALLET_ENCRYPTION_PREVIOUS_KEYS)
+        .split(',')
+        .map(value => value.trim())
+        .filter(Boolean);
+    const paymentProofSecret = normalized(env.USDT_PAYMENT_PROOF_SECRET);
+    const walletEncryptionKey = normalized(env.USDT_WALLET_ENCRYPTION_KEY);
+    const walletKeyRing = [walletEncryptionKey, ...previousWalletKeys];
+    const usdtSecurityReady =
+        isConfiguredSecret(paymentProofSecret, 32) &&
+        isConfiguredSecret(walletEncryptionKey, 32) &&
+        previousWalletKeys.every(value => isConfiguredSecret(value, 32)) &&
+        new Set(walletKeyRing).size === walletKeyRing.length &&
+        !walletKeyRing.includes(paymentProofSecret) &&
+        refundSenders.length > 0 &&
+        refundSenders.every(isTronMainnetAddress);
+    pushCheck(checks, {
+        id: 'usdt-wallet-security',
+        title: 'USDT 钱包加密、结算签名与退款白名单',
+        passed: usdtSecurityReady,
+        detail: usdtSecurityReady
+            ? 'independent secrets and reviewed refund senders configured'
+            : 'proof secret, wallet key ring, secret isolation, or refund sender allowlist is missing/unsafe',
     });
     pushCheck(checks, {
         id: 'bootstrap-disabled',

@@ -30,27 +30,158 @@ const storeCurrencyConfigurationFields = gql`
         usdtPaymentNetwork
         usdtReceivingAddressMasked
         usdtReceivingAddressFingerprint
+        usdtWalletReviewStatus
+    }
+`;
+
+const storeUsdtWalletFields = gql`
+    fragment StoreUsdtWalletFields on StoreUsdtWallet {
+        channelId
+        channelCode
+        reviewStatus
+        configured
+        network
+        activeReceivingAddressMasked
+        activeReceivingAddressFingerprint
+        pendingReceivingAddress
+        pendingReceivingAddressFingerprint
+        submittedAt
+        reviewedAt
+        rejectionReason
+    }
+`;
+
+const storeUsdtManualRefundFields = gql`
+    fragment StoreUsdtManualRefundFields on StoreUsdtManualRefund {
+        id
+        refundId
+        channelId
+        channelCode
+        paymentId
+        orderId
+        orderCode
+        currencyCode
+        amount
+        usdtAmount
+        network
+        transactionId
+        fromAddress
+        toAddress
+        blockNumber
+        blockTimestamp
+        reason
+        operatorUserId
+        state
+        createdAt
     }
 `;
 
 export const myStoreCurrencyConfigurationQuery = gql`
     ${storeCurrencyConfigurationFields}
+    ${storeUsdtWalletFields}
+    ${storeUsdtManualRefundFields}
     query MyStoreCurrencyConfiguration {
         myStoreCurrencyConfiguration {
             ...StoreCurrencyConfigurationFields
         }
+        myStoreUsdtWallet {
+            ...StoreUsdtWalletFields
+        }
+        myStoreUsdtPaymentStats {
+            channelId
+            channelCode
+            totalCount
+            pendingCount
+            settledCount
+            manualReviewCount
+            expiredCount
+            expectedUsdtTotal
+            receivedUsdtTotal
+            fiatTotals {
+                currencyCode
+                amount
+            }
+        }
         myStoreUsdtPaymentIntents {
             id
+            channelId
+            channelCode
             orderId
             orderCode
             network
+            fiatCurrencyCode
+            fiatAmount
+            fiatPerUsdtRate
+            markupPercent
+            rateSource
+            receivingAddressMasked
+            receivingAddressFingerprint
+            baseUsdtAmount
             expectedUsdtAmount
+            receivedUsdtAmount
+            senderAddressMasked
             status
             transactionId
             failureReason
             createdAt
             expiresAt
             settledAt
+            blockNumber
+            blockTimestamp
+            lastCheckedAt
+        }
+        myStorePaymentStats {
+            channelId
+            channelCode
+            paymentMethodCode
+            currencyCode
+            settledCount
+            refundCount
+            grossAmount
+            refundedAmount
+            netAmount
+        }
+        myStorePaymentDetails(options: { take: 100 }) {
+            items {
+                id
+                channelId
+                channelCode
+                orderId
+                orderCode
+                paymentMethodCode
+                paymentState
+                currencyCode
+                amount
+                refundedAmount
+                netAmount
+                transactionId
+                createdAt
+            }
+            totalItems
+        }
+        myStoreUsdtManualRefunds(options: { take: 100 }) {
+            items {
+                ...StoreUsdtManualRefundFields
+            }
+            totalItems
+        }
+    }
+`;
+
+export const submitMyStoreUsdtWalletMutation = gql`
+    ${storeUsdtWalletFields}
+    mutation SubmitMyStoreUsdtWallet($receivingAddress: String!) {
+        submitMyStoreUsdtWallet(receivingAddress: $receivingAddress) {
+            ...StoreUsdtWalletFields
+        }
+    }
+`;
+
+export const recordStoreUsdtManualRefundMutation = gql`
+    ${storeUsdtManualRefundFields}
+    mutation RecordStoreUsdtManualRefund($input: StoreUsdtManualRefundInput!) {
+        recordStoreUsdtManualRefund(input: $input) {
+            ...StoreUsdtManualRefundFields
         }
     }
 `;
@@ -115,25 +246,152 @@ export interface StoreCurrencyConfigurationRecord {
     usdtPaymentNetwork: string;
     usdtReceivingAddressMasked: string | null;
     usdtReceivingAddressFingerprint: string | null;
+    usdtWalletReviewStatus: string;
+}
+
+export interface StoreUsdtWalletRecord {
+    channelId: string;
+    channelCode: string;
+    reviewStatus: 'UNCONFIGURED' | 'PENDING' | 'ACTIVE' | 'REJECTED';
+    configured: boolean;
+    network: string;
+    activeReceivingAddressMasked: string | null;
+    activeReceivingAddressFingerprint: string | null;
+    pendingReceivingAddress: string | null;
+    pendingReceivingAddressFingerprint: string | null;
+    submittedAt: string | null;
+    reviewedAt: string | null;
+    rejectionReason: string | null;
+}
+
+export interface StoreUsdtPaymentStatsRecord {
+    channelId: string;
+    channelCode: string;
+    totalCount: number;
+    pendingCount: number;
+    settledCount: number;
+    manualReviewCount: number;
+    expiredCount: number;
+    expectedUsdtTotal: number;
+    receivedUsdtTotal: number;
+    fiatTotals: Array<{ currencyCode: string; amount: number }>;
 }
 
 export interface MyStoreCurrencyConfigurationResult {
     myStoreCurrencyConfiguration: StoreCurrencyConfigurationRecord;
+    myStoreUsdtWallet: StoreUsdtWalletRecord;
+    myStoreUsdtPaymentStats: StoreUsdtPaymentStatsRecord;
     myStoreUsdtPaymentIntents: StoreUsdtPaymentIntentRecord[];
+    myStorePaymentStats: StorePaymentStatsRecord[];
+    myStorePaymentDetails: StorePaymentDetailListRecord;
+    myStoreUsdtManualRefunds: StoreUsdtManualRefundListRecord;
+}
+
+export interface StorePaymentStatsRecord {
+    channelId: string;
+    channelCode: string;
+    paymentMethodCode: string;
+    currencyCode: string;
+    settledCount: number;
+    refundCount: number;
+    grossAmount: number;
+    refundedAmount: number;
+    netAmount: number;
+}
+
+export interface StorePaymentDetailRecord {
+    id: string;
+    channelId: string;
+    channelCode: string;
+    orderId: string;
+    orderCode: string;
+    paymentMethodCode: string;
+    paymentState: string;
+    currencyCode: string;
+    amount: number;
+    refundedAmount: number;
+    netAmount: number;
+    transactionId: string | null;
+    createdAt: string;
+}
+
+export interface StorePaymentDetailListRecord {
+    items: StorePaymentDetailRecord[];
+    totalItems: number;
+}
+
+export interface StoreUsdtManualRefundRecord {
+    id: string;
+    refundId: string;
+    channelId: string;
+    channelCode: string;
+    paymentId: string;
+    orderId: string;
+    orderCode: string;
+    currencyCode: string;
+    amount: number;
+    usdtAmount: string;
+    network: string;
+    transactionId: string;
+    fromAddress: string;
+    toAddress: string;
+    blockNumber: number;
+    blockTimestamp: string;
+    reason: string;
+    operatorUserId: string;
+    state: string;
+    createdAt: string;
+}
+
+export interface StoreUsdtManualRefundListRecord {
+    items: StoreUsdtManualRefundRecord[];
+    totalItems: number;
+}
+
+export interface RecordStoreUsdtManualRefundResult {
+    recordStoreUsdtManualRefund: StoreUsdtManualRefundRecord;
+}
+
+export interface StoreUsdtManualRefundMutationInput {
+    paymentId: string;
+    amount: number;
+    usdtAmount: string;
+    recipientAddress: string;
+    transactionId: string;
+    reason: string;
 }
 
 export interface StoreUsdtPaymentIntentRecord {
     id: string;
+    channelId: string;
+    channelCode: string;
     orderId: string;
     orderCode: string;
     network: string;
+    fiatCurrencyCode: string;
+    fiatAmount: number;
+    fiatPerUsdtRate: number;
+    markupPercent: number;
+    rateSource: string;
+    receivingAddressMasked: string;
+    receivingAddressFingerprint: string;
+    baseUsdtAmount: number;
     expectedUsdtAmount: number;
+    receivedUsdtAmount: number | null;
+    senderAddressMasked: string | null;
     status: 'PENDING' | 'SETTLED' | 'MANUAL_REVIEW' | 'EXPIRED';
     transactionId: string | null;
     failureReason: string | null;
     createdAt: string;
     expiresAt: string;
     settledAt: string | null;
+    blockNumber: number | null;
+    blockTimestamp: string | null;
+    lastCheckedAt: string | null;
+}
+
+export interface SubmitMyStoreUsdtWalletResult {
+    submitMyStoreUsdtWallet: StoreUsdtWalletRecord;
 }
 
 export interface UpdateStoreCurrencyConfigurationResult {
