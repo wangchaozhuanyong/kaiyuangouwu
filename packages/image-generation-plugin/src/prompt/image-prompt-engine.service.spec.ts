@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
     firstSuccessfulPromptProvider,
     ImagePromptEngineService,
+    optimizerSystemPrompt,
     startOfBeijingDay,
 } from './image-prompt-engine.service';
 
@@ -52,5 +53,18 @@ describe('prompt provider failover', () => {
         await expect(
             firstSuccessfulPromptProvider(scope => Promise.reject(new Error(`${scope} unavailable`))),
         ).rejects.toThrow('GEMINI unavailable');
+    });
+});
+
+describe('prompt optimizer language instruction', () => {
+    it('requires Chinese descriptive fields for Chinese input', () => {
+        const prompt = optimizerSystemPrompt('zh');
+
+        expect(prompt).toContain('entirely in Simplified Chinese');
+        expect(prompt).toContain('exact user text, brand names, product names, and model names');
+    });
+
+    it('requires English descriptive fields for English input', () => {
+        expect(optimizerSystemPrompt('en')).toContain('entirely in English');
     });
 });

@@ -6,10 +6,16 @@
         "lighting": "match the requested target scene",
         "style": "high-fidelity controlled edit"
     },
+    "defaultsZh": {
+        "composition": "除非用户明确要求改变，否则保留指定的参考图结构",
+        "lighting": "匹配用户要求的目标场景光线",
+        "style": "高保真、可控的图像编辑"
+    },
     "avoid": [
         "unrequested identity change",
         "unrequested logo change",
         "product shape drift",
         "lost fine details"
-    ]
+    ],
+    "avoidZh": ["未要求的人物身份变化", "未要求的 Logo 变化", "商品外形漂移", "精细细节丢失"]
 }

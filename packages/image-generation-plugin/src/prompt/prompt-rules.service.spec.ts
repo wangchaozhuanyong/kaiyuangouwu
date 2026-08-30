@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { PromptRulesService } from './prompt-rules.service';
+import {
+    detectPromptLanguage,
+    promptLanguageFromLanguageCode,
+    PromptRulesService,
+} from './prompt-rules.service';
 
 describe('PromptRulesService', () => {
     const rules = new PromptRulesService();
@@ -40,7 +44,7 @@ describe('PromptRulesService', () => {
     it('renders a deterministic prompt and rejects malformed model JSON', () => {
         const spec = rules.fallbackSpec('一款白色咖啡机的棚拍产品图');
 
-        expect(rules.render(spec)).toContain('Subject:');
+        expect(rules.render(spec)).toContain('主体：');
         expect(rules.validateSpec({ ...spec, colors: 'white' })).toBeUndefined();
         expect(rules.validateSpec({ ...spec, unexpected: true })).toBeUndefined();
         expect(rules.validateSpec({ ...spec, subject: 'x'.repeat(1_201) })).toBeUndefined();
@@ -64,8 +68,70 @@ describe('PromptRulesService', () => {
 
         expect(spec.exactText).toEqual(['限定礼盒']);
         expect(spec.preserve).toContain('用户明确要求保留的参考图主体与细节');
-        expect(rendered).toContain('Render this text exactly: "限定礼盒"');
-        expect(rendered).toContain('Preserve:');
-        expect(rendered).toContain('Avoid:');
+        expect(rendered).toContain('需精确呈现的文字："限定礼盒"');
+        expect(rendered).toContain('保留：');
+        expect(rendered).toContain('避免：');
+    });
+
+    it('renders Chinese prompts entirely with Chinese rule labels and fallback copy', () => {
+        const rendered = rules.render(rules.fallbackSpec('一罐百事可乐饮料产品，干净的棚拍背景'));
+
+        expect(rendered).toContain('主体：一罐百事可乐饮料产品');
+        expect(rendered).toContain('构图：商品层级清晰');
+        expect(rendered).toContain('光线：可控且专业的商业摄影光线');
+        expect(rendered).toContain('避免：虚构品牌信息');
+        expect(rendered).not.toContain('Subject:');
+        expect(rendered).not.toContain('Composition:');
+    });
+
+    it('keeps English prompts and fallback copy in English', () => {
+        const rendered = rules.render(
+            rules.fallbackSpec('A white insulated bottle on a clean studio background'),
+        );
+
+        expect(rendered).toContain('Subject: A white insulated bottle');
+        expect(rendered).toContain('Composition: clear product hierarchy');
+        expect(rendered).toContain('Avoid: invented branding');
+        expect(rendered).not.toContain('主体：');
+    });
+
+    it('keeps Chinese fallback output localized when an older Skill bundle is active', () => {
+        const currentBundle = structuredClone(rules.serializableBundle);
+        const legacyBundle = structuredClone(currentBundle) as {
+            useCases: Array<Record<string, unknown>>;
+        };
+        for (const useCase of legacyBundle.useCases) {
+            delete useCase.defaultsZh;
+            delete useCase.avoidZh;
+        }
+
+        try {
+            rules.activateBundle(legacyBundle);
+            const rendered = rules.render(rules.fallbackSpec('白色咖啡机商品图'));
+            expect(rendered).toContain('构图：主体清晰、构图协调');
+            expect(rendered).toContain('避免：结构畸变');
+            expect(rendered).not.toContain('clear product hierarchy');
+        } finally {
+            rules.activateBundle(currentBundle);
+        }
+    });
+});
+
+describe('prompt output language', () => {
+    it.each([
+        ['一罐 Pepsi 可乐产品图', 'en', 'zh'],
+        ['Create a poster that says “夏日大促”', 'zh', 'en'],
+        ['A clean ecommerce product photo', 'zh', 'en'],
+        ['纯中文商品摄影', 'en', 'zh'],
+        ['12345', 'zh', 'zh'],
+    ] as const)('detects %s with %s fallback as %s', (prompt, fallback, expected) => {
+        expect(detectPromptLanguage(prompt, fallback)).toBe(expected);
+    });
+
+    it('maps Vendure language codes to the supported prompt languages', () => {
+        expect(promptLanguageFromLanguageCode('zh_Hans')).toBe('zh');
+        expect(promptLanguageFromLanguageCode('zh-CN')).toBe('zh');
+        expect(promptLanguageFromLanguageCode('en')).toBe('en');
+        expect(promptLanguageFromLanguageCode('ms')).toBe('en');
     });
 });

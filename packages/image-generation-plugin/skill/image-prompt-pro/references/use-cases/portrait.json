@@ -6,5 +6,11 @@
         "lighting": "soft flattering portrait light",
         "style": "tasteful adult commercial portrait"
     },
-    "avoid": ["age ambiguity", "sexualized pose", "identity drift", "over-smoothed skin"]
+    "defaultsZh": {
+        "composition": "自然的人像取景与符合人体结构的姿势",
+        "lighting": "柔和、自然修饰面部的人像光线",
+        "style": "得体的成年商业人像"
+    },
+    "avoid": ["age ambiguity", "sexualized pose", "identity drift", "over-smoothed skin"],
+    "avoidZh": ["年龄模糊", "性暗示姿势", "人物身份漂移", "皮肤过度磨皮"]
 }

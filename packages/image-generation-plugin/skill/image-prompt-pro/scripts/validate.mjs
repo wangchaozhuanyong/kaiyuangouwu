@@ -48,8 +48,13 @@ for (const useCase of bundle.useCases) {
         !useCase.defaults?.composition ||
         !useCase.defaults?.lighting ||
         !useCase.defaults?.style ||
+        !useCase.defaultsZh?.composition ||
+        !useCase.defaultsZh?.lighting ||
+        !useCase.defaultsZh?.style ||
         !Array.isArray(useCase.avoid) ||
-        useCase.avoid.length === 0
+        useCase.avoid.length === 0 ||
+        !Array.isArray(useCase.avoidZh) ||
+        useCase.avoidZh.length === 0
     ) {
         throw new Error(`Incomplete use-case profile: ${useCase.code}`);
     }

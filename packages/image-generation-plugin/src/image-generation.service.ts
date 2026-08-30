@@ -58,7 +58,12 @@ import { deriveImageJobSettlement, hasStaleImageOutput } from './image-generatio
 import { isImageResolution, resolutionPrice, supportsNativeResolution } from './image-resolution';
 import { ImageUsageQuotaService } from './image-usage-quota.service';
 import { ImagePromptEngineService, startOfBeijingDay } from './prompt/image-prompt-engine.service';
-import { PromptRulesService } from './prompt/prompt-rules.service';
+import {
+    detectPromptLanguage,
+    promptLanguageFromLanguageCode,
+    PromptRulesService,
+    type PromptOutputLanguage,
+} from './prompt/prompt-rules.service';
 import { ImagePrivateStorageService, UploadedImageFile } from './storage/image-private-storage.service';
 import {
     CreateImageGenerationInput,
@@ -88,7 +93,7 @@ export class ImageGenerationService {
 
     async create(ctx: RequestContext, input: CreateImageGenerationInput) {
         const customer = await this.activeCustomer(ctx);
-        const normalized = this.validateCreateInput(input);
+        const normalized = this.validateCreateInput(input, promptLanguageFromLanguageCode(ctx.languageCode));
         const existing = await this.connection.getRepository(ctx, ImageGenerationJob).findOne({
             where: {
                 channelId: ctx.channelId,
@@ -182,7 +187,11 @@ export class ImageGenerationService {
                 for (const asset of validReferences) {
                     await this.storage.retainReferenceWhileActive(txCtx, asset.id);
                 }
-                const promptSpec = this.rules.fallbackSpec(normalized.prompt, normalized.referenceMode);
+                const promptSpec = this.rules.fallbackSpec(
+                    normalized.prompt,
+                    normalized.referenceMode,
+                    normalized.promptLanguage,
+                );
                 const finalPrompt = this.compileFinalPrompt(normalized, promptSpec);
                 this.promptEngine.assertSafe(finalPrompt);
                 const safetyEvent = await this.quota.reserve(txCtx, {
@@ -1147,7 +1156,10 @@ export class ImageGenerationService {
         return new Date(Date.now() - IMAGE_UNKNOWN_MAX_AGE_MS);
     }
 
-    private validateCreateInput(input: CreateImageGenerationInput) {
+    private validateCreateInput(
+        input: CreateImageGenerationInput,
+        fallbackLanguage: PromptOutputLanguage = 'en',
+    ) {
         const prompt = input.prompt.trim();
         if (!prompt || prompt.length > MAX_PROMPT_LENGTH)
             throw new UserInputError(`原始描述必须为 1 至 ${MAX_PROMPT_LENGTH} 个字符`);
@@ -1178,6 +1190,7 @@ export class ImageGenerationService {
         if (!referenceAssetIds.length && referenceInstruction) {
             throw new UserInputError('添加参考要求前请先上传参考图');
         }
+        const promptLanguage = detectPromptLanguage(prompt, fallbackLanguage);
         return {
             ...input,
             prompt,
@@ -1188,6 +1201,7 @@ export class ImageGenerationService {
             referenceInstruction,
             referenceMode,
             resolution,
+            promptLanguage,
         };
     }
 
@@ -1200,7 +1214,7 @@ export class ImageGenerationService {
         const sameReferenceInstruction = storedReferenceInstruction(job) === input.referenceInstruction;
         const expectedPrompt = this.compileFinalPrompt(
             input,
-            this.rules.fallbackSpec(input.prompt, input.referenceMode),
+            this.rules.fallbackSpec(input.prompt, input.referenceMode, input.promptLanguage),
         );
         const sameExplicitOptimizedPrompt = !input.optimizedPrompt || job.finalPrompt === expectedPrompt;
         if (
@@ -1225,14 +1239,21 @@ export class ImageGenerationService {
         input: ReturnType<ImageGenerationService['validateCreateInput']>,
         promptSpec: ReturnType<PromptRulesService['fallbackSpec']>,
     ): string {
-        const base = input.optimizedPrompt || this.rules.render(promptSpec);
-        const referenceInstruction = referenceModeInstruction(input.referenceMode);
+        const base = input.optimizedPrompt || this.rules.render(promptSpec, input.promptLanguage);
+        const referenceInstruction = referenceModeInstruction(input.referenceMode, input.promptLanguage);
+        const isZh = input.promptLanguage === 'zh';
         const referenceLines = [
             input.referenceAssetIds.length > 1
-                ? `Reference images are attached in order from 1 to ${input.referenceAssetIds.length}.`
+                ? isZh
+                    ? `参考图已按第 1 张至第 ${input.referenceAssetIds.length} 张的顺序附加。`
+                    : `Reference images are attached in order from 1 to ${input.referenceAssetIds.length}.`
                 : '',
-            referenceInstruction ? `Reference instruction: ${referenceInstruction}` : '',
-            input.referenceInstruction ? `Specific reference requirement: ${input.referenceInstruction}` : '',
+            referenceInstruction
+                ? `${isZh ? '参考图要求：' : 'Reference instruction: '}${referenceInstruction}`
+                : '',
+            input.referenceInstruction
+                ? `${isZh ? '具体参考要求：' : 'Specific reference requirement: '}${input.referenceInstruction}`
+                : '',
         ].filter(Boolean);
         const finalPrompt = referenceLines.length ? `${base}\n${referenceLines.join('\n')}` : base;
         if (finalPrompt.length > 8_000) throw new UserInputError('最终提示词超过 8000 个字符');
@@ -1863,8 +1884,11 @@ function normalizeReferenceMode(value?: ImageReferenceMode | null): ImageReferen
     return value && ['STYLE', 'COMPOSITION', 'IDENTITY', 'PRODUCT', 'EDIT'].includes(value) ? value : 'NONE';
 }
 
-function referenceModeInstruction(mode: ImageReferenceMode): string {
-    const instructions: Record<ImageReferenceMode, string> = {
+export function referenceModeInstruction(
+    mode: ImageReferenceMode,
+    language: PromptOutputLanguage = 'en',
+): string {
+    const instructionsEn: Record<ImageReferenceMode, string> = {
         NONE: '',
         STYLE: 'Use the reference only for visual style; do not copy its identity, text, logo, or unrelated objects.',
         COMPOSITION:
@@ -1875,7 +1899,15 @@ function referenceModeInstruction(mode: ImageReferenceMode): string {
             'Preserve the product shape, proportions, materials, colors, labels, and brand details unless explicitly changed.',
         EDIT: 'Edit only the requested regions and preserve all unrequested details from the reference.',
     };
-    return instructions[mode];
+    const instructionsZh: Record<ImageReferenceMode, string> = {
+        NONE: '',
+        STYLE: '仅参考视觉风格，不复制其人物身份、文字、Logo 或无关物体。',
+        COMPOSITION: '保留参考图的构图和空间布局，同时遵循用户要求的主体与内容。',
+        IDENTITY: '保留已同意使用的成年人物身份和面部特征，只修改用户明确要求的内容。',
+        PRODUCT: '除非用户明确要求改变，否则保留商品外形、比例、材质、颜色、标签和品牌细节。',
+        EDIT: '只编辑用户指定的区域，保留参考图中所有未要求修改的细节。',
+    };
+    return (language === 'zh' ? instructionsZh : instructionsEn)[mode];
 }
 
 function supportsGenerationLock(driverType: unknown): boolean {
