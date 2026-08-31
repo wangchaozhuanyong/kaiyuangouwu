@@ -210,12 +210,15 @@ function ProductListPage() {
                         meta: { dependencies: ['variants'] },
                         header: 'SKU',
                         cell: ({ row }) =>
-                            compactVariantValues(row.original.variants.map(variant => variant.sku)),
+                            compactVariantValues(
+                                row.original.variants.map(variant => variant.sku),
+                                t,
+                            ),
                         enableSorting: false,
                     },
                     barcode: {
                         meta: { dependencies: ['variants'] },
-                        header: '条码',
+                        header: t`Barcode`,
                         cell: ({ row }) =>
                             compactVariantValues(
                                 row.original.variants.map(variant =>
@@ -224,12 +227,13 @@ function ProductListPage() {
                                             ?.barcode ?? '',
                                     ),
                                 ),
+                                t,
                             ),
                         enableSorting: false,
                     },
                     sellingPrice: {
                         meta: { dependencies: ['variants'] },
-                        header: '售价',
+                        header: t`Selling price`,
                         cell: ({ row }) => {
                             const variant = row.original.variants[0];
                             if (!variant) return '—';
@@ -237,13 +241,13 @@ function ProductListPage() {
                                 style: 'currency',
                                 currency: variant.currencyCode,
                             }).format(variant.price / 100);
-                            return row.original.variants.length > 1 ? `${amount} 起` : amount;
+                            return row.original.variants.length > 1 ? t`${amount} and up` : amount;
                         },
                         enableSorting: false,
                     },
                     availableStock: {
                         meta: { dependencies: ['variants'] },
-                        header: '可用库存',
+                        header: t`Available stock`,
                         cell: ({ row }) =>
                             row.original.variants.reduce(
                                 (total, variant) =>
@@ -421,11 +425,11 @@ function ProductListPage() {
     );
 }
 
-function compactVariantValues(values: string[]): string {
+function compactVariantValues(values: string[], t: Translate): string {
     const unique = [...new Set(values.map(value => value.trim()).filter(Boolean))];
     if (unique.length === 0) return '—';
     if (unique.length === 1) return unique[0];
-    return `${unique[0]} 等 ${unique.length} 项`;
+    return t`${unique[0]} and ${unique.length} total`;
 }
 
 function CatalogAdvancedFilterAction({
@@ -435,17 +439,18 @@ function CatalogAdvancedFilterAction({
     value: CatalogAdvancedFilters;
     onApply: (value: CatalogAdvancedFilters) => void;
 }>) {
+    const { t } = useLingui();
     const [open, setOpen] = useState(false);
     const [draft, setDraft] = useState(value);
     const activeCount = Object.keys(catalogSummaryFilterInput(value)).length;
     const update = (next: Partial<CatalogAdvancedFilters>) => setDraft(current => ({ ...current, ...next }));
     const apply = () => {
         try {
-            validateAdvancedFilters(draft);
+            validateAdvancedFilters(draft, t);
             onApply({ ...draft });
             setOpen(false);
         } catch (filterError) {
-            toast.error(filterError instanceof Error ? filterError.message : '筛选条件无效');
+            toast.error(filterError instanceof Error ? filterError.message : t`Invalid filter criteria`);
         }
     };
     return (
@@ -458,38 +463,43 @@ function CatalogAdvancedFilterAction({
                 }}
             >
                 <Filter />
-                高级筛选
+                <Trans>Advanced filters</Trans>
                 {activeCount > 0 && <Badge variant="secondary">{activeCount}</Badge>}
             </Button>
             <Sheet open={open} onOpenChange={setOpen}>
                 <SheetContent className="flex w-full flex-col overflow-y-auto sm:max-w-[640px]">
                     <SheetHeader>
-                        <SheetTitle>商品高级筛选</SheetTitle>
+                        <SheetTitle>
+                            <Trans>Product advanced filters</Trans>
+                        </SheetTitle>
                         <SheetDescription>
-                            名称、SKU、条码、价格、成本、毛利、库存和效期均在当前门店内计算。
+                            <Trans>
+                                Name, SKU, barcode, price, cost, margin, stock and shelf life are calculated
+                                for the current store.
+                            </Trans>
                         </SheetDescription>
                     </SheetHeader>
                     <div className="grid flex-1 content-start gap-5 py-6 sm:grid-cols-2">
-                        <FilterField label="名称 / SKU / 条码" className="sm:col-span-2">
+                        <FilterField label={t`Name / SKU / barcode`} className="sm:col-span-2">
                             <Input
                                 value={draft.text}
                                 onChange={event => update({ text: event.target.value })}
-                                placeholder="输入任一关键字"
+                                placeholder={t`Enter any keyword`}
                             />
                         </FilterField>
-                        <FilterField label="分类">
+                        <FilterField label={t`Product group`}>
                             <Input
                                 value={draft.category}
                                 onChange={event => update({ category: event.target.value })}
                             />
                         </FilterField>
-                        <FilterField label="品牌">
+                        <FilterField label={t`Brand`}>
                             <Input
                                 value={draft.brand}
                                 onChange={event => update({ brand: event.target.value })}
                             />
                         </FilterField>
-                        <FilterField label="商品状态">
+                        <FilterField label={t`Product status`}>
                             <Select
                                 value={draft.enabled}
                                 onValueChange={next =>
@@ -500,24 +510,30 @@ function CatalogAdvancedFilterAction({
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="ALL">全部</SelectItem>
-                                    <SelectItem value="ENABLED">启用</SelectItem>
-                                    <SelectItem value="DISABLED">停用</SelectItem>
+                                    <SelectItem value="ALL">
+                                        <Trans>All</Trans>
+                                    </SelectItem>
+                                    <SelectItem value="ENABLED">
+                                        <Trans>Enabled</Trans>
+                                    </SelectItem>
+                                    <SelectItem value="DISABLED">
+                                        <Trans>Disabled</Trans>
+                                    </SelectItem>
                                 </SelectContent>
                             </Select>
                         </FilterField>
-                        <FilterField label="临期范围（天）">
+                        <FilterField label={t`Expiring within (days)`}>
                             <Input
                                 type="number"
                                 min="0"
                                 step="1"
                                 value={draft.expiringWithinDays}
                                 onChange={event => update({ expiringWithinDays: event.target.value })}
-                                placeholder="例如 30"
+                                placeholder={t`For example: 30`}
                             />
                         </FilterField>
                         <RangeFields
-                            label="销售价"
+                            label={t`Selling price`}
                             minimum={draft.minimumSellingPrice}
                             maximum={draft.maximumSellingPrice}
                             step="0.01"
@@ -525,7 +541,7 @@ function CatalogAdvancedFilterAction({
                             onMaximum={maximumSellingPrice => update({ maximumSellingPrice })}
                         />
                         <RangeFields
-                            label="进货成本"
+                            label={t`Purchase cost`}
                             minimum={draft.minimumPurchaseCost}
                             maximum={draft.maximumPurchaseCost}
                             step="0.001"
@@ -533,7 +549,7 @@ function CatalogAdvancedFilterAction({
                             onMaximum={maximumPurchaseCost => update({ maximumPurchaseCost })}
                         />
                         <RangeFields
-                            label="毛利率（%）"
+                            label={t`Margin (%)`}
                             minimum={draft.minimumMargin}
                             maximum={draft.maximumMargin}
                             step="0.1"
@@ -542,7 +558,7 @@ function CatalogAdvancedFilterAction({
                             onMaximum={maximumMargin => update({ maximumMargin })}
                         />
                         <RangeFields
-                            label="可用库存"
+                            label={t`Available stock`}
                             minimum={draft.minimumAvailableStock}
                             maximum={draft.maximumAvailableStock}
                             step="1"
@@ -552,9 +568,11 @@ function CatalogAdvancedFilterAction({
                         />
                         <div className="flex items-center justify-between rounded-lg border p-4 sm:col-span-2">
                             <div>
-                                <Label htmlFor="catalog-low-stock-filter">仅看低库存</Label>
+                                <Label htmlFor="catalog-low-stock-filter">
+                                    <Trans>Low stock only</Trans>
+                                </Label>
                                 <p className="mt-1 text-xs text-muted-foreground">
-                                    可用库存小于或等于预警下限
+                                    <Trans>Available stock is at or below the reorder level</Trans>
                                 </p>
                             </div>
                             <Switch
@@ -573,9 +591,11 @@ function CatalogAdvancedFilterAction({
                                 setOpen(false);
                             }}
                         >
-                            清空筛选
+                            <Trans>Clear filters</Trans>
                         </Button>
-                        <Button onClick={apply}>应用筛选</Button>
+                        <Button onClick={apply}>
+                            <Trans>Apply filters</Trans>
+                        </Button>
                     </SheetFooter>
                 </SheetContent>
             </Sheet>
@@ -613,6 +633,7 @@ function RangeFields({
     onMinimum: (value: string) => void;
     onMaximum: (value: string) => void;
 }>) {
+    const { t } = useLingui();
     return (
         <div className="space-y-2 sm:col-span-2">
             <Label>{label}</Label>
@@ -623,7 +644,7 @@ function RangeFields({
                     step={step}
                     value={minimum}
                     onChange={event => onMinimum(event.target.value)}
-                    placeholder="最低"
+                    placeholder={t`Minimum`}
                 />
                 <Input
                     type="number"
@@ -631,43 +652,45 @@ function RangeFields({
                     step={step}
                     value={maximum}
                     onChange={event => onMaximum(event.target.value)}
-                    placeholder="最高"
+                    placeholder={t`Maximum`}
                 />
             </div>
         </div>
     );
 }
 
-function validateAdvancedFilters(value: CatalogAdvancedFilters): void {
+type Translate = ReturnType<typeof useLingui>['t'];
+
+function validateAdvancedFilters(value: CatalogAdvancedFilters, t: Translate): void {
     for (const [key, label, integer, nonNegative] of [
-        ['minimumSellingPrice', '最低售价', false, true],
-        ['maximumSellingPrice', '最高售价', false, true],
-        ['minimumPurchaseCost', '最低成本', false, true],
-        ['maximumPurchaseCost', '最高成本', false, true],
-        ['minimumMargin', '最低毛利率', false, false],
-        ['maximumMargin', '最高毛利率', false, false],
-        ['minimumAvailableStock', '最低可用库存', true, false],
-        ['maximumAvailableStock', '最高可用库存', true, false],
-        ['expiringWithinDays', '临期天数', true, true],
+        ['minimumSellingPrice', t`Minimum selling price`, false, true],
+        ['maximumSellingPrice', t`Maximum selling price`, false, true],
+        ['minimumPurchaseCost', t`Minimum purchase cost`, false, true],
+        ['maximumPurchaseCost', t`Maximum purchase cost`, false, true],
+        ['minimumMargin', t`Minimum margin`, false, false],
+        ['maximumMargin', t`Maximum margin`, false, false],
+        ['minimumAvailableStock', t`Minimum available stock`, true, false],
+        ['maximumAvailableStock', t`Maximum available stock`, true, false],
+        ['expiringWithinDays', t`Expiring within days`, true, true],
     ] as const) {
         const raw = value[key].trim();
         if (!raw) continue;
         const parsed = Number(raw);
         if (!Number.isFinite(parsed) || (integer && !Number.isInteger(parsed))) {
-            throw new Error(`${label}格式无效`);
+            throw new Error(t`${label} has an invalid format`);
         }
-        if (nonNegative && parsed < 0) throw new Error(`${label}不能为负数`);
+        if (nonNegative && parsed < 0) throw new Error(t`${label} cannot be negative`);
     }
     for (const [minimumKey, maximumKey, label] of [
-        ['minimumSellingPrice', 'maximumSellingPrice', '售价'],
-        ['minimumPurchaseCost', 'maximumPurchaseCost', '成本'],
-        ['minimumMargin', 'maximumMargin', '毛利率'],
-        ['minimumAvailableStock', 'maximumAvailableStock', '可用库存'],
+        ['minimumSellingPrice', 'maximumSellingPrice', t`Selling price`],
+        ['minimumPurchaseCost', 'maximumPurchaseCost', t`Purchase cost`],
+        ['minimumMargin', 'maximumMargin', t`Margin`],
+        ['minimumAvailableStock', 'maximumAvailableStock', t`Available stock`],
     ] as const) {
         const minimum = optionalFilterNumber(value[minimumKey]);
         const maximum = optionalFilterNumber(value[maximumKey]);
         if (minimum != null && maximum != null && minimum > maximum) {
-            throw new Error(`${label}上限不能小于下限`);
+            throw new Error(t`${label} maximum cannot be lower than minimum`);
         }
     }
 }

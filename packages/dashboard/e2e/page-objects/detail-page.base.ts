@@ -53,7 +53,9 @@ export class BaseDetailPage {
     }
 
     async expectNewPageLoaded() {
-        await expect(this.page.getByTestId('page-heading')).toBeVisible({
+        await expect(
+            this.page.getByTestId('page-heading').filter({ hasText: this.config.newTitle }),
+        ).toBeVisible({
             timeout: 10_000,
         });
     }

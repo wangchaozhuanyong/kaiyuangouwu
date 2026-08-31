@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 import { BaseListPage } from '../../page-objects/list-page.base.js';
+import { expectProductEditorOpen } from '../../utils/product-test-helpers.js';
 
 test.describe('Product List', () => {
     const listPage = (page: import('@playwright/test').Page) =>
@@ -26,7 +27,7 @@ test.describe('Product List', () => {
         expect(await rows.count()).toBeGreaterThan(0);
     });
 
-    test('should navigate to product detail when clicking a product', async ({ page }) => {
+    test('should open the product editor when clicking a product', async ({ page }) => {
         const lp = listPage(page);
         await lp.goto();
         await lp.expectLoaded();
@@ -35,7 +36,7 @@ test.describe('Product List', () => {
         const firstProductLink = lp.getRows().first().getByRole('button').first();
         await firstProductLink.click();
 
-        await expect(page).toHaveURL(/\/products\/.+/);
+        await expectProductEditorOpen(page);
     });
 
     test('should display "New Product" button', async ({ page }) => {

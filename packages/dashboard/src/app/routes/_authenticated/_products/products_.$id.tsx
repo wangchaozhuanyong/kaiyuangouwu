@@ -94,6 +94,8 @@ interface InitialCatalogVariantDraft {
     maximumStock: string;
 }
 
+type Translate = ReturnType<typeof useLingui>['t'];
+
 function productSourceTranslationIndex(
     translations: readonly ProductTranslationFormValue[] | null | undefined,
 ): number {
@@ -225,22 +227,27 @@ function InitialCatalogVariantFields({
     onDraftChange: (draft: InitialCatalogVariantDraft) => void;
     onCollectionIdsChange: (ids: string[]) => void;
 }>) {
+    const { t } = useLingui();
     const update = (values: Partial<InitialCatalogVariantDraft>) => onDraftChange({ ...draft, ...values });
     const margin = initialCatalogMargin(draft.sellingPrice, draft.purchaseCost);
 
     if (loading) {
         return (
             <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground" role="status">
-                正在加载门店币种与仓库…
+                <Trans>Loading store currency and warehouse...</Trans>
             </div>
         );
     }
     if (error || !creationContext) {
         return (
             <div className="space-y-3 rounded-lg border border-destructive/40 p-4 text-sm text-destructive">
-                <p>无法加载商品创建资料，暂不能创建商品。</p>
+                <p>
+                    <Trans>
+                        Unable to load product creation context. Product creation is temporarily unavailable.
+                    </Trans>
+                </p>
                 <Button type="button" variant="outline" size="sm" onClick={onRetry}>
-                    重试
+                    <Trans>Retry</Trans>
                 </Button>
             </div>
         );
@@ -250,7 +257,7 @@ function InitialCatalogVariantFields({
         <div className="space-y-6">
             <div className="space-y-2">
                 <Label>
-                    商品分类 <span className="text-destructive">*</span>
+                    <Trans>Product group</Trans> <span className="text-destructive">*</span>
                 </Label>
                 <ProductCollectionSelector
                     value={collectionIds}
@@ -259,73 +266,73 @@ function InitialCatalogVariantFields({
                 />
                 {collectionIds.length === 0 && (
                     <p className="text-xs text-muted-foreground">
-                        至少选择一个分类，避免生成无法归类的商品。
+                        <Trans>Select at least one product group so the product can be categorized.</Trans>
                     </p>
                 )}
             </div>
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                <InitialCatalogField label="SKU 编码" required>
+                <InitialCatalogField label={t`SKU code`} required>
                     <Input value={draft.sku} onChange={event => update({ sku: event.target.value })} />
                 </InitialCatalogField>
-                <InitialCatalogField label="条码">
+                <InitialCatalogField label={t`Barcode`}>
                     <Input
                         value={draft.barcode}
                         onChange={event => update({ barcode: event.target.value })}
                     />
                 </InitialCatalogField>
-                <InitialCatalogField label="规格说明">
+                <InitialCatalogField label={t`Specification`}>
                     <Input
                         value={draft.specification}
                         onChange={event => update({ specification: event.target.value })}
                     />
                 </InitialCatalogField>
-                <InitialCatalogField label="销售单位">
+                <InitialCatalogField label={t`Selling unit`}>
                     <Input
                         value={draft.saleUnit}
                         onChange={event => update({ saleUnit: event.target.value })}
                     />
                 </InitialCatalogField>
-                <InitialCatalogField label="采购单位">
+                <InitialCatalogField label={t`Purchasing unit`}>
                     <Input
                         value={draft.purchaseUnit}
                         onChange={event => update({ purchaseUnit: event.target.value })}
                     />
                 </InitialCatalogField>
-                <InitialCatalogField label="包装换算" required>
+                <InitialCatalogField label={t`Package conversion`} required>
                     <InitialNumberInput
                         value={draft.packageQuantity}
                         step="0.001"
                         onChange={packageQuantity => update({ packageQuantity })}
                     />
                 </InitialCatalogField>
-                <InitialCatalogField label={`销售价（${creationContext.currencyCode}）`} required>
+                <InitialCatalogField label={t`Selling price (${creationContext.currencyCode})`} required>
                     <InitialNumberInput
                         value={draft.sellingPrice}
                         step="0.01"
                         onChange={sellingPrice => update({ sellingPrice })}
                     />
                 </InitialCatalogField>
-                <InitialCatalogField label={`进货价（${creationContext.currencyCode}）`} required>
+                <InitialCatalogField label={t`Purchase cost (${creationContext.currencyCode})`} required>
                     <InitialNumberInput
                         value={draft.purchaseCost}
                         step="0.001"
                         onChange={purchaseCost => update({ purchaseCost })}
                     />
                 </InitialCatalogField>
-                <InitialCatalogField label="毛利率（系统计算）">
+                <InitialCatalogField label={t`Margin (calculated)`}>
                     <div className="flex h-9 items-center">
                         <Badge variant={margin != null && margin < 0 ? 'destructive' : 'secondary'}>
                             {margin == null ? '—' : `${(margin * 100).toFixed(1)}%`}
                         </Badge>
                     </div>
                 </InitialCatalogField>
-                <InitialCatalogField label="当前仓库" required>
+                <InitialCatalogField label={t`Current warehouse`} required>
                     <Select
                         value={draft.stockLocationId}
                         onValueChange={stockLocationId => stockLocationId && update({ stockLocationId })}
                     >
                         <SelectTrigger>
-                            <SelectValue placeholder="选择仓库" />
+                            <SelectValue placeholder={t`Select warehouse`} />
                         </SelectTrigger>
                         <SelectContent>
                             {creationContext.stockLocations.map(location => (
@@ -336,28 +343,28 @@ function InitialCatalogVariantFields({
                         </SelectContent>
                     </Select>
                 </InitialCatalogField>
-                <InitialCatalogField label="库存量" required>
+                <InitialCatalogField label={t`Stock on hand`} required>
                     <InitialNumberInput
                         value={draft.stockOnHand}
                         step="1"
                         onChange={stockOnHand => update({ stockOnHand })}
                     />
                 </InitialCatalogField>
-                <InitialCatalogField label="库存下限">
+                <InitialCatalogField label={t`Minimum stock`}>
                     <InitialNumberInput
                         value={draft.minimumStock}
                         step="1"
                         onChange={minimumStock => update({ minimumStock })}
                     />
                 </InitialCatalogField>
-                <InitialCatalogField label="库存上限">
+                <InitialCatalogField label={t`Maximum stock`}>
                     <InitialNumberInput
                         value={draft.maximumStock}
                         step="1"
                         onChange={maximumStock => update({ maximumStock })}
                     />
                 </InitialCatalogField>
-                <InitialCatalogField label="保质期（天）">
+                <InitialCatalogField label={t`Shelf life (days)`}>
                     <InitialNumberInput
                         value={draft.shelfLifeDays}
                         step="1"
@@ -366,8 +373,12 @@ function InitialCatalogVariantFields({
                 </InitialCatalogField>
                 <div className="flex items-center justify-between rounded-lg border p-4 sm:col-span-2 xl:col-span-1">
                     <div>
-                        <Label htmlFor="initial-catalog-variant-enabled">SKU 销售状态</Label>
-                        <p className="mt-1 text-xs text-muted-foreground">可独立于商品主体停用。</p>
+                        <Label htmlFor="initial-catalog-variant-enabled">
+                            <Trans>SKU sales status</Trans>
+                        </Label>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                            <Trans>Can be disabled independently from the product.</Trans>
+                        </p>
                     </div>
                     <Switch
                         id="initial-catalog-variant-enabled"
@@ -455,6 +466,7 @@ export function ProductEditor({
         enabled: creatingNewEntity,
     });
     const creationContext = creationContextQuery.data?.catalogProductCreationContext;
+    const catalogApiUnavailable = isCatalogApiUnavailableError(creationContextQuery.error);
     const defaultStockLocationId = creationContext?.stockLocations[0]?.id ?? '';
 
     useEffect(() => {
@@ -472,11 +484,13 @@ export function ProductEditor({
     );
     const initialCatalogValidationMessage = !creatingNewEntity
         ? null
-        : !creationContext
-          ? '商品创建资料尚未加载'
-          : initialCollectionIds.length === 0
-            ? '请至少选择一个商品分类'
-            : initialCatalogVariantValidationMessage(initialVariant);
+        : catalogApiUnavailable
+          ? null
+          : !creationContext
+            ? t`Product creation context is still loading`
+            : initialCollectionIds.length === 0
+              ? t`Select at least one product group`
+              : initialCatalogVariantValidationMessage(initialVariant, t);
     const initialCatalogValid = !creatingNewEntity || initialCatalogValidationMessage == null;
 
     const { form, submitHandler, entity, isPending, refreshEntity, resetForm } = useDetailPage({
@@ -486,8 +500,14 @@ export function ProductEditor({
         createDocument: createProductDocument,
         updateDocument: updateProductDocument,
         customCreateMutationFn: async product => {
-            if (!creationContext) throw new Error('商品创建资料尚未加载，请稍后重试');
-            const variant = initialCatalogVariantInput(initialVariant);
+            if (catalogApiUnavailable) {
+                const result = await api.mutate(createProductDocument, { input: product });
+                return result.createProduct as any;
+            }
+            if (!creationContext) {
+                throw new Error(t`Product creation context is still loading. Please try again shortly.`);
+            }
+            const variant = initialCatalogVariantInput(initialVariant, t);
             const result = await api.mutate<{ createCatalogProduct: { id: string } }>(
                 createCatalogProductDocument,
                 {
@@ -513,11 +533,17 @@ export function ProductEditor({
                 }),
             );
             if (failures.length > 0) throw failures[0];
-            const result = await api.mutate<{ saveCatalogProduct: { id: string } }>(
-                saveCatalogProductDocument,
-                { input: { product, variants } },
-            );
-            return result.saveCatalogProduct as any;
+            try {
+                const result = await api.mutate<{ saveCatalogProduct: { id: string } }>(
+                    saveCatalogProductDocument,
+                    { input: { product, variants } },
+                );
+                return result.saveCatalogProduct as any;
+            } catch (error) {
+                if (!isCatalogApiUnavailableError(error)) throw error;
+                const result = await api.mutate(updateProductDocument, { input: product });
+                return result.updateProduct as any;
+            }
         },
         extendSchema: schema =>
             schema.superRefine((values, ctx) => {
@@ -565,16 +591,24 @@ export function ProductEditor({
             toast.success(
                 creatingNewEntity ? t`Successfully created product` : t`Successfully updated product`,
             );
-            void queryClient.invalidateQueries({ queryKey: ['PaginatedListDataTable'] });
+            const listRefresh = queryClient.invalidateQueries({
+                queryKey: ['PaginatedListDataTable'],
+                refetchType: 'active',
+            });
             if (!creatingNewEntity) {
                 window.dispatchEvent(new CustomEvent(WORKSPACE_COMMITTED_EVENT, { detail: { productId } }));
             }
             resetForm();
+            setCatalogWorkspaceDirty(false);
+            setInitialVariant(emptyInitialCatalogVariant(defaultStockLocationId));
+            setInitialCollectionIds([]);
+            onDirtyChange?.(false);
             if (presentation === 'sheet') {
                 onSaved?.('keep-open', data.id);
             } else if (creatingNewEntity) {
                 void navigate({ to: `../$id`, params: { id: data.id } });
             }
+            await listRefresh;
         },
         onError: err => {
             toast.error(creatingNewEntity ? t`Failed to create product` : t`Failed to update product`, {
@@ -717,7 +751,7 @@ export function ProductEditor({
                         render={({ field }) => <RichTextInput {...field} required aria-required="true" />}
                     />
                 </PageBlock>
-                {creatingNewEntity && (
+                {creatingNewEntity && !catalogApiUnavailable && (
                     <PageBlock
                         column="main"
                         blockId="initial-catalog-variant"
@@ -978,24 +1012,27 @@ function emptyInitialCatalogVariant(stockLocationId = ''): InitialCatalogVariant
     };
 }
 
-function initialCatalogVariantValidationMessage(draft: InitialCatalogVariantDraft): string | null {
+function initialCatalogVariantValidationMessage(
+    draft: InitialCatalogVariantDraft,
+    t: Translate,
+): string | null {
     try {
-        initialCatalogVariantInput(draft);
+        initialCatalogVariantInput(draft, t);
         return null;
     } catch (error) {
-        return error instanceof Error ? error.message : '首个 SKU 信息不完整';
+        return error instanceof Error ? error.message : t`The first SKU information is incomplete`;
     }
 }
 
-function initialCatalogVariantInput(draft: InitialCatalogVariantDraft) {
-    if (!draft.stockLocationId) throw new Error('请选择当前仓库');
-    if (!draft.sku.trim()) throw new Error('SKU 编码不能为空');
-    const packageQuantity = requiredCatalogNumber(draft.packageQuantity, '包装换算');
-    if (packageQuantity <= 0) throw new Error('包装换算必须大于 0');
-    const minimumStock = optionalCatalogInteger(draft.minimumStock, '库存下限');
-    const maximumStock = optionalCatalogInteger(draft.maximumStock, '库存上限');
+function initialCatalogVariantInput(draft: InitialCatalogVariantDraft, t: Translate) {
+    if (!draft.stockLocationId) throw new Error(t`Select the current warehouse`);
+    if (!draft.sku.trim()) throw new Error(t`SKU code is required`);
+    const packageQuantity = requiredCatalogNumber(draft.packageQuantity, t`Package conversion`, t);
+    if (packageQuantity <= 0) throw new Error(t`Package conversion must be greater than 0`);
+    const minimumStock = optionalCatalogInteger(draft.minimumStock, t`Minimum stock`, t);
+    const maximumStock = optionalCatalogInteger(draft.maximumStock, t`Maximum stock`, t);
     if (minimumStock != null && maximumStock != null && maximumStock < minimumStock) {
-        throw new Error('库存上限不能小于库存下限');
+        throw new Error(t`Maximum stock cannot be lower than minimum stock`);
     }
     return {
         stockLocationId: draft.stockLocationId,
@@ -1006,31 +1043,33 @@ function initialCatalogVariantInput(draft: InitialCatalogVariantDraft) {
         saleUnit: draft.saleUnit.trim() || null,
         purchaseUnit: draft.purchaseUnit.trim() || null,
         packageQuantity,
-        shelfLifeDays: optionalCatalogInteger(draft.shelfLifeDays, '保质期'),
-        sellingPrice: Math.round(requiredCatalogNumber(draft.sellingPrice, '销售价') * 100),
-        purchaseCostMicrounits: Math.round(requiredCatalogNumber(draft.purchaseCost, '进货价') * 1_000),
-        stockOnHand: requiredCatalogInteger(draft.stockOnHand, '库存量'),
+        shelfLifeDays: optionalCatalogInteger(draft.shelfLifeDays, t`Shelf life`, t),
+        sellingPrice: Math.round(requiredCatalogNumber(draft.sellingPrice, t`Selling price`, t) * 100),
+        purchaseCostMicrounits: Math.round(
+            requiredCatalogNumber(draft.purchaseCost, t`Purchase cost`, t) * 1_000,
+        ),
+        stockOnHand: requiredCatalogInteger(draft.stockOnHand, t`Stock on hand`, t),
         minimumStock,
         maximumStock,
     };
 }
 
-function requiredCatalogNumber(value: string, label: string): number {
-    if (!value.trim()) throw new Error(`${label}不能为空`);
+function requiredCatalogNumber(value: string, label: string, t: Translate): number {
+    if (!value.trim()) throw new Error(t`${label} is required`);
     const parsed = Number(value);
-    if (!Number.isFinite(parsed) || parsed < 0) throw new Error(`${label}必须是非负数`);
+    if (!Number.isFinite(parsed) || parsed < 0) throw new Error(t`${label} must be a non-negative number`);
     return parsed;
 }
 
-function requiredCatalogInteger(value: string, label: string): number {
-    const parsed = requiredCatalogNumber(value, label);
-    if (!Number.isInteger(parsed)) throw new Error(`${label}必须是整数`);
+function requiredCatalogInteger(value: string, label: string, t: Translate): number {
+    const parsed = requiredCatalogNumber(value, label, t);
+    if (!Number.isInteger(parsed)) throw new Error(t`${label} must be an integer`);
     return parsed;
 }
 
-function optionalCatalogInteger(value: string, label: string): number | null {
+function optionalCatalogInteger(value: string, label: string, t: Translate): number | null {
     if (!value.trim()) return null;
-    return requiredCatalogInteger(value, label);
+    return requiredCatalogInteger(value, label, t);
 }
 
 function initialCatalogMargin(sellingPrice: string, purchaseCost: string): number | null {
@@ -1038,4 +1077,13 @@ function initialCatalogMargin(sellingPrice: string, purchaseCost: string): numbe
     const cost = Number(purchaseCost);
     if (!Number.isFinite(price) || !Number.isFinite(cost) || price <= 0) return null;
     return (price - cost) / price;
+}
+
+function isCatalogApiUnavailableError(error: unknown): boolean {
+    return (
+        error instanceof Error &&
+        /Cannot query field "(?:catalogProductCreationContext|createCatalogProduct|saveCatalogProduct)"|Unknown type "(?:CreateCatalogProductInput|SaveCatalogProductInput)"/u.test(
+            error.message,
+        )
+    );
 }

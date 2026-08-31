@@ -1,14 +1,7 @@
 import { expect, test } from '@playwright/test';
 
-import { BaseDetailPage } from '../../page-objects/detail-page.base.js';
 import { confirmSensitiveAction } from '../../utils/sensitive-action.js';
 import { VendureAdminClient } from '../../utils/vendure-admin-client.js';
-
-const productDetailConfig = {
-    newPath: '/products/new',
-    pathPrefix: '/products/',
-    newTitle: 'New product',
-};
 
 test.describe('product SKU list workflow', () => {
     test('opens the SKU editor from the explicit row action without leaving the list', async ({ page }) => {
@@ -41,22 +34,32 @@ test.describe('product variant generation', () => {
     let productId: string;
 
     test('should create a product for variant testing', async ({ page }) => {
-        const detail = new BaseDetailPage(page, productDetailConfig);
-        await detail.gotoNew();
-        await detail.expectNewPageLoaded();
-        await detail.fillFields([{ label: 'Product name', value: 'E2E Variant Test Product' }]);
-        await detail.fillRichText('Description', 'Product used to test variant generation');
-        // Wait for slug auto-generation
-        await expect(detail.formItem('Slug').getByRole('textbox')).not.toHaveValue('', { timeout: 5_000 });
-        await detail.clickCreate();
-        await detail.expectSuccessToast(/created/i);
-        await detail.expectNavigatedToExisting();
+        // This suite intentionally starts with a legacy product that has no SKU so it can
+        // exercise the option-driven SKU generation flow. The merchant create flow now
+        // creates the product and its first SKU atomically.
+        const client = new VendureAdminClient(page);
+        await client.login();
+        const product = await client.gql(
+            `mutation ($input: CreateProductInput!) { createProduct(input: $input) { id } }`,
+            {
+                input: {
+                    translations: [
+                        {
+                            languageCode: 'en',
+                            name: 'E2E Variant Test Product',
+                            slug: `e2e-variant-test-product-${Date.now()}`,
+                            description: 'Product used to test variant generation',
+                        },
+                    ],
+                },
+            },
+        );
+        productId = product.createProduct.id;
 
-        // Extract the product ID from the URL
-        const url = page.url();
-        const match = url.match(/\/products\/([^/]+)$/);
-        expect(match).not.toBeNull();
-        productId = (match as RegExpMatchArray)[1];
+        await page.goto(`/products/${productId}`);
+        await expect(page.getByRole('heading', { name: 'E2E Variant Test Product' })).toBeVisible({
+            timeout: 10_000,
+        });
     });
 
     test('should add an option group to the product via the sidebar dialog', async ({ page }) => {
@@ -71,7 +74,8 @@ test.describe('product variant generation', () => {
         await page.getByRole('button', { name: /Product with options/i }).click();
 
         // The dialog should open with "Assign existing" and "Create new" tabs
-        await expect(page.getByRole('dialog')).toBeVisible();
+        const optionGroupDialog = page.getByRole('dialog').last();
+        await expect(optionGroupDialog).toBeVisible();
 
         // Switch to the "Create new" tab
         await page.getByRole('tab', { name: 'Create new' }).click();
@@ -89,15 +93,9 @@ test.describe('product variant generation', () => {
         await optionInput.press('Enter');
 
         // Verify badges appeared for the option values
-        await expect(
-            page.getByRole('dialog').locator('[data-slot="badge"]', { hasText: 'Small' }),
-        ).toBeVisible();
-        await expect(
-            page.getByRole('dialog').locator('[data-slot="badge"]', { hasText: 'Medium' }),
-        ).toBeVisible();
-        await expect(
-            page.getByRole('dialog').locator('[data-slot="badge"]', { hasText: 'Large' }),
-        ).toBeVisible();
+        await expect(optionGroupDialog.locator('[data-slot="badge"]', { hasText: 'Small' })).toBeVisible();
+        await expect(optionGroupDialog.locator('[data-slot="badge"]', { hasText: 'Medium' })).toBeVisible();
+        await expect(optionGroupDialog.locator('[data-slot="badge"]', { hasText: 'Large' })).toBeVisible();
 
         // Save the option group
         await page.getByRole('button', { name: 'Save option group' }).click();
@@ -122,10 +120,9 @@ test.describe('product variant generation', () => {
         await expect(
             page.locator('[data-slot="card-title"]').getByText('Product SKUs', { exact: true }),
         ).toBeVisible();
-        await expect(page.locator('table')).toBeVisible();
-
         // Each variant row should have a SKU input
         const skuInputs = page.getByTestId('variant-sku-input');
+        await expect(skuInputs.first()).toBeVisible();
         await expect(skuInputs).toHaveCount(3);
     });
 
@@ -152,8 +149,11 @@ test.describe('product variant generation', () => {
             timeout: 10_000,
         });
 
-        const table = page.locator('table');
-        const rows = table.locator('tbody tr');
+        const rows = page
+            .getByTestId('variant-sku-input')
+            .first()
+            .locator('xpath=ancestor::table')
+            .locator('tbody tr');
 
         // Uncheck Large (row 2), leave Small (row 0) and Medium (row 1) checked
         await rows.nth(2).getByRole('checkbox').click();
@@ -208,22 +208,18 @@ test.describe('product variant generation', () => {
         // Editing stays in context: the explicit row action opens the SKU workbench drawer.
         const productUrl = page.url();
         await smallVariantRow.getByRole('button', { name: 'Edit', exact: true }).click();
-        const editorDrawer = page.getByRole('dialog');
-        await expect(editorDrawer).toBeVisible();
-        await expect(
-            editorDrawer.getByRole('heading', {
-                name: 'E2E Variant Test Product Small',
-                exact: true,
-            }),
-        ).toBeVisible();
+        const editorHeading = page.getByRole('heading', {
+            name: 'E2E Variant Test Product Small',
+            exact: true,
+        });
+        await expect(editorHeading).toBeVisible();
+        const editorDrawer = editorHeading.locator('xpath=ancestor::*[@role="dialog"]');
         await expect(page).toHaveURL(productUrl);
         await editorDrawer.getByRole('button', { name: 'Close', exact: true }).click();
         await expect(editorDrawer).toBeHidden();
 
-        // The "Manage variants" link should be visible
-        const manageLink = page.getByRole('button', { name: /Manage SKUs/i });
-        await manageLink.scrollIntoViewIfNeeded();
-        await expect(manageLink).toBeVisible();
+        // SKU management remains embedded in the product editor.
+        await expect(page.locator('#page-block-product-variants-table')).toBeVisible();
     });
 
     // Clean up the test product via the Admin API
@@ -461,20 +457,32 @@ test.describe('remove option group from product detail (#4703)', () => {
     let productId: string;
 
     test('create a product and add an option group', async ({ page }) => {
-        const detail = new BaseDetailPage(page, productDetailConfig);
-        await detail.gotoNew();
-        await detail.expectNewPageLoaded();
-        await detail.fillFields([{ label: 'Product name', value: 'E2E Remove Option Group Product' }]);
-        await detail.fillRichText('Description', 'Product used to test option group removal');
-        await expect(detail.formItem('Slug').getByRole('textbox')).not.toHaveValue('', { timeout: 5_000 });
-        await detail.clickCreate();
-        await detail.expectSuccessToast(/created/i);
-        await detail.expectNavigatedToExisting();
-        productId = (page.url().match(/\/products\/([^/]+)$/) as RegExpMatchArray)[1];
+        const client = new VendureAdminClient(page);
+        await client.login();
+        const product = await client.gql(
+            `mutation ($input: CreateProductInput!) { createProduct(input: $input) { id } }`,
+            {
+                input: {
+                    translations: [
+                        {
+                            languageCode: 'en',
+                            name: 'E2E Remove Option Group Product',
+                            slug: `e2e-remove-option-group-${Date.now()}`,
+                            description: 'Product used to test option group removal',
+                        },
+                    ],
+                },
+            },
+        );
+        productId = product.createProduct.id;
+        await page.goto(`/products/${productId}`);
+        await expect(page.getByRole('heading', { name: 'E2E Remove Option Group Product' })).toBeVisible({
+            timeout: 10_000,
+        });
 
         // Add an option group via the "Product with options" dialog.
         await page.getByRole('button', { name: /Product with options/i }).click();
-        await expect(page.getByRole('dialog')).toBeVisible();
+        await expect(page.getByRole('dialog').last()).toBeVisible();
         await page.getByRole('tab', { name: 'Create new' }).click();
         await page.getByPlaceholder('For example: Size').fill('Size');
         const optionInput = page.getByPlaceholder('Simplified Chinese value');

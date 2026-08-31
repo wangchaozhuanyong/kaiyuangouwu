@@ -1156,6 +1156,7 @@ function BilingualField({
                     <Control value={zh} disabled={disabled} onChange={event => onZh(event.target.value)} />
                 </div>
                 <div>
+                    {/* i18n-audit-ignore -- explicit language name in the bilingual editor */}
                     <small className="mb-1 block text-muted-foreground">English</small>
                     <Control value={en} disabled={disabled} onChange={event => onEn(event.target.value)} />
                 </div>

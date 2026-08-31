@@ -28,11 +28,18 @@ export function NavigationConfirmation(props: Readonly<NavigationConfirmationPro
         shouldBlockFn: args => {
             // When a new entity is being created, we don't want to block navigation
             // to the newly-created entity page.
-            const isNavigatingToNewlyCreatedEntity =
+            const isNavigatingToNewlyCreatedPathEntity =
                 args.current.fullPath === args.next.fullPath &&
                 args.current.params.id === 'new' &&
                 args.next.params.id !== 'new';
-            if (isNavigatingToNewlyCreatedEntity) {
+            const currentEditor = (args.current.search as Record<string, unknown> | undefined)?.editor;
+            const nextEditor = (args.next.search as Record<string, unknown> | undefined)?.editor;
+            const isNavigatingToNewlyCreatedSheetEntity =
+                args.current.fullPath === args.next.fullPath &&
+                currentEditor === 'new' &&
+                typeof nextEditor === 'string' &&
+                nextEditor !== 'new';
+            if (isNavigatingToNewlyCreatedPathEntity || isNavigatingToNewlyCreatedSheetEntity) {
                 return false;
             }
             return props.form.formState.isDirty;
