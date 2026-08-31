@@ -109,16 +109,21 @@ export class AutoCardOrderResolver {
 
 @Resolver('ProductVariant')
 export class AutoCardProductVariantResolver {
-    constructor(
-        private readonly autoCardService: AutoCardService,
-        private readonly productVariantService: ProductVariantService,
-    ) {}
+    constructor(private readonly autoCardService: AutoCardService) {}
 
     @ResolveField()
     @Allow(Permission.Public)
     autoCardAvailableStock(@Ctx() ctx: RequestContext, @Parent() variant: ProductVariant) {
         return this.autoCardService.availableStockForVariant(ctx, variant.id);
     }
+}
+
+@Resolver('ProductVariant')
+export class AutoCardShopProductVariantResolver {
+    constructor(
+        private readonly autoCardService: AutoCardService,
+        private readonly productVariantService: ProductVariantService,
+    ) {}
 
     @ResolveField()
     @Allow(Permission.Public)
@@ -140,3 +145,10 @@ export function normalizePublicSaleableStockLevel(stockLevel: number): number | 
     if (!Number.isFinite(stockLevel)) return null;
     return Math.max(0, Math.floor(stockLevel));
 }
+
+export const autoCardAdminResolvers = [AutoCardAdminResolver, AutoCardProductVariantResolver];
+export const autoCardShopResolvers = [
+    AutoCardOrderResolver,
+    AutoCardProductVariantResolver,
+    AutoCardShopProductVariantResolver,
+];

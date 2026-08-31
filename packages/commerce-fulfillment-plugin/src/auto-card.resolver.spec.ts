@@ -1,11 +1,21 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+    autoCardAdminResolvers,
     AutoCardProductVariantResolver,
+    AutoCardShopProductVariantResolver,
+    autoCardShopResolvers,
     normalizePublicSaleableStockLevel,
 } from './auto-card.resolver';
 
 describe('public product availability resolver', () => {
+    it('registers the saleable stock resolver only for the Shop API schema', () => {
+        expect(autoCardAdminResolvers).toContain(AutoCardProductVariantResolver);
+        expect(autoCardAdminResolvers).not.toContain(AutoCardShopProductVariantResolver);
+        expect(autoCardShopResolvers).toContain(AutoCardProductVariantResolver);
+        expect(autoCardShopResolvers).toContain(AutoCardShopProductVariantResolver);
+    });
+
     it('exposes finite saleable stock and clamps negative stock to zero', () => {
         expect(normalizePublicSaleableStockLevel(12)).toBe(12);
         expect(normalizePublicSaleableStockLevel(-4)).toBe(0);
@@ -19,7 +29,7 @@ describe('public product availability resolver', () => {
     it('uses Vendure saleable stock for non-auto-card variants', async () => {
         const productVariantService = { getSaleableStockLevel: vi.fn().mockResolvedValue(7) };
         const autoCardService = { availableStockForVariant: vi.fn() };
-        const resolver = new AutoCardProductVariantResolver(
+        const resolver = new AutoCardShopProductVariantResolver(
             autoCardService as never,
             productVariantService as never,
         );
@@ -43,7 +53,7 @@ describe('public product availability resolver', () => {
     it('uses the available card pool for auto-card variants', async () => {
         const autoCardService = { availableStockForVariant: vi.fn().mockResolvedValue(4) };
         const productVariantService = { getSaleableStockLevel: vi.fn() };
-        const resolver = new AutoCardProductVariantResolver(
+        const resolver = new AutoCardShopProductVariantResolver(
             autoCardService as never,
             productVariantService as never,
         );
