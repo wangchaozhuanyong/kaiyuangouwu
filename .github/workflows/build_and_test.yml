@@ -100,6 +100,7 @@ jobs:
                   IMAGE_GENERATION_STORAGE_ROOT: /tmp/vendure-build-images
                   IMAGE_GENERATION_DOWNLOAD_SECRET: build-check-image-download-key-000000000000000000000000
                   IMAGE_GENERATION_MASTER_KEY: build-check-image-master-key-000000000000000000000000
+                  TWO_FACTOR_DASHBOARD_ENCRYPTION_KEY: build-check-dashboard-2fa-key-000000000000000000000000
                   USDT_PAYMENT_PROOF_SECRET: build-check-usdt-proof-secret-000000000000000000000000
                   USDT_WALLET_ENCRYPTION_KEY: build-check-usdt-wallet-key-000000000000000000000000
                   USDT_REFUND_SENDER_ADDRESSES: TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t

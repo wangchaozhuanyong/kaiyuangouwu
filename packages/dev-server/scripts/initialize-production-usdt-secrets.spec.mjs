@@ -9,13 +9,14 @@ import { fileURLToPath } from 'node:url';
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const initializer = path.join(repositoryRoot, 'deploy/initialize-production-usdt-secrets.mjs');
 
-void test('initializes independent USDT secrets atomically without printing their values', () => {
+void test('initializes independent production secrets atomically without printing their values', () => {
     withEnvironmentFile(
         [
             'UNCHANGED=value',
             'USDT_PAYMENT_PROOF_SECRET=replace-with-proof-secret',
             'USDT_WALLET_ENCRYPTION_KEY=',
             'USDT_WALLET_ENCRYPTION_PREVIOUS_KEYS=',
+            'TWO_FACTOR_DASHBOARD_ENCRYPTION_KEY=replace-with-dashboard-two-factor-secret',
             '',
         ].join('\n'),
         environmentFile => {
@@ -26,13 +27,18 @@ void test('initializes independent USDT secrets atomically without printing thei
             const firstValues = parseEnvironment(firstContents);
             const proofSecret = firstValues.get('USDT_PAYMENT_PROOF_SECRET');
             const walletKey = firstValues.get('USDT_WALLET_ENCRYPTION_KEY');
+            const dashboardTwoFactorKey = firstValues.get('TWO_FACTOR_DASHBOARD_ENCRYPTION_KEY');
 
             assert.match(proofSecret ?? '', /^[a-f0-9]{64}$/u);
             assert.match(walletKey ?? '', /^[a-f0-9]{64}$/u);
+            assert.match(dashboardTwoFactorKey ?? '', /^[a-f0-9]{64}$/u);
             assert.notEqual(proofSecret, walletKey);
+            assert.notEqual(dashboardTwoFactorKey, proofSecret);
+            assert.notEqual(dashboardTwoFactorKey, walletKey);
             assert.equal(firstValues.get('UNCHANGED'), 'value');
             assert.equal(firstOutput.includes(proofSecret ?? 'missing'), false);
             assert.equal(firstOutput.includes(walletKey ?? 'missing'), false);
+            assert.equal(firstOutput.includes(dashboardTwoFactorKey ?? 'missing'), false);
             assert.equal(statSync(environmentFile).mode % 0o1000, 0o640);
 
             const secondOutput = execFileSync(process.execPath, [initializer, environmentFile], {
@@ -41,6 +47,7 @@ void test('initializes independent USDT secrets atomically without printing thei
             assert.equal(readFileSync(environmentFile, 'utf8'), firstContents);
             assert.match(secondOutput, /USDT_PAYMENT_PROOF_SECRET=preserved/u);
             assert.match(secondOutput, /USDT_WALLET_ENCRYPTION_KEY=preserved/u);
+            assert.match(secondOutput, /TWO_FACTOR_DASHBOARD_ENCRYPTION_KEY=preserved/u);
             assert.match(secondOutput, /environment_file_updated=no/u);
         },
     );

@@ -81,6 +81,7 @@ import { AlignChannelUsdtSchema1787889600000 } from './1787889600000-align-chann
 import { AlignSystemAnnouncementChannelForeignKeys1787893200000 } from './1787893200000-align-system-announcement-channel-foreign-keys';
 import { HardenImageGenerationReliability1787896800000 } from './1787896800000-harden-image-generation-reliability';
 import { AlignUsdtCheckoutRateSchema1787900400000 } from './1787900400000-align-usdt-checkout-rate-schema';
+import { AddDashboardTwoFactorAccounts1787904000000 } from './1787904000000-add-dashboard-two-factor-accounts';
 
 export const devServerMigrations = [
     CommerceFulfillment1786514145999,
@@ -166,4 +167,5 @@ export const devServerMigrations = [
     AlignSystemAnnouncementChannelForeignKeys1787893200000,
     HardenImageGenerationReliability1787896800000,
     AlignUsdtCheckoutRateSchema1787900400000,
+    AddDashboardTwoFactorAccounts1787904000000,
 ];

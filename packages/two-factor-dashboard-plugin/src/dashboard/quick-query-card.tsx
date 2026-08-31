@@ -16,6 +16,7 @@ export function QuickQueryCard({
     onCopy,
     onClear,
     onSave,
+    saveDisabled,
 }: {
     text: TwoFactorText;
     input: string;
@@ -28,6 +29,7 @@ export function QuickQueryCard({
     onCopy: () => void;
     onClear: () => void;
     onSave: () => void;
+    saveDisabled?: boolean;
 }) {
     return (
         <section aria-labelledby="two-factor-quick-query-title">
@@ -78,7 +80,12 @@ export function QuickQueryCard({
                                     <Copy className="size-4" aria-hidden="true" />
                                     {text.copy}
                                 </Button>
-                                <Button type="button" variant="outline" onClick={onSave}>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    disabled={saveDisabled}
+                                    onClick={onSave}
+                                >
                                     <Plus className="size-4" aria-hidden="true" />
                                     {text.saveToList}
                                 </Button>

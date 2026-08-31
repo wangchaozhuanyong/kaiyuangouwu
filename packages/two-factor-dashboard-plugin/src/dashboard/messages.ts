@@ -5,7 +5,7 @@ export const messages = {
     title: msg({ id: 'twoFactor.title', message: '2FA dynamic codes' }),
     description: msg({
         id: 'twoFactor.description',
-        message: 'Query or manage dynamic codes in bulk. Secrets are never uploaded to the server.',
+        message: 'Query codes or manage server-stored 2FA accounts in bulk.',
     }),
     batchImport: msg({ id: 'twoFactor.batchImport', message: 'Bulk import' }),
     addAccount: msg({ id: 'twoFactor.addAccount', message: 'Add account' }),
@@ -21,20 +21,20 @@ export const messages = {
     saveToList: msg({ id: 'twoFactor.saveToList', message: 'Add to account list' }),
     queryMemoryNotice: msg({
         id: 'twoFactor.queryMemoryNotice',
-        message: 'This query is not stored in Session Storage and is cleared on refresh or navigation.',
+        message: 'This one-time query stays only in page memory and is cleared on refresh or navigation.',
     }),
     privacyTitle: msg({ id: 'twoFactor.privacyTitle', message: 'Data and privacy' }),
     privacyStorage: msg({
         id: 'twoFactor.privacyStorage',
-        message: 'Storage: current browser Session Storage (not a server cache)',
+        message: 'Storage: encrypted server database (no browser cache)',
     }),
     privacyNoDatabase: msg({
         id: 'twoFactor.privacy.noDatabase',
-        message: 'Not written to the server database',
+        message: 'Saved accounts are written to the server database',
     }),
     privacyNoUpload: msg({
         id: 'twoFactor.privacy.noUpload',
-        message: 'Secrets are not uploaded to the server',
+        message: 'Secrets are encrypted with AES-256-GCM at rest',
     }),
     privacyLocalGeneration: msg({
         id: 'twoFactor.privacy.localGeneration',
@@ -43,7 +43,7 @@ export const messages = {
     privacyRefresh: msg({ id: 'twoFactor.privacy.refresh', message: 'Account data remains after refresh' }),
     privacyClear: msg({
         id: 'twoFactor.privacy.clear',
-        message: 'Cleared after logout or closing the tab',
+        message: 'Logout or closing the tab does not delete saved accounts',
     }),
     privacyLimit: msg({
         id: 'twoFactor.privacy.limit',
@@ -52,13 +52,13 @@ export const messages = {
     privacyPublicDevice: msg({
         id: 'twoFactor.privacy.publicDevice',
         message:
-            'This feature does not add encryption to secrets in Session Storage. Do not use it on a public or shared device.',
+            'Decrypted secrets exist only in the current page memory while this page is open. Do not reveal them on a shared screen.',
     }),
     expandPrivacy: msg({ id: 'twoFactor.expandPrivacy', message: 'Show details' }),
     collapsePrivacy: msg({ id: 'twoFactor.collapsePrivacy', message: 'Hide details' }),
     privacySummary: msg({
         id: 'twoFactor.privacySummary',
-        message: 'Browser session only · No database · No server upload',
+        message: 'Encrypted server database · No browser cache',
     }),
     accountList: msg({ id: 'twoFactor.accountList', message: '2FA account list' }),
     searchPlaceholder: msg({ id: 'twoFactor.searchPlaceholder', message: 'Search project name' }),
@@ -95,12 +95,12 @@ export const messages = {
     addDialogTitle: msg({ id: 'twoFactor.addDialogTitle', message: 'Add 2FA account' }),
     addDialogDescription: msg({
         id: 'twoFactor.addDialogDescription',
-        message: 'The account is stored only in this browser session.',
+        message: 'The account is encrypted and saved to the server database.',
     }),
     editDialogTitle: msg({ id: 'twoFactor.editDialogTitle', message: 'Edit 2FA account' }),
     editDialogDescription: msg({
         id: 'twoFactor.editDialogDescription',
-        message: 'Changes remain in this browser session only.',
+        message: 'Changes are encrypted and saved to the server database.',
     }),
     cancel: msg({ id: 'twoFactor.cancel', message: 'Cancel' }),
     save: msg({ id: 'twoFactor.save', message: 'Save' }),
@@ -149,17 +149,29 @@ export const messages = {
     accountsCleared: msg({ id: 'twoFactor.accountsCleared', message: 'All accounts cleared' }),
     storageUnavailable: msg({
         id: 'twoFactor.storageUnavailable',
-        message: 'Session Storage is unavailable. You can still query a code, but accounts cannot be saved.',
+        message:
+            'The server database is unavailable. You can still run a one-time query, but accounts cannot be saved.',
+    }),
+    legacyMigrationFailed: msg({
+        id: 'twoFactor.legacyMigrationFailed',
+        message:
+            'Legacy browser data could not be migrated to the server database. It was kept in this browser; retry later or contact an administrator.',
+    }),
+    legacyMigrationLimit: msg({
+        id: 'twoFactor.legacyMigrationLimit',
+        message:
+            'Legacy browser data exceeds the 100-account database limit. It was kept in this browser; remove server accounts before retrying.',
     }),
     deleteConfirmTitle: msg({ id: 'twoFactor.deleteConfirmTitle', message: 'Delete this account?' }),
     deleteConfirmDescription: msg({
         id: 'twoFactor.deleteConfirmDescription',
-        message: 'This removes the account from the current browser session.',
+        message: 'This permanently removes the account from the server database.',
     }),
     clearConfirmTitle: msg({ id: 'twoFactor.clearConfirmTitle', message: 'Clear all 2FA accounts?' }),
     clearConfirmDescription: msg({
         id: 'twoFactor.clearConfirmDescription',
-        message: 'All saved accounts in this browser session will be removed.',
+        message:
+            'All 2FA accounts saved by the current administrator will be permanently removed from the server database.',
     }),
     confirmDelete: msg({ id: 'twoFactor.confirmDelete', message: 'Delete' }),
     confirmClear: msg({ id: 'twoFactor.confirmClear', message: 'Clear all' }),

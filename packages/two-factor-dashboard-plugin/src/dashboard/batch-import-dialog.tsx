@@ -26,10 +26,11 @@ export function BatchImportDialog({
     open: boolean;
     existingSecrets: string[];
     onOpenChange: (open: boolean) => void;
-    onImport: (accounts: ParsedBatchAccount[]) => void;
+    onImport: (accounts: ParsedBatchAccount[]) => Promise<boolean>;
 }) {
     const [input, setInput] = useState('');
     const [validated, setValidated] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
     const result = useMemo(() => parseBatchImport(input, existingSecrets), [existingSecrets, input]);
 
     const close = (nextOpen: boolean) => {
@@ -37,6 +38,7 @@ export function BatchImportDialog({
         if (!nextOpen) {
             setInput('');
             setValidated(false);
+            setSubmitting(false);
         }
     };
 
@@ -86,12 +88,15 @@ export function BatchImportDialog({
                     </Button>
                     <Button
                         type="button"
-                        disabled={!input.trim()}
+                        disabled={!input.trim() || submitting}
                         onClick={() => {
                             setValidated(true);
                             if (result.errors.length === 0 && result.accounts.length > 0) {
-                                onImport(result.accounts);
-                                close(false);
+                                setSubmitting(true);
+                                void onImport(result.accounts).then(success => {
+                                    setSubmitting(false);
+                                    if (success) close(false);
+                                });
                             }
                         }}
                     >

@@ -143,6 +143,7 @@ jobs:
                   SUPERADMIN_USERNAME: build-check-admin
                   SUPERADMIN_PASSWORD: build-check-admin-password
                   COOKIE_SECRET: build-check-cookie-secret-000000000000000000000000
+                  TWO_FACTOR_DASHBOARD_ENCRYPTION_KEY: build-check-dashboard-2fa-key-000000000000000000000000
                   ORDER_CONFIRMATION_TOKEN_SECRET: build-check-order-token-secret-000000000000000000000000
                   USDT_PAYMENT_PROOF_SECRET: build-check-usdt-proof-secret-000000000000000000000000
                   USDT_WALLET_ENCRYPTION_KEY: build-check-usdt-wallet-key-000000000000000000000000

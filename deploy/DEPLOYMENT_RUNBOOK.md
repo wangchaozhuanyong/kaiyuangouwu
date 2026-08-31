@@ -250,6 +250,12 @@ node "${CANDIDATE}/verify-runtime.mjs" --expected-sha "${TARGET_SHA}"
 
 数据库迁移只在备份和 `READINESS_PROCESS_ROLE=migration` 预检通过后，使用产物内专用的一次性入口：
 
+管理后台 2FA 数据库功能上线前，生产加密环境文件必须先配置独立且固定的
+`TWO_FACTOR_DASHBOARD_ENCRYPTION_KEY`（至少 32 个随机字符），API、Worker 和迁移进程必须读取同一值。
+该值不得写入仓库、命令参数、聊天记录或发布记录；丢失或错误轮换会导致已保存的 2FA 密钥无法解密。
+受管发布会在备份成功后、迁移预检前，通过原子环境文件更新自动初始化缺失或占位的密钥；已配置的有效密钥
+会原样保留，初始化日志只记录状态，不输出密钥值。
+
 ```bash
 set -a
 source /var/www/kaiyuangouwu/packages/dev-server/.env

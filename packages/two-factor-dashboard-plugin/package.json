@@ -12,7 +12,12 @@
     "dependencies": {
         "@lingui/core": "^5.9.3",
         "@lingui/react": "^5.9.3",
-        "lucide-react": "^0.475.0"
+        "@nestjs/common": "^11.0.12",
+        "@nestjs/graphql": "~13.4.4",
+        "@vendure/core": "3.7.2",
+        "graphql-tag": "^2.12.6",
+        "lucide-react": "^0.475.0",
+        "typeorm": "^0.3.21"
     },
     "devDependencies": {
         "@types/react": "^19.2.14",
@@ -21,7 +26,6 @@
         "vitest": "^3.2.4"
     },
     "peerDependencies": {
-        "@vendure/core": "3.7.2",
         "@vendure/dashboard": "3.7.2",
         "react": "^19.2.4"
     }

@@ -17,7 +17,11 @@ import {
 import path from 'node:path';
 
 const placeholderPattern = /^(?:abc|admin|changeme|example|password|superadmin|vendure-dev|replace[-_])/iu;
-const managedKeys = ['USDT_PAYMENT_PROOF_SECRET', 'USDT_WALLET_ENCRYPTION_KEY'];
+const managedKeys = [
+    'USDT_PAYMENT_PROOF_SECRET',
+    'USDT_WALLET_ENCRYPTION_KEY',
+    'TWO_FACTOR_DASHBOARD_ENCRYPTION_KEY',
+];
 const environmentFile = process.argv[2];
 
 if (!environmentFile || !path.isAbsolute(environmentFile) || path.basename(environmentFile) !== '.env') {
@@ -63,9 +67,17 @@ const proofSecret =
         ? currentProofSecret
         : createSecret([walletKey, ...previousKeys]);
 
+const currentDashboardTwoFactorKey = entries.get('TWO_FACTOR_DASHBOARD_ENCRYPTION_KEY') ?? '';
+const dashboardTwoFactorKey =
+    isConfiguredSecret(currentDashboardTwoFactorKey) &&
+    ![walletKey, proofSecret, ...previousKeys].includes(currentDashboardTwoFactorKey)
+        ? currentDashboardTwoFactorKey
+        : createSecret([walletKey, proofSecret, ...previousKeys]);
+
 const replacements = new Map([
     ['USDT_PAYMENT_PROOF_SECRET', proofSecret],
     ['USDT_WALLET_ENCRYPTION_KEY', walletKey],
+    ['TWO_FACTOR_DASHBOARD_ENCRYPTION_KEY', dashboardTwoFactorKey],
 ]);
 const updates = new Map([...replacements].filter(([key, value]) => entries.get(key) !== value));
 const updated = replaceEnvironmentValues(original, updates);
@@ -78,6 +90,7 @@ for (const key of managedKeys) {
     process.stdout.write(`${key}=${preserved ? 'preserved' : 'initialized'}\n`);
 }
 process.stdout.write(`environment_file_updated=${changed ? 'yes' : 'no'}\n`);
+process.stdout.write('DASHBOARD_TWO_FACTOR_SECRET_INITIALIZATION_OK\n');
 process.stdout.write('USDT_SECRET_INITIALIZATION_OK\n');
 
 function parseEnvironment(source) {

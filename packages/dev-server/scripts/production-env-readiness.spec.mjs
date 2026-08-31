@@ -22,6 +22,8 @@ function readyEnvironment(overrides = {}) {
         SUPERADMIN_PASSWORD: 'p4ssword-that-is-long-and-random',
         COOKIE_SECRET: 'cookie-secret-that-is-longer-than-thirty-two-characters',
         AUTO_CARD_ENCRYPTION_KEY: 'auto-card-secret-that-is-longer-than-thirty-two-characters',
+        TWO_FACTOR_DASHBOARD_ENCRYPTION_KEY:
+            'dashboard-two-factor-key-that-is-longer-than-thirty-two-characters',
         VENDURE_GOOGLE_TRANSLATION_API_KEY: 'google-translation-api-key-for-production-tests',
         ORDER_CONFIRMATION_TOKEN_SECRET:
             'order-confirmation-secret-that-is-longer-than-thirty-two-characters',
@@ -88,7 +90,7 @@ const confirmedSingleHostControls = {
 void test('passes a complete server production environment', () => {
     const report = evaluateProductionEnvironment(readyEnvironment(), 'server', confirmedControls);
     assert.equal(report.ready, true);
-    assert.deepEqual(report.summary, { pass: 34, manual: 0, blocker: 0 });
+    assert.deepEqual(report.summary, { pass: 35, manual: 0, blocker: 0 });
 });
 
 void test('uses different migration expectations for worker and migration roles', () => {
@@ -210,7 +212,7 @@ void test('allows a verified single-host database and system monitoring profile'
     );
 
     assert.equal(report.ready, true);
-    assert.deepEqual(report.summary, { pass: 35, manual: 0, blocker: 0 });
+    assert.deepEqual(report.summary, { pass: 36, manual: 0, blocker: 0 });
 });
 
 void test('blocks a missing or placeholder auto-card encryption key', () => {
@@ -224,6 +226,23 @@ void test('blocks a missing or placeholder auto-card encryption key', () => {
         assert.equal(
             report.checks.some(
                 check => check.id === 'auto-card-encryption-key' && check.status === 'blocker',
+            ),
+            true,
+        );
+    }
+});
+
+void test('blocks a missing or placeholder dashboard 2FA encryption key', () => {
+    for (const value of ['', 'replace-with-a-random-secret-at-least-32-characters']) {
+        const report = evaluateProductionEnvironment(
+            readyEnvironment({ TWO_FACTOR_DASHBOARD_ENCRYPTION_KEY: value }),
+            'server',
+            confirmedControls,
+        );
+        assert.equal(report.ready, false);
+        assert.equal(
+            report.checks.some(
+                check => check.id === 'dashboard-two-factor-encryption-key' && check.status === 'blocker',
             ),
             true,
         );

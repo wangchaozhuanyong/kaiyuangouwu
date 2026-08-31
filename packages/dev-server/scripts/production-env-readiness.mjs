@@ -245,6 +245,14 @@ export function evaluateProductionEnvironment(env, role, controls = {}) {
             : 'missing, short, or placeholder',
     });
     pushCheck(checks, {
+        id: 'dashboard-two-factor-encryption-key',
+        title: '管理后台 2FA 数据加密密钥',
+        passed: isConfiguredSecret(env.TWO_FACTOR_DASHBOARD_ENCRYPTION_KEY, 32),
+        detail: isConfiguredSecret(env.TWO_FACTOR_DASHBOARD_ENCRYPTION_KEY, 32)
+            ? 'configured'
+            : 'missing, short, or placeholder',
+    });
+    pushCheck(checks, {
         id: 'content-translation-provider',
         title: '客户内容自动翻译服务',
         passed: isConfiguredSecret(env.VENDURE_GOOGLE_TRANSLATION_API_KEY, 16),

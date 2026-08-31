@@ -33,12 +33,13 @@ export function AccountDialog({
     account: TwoFactorAccount | null;
     defaultSecret: string;
     onOpenChange: (open: boolean) => void;
-    onSubmit: (draft: AccountDraft) => string | null;
+    onSubmit: (draft: AccountDraft) => Promise<string | null>;
 }) {
     const [projectName, setProjectName] = useState('');
     const [secret, setSecret] = useState('');
     const [revealed, setRevealed] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [submitting, setSubmitting] = useState(false);
 
     useEffect(() => {
         if (!open) return;
@@ -46,6 +47,7 @@ export function AccountDialog({
         setSecret(account?.secret ?? defaultSecret);
         setRevealed(false);
         setError(null);
+        setSubmitting(false);
     }, [account, defaultSecret, open]);
 
     return (
@@ -61,9 +63,13 @@ export function AccountDialog({
                     className="space-y-4"
                     onSubmit={event => {
                         event.preventDefault();
-                        const nextError = onSubmit({ projectName, secret });
-                        setError(nextError);
-                        if (!nextError) onOpenChange(false);
+                        setSubmitting(true);
+                        void onSubmit({ projectName, secret })
+                            .then(nextError => {
+                                setError(nextError);
+                                if (!nextError) onOpenChange(false);
+                            })
+                            .finally(() => setSubmitting(false));
                     }}
                 >
                     <div className="space-y-2">
@@ -105,10 +111,17 @@ export function AccountDialog({
                     </div>
                     {error && <p className="text-sm text-destructive">{error}</p>}
                     <DialogFooter>
-                        <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            disabled={submitting}
+                            onClick={() => onOpenChange(false)}
+                        >
                             {text.cancel}
                         </Button>
-                        <Button type="submit">{account ? text.save : text.addAccount}</Button>
+                        <Button type="submit" disabled={submitting}>
+                            {account ? text.save : text.addAccount}
+                        </Button>
                     </DialogFooter>
                 </form>
             </DialogContent>

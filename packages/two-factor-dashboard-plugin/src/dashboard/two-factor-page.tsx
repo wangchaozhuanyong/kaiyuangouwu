@@ -2,6 +2,7 @@ import { useLingui } from '@lingui/react/macro';
 import {
     Alert,
     AlertDescription,
+    api,
     Badge,
     Button,
     Page,
@@ -10,21 +11,34 @@ import {
     PageBlock,
     PageLayout,
     PageTitle,
+    Skeleton,
     toast,
     useAuth,
 } from '@vendure/dashboard';
 import { LockKeyhole, Plus, Upload } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { AccountDialog, AccountDraft } from './account-dialog';
 import { AccountList } from './account-list';
 import { BatchImportDialog } from './batch-import-dialog';
 import { ParsedBatchAccount } from './batch-parser';
+import {
+    clearLegacyTwoFactorSessionStorage,
+    loadLegacyTwoFactorSessionAccounts,
+} from './legacy-session-cleanup';
 import { messages, TwoFactorText } from './messages';
 import { PrivacyNotice } from './privacy-notice';
 import { QuickQueryCard } from './quick-query-card';
-import { clearSessionAccounts, loadSessionAccounts, saveSessionAccounts } from './session-storage';
 import { generateTotp, getTotpSecondsRemaining, normalizeBase32Secret } from './totp';
+import {
+    clearDashboardTwoFactorAccountsMutation,
+    createDashboardTwoFactorAccountMutation,
+    dashboardTwoFactorAccountsQuery,
+    deleteDashboardTwoFactorAccountMutation,
+    importDashboardTwoFactorAccountsMutation,
+    touchDashboardTwoFactorAccountMutation,
+    updateDashboardTwoFactorAccountMutation,
+} from './two-factor.graphql';
 import { MAX_TWO_FACTOR_ACCOUNTS, TwoFactorAccount } from './types';
 
 export function TwoFactorPage() {
@@ -32,9 +46,9 @@ export function TwoFactorPage() {
     const text = useMemo(() => translateMessages(t), [t]);
     const { user } = useAuth();
     const ownerId = user?.id ?? '';
-    const loadedOwnerId = useRef('');
     const [accounts, setAccounts] = useState<TwoFactorAccount[]>([]);
-    const [storageAvailable, setStorageAvailable] = useState(true);
+    const [loadingAccounts, setLoadingAccounts] = useState(true);
+    const [loadError, setLoadError] = useState('');
     const [now, setNow] = useState(() => Date.now());
     const [codes, setCodes] = useState<Record<string, string>>({});
     const [queryInput, setQueryInput] = useState('');
@@ -47,6 +61,7 @@ export function TwoFactorPage() {
     const [batchDialogOpen, setBatchDialogOpen] = useState(false);
     const timeStep = Math.floor(now / 30_000);
     const secondsRemaining = getTotpSecondsRemaining(now);
+    const persistenceReady = Boolean(ownerId && !loadingAccounts && !loadError);
 
     useEffect(() => {
         const interval = window.setInterval(() => setNow(Date.now()), 1_000);
@@ -54,12 +69,30 @@ export function TwoFactorPage() {
     }, []);
 
     useEffect(() => {
-        if (!ownerId || loadedOwnerId.current === ownerId) return;
-        const stored = loadSessionAccounts(ownerId);
-        loadedOwnerId.current = ownerId;
-        setAccounts(stored.accounts);
-        setStorageAvailable(stored.available);
-    }, [ownerId]);
+        let active = true;
+        setAccounts([]);
+        setLoadError('');
+        if (!ownerId) {
+            setLoadingAccounts(false);
+            return () => {
+                active = false;
+            };
+        }
+        setLoadingAccounts(true);
+        void loadPersistedAccounts(ownerId, text)
+            .then(loadedAccounts => {
+                if (active) setAccounts(loadedAccounts);
+            })
+            .catch(error => {
+                if (active) setLoadError(errorMessage(error, text.storageUnavailable));
+            })
+            .finally(() => {
+                if (active) setLoadingAccounts(false);
+            });
+        return () => {
+            active = false;
+        };
+    }, [ownerId, text.storageUnavailable]);
 
     useEffect(() => {
         let active = true;
@@ -93,19 +126,6 @@ export function TwoFactorPage() {
             active = false;
         };
     }, [querySecret, timeStep]);
-
-    const persistAccounts = useCallback(
-        (nextAccounts: TwoFactorAccount[]): boolean => {
-            if (!ownerId || !storageAvailable || !saveSessionAccounts(ownerId, nextAccounts)) {
-                setStorageAvailable(false);
-                toast.error(text.storageUnavailable);
-                return false;
-            }
-            setAccounts(nextAccounts);
-            return true;
-        },
-        [ownerId, storageAvailable, text.storageUnavailable],
-    );
 
     const handleQuery = async () => {
         setQuerying(true);
@@ -151,7 +171,7 @@ export function TwoFactorPage() {
         }
     };
 
-    const handleAccountSubmit = (draft: AccountDraft): string | null => {
+    const handleAccountSubmit = async (draft: AccountDraft): Promise<string | null> => {
         const projectName = draft.projectName.trim();
         if (!projectName) return text.projectRequired;
         if (projectName.length > 80) return text.projectTooLong;
@@ -166,23 +186,30 @@ export function TwoFactorPage() {
         }
         if (!editingAccount && accounts.length >= MAX_TWO_FACTOR_ACCOUNTS) return text.accountLimit;
 
-        const nextAccounts = editingAccount
-            ? accounts.map(account =>
-                  account.id === editingAccount.id ? { ...account, projectName, secret } : account,
-              )
-            : [
-                  ...accounts,
-                  {
-                      id: createAccountId(),
-                      projectName,
-                      secret,
-                      createdAt: new Date().toISOString(),
-                      lastUsedAt: null,
-                  },
-              ];
-        if (!persistAccounts(nextAccounts)) return text.storageUnavailable;
-        toast.success(editingAccount ? text.accountUpdated : text.accountAdded);
-        return null;
+        try {
+            if (editingAccount) {
+                const result = await api.mutate<{
+                    updateDashboardTwoFactorAccount: TwoFactorAccount;
+                }>(updateDashboardTwoFactorAccountMutation, {
+                    input: { id: editingAccount.id, projectName, secret },
+                });
+                setAccounts(current =>
+                    current.map(account =>
+                        account.id === editingAccount.id ? result.updateDashboardTwoFactorAccount : account,
+                    ),
+                );
+                toast.success(text.accountUpdated);
+            } else {
+                const result = await api.mutate<{
+                    createDashboardTwoFactorAccount: TwoFactorAccount;
+                }>(createDashboardTwoFactorAccountMutation, { input: { projectName, secret } });
+                setAccounts(current => [...current, result.createDashboardTwoFactorAccount]);
+                toast.success(text.accountAdded);
+            }
+            return null;
+        } catch (error) {
+            return errorMessage(error, text.storageUnavailable);
+        }
     };
 
     const openAddDialog = (defaultSecret = '') => {
@@ -191,39 +218,56 @@ export function TwoFactorPage() {
         setAccountDialogOpen(true);
     };
 
-    const importAccounts = (parsedAccounts: ParsedBatchAccount[]) => {
-        const createdAt = new Date().toISOString();
-        const nextAccounts = [
-            ...accounts,
-            ...parsedAccounts.map(account => ({
-                id: createAccountId(),
-                projectName: account.projectName,
-                secret: account.secret,
-                createdAt,
-                lastUsedAt: null,
-            })),
-        ];
-        if (persistAccounts(nextAccounts)) toast.success(text.accountsImported);
-    };
-
-    const deleteAccount = (account: TwoFactorAccount) => {
-        if (persistAccounts(accounts.filter(item => item.id !== account.id))) {
-            toast.success(text.accountDeleted);
+    const importAccounts = async (parsedAccounts: ParsedBatchAccount[]): Promise<boolean> => {
+        try {
+            const result = await api.mutate<{
+                importDashboardTwoFactorAccounts: TwoFactorAccount[];
+            }>(importDashboardTwoFactorAccountsMutation, {
+                inputs: parsedAccounts.map(({ projectName, secret }) => ({ projectName, secret })),
+            });
+            setAccounts(result.importDashboardTwoFactorAccounts);
+            toast.success(text.accountsImported);
+            return true;
+        } catch (error) {
+            toast.error(errorMessage(error, text.storageUnavailable));
+            return false;
         }
     };
 
-    const clearAllAccounts = () => {
-        clearSessionAccounts(ownerId);
-        setAccounts([]);
-        setCodes({});
-        toast.success(text.accountsCleared);
+    const deleteAccount = async (account: TwoFactorAccount) => {
+        try {
+            await api.mutate(deleteDashboardTwoFactorAccountMutation, { id: account.id });
+            setAccounts(current => current.filter(item => item.id !== account.id));
+            toast.success(text.accountDeleted);
+        } catch (error) {
+            toast.error(errorMessage(error, text.storageUnavailable));
+        }
+    };
+
+    const clearAllAccounts = async () => {
+        try {
+            await api.mutate(clearDashboardTwoFactorAccountsMutation, {});
+            setAccounts([]);
+            setCodes({});
+            toast.success(text.accountsCleared);
+        } catch (error) {
+            toast.error(errorMessage(error, text.storageUnavailable));
+        }
     };
 
     const copyAccountCode = async (account: TwoFactorAccount) => {
         const code = codes[account.id];
         if (!code || !(await copyCode(code))) return;
-        const lastUsedAt = new Date().toISOString();
-        persistAccounts(accounts.map(item => (item.id === account.id ? { ...item, lastUsedAt } : item)));
+        try {
+            const result = await api.mutate<{
+                touchDashboardTwoFactorAccount: TwoFactorAccount;
+            }>(touchDashboardTwoFactorAccountMutation, { id: account.id });
+            setAccounts(current =>
+                current.map(item => (item.id === account.id ? result.touchDashboardTwoFactorAccount : item)),
+            );
+        } catch (error) {
+            toast.error(errorMessage(error, text.storageUnavailable));
+        }
     };
 
     return (
@@ -235,13 +279,13 @@ export function TwoFactorPage() {
                         <Button
                             type="button"
                             variant="outline"
-                            disabled={!storageAvailable}
+                            disabled={!persistenceReady}
                             onClick={() => setBatchDialogOpen(true)}
                         >
                             <Upload className="size-4" aria-hidden="true" />
                             {text.batchImport}
                         </Button>
-                        <Button type="button" disabled={!storageAvailable} onClick={() => openAddDialog()}>
+                        <Button type="button" disabled={!persistenceReady} onClick={() => openAddDialog()}>
                             <Plus className="size-4" aria-hidden="true" />
                             {text.addAccount}
                         </Button>
@@ -277,30 +321,38 @@ export function TwoFactorPage() {
                             setQueryCode(null);
                         }}
                         onSave={() => querySecret && openAddDialog(querySecret)}
+                        saveDisabled={!persistenceReady}
                     />
                 </PageBlock>
             </PageLayout>
             <PageLayout>
                 <PageBlock column="full" blockId="two-factor-account-list">
-                    {!storageAvailable && (
+                    {loadError && (
                         <Alert variant="destructive" className="mb-4">
-                            <AlertDescription>{text.storageUnavailable}</AlertDescription>
+                            <AlertDescription>{loadError}</AlertDescription>
                         </Alert>
                     )}
-                    <AccountList
-                        text={text}
-                        accounts={accounts}
-                        codes={codes}
-                        secondsRemaining={secondsRemaining}
-                        onCopy={account => void copyAccountCode(account)}
-                        onEdit={account => {
-                            setEditingAccount(account);
-                            setAccountDefaultSecret('');
-                            setAccountDialogOpen(true);
-                        }}
-                        onDelete={deleteAccount}
-                        onClearAll={clearAllAccounts}
-                    />
+                    {loadingAccounts ? (
+                        <div className="space-y-3" aria-busy="true">
+                            <Skeleton className="h-10 w-full" />
+                            <Skeleton className="h-32 w-full" />
+                        </div>
+                    ) : (
+                        <AccountList
+                            text={text}
+                            accounts={accounts}
+                            codes={codes}
+                            secondsRemaining={secondsRemaining}
+                            onCopy={account => void copyAccountCode(account)}
+                            onEdit={account => {
+                                setEditingAccount(account);
+                                setAccountDefaultSecret('');
+                                setAccountDialogOpen(true);
+                            }}
+                            onDelete={account => void deleteAccount(account)}
+                            onClearAll={() => void clearAllAccounts()}
+                        />
+                    )}
                 </PageBlock>
             </PageLayout>
 
@@ -323,14 +375,38 @@ export function TwoFactorPage() {
     );
 }
 
+async function loadPersistedAccounts(ownerId: string, text: TwoFactorText): Promise<TwoFactorAccount[]> {
+    const result = await api.query<{ dashboardTwoFactorAccounts: TwoFactorAccount[] }>(
+        dashboardTwoFactorAccountsQuery,
+    );
+    const persistedAccounts = result.dashboardTwoFactorAccounts;
+    const legacy = loadLegacyTwoFactorSessionAccounts(ownerId);
+    if (!legacy.found) return persistedAccounts;
+    if (!legacy.valid) throw new Error(text.legacyMigrationFailed);
+
+    const persistedSecrets = new Set(persistedAccounts.map(account => account.secret));
+    const accountsToMigrate = legacy.accounts.filter(account => !persistedSecrets.has(account.secret));
+    if (persistedAccounts.length + accountsToMigrate.length > MAX_TWO_FACTOR_ACCOUNTS) {
+        throw new Error(text.legacyMigrationLimit);
+    }
+
+    let migratedAccounts = persistedAccounts;
+    if (accountsToMigrate.length > 0) {
+        const importResult = await api.mutate<{
+            importDashboardTwoFactorAccounts: TwoFactorAccount[];
+        }>(importDashboardTwoFactorAccountsMutation, { inputs: accountsToMigrate });
+        migratedAccounts = importResult.importDashboardTwoFactorAccounts;
+    }
+    clearLegacyTwoFactorSessionStorage(ownerId);
+    return migratedAccounts;
+}
+
 function translateMessages(t: ReturnType<typeof useLingui>['t']): TwoFactorText {
     return Object.fromEntries(
         Object.entries(messages).map(([key, descriptor]) => [key, t(descriptor)]),
     ) as TwoFactorText;
 }
 
-function createAccountId(): string {
-    return (
-        globalThis.crypto?.randomUUID?.() ?? `two-factor-${Date.now()}-${Math.random().toString(36).slice(2)}`
-    );
+function errorMessage(error: unknown, fallback: string): string {
+    return error instanceof Error && error.message ? error.message : fallback;
 }

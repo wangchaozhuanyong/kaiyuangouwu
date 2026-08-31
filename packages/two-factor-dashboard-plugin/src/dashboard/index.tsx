@@ -3,7 +3,6 @@ import { DashboardRouteDefinition, defineDashboardExtension } from '@vendure/das
 import { Bot, KeyRound } from 'lucide-react';
 
 import { messages } from './messages';
-import { TwoFactorSessionGuardProvider } from './session-guard-provider';
 import { TwoFactorPage } from './two-factor-page';
 
 const twoFactorRoute: DashboardRouteDefinition = {
@@ -30,13 +29,6 @@ defineDashboardExtension({
         },
     ],
     routes: [twoFactorRoute],
-    customProviders: [
-        {
-            id: 'two-factor-session-guard',
-            component: TwoFactorSessionGuardProvider,
-            location: 'app',
-        },
-    ],
 });
 
 function TwoFactorBreadcrumb() {
