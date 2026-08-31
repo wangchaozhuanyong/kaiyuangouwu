@@ -1,3 +1,4 @@
+/* eslint-disable max-len -- Tailwind utility lists are intentionally kept as single JSX attributes. */
 import { useMutation, useQuery } from '@apollo/client/react';
 import {
     AlertCircle,
@@ -17,9 +18,11 @@ import {
 } from 'lucide-react';
 import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+
 import { sensitiveActionContext, switchActiveChannel } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { DELETE_PRODUCT, GET_CATALOG_CHANNELS, GET_PRODUCTS } from '../../graphql/catalog.graphql';
+import { useUrlListState } from '../../hooks/use-url-list-state';
 import {
     getCatalogEmptyStateDescription,
     getChannelDisplayLabel,
@@ -103,9 +106,13 @@ const formatMoney = (amount: number, currencyCode: string) => {
 
 export function CatalogModule() {
     const navigate = useNavigate();
-    const [searchTerm, setSearchTerm] = useState('');
-    const [statusFilter, setStatusFilter] = useState<'ALL' | 'ENABLED' | 'DISABLED'>('ALL');
-    const [page, setPage] = useState(0);
+    const { page, searchParams, searchTerm, setFilter, setPage, setSearchTerm } = useUrlListState();
+    const statusParameter = searchParams.get('status');
+    const statusFilter: 'ALL' | 'ENABLED' | 'DISABLED' =
+        statusParameter === 'enabled' ? 'ENABLED' : statusParameter === 'disabled' ? 'DISABLED' : 'ALL';
+    const setStatusFilter = (status: 'ALL' | 'ENABLED' | 'DISABLED') => {
+        setFilter('status', status.toLowerCase(), 'all');
+    };
     const pageSize = 10;
 
     const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(
@@ -146,7 +153,7 @@ export function CatalogModule() {
 
     const { data, loading, error, refetch } = useQuery<GetProductsData>(GET_PRODUCTS, {
         variables: queryVariables,
-        fetchPolicy: 'cache-and-network',
+        fetchPolicy: 'cache-first',
         notifyOnNetworkStatusChange: true,
     });
     const activeChannelQuery = useQuery<GetCatalogChannelsData>(GET_CATALOG_CHANNELS, {
@@ -162,7 +169,7 @@ export function CatalogModule() {
                 showNotice(`商品《${productToDelete?.name || ''}》已删除`);
                 setProductToDelete(null);
                 setDeletePassword('');
-                refetch();
+                void refetch();
             } else {
                 showNotice(res?.deleteProduct?.message || '商品删除失败，请稍后重试', 'error');
             }
@@ -194,7 +201,7 @@ export function CatalogModule() {
             showNotice('请输入当前管理员密码后再删除商品', 'error');
             return;
         }
-        deleteProductMutation({
+        void deleteProductMutation({
             variables: { id: productToDelete.id },
             context: sensitiveActionContext(deletePassword),
         });
@@ -296,7 +303,6 @@ export function CatalogModule() {
                                 type="button"
                                 onClick={() => {
                                     setStatusFilter('ALL');
-                                    setPage(0);
                                 }}
                                 className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer ${statusFilter === 'ALL' ? 'bg-blue-600 text-white shadow-2xs' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}
                             >
@@ -306,7 +312,6 @@ export function CatalogModule() {
                                 type="button"
                                 onClick={() => {
                                     setStatusFilter('ENABLED');
-                                    setPage(0);
                                 }}
                                 className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer ${statusFilter === 'ENABLED' ? 'bg-blue-600 text-white shadow-2xs' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}
                             >
@@ -316,7 +321,6 @@ export function CatalogModule() {
                                 type="button"
                                 onClick={() => {
                                     setStatusFilter('DISABLED');
-                                    setPage(0);
                                 }}
                                 className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer ${statusFilter === 'DISABLED' ? 'bg-blue-600 text-white shadow-2xs' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}
                             >
@@ -332,7 +336,6 @@ export function CatalogModule() {
                                     value={searchTerm}
                                     onChange={e => {
                                         setSearchTerm(e.target.value);
-                                        setPage(0);
                                     }}
                                     aria-label="搜索商品"
                                     placeholder="搜索商品名称"
@@ -343,7 +346,6 @@ export function CatalogModule() {
                                         type="button"
                                         onClick={() => {
                                             setSearchTerm('');
-                                            setPage(0);
                                         }}
                                         className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600"
                                         aria-label="清空商品搜索"
@@ -591,7 +593,7 @@ export function CatalogModule() {
                                 <button
                                     type="button"
                                     disabled={page === 0}
-                                    onClick={() => setPage(prev => Math.max(0, prev - 1))}
+                                    onClick={() => setPage(Math.max(0, page - 1))}
                                     className="px-2.5 py-1 bg-white border border-slate-200 rounded hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed font-medium flex items-center gap-1"
                                 >
                                     <ChevronLeft className="w-3.5 h-3.5" /> 上一页
@@ -599,7 +601,7 @@ export function CatalogModule() {
                                 <button
                                     type="button"
                                     disabled={page + 1 >= totalPages}
-                                    onClick={() => setPage(prev => prev + 1)}
+                                    onClick={() => setPage(page + 1)}
                                     className="px-2.5 py-1 bg-white border border-slate-200 rounded hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed font-medium flex items-center gap-1"
                                 >
                                     下一页 <ChevronRight className="w-3.5 h-3.5" />

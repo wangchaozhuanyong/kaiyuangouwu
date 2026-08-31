@@ -7,94 +7,89 @@ import { clearAuthSession, hasActiveChannelSelection, setInitialActiveChannel } 
 import { ConfirmDialogProvider } from './components/ConfirmDialog';
 import { InitialPasswordChangeModule } from './pages/Auth/InitialPasswordChangeModule';
 import { LoginModule } from './pages/Auth/LoginModule';
+import { routeModuleLoaders } from './route-modules';
 import { isAuthenticationRequiredError } from './utils/authentication-error';
 import { toUserFacingError } from './utils/user-facing-error';
 
-const AppShell = lazy(() =>
-    import('./layouts/AppShell').then(module => ({ default: module.AppShell })),
-);
+const AppShell = lazy(() => import('./layouts/AppShell').then(module => ({ default: module.AppShell })));
 
 const ProfileModule = lazy(() =>
-    import('./pages/Auth/ProfileModule').then(module => ({ default: module.ProfileModule })),
+    routeModuleLoaders.profile().then(module => ({ default: module.ProfileModule })),
 );
 const DashboardModule = lazy(() =>
-    import('./pages/Dashboard/DashboardModule').then(module => ({ default: module.DashboardModule })),
+    routeModuleLoaders.dashboard().then(module => ({ default: module.DashboardModule })),
 );
 const CatalogModule = lazy(() =>
-    import('./pages/Catalog/CatalogModule').then(module => ({ default: module.CatalogModule })),
+    routeModuleLoaders.catalog().then(module => ({ default: module.CatalogModule })),
 );
 const ProductEditor = lazy(() =>
-    import('./pages/Catalog/ProductEditor').then(module => ({ default: module.ProductEditor })),
+    routeModuleLoaders.productEditor().then(module => ({ default: module.ProductEditor })),
 );
 const CategoriesModule = lazy(() =>
-    import('./pages/Catalog/CategoriesModule').then(module => ({ default: module.CategoriesModule })),
+    routeModuleLoaders.categories().then(module => ({ default: module.CategoriesModule })),
 );
 const InventoryWarehouseModule = lazy(() =>
-    import('./pages/Catalog/InventoryWarehouseModule').then(module => ({
+    routeModuleLoaders.inventory().then(module => ({
         default: module.InventoryWarehouseModule,
     })),
 );
 const CardPoolModule = lazy(() =>
-    import('./pages/Sales/CardPoolModule').then(module => ({ default: module.CardPoolModule })),
+    routeModuleLoaders.cardPool().then(module => ({ default: module.CardPoolModule })),
 );
 const AssetsModule = lazy(() =>
-    import('./pages/Catalog/AssetsModule').then(module => ({ default: module.AssetsModule })),
+    routeModuleLoaders.assets().then(module => ({ default: module.AssetsModule })),
 );
-const SalesModule = lazy(() =>
-    import('./pages/Sales/SalesModule').then(module => ({ default: module.SalesModule })),
-);
+const SalesModule = lazy(() => routeModuleLoaders.sales().then(module => ({ default: module.SalesModule })));
 const OrderEditor = lazy(() =>
-    import('./pages/Sales/OrderEditor').then(module => ({ default: module.OrderEditor })),
+    routeModuleLoaders.orderEditor().then(module => ({ default: module.OrderEditor })),
 );
 const AfterSalesModule = lazy(() =>
-    import('./pages/Sales/AfterSalesModule').then(module => ({ default: module.AfterSalesModule })),
+    routeModuleLoaders.afterSales().then(module => ({ default: module.AfterSalesModule })),
 );
 const ReviewsModule = lazy(() =>
-    import('./pages/Storefront/ReviewsModule').then(module => ({ default: module.ReviewsModule })),
+    routeModuleLoaders.reviews().then(module => ({ default: module.ReviewsModule })),
 );
 const CustomersModule = lazy(() =>
-    import('./pages/Customers/CustomersModule').then(module => ({ default: module.CustomersModule })),
+    routeModuleLoaders.customers().then(module => ({ default: module.CustomersModule })),
 );
 const PromotionsModule = lazy(() =>
-    import('./pages/Marketing/PromotionsModule').then(module => ({ default: module.PromotionsModule })),
+    routeModuleLoaders.promotions().then(module => ({ default: module.PromotionsModule })),
 );
 const ReferralsModule = lazy(() =>
-    import('./pages/Marketing/ReferralsModule').then(module => ({ default: module.ReferralsModule })),
+    routeModuleLoaders.referrals().then(module => ({ default: module.ReferralsModule })),
 );
 const StorefrontModule = lazy(() =>
-    import('./pages/Storefront/StorefrontModule').then(module => ({ default: module.StorefrontModule })),
+    routeModuleLoaders.storefront().then(module => ({ default: module.StorefrontModule })),
 );
 const StorefrontContentModule = lazy(() =>
-    import('./pages/Storefront/StorefrontContentModule').then(module => ({
+    routeModuleLoaders.storefrontContent().then(module => ({
         default: module.StorefrontContentModule,
     })),
 );
 const ClientPluginsModule = lazy(() =>
-    import('./pages/Plugins/ClientPluginsModule').then(module => ({ default: module.ClientPluginsModule })),
+    routeModuleLoaders.clientPlugins().then(module => ({ default: module.ClientPluginsModule })),
 );
 const AiImageSettingsModule = lazy(() =>
-    import('./pages/Plugins/AiImageSettingsModule').then(module => ({
+    routeModuleLoaders.aiImageSettings().then(module => ({
         default: module.AiImageSettingsModule,
     })),
 );
 const AiImageAccessModule = lazy(() =>
-    import('./pages/Plugins/AiImageAccessModule').then(module => ({ default: module.AiImageAccessModule })),
+    routeModuleLoaders.aiImageAccess().then(module => ({ default: module.AiImageAccessModule })),
 );
 const TranslationsModule = lazy(() =>
-    import('./pages/Settings/TranslationsModule').then(module => ({ default: module.TranslationsModule })),
+    routeModuleLoaders.translations().then(module => ({ default: module.TranslationsModule })),
 );
 const StoreSettingsModule = lazy(() =>
-    import('./pages/Settings/StoreSettingsModule').then(module => ({ default: module.StoreSettingsModule })),
+    routeModuleLoaders.storeSettings().then(module => ({ default: module.StoreSettingsModule })),
 );
-const RolesModule = lazy(() =>
-    import('./pages/Settings/RolesModule').then(module => ({ default: module.RolesModule })),
-);
+const RolesModule = lazy(() => routeModuleLoaders.roles().then(module => ({ default: module.RolesModule })));
 const SystemOpsModule = lazy(() =>
-    import('./pages/Settings/SystemOpsModule').then(module => ({ default: module.SystemOpsModule })),
+    routeModuleLoaders.systemOps().then(module => ({ default: module.SystemOpsModule })),
 );
 
-const GET_CURRENT_ADMINISTRATOR = gql`
-    query GetCurrentAdministrator {
+const GET_ADMIN_BOOTSTRAP = gql`
+    query GetAdminBootstrap {
         me {
             id
             identifier
@@ -104,26 +99,18 @@ const GET_CURRENT_ADMINISTRATOR = gql`
                 token
             }
         }
-    }
-`;
-
-const GET_INITIAL_PASSWORD_STATUS = gql`
-    query GetInitialPasswordStatus {
         merchantInitialPasswordStatus {
             mustChangePassword
         }
     }
 `;
 
-interface CurrentAdministratorData {
+interface AdminBootstrapData {
     me: {
         id: string;
         identifier: string;
         channels: Array<{ id: string; code: string; token: string }>;
     } | null;
-}
-
-interface InitialPasswordStatusData {
     merchantInitialPasswordStatus: { mustChangePassword: boolean };
 }
 
@@ -134,16 +121,12 @@ function SessionExpiredRedirect() {
 
 function AuthenticatedShell() {
     const [channelReady, setChannelReady] = useState(() => hasActiveChannelSelection());
-    const authQuery = useQuery<CurrentAdministratorData>(GET_CURRENT_ADMINISTRATOR, {
+    const authQuery = useQuery<AdminBootstrapData>(GET_ADMIN_BOOTSTRAP, {
         fetchPolicy: 'network-only',
-    });
-    const passwordStatusQuery = useQuery<InitialPasswordStatusData>(GET_INITIAL_PASSWORD_STATUS, {
-        fetchPolicy: 'network-only',
-        skip: !authQuery.data?.me,
     });
     const data = authQuery.data;
-    const loading = authQuery.loading || (Boolean(data?.me) && passwordStatusQuery.loading);
-    const error = authQuery.error || passwordStatusQuery.error;
+    const loading = authQuery.loading;
+    const error = authQuery.error;
 
     // 会话恢复时需要先将唯一可用 Channel 写入请求上下文，再挂载业务页面。
     /* oxlint-disable react/set-state-in-effect */
@@ -179,12 +162,7 @@ function AuthenticatedShell() {
                     </p>
                     <button
                         type="button"
-                        onClick={() =>
-                            void Promise.all([
-                                authQuery.refetch(),
-                                data?.me ? passwordStatusQuery.refetch() : Promise.resolve(),
-                            ])
-                        }
+                        onClick={() => void authQuery.refetch()}
                         className="mt-5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700"
                     >
                         重新验证
@@ -206,11 +184,11 @@ function AuthenticatedShell() {
         );
     }
 
-    if (passwordStatusQuery.data?.merchantInitialPasswordStatus.mustChangePassword) {
+    if (data.merchantInitialPasswordStatus.mustChangePassword) {
         return (
             <InitialPasswordChangeModule
                 onCompleted={async () => {
-                    await Promise.all([authQuery.refetch(), passwordStatusQuery.refetch()]);
+                    await authQuery.refetch();
                 }}
             />
         );

@@ -78,12 +78,14 @@ import {
     normalizeDeliveryEmail,
     orderConfirmationRecipient,
 } from './order-confirmation-email';
+import { resolveRuntimeAdminCredentials } from './runtime-admin-credentials';
 import { StorefrontNativeAuthenticationStrategy } from './storefront-native-authentication-strategy';
 // import { FieldTestPlugin } from './test-plugins/field-test/field-test-plugin';
 
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 const IS_INSTRUMENTED = process.env.IS_INSTRUMENTED === 'true';
 const BOOTSTRAP_BASE_SCHEMA = process.env.VENDURE_BOOTSTRAP_BASE_SCHEMA === 'true';
+const runtimeAdminCredentials = resolveRuntimeAdminCredentials(process.env, IS_PRODUCTION);
 const contentTranslationApiKey = BOOTSTRAP_BASE_SCHEMA
     ? ''
     : configuredValue('VENDURE_GOOGLE_TRANSLATION_API_KEY', '');
@@ -519,11 +521,11 @@ export const devConfig: VendureConfig = {
         passwordValidationStrategy: new DefaultPasswordValidationStrategy({ minLength: 8, maxLength: 72 }),
         customPermissions: [],
         superadminCredentials: {
-            identifier: configuredValue('SUPERADMIN_USERNAME', 'superadmin'),
-            password: configuredValue('SUPERADMIN_PASSWORD', 'superadmin'),
+            identifier: runtimeAdminCredentials.identifier,
+            password: runtimeAdminCredentials.password,
         },
         cookieOptions: {
-            secret: configuredValue('COOKIE_SECRET', 'abc'),
+            secret: runtimeAdminCredentials.cookieSecret,
             httpOnly: true,
             secure: IS_PRODUCTION,
             sameSite: 'lax',

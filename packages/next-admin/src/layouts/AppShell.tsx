@@ -1,3 +1,4 @@
+/* eslint-disable max-len -- Tailwind utility lists are intentionally kept as single JSX attributes. */
 import { useQuery } from '@apollo/client/react';
 import {
     Blocks,
@@ -32,20 +33,24 @@ import {
     Users,
     X,
 } from 'lucide-react';
-import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { NavLink, Outlet, useLocation, useNavigate, type NavigateOptions } from 'react-router-dom';
+import React, { startTransition, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import {
+    Outlet,
+    NavLink as RouterNavLink,
+    useLocation,
+    useNavigate,
+    type NavigateOptions,
+    type NavLinkProps,
+} from 'react-router-dom';
+import type { ThemePreference } from '../theme/theme';
+
 import { logoutAdministrator, switchActiveChannel } from '../apollo';
 import { AccessibleDialogSurface } from '../components/AccessibleDialogSurface';
 import { ThemeToggleButton } from '../components/ThemeToggleButton';
-import {
-    ACTIVE_ADMINISTRATOR_PROFILE_QUERY,
-    CHANNEL_SWITCHER_QUERY,
-    type ActiveAdministratorProfileData,
-    type ChannelSwitcherData,
-} from '../graphql/auth.graphql';
+import { APP_SHELL_BOOTSTRAP_QUERY, type AppShellBootstrapData } from '../graphql/auth.graphql';
 import { requestAppNavigation } from '../hooks/use-unsaved-changes-warning';
+import { preloadCommonRoutes, preloadRoute } from '../route-modules';
 import { useTheme } from '../theme/theme-context';
-import type { ThemePreference } from '../theme/theme';
 import { getChannelDisplayLabel } from '../utils/channel-display';
 import { toUserFacingError } from '../utils/user-facing-error';
 
@@ -53,6 +58,31 @@ interface OpenTab {
     path: string;
     href: string;
     label: string;
+}
+
+function NavLink({ onFocus, onMouseEnter, onPointerDown, to, ...props }: NavLinkProps) {
+    const preload = () => {
+        if (typeof to === 'string') preloadRoute(to);
+    };
+
+    return (
+        <RouterNavLink
+            {...props}
+            to={to}
+            onMouseEnter={event => {
+                preload();
+                onMouseEnter?.(event);
+            }}
+            onFocus={event => {
+                preload();
+                onFocus?.(event);
+            }}
+            onPointerDown={event => {
+                preload();
+                onPointerDown?.(event);
+            }}
+        />
+    );
 }
 
 const THEME_OPTIONS: Array<{
@@ -68,10 +98,11 @@ const THEME_OPTIONS: Array<{
 export function AppShell() {
     const location = useLocation();
     const routerNavigate = useNavigate();
-    const { preference: themePreference, resolvedTheme, setPreference: setThemePreference } =
-        useTheme();
+    const { preference: themePreference, resolvedTheme, setPreference: setThemePreference } = useTheme();
     const navigate = (target: string, options?: NavigateOptions) => {
-        if (requestAppNavigation(target)) void routerNavigate(target, options);
+        if (!requestAppNavigation(target)) return;
+        preloadRoute(target);
+        startTransition(() => void routerNavigate(target, options));
     };
     const [isDesktop, setIsDesktop] = useState(() => window.matchMedia('(min-width: 1024px)').matches);
     const [isSidebarOpen, setIsSidebarOpen] = useState(
@@ -79,6 +110,7 @@ export function AppShell() {
     );
     const sidebarRef = useRef<HTMLElement>(null);
     const sidebarToggleRef = useRef<HTMLButtonElement>(null);
+    const mainContentRef = useRef<HTMLDivElement>(null);
     const wasMobileSidebarOpenRef = useRef(false);
     const [isCmdKOpen, setIsCmdKOpen] = useState(false);
     const [cmdSearchQuery, setCmdSearchQuery] = useState('');
@@ -88,15 +120,18 @@ export function AppShell() {
     const [isChannelSwitching, setIsChannelSwitching] = useState(false);
     const [channelError, setChannelError] = useState('');
     const loadingAllChannelsRef = useRef(false);
-    const {
-        data: profileData,
-        loading: profileLoading,
-        error: profileError,
-        refetch: refetchProfile,
-    } = useQuery<ActiveAdministratorProfileData>(ACTIVE_ADMINISTRATOR_PROFILE_QUERY, {
+    const appShellQuery = useQuery<AppShellBootstrapData>(APP_SHELL_BOOTSTRAP_QUERY, {
+        variables: { options: { skip: 0, take: 100, sort: { code: 'ASC' } } },
         fetchPolicy: 'cache-first',
     });
-    const activeAdministrator = profileData?.activeAdministrator;
+    const {
+        data: channelData,
+        error: appShellError,
+        fetchMore: fetchMoreChannels,
+        loading: appShellLoading,
+        refetch: refetchAppShell,
+    } = appShellQuery;
+    const activeAdministrator = channelData?.activeAdministrator;
     const administratorName = activeAdministrator
         ? [activeAdministrator.lastName, activeAdministrator.firstName].filter(Boolean).join('') ||
           activeAdministrator.user.identifier
@@ -109,16 +144,16 @@ export function AppShell() {
     const isSuperAdminRoute =
         location.pathname.startsWith('/plugins/ai-access') ||
         location.pathname.startsWith('/settings/system-ops');
-    const channelQuery = useQuery<ChannelSwitcherData>(CHANNEL_SWITCHER_QUERY, {
-        variables: { options: { skip: 0, take: 100, sort: { code: 'ASC' } } },
-        fetchPolicy: 'cache-and-network',
-    });
-    const {
-        data: channelData,
-        error: channelsError,
-        fetchMore: fetchMoreChannels,
-        loading: channelsLoading,
-    } = channelQuery;
+    const channelsError = appShellError;
+    const channelsLoading = appShellLoading;
+    const profileError = appShellError;
+    const profileLoading = appShellLoading;
+    const refetchProfile = refetchAppShell;
+
+    useEffect(() => {
+        const timer = window.setTimeout(preloadCommonRoutes, 1200);
+        return () => window.clearTimeout(timer);
+    }, []);
 
     useEffect(() => {
         const channels = channelData?.channels;
@@ -261,6 +296,7 @@ export function AppShell() {
         }
 
         if (currentTitle) {
+            document.title = `${currentTitle} · Vendure 商家后台`;
             const currentHref = `${location.pathname}${location.search}`;
             setTabs(prev => {
                 const existing = prev.find(tab => tab.path === location.pathname);
@@ -274,6 +310,13 @@ export function AppShell() {
             });
         }
     }, [location.pathname, location.search]);
+
+    useEffect(() => {
+        const frame = window.requestAnimationFrame(() => {
+            mainContentRef.current?.focus({ preventScroll: true });
+        });
+        return () => window.cancelAnimationFrame(frame);
+    }, [location.pathname]);
     /* oxlint-enable react/set-state-in-effect */
 
     const toggleMenu = (menu: string) => {
@@ -477,7 +520,7 @@ export function AppShell() {
                 ref={sidebarRef}
                 aria-hidden={!isDesktop && !isSidebarOpen}
                 inert={!isDesktop && !isSidebarOpen ? true : undefined}
-                className={`fixed inset-y-0 left-0 z-40 flex w-64 shrink-0 flex-col bg-[#1c2128] text-slate-300 transition-all duration-300 lg:relative lg:z-20 ${isSidebarOpen ? 'translate-x-0 lg:w-64' : '-translate-x-full lg:w-16 lg:translate-x-0'}`}
+                className={`fixed inset-y-0 left-0 z-40 flex w-64 shrink-0 flex-col bg-[#1c2128] text-slate-300 transition-[transform,width] duration-150 ease-out lg:relative lg:z-20 ${isSidebarOpen ? 'translate-x-0 lg:w-64' : '-translate-x-full lg:w-16 lg:translate-x-0'}`}
             >
                 <div className="h-14 border-b border-white/10 flex items-center justify-center shrink-0">
                     <div className="flex items-center gap-2">
@@ -551,7 +594,7 @@ export function AppShell() {
                             )}
                         </button>
                         <div
-                            className={`overflow-hidden transition-all duration-300 ${isSidebarOpen && openMenu === 'catalog' ? 'max-h-96 mt-1 space-y-0.5' : 'max-h-0'}`}
+                            className={`overflow-hidden transition-[max-height,margin] duration-150 ease-out ${isSidebarOpen && openMenu === 'catalog' ? 'max-h-96 mt-1 space-y-0.5' : 'max-h-0'}`}
                         >
                             <NavLink to="/catalog/list" className={navItemClass}>
                                 商品列表
@@ -593,7 +636,7 @@ export function AppShell() {
                             )}
                         </button>
                         <div
-                            className={`overflow-hidden transition-all duration-300 ${isSidebarOpen && openMenu === 'sales' ? 'max-h-60 mt-1 space-y-0.5' : 'max-h-0'}`}
+                            className={`overflow-hidden transition-[max-height,margin] duration-150 ease-out ${isSidebarOpen && openMenu === 'sales' ? 'max-h-60 mt-1 space-y-0.5' : 'max-h-0'}`}
                         >
                             <NavLink to="/sales/orders" className={navItemClass}>
                                 订单列表
@@ -645,7 +688,7 @@ export function AppShell() {
                             )}
                         </button>
                         <div
-                            className={`overflow-hidden transition-all duration-300 ${isSidebarOpen && openMenu === 'marketing' ? 'max-h-60 mt-1 space-y-0.5' : 'max-h-0'}`}
+                            className={`overflow-hidden transition-[max-height,margin] duration-150 ease-out ${isSidebarOpen && openMenu === 'marketing' ? 'max-h-60 mt-1 space-y-0.5' : 'max-h-0'}`}
                         >
                             <NavLink to="/marketing/promotions" className={navItemClass}>
                                 优惠与促销
@@ -678,7 +721,7 @@ export function AppShell() {
                             )}
                         </button>
                         <div
-                            className={`overflow-hidden transition-all duration-300 ${isSidebarOpen && openMenu === 'storefront' ? 'max-h-60 mt-1 space-y-0.5' : 'max-h-0'}`}
+                            className={`overflow-hidden transition-[max-height,margin] duration-150 ease-out ${isSidebarOpen && openMenu === 'storefront' ? 'max-h-60 mt-1 space-y-0.5' : 'max-h-0'}`}
                         >
                             <NavLink to="/storefront/decoration" className={navItemClass}>
                                 商城装修
@@ -721,7 +764,7 @@ export function AppShell() {
                             )}
                         </button>
                         <div
-                            className={`overflow-hidden transition-all duration-300 ${isSidebarOpen && openMenu === 'plugins' ? 'max-h-80 mt-1 space-y-0.5' : 'max-h-0'}`}
+                            className={`overflow-hidden transition-[max-height,margin] duration-150 ease-out ${isSidebarOpen && openMenu === 'plugins' ? 'max-h-80 mt-1 space-y-0.5' : 'max-h-0'}`}
                         >
                             <NavLink to="/plugins/client-plugins" className={navItemClass}>
                                 客户端插件中心
@@ -762,7 +805,7 @@ export function AppShell() {
                             )}
                         </button>
                         <div
-                            className={`overflow-hidden transition-all duration-300 ${isSidebarOpen && openMenu === 'settings' ? 'max-h-60 mt-1 space-y-0.5' : 'max-h-0'}`}
+                            className={`overflow-hidden transition-[max-height,margin] duration-150 ease-out ${isSidebarOpen && openMenu === 'settings' ? 'max-h-60 mt-1 space-y-0.5' : 'max-h-0'}`}
                         >
                             <NavLink to="/settings/store-profile" className={navItemClass}>
                                 店铺综合设置
@@ -1121,7 +1164,12 @@ export function AppShell() {
                     </div>
                 </div>
 
-                <div id="main-content" tabIndex={-1} className="flex-1 overflow-hidden relative outline-none">
+                <div
+                    id="main-content"
+                    ref={mainContentRef}
+                    tabIndex={-1}
+                    className="flex-1 overflow-hidden relative outline-none"
+                >
                     {isSuperAdminRoute && profileLoading ? (
                         <div className="flex h-full items-center justify-center text-xs font-medium text-slate-500">
                             正在核验访问权限…
@@ -1169,7 +1217,11 @@ export function AppShell() {
                     ) : (
                         <Suspense
                             fallback={
-                                <div className="flex h-full items-center justify-center gap-2 text-xs font-medium text-slate-500">
+                                <div
+                                    className="flex h-full items-center justify-center gap-2 text-xs font-medium text-slate-500"
+                                    role="status"
+                                    aria-live="polite"
+                                >
                                     <RotateCcw className="h-4 w-4 animate-spin" />
                                     正在打开页面…
                                 </div>

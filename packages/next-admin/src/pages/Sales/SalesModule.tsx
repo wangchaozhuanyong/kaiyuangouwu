@@ -1,3 +1,4 @@
+/* eslint-disable max-len -- Tailwind utility lists are intentionally kept as single JSX attributes. */
 import { useMutation, useQuery } from '@apollo/client/react';
 import {
     AlertCircle,
@@ -13,16 +14,19 @@ import {
     Truck,
     X,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useDeferredValue, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import {
     ADD_ORDER_FULFILLMENT,
     GET_SALES_ORDERS,
     TRANSITION_SALES_FULFILLMENT,
 } from '../../graphql/sales.graphql';
+import { useUrlListState } from '../../hooks/use-url-list-state';
 import { useUrlTab } from '../../hooks/use-url-tab';
 import { toUserFacingError } from '../../utils/user-facing-error';
+
 import {
     formatAddress,
     formatDateTime,
@@ -118,6 +122,7 @@ interface FulfillmentMutationData {
 }
 
 const PAGE_SIZE = 20;
+const ORDER_TAB_RESET_PARAMETERS = ['page'];
 const EMPTY_ORDERS: SalesOrderItem[] = [];
 const FULFILLABLE_STATES = ['PaymentAuthorized', 'PaymentSettled', 'PartiallyShipped', 'PartiallyDelivered'];
 const tabs: Array<{ id: OrderTab; label: string }> = [
@@ -136,14 +141,18 @@ const tabStateFilter: Record<OrderTab, Record<string, unknown>> = {
     DELIVERED: { eq: 'Delivered' },
     CANCELLED: { eq: 'Cancelled' },
 };
-const csvCell = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+const csvCell = (value: string) => `"${value.replace(/"/g, '""')}"`;
 
 export function SalesModule() {
     const navigate = useNavigate();
-    const [searchParams] = useSearchParams();
-    const [activeTab, setActiveTab] = useUrlTab<OrderTab>(ORDER_TABS, 'all');
-    const [page, setPage] = useState(0);
-    const [searchTerm, setSearchTerm] = useState(() => searchParams.get('search') ?? '');
+    const [activeTab, setActiveTab] = useUrlTab<OrderTab>(
+        ORDER_TABS,
+        'all',
+        'tab',
+        ORDER_TAB_RESET_PARAMETERS,
+    );
+    const { page, searchTerm, setPage, setSearchTerm } = useUrlListState();
+    const deferredSearchTerm = useDeferredValue(searchTerm);
     const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
     const [isBatchOpen, setIsBatchOpen] = useState(false);
     const [carrier, setCarrier] = useState('');
@@ -157,7 +166,7 @@ export function SalesModule() {
             { active: { eq: false } },
             { state: tabStateFilter[activeTab] },
         ];
-        const query = searchTerm.trim();
+        const query = deferredSearchTerm.trim();
         if (query) {
             filters.push({
                 _or: [
@@ -176,11 +185,11 @@ export function SalesModule() {
                 filter: { _and: filters },
             },
         };
-    }, [activeTab, page, searchTerm]);
+    }, [activeTab, deferredSearchTerm, page]);
 
     const { data, loading, error, refetch } = useQuery<SalesOrdersData>(GET_SALES_ORDERS, {
         variables: queryVariables,
-        fetchPolicy: 'cache-and-network',
+        fetchPolicy: 'cache-first',
         notifyOnNetworkStatusChange: true,
     });
     const [addFulfillment, { loading: fulfilling }] =
@@ -205,7 +214,6 @@ export function SalesModule() {
     };
     const resetListState = (tab: OrderTab) => {
         setActiveTab(tab);
-        setPage(0);
         setSelectedOrderIds([]);
         setActionError('');
     };
@@ -463,7 +471,6 @@ export function SalesModule() {
                                     value={searchTerm}
                                     onChange={event => {
                                         setSearchTerm(event.target.value);
-                                        setPage(0);
                                         setSelectedOrderIds([]);
                                     }}
                                     aria-label="搜索订单"
@@ -475,7 +482,6 @@ export function SalesModule() {
                                         type="button"
                                         onClick={() => {
                                             setSearchTerm('');
-                                            setPage(0);
                                         }}
                                         className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-700"
                                         aria-label="清空搜索"
@@ -698,7 +704,7 @@ export function SalesModule() {
                                 <button
                                     type="button"
                                     onClick={() => {
-                                        setPage(current => Math.max(0, current - 1));
+                                        setPage(Math.max(0, page - 1));
                                         setSelectedOrderIds([]);
                                     }}
                                     disabled={page === 0}
@@ -710,7 +716,7 @@ export function SalesModule() {
                                 <button
                                     type="button"
                                     onClick={() => {
-                                        setPage(current => Math.min(totalPages - 1, current + 1));
+                                        setPage(Math.min(totalPages - 1, page + 1));
                                         setSelectedOrderIds([]);
                                     }}
                                     disabled={page >= totalPages - 1}

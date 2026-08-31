@@ -111,7 +111,7 @@ void test('blocks local services, placeholders, unsafe routing and default crede
             TZ: 'America/Los_Angeles',
             VENDURE_DASHBOARD_URL: 'http://localhost:3000/dashboard',
             VENDURE_CORS_ORIGINS: 'http://localhost:5173',
-            SUPERADMIN_USERNAME: 'superadmin',
+            SUPERADMIN_USERNAME: 'replace-with-admin',
             SUPERADMIN_PASSWORD: 'replace-with-password',
             ORDER_CONFIRMATION_TOKEN_SECRET: 'replace-with-a-secret',
             DB: 'sqlite',
