@@ -1,23 +1,9 @@
 name: Build & Test
 on:
     workflow_dispatch:
-    push:
-        branches:
-            - main
-            - master
-            - minor
-            - major
-        paths:
-            - 'packages/**'
-            - 'package.json'
-            - 'bun.lock'
-            - 'bunfig.toml'
     pull_request:
         branches:
             - main
-            - master
-            - major
-            - minor
 
 env:
     CI: true
@@ -257,25 +243,6 @@ jobs:
             - name: Dashboard e2e tests
               run: bun run e2e:pw -- --shard=${{ matrix.shard }}/4
               working-directory: packages/dashboard
-    sonarqube:
-        name: SonarQube
-        needs: detect-changes
-        if: needs.detect-changes.outputs.packages == 'true' && (github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork)
-        runs-on: ubuntu-latest
-        permissions:
-            contents: read
-        env:
-            SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        steps:
-            - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
-              with:
-                  fetch-depth: 0
-            - name: SonarQube Scan
-              if: env.SONAR_TOKEN != ''
-              uses: SonarSource/sonarqube-scan-action@fd88b7d7ccbaefd23d8f36f73b59db7a3d246602 # v6
-            - name: Report unavailable SonarQube credentials
-              if: env.SONAR_TOKEN == ''
-              run: echo "::notice::SonarQube scan skipped because SONAR_TOKEN is not configured for this repository."
     e2e-sqljs:
         name: e2e (sqljs)
         needs: detect-changes
@@ -433,7 +400,6 @@ jobs:
             - dashboard-storybook
             - dashboard-storybook-windows
             - dashboard-e2e
-            - sonarqube
             - e2e-sqljs
             - e2e-mariadb
             - e2e-mysql
