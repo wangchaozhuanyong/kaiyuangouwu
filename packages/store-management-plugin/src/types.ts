@@ -1,6 +1,15 @@
 import type { CurrencyCode, ID } from '@vendure/core';
 
 export type SystemAnnouncementTargetMode = 'ALL' | 'SINGLE' | 'MULTIPLE';
+export type StoreCommerceMode = 'DIGITAL_ONLY' | 'PHYSICAL_ONLY' | 'HYBRID';
+
+declare module '@vendure/core/dist/entity/custom-entity-fields' {
+    interface CustomChannelFields {
+        commerceMode: StoreCommerceMode;
+        storefrontNameZh?: string | null;
+        storefrontNameEn?: string | null;
+    }
+}
 
 export interface CreateSystemAnnouncementInput {
     enabled?: boolean | null;

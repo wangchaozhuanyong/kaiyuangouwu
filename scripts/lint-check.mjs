@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -48,6 +48,26 @@ for (const sourceFile of sourceFiles) {
 let checkedFiles = 0;
 for (const [name, files] of groups) {
     const packageDirectory = path.join(repositoryRoot, name);
+    const packageJsonPath = path.join(packageDirectory, 'package.json');
+    const packageManifest = existsSync(packageJsonPath)
+        ? JSON.parse(readFileSync(packageJsonPath, 'utf8'))
+        : undefined;
+    const usesPackageOxlint = packageManifest?.scripts?.lint === 'oxlint';
+    if (usesPackageOxlint) {
+        process.stdout.write(`Linting ${name}: files 1-${files.length}/${files.length} (package oxlint)\n`);
+        const result = spawnSync('bun', ['run', 'lint'], {
+            cwd: packageDirectory,
+            stdio: 'inherit',
+        });
+        if (result.error) {
+            throw result.error;
+        }
+        if (result.status !== 0) {
+            process.exit(result.status ?? 1);
+        }
+        checkedFiles += files.length;
+        continue;
+    }
     const usesPackageFlatConfig = existsSync(path.join(packageDirectory, 'eslint.config.js'));
     const lintWorkingDirectory = usesPackageFlatConfig ? packageDirectory : repositoryRoot;
     const lintFiles = usesPackageFlatConfig

@@ -28,16 +28,19 @@ import {
     useMutation,
     useQuery,
 } from '@vendure/dashboard';
-import { LoaderCircle, RefreshCw, Save, Truck } from 'lucide-react';
+import { Boxes, LoaderCircle, RefreshCw, Save, Truck } from 'lucide-react';
 import { ReactNode, useEffect, useState } from 'react';
 
 import {
     MyStoreCommerceConfigurationResult,
     StoreCommerceConfigurationRecord,
+    StoreCommerceMode,
     StoreCountryRecord,
     UpdateMyStoreCommerceConfigurationResult,
+    UpdateMyStoreCommerceModeResult,
     myStoreCommerceConfigurationQuery,
     updateMyStoreCommerceConfigurationMutation,
+    updateMyStoreCommerceModeMutation,
 } from './store-commerce.graphql';
 
 interface CommerceDraft {
@@ -99,6 +102,15 @@ const zhCopy = {
     shippingZone: '配送区',
     notCreated: '首次保存后创建',
     invalid: '请检查国家、税率、金额、配送名称和时效设置',
+    mode: '经营模式',
+    modeDescription: '经营模式会约束可创建的商品类型，并控制结账需要收集的收货信息。切换前会自动检查冲突。',
+    digitalOnly: '仅虚拟商品',
+    physicalOnly: '仅实物商品',
+    hybrid: '实物与虚拟混合经营',
+    modeSaved: '经营模式已更新',
+    modeHelpDigital: '只显示邮箱交付、自动发卡、人工交付和文件下载功能。',
+    modeHelpPhysical: '只显示实际地址、库存、仓库、物流、包装与拆箱功能。',
+    modeHelpHybrid: '同时支持实物和虚拟商品；混合订单会同时收集实际地址与交付邮箱。',
 };
 
 const enCopy: typeof zhCopy = {
@@ -143,6 +155,16 @@ const enCopy: typeof zhCopy = {
     shippingZone: 'Shipping zone',
     notCreated: 'Created on first save',
     invalid: 'Check the country, rates, amounts, delivery names, and estimates',
+    mode: 'Commerce mode',
+    modeDescription:
+        'Controls allowed product types and checkout recipient details. Conflicts are checked before switching.',
+    digitalOnly: 'Digital products only',
+    physicalOnly: 'Physical products only',
+    hybrid: 'Physical and digital',
+    modeSaved: 'Commerce mode updated',
+    modeHelpDigital: 'Shows email delivery, credential pools, manual delivery, and file downloads only.',
+    modeHelpPhysical: 'Shows addresses, stock, warehouses, shipping, packaging, and unpacking only.',
+    modeHelpHybrid: 'Supports both types. Mixed orders collect a physical address and a delivery email.',
 };
 
 export const storeCommerceSettingsRoute: DashboardRouteDefinition = {
@@ -172,6 +194,7 @@ function StoreCommerceSettingsPage() {
         enabled: Boolean(activeChannel?.id),
     });
     const configuration = configurationQuery.data?.myStoreCommerceConfiguration;
+    const commerceMode = configurationQuery.data?.myStoreCommerceMode.mode ?? 'DIGITAL_ONLY';
     const countries = configurationQuery.data?.countries.items.filter(country => country.enabled) ?? [];
 
     useEffect(() => {
@@ -195,6 +218,15 @@ function StoreCommerceSettingsPage() {
             setDraft(toDraft(result.updateMyStoreCommerceConfiguration));
             void configurationQuery.refetch();
             toast.success(text.saved);
+        },
+        onError: error => toast.error(errorMessage(error)),
+    });
+    const modeMutation = useMutation({
+        mutationFn: (mode: StoreCommerceMode) =>
+            api.mutate<UpdateMyStoreCommerceModeResult>(updateMyStoreCommerceModeMutation, { mode }),
+        onSuccess: () => {
+            void configurationQuery.refetch();
+            toast.success(text.modeSaved);
         },
         onError: error => toast.error(errorMessage(error)),
     });
@@ -223,6 +255,47 @@ function StoreCommerceSettingsPage() {
                 </PageActionBarRight>
             </PageActionBar>
             <PageLayout>
+                <PageBlock
+                    column="main"
+                    blockId="store-commerce-mode"
+                    title={text.mode}
+                    description={text.modeDescription}
+                >
+                    <div className="grid gap-4 sm:grid-cols-[minmax(0,280px)_1fr] sm:items-start">
+                        <div className="space-y-2">
+                            <Label htmlFor="store-commerce-mode-select">{text.mode}</Label>
+                            <Select
+                                value={commerceMode}
+                                disabled={modeMutation.isPending}
+                                onValueChange={value => value && modeMutation.mutate(value)}
+                            >
+                                <SelectTrigger id="store-commerce-mode-select" className="w-full">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="DIGITAL_ONLY">{text.digitalOnly}</SelectItem>
+                                    <SelectItem value="PHYSICAL_ONLY">{text.physicalOnly}</SelectItem>
+                                    <SelectItem value="HYBRID">{text.hybrid}</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="rounded-md border bg-muted/20 p-4 text-sm text-muted-foreground">
+                            <div className="mb-2 flex items-center gap-2 font-medium text-foreground">
+                                <Boxes className="size-4" aria-hidden="true" />
+                                {commerceMode === 'DIGITAL_ONLY'
+                                    ? text.digitalOnly
+                                    : commerceMode === 'PHYSICAL_ONLY'
+                                      ? text.physicalOnly
+                                      : text.hybrid}
+                            </div>
+                            {commerceMode === 'DIGITAL_ONLY'
+                                ? text.modeHelpDigital
+                                : commerceMode === 'PHYSICAL_ONLY'
+                                  ? text.modeHelpPhysical
+                                  : text.modeHelpHybrid}
+                        </div>
+                    </div>
+                </PageBlock>
                 <PageBlock
                     column="main"
                     blockId="store-tax-settings"
@@ -263,185 +336,193 @@ function StoreCommerceSettingsPage() {
                         )}
                     </ConfigurationState>
                 </PageBlock>
-                <PageBlock
-                    column="main"
-                    blockId="store-shipping-settings"
-                    title={text.shipping}
-                    description={text.shippingDescription}
-                >
-                    {draft ? (
-                        <div className="grid gap-5 sm:grid-cols-2">
-                            <div className="flex flex-col gap-3 rounded-md border bg-muted/20 p-3 sm:col-span-2 sm:flex-row sm:items-center sm:justify-between">
-                                <p className="text-xs text-muted-foreground">{text.translationHelp}</p>
-                                <div className="flex shrink-0 rounded-md border bg-background p-1">
-                                    <Button
-                                        type="button"
-                                        size="sm"
-                                        variant={editEnglish ? 'ghost' : 'secondary'}
-                                        onClick={() => setEditEnglish(false)}
-                                    >
-                                        {text.commonMode}
-                                    </Button>
-                                    <Button
-                                        type="button"
-                                        size="sm"
-                                        variant={editEnglish ? 'secondary' : 'ghost'}
-                                        onClick={() => setEditEnglish(true)}
-                                    >
-                                        {text.englishReview}
-                                    </Button>
+                {commerceMode !== 'DIGITAL_ONLY' && (
+                    <PageBlock
+                        column="main"
+                        blockId="store-shipping-settings"
+                        title={text.shipping}
+                        description={text.shippingDescription}
+                    >
+                        {draft ? (
+                            <div className="grid gap-5 sm:grid-cols-2">
+                                <div className="flex flex-col gap-3 rounded-md border bg-muted/20 p-3 sm:col-span-2 sm:flex-row sm:items-center sm:justify-between">
+                                    <p className="text-xs text-muted-foreground">{text.translationHelp}</p>
+                                    <div className="flex shrink-0 rounded-md border bg-background p-1">
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant={editEnglish ? 'ghost' : 'secondary'}
+                                            onClick={() => setEditEnglish(false)}
+                                        >
+                                            {text.commonMode}
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant={editEnglish ? 'secondary' : 'ghost'}
+                                            onClick={() => setEditEnglish(true)}
+                                        >
+                                            {text.englishReview}
+                                        </Button>
+                                    </div>
                                 </div>
-                            </div>
-                            <Field
-                                id="store-shipping-name-zh"
-                                label={text.nameZh}
-                                className={editEnglish ? undefined : 'sm:col-span-2'}
-                            >
-                                <Input
+                                <Field
                                     id="store-shipping-name-zh"
-                                    maxLength={80}
-                                    value={draft.shippingMethodNameZh}
-                                    onChange={event => update('shippingMethodNameZh', event.target.value)}
-                                />
-                            </Field>
-                            {editEnglish ? (
-                                <Field id="store-shipping-name-en" label={text.nameEn}>
+                                    label={text.nameZh}
+                                    className={editEnglish ? undefined : 'sm:col-span-2'}
+                                >
                                     <Input
-                                        id="store-shipping-name-en"
+                                        id="store-shipping-name-zh"
                                         maxLength={80}
-                                        value={draft.shippingMethodNameEn}
-                                        onChange={event => update('shippingMethodNameEn', event.target.value)}
+                                        value={draft.shippingMethodNameZh}
+                                        onChange={event => update('shippingMethodNameZh', event.target.value)}
                                     />
                                 </Field>
-                            ) : null}
-                            <Field
-                                id="store-shipping-description-zh"
-                                label={text.descriptionZh}
-                                className={editEnglish ? undefined : 'sm:col-span-2'}
-                            >
-                                <Textarea
+                                {editEnglish ? (
+                                    <Field id="store-shipping-name-en" label={text.nameEn}>
+                                        <Input
+                                            id="store-shipping-name-en"
+                                            maxLength={80}
+                                            value={draft.shippingMethodNameEn}
+                                            onChange={event =>
+                                                update('shippingMethodNameEn', event.target.value)
+                                            }
+                                        />
+                                    </Field>
+                                ) : null}
+                                <Field
                                     id="store-shipping-description-zh"
-                                    rows={3}
-                                    maxLength={500}
-                                    value={draft.shippingDescriptionZh}
-                                    onChange={event => update('shippingDescriptionZh', event.target.value)}
-                                />
-                            </Field>
-                            {editEnglish ? (
-                                <Field id="store-shipping-description-en" label={text.descriptionEn}>
+                                    label={text.descriptionZh}
+                                    className={editEnglish ? undefined : 'sm:col-span-2'}
+                                >
                                     <Textarea
-                                        id="store-shipping-description-en"
+                                        id="store-shipping-description-zh"
                                         rows={3}
                                         maxLength={500}
-                                        value={draft.shippingDescriptionEn}
+                                        value={draft.shippingDescriptionZh}
                                         onChange={event =>
-                                            update('shippingDescriptionEn', event.target.value)
+                                            update('shippingDescriptionZh', event.target.value)
                                         }
                                     />
                                 </Field>
-                            ) : null}
-                            <Field
-                                id="store-shipping-base-rate"
-                                label={`${text.baseRate} (${configuration?.currencyCode ?? ''})`}
-                            >
-                                <Input
+                                {editEnglish ? (
+                                    <Field id="store-shipping-description-en" label={text.descriptionEn}>
+                                        <Textarea
+                                            id="store-shipping-description-en"
+                                            rows={3}
+                                            maxLength={500}
+                                            value={draft.shippingDescriptionEn}
+                                            onChange={event =>
+                                                update('shippingDescriptionEn', event.target.value)
+                                            }
+                                        />
+                                    </Field>
+                                ) : null}
+                                <Field
                                     id="store-shipping-base-rate"
-                                    type="number"
-                                    min={0}
-                                    step={currencyStep(configuration?.currencyCode)}
-                                    value={draft.baseRate}
-                                    onChange={event => update('baseRate', numberValue(event.target.value))}
-                                />
-                            </Field>
-                            <Field
-                                id="store-free-shipping-threshold"
-                                label={`${text.freeThreshold} (${configuration?.currencyCode ?? ''})`}
-                            >
-                                <Input
+                                    label={`${text.baseRate} (${configuration?.currencyCode ?? ''})`}
+                                >
+                                    <Input
+                                        id="store-shipping-base-rate"
+                                        type="number"
+                                        min={0}
+                                        step={currencyStep(configuration?.currencyCode)}
+                                        value={draft.baseRate}
+                                        onChange={event =>
+                                            update('baseRate', numberValue(event.target.value))
+                                        }
+                                    />
+                                </Field>
+                                <Field
                                     id="store-free-shipping-threshold"
-                                    type="number"
-                                    min={0}
-                                    step={currencyStep(configuration?.currencyCode)}
-                                    value={draft.freeShippingThreshold}
-                                    onChange={event =>
-                                        update('freeShippingThreshold', numberValue(event.target.value))
-                                    }
+                                    label={`${text.freeThreshold} (${configuration?.currencyCode ?? ''})`}
+                                >
+                                    <Input
+                                        id="store-free-shipping-threshold"
+                                        type="number"
+                                        min={0}
+                                        step={currencyStep(configuration?.currencyCode)}
+                                        value={draft.freeShippingThreshold}
+                                        onChange={event =>
+                                            update('freeShippingThreshold', numberValue(event.target.value))
+                                        }
+                                    />
+                                </Field>
+                                <Field id="store-shipping-tax-rate" label={text.shippingTaxRate}>
+                                    <Input
+                                        id="store-shipping-tax-rate"
+                                        type="number"
+                                        min={0}
+                                        max={100}
+                                        step="0.01"
+                                        value={draft.shippingTaxRate}
+                                        onChange={event =>
+                                            update('shippingTaxRate', numberValue(event.target.value))
+                                        }
+                                    />
+                                </Field>
+                                <BooleanField
+                                    id="store-shipping-includes-tax"
+                                    label={text.shippingIncludesTax}
+                                    checked={draft.shippingPriceIncludesTax}
+                                    onChange={value => update('shippingPriceIncludesTax', value)}
                                 />
-                            </Field>
-                            <Field id="store-shipping-tax-rate" label={text.shippingTaxRate}>
-                                <Input
-                                    id="store-shipping-tax-rate"
-                                    type="number"
-                                    min={0}
-                                    max={100}
-                                    step="0.01"
-                                    value={draft.shippingTaxRate}
-                                    onChange={event =>
-                                        update('shippingTaxRate', numberValue(event.target.value))
-                                    }
-                                />
-                            </Field>
-                            <BooleanField
-                                id="store-shipping-includes-tax"
-                                label={text.shippingIncludesTax}
-                                checked={draft.shippingPriceIncludesTax}
-                                onChange={value => update('shippingPriceIncludesTax', value)}
-                            />
-                            <Field id="store-shipping-min-days" label={text.minDays}>
-                                <Input
-                                    id="store-shipping-min-days"
-                                    type="number"
-                                    min={0}
-                                    max={365}
-                                    step={1}
-                                    value={draft.estimateMinDays}
-                                    onChange={event =>
-                                        update('estimateMinDays', numberValue(event.target.value))
-                                    }
-                                />
-                            </Field>
-                            <Field id="store-shipping-max-days" label={text.maxDays}>
-                                <Input
-                                    id="store-shipping-max-days"
-                                    type="number"
-                                    min={0}
-                                    max={365}
-                                    step={1}
-                                    value={draft.estimateMaxDays}
-                                    onChange={event =>
-                                        update('estimateMaxDays', numberValue(event.target.value))
-                                    }
-                                />
-                            </Field>
-                            <Field
-                                id="store-blocked-postal-prefixes"
-                                label={text.blockedPostalPrefixes}
-                                className="sm:col-span-2"
-                            >
-                                <Input
+                                <Field id="store-shipping-min-days" label={text.minDays}>
+                                    <Input
+                                        id="store-shipping-min-days"
+                                        type="number"
+                                        min={0}
+                                        max={365}
+                                        step={1}
+                                        value={draft.estimateMinDays}
+                                        onChange={event =>
+                                            update('estimateMinDays', numberValue(event.target.value))
+                                        }
+                                    />
+                                </Field>
+                                <Field id="store-shipping-max-days" label={text.maxDays}>
+                                    <Input
+                                        id="store-shipping-max-days"
+                                        type="number"
+                                        min={0}
+                                        max={365}
+                                        step={1}
+                                        value={draft.estimateMaxDays}
+                                        onChange={event =>
+                                            update('estimateMaxDays', numberValue(event.target.value))
+                                        }
+                                    />
+                                </Field>
+                                <Field
                                     id="store-blocked-postal-prefixes"
-                                    maxLength={1050}
-                                    placeholder={text.blockedPostalPlaceholder}
-                                    value={draft.blockedPostalPrefixes}
-                                    onChange={event =>
-                                        update('blockedPostalPrefixes', event.target.value.toUpperCase())
-                                    }
-                                />
-                            </Field>
-                            <div className="border-t pt-4 sm:col-span-2 sm:hidden">
-                                <SaveButton
-                                    draft={draft}
-                                    pending={mutation.isPending}
-                                    save={save}
-                                    text={text}
-                                    fullWidth
-                                />
+                                    label={text.blockedPostalPrefixes}
+                                    className="sm:col-span-2"
+                                >
+                                    <Input
+                                        id="store-blocked-postal-prefixes"
+                                        maxLength={1050}
+                                        placeholder={text.blockedPostalPlaceholder}
+                                        value={draft.blockedPostalPrefixes}
+                                        onChange={event =>
+                                            update('blockedPostalPrefixes', event.target.value.toUpperCase())
+                                        }
+                                    />
+                                </Field>
+                                <div className="border-t pt-4 sm:col-span-2 sm:hidden">
+                                    <SaveButton
+                                        draft={draft}
+                                        pending={mutation.isPending}
+                                        save={save}
+                                        text={text}
+                                        fullWidth
+                                    />
+                                </div>
                             </div>
-                        </div>
-                    ) : configurationQuery.isPending ? (
-                        <ConfigurationSkeleton />
-                    ) : null}
-                </PageBlock>
+                        ) : configurationQuery.isPending ? (
+                            <ConfigurationSkeleton />
+                        ) : null}
+                    </PageBlock>
+                )}
                 <PageBlock column="side" blockId="store-commerce-status" title={text.status}>
                     {configuration ? (
                         <dl className="divide-y text-sm">

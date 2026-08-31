@@ -16,6 +16,7 @@ export interface AutoCardFieldDefinition {
 
 export interface AutoCardParsedRow {
     lineNumber: number;
+    rawPayload: string;
     values: Record<string, string>;
 }
 
@@ -133,6 +134,7 @@ export function parseAutoCardRows(
         }
         rows.push({
             lineNumber,
+            rawPayload: rawLine,
             values: Object.fromEntries(fields.map((field, fieldIndex) => [field.key, columns[fieldIndex]])),
         });
     }

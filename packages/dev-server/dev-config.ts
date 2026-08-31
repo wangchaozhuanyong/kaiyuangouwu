@@ -6,6 +6,8 @@ import {
     AutoCardDeliveryReadyEvent,
     AutoCardService,
     CommerceFulfillmentPlugin,
+    ManualDigitalDeliveryReadyEvent,
+    ManualDigitalDeliveryService,
     OrderConfirmationTokenService,
     summarizeOrderFulfillment,
 } from '@vendure/commerce-fulfillment-plugin';
@@ -135,7 +137,33 @@ const autoCardDeliveryEmailHandler = new EmailEventListener('auto-card-delivery'
         deliveryId: event.data.deliveryId,
     }));
 
-const localizedEmailHandlers = [...defaultEmailHandlers, autoCardDeliveryEmailHandler].map(handler => {
+const manualDigitalDeliveryEmailHandler = new EmailEventListener('manual-digital-delivery')
+    .on(ManualDigitalDeliveryReadyEvent)
+    .loadData(({ event, injector }) =>
+        injector.get(ManualDigitalDeliveryService).emailPayload(event.ctx, event.deliveryId),
+    )
+    .setRecipient(event => event.data.recipientEmail)
+    .setFrom('{{ fromAddress }}')
+    .setSubject(event =>
+        event.data.isChinese ? '您购买的虚拟商品已完成交付' : 'Your digital order is ready',
+    )
+    .setTemplateVars(event => event.data)
+    .setAttachments(event =>
+        event.data.attachments.map(attachment => ({
+            filename: attachment.filename,
+            path: safeAssetAttachmentPath(attachment.source),
+        })),
+    )
+    .setMetadata(event => ({
+        type: 'manual-digital-delivery',
+        deliveryId: event.data.deliveryId,
+    }));
+
+const localizedEmailHandlers = [
+    ...defaultEmailHandlers,
+    autoCardDeliveryEmailHandler,
+    manualDigitalDeliveryEmailHandler,
+].map(handler => {
     if (handler.type === 'order-confirmation') {
         type DefaultOrderEmailData = { shippingLines: ShippingLine[] };
         type StorefrontOrderEmailData = DefaultOrderEmailData & {
@@ -323,6 +351,15 @@ const importAssetsDir = configuredDirectory(
     path.join(serverRoot, 'import-assets'),
 );
 const assetUploadDir = configuredDirectory('VENDURE_ASSET_UPLOAD_DIR', path.join(serverRoot, 'assets'));
+
+function safeAssetAttachmentPath(source: string): string {
+    const root = path.resolve(assetUploadDir);
+    const resolved = path.resolve(root, source);
+    if (resolved !== root && !resolved.startsWith(`${root}${path.sep}`)) {
+        throw new Error('Invalid manual delivery attachment path');
+    }
+    return resolved;
+}
 
 async function storefrontUrlForChannel(
     ctx: RequestContext,
@@ -583,6 +620,18 @@ export const devConfig: VendureConfig = {
                         languageCode: LanguageCode.en,
                         value: 'Receives the digital order confirmation and secure delivery link',
                     },
+                ],
+            },
+            {
+                name: 'deliveryEmailContactId',
+                type: 'string',
+                length: 64,
+                nullable: true,
+                public: false,
+                ui: { dashboard: false },
+                label: [
+                    { languageCode: LanguageCode.zh_Hans, value: '交付邮箱联系人快照 ID' },
+                    { languageCode: LanguageCode.en, value: 'Delivery email contact snapshot ID' },
                 ],
             },
         ],

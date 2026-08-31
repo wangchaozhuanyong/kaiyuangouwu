@@ -99,6 +99,7 @@ const checkMessages: Record<StoreActivationCheckCode, { zh: string; en: string }
 
 export function evaluateStoreActivationReadiness(
     snapshot: StoreActivationSnapshot,
+    commerceMode: 'DIGITAL_ONLY' | 'PHYSICAL_ONLY' | 'HYBRID' = 'HYBRID',
 ): StoreActivationReadiness {
     const mappings: Array<[StoreActivationCheckCode, boolean]> = [
         ['PROFILE', snapshot.profile],
@@ -108,7 +109,9 @@ export function evaluateStoreActivationReadiness(
         ['SUPPORT', snapshot.support],
         ['PRIVACY', snapshot.privacy],
         ['TERMS', snapshot.terms],
-        ['SHIPPING', snapshot.shipping],
+        ...(commerceMode === 'DIGITAL_ONLY'
+            ? []
+            : ([['SHIPPING', snapshot.shipping]] as Array<[StoreActivationCheckCode, boolean]>)),
         ['PAYMENT', snapshot.payment],
     ];
     const checks: StoreActivationCheck[] = mappings.map(([code, ready]) => ({
@@ -182,22 +185,25 @@ export class StoreActivationReadinessService {
             this.configService.paymentOptions.paymentMethodHandlers.map(handler => handler.code),
         );
 
-        return evaluateStoreActivationReadiness({
-            profile: this.hasCompleteProfile(profile),
-            domain: Boolean(domain),
-            password: temporaryPasswordCount === 0,
-            catalog: this.hasBilingualCatalog(catalogVariants),
-            support: this.hasSupportContent(activeContent),
-            privacy: this.hasLegalContent(activeContent, 'privacy'),
-            terms: this.hasLegalContent(activeContent, 'terms'),
-            shipping:
-                channel.defaultShippingZone?.name === storeZoneName(channel.code, 'shipping') &&
-                storeShippingMethod?.calculator?.code === SHIPPING_CALCULATOR_CODE &&
-                storeShippingMethod?.checker?.code === SHIPPING_CHECKER_CODE,
-            payment: paymentMethods.some(method =>
-                isProductionPaymentMethod(method, registeredPaymentHandlers),
-            ),
-        });
+        return evaluateStoreActivationReadiness(
+            {
+                profile: this.hasCompleteProfile(profile),
+                domain: Boolean(domain),
+                password: temporaryPasswordCount === 0,
+                catalog: this.hasBilingualCatalog(catalogVariants),
+                support: this.hasSupportContent(activeContent),
+                privacy: this.hasLegalContent(activeContent, 'privacy'),
+                terms: this.hasLegalContent(activeContent, 'terms'),
+                shipping:
+                    channel.defaultShippingZone?.name === storeZoneName(channel.code, 'shipping') &&
+                    storeShippingMethod?.calculator?.code === SHIPPING_CALCULATOR_CODE &&
+                    storeShippingMethod?.checker?.code === SHIPPING_CHECKER_CODE,
+                payment: paymentMethods.some(method =>
+                    isProductionPaymentMethod(method, registeredPaymentHandlers),
+                ),
+            },
+            channel.customFields?.commerceMode ?? 'DIGITAL_ONLY',
+        );
     }
 
     private emptySnapshot(): StoreActivationSnapshot {

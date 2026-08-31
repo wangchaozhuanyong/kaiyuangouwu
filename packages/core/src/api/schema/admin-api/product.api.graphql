@@ -87,6 +87,7 @@ input ProductListOptions
 
 input ProductFilterParameter {
     facetValueId: IDOperators
+    collectionId: IDOperators
     sku: StringOperators
     optionGroupId: IDOperators
 }

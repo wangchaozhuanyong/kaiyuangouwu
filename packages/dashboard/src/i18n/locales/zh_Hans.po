@@ -172,8 +172,8 @@ msgid "Add store"
 msgstr "添加店铺"
 
 #: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
-msgid "Failed to update product delivery method"
-msgstr "更新商品交付方式失败"
+#~ msgid "Failed to update product delivery method"
+#~ msgstr "更新商品交付方式失败"
 
 #: src/app/routes/_authenticated/_global-settings/global-settings.tsx
 msgid "Global out of stock threshold"
@@ -383,6 +383,10 @@ msgstr "通过模拟订单测试此配送方式，以查看其是否适用以及
 #: src/app/routes/_authenticated/_roles/components/expandable-permissions.tsx
 msgid "Permissions for {0}"
 msgstr "{0} 的权限"
+
+#: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
+msgid "Failed to update product policy"
+msgstr "商品政策更新失败"
 
 #: src/app/routes/_authenticated/_stock-locations/stock-locations_.$id.tsx
 #: src/app/routes/_authenticated/_stock-locations/stock-locations.tsx
@@ -783,6 +787,10 @@ msgstr "总价：<0/>"
 msgid "Go to next page"
 msgstr "转到下一页"
 
+#: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
+msgid "All SKUs will become digital. Physical stock, packaging, and shipping settings will no longer apply."
+msgstr "所有 SKU 都将改为虚拟商品，实物库存、包装和物流设置将不再适用。"
+
 #: src/lib/components/shared/rich-text-editor/link-dialog.tsx
 msgid "Remove link"
 msgstr "删除链接"
@@ -1030,8 +1038,8 @@ msgid "Tax rate: {taxRate}%"
 msgstr "税率：{taxRate}%"
 
 #: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
-msgid "All SKUs will use email delivery and inventory tracking will be disabled. Existing orders keep their recorded delivery type."
-msgstr "所有 SKU 将改为邮箱交付并关闭库存跟踪。已有订单保留下单时记录的交付类型。"
+#~ msgid "All SKUs will use email delivery and inventory tracking will be disabled. Existing orders keep their recorded delivery type."
+#~ msgstr "所有 SKU 将改为邮箱交付并关闭库存跟踪。已有订单保留下单时记录的交付类型。"
 
 #: src/app/routes/_authenticated/_shipping-methods/components/shipping-method-test-result-wrapper.tsx
 msgid "Please add products and complete the shipping address to run the test."
@@ -1056,6 +1064,10 @@ msgstr "选择地址"
 #: src/app/routes/_authenticated/_payment-methods/payment-methods_.$id.tsx
 msgid "Payment eligibility checker"
 msgstr "支付资格检查器"
+
+#: src/app/routes/_authenticated/_product-variants/product-variants_.$id.tsx
+msgid "This downloadable item uses the sellable inventory entered below."
+msgstr "该下载商品使用下方填写的可售库存。"
 
 #: src/lib/framework/dashboard-widget/metrics-widget/index.tsx
 msgid "Check the connection and try again"
@@ -1248,8 +1260,8 @@ msgid "Name (Simplified Chinese)"
 msgstr "名称（简体中文）"
 
 #: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
-msgid "No shipping address or shipping method is required. Inventory tracking is disabled and the order is delivered to the email entered at checkout after payment."
-msgstr "无需收货地址或配送方式。系统会关闭库存跟踪，付款后将订单和领取入口发送到结账时填写的交付邮箱。"
+#~ msgid "No shipping address or shipping method is required. Inventory tracking is disabled and the order is delivered to the email entered at checkout after payment."
+#~ msgstr "无需收货地址或配送方式。系统会关闭库存跟踪，付款后将订单和领取入口发送到结账时填写的交付邮箱。"
 
 #. placeholder {0}: formatCurrency(refund.totalRefundableAmount, order.currencyCode)
 #: src/app/routes/_authenticated/_orders/components/refund-order-dialog.tsx
@@ -1362,6 +1374,10 @@ msgstr "支持的货币"
 #: src/lib/components/layout/channel-switcher.tsx
 msgid "Switch store"
 msgstr "切换店铺"
+
+#: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
+msgid "This store only sells digital products. Product type is fixed to email delivery."
+msgstr "当前店铺仅销售虚拟商品，商品类型固定为邮箱交付。"
 
 #: src/app/routes/_authenticated/_orders/components/order-detail-shared.tsx
 #: src/app/routes/_authenticated/_orders/orders_.$id_.modify.tsx
@@ -1801,6 +1817,10 @@ msgstr "未找到结果"
 msgid "Off"
 msgstr "关"
 
+#: src/app/routes/_authenticated/_product-variants/product-variants_.$id.tsx
+msgid "This is the sellable quantity for the digital SKU. Warehouse, packaging and shipping settings do not apply."
+msgstr "这是虚拟 SKU 的可售数量，不适用仓库、包装和物流设置。"
+
 #: src/lib/components/data-input/datetime-input.tsx
 msgid "Set minute to {minute}"
 msgstr "将分钟设置为 {minute}"
@@ -1813,6 +1833,10 @@ msgstr "系统配置"
 #: src/app/routes/_authenticated/_products/products_.$id.tsx
 msgid "Templates define the selectable specifications for this product and are used to generate SKUs."
 msgstr "规格模板定义该商品可选择的规格，并用于生成 SKU。"
+
+#: src/app/routes/_authenticated/_products/products.tsx
+msgid "Uncategorized"
+msgstr "未分类"
 
 #: src/app/routes/_authenticated/_tax-rates/tax-rates_.$id.tsx
 #: src/app/routes/_authenticated/_tax-rates/tax-rates_.$id.tsx
@@ -1885,6 +1909,10 @@ msgstr "删除 {0} 个{entityName}失败：{message}"
 msgid "Test your shipping methods by simulating a new order."
 msgstr "通过模拟新订单来测试您的配送方式。"
 
+#: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
+msgid "Uses stock, a physical address, shipping, warehouse operations, packaging and automatic unpacking."
+msgstr "使用实物库存、实际收货地址、物流、仓库、包装和自动拆箱。"
+
 #: src/app/routes/_authenticated/_products/components/add-product-variant-dialog.tsx
 #: src/app/routes/_authenticated/_products/components/generate-variants-panel.tsx
 #: src/app/routes/_authenticated/_products/products_.$id.tsx
@@ -1951,6 +1979,7 @@ msgid "Payment Methods"
 msgstr "支付方式"
 
 #: src/app/routes/_authenticated/_product-variants/product-variants_.$id.tsx
+#: src/app/routes/_authenticated/_products/components/product-variants-table.tsx
 msgid "Stock"
 msgstr "库存"
 
@@ -2007,11 +2036,16 @@ msgstr "{cancellableCount, plural, one {取消 {cancellableCount} 个任务} oth
 msgid "Item added to order"
 msgstr "项目已添加到订单"
 
+#: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
+msgid "Shown on product, checkout, and order pages for manually delivered SKUs."
+msgstr "用于人工交付 SKU，并显示在商品页、结账页和订单页。"
+
 #: src/lib/components/shared/asset/asset-preview.tsx
 msgid "Edit focal point"
 msgstr "编辑焦点"
 
 #: src/app/routes/_authenticated/_orders/components/fulfillment-details.tsx
+#: src/app/routes/_authenticated/_product-variants/product-variants_.$id.tsx
 #: src/app/routes/_authenticated/_products/products_.$id_.variants.tsx
 msgid "Digital delivery"
 msgstr "电子交付"
@@ -2398,10 +2432,9 @@ msgstr "商品类型"
 msgid "Select a target collection to move {0} to."
 msgstr "选择要将 {0} 移动到的目标分类。"
 
-#. placeholder {0}: variants.length
 #: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
-msgid "{0} SKUs will use this setting"
-msgstr "此设置将应用于 {0} 个 SKU"
+#~ msgid "{0} SKUs will use this setting"
+#~ msgstr "此设置将应用于 {0} 个 SKU"
 
 #. placeholder {0}: error.message
 #: src/app/routes/_authenticated/_orders/orders_.draft.$id.tsx
@@ -2490,8 +2523,8 @@ msgid "Deleted {deleted} {entityName}"
 msgstr "{entityName}已删除：{deleted} 个"
 
 #: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
-msgid "Product delivery method updated"
-msgstr "商品交付方式已更新"
+#~ msgid "Product delivery method updated"
+#~ msgstr "商品交付方式已更新"
 
 #. placeholder {0}: error.message
 #: src/app/routes/_authenticated/_orders/orders_.draft.$id.tsx
@@ -2566,6 +2599,10 @@ msgstr "调整时间范围后可查看历史经营趋势"
 #: src/app/routes/_authenticated/_orders/components/order-history/default-order-history-components.tsx
 msgid "Reason:"
 msgstr "原因:"
+
+#: src/app/routes/_authenticated/_product-variants/product-variants_.$id.tsx
+msgid "This downloadable item can be sold without an inventory limit."
+msgstr "该下载商品可以不限制库存销售。"
 
 #: src/app/routes/_authenticated/_orders/components/order-detail-shared.tsx
 #: src/app/routes/_authenticated/_orders/orders_.$id_.modify.tsx
@@ -2930,6 +2967,11 @@ msgstr "创建并继续添加子分类"
 msgid "Are you sure you want to delete this address?"
 msgstr "确定要删除此地址吗？"
 
+#: src/app/routes/_authenticated/_products/components/add-product-variant-dialog.tsx
+#: src/app/routes/_authenticated/_products/components/generate-variants-panel.tsx
+msgid "This store only supports physical products delivered by logistics."
+msgstr "当前店铺仅支持通过物流交付的实物商品。"
+
 #: src/app/routes/_authenticated/_products/components/add-option-group-dialog.tsx
 msgid "Failed to assign option group"
 msgstr "分配规格组失败"
@@ -2941,6 +2983,10 @@ msgstr "更新素材失败"
 #: src/lib/components/data-table/save-view-dialog.tsx
 msgid "A view with this name already exists"
 msgstr "已存在同名视图"
+
+#: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
+msgid "Manual delivery estimate (minutes)"
+msgstr "人工交付预计时长（分钟）"
 
 #: src/app/routes/_authenticated/_stock-locations/stock-locations_.$id.tsx
 msgid "Successfully updated stock location"
@@ -3012,6 +3058,10 @@ msgstr "筛选属性值"
 #: src/app/routes/_authenticated/_assets/assets_.$id.tsx
 msgid "Successfully updated asset"
 msgstr "已成功更新素材"
+
+#: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
+msgid "Change this product to {selectedLabel}?"
+msgstr "将此商品改为{selectedLabel}？"
 
 #: src/lib/components/layout/nav-user.tsx
 msgid "Theme"
@@ -3509,6 +3559,11 @@ msgstr "详情与配置"
 msgid "Failed to set shipping address for order: {0}"
 msgstr "设置订单收货地址失败：{0}"
 
+#: src/app/routes/_authenticated/_products/components/add-product-variant-dialog.tsx
+#: src/app/routes/_authenticated/_products/components/generate-variants-panel.tsx
+msgid "This store only supports digital products delivered by email."
+msgstr "当前店铺仅支持通过邮箱交付的虚拟商品。"
+
 #: src/app/routes/_authenticated/_system/job-queue.tsx
 #: src/app/routes/_authenticated/_system/job-queue.tsx
 #: src/app/routes/_authenticated/_system/job-queue.tsx
@@ -3519,13 +3574,17 @@ msgstr "取消任务"
 msgid "Discard the unsaved product variant?"
 msgstr "放弃未保存的 SKU？"
 
+#: src/app/routes/_authenticated/_product-variants/product-variants_.$id.tsx
+msgid "Credential pool auto-delivery"
+msgstr "号池自动发卡"
+
 #: src/app/routes/_authenticated/_promotions/promotions_.$id.tsx
 msgid "Ends at"
 msgstr "结束于"
 
 #: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
-msgid "Apply {selectedLabel} to all SKUs?"
-msgstr "将{selectedLabel}应用到所有 SKU？"
+#~ msgid "Apply {selectedLabel} to all SKUs?"
+#~ msgstr "将{selectedLabel}应用到所有 SKU？"
 
 #. placeholder {0}: table.getState().pagination.pageIndex + 1
 #. placeholder {1}: table.getPageCount() || 1
@@ -4033,6 +4092,7 @@ msgstr "正在加载税务分类..."
 msgid "Force remove option group"
 msgstr "强制移除规格组"
 
+#: src/app/routes/_authenticated/_product-variants/product-variants_.$id.tsx
 #: src/app/routes/_authenticated/_products/products_.$id_.variants.tsx
 #: src/app/routes/_authenticated/_products/products_.$id_.variants.tsx
 msgid "File download"
@@ -4335,6 +4395,10 @@ msgstr "楼栋、单元、房间号等"
 msgid "Default content language"
 msgstr "默认内容语言"
 
+#: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
+msgid "{variantCount} SKUs inherit the product type"
+msgstr "{variantCount} 个 SKU 继承该商品类型"
+
 #: src/app/routes/_authenticated/_products/products_.$id_.variants.tsx
 msgid "Configure automatic delivery"
 msgstr "配置自动发卡"
@@ -4414,8 +4478,8 @@ msgid "Remove asset"
 msgstr "移除素材"
 
 #: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
-msgid "All SKUs will require shipping. Configure stock and shipping methods before accepting orders."
-msgstr "所有 SKU 将需要物流配送。请在接受订单前配置库存和配送方式。"
+#~ msgid "All SKUs will require shipping. Configure stock and shipping methods before accepting orders."
+#~ msgstr "所有 SKU 将需要物流配送。请在接受订单前配置库存和配送方式。"
 
 #: src/app/routes/_authenticated/_channels/channels_.$id.tsx
 msgid "Supported content languages"
@@ -4761,6 +4825,8 @@ msgstr "轮换 API 密钥"
 msgid "Large"
 msgstr "大图"
 
+#: src/app/routes/_authenticated/_products/products.tsx
+#: src/app/routes/_authenticated/_products/products.tsx
 #: src/app/routes/_authenticated/_tax-rates/tax-rates.tsx
 msgid "Category"
 msgstr "类别"
@@ -4878,6 +4944,14 @@ msgstr "重新排序商品失败"
 #: src/app/routes/_authenticated/_shipping-methods/components/test-shipping-methods-result.tsx
 msgid "No eligible shipping methods found for this order."
 msgstr "未找到此订单的符合条件的配送方式。"
+
+#: src/app/routes/_authenticated/_product-variants/product-variants_.$id.tsx
+msgid "Manual email delivery"
+msgstr "人工邮箱交付"
+
+#: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
+msgid "Product policy updated"
+msgstr "商品政策已更新"
 
 #: src/app/routes/_authenticated/_products/components/product-option-editor-sheet.tsx
 #: src/app/routes/_authenticated/_products/components/product-options-table.tsx
@@ -5041,9 +5115,14 @@ msgid "Channels"
 msgstr "店铺"
 
 #: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
+#: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
+msgid "Save product policy"
+msgstr "保存商品政策"
+
+#: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
 #: src/app/routes/_authenticated/_products/products.tsx
-msgid "Mixed product"
-msgstr "混合商品"
+#~ msgid "Mixed product"
+#~ msgstr "混合商品"
 
 #: src/app/routes/_authenticated/_orders/components/order-history/default-order-history-components.tsx
 msgid "Shipping refunded"
@@ -5091,6 +5170,10 @@ msgstr "新商品"
 #: src/app/routes/_authenticated/_collections/components/collection-quick-create-sheet.tsx
 msgid "No parent collection (top level)"
 msgstr "无上级分类（一级分类）"
+
+#: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
+msgid "Refund request with merchant review"
+msgstr "可申请退款（商家审核）"
 
 #: src/lib/components/shared/assign-to-channel-dialog.tsx
 msgid "Failed for: {failedCodes}"
@@ -5272,6 +5355,7 @@ msgid "Select seller"
 msgstr "选择商家"
 
 #: src/app/routes/_authenticated/_orders/orders.tsx
+#: src/app/routes/_authenticated/_product-variants/product-variants_.$id.tsx
 msgid "Delivery method"
 msgstr "配送方式"
 
@@ -5979,8 +6063,8 @@ msgid "Light"
 msgstr "浅色"
 
 #: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
-msgid "This product contains both physical and digital SKUs. You can keep editing each SKU separately, or choose one type below to apply it to every SKU."
-msgstr "该商品同时包含实物 SKU 和虚拟 SKU。你可以继续分别编辑各 SKU，也可以在下方选择一种类型并应用到全部 SKU。"
+#~ msgid "This product contains both physical and digital SKUs. You can keep editing each SKU separately, or choose one type below to apply it to every SKU."
+#~ msgstr "该商品同时包含实物 SKU 和虚拟 SKU。你可以继续分别编辑各 SKU，也可以在下方选择一种类型并应用到全部 SKU。"
 
 #: src/lib/components/data-table/data-table-view-options.tsx
 msgid "Reset"
@@ -6022,6 +6106,10 @@ msgstr "无法加载记录"
 #: src/app/routes/_authenticated/_collections/components/collection-visibility-switch.tsx
 msgid "Visible"
 msgstr "显示"
+
+#: src/app/routes/_authenticated/_product-variants/product-variants_.$id.tsx
+msgid "Limit sellable inventory"
+msgstr "限制可售库存"
 
 #: src/lib/components/data-table/human-readable-operator.tsx
 msgid "does not contain"
@@ -6249,6 +6337,10 @@ msgstr "已发货"
 msgid "Failed to assign all products"
 msgstr "全部商品分配失败"
 
+#: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
+msgid "Non-refundable"
+msgstr "不支持退款"
+
 #: src/app/routes/_authenticated/_zones/components/zone-bulk-actions.tsx
 msgid "Removed {countryCount} countries/regions from zone"
 msgstr "已从业务区域移除 {countryCount} 个国家/地区"
@@ -6391,6 +6483,10 @@ msgstr "复制{entityName}"
 #: src/app/routes/_authenticated/_orders/orders_.$id_.modify.tsx
 msgid "Order lines"
 msgstr "订单行"
+
+#: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
+msgid "Refund policy"
+msgstr "退款政策"
 
 #: src/app/routes/_authenticated/_products/products.tsx
 msgid "Brand"
@@ -6709,6 +6805,10 @@ msgstr "基本信息"
 msgid "Clear filter"
 msgstr "清除筛选器"
 
+#: src/app/routes/_authenticated/_product-variants/product-variants_.$id.tsx
+msgid "Paid orders enter the manual delivery workbench. Sellable inventory is entered below and is restored only when the order is cancelled before delivery."
+msgstr "付款后的订单进入人工交付工作台。可售库存填写在下方，仅在交付前取消订单时恢复。"
+
 #: src/app/routes/_authenticated/_zones/zones.tsx
 msgid "Regions"
 msgstr "地区"
@@ -6755,8 +6855,8 @@ msgstr "商品下架失败"
 #~ msgstr "全局设置"
 
 #: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
-msgid "Customers enter a shipping address and select a shipping method. Orders use stock and are fulfilled with logistics tracking."
-msgstr "客户需填写收货地址并选择配送方式。订单会扣减库存，并通过物流单号跟踪发货。"
+#~ msgid "Customers enter a shipping address and select a shipping method. Orders use stock and are fulfilled with logistics tracking."
+#~ msgstr "客户需填写收货地址并选择配送方式。订单会扣减库存，并通过物流单号跟踪发货。"
 
 #: src/lib/components/data-table/views-sheet.tsx
 msgid "No global views have been created yet."
@@ -6947,6 +7047,10 @@ msgstr "添加优惠券代码"
 #: src/app/routes/_authenticated/_orders/orders_.draft.$id.tsx
 msgid "Coupon code set for order"
 msgstr "已为订单设置优惠券代码"
+
+#: src/app/routes/_authenticated/_products/components/product-variants-table.tsx
+msgid "Digital stock"
+msgstr "虚拟库存"
 
 #: src/lib/components/data-table/data-table-column-header.tsx
 msgid "Change sort order"
@@ -7365,6 +7469,10 @@ msgstr "由插件或业务扩展注册的定时后台任务"
 msgid "Are you sure you want to delete this item? This action cannot be undone."
 msgstr "确定要删除此项目吗？此操作无法撤销。"
 
+#: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
+msgid "Uses the checkout delivery email and the SKU-level automatic card, manual service, or file-download workflow."
+msgstr "使用结账时填写的交付邮箱，并按 SKU 选择自动发卡、人工交付或文件下载流程。"
+
 #: src/lib/framework/page/detail-page.tsx
 msgid "Updated successfully"
 msgstr "更新成功"
@@ -7469,6 +7577,10 @@ msgstr "更新分类失败"
 #: src/app/routes/_authenticated/_product-variants/product-variants_.$id.tsx
 msgid "Price and tax"
 msgstr "价格和税费"
+
+#: src/app/routes/_authenticated/_product-variants/product-variants_.$id.tsx
+msgid "Inventory is read-only and equals the available records in the credential pool. Configure and replenish it in Automatic credential delivery."
+msgstr "库存只读，等于号池中的可用记录数。请在自动发卡中配置和补充库存。"
 
 #: src/app/routes/_authenticated/_orders/components/order-history/order-history-container.tsx
 msgid "Order not found"
@@ -7659,6 +7771,10 @@ msgstr "正在加载客户组..."
 #: src/lib/components/layout/manage-languages-dialog.tsx
 msgid "Failed to load global settings"
 msgstr "加载全局设置失败"
+
+#: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
+msgid "This store only sells physical products. Product type is fixed to logistics delivery."
+msgstr "当前店铺仅销售实物商品，商品类型固定为物流交付。"
 
 #: src/app/routes/_authenticated/_option-groups/components/option-group-products-block.tsx
 msgid "No products are linked to this template"
@@ -8436,6 +8552,10 @@ msgstr "已成功更新筛选属性"
 msgid "Strikethrough"
 msgstr "删除线"
 
+#: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
+msgid "All SKUs will become physical and require stock, a delivery address, and shipping configuration."
+msgstr "所有 SKU 都将改为实物商品，并需要库存、收货地址和物流配置。"
+
 #: src/app/routes/_authenticated/_products/components/product-collections-panel.tsx
 msgid "Product group not found"
 msgstr "未找到商品分类"
@@ -8471,6 +8591,11 @@ msgstr "新建筛选属性"
 msgid "Are you sure you want to remove this option group from the product?"
 msgstr "您确定要从商品中移除此规格组吗？"
 
+#: src/app/routes/_authenticated/_product-variants/product-variants_.$id.tsx
+#: src/app/routes/_authenticated/_product-variants/product-variants_.$id.tsx
+msgid "Digital inventory"
+msgstr "虚拟库存"
+
 #: src/lib/components/shared/rich-text-editor/image-dialog.tsx
 msgid "Description (alt)"
 msgstr "描述（替代文本）"
@@ -8503,8 +8628,8 @@ msgid "Next Execution"
 msgstr "下次执行"
 
 #: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
-msgid "All SKUs use this setting"
-msgstr "所有 SKU 已使用此设置"
+#~ msgid "All SKUs use this setting"
+#~ msgstr "所有 SKU 已使用此设置"
 
 #: src/lib/components/shared/history-timeline/history-note-checkbox.tsx
 msgid "Note is private"
@@ -8573,8 +8698,8 @@ msgstr "小于"
 
 #: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
 #: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
-msgid "Apply to all SKUs"
-msgstr "应用到所有 SKU"
+#~ msgid "Apply to all SKUs"
+#~ msgstr "应用到所有 SKU"
 
 #: src/app/routes/_authenticated/_orders/components/payment-details.tsx
 msgid "Refund ID"
@@ -8709,6 +8834,10 @@ msgstr "打开规格模板库"
 msgid "New Seller"
 msgstr "新建商家"
 
+#: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
+msgid "Seven-day no-reason return"
+msgstr "7 天无理由"
+
 #: src/lib/components/shared/rich-text-editor/image-dialog.tsx
 msgid "Edit image"
 msgstr "编辑图片"
@@ -8792,6 +8921,10 @@ msgstr "名称、SKU、条码、价格、成本、毛利、库存和效期均按
 msgid "Browse and select one or more assets"
 msgstr "浏览并选择一个或多个素材"
 
+#: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
+msgid "Confirm and save"
+msgstr "确认并保存"
+
 #: src/app/routes/_authenticated/_collections/components/move-collections-dialog.tsx
 msgid "Loading collections..."
 msgstr "正在加载商品分类…"
@@ -8862,6 +8995,10 @@ msgstr "SKU 编码"
 #: src/app/routes/_authenticated/_products/products_.$id_.variants.tsx
 msgid "SKU"
 msgstr "SKU"
+
+#: src/app/routes/_authenticated/_product-variants/product-variants_.$id.tsx
+msgid "Unlimited inventory"
+msgstr "无限库存"
 
 #: src/lib/components/shared/rich-text-editor/responsive-toolbar.tsx
 msgid "More formatting options"

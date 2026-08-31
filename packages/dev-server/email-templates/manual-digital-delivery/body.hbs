@@ -1,0 +1,72 @@
+{{#if isChinese}}
+    {{> header title="虚拟商品交付通知" }}
+{{else}}
+    {{> header title="Digital order delivery" }}
+{{/if}}
+
+<mj-section background-color="#ffffff" padding="12px 28px">
+    <mj-column>
+        <mj-text padding="0 0 8px">{{#if isChinese}}您好：{{else}}Hello,{{/if}}</mj-text>
+        <mj-text padding="0">
+            {{#if isChinese}}
+                订单 {{ orderCode }} 的人工虚拟商品已完成处理，以下是本次交付的成品内容。
+            {{else}}
+                The manually prepared digital item in order {{ orderCode }} is ready. Your delivery is below.
+            {{/if}}
+        </mj-text>
+    </mj-column>
+</mj-section>
+
+<mj-section background-color="#eaf5f0" padding="18px 28px">
+    <mj-column>
+        <mj-text font-size="17px" font-weight="700" padding="0 0 4px">{{ productName }}</mj-text>
+        <mj-text color="#53625b" padding="0">SKU: {{ sku }}</mj-text>
+    </mj-column>
+</mj-section>
+
+{{#each packages}}
+<mj-section background-color="#ffffff" padding="16px 28px 4px">
+    <mj-column>
+        <mj-text font-weight="700" padding="0 0 8px">
+            {{#if ../isChinese}}第 {{ number }} 份{{else}}Item {{ number }}{{/if}}
+        </mj-text>
+        {{#if fields.length}}
+        <mj-table cellpadding="7px" border="0">
+            {{#each fields}}
+                <tr style="border-bottom: 1px solid #e6eaed;">
+                    <td style="width: 32%; color: #53625b;">{{ label }}</td>
+                    <td style="font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; word-break: break-all;">{{ value }}</td>
+                </tr>
+            {{/each}}
+        </mj-table>
+        {{/if}}
+        {{#if note}}
+        <mj-text padding="10px 0 0" line-height="1.8"><div style="white-space: pre-wrap;">{{ note }}</div></mj-text>
+        {{/if}}
+    </mj-column>
+</mj-section>
+{{/each}}
+
+{{#if attachments.length}}
+<mj-section background-color="#f3f8f5" padding="16px 28px">
+    <mj-column>
+        <mj-text padding="0">
+            {{#if isChinese}}本邮件附带 {{ attachments.length }} 个成品附件。{{else}}This email includes {{ attachments.length }} delivery attachment(s).{{/if}}
+        </mj-text>
+    </mj-column>
+</mj-section>
+{{/if}}
+
+<mj-section background-color="#fff7ed" padding="16px 28px">
+    <mj-column>
+        <mj-text color="#9a3412" padding="0">
+            {{#if isChinese}}
+                请勿向他人泄露成品账号或密钥。交付内容异常时，请通过订单联系客服处理。
+            {{else}}
+                Keep account details and credentials private. Contact support from the order if delivery content is unusable.
+            {{/if}}
+        </mj-text>
+    </mj-column>
+</mj-section>
+
+{{> footer }}

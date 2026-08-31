@@ -32,12 +32,16 @@ describe('store management dashboard extension', () => {
 
         expect(mocks.defineDashboardExtension).toHaveBeenCalledWith(
             expect.objectContaining({
-                customProviders: [
+                customProviders: expect.arrayContaining([
+                    expect.objectContaining({
+                        id: 'store-commerce-navigation',
+                        location: 'app',
+                    }),
                     expect.objectContaining({
                         id: 'merchant-initial-password-gate',
                         location: 'app',
                     }),
-                ],
+                ]),
             }),
         );
     });

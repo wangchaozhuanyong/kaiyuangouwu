@@ -25,12 +25,14 @@ interface ProductVariantsTableProps {
     productId: string;
     registerRefresher?: PaginatedListRefresherRegisterFn;
     fromProductDetailPage?: boolean;
+    digitalInventory?: boolean;
 }
 
 export function ProductVariantsTable({
     productId,
     registerRefresher,
     fromProductDetailPage,
+    digitalInventory = false,
 }: ProductVariantsTableProps) {
     const { pageId } = usePage();
     const { setTableSettings } = useUserSettings();
@@ -113,6 +115,7 @@ export function ProductVariantsTable({
                         ),
                     },
                     stockLevels: {
+                        header: digitalInventory ? t`Digital stock` : t`Stock`,
                         cell: ({ row: { original } }) => (
                             <StockLevelLabel stockLevels={original.stockLevels} />
                         ),

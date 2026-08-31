@@ -30,14 +30,9 @@
         <mj-text font-weight="700" padding="0 0 8px">
             {{#if ../isChinese}}第 {{ number }} 份{{else}}Item {{ number }}{{/if}}
         </mj-text>
-        <mj-table cellpadding="7px" border="0">
-            {{#each fields}}
-                <tr style="border-bottom: 1px solid #e6eaed;">
-                    <td style="width: 32%; color: #53625b;">{{ label }}</td>
-                    <td style="font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; word-break: break-all;">{{ value }}</td>
-                </tr>
-            {{/each}}
-        </mj-table>
+        <mj-text padding="10px 12px" background-color="#f6f8f7" border-radius="4px"
+            font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+            line-height="1.7"><div style="white-space: pre-wrap; word-break: break-all;">{{ rawPayload }}</div></mj-text>
     </mj-column>
 </mj-section>
 {{/each}}

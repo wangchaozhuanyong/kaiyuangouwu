@@ -42,6 +42,12 @@ const SalesModule = lazy(() => routeModuleLoaders.sales().then(module => ({ defa
 const OrderEditor = lazy(() =>
     routeModuleLoaders.orderEditor().then(module => ({ default: module.OrderEditor })),
 );
+const DraftOrderEditor = lazy(() =>
+    routeModuleLoaders.orderWorkflow().then(module => ({ default: module.DraftOrderEditor })),
+);
+const ModifyOrderEditor = lazy(() =>
+    routeModuleLoaders.orderWorkflow().then(module => ({ default: module.ModifyOrderEditor })),
+);
 const CustomersModule = lazy(() =>
     routeModuleLoaders.customers().then(module => ({ default: module.CustomersModule })),
 );
@@ -218,6 +224,8 @@ function App() {
                         <Route path="sales">
                             <Route index element={<Navigate to="orders" replace />} />
                             <Route path="orders" element={<SalesModule />} />
+                            <Route path="orders/draft/:id" element={<DraftOrderEditor />} />
+                            <Route path="orders/:id/modify" element={<ModifyOrderEditor />} />
                             <Route path="orders/:id" element={<OrderEditor />} />
                             <Route
                                 path="shipments"
@@ -265,6 +273,13 @@ function App() {
                             <Route path="*" element={<Navigate to="client-plugins" replace />} />
                         </Route>
 
+                        {getNextAdminExtensionRoutes().map(route => {
+                            const Component = route.component;
+                            return (
+                                <Route key={route.id} path={route.path.slice(1)} element={<Component />} />
+                            );
+                        })}
+
                         {/* 8. ⚙️ 系统与权限 */}
                         <Route path="settings">
                             <Route index element={<Navigate to="store-profile" replace />} />
@@ -299,13 +314,6 @@ function App() {
                                 element={<Navigate to="/settings/system-ops?tab=api-keys" replace />}
                             />
                         </Route>
-
-                        {getNextAdminExtensionRoutes().map(route => {
-                            const Component = route.component;
-                            return (
-                                <Route key={route.id} path={route.path.slice(1)} element={<Component />} />
-                            );
-                        })}
 
                         <Route path="operations/*" element={<Navigate to="/settings/system-ops" replace />} />
                         <Route path="*" element={<Navigate to="/dashboard" replace />} />

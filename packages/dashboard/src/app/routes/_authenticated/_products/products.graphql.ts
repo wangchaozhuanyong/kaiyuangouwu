@@ -15,7 +15,11 @@ const productVariantFulfillmentFragment = graphql(`
             stockOnHand
             stockAllocated
         }
-        customFields
+        customFields {
+            fulfillmentType
+            digitalDeliveryMode
+            digitalStockPolicy
+        }
     }
 `);
 
@@ -51,6 +55,11 @@ export const productListDocument = graphql(
                         code
                         token
                     }
+                    collections {
+                        id
+                        name
+                    }
+                    customFields
                     variants {
                         ...ProductVariantFulfillment
                     }
@@ -61,6 +70,18 @@ export const productListDocument = graphql(
     `,
     [productVariantFulfillmentFragment],
 );
+
+export const productCategoryFilterOptionsDocument = graphql(`
+    query ProductCategoryFilterOptions($options: CollectionListOptions) {
+        collections(options: $options) {
+            items {
+                id
+                name
+            }
+            totalItems
+        }
+    }
+`);
 
 export const productDetailFragment = graphql(
     `
@@ -130,7 +151,11 @@ export const productDetailFragment = graphql(
                     }
                 }
             }
-            customFields
+            customFields {
+                fulfillmentType
+                refundPolicy
+                manualDeliverySlaMinutes
+            }
         }
     `,
     [assetFragment],

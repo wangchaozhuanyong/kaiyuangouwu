@@ -10,14 +10,13 @@ import {
     Truck,
 } from 'lucide-react';
 import { Suspense, useEffect, useState } from 'react';
-import type { RouteState } from '../storefront-router';
 
 import { ShopApi } from '../api';
 import { LazySharePosterModal } from '../lazy-storefront-pages';
 import { productAvailability, productAvailabilityLabel } from '../product-availability';
 import { ProductReviewsSection } from '../review-pages';
 import { productDescriptionText, sanitizeProductDescription } from '../rich-text';
-import { routeNavigateOptions } from '../storefront-router';
+import { routeNavigateOptions, type RouteState } from '../storefront-router';
 import { SubHeader } from '../storefront-ui/page-shell';
 import {
     formatMoney,
@@ -58,6 +57,19 @@ interface ProductDetailPageProps {
     onNotify: (message: string) => void;
 }
 
+function formatManualDeliverySla(minutesInput: number, isZh: boolean): string {
+    const minutes = Math.max(5, Math.trunc(minutesInput));
+    if (minutes % 1440 === 0) {
+        const days = minutes / 1440;
+        return isZh ? `${days}天` : `${days} ${days === 1 ? 'day' : 'days'}`;
+    }
+    if (minutes % 60 === 0) {
+        const hours = minutes / 60;
+        return isZh ? `${hours}小时` : `${hours} ${hours === 1 ? 'hour' : 'hours'}`;
+    }
+    return isZh ? `${minutes}分钟` : `${minutes} minutes`;
+}
+
 export function ProductDetailPage() {
     const navigate = useNavigate();
     const navigateTo = (route: RouteState) => void navigate(routeNavigateOptions(route) as never);
@@ -92,17 +104,29 @@ export function ProductDetailPage() {
         : product.featuredAsset
           ? [product.featuredAsset]
           : [];
-    const isDigital = variant?.customFields.fulfillmentType === 'digital';
+    const isDigital =
+        (product.customFields?.fulfillmentType ?? variant?.customFields.fulfillmentType) === 'digital';
     const digitalDeliveryMode: DigitalDeliveryMode =
         variant?.customFields.digitalDeliveryMode ?? 'manual_service';
     const isAutoCard = isDigital && digitalDeliveryMode === 'auto_card';
     const isFileDownload = isDigital && digitalDeliveryMode === 'file_download';
     const availability = productAvailability(variant);
-    const unavailable = availability.soldOut;
     const stockLabel = productAvailabilityLabel(availability, language);
-    const packaging = product.packaging?.enabled ? product.packaging : null;
+    const packaging = !isDigital && product.packaging?.enabled ? product.packaging : null;
+    const refundPolicy = product.customFields?.refundPolicy ?? 'MERCHANT_REVIEW';
+    const manualSlaText = formatManualDeliverySla(
+        product.customFields?.manualDeliverySlaMinutes ?? 1440,
+        isZh,
+    );
     const isUnitVariant = packaging?.unitVariant.id === variant?.id;
     const isPackageVariant = packaging?.packageVariant.id === variant?.id;
+    const unavailable =
+        !variant ||
+        (variant.customFields.fulfillmentType === 'physical' && variant.stockLevel === 'OUT_OF_STOCK') ||
+        (isDigital &&
+            variant.customFields.digitalStockPolicy === 'limited' &&
+            variant.stockLevel === 'OUT_OF_STOCK') ||
+        (isAutoCard && (variant.autoCardAvailableStock ?? 0) < 1);
     const similarProducts = products.filter(item => item.id !== product.id).slice(0, 4);
     const descriptionText = productDescriptionText(product.description);
     const descriptionHtml = sanitizeProductDescription(product.description);
@@ -233,8 +257,8 @@ export function ProductDetailPage() {
                                   : 'Download from your order after payment'
                               : isDigital
                                 ? isZh
-                                    ? '付款后由商家处理并通知'
-                                    : 'Processed and updated by the merchant after payment'
+                                    ? `付款后由商家处理，预计${manualSlaText}内发送至邮箱`
+                                    : `Merchant processed and emailed within ${manualSlaText}`
                                 : isZh
                                   ? '运费结算页计算'
                                   : 'Shipping at checkout'}
@@ -318,8 +342,8 @@ export function ProductDetailPage() {
                               : 'Get the file download from your order after payment'
                           : isDigital
                             ? isZh
-                                ? '付款后由商家处理，进度与结果通过订单和邮箱通知'
-                                : 'The merchant processes it after payment and sends order and email updates'
+                                ? `付款后由商家处理，预计${manualSlaText}内发送至邮箱`
+                                : `The merchant processes it and sends it by email within ${manualSlaText}`
                             : isZh
                               ? '结算页选择收货地址并确认时效'
                               : 'Choose an address and confirm timing at checkout'}
@@ -364,13 +388,17 @@ export function ProductDetailPage() {
                 </span>
                 <span>
                     <RotateCcw />
-                    {isAutoCard
+                    {refundPolicy === 'NON_REFUNDABLE'
                         ? isZh
-                            ? '发卡后不支持退款'
-                            : 'Non-refundable after delivery'
-                        : isZh
-                          ? '售后支持'
-                          : 'Returns support'}
+                            ? '不支持退款 · 异常可联系客服'
+                            : 'Non-refundable · support for delivery issues'
+                        : refundPolicy === 'SEVEN_DAY_NO_REASON'
+                          ? isZh
+                              ? '支持7天无理由'
+                              : 'Seven-day no-reason return'
+                          : isZh
+                            ? '可申请退款 · 商家审核'
+                            : 'Refund request · merchant review'}
                 </span>
             </section>
             <ProductReviewsSection api={api} productId={product.id} market={market} language={language} />

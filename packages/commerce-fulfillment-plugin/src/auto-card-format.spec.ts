@@ -26,10 +26,12 @@ describe('auto card format', () => {
         expect(result.rows).toEqual([
             {
                 lineNumber: 1,
+                rawPayload: 'first@example.com----pass-1----seed-1',
                 values: { account: 'first@example.com', password: 'pass-1', twoFactor: 'seed-1' },
             },
             {
                 lineNumber: 2,
+                rawPayload: 'second@example.com----pass-2----seed-2',
                 values: { account: 'second@example.com', password: 'pass-2', twoFactor: 'seed-2' },
             },
         ]);

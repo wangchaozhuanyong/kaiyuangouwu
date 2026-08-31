@@ -25,6 +25,9 @@ export class AutoCardPoolItem extends VendureEntity {
     @Column({ type: 'text' })
     encryptedPayload: string;
 
+    @Column({ type: 'text', nullable: true })
+    encryptedRawPayload: string | null;
+
     @Column({ type: 'varchar', length: 64 })
     fingerprint: string;
 

@@ -1,7 +1,9 @@
 import { ID } from '@vendure/common/lib/shared-types';
 import {
+    CustomChannelFields,
     CustomOrderFields,
     CustomOrderLineFields,
+    CustomProductFields,
     CustomProductVariantFields,
 } from '@vendure/core/dist/entity/custom-entity-fields';
 
@@ -10,6 +12,20 @@ import { AutoCardFieldDefinition } from './auto-card-format';
 import { AutoCardDeliveryState, AutoCardPoolItemState, DigitalDeliveryMode } from './auto-card.constants';
 
 export type FulfillmentType = 'physical' | 'digital';
+export type StoreCommerceMode = 'DIGITAL_ONLY' | 'PHYSICAL_ONLY' | 'HYBRID';
+export type RefundPolicy = 'MERCHANT_REVIEW' | 'SEVEN_DAY_NO_REASON' | 'NON_REFUNDABLE';
+export type DigitalStockPolicy = 'pool_derived' | 'limited' | 'unlimited';
+
+export interface UpdateProductPackagingInput {
+    productId: ID;
+    unitVariantId: ID;
+    packageVariantId: ID;
+    unitLabel: string;
+    packageLabel: string;
+    unitsPerPackage: number;
+    enabled: boolean;
+    autoUnpack: boolean;
+}
 
 export interface UpdateProductPackagingInput {
     productId: ID;
@@ -83,17 +99,31 @@ export interface TransitionAfterSalesRequestInput {
 }
 
 declare module '@vendure/core/dist/entity/custom-entity-fields' {
+    interface CustomChannelFields {
+        commerceMode: StoreCommerceMode;
+    }
+
     interface CustomOrderFields {
         deliveryEmail?: string | null;
+        deliveryEmailContactId?: string | null;
+    }
+
+    interface CustomProductFields {
+        fulfillmentType: FulfillmentType;
+        refundPolicy: RefundPolicy;
+        manualDeliverySlaMinutes: number;
     }
 
     interface CustomProductVariantFields {
         fulfillmentType: FulfillmentType;
         digitalDeliveryMode: DigitalDeliveryMode;
+        digitalStockPolicy: DigitalStockPolicy;
     }
 
     interface CustomOrderLineFields {
         fulfillmentTypeSnapshot: FulfillmentType;
         digitalDeliveryModeSnapshot: DigitalDeliveryMode;
+        refundPolicySnapshot: RefundPolicy;
+        manualDeliverySlaMinutesSnapshot: number;
     }
 }

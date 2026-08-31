@@ -9,6 +9,7 @@ import {
     FileText,
     Image as ImageIcon,
     PackageCheck,
+    Plus,
     RefreshCw,
     Search,
     Truck,
@@ -16,13 +17,14 @@ import {
 } from 'lucide-react';
 import { useDeferredValue, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import {
     ADD_ORDER_FULFILLMENT,
+    CREATE_DRAFT_ORDER,
     GET_SALES_ORDERS,
     TRANSITION_SALES_FULFILLMENT,
 } from '../../graphql/sales.graphql';
+import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { useUrlListState } from '../../hooks/use-url-list-state';
 import { useUrlTab } from '../../hooks/use-url-tab';
 import { toUserFacingError } from '../../utils/user-facing-error';
@@ -39,9 +41,10 @@ import {
     getRemainingPhysicalLines,
 } from './sales-utils';
 
-type OrderTab = 'ALL' | 'TO_SETTLE' | 'TO_FULFILL' | 'IN_TRANSIT' | 'DELIVERED' | 'CANCELLED';
+type OrderTab = 'ALL' | 'DRAFT' | 'TO_SETTLE' | 'TO_FULFILL' | 'IN_TRANSIT' | 'DELIVERED' | 'CANCELLED';
 const ORDER_TABS = {
     all: 'ALL',
+    drafts: 'DRAFT',
     'to-settle': 'TO_SETTLE',
     'to-fulfill': 'TO_FULFILL',
     'in-transit': 'IN_TRANSIT',
@@ -127,6 +130,7 @@ const EMPTY_ORDERS: SalesOrderItem[] = [];
 const FULFILLABLE_STATES = ['PaymentAuthorized', 'PaymentSettled', 'PartiallyShipped', 'PartiallyDelivered'];
 const tabs: Array<{ id: OrderTab; label: string }> = [
     { id: 'ALL', label: '全部交易' },
+    { id: 'DRAFT', label: '草稿订单' },
     { id: 'TO_SETTLE', label: '支付已授权' },
     { id: 'TO_FULFILL', label: '待处理履约' },
     { id: 'IN_TRANSIT', label: '配送中' },
@@ -135,6 +139,7 @@ const tabs: Array<{ id: OrderTab; label: string }> = [
 ];
 const tabStateFilter: Record<OrderTab, Record<string, unknown>> = {
     ALL: { notIn: ['AddingItems', 'Draft'] },
+    DRAFT: { in: ['AddingItems', 'Draft'] },
     TO_SETTLE: { eq: 'PaymentAuthorized' },
     TO_FULFILL: { in: FULFILLABLE_STATES },
     IN_TRANSIT: { in: ['PartiallyShipped', 'Shipped', 'PartiallyDelivered'] },
@@ -145,6 +150,9 @@ const csvCell = (value: string) => `"${value.replace(/"/g, '""')}"`;
 
 export function SalesModule() {
     const navigate = useNavigate();
+    const { hasAnyPermission } = useAdminPermissions();
+    const canCreateOrder = hasAnyPermission(['CreateOrder']);
+    const canUpdateOrder = hasAnyPermission(['UpdateOrder']);
     const [activeTab, setActiveTab] = useUrlTab<OrderTab>(
         ORDER_TABS,
         'all',
@@ -162,10 +170,8 @@ export function SalesModule() {
     const [batchProgress, setBatchProgress] = useState('');
 
     const queryVariables = useMemo(() => {
-        const filters: Array<Record<string, unknown>> = [
-            { active: { eq: false } },
-            { state: tabStateFilter[activeTab] },
-        ];
+        const filters: Array<Record<string, unknown>> = [{ state: tabStateFilter[activeTab] }];
+        if (activeTab !== 'DRAFT') filters.unshift({ active: { eq: false } });
         const query = deferredSearchTerm.trim();
         if (query) {
             filters.push({
@@ -194,6 +200,9 @@ export function SalesModule() {
     });
     const [addFulfillment, { loading: fulfilling }] =
         useMutation<FulfillmentMutationData>(ADD_ORDER_FULFILLMENT);
+    const [createDraftOrder, { loading: creatingDraft }] = useMutation<{
+        createDraftOrder: { id: string; code: string; state: string };
+    }>(CREATE_DRAFT_ORDER);
     const [transitionFulfillment, { loading: transitioning }] = useMutation<{
         transitionFulfillmentToState: FulfillmentMutationData['addFulfillmentToOrder'];
     }>(TRANSITION_SALES_FULFILLMENT);
@@ -211,6 +220,17 @@ export function SalesModule() {
     const showNotice = (message: string) => {
         setNotification(message);
         window.setTimeout(() => setNotification(''), 3500);
+    };
+    const handleCreateDraftOrder = async () => {
+        setActionError('');
+        try {
+            const response = await createDraftOrder();
+            const draft = response.data?.createDraftOrder;
+            if (!draft?.id) throw new Error('后端没有返回草稿订单 ID');
+            navigate(`/sales/orders/draft/${draft.id}`);
+        } catch (mutationError) {
+            setActionError(toUserFacingError(mutationError, '草稿订单创建失败'));
+        }
     };
     const resetListState = (tab: OrderTab) => {
         setActiveTab(tab);
@@ -338,7 +358,7 @@ export function SalesModule() {
     return (
         <div className="flex h-full flex-col bg-slate-50">
             <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-5 sm:px-8">
-                <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4">
+                <div className="flex w-full flex-wrap items-center justify-between gap-4">
                     <div>
                         <h1 className="text-xl font-semibold tracking-tight text-slate-950">订单与履约</h1>
                         <p className="mt-1 text-xs leading-5 text-slate-500">
@@ -346,6 +366,21 @@ export function SalesModule() {
                         </p>
                     </div>
                     <div className="flex items-center gap-2">
+                        {canCreateOrder && (
+                            <button
+                                type="button"
+                                onClick={() => void handleCreateDraftOrder()}
+                                disabled={creatingDraft}
+                                className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-blue-700 active:scale-[0.98] disabled:opacity-50"
+                            >
+                                {creatingDraft ? (
+                                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                    <Plus className="h-3.5 w-3.5" />
+                                )}
+                                新建草稿订单
+                            </button>
+                        )}
                         <button
                             type="button"
                             onClick={() => refetch()}
@@ -371,7 +406,7 @@ export function SalesModule() {
                 aria-label="订单状态筛选"
                 className="scrollbar-hidden shrink-0 overflow-x-auto border-b border-slate-200 bg-white px-5 sm:px-8"
             >
-                <div className="mx-auto flex max-w-7xl min-w-max gap-6">
+                <div className="flex w-full min-w-max gap-6">
                     {tabs.map(tab => (
                         <button
                             key={tab.id}
@@ -387,7 +422,7 @@ export function SalesModule() {
             </nav>
 
             <div className="flex-1 overflow-y-auto p-5 sm:p-8">
-                <div className="mx-auto max-w-7xl space-y-4">
+                <div className="w-full max-w-none space-y-4">
                     <div className="grid gap-3 sm:grid-cols-3">
                         <div className="rounded-xl bg-slate-900 p-4 text-white shadow-sm">
                             <div className="text-[11px] font-medium text-slate-300">当前筛选</div>
@@ -498,15 +533,17 @@ export function SalesModule() {
                                     </strong>{' '}
                                     笔
                                 </span>
-                                <button
-                                    type="button"
-                                    onClick={openBatchFulfillment}
-                                    disabled={selectedOrders.length === 0}
-                                    className="flex items-center gap-1.5 rounded-lg bg-amber-600 px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-amber-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
-                                >
-                                    <Truck className="h-3.5 w-3.5" />
-                                    批量填写运单并发货
-                                </button>
+                                {canUpdateOrder && (
+                                    <button
+                                        type="button"
+                                        onClick={openBatchFulfillment}
+                                        disabled={selectedOrders.length === 0}
+                                        className="flex items-center gap-1.5 rounded-lg bg-amber-600 px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-amber-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
+                                    >
+                                        <Truck className="h-3.5 w-3.5" />
+                                        批量填写运单并发货
+                                    </button>
+                                )}
                             </div>
                         </div>
 
@@ -551,6 +588,7 @@ export function SalesModule() {
                                             {orders.map(order => {
                                                 const remainingLines = getRemainingPhysicalLines(order);
                                                 const canFulfill =
+                                                    canUpdateOrder &&
                                                     FULFILLABLE_STATES.includes(order.state) &&
                                                     remainingLines.length > 0;
                                                 const kind = getOrderFulfillmentKind(order);
@@ -731,7 +769,7 @@ export function SalesModule() {
                 </div>
             </div>
 
-            {isBatchOpen && (
+            {canUpdateOrder && isBatchOpen && (
                 <div
                     className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-xs"
                     onClick={() => !fulfilling && !transitioning && setIsBatchOpen(false)}

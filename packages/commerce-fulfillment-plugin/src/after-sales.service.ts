@@ -24,7 +24,7 @@ import {
 import { AfterSalesEvent } from './entities/after-sales-event.entity';
 import { AfterSalesItem } from './entities/after-sales-item.entity';
 import { AfterSalesRequest } from './entities/after-sales-request.entity';
-import { getOrderLineFulfillmentType, isAutoCardOrderLine } from './fulfillment-classification';
+import { getOrderLineFulfillmentType } from './fulfillment-classification';
 import {
     AfterSalesRequestListOptions,
     CreateAfterSalesRequestInput,
@@ -145,11 +145,11 @@ export class AfterSalesService {
                 input: item,
                 line,
                 fulfillmentType: getOrderLineFulfillmentType(line),
-                autoCard: isAutoCardOrderLine(line),
+                refundPolicy: line.customFields?.refundPolicySnapshot ?? 'MERCHANT_REVIEW',
             };
         });
-        if (selectedLines.some(item => item.autoCard)) {
-            throw new UserInputError('自动发卡商品不支持申请退款，发卡异常请联系客服');
+        if (selectedLines.some(item => item.refundPolicy === 'NON_REFUNDABLE')) {
+            throw new UserInputError('所选商品不支持自助退款；交付异常请联系客服人工处理');
         }
         if (
             input.type === 'RETURN_AND_REFUND' &&

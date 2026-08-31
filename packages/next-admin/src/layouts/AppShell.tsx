@@ -53,8 +53,8 @@ import type { ThemePreference } from '../theme/theme';
 
 import { logoutAdministrator, switchActiveChannel } from '../apollo';
 import { AccessibleDialogSurface } from '../components/AccessibleDialogSurface';
-import { AdminPermissionsProvider } from '../components/admin-permissions-context';
 import { ThemeToggleButton } from '../components/ThemeToggleButton';
+import { AdminPermissionsProvider } from '../components/admin-permissions-context';
 import { CustomFieldsProvider } from '../custom-fields/CustomFieldsProvider';
 import {
     getNextAdminExtensionNavItems,
@@ -71,6 +71,7 @@ import {
     hasAnyAdminPermission,
 } from '../utils/admin-permissions';
 import { getChannelDisplayLabel } from '../utils/channel-display';
+import { commerceModeAllowsPath } from '../utils/commerce-mode';
 import { toUserFacingError } from '../utils/user-facing-error';
 
 interface OpenTab {
@@ -163,6 +164,9 @@ export function AppShell() {
         refetch: refetchAppShell,
     } = appShellQuery;
     const activeAdministrator = channelData?.activeAdministrator;
+    const commerceMode = channelData?.myStoreCommerceMode.mode ?? 'HYBRID';
+    const showsPhysicalCatalog = commerceMode !== 'DIGITAL_ONLY';
+    const showsDigitalCatalog = commerceMode !== 'PHYSICAL_ONLY';
     const administratorName = activeAdministrator
         ? [activeAdministrator.lastName, activeAdministrator.firstName].filter(Boolean).join('') ||
           activeAdministrator.user.identifier
@@ -204,6 +208,13 @@ export function AppShell() {
         const timer = window.setTimeout(preloadCommonRoutes, 1200);
         return () => window.clearTimeout(timer);
     }, []);
+
+    useEffect(() => {
+        if (!channelData?.myStoreCommerceMode || commerceModeAllowsPath(commerceMode, location.pathname)) {
+            return;
+        }
+        void routerNavigate('/catalog/list', { replace: true });
+    }, [channelData?.myStoreCommerceMode, commerceMode, location.pathname, routerNavigate]);
 
     useEffect(() => {
         const channels = channelData?.channels;
@@ -270,6 +281,7 @@ export function AppShell() {
                 usedWidth = nextWidth;
             }
 
+            // Keep the current page reachable from the tab strip after navigation.
             const activePath = location.pathname;
             if (activePath && !fittingPaths.includes(activePath)) {
                 const activeTab = measuredTabs.find(tab => tab.path === activePath);
@@ -297,7 +309,10 @@ export function AppShell() {
         const observer =
             typeof ResizeObserver !== 'undefined' ? new ResizeObserver(recalculateVisibleTabs) : null;
         observer?.observe(tabList);
-        return () => observer?.disconnect();
+
+        return () => {
+            observer?.disconnect();
+        };
     }, [tabLayout, location.pathname]);
 
     const visibleTabs = tabs.filter(tab => visibleTabPaths.includes(tab.path));
@@ -386,10 +401,6 @@ export function AppShell() {
             '/marketing/referrals': '分销与返利',
             '/storefront/decoration': '商城装修',
             '/storefront/content': '内容与页面',
-            '/plugins/client-plugins': '客户端插件中心',
-            '/plugins/ai-settings': 'AI 生图设置',
-            '/plugins/ai-access': 'AI 服务商接入',
-            '/plugins/translations': '多语言内容翻译',
             '/settings/store-profile': '店铺综合设置',
             '/settings/team': '员工与权限',
             '/settings/system-ops': '系统运维 [超管]',
@@ -495,8 +506,26 @@ export function AppShell() {
                     cat: '商品',
                     icon: FolderTree,
                 },
-                { title: '多仓库存总盘与出入库流水', path: '/catalog/inventory', cat: '商品', icon: Boxes },
-                { title: '虚拟卡密与自动发货库', path: '/catalog/card-pool', cat: '商品', icon: KeyRound },
+                ...(showsPhysicalCatalog
+                    ? [
+                          {
+                              title: '多仓库存总盘与出入库流水',
+                              path: '/catalog/inventory',
+                              cat: '商品',
+                              icon: Boxes,
+                          },
+                      ]
+                    : []),
+                ...(showsDigitalCatalog
+                    ? [
+                          {
+                              title: '虚拟卡密与自动发货库',
+                              path: '/catalog/card-pool',
+                              cat: '商品',
+                              icon: KeyRound,
+                          },
+                      ]
+                    : []),
                 { title: '素材媒体库管理', path: '/catalog/assets', cat: '商品', icon: Palette },
                 {
                     title: '全量交易订单与待发货打单',
@@ -567,7 +596,7 @@ export function AppShell() {
                       ]
                     : []),
             ].filter(item => canAccessPath(item.path)),
-        [canAccessPath, isSuperAdmin],
+        [canAccessPath, isSuperAdmin, showsDigitalCatalog, showsPhysicalCatalog],
     );
 
     const filteredCmdItems = useMemo(() => {
@@ -654,7 +683,6 @@ export function AppShell() {
                 >
                     {/* 1. 📊 工作台 */}
                     <NavLink
-                        allowed={canAccessPath('/dashboard')}
                         to="/dashboard"
                         aria-label="工作台"
                         className={({ isActive }) =>
@@ -718,14 +746,14 @@ export function AppShell() {
                                 分类与属性
                             </NavLink>
                             <NavLink
-                                allowed={canAccessPath('/catalog/inventory')}
+                                allowed={showsPhysicalCatalog && canAccessPath('/catalog/inventory')}
                                 to="/catalog/inventory"
                                 className={navItemClass}
                             >
                                 库存与仓库
                             </NavLink>
                             <NavLink
-                                allowed={canAccessPath('/catalog/card-pool')}
+                                allowed={showsDigitalCatalog && canAccessPath('/catalog/card-pool')}
                                 to="/catalog/card-pool"
                                 className={navItemClass}
                             >
@@ -1185,7 +1213,7 @@ export function AppShell() {
                     {/* 左侧标签列表 */}
                     <div
                         ref={tabListRef}
-                        className="flex-1 h-full min-w-0 flex items-center px-3 gap-1 overflow-hidden"
+                        className="flex-1 min-w-0 h-full flex items-center px-3 gap-1 overflow-hidden"
                     >
                         {visibleTabs.map(tab => {
                             const isActive = location.pathname === tab.path;
@@ -1212,9 +1240,10 @@ export function AppShell() {
                         })}
                     </div>
 
+                    {/* 用同样的样式测量所有标签，避免隐藏标签影响可见区宽度。 */}
                     <div
                         aria-hidden="true"
-                        className="absolute -z-10 h-0 overflow-hidden opacity-0 pointer-events-none"
+                        className="pointer-events-none absolute -z-10 flex h-px w-max overflow-hidden opacity-0"
                     >
                         {tabs.map(tab => (
                             <div
@@ -1223,7 +1252,7 @@ export function AppShell() {
                                     if (element) tabMeasurementRefs.current.set(tab.path, element);
                                     else tabMeasurementRefs.current.delete(tab.path);
                                 }}
-                                className="inline-flex shrink-0 items-center rounded-md border text-xs font-bold"
+                                className="inline-flex shrink-0 items-center rounded-md border text-xs"
                             >
                                 <span className="px-3 py-1">{tab.label}</span>
                                 {tabs.length > 1 && (
@@ -1393,7 +1422,7 @@ export function AppShell() {
                                 <ShieldCheck className="mx-auto h-10 w-10 text-amber-500" />
                                 <h1 className="mt-4 text-base font-bold text-slate-900">当前账号无权访问</h1>
                                 <p className="mt-2 text-xs leading-5 text-slate-500">
-                                    当前账号缺少访问该页面所需的权限，请联系管理员调整角色授权。
+                                    当前账号在所选店铺中缺少访问该页面所需的权限。
                                 </p>
                                 <button
                                     type="button"

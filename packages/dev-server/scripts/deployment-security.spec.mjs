@@ -84,6 +84,9 @@ void test('production PM2 config starts compiled runtime entries without the dev
     );
     assert.match(config, /max_memory_restart:\s*'768M'/u);
     assert.match(config, /restart_delay:\s*5000/u);
+    assert.match(config, /STORE_DOMAIN_CNAME_TARGET:\s*'damatong\.net'/u);
+    assert.match(config, /STORE_DOMAIN_ROUTING_MODE:\s*'require-domain'/u);
+    assert.match(config, /STORE_DOMAIN_BYPASS_HOSTS:\s*''/u);
     assert.doesNotMatch(config, /cli\.js/u);
 });
 

@@ -52,6 +52,14 @@ describe('commerceOrderProcess digital fulfillment', () => {
         variantIdsForLock: vi.fn((variantIds: string[]) => variantIds),
         autoUnpackForOrder: vi.fn().mockResolvedValue(undefined),
     };
+    const commerceModeService = {
+        activeMode: vi.fn().mockResolvedValue('HYBRID'),
+        assertProductTypeAllowed: vi.fn(),
+    };
+    const manualDigitalDeliveryService = {
+        createSettledOrderTasks: vi.fn().mockResolvedValue([]),
+        cancelOrder: vi.fn().mockResolvedValue(undefined),
+    };
 
     beforeEach(async () => {
         vi.clearAllMocks();
@@ -68,6 +76,8 @@ describe('commerceOrderProcess digital fulfillment', () => {
             globalSettingsService,
             autoCardService,
             productPackagingService,
+            commerceModeService,
+            manualDigitalDeliveryService,
         ];
         await commerceOrderProcess.init?.({ get: vi.fn(() => services.shift()) } as any);
         hydratedOrder = undefined;

@@ -49,6 +49,8 @@ export { AutoCardConfig } from './entities/auto-card-config.entity';
 export { AutoCardDeliveryEvent } from './entities/auto-card-delivery-event.entity';
 export { AutoCardDelivery } from './entities/auto-card-delivery.entity';
 export { AutoCardPoolItem } from './entities/auto-card-pool-item.entity';
+export { ManualDigitalDeliveryEvent } from './entities/manual-digital-delivery-event.entity';
+export { ManualDigitalDelivery } from './entities/manual-digital-delivery.entity';
 export { PackagingUnpackEvent } from './entities/packaging-unpack-event.entity';
 export { ProductPackagingRule } from './entities/product-packaging-rule.entity';
 export {
@@ -61,6 +63,8 @@ export {
     summarizeOrderFulfillment,
 } from './fulfillment-classification';
 export type { CheckoutFulfillmentSummary } from './fulfillment-classification';
+export { ManualDigitalDeliveryReadyEvent } from './manual-digital-delivery.event';
+export { ManualDigitalDeliveryService } from './manual-digital-delivery.service';
 export { manualServiceFulfillmentHandler } from './manual-service-fulfillment-handler';
 export {
     ORDER_CONFIRMATION_TOKEN_CONFIGURATION,

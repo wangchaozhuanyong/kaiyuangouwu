@@ -11,6 +11,7 @@ import {
     MapPin,
     MessageSquare,
     PackageCheck,
+    PencilLine,
     Printer,
     RefreshCw,
     RotateCcw,
@@ -23,10 +24,10 @@ import {
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import type { CustomFieldValueMap } from '../../custom-fields/custom-field-types';
-
 import { sensitiveActionContext } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
+import { DynamicCustomFieldsForm } from '../../custom-fields/DynamicCustomFieldsForm';
+import type { CustomFieldValueMap } from '../../custom-fields/custom-field-types';
 import {
     addCustomFieldsToDocument,
     customFieldInputFromValues,
@@ -34,7 +35,6 @@ import {
     validateCustomFieldValues,
 } from '../../custom-fields/custom-field-utils';
 import { useCustomFieldDefinitions } from '../../custom-fields/custom-fields-context';
-import { DynamicCustomFieldsForm } from '../../custom-fields/DynamicCustomFieldsForm';
 import { NextAdminActions, NextAdminPageBlocks } from '../../extensions/extension-hosts';
 import {
     ADD_ORDER_FULFILLMENT,
@@ -44,11 +44,11 @@ import {
     REFUND_SALES_ORDER,
     SET_SALES_ORDER_CUSTOM_FIELDS,
     TRANSITION_SALES_FULFILLMENT,
+    TRANSITION_SALES_ORDER,
 } from '../../graphql/sales.graphql';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
-
 import {
     formatAddress,
     formatDateTime,
@@ -195,26 +195,16 @@ const refundCountsAgainstPayment = (refund: RefundItem) => !['Failed', 'Cancelle
 
 const historyLabel = (entry: HistoryItem) => {
     if (entry.type === 'ORDER_STATE_TRANSITION')
-        return `订单状态：${historyValue(entry.data.from)} → ${historyValue(entry.data.to)}`;
+        return `订单状态：${String(entry.data.from ?? '')} → ${String(entry.data.to ?? '')}`;
     if (entry.type === 'ORDER_PAYMENT_TRANSITION')
-        return `支付状态：${historyValue(entry.data.from)} → ${historyValue(entry.data.to)}`;
+        return `支付状态：${String(entry.data.from ?? '')} → ${String(entry.data.to ?? '')}`;
     if (entry.type === 'ORDER_FULFILLMENT_TRANSITION')
-        return `履约状态：${historyValue(entry.data.from)} → ${historyValue(entry.data.to)}`;
+        return `履约状态：${String(entry.data.from ?? '')} → ${String(entry.data.to ?? '')}`;
     if (entry.type === 'ORDER_REFUND_TRANSITION')
-        return `退款状态：${historyValue(entry.data.from)} → ${historyValue(entry.data.to)}`;
-    if (entry.type === 'ORDER_CANCELLATION') {
-        return `订单取消：${historyValue(entry.data.reason, '未填写原因')}`;
-    }
+        return `退款状态：${String(entry.data.from ?? '')} → ${String(entry.data.to ?? '')}`;
+    if (entry.type === 'ORDER_CANCELLATION') return `订单取消：${String(entry.data.reason ?? '未填写原因')}`;
     if (entry.type === 'ORDER_FULFILLMENT') return '创建履约记录';
     return entry.type;
-};
-
-const historyValue = (value: unknown, fallback = '') => {
-    if (typeof value === 'string') return value;
-    if (typeof value === 'number' || typeof value === 'bigint' || typeof value === 'boolean') {
-        return String(value);
-    }
-    return fallback;
 };
 
 export function OrderEditor() {
@@ -264,6 +254,9 @@ export function OrderEditor() {
     const [cancelOrder, { loading: cancelling }] = useMutation<{ cancelOrder: ResultPayload }>(
         CANCEL_SALES_ORDER,
     );
+    const [transitionOrder, { loading: transitioningOrder }] = useMutation<{
+        transitionOrderToState: ResultPayload | null;
+    }>(TRANSITION_SALES_ORDER);
     const [setOrderCustomFields, { loading: savingCustomFields }] = useMutation<{
         setOrderCustomFields: { id: string; updatedAt: string } | null;
     }>(SET_SALES_ORDER_CUSTOM_FIELDS);
@@ -296,7 +289,13 @@ export function OrderEditor() {
         paymentsWithBalances.find(item => item.payment.id === refundPaymentId) ?? paymentsWithBalances[0];
     const notes = order?.history.items.filter(entry => entry.type === 'ORDER_NOTE') ?? [];
     const timeline = order?.history.items.filter(entry => entry.type !== 'ORDER_NOTE').slice(0, 20) ?? [];
-    const busy = addingNote || addingFulfillment || transitioningFulfillment || refunding || cancelling;
+    const busy =
+        addingNote ||
+        addingFulfillment ||
+        transitioningFulfillment ||
+        transitioningOrder ||
+        refunding ||
+        cancelling;
 
     const showNotice = (message: string) => {
         setNotification(message);
@@ -306,6 +305,21 @@ export function OrderEditor() {
         await refetch();
         setActionError('');
         showNotice(message);
+    };
+
+    const handleAddNote = async () => {
+        const note = newNote.trim();
+        if (!order || !note) {
+            setActionError('请输入内部备注内容');
+            return;
+        }
+        try {
+            await addNote({ variables: { input: { id: order.id, note, isPublic: false } } });
+            setNewNote('');
+            await refreshAfterMutation('内部备注已保存');
+        } catch (mutationError) {
+            setActionError(toUserFacingError(mutationError, '备注保存失败，请稍后重试'));
+        }
     };
 
     const handleSaveCustomFields = async () => {
@@ -333,21 +347,6 @@ export function OrderEditor() {
             await refreshAfterMutation('订单扩展字段已保存');
         } catch (mutationError) {
             setActionError(toUserFacingError(mutationError, '订单扩展字段保存失败'));
-        }
-    };
-
-    const handleAddNote = async () => {
-        const note = newNote.trim();
-        if (!order || !note) {
-            setActionError('请输入内部备注内容');
-            return;
-        }
-        try {
-            await addNote({ variables: { input: { id: order.id, note, isPublic: false } } });
-            setNewNote('');
-            await refreshAfterMutation('内部备注已保存');
-        } catch (mutationError) {
-            setActionError(toUserFacingError(mutationError, '备注保存失败，请稍后重试'));
         }
     };
 
@@ -504,6 +503,27 @@ export function OrderEditor() {
         }
     };
 
+    const handleBeginModify = async () => {
+        if (!order) return;
+        if (order.state === 'Modifying') {
+            navigate(`/sales/orders/${order.id}/modify`);
+            return;
+        }
+        try {
+            const response = await transitionOrder({
+                variables: { id: order.id, state: 'Modifying' },
+            });
+            const result = response.data?.transitionOrderToState;
+            if (result?.__typename !== 'Order') {
+                setActionError(getMutationError(result));
+                return;
+            }
+            navigate(`/sales/orders/${order.id}/modify`);
+        } catch (mutationError) {
+            setActionError(toUserFacingError(mutationError, '订单无法进入修改状态'));
+        }
+    };
+
     if (loading && !data)
         return (
             <div className="flex h-full items-center justify-center bg-slate-50">
@@ -525,14 +545,14 @@ export function OrderEditor() {
                     <div className="mt-4 flex justify-center gap-2">
                         <button
                             type="button"
-                            onClick={() => void navigate('/sales/orders')}
+                            onClick={() => navigate('/sales/orders')}
                             className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-semibold"
                         >
                             返回列表
                         </button>
                         <button
                             type="button"
-                            onClick={() => void refetch()}
+                            onClick={() => refetch()}
                             className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white"
                         >
                             重试
@@ -551,7 +571,7 @@ export function OrderEditor() {
                     </h1>
                     <button
                         type="button"
-                        onClick={() => void navigate('/sales/orders')}
+                        onClick={() => navigate('/sales/orders')}
                         className="mt-4 rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold text-white"
                     >
                         返回订单列表
@@ -567,7 +587,7 @@ export function OrderEditor() {
                     <div className="flex min-w-0 items-center gap-3">
                         <button
                             type="button"
-                            onClick={() => void navigate('/sales/orders')}
+                            onClick={() => navigate('/sales/orders')}
                             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100"
                             aria-label="返回订单列表"
                         >
@@ -595,31 +615,38 @@ export function OrderEditor() {
                             pageId="order-detail"
                             entity={order as unknown as Record<string, unknown>}
                         />
-                        <button
-                            type="button"
-                            onClick={openRefund}
-                            disabled={paymentsWithBalances.length === 0 || busy}
-                            className={[
-                                'flex items-center gap-1.5 rounded-lg border border-rose-200 bg-white',
-                                'px-3 py-2 text-xs font-semibold text-rose-700',
-                                'hover:bg-rose-50 disabled:opacity-40',
-                            ].join(' ')}
-                        >
-                            <RotateCcw className="h-3.5 w-3.5" />
-                            执行退款
-                        </button>
+                        {canUpdateOrder &&
+                            (order.state === 'Modifying' || order.nextStates.includes('Modifying')) && (
+                                <button
+                                    type="button"
+                                    onClick={() => void handleBeginModify()}
+                                    disabled={busy}
+                                    className="flex items-center gap-1.5 rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-40"
+                                >
+                                    <PencilLine className="h-3.5 w-3.5" />
+                                    {order.state === 'Modifying' ? '继续修改订单' : '修改订单'}
+                                </button>
+                            )}
+                        {canUpdateOrder && (
+                            <button
+                                type="button"
+                                onClick={openRefund}
+                                disabled={paymentsWithBalances.length === 0 || busy}
+                                className="flex items-center gap-1.5 rounded-lg border border-rose-200 bg-white px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-40"
+                            >
+                                <RotateCcw className="h-3.5 w-3.5" />
+                                执行退款
+                            </button>
+                        )}
                         <button
                             type="button"
                             onClick={() => window.print()}
-                            className={[
-                                'flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white',
-                                'px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50',
-                            ].join(' ')}
+                            className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                         >
                             <Printer className="h-3.5 w-3.5" />
                             打印订单
                         </button>
-                        {order.nextStates.includes('Cancelled') && (
+                        {canUpdateOrder && order.nextStates.includes('Cancelled') && (
                             <button
                                 type="button"
                                 onClick={() => {
@@ -629,16 +656,13 @@ export function OrderEditor() {
                                     setIsCancelOpen(true);
                                 }}
                                 disabled={busy}
-                                className={[
-                                    'flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white',
-                                    'px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50',
-                                ].join(' ')}
+                                className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                             >
                                 <XCircle className="h-3.5 w-3.5" />
                                 取消订单
                             </button>
                         )}
-                        {remainingPhysicalLines.length > 0 && (
+                        {canUpdateOrder && remainingPhysicalLines.length > 0 && (
                             <button
                                 type="button"
                                 onClick={() => {
@@ -646,10 +670,7 @@ export function OrderEditor() {
                                     setIsFulfillOpen(true);
                                 }}
                                 disabled={!manualHandlerAvailable || busy}
-                                className={[
-                                    'flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-2',
-                                    'text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-40',
-                                ].join(' ')}
+                                className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-40"
                             >
                                 <Truck className="h-4 w-4" />
                                 创建实物发货
@@ -713,11 +734,7 @@ export function OrderEditor() {
                                         type="button"
                                         onClick={() => void handleSaveCustomFields()}
                                         disabled={savingCustomFields}
-                                        className={[
-                                            'flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2',
-                                            'text-xs font-semibold text-white',
-                                            'hover:bg-blue-700 disabled:opacity-50',
-                                        ].join(' ')}
+                                        className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
                                     >
                                         {savingCustomFields && (
                                             <RefreshCw className="h-3.5 w-3.5 animate-spin" />
@@ -847,23 +864,20 @@ export function OrderEditor() {
                                                         {fulfillment.trackingCode || '无物流单号'}
                                                     </div>
                                                 </div>
-                                                {fulfillment.nextStates.includes('Delivered') && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() =>
-                                                            void handleFulfillmentDelivered(fulfillment)
-                                                        }
-                                                        disabled={transitioningFulfillment}
-                                                        className={[
-                                                            'rounded-lg bg-emerald-50 px-3 py-1.5 text-xs',
-                                                            'font-semibold text-emerald-700 hover:bg-emerald-100',
-                                                            'disabled:opacity-50',
-                                                        ].join(' ')}
-                                                    >
-                                                        <CheckCircle2 className="mr-1 inline h-3.5 w-3.5" />
-                                                        确认送达
-                                                    </button>
-                                                )}
+                                                {canUpdateOrder &&
+                                                    fulfillment.nextStates.includes('Delivered') && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() =>
+                                                                handleFulfillmentDelivered(fulfillment)
+                                                            }
+                                                            disabled={transitioningFulfillment}
+                                                            className="rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+                                                        >
+                                                            <CheckCircle2 className="mr-1 inline h-3.5 w-3.5" />
+                                                            确认送达
+                                                        </button>
+                                                    )}
                                             </div>
                                         ))
                                     )}
@@ -907,11 +921,7 @@ export function OrderEditor() {
                                                         {payment.refunds.map(refund => (
                                                             <div
                                                                 key={refund.id}
-                                                                className={[
-                                                                    'flex flex-wrap items-center justify-between gap-2',
-                                                                    'rounded-lg bg-rose-50 px-3 py-2',
-                                                                    'text-[11px] text-rose-700',
-                                                                ].join(' ')}
+                                                                className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-rose-50 px-3 py-2 text-[11px] text-rose-700"
                                                             >
                                                                 <span>
                                                                     退款 #{refund.id} · {refund.state} ·{' '}
@@ -942,33 +952,32 @@ export function OrderEditor() {
                                     当前读取最近 {order.history.items.length} / {order.history.totalItems}{' '}
                                     条订单历史中的备注
                                 </p>
-                                <div className="mt-4 flex gap-2">
-                                    <input
-                                        value={newNote}
-                                        onChange={event => setNewNote(event.target.value)}
-                                        onKeyDown={event => {
-                                            if (event.key === 'Enter') void handleAddNote();
-                                        }}
-                                        placeholder="输入仅管理员可见的跟进备注"
-                                        className={[
-                                            'min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2',
-                                            'text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100',
-                                        ].join(' ')}
-                                    />
-                                    <button
-                                        type="button"
-                                        onClick={() => void handleAddNote()}
-                                        disabled={addingNote || !newNote.trim()}
-                                        className="flex items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold text-white disabled:opacity-40"
-                                    >
-                                        {addingNote ? (
-                                            <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                                        ) : (
-                                            <Send className="h-3.5 w-3.5" />
-                                        )}
-                                        保存
-                                    </button>
-                                </div>
+                                {canUpdateOrder && (
+                                    <div className="mt-4 flex gap-2">
+                                        <input
+                                            value={newNote}
+                                            onChange={event => setNewNote(event.target.value)}
+                                            onKeyDown={event => {
+                                                if (event.key === 'Enter') handleAddNote();
+                                            }}
+                                            placeholder="输入仅管理员可见的跟进备注"
+                                            className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={handleAddNote}
+                                            disabled={addingNote || !newNote.trim()}
+                                            className="flex items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold text-white disabled:opacity-40"
+                                        >
+                                            {addingNote ? (
+                                                <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                                            ) : (
+                                                <Send className="h-3.5 w-3.5" />
+                                            )}
+                                            保存
+                                        </button>
+                                    </div>
+                                )}
                                 <div className="mt-4 space-y-2">
                                     {notes.length === 0 ? (
                                         <div className="rounded-lg bg-slate-50 p-4 text-center text-xs text-slate-500">
@@ -992,7 +1001,7 @@ export function OrderEditor() {
                                                     <span>{formatDateTime(note.createdAt)}</span>
                                                 </div>
                                                 <p className="mt-1.5 leading-5 text-slate-800">
-                                                    {historyValue(note.data.note)}
+                                                    {String(note.data.note ?? '')}
                                                 </p>
                                             </div>
                                         ))
@@ -1121,7 +1130,7 @@ export function OrderEditor() {
                 </div>
             </div>
 
-            {isFulfillOpen && (
+            {canUpdateOrder && isFulfillOpen && (
                 <ActionDialog
                     title="创建实物发货"
                     description="提交后会写入真实履约记录，并将履约状态推进为已发货。"
@@ -1129,7 +1138,7 @@ export function OrderEditor() {
                     busy={addingFulfillment || transitioningFulfillment}
                     error={actionError}
                     onClose={() => setIsFulfillOpen(false)}
-                    onConfirm={() => void handleFulfill()}
+                    onConfirm={handleFulfill}
                     confirmLabel="确认发货"
                 >
                     <label className="block text-xs font-semibold text-slate-700">
@@ -1145,11 +1154,7 @@ export function OrderEditor() {
                         value={trackingCode}
                         onChange={event => setTrackingCode(event.target.value)}
                         placeholder="请从物流系统复制运单号"
-                        className={[
-                            'mt-1.5 w-full rounded-lg border border-slate-300 p-2.5',
-                            'font-mono text-sm outline-none focus:border-blue-500',
-                            'focus:ring-2 focus:ring-blue-100',
-                        ].join(' ')}
+                        className="mt-1.5 w-full rounded-lg border border-slate-300 p-2.5 font-mono text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                     />
                     <div className="mt-4 rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
                         本次发货：{remainingPhysicalLines.reduce((sum, line) => sum + line.quantity, 0)}{' '}
@@ -1158,7 +1163,7 @@ export function OrderEditor() {
                 </ActionDialog>
             )}
 
-            {isRefundOpen && (
+            {canUpdateOrder && isRefundOpen && (
                 <ActionDialog
                     title="创建原支付渠道退款"
                     description="最终到账时间和状态以支付处理器返回结果为准，后台不会提前显示“已到账”。"
@@ -1169,7 +1174,7 @@ export function OrderEditor() {
                         setIsRefundOpen(false);
                         setRefundCurrentPassword('');
                     }}
-                    onConfirm={() => void handleRefund()}
+                    onConfirm={handleRefund}
                     confirmLabel="提交退款"
                 >
                     <label className="block text-xs font-semibold text-slate-700">退款支付记录 *</label>
@@ -1196,11 +1201,7 @@ export function OrderEditor() {
                         value={refundAmount}
                         onChange={event => setRefundAmount(event.target.value)}
                         inputMode="decimal"
-                        className={[
-                            'mt-1.5 w-full rounded-lg border border-slate-300 p-2.5',
-                            'font-mono text-sm font-semibold outline-none focus:border-rose-500',
-                            'focus:ring-2 focus:ring-rose-100',
-                        ].join(' ')}
+                        className="mt-1.5 w-full rounded-lg border border-slate-300 p-2.5 font-mono text-sm font-semibold outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-100"
                     />
                     <label className="mt-4 block text-xs font-semibold text-slate-700">退款原因 *</label>
                     <textarea
@@ -1224,7 +1225,7 @@ export function OrderEditor() {
                 </ActionDialog>
             )}
 
-            {isCancelOpen && (
+            {canUpdateOrder && isCancelOpen && (
                 <ActionDialog
                     title="取消订单"
                     description="取消会按 Vendure 订单流程释放未履约库存和配送，不等同于自动完成退款。"
@@ -1235,7 +1236,7 @@ export function OrderEditor() {
                         setIsCancelOpen(false);
                         setCancelCurrentPassword('');
                     }}
-                    onConfirm={() => void handleCancel()}
+                    onConfirm={handleCancel}
                     confirmLabel="确认取消"
                 >
                     <label className="block text-xs font-semibold text-slate-700">取消原因 *</label>

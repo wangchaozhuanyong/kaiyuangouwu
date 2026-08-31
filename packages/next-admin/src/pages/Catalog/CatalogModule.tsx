@@ -21,13 +21,26 @@ import { useNavigate } from 'react-router-dom';
 
 import { sensitiveActionContext, switchActiveChannel } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
-import { DELETE_PRODUCT, GET_CATALOG_CHANNELS, GET_PRODUCTS } from '../../graphql/catalog.graphql';
+import {
+    DELETE_PRODUCT,
+    GET_CATALOG_CHANNELS,
+    GET_COLLECTIONS,
+    GET_PRODUCTS,
+} from '../../graphql/catalog.graphql';
+import {
+    STORE_COMMERCE_MODE_QUERY,
+    type DigitalDeliveryMode,
+    type DigitalStockPolicy,
+    type FulfillmentType,
+    type StoreCommerceModeData,
+} from '../../graphql/commerce.graphql';
 import { useUrlListState } from '../../hooks/use-url-list-state';
 import {
     getCatalogEmptyStateDescription,
     getChannelDisplayLabel,
     isDefaultChannelCode,
 } from '../../utils/channel-display';
+import { collectionSummary } from '../../utils/commerce-mode';
 
 interface ProductVariantItem {
     id: string;
@@ -39,6 +52,12 @@ interface ProductVariantItem {
     stockOnHand?: number;
     stockAllocated?: number;
     enabled: boolean;
+    autoCardAvailableStock?: number | null;
+    customFields?: {
+        fulfillmentType?: FulfillmentType | null;
+        digitalDeliveryMode?: DigitalDeliveryMode | null;
+        digitalStockPolicy?: DigitalStockPolicy | null;
+    } | null;
 }
 
 interface ProductItem {
@@ -49,6 +68,11 @@ interface ProductItem {
     name: string;
     slug: string;
     description?: string;
+    customFields?: {
+        fulfillmentType?: FulfillmentType | null;
+        refundPolicy?: string | null;
+        manualDeliverySlaMinutes?: number | null;
+    } | null;
     featuredAsset?: {
         id: string;
         preview: string;
@@ -92,6 +116,11 @@ interface GetCatalogChannelsData {
     };
 }
 
+interface CollectionFilterItem {
+    id: string;
+    name: string;
+}
+
 const formatMoney = (amount: number, currencyCode: string) => {
     try {
         return new Intl.NumberFormat('zh-CN', {
@@ -108,6 +137,7 @@ export function CatalogModule() {
     const navigate = useNavigate();
     const { page, searchParams, searchTerm, setFilter, setPage, setSearchTerm } = useUrlListState();
     const statusParameter = searchParams.get('status');
+    const categoryId = searchParams.get('category') ?? '';
     const statusFilter: 'ALL' | 'ENABLED' | 'DISABLED' =
         statusParameter === 'enabled' ? 'ENABLED' : statusParameter === 'disabled' ? 'DISABLED' : 'ALL';
     const setStatusFilter = (status: 'ALL' | 'ENABLED' | 'DISABLED') => {
@@ -122,6 +152,18 @@ export function CatalogModule() {
     const [deletePassword, setDeletePassword] = useState('');
     const [isSwitchingStore, setIsSwitchingStore] = useState(false);
     const deferredSearchTerm = useDeferredValue(searchTerm);
+    const commerceModeQuery = useQuery<StoreCommerceModeData>(STORE_COMMERCE_MODE_QUERY, {
+        fetchPolicy: 'cache-first',
+    });
+    const commerceMode = commerceModeQuery.data?.myStoreCommerceMode.mode ?? 'HYBRID';
+    const collectionsQuery = useQuery<{
+        collections: { items: CollectionFilterItem[]; totalItems: number };
+    }>(GET_COLLECTIONS, {
+        variables: {
+            options: { topLevelOnly: false, take: 250, sort: { name: 'ASC' } },
+        },
+        fetchPolicy: 'cache-first',
+    });
 
     useEffect(() => {
         if (!notification) return;
@@ -140,6 +182,9 @@ export function CatalogModule() {
         } else if (statusFilter === 'DISABLED') {
             filter.enabled = { eq: false };
         }
+        if (categoryId) {
+            filter.collectionId = { eq: categoryId };
+        }
 
         return {
             options: {
@@ -149,7 +194,7 @@ export function CatalogModule() {
                 sort: { updatedAt: 'DESC' as const },
             },
         };
-    }, [deferredSearchTerm, statusFilter, page, pageSize]);
+    }, [categoryId, deferredSearchTerm, statusFilter, page, pageSize]);
 
     const { data, loading, error, refetch } = useQuery<GetProductsData>(GET_PRODUCTS, {
         variables: queryVariables,
@@ -328,7 +373,20 @@ export function CatalogModule() {
                             </button>
                         </div>
 
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <select
+                                value={categoryId}
+                                onChange={event => setFilter('category', event.target.value)}
+                                aria-label="按商品分类筛选"
+                                className="max-w-48 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            >
+                                <option value="">全部分类</option>
+                                {(collectionsQuery.data?.collections.items ?? []).map(collection => (
+                                    <option key={collection.id} value={collection.id}>
+                                        {collection.name}
+                                    </option>
+                                ))}
+                            </select>
                             <div className="relative">
                                 <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
                                 <input
@@ -418,11 +476,21 @@ export function CatalogModule() {
                                     <tr className="border-b border-slate-200 bg-slate-50/70 text-slate-500 font-bold whitespace-nowrap">
                                         <th className="p-4 w-14">主图</th>
                                         <th className="p-4 min-w-[240px]">商品名称 / SPU Slug</th>
+                                        <th className="p-4 min-w-[150px]">分类归属</th>
+                                        <th className="p-4">商品类型</th>
                                         <th className="p-4">上架状态</th>
                                         <th className="p-4">规格 SKU 变体</th>
-                                        <th className="p-4">在手总库存</th>
+                                        <th className="p-4">
+                                            {commerceMode === 'DIGITAL_ONLY'
+                                                ? '虚拟可售库存'
+                                                : commerceMode === 'PHYSICAL_ONLY'
+                                                  ? '在手总库存'
+                                                  : '库存状态'}
+                                        </th>
                                         <th className="p-4">起售价</th>
-                                        <th className="p-4 text-right w-40 whitespace-nowrap">操作</th>
+                                        <th className="sticky right-0 z-10 w-32 whitespace-nowrap border-l border-slate-200 bg-slate-50 p-4 text-right">
+                                            操作
+                                        </th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100 text-slate-700">
@@ -443,6 +511,33 @@ export function CatalogModule() {
                                             (acc, v) => acc + (v.stockOnHand || 0),
                                             0,
                                         );
+                                        const fulfillmentType: FulfillmentType =
+                                            product.customFields?.fulfillmentType === 'physical'
+                                                ? 'physical'
+                                                : 'digital';
+                                        const category = collectionSummary(product.collections);
+                                        const unlimitedDigitalStock =
+                                            fulfillmentType === 'digital' &&
+                                            variants.length > 0 &&
+                                            variants.every(
+                                                variant =>
+                                                    variant.customFields?.digitalStockPolicy === 'unlimited',
+                                            );
+                                        const hasUnlimitedDigitalStock =
+                                            fulfillmentType === 'digital' &&
+                                            variants.some(
+                                                variant =>
+                                                    variant.customFields?.digitalStockPolicy === 'unlimited',
+                                            );
+                                        const digitalStock = variants.reduce((total, variant) => {
+                                            if (variant.customFields?.digitalDeliveryMode === 'auto_card') {
+                                                return total + (variant.autoCardAvailableStock ?? 0);
+                                            }
+                                            if (variant.customFields?.digitalStockPolicy === 'unlimited') {
+                                                return total;
+                                            }
+                                            return total + (variant.stockOnHand ?? 0);
+                                        }, 0);
 
                                         return (
                                             <tr
@@ -487,6 +582,31 @@ export function CatalogModule() {
                                                     </div>
                                                 </td>
 
+                                                {/* Category ownership */}
+                                                <td className="p-4 whitespace-nowrap">
+                                                    <span
+                                                        className={`inline-flex items-center rounded-md px-2 py-1 text-[11px] font-bold ${category.primary === '未分类' ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-700'}`}
+                                                    >
+                                                        {category.primary}
+                                                    </span>
+                                                    {category.extraCount > 0 && (
+                                                        <span className="ml-1 text-[10px] text-slate-400">
+                                                            +{category.extraCount}
+                                                        </span>
+                                                    )}
+                                                </td>
+
+                                                {/* Product type */}
+                                                <td className="p-4 whitespace-nowrap">
+                                                    <span
+                                                        className={`inline-flex rounded-md px-2 py-1 text-[11px] font-bold ${fulfillmentType === 'digital' ? 'bg-violet-50 text-violet-700' : 'bg-blue-50 text-blue-700'}`}
+                                                    >
+                                                        {fulfillmentType === 'digital'
+                                                            ? '虚拟商品'
+                                                            : '实物商品'}
+                                                    </span>
+                                                </td>
+
                                                 {/* Status */}
                                                 <td className="p-4 whitespace-nowrap">
                                                     {product.enabled ? (
@@ -526,7 +646,13 @@ export function CatalogModule() {
                                                                     : 'text-slate-800'
                                                             }
                                                         >
-                                                            {totalStock}
+                                                            {fulfillmentType === 'physical'
+                                                                ? totalStock
+                                                                : unlimitedDigitalStock
+                                                                  ? '无限'
+                                                                  : hasUnlimitedDigitalStock
+                                                                    ? '部分无限'
+                                                                    : digitalStock}
                                                         </span>
                                                     ) : (
                                                         <span className="text-slate-400">-</span>
@@ -544,7 +670,7 @@ export function CatalogModule() {
                                                 </td>
 
                                                 {/* Actions */}
-                                                <td className="p-4 text-right whitespace-nowrap">
+                                                <td className="sticky right-0 border-l border-slate-100 bg-white p-4 text-right whitespace-nowrap group-hover:bg-slate-50">
                                                     <div className="flex items-center justify-end gap-1.5">
                                                         <button
                                                             type="button"

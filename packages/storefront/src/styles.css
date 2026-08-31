@@ -8120,6 +8120,46 @@ img.fatal-error-mark {
     padding-bottom: 24px;
 }
 
+.address-type-tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px;
+    margin: 14px 14px 0;
+    padding: 4px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--soft);
+}
+
+.address-type-tabs button {
+    min-height: 42px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--muted);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    font-weight: 600;
+}
+
+.address-type-tabs button.is-active {
+    background: white;
+    color: var(--accent-ink);
+    box-shadow: var(--shadow-sm);
+}
+
+.address-type-tabs svg {
+    width: 16px;
+    height: 16px;
+}
+
+.delivery-email-card p {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    overflow-wrap: anywhere;
+}
+
 .address-card {
     margin-top: 0;
     padding: 14px;

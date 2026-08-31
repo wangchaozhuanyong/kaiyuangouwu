@@ -243,6 +243,244 @@ export const GET_SALES_ORDER = gql`
     ${ORDER_LIST_FIELDS}
 `;
 
+export const SET_SALES_ORDER_CUSTOM_FIELDS = gql`
+    mutation SetSalesOrderCustomFields($input: UpdateOrderInput!) {
+        setOrderCustomFields(input: $input) {
+            id
+            updatedAt
+        }
+    }
+`;
+
+export const CREATE_DRAFT_ORDER = gql`
+    mutation CreateSalesDraftOrder {
+        createDraftOrder {
+            id
+            code
+            state
+        }
+    }
+`;
+
+export const DELETE_DRAFT_ORDER = gql`
+    mutation DeleteSalesDraftOrder($orderId: ID!) {
+        deleteDraftOrder(orderId: $orderId) {
+            result
+            message
+        }
+    }
+`;
+
+export const ADD_ITEM_TO_DRAFT_ORDER = gql`
+    mutation AddSalesDraftOrderItem($orderId: ID!, $input: AddItemToDraftOrderInput!) {
+        addItemToDraftOrder(orderId: $orderId, input: $input) {
+            __typename
+            ... on Order {
+                id
+            }
+            ... on ErrorResult {
+                errorCode
+                message
+            }
+        }
+    }
+`;
+
+export const ADJUST_DRAFT_ORDER_LINE = gql`
+    mutation AdjustSalesDraftOrderLine($orderId: ID!, $input: AdjustDraftOrderLineInput!) {
+        adjustDraftOrderLine(orderId: $orderId, input: $input) {
+            __typename
+            ... on Order {
+                id
+            }
+            ... on ErrorResult {
+                errorCode
+                message
+            }
+        }
+    }
+`;
+
+export const REMOVE_DRAFT_ORDER_LINE = gql`
+    mutation RemoveSalesDraftOrderLine($orderId: ID!, $orderLineId: ID!) {
+        removeDraftOrderLine(orderId: $orderId, orderLineId: $orderLineId) {
+            __typename
+            ... on Order {
+                id
+            }
+            ... on ErrorResult {
+                errorCode
+                message
+            }
+        }
+    }
+`;
+
+export const SET_DRAFT_ORDER_CUSTOMER = gql`
+    mutation SetSalesDraftOrderCustomer($orderId: ID!, $customerId: ID!) {
+        setCustomerForDraftOrder(orderId: $orderId, customerId: $customerId) {
+            __typename
+            ... on Order {
+                id
+            }
+            ... on ErrorResult {
+                errorCode
+                message
+            }
+        }
+    }
+`;
+
+export const SET_DRAFT_ORDER_SHIPPING_ADDRESS = gql`
+    mutation SetSalesDraftOrderShippingAddress($orderId: ID!, $input: CreateAddressInput!) {
+        setDraftOrderShippingAddress(orderId: $orderId, input: $input) {
+            id
+        }
+    }
+`;
+
+export const SET_DRAFT_ORDER_BILLING_ADDRESS = gql`
+    mutation SetSalesDraftOrderBillingAddress($orderId: ID!, $input: CreateAddressInput!) {
+        setDraftOrderBillingAddress(orderId: $orderId, input: $input) {
+            id
+        }
+    }
+`;
+
+export const GET_DRAFT_ORDER_SHIPPING_METHODS = gql`
+    query GetSalesDraftOrderShippingMethods($orderId: ID!) {
+        eligibleShippingMethodsForDraftOrder(orderId: $orderId) {
+            id
+            code
+            name
+            description
+            price
+            priceWithTax
+        }
+    }
+`;
+
+export const SET_DRAFT_ORDER_SHIPPING_METHOD = gql`
+    mutation SetSalesDraftOrderShippingMethod($orderId: ID!, $shippingMethodId: ID!) {
+        setDraftOrderShippingMethod(orderId: $orderId, shippingMethodId: $shippingMethodId) {
+            __typename
+            ... on Order {
+                id
+            }
+            ... on ErrorResult {
+                errorCode
+                message
+            }
+        }
+    }
+`;
+
+export const APPLY_DRAFT_ORDER_COUPON = gql`
+    mutation ApplySalesDraftOrderCoupon($orderId: ID!, $couponCode: String!) {
+        applyCouponCodeToDraftOrder(orderId: $orderId, couponCode: $couponCode) {
+            __typename
+            ... on Order {
+                id
+            }
+            ... on ErrorResult {
+                errorCode
+                message
+            }
+        }
+    }
+`;
+
+export const REMOVE_DRAFT_ORDER_COUPON = gql`
+    mutation RemoveSalesDraftOrderCoupon($orderId: ID!, $couponCode: String!) {
+        removeCouponCodeFromDraftOrder(orderId: $orderId, couponCode: $couponCode) {
+            id
+        }
+    }
+`;
+
+export const ORDER_VARIANT_SEARCH_QUERY = gql`
+    query SearchSalesOrderVariants($options: ProductVariantListOptions) {
+        productVariants(options: $options) {
+            items {
+                id
+                name
+                sku
+                price
+                currencyCode
+                stockLevel
+                enabled
+                featuredAsset {
+                    id
+                    preview
+                }
+            }
+            totalItems
+        }
+    }
+`;
+
+export const ORDER_CUSTOMER_SEARCH_QUERY = gql`
+    query SearchSalesOrderCustomers($options: CustomerListOptions) {
+        customers(options: $options) {
+            items {
+                id
+                firstName
+                lastName
+                emailAddress
+                phoneNumber
+                addresses {
+                    id
+                    fullName
+                    company
+                    streetLine1
+                    streetLine2
+                    city
+                    province
+                    postalCode
+                    phoneNumber
+                    defaultShippingAddress
+                    defaultBillingAddress
+                    country {
+                        code
+                        name
+                    }
+                }
+            }
+            totalItems
+        }
+    }
+`;
+
+export const MODIFY_SALES_ORDER = gql`
+    mutation ModifySalesOrder($input: ModifyOrderInput!) {
+        modifyOrder(input: $input) {
+            __typename
+            ... on ErrorResult {
+                errorCode
+                message
+            }
+            ... on Order {
+                id
+                code
+                state
+                totalWithTax
+                currencyCode
+                lines {
+                    id
+                    quantity
+                    unitPriceWithTax
+                    linePriceWithTax
+                    productVariant {
+                        id
+                        name
+                        sku
+                    }
+                }
+            }
+        }
+    }
+`;
+
 export const ADD_ORDER_FULFILLMENT = gql`
     mutation AddSalesOrderFulfillment($input: FulfillOrderInput!) {
         addFulfillmentToOrder(input: $input) {
@@ -303,15 +541,6 @@ export const TRANSITION_SALES_ORDER = gql`
             ... on OrderStateTransitionError {
                 transitionError
             }
-        }
-    }
-`;
-
-export const SET_SALES_ORDER_CUSTOM_FIELDS = gql`
-    mutation SetSalesOrderCustomFields($input: UpdateOrderInput!) {
-        setOrderCustomFields(input: $input) {
-            id
-            updatedAt
         }
     }
 `;

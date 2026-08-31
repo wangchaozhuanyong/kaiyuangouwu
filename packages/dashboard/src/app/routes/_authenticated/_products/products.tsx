@@ -41,9 +41,10 @@ import {
     EnableProductsBulkAction,
     RemoveProductsFromChannelBulkAction,
 } from './components/product-bulk-actions.js';
-import { getProductFulfillmentType } from './components/product-fulfillment-type.js';
+import { getProductLevelFulfillmentType } from './components/product-fulfillment-type.js';
 import {
     catalogFilteredProductListDocument,
+    productCategoryFilterOptionsDocument,
     productListDocument,
     reindexDocument,
     withProductVariantCustomFields,
@@ -156,6 +157,30 @@ function ProductListPage() {
                         header: () => <Trans>Product name</Trans>,
                         cell: ({ row }) => <span>{row.original.name}</span>,
                     },
+                    collections: {
+                        header: () => <Trans>Category</Trans>,
+                        cell: ({ row }) => {
+                            const collections = row.original.collections;
+                            if (!collections.length) {
+                                return (
+                                    <span className="text-muted-foreground">
+                                        <Trans>Uncategorized</Trans>
+                                    </span>
+                                );
+                            }
+                            return (
+                                <div className="flex max-w-72 items-center gap-1.5">
+                                    <Badge variant="secondary">{collections[0].name}</Badge>
+                                    {collections.length > 1 && (
+                                        <span className="text-xs text-muted-foreground">
+                                            +{collections.length - 1}
+                                        </span>
+                                    )}
+                                </div>
+                            );
+                        },
+                        enableSorting: false,
+                    },
                     enabled: {
                         header: () => <Trans>Sales status</Trans>,
                     },
@@ -192,15 +217,14 @@ function ProductListPage() {
                 }}
                 additionalColumns={{
                     fulfillmentType: {
-                        meta: { dependencies: ['variants'] },
+                        meta: { dependencies: ['customFields'] },
                         header: () => <Trans>Product type</Trans>,
                         cell: ({ row }) => {
-                            const fulfillmentType = getProductFulfillmentType(row.original.variants);
+                            const fulfillmentType = getProductLevelFulfillmentType(row.original.customFields);
                             return (
-                                <Badge variant={fulfillmentType === 'mixed' ? 'outline' : 'secondary'}>
+                                <Badge variant="secondary">
                                     {fulfillmentType === 'physical' && <Trans>Physical product</Trans>}
                                     {fulfillmentType === 'digital' && <Trans>Digital product</Trans>}
-                                    {fulfillmentType === 'mixed' && <Trans>Mixed product</Trans>}
                                 </Badge>
                             );
                         },
@@ -268,8 +292,32 @@ function ProductListPage() {
                         enableHiding: false,
                         enableColumnFilter: false,
                     },
+                    collectionId: {
+                        header: '',
+                        cell: () => null,
+                        enableSorting: false,
+                        enableHiding: false,
+                        enableColumnFilter: false,
+                    },
                 }}
                 facetedFilters={{
+                    collectionId: {
+                        title: t`Category`,
+                        optionsFn: async () => {
+                            const collections: Array<{ id: string; name: string }> = [];
+                            for (let skip = 0; ; skip += 100) {
+                                const result = await api.query(productCategoryFilterOptionsDocument, {
+                                    options: { take: 100, skip, sort: { name: 'ASC' } },
+                                });
+                                collections.push(...result.collections.items);
+                                if (collections.length >= result.collections.totalItems) break;
+                            }
+                            return collections.map(collection => ({
+                                label: collection.name,
+                                value: collection.id,
+                            }));
+                        },
+                    },
                     facetValueId: {
                         title: t`Facet values`,
                         component: FacetValueFacetedFilter,
@@ -297,6 +345,7 @@ function ProductListPage() {
                     'name',
                     'sku',
                     'barcode',
+                    'collections',
                     'fulfillmentType',
                     'sellingPrice',
                     'availableStock',
@@ -310,6 +359,7 @@ function ProductListPage() {
                     name: true,
                     sku: true,
                     barcode: true,
+                    collections: true,
                     fulfillmentType: true,
                     sellingPrice: true,
                     availableStock: true,

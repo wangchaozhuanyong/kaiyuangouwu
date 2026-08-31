@@ -167,6 +167,7 @@ describe('CheckoutPage digital delivery', () => {
         expect(markup).toContain('name="lastName"');
         expect(markup).toContain('收货地址');
         expect(markup).toContain('填写地址后计算');
-        expect(markup).not.toContain('name="deliveryEmail"');
+        expect(markup).toContain('name="deliveryEmail"');
+        expect(markup).toContain('name="confirmDeliveryEmail"');
     });
 });

@@ -1,5 +1,5 @@
 import { useNavigate } from '@tanstack/react-router';
-import { ArrowLeft, CircleCheck, MapPin, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { ArrowLeft, CircleCheck, Mail, MapPin, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { FormEvent, ReactNode, useEffect, useId, useRef, useState } from 'react';
 
 import { ShopApi } from './api';
@@ -9,7 +9,9 @@ import {
     ActiveCustomer,
     CustomerAddress,
     CustomerAddressInput,
+    CustomerDeliveryEmail,
     MarketConfig,
+    StoreCommerceMode,
     StorefrontConfig,
     StorefrontLanguage,
 } from './types';
@@ -44,9 +46,30 @@ export function AddressesPage({
     const [editingAddress, setEditingAddress] = useState<CustomerAddress | null>(null);
     const [submitting, setSubmitting] = useState(false);
     const [formError, setFormError] = useState('');
+    const [activeTab, setActiveTab] = useState<'physical' | 'email'>('physical');
+    const [commerceMode, setCommerceMode] = useState<StoreCommerceMode>('HYBRID');
+    const [deliveryEmails, setDeliveryEmails] = useState<CustomerDeliveryEmail[]>([]);
+    const [emailOpen, setEmailOpen] = useState(false);
+
+    useEffect(() => {
+        if (!customer) return;
+        const controller = new AbortController();
+        void Promise.all([
+            api.activeStoreCommerceMode(controller.signal),
+            api.myDeliveryEmails(controller.signal),
+        ])
+            .then(([mode, emails]) => {
+                setCommerceMode(mode);
+                setDeliveryEmails(emails);
+                if (mode === 'DIGITAL_ONLY') setActiveTab('email');
+                if (mode === 'PHYSICAL_ONLY') setActiveTab('physical');
+            })
+            .catch(() => undefined);
+        return () => controller.abort();
+    }, [api, customer]);
     if (!customer) {
         return (
-            <Subpage title={isZh ? '地址管理' : 'Addresses'} language={language} onBack={onBack}>
+            <Subpage title={isZh ? '收货信息' : 'Delivery contacts'} language={language} onBack={onBack}>
                 <EmptyState
                     icon={<MapPin />}
                     title={isZh ? '登录后管理地址' : 'Sign in to manage addresses'}
@@ -139,63 +162,174 @@ export function AddressesPage({
         setFormError('');
         setOpen(true);
     };
+    const refreshDeliveryEmails = async () => setDeliveryEmails(await api.myDeliveryEmails());
+    const saveEmail = async (event: FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        const data = new FormData(event.currentTarget);
+        setSubmitting(true);
+        setFormError('');
+        try {
+            await api.saveDeliveryEmail({
+                emailAddress: formText(data, 'emailAddress'),
+                confirmEmailAddress: formText(data, 'confirmEmailAddress'),
+                label: formText(data, 'label'),
+                isDefault: data.get('isDefault') === 'on',
+            });
+            await refreshDeliveryEmails();
+            setEmailOpen(false);
+            onNotify(isZh ? '交付邮箱已保存' : 'Delivery email saved');
+        } catch (requestError) {
+            setFormError(
+                requestError instanceof Error
+                    ? requestError.message
+                    : isZh
+                      ? '保存失败'
+                      : 'Could not save email',
+            );
+        } finally {
+            setSubmitting(false);
+        }
+    };
+    const removeEmail = async (id: string) => {
+        if (!window.confirm(isZh ? '确定删除这个交付邮箱吗？' : 'Delete this delivery email?')) return;
+        await api.deleteDeliveryEmail(id);
+        await refreshDeliveryEmails();
+        onNotify(isZh ? '交付邮箱已删除' : 'Delivery email deleted');
+    };
+    const makeDefaultEmail = async (id: string) => {
+        await api.setDefaultDeliveryEmail(id);
+        await refreshDeliveryEmails();
+        onNotify(isZh ? '默认交付邮箱已更新' : 'Default delivery email updated');
+    };
     return (
         <main className="page subpage addresses-page">
             <SubHeader
-                title={isZh ? '地址管理' : 'Addresses'}
+                title={isZh ? '收货信息' : 'Delivery contacts'}
                 language={language}
                 onBack={onBack}
                 action={
                     <button
                         type="button"
-                        onClick={() => startEdit(null)}
-                        aria-label={isZh ? '新增地址' : 'Add address'}
+                        onClick={() => (activeTab === 'email' ? setEmailOpen(true) : startEdit(null))}
+                        aria-label={
+                            activeTab === 'email'
+                                ? isZh
+                                    ? '新增交付邮箱'
+                                    : 'Add delivery email'
+                                : isZh
+                                  ? '新增地址'
+                                  : 'Add address'
+                        }
                     >
                         <Plus />
                     </button>
                 }
             />
-            {customer.addresses?.length ? (
-                <div className="address-list">
-                    {customer.addresses.map(address => (
-                        <article className="address-card" key={address.id}>
-                            <header>
-                                <strong>{address.fullName}</strong>
-                                <span>{address.phoneNumber}</span>
-                                {address.defaultShippingAddress && <em>{isZh ? '默认' : 'Default'}</em>}
-                            </header>
-                            <p>{addressText(address)}</p>
-                            <footer>
-                                <span>{address.country.name}</span>
-                                <div className="address-actions">
-                                    {!address.defaultShippingAddress && (
-                                        <button type="button" onClick={() => void makeDefault(address)}>
-                                            <CircleCheck />
-                                            {isZh ? '设为默认' : 'Make default'}
-                                        </button>
-                                    )}
-                                    <button type="button" onClick={() => startEdit(address)}>
-                                        <Pencil />
-                                        {isZh ? '编辑' : 'Edit'}
-                                    </button>
-                                    <button type="button" onClick={() => void remove(address.id)}>
-                                        <Trash2 />
-                                        {isZh ? '删除' : 'Delete'}
-                                    </button>
-                                </div>
-                            </footer>
-                        </article>
-                    ))}
-                </div>
-            ) : (
-                <EmptyState
-                    icon={<MapPin />}
-                    title={isZh ? '还没有收货地址' : 'No saved addresses'}
-                    detail={isZh ? '新增地址后，结算会更方便' : 'Save an address for faster checkout'}
-                    action={isZh ? '新增地址' : 'Add address'}
-                    onAction={() => startEdit(null)}
-                />
+            {commerceMode === 'HYBRID' && (
+                <nav
+                    className="address-type-tabs"
+                    aria-label={isZh ? '收货信息类型' : 'Delivery contact type'}
+                >
+                    <button
+                        type="button"
+                        className={activeTab === 'physical' ? 'is-active' : undefined}
+                        onClick={() => setActiveTab('physical')}
+                    >
+                        <MapPin />
+                        {isZh ? '实际地址' : 'Physical addresses'}
+                    </button>
+                    <button
+                        type="button"
+                        className={activeTab === 'email' ? 'is-active' : undefined}
+                        onClick={() => setActiveTab('email')}
+                    >
+                        <Mail />
+                        {isZh ? '交付邮箱' : 'Delivery emails'}
+                    </button>
+                </nav>
             )}
+            {activeTab === 'physical' &&
+                (customer.addresses?.length ? (
+                    <div className="address-list">
+                        {customer.addresses.map(address => (
+                            <article className="address-card" key={address.id}>
+                                <header>
+                                    <strong>{address.fullName}</strong>
+                                    <span>{address.phoneNumber}</span>
+                                    {address.defaultShippingAddress && <em>{isZh ? '默认' : 'Default'}</em>}
+                                </header>
+                                <p>{addressText(address)}</p>
+                                <footer>
+                                    <span>{address.country.name}</span>
+                                    <div className="address-actions">
+                                        {!address.defaultShippingAddress && (
+                                            <button type="button" onClick={() => void makeDefault(address)}>
+                                                <CircleCheck />
+                                                {isZh ? '设为默认' : 'Make default'}
+                                            </button>
+                                        )}
+                                        <button type="button" onClick={() => startEdit(address)}>
+                                            <Pencil />
+                                            {isZh ? '编辑' : 'Edit'}
+                                        </button>
+                                        <button type="button" onClick={() => void remove(address.id)}>
+                                            <Trash2 />
+                                            {isZh ? '删除' : 'Delete'}
+                                        </button>
+                                    </div>
+                                </footer>
+                            </article>
+                        ))}
+                    </div>
+                ) : (
+                    <EmptyState
+                        icon={<MapPin />}
+                        title={isZh ? '还没有收货地址' : 'No saved addresses'}
+                        detail={isZh ? '新增地址后，结算会更方便' : 'Save an address for faster checkout'}
+                        action={isZh ? '新增地址' : 'Add address'}
+                        onAction={() => startEdit(null)}
+                    />
+                ))}
+            {activeTab === 'email' &&
+                (deliveryEmails.length ? (
+                    <div className="address-list delivery-email-list">
+                        {deliveryEmails.map(email => (
+                            <article className="address-card delivery-email-card" key={email.id}>
+                                <header>
+                                    <strong>{email.label || (isZh ? '交付邮箱' : 'Delivery email')}</strong>
+                                    {email.isDefault && <em>{isZh ? '默认' : 'Default'}</em>}
+                                </header>
+                                <p>{email.emailAddress}</p>
+                                <footer>
+                                    <span>{isZh ? '已确认' : 'Confirmed'}</span>
+                                    <div className="address-actions">
+                                        {!email.isDefault && (
+                                            <button
+                                                type="button"
+                                                onClick={() => void makeDefaultEmail(email.id)}
+                                            >
+                                                <CircleCheck />
+                                                {isZh ? '设为默认' : 'Make default'}
+                                            </button>
+                                        )}
+                                        <button type="button" onClick={() => void removeEmail(email.id)}>
+                                            <Trash2 />
+                                            {isZh ? '删除' : 'Delete'}
+                                        </button>
+                                    </div>
+                                </footer>
+                            </article>
+                        ))}
+                    </div>
+                ) : (
+                    <EmptyState
+                        icon={<Mail />}
+                        title={isZh ? '还没有交付邮箱' : 'No delivery emails'}
+                        detail={isZh ? '保存后可在结账时直接选择' : 'Save one for faster digital checkout'}
+                        action={isZh ? '新增交付邮箱' : 'Add delivery email'}
+                        onAction={() => setEmailOpen(true)}
+                    />
+                ))}
             {open && (
                 <Sheet
                     title={
@@ -271,6 +405,43 @@ export function AddressesPage({
                         {formError && <small className="form-error">{formError}</small>}
                         <button className="primary-action wide-action" type="submit" disabled={submitting}>
                             {submitting ? (isZh ? '保存中' : 'Saving') : isZh ? '保存地址' : 'Save address'}
+                        </button>
+                    </form>
+                </Sheet>
+            )}
+            {emailOpen && (
+                <Sheet
+                    title={isZh ? '新增交付邮箱' : 'Add delivery email'}
+                    language={language}
+                    onClose={() => setEmailOpen(false)}
+                >
+                    <form className="address-form" onSubmit={event => void saveEmail(event)}>
+                        <Field
+                            name="label"
+                            label={isZh ? '备注名称（选填）' : 'Label (optional)'}
+                            defaultValue=""
+                            required={false}
+                            wide
+                        />
+                        <Field
+                            name="emailAddress"
+                            label={isZh ? '交付邮箱' : 'Delivery email'}
+                            defaultValue={customer.emailAddress}
+                            wide
+                        />
+                        <Field
+                            name="confirmEmailAddress"
+                            label={isZh ? '再次输入交付邮箱' : 'Confirm delivery email'}
+                            defaultValue=""
+                            wide
+                        />
+                        <label className="address-default-toggle field-wide">
+                            <input type="checkbox" name="isDefault" />
+                            <span>{isZh ? '设为默认交付邮箱' : 'Set as default delivery email'}</span>
+                        </label>
+                        {formError && <small className="form-error">{formError}</small>}
+                        <button className="primary-action wide-action" type="submit" disabled={submitting}>
+                            {submitting ? (isZh ? '保存中' : 'Saving') : isZh ? '保存邮箱' : 'Save email'}
                         </button>
                     </form>
                 </Sheet>

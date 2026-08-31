@@ -5,6 +5,7 @@ import { MerchantPasswordGate } from './merchant-password-gate';
 import { myStoreProfileRoute } from './my-store-profile-page';
 import { referralRoute } from './referral-page';
 import { ReferralTodayWidget } from './referral-today-widget';
+import { StoreCommerceNavigation } from './store-commerce-navigation';
 import { storeCommerceSettingsRoute } from './store-commerce-settings-page';
 import { StoreCouponOrderBlock } from './store-coupon-order-block';
 import { storeCurrencySettingsRoute } from './store-currency-settings-page';
@@ -59,6 +60,12 @@ defineDashboardExtension({
         },
     ],
     customProviders: [
+        {
+            id: 'store-commerce-navigation',
+            component: StoreCommerceNavigation,
+            location: 'app',
+            order: -110,
+        },
         {
             id: 'merchant-initial-password-gate',
             component: MerchantPasswordGate,

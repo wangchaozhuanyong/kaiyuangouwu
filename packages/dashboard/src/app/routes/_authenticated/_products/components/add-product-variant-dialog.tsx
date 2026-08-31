@@ -16,6 +16,7 @@ import {
 import { api } from '@/vdb/graphql/api.js';
 import { graphql } from '@/vdb/graphql/graphql.js';
 import { useChannel } from '@/vdb/hooks/use-channel.js';
+import { useCommerceMode } from '@/vdb/hooks/use-commerce-mode.js';
 import { z, zodResolver } from '@/vdb/lib/zod.js';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { useMutation, useQuery } from '@tanstack/react-query';
@@ -29,7 +30,11 @@ import { ProductOptionSelect } from './product-option-select.js';
 
 const productVariantFulfillmentFragment = graphql(`
     fragment ProductVariantFulfillment on ProductVariant {
-        customFields
+        customFields {
+            fulfillmentType
+            digitalDeliveryMode
+            digitalStockPolicy
+        }
     }
 `);
 
@@ -125,6 +130,7 @@ export function AddProductVariantDialog({
 }) {
     const [open, setOpen] = useState(false);
     const { activeChannel } = useChannel();
+    const { fixedFulfillmentType } = useCommerceMode();
     const { t } = useLingui();
     const formSchema = useMemo(() => createFormSchema(t), [t]);
     const [duplicateVariantError, setDuplicateVariantError] = useState<string | null>(null);
@@ -143,7 +149,7 @@ export function AddProductVariantDialog({
             sku: '',
             price: '0',
             stockOnHand: '0',
-            fulfillmentType: 'physical',
+            fulfillmentType: fixedFulfillmentType ?? 'physical',
             options: {},
         },
     });
@@ -214,12 +220,13 @@ export function AddProductVariantDialog({
     useEffect(() => {
         if (open && productData?.product) {
             checkForDuplicateVariant(form.getValues());
-            const productType = getProductFulfillmentType(productData.product.variants);
-            if (productType !== 'mixed' && !form.formState.isDirty) {
+            const productType =
+                fixedFulfillmentType ?? getProductFulfillmentType(productData.product.variants);
+            if (productType !== 'mixed' && (!form.formState.isDirty || fixedFulfillmentType)) {
                 form.setValue('fulfillmentType', productType);
             }
         }
-    }, [open, productData?.product, checkForDuplicateVariant, form]);
+    }, [open, productData?.product, checkForDuplicateVariant, fixedFulfillmentType, form]);
 
     const createProductVariantMutation = useMutation({
         mutationFn: api.mutate(createProductVariantsDocument),
@@ -369,43 +376,59 @@ export function AddProductVariantDialog({
                                     />
                                 )}
                             />
-                            <FormFieldWrapper
-                                control={form.control}
-                                name="fulfillmentType"
-                                label={<Trans>Product type and delivery</Trans>}
-                                description={
-                                    form.watch('fulfillmentType') === 'digital' ? (
+                            {fixedFulfillmentType ? (
+                                <div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
+                                    {fixedFulfillmentType === 'digital' ? (
                                         <Trans>
-                                            Delivered to the checkout email after payment; no shipping is
-                                            required.
+                                            This store only supports digital products delivered by email.
                                         </Trans>
                                     ) : (
-                                        <Trans>Uses stock, shipping address and logistics fulfillment.</Trans>
-                                    )
-                                }
-                                render={({ field }) => (
-                                    <Select
-                                        items={{
-                                            physical: t`Physical product`,
-                                            digital: t`Digital product`,
-                                        }}
-                                        value={field.value}
-                                        onValueChange={field.onChange}
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="physical">
-                                                <Trans>Physical product</Trans>
-                                            </SelectItem>
-                                            <SelectItem value="digital">
-                                                <Trans>Digital product</Trans>
-                                            </SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                )}
-                            />
+                                        <Trans>
+                                            This store only supports physical products delivered by logistics.
+                                        </Trans>
+                                    )}
+                                </div>
+                            ) : (
+                                <FormFieldWrapper
+                                    control={form.control}
+                                    name="fulfillmentType"
+                                    label={<Trans>Product type and delivery</Trans>}
+                                    description={
+                                        form.watch('fulfillmentType') === 'digital' ? (
+                                            <Trans>
+                                                Delivered to the checkout email after payment; no shipping is
+                                                required.
+                                            </Trans>
+                                        ) : (
+                                            <Trans>
+                                                Uses stock, shipping address and logistics fulfillment.
+                                            </Trans>
+                                        )
+                                    }
+                                    render={({ field }) => (
+                                        <Select
+                                            items={{
+                                                physical: t`Physical product`,
+                                                digital: t`Digital product`,
+                                            }}
+                                            value={field.value}
+                                            onValueChange={field.onChange}
+                                        >
+                                            <SelectTrigger>
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="physical">
+                                                    <Trans>Physical product</Trans>
+                                                </SelectItem>
+                                                <SelectItem value="digital">
+                                                    <Trans>Digital product</Trans>
+                                                </SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    )}
+                                />
+                            )}
                             <FormFieldWrapper
                                 control={form.control}
                                 name="stockOnHand"

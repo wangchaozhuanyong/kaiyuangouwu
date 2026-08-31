@@ -10,12 +10,13 @@ import { RadioGroup, RadioGroupItem } from '@/vdb/components/ui/radio-group.js';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/vdb/components/ui/table.js';
 import { api } from '@/vdb/graphql/api.js';
 import { useChannel } from '@/vdb/hooks/use-channel.js';
+import { useCommerceMode } from '@/vdb/hooks/use-commerce-mode.js';
 import { z, zodResolver } from '@/vdb/lib/zod.js';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { useMutation } from '@tanstack/react-query';
 import { useDebounce } from '@uidotdev/usehooks';
 import { Mail, Save, Search, Truck } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
 
@@ -173,6 +174,7 @@ export function GenerateVariantsPanel({
 }>) {
     const { t } = useLingui();
     const { activeChannel } = useChannel();
+    const { fixedFulfillmentType } = useCommerceMode();
     const formSchema = useMemo(() => createVariantFormSchema(t), [t]);
 
     const variants = useMemo(() => generateVariantCombinations(optionGroups), [optionGroups]);
@@ -189,13 +191,19 @@ export function GenerateVariantsPanel({
     const form = useForm<VariantFormValues>({
         resolver: zodResolver(formSchema),
         defaultValues: {
-            fulfillmentType: 'physical',
+            fulfillmentType: fixedFulfillmentType ?? 'physical',
             variants: Object.fromEntries(
                 variants.map(v => [v.id, { enabled: enableByDefault, sku: '', price: '', stock: '' }]),
             ),
         },
         mode: 'onChange',
     });
+
+    useEffect(() => {
+        if (fixedFulfillmentType) {
+            form.setValue('fulfillmentType', fixedFulfillmentType);
+        }
+    }, [fixedFulfillmentType, form]);
 
     const createVariantsMutation = useMutation({
         mutationFn: api.mutate(createProductVariantsDocument),
@@ -298,71 +306,84 @@ export function GenerateVariantsPanel({
                             <Trans>This setting will be saved on every SKU created below.</Trans>
                         </p>
                     </div>
-                    <Controller
-                        control={form.control}
-                        name="fulfillmentType"
-                        render={({ field }) => (
-                            <RadioGroup
-                                value={field.value}
-                                onValueChange={field.onChange}
-                                className="grid gap-3 md:grid-cols-2"
-                            >
-                                <Label
-                                    htmlFor="new-variant-type-physical"
-                                    className={`cursor-pointer rounded-lg border p-3 hover:bg-accent/50 ${
-                                        field.value === 'physical' ? 'border-primary bg-primary/5' : ''
-                                    }`}
+                    {fixedFulfillmentType ? (
+                        <div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
+                            {fixedFulfillmentType === 'digital' ? (
+                                <Trans>This store only supports digital products delivered by email.</Trans>
+                            ) : (
+                                <Trans>
+                                    This store only supports physical products delivered by logistics.
+                                </Trans>
+                            )}
+                        </div>
+                    ) : (
+                        <Controller
+                            control={form.control}
+                            name="fulfillmentType"
+                            render={({ field }) => (
+                                <RadioGroup
+                                    value={field.value}
+                                    onValueChange={field.onChange}
+                                    className="grid gap-3 md:grid-cols-2"
                                 >
-                                    <div className="flex items-start gap-3">
-                                        <RadioGroupItem
-                                            id="new-variant-type-physical"
-                                            value="physical"
-                                            aria-label={t`Physical product`}
-                                            className="mt-1"
-                                        />
-                                        <div>
-                                            <div className="flex items-center gap-2 font-medium">
-                                                <Truck className="h-4 w-4" />
-                                                <Trans>Physical product</Trans>
+                                    <Label
+                                        htmlFor="new-variant-type-physical"
+                                        className={`cursor-pointer rounded-lg border p-3 hover:bg-accent/50 ${
+                                            field.value === 'physical' ? 'border-primary bg-primary/5' : ''
+                                        }`}
+                                    >
+                                        <div className="flex items-start gap-3">
+                                            <RadioGroupItem
+                                                id="new-variant-type-physical"
+                                                value="physical"
+                                                aria-label={t`Physical product`}
+                                                className="mt-1"
+                                            />
+                                            <div>
+                                                <div className="flex items-center gap-2 font-medium">
+                                                    <Truck className="h-4 w-4" />
+                                                    <Trans>Physical product</Trans>
+                                                </div>
+                                                <p className="mt-1 text-sm font-normal text-muted-foreground">
+                                                    <Trans>
+                                                        Uses stock, shipping address and logistics
+                                                        fulfillment.
+                                                    </Trans>
+                                                </p>
                                             </div>
-                                            <p className="mt-1 text-sm font-normal text-muted-foreground">
-                                                <Trans>
-                                                    Uses stock, shipping address and logistics fulfillment.
-                                                </Trans>
-                                            </p>
                                         </div>
-                                    </div>
-                                </Label>
-                                <Label
-                                    htmlFor="new-variant-type-digital"
-                                    className={`cursor-pointer rounded-lg border p-3 hover:bg-accent/50 ${
-                                        field.value === 'digital' ? 'border-primary bg-primary/5' : ''
-                                    }`}
-                                >
-                                    <div className="flex items-start gap-3">
-                                        <RadioGroupItem
-                                            id="new-variant-type-digital"
-                                            value="digital"
-                                            aria-label={t`Digital product`}
-                                            className="mt-1"
-                                        />
-                                        <div>
-                                            <div className="flex items-center gap-2 font-medium">
-                                                <Mail className="h-4 w-4" />
-                                                <Trans>Digital product</Trans>
+                                    </Label>
+                                    <Label
+                                        htmlFor="new-variant-type-digital"
+                                        className={`cursor-pointer rounded-lg border p-3 hover:bg-accent/50 ${
+                                            field.value === 'digital' ? 'border-primary bg-primary/5' : ''
+                                        }`}
+                                    >
+                                        <div className="flex items-start gap-3">
+                                            <RadioGroupItem
+                                                id="new-variant-type-digital"
+                                                value="digital"
+                                                aria-label={t`Digital product`}
+                                                className="mt-1"
+                                            />
+                                            <div>
+                                                <div className="flex items-center gap-2 font-medium">
+                                                    <Mail className="h-4 w-4" />
+                                                    <Trans>Digital product</Trans>
+                                                </div>
+                                                <p className="mt-1 text-sm font-normal text-muted-foreground">
+                                                    <Trans>
+                                                        Delivered to the checkout email after payment; no
+                                                        shipping is required.
+                                                    </Trans>
+                                                </p>
                                             </div>
-                                            <p className="mt-1 text-sm font-normal text-muted-foreground">
-                                                <Trans>
-                                                    Delivered to the checkout email after payment; no shipping
-                                                    is required.
-                                                </Trans>
-                                            </p>
                                         </div>
-                                    </div>
-                                </Label>
-                            </RadioGroup>
-                        )}
-                    />
+                                    </Label>
+                                </RadioGroup>
+                            )}
+                        />
+                    )}
                 </div>
                 {showVariantTools && (
                     <div className="flex items-center gap-3">

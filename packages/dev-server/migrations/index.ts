@@ -84,6 +84,8 @@ import { AlignUsdtCheckoutRateSchema1787900400000 } from './1787900400000-align-
 import { AddDashboardTwoFactorAccounts1787904000000 } from './1787904000000-add-dashboard-two-factor-accounts';
 import { AddUnifiedImagePromptRouting1787907600000 } from './1787907600000-add-unified-image-prompt-routing';
 import { AddProductPackaging1787911200000 } from './1787911200000-add-product-packaging';
+import { AddCommerceModeAndManualDelivery1787914800000 } from './1787914800000-add-commerce-mode-and-manual-delivery';
+import { AlignSqliteSchema1788182779979 } from './1788182779979-align-sqlite-schema';
 
 export const devServerMigrations = [
     CommerceFulfillment1786514145999,
@@ -172,4 +174,6 @@ export const devServerMigrations = [
     AddDashboardTwoFactorAccounts1787904000000,
     AddUnifiedImagePromptRouting1787907600000,
     AddProductPackaging1787911200000,
+    AddCommerceModeAndManualDelivery1787914800000,
+    AlignSqliteSchema1788182779979,
 ];

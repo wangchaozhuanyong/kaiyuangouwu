@@ -20,11 +20,11 @@ import {
 } from 'lucide-react';
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import type { CustomFieldValueMap } from '../../custom-fields/custom-field-types';
-
 import { client, sensitiveActionContext } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
+import { DynamicCustomFieldsForm } from '../../custom-fields/DynamicCustomFieldsForm';
+import type { CustomFieldValueMap } from '../../custom-fields/custom-field-types';
 import {
     addCustomFieldsToDocument,
     customFieldInputFromValues,
@@ -33,7 +33,6 @@ import {
     validateCustomFieldValues,
 } from '../../custom-fields/custom-field-utils';
 import { useCustomFieldDefinitions } from '../../custom-fields/custom-fields-context';
-import { DynamicCustomFieldsForm } from '../../custom-fields/DynamicCustomFieldsForm';
 import { NextAdminActions, NextAdminPageBlocks } from '../../extensions/extension-hosts';
 import {
     ADD_OPTION_GROUP_TO_PRODUCT,
@@ -56,9 +55,22 @@ import {
     UPDATE_PRODUCT,
     UPDATE_PRODUCT_VARIANTS,
 } from '../../graphql/catalog.graphql';
+import {
+    STORE_COMMERCE_MODE_QUERY,
+    type DigitalDeliveryMode,
+    type DigitalStockPolicy,
+    type FulfillmentType,
+    type RefundPolicy,
+    type StoreCommerceModeData,
+} from '../../graphql/commerce.graphql';
 import { useUnsavedChangesWarning } from '../../hooks/use-unsaved-changes-warning';
 import { useUrlTab } from '../../hooks/use-url-tab';
 import { getChannelDisplayName } from '../../utils/channel-display';
+import {
+    fulfillmentTypeForMode,
+    stockPolicyForDeliveryMode,
+    trackInventoryForDigitalVariant,
+} from '../../utils/commerce-mode';
 import {
     hasDirectProductAssignment,
     setDirectProductAssignment,
@@ -75,6 +87,11 @@ const PRODUCT_EDITOR_TABS = {
 const SOURCE_LANGUAGE_CODE = 'zh_Hans';
 const LOOKUP_PAGE_SIZE = 30;
 const ASSET_PAGE_SIZE = 40;
+const PRODUCT_MANAGED_CUSTOM_FIELDS = [
+    'fulfillmentType',
+    'refundPolicy',
+    'manualDeliverySlaMinutes',
+] as const;
 
 interface ProductVariantState {
     id?: string;
@@ -84,6 +101,9 @@ interface ProductVariantState {
     stockOnHand: number | '';
     stockAllocated: number;
     enabled: boolean;
+    digitalDeliveryMode: DigitalDeliveryMode;
+    digitalStockPolicy: DigitalStockPolicy;
+    autoCardAvailableStock?: number | null;
     optionIds: string[];
     isNew?: boolean;
 }
@@ -137,7 +157,13 @@ interface ProductDetailRecord {
     name: string;
     slug: string;
     description: string;
-    customFields?: Record<string, unknown> | null;
+    customFields?:
+        | ({
+              fulfillmentType?: FulfillmentType | null;
+              refundPolicy?: RefundPolicy | null;
+              manualDeliverySlaMinutes?: number | null;
+          } & Record<string, unknown>)
+        | null;
     featuredAsset?: { id: string; preview: string; name: string } | null;
     assets: Array<{ id: string; name: string; preview: string }>;
     translations: Array<{
@@ -160,6 +186,13 @@ interface ProductDetailRecord {
         price: number;
         stockOnHand: number;
         stockAllocated: number;
+        trackInventory: string;
+        autoCardAvailableStock?: number | null;
+        customFields?: {
+            fulfillmentType?: FulfillmentType | null;
+            digitalDeliveryMode?: DigitalDeliveryMode | null;
+            digitalStockPolicy?: DigitalStockPolicy | null;
+        } | null;
         options: Array<{ id: string }>;
         translations: Array<{
             languageCode: string;
@@ -173,6 +206,9 @@ interface ProductEditorSnapshotInput {
     slug: string;
     enabled: boolean;
     description: string;
+    fulfillmentType: FulfillmentType;
+    refundPolicy: RefundPolicy;
+    manualDeliverySlaMinutes: number;
     featuredAssetId: string | null;
     selectedAssetIds: string[];
     selectedFacetValueIds: string[];
@@ -199,6 +235,8 @@ const serializeProductEditor = (input: ProductEditorSnapshotInput) =>
             stockOnHand: variant.stockOnHand,
             stockAllocated: variant.stockAllocated,
             enabled: variant.enabled,
+            digitalDeliveryMode: variant.digitalDeliveryMode,
+            digitalStockPolicy: variant.digitalStockPolicy,
             optionIds: [...variant.optionIds].sort(),
             isNew: Boolean(variant.isNew),
         })),
@@ -214,6 +252,35 @@ const createSlugFromName = (value: string) => {
     return normalized || `product-${Date.now().toString(36)}`;
 };
 
+const variantFulfillmentInput = (variant: ProductVariantState, fulfillmentType: FulfillmentType) => {
+    if (fulfillmentType === 'physical') {
+        return {
+            stockOnHand: variant.stockOnHand === '' ? 0 : Number(variant.stockOnHand),
+            trackInventory: 'INHERIT' as const,
+            customFields: {
+                digitalStockPolicy: 'limited' as const,
+            },
+        };
+    }
+    const digitalStockPolicy = stockPolicyForDeliveryMode(
+        variant.digitalDeliveryMode,
+        variant.digitalStockPolicy,
+    );
+    return {
+        stockOnHand:
+            variant.digitalDeliveryMode === 'auto_card' || digitalStockPolicy === 'unlimited'
+                ? 0
+                : variant.stockOnHand === ''
+                  ? 0
+                  : Number(variant.stockOnHand),
+        trackInventory: trackInventoryForDigitalVariant(variant.digitalDeliveryMode, digitalStockPolicy),
+        customFields: {
+            digitalDeliveryMode: variant.digitalDeliveryMode,
+            digitalStockPolicy,
+        },
+    };
+};
+
 export function ProductEditor() {
     const requestConfirmation = useConfirmDialog();
     const params = useParams<{ id: string }>();
@@ -221,6 +288,16 @@ export function ProductEditor() {
     const productId = params.id;
     const isCreateMode = !productId || productId === 'new';
     const productCustomFieldDefinitions = useCustomFieldDefinitions('Product');
+    const productExtensionFields = useMemo(
+        () =>
+            productCustomFieldDefinitions.filter(
+                field =>
+                    !PRODUCT_MANAGED_CUSTOM_FIELDS.includes(
+                        field.name as (typeof PRODUCT_MANAGED_CUSTOM_FIELDS)[number],
+                    ),
+            ),
+        [productCustomFieldDefinitions],
+    );
     const productDetailDocument = useMemo(
         () =>
             addCustomFieldsToDocument(GET_PRODUCT_DETAIL, 'Product', productCustomFieldDefinitions, [
@@ -230,12 +307,16 @@ export function ProductEditor() {
     );
 
     const [activeTab, setActiveTab] = useUrlTab<ProductEditorTab>(PRODUCT_EDITOR_TABS, 'basic');
+    const contentWidthClass = activeTab === 'VARIANTS' ? 'max-w-none' : 'max-w-5xl';
 
     // SPU 基础字段 (严格无演示默认数据)
     const [productName, setProductName] = useState('');
     const [slug, setSlug] = useState('');
     const [enabled, setEnabled] = useState(true);
     const [description, setDescription] = useState('');
+    const [fulfillmentType, setFulfillmentType] = useState<FulfillmentType>('digital');
+    const [refundPolicy, setRefundPolicy] = useState<RefundPolicy>('MERCHANT_REVIEW');
+    const [manualDeliverySlaMinutes, setManualDeliverySlaMinutes] = useState(1440);
     const [dynamicCustomFieldValues, setDynamicCustomFieldValues] = useState<CustomFieldValueMap>({});
 
     // 素材与图片关联 (使用真实 Asset ID)
@@ -296,6 +377,12 @@ export function ProductEditor() {
     }>(GET_ACTIVE_CHANNEL, { fetchPolicy: 'cache-first' });
     const activeCurrencyCode =
         channelData?.activeChannel.currencyCode ?? channelData?.activeChannel.defaultCurrencyCode ?? 'CNY';
+    const commerceModeQuery = useQuery<StoreCommerceModeData>(STORE_COMMERCE_MODE_QUERY, {
+        fetchPolicy: 'cache-first',
+    });
+    const commerceMode = commerceModeQuery.data?.myStoreCommerceMode.mode ?? 'HYBRID';
+    const fixedFulfillmentType = fulfillmentTypeForMode(commerceMode);
+    const effectiveFulfillmentType = fixedFulfillmentType ?? fulfillmentType;
 
     // 1. 查询已有商品详情 (若为编辑模式)
     const {
@@ -447,8 +534,21 @@ export function ProductEditor() {
             setSlug(sourceTranslation?.slug || p.slug || '');
             setEnabled(p.enabled ?? true);
             setDescription(sourceTranslation?.description || p.description || '');
+            setFulfillmentType(
+                fixedFulfillmentType ??
+                    (p.customFields?.fulfillmentType === 'physical' ? 'physical' : 'digital'),
+            );
+            setRefundPolicy(
+                p.customFields?.refundPolicy === 'SEVEN_DAY_NO_REASON' ||
+                    p.customFields?.refundPolicy === 'NON_REFUNDABLE'
+                    ? p.customFields.refundPolicy
+                    : 'MERCHANT_REVIEW',
+            );
+            setManualDeliverySlaMinutes(
+                Math.min(525600, Math.max(5, p.customFields?.manualDeliverySlaMinutes ?? 1440)),
+            );
             setDynamicCustomFieldValues(
-                customFieldValuesFromEntity(productCustomFieldDefinitions, p.customFields, p.translations),
+                customFieldValuesFromEntity(productExtensionFields, p.customFields, p.translations),
             );
 
             if (p.featuredAsset) {
@@ -492,6 +592,17 @@ export function ProductEditor() {
                             stockOnHand: variant.stockOnHand,
                             stockAllocated: variant.stockAllocated,
                             enabled: variant.enabled,
+                            digitalDeliveryMode:
+                                variant.customFields?.digitalDeliveryMode === 'auto_card' ||
+                                variant.customFields?.digitalDeliveryMode === 'file_download'
+                                    ? variant.customFields.digitalDeliveryMode
+                                    : 'manual_service',
+                            digitalStockPolicy:
+                                variant.customFields?.digitalStockPolicy === 'pool_derived' ||
+                                variant.customFields?.digitalStockPolicy === 'unlimited'
+                                    ? variant.customFields.digitalStockPolicy
+                                    : 'limited',
+                            autoCardAvailableStock: variant.autoCardAvailableStock,
                             optionIds: variant.options.map(option => option.id),
                             isNew: false,
                         };
@@ -506,6 +617,9 @@ export function ProductEditor() {
             setSlug('');
             setEnabled(true);
             setDescription('');
+            setFulfillmentType(fixedFulfillmentType ?? 'digital');
+            setRefundPolicy('MERCHANT_REVIEW');
+            setManualDeliverySlaMinutes(1440);
             setDynamicCustomFieldValues({});
             setFeaturedAssetId(null);
             setFeaturedAssetPreview(null);
@@ -517,7 +631,11 @@ export function ProductEditor() {
             setKnownOptionGroups({});
             setVariants([]);
         }
-    }, [productData, isCreateMode, productCustomFieldDefinitions]);
+    }, [fixedFulfillmentType, productData, isCreateMode, productExtensionFields]);
+
+    useEffect(() => {
+        if (fixedFulfillmentType) setFulfillmentType(fixedFulfillmentType);
+    }, [fixedFulfillmentType]);
 
     useEffect(() => {
         if (productData?.product) {
@@ -535,6 +653,9 @@ export function ProductEditor() {
                 slug,
                 enabled,
                 description,
+                fulfillmentType: effectiveFulfillmentType,
+                refundPolicy,
+                manualDeliverySlaMinutes,
                 featuredAssetId,
                 selectedAssetIds,
                 selectedFacetValueIds,
@@ -548,8 +669,11 @@ export function ProductEditor() {
             description,
             dynamicCustomFieldValues,
             enabled,
+            effectiveFulfillmentType,
             featuredAssetId,
+            manualDeliverySlaMinutes,
             productName,
+            refundPolicy,
             selectedAssetIds,
             selectedChannelIds,
             selectedCollectionIds,
@@ -567,6 +691,9 @@ export function ProductEditor() {
                 slug: '',
                 enabled: true,
                 description: '',
+                fulfillmentType: fixedFulfillmentType ?? 'digital',
+                refundPolicy: 'MERCHANT_REVIEW',
+                manualDeliverySlaMinutes: 1440,
                 featuredAssetId: null,
                 selectedAssetIds: [],
                 selectedFacetValueIds: [],
@@ -587,6 +714,18 @@ export function ProductEditor() {
             slug: sourceTranslation?.slug || product.slug || '',
             enabled: product.enabled,
             description: sourceTranslation?.description || product.description || '',
+            fulfillmentType:
+                fixedFulfillmentType ??
+                (product.customFields?.fulfillmentType === 'physical' ? 'physical' : 'digital'),
+            refundPolicy:
+                product.customFields?.refundPolicy === 'SEVEN_DAY_NO_REASON' ||
+                product.customFields?.refundPolicy === 'NON_REFUNDABLE'
+                    ? product.customFields.refundPolicy
+                    : 'MERCHANT_REVIEW',
+            manualDeliverySlaMinutes: Math.min(
+                525600,
+                Math.max(5, product.customFields?.manualDeliverySlaMinutes ?? 1440),
+            ),
             featuredAssetId: product.featuredAsset?.id ?? null,
             selectedAssetIds: product.assets.map(asset => asset.id),
             selectedFacetValueIds: product.facetValues.map(value => value.id),
@@ -610,16 +749,33 @@ export function ProductEditor() {
                 stockOnHand: variant.stockOnHand,
                 stockAllocated: variant.stockAllocated,
                 enabled: variant.enabled,
+                digitalDeliveryMode:
+                    variant.customFields?.digitalDeliveryMode === 'auto_card' ||
+                    variant.customFields?.digitalDeliveryMode === 'file_download'
+                        ? variant.customFields.digitalDeliveryMode
+                        : 'manual_service',
+                digitalStockPolicy:
+                    variant.customFields?.digitalStockPolicy === 'pool_derived' ||
+                    variant.customFields?.digitalStockPolicy === 'unlimited'
+                        ? variant.customFields.digitalStockPolicy
+                        : 'limited',
+                autoCardAvailableStock: variant.autoCardAvailableStock,
                 optionIds: variant.options.map(option => option.id),
                 isNew: false,
             })),
             dynamicCustomFields: customFieldValuesFromEntity(
-                productCustomFieldDefinitions,
+                productExtensionFields,
                 product.customFields,
                 product.translations,
             ),
         });
-    }, [catalogChannelsData?.activeChannel.id, isCreateMode, productCustomFieldDefinitions, productData]);
+    }, [
+        catalogChannelsData?.activeChannel.id,
+        fixedFulfillmentType,
+        isCreateMode,
+        productData,
+        productExtensionFields,
+    ]);
     const hasUnsavedChanges =
         !productLoading &&
         baselineEditorSnapshot !== null &&
@@ -629,7 +785,7 @@ export function ProductEditor() {
         '当前商品还有未保存的修改，离开后这些内容将丢失。确定离开吗？',
     );
     const leaveToProductList = () => {
-        if (confirmLeave()) void navigate('/catalog/list');
+        if (confirmLeave()) navigate('/catalog/list');
     };
 
     // Mutations
@@ -668,7 +824,19 @@ export function ProductEditor() {
         value: ProductVariantState[K],
     ) => {
         const updated = [...variants];
-        updated[index] = { ...updated[index], [field]: value };
+        const current = updated[index];
+        updated[index] = {
+            ...current,
+            [field]: value,
+            ...(field === 'digitalDeliveryMode'
+                ? {
+                      digitalStockPolicy: stockPolicyForDeliveryMode(
+                          value as DigitalDeliveryMode,
+                          current.digitalStockPolicy,
+                      ),
+                  }
+                : {}),
+        };
         setVariants(updated);
 
         // 清除对应字段的表单错误
@@ -689,6 +857,8 @@ export function ProductEditor() {
                 stockOnHand: '',
                 stockAllocated: 0,
                 enabled: true,
+                digitalDeliveryMode: 'manual_service',
+                digitalStockPolicy: 'limited',
                 optionIds: [],
                 isNew: true,
             },
@@ -745,6 +915,8 @@ export function ProductEditor() {
                 stockOnHand: '',
                 stockAllocated: 0,
                 enabled: true,
+                digitalDeliveryMode: 'manual_service',
+                digitalStockPolicy: 'limited',
                 optionIds: combination.map(option => option.id),
                 isNew: true,
             }));
@@ -889,6 +1061,16 @@ export function ProductEditor() {
         if (!description.trim()) {
             errors.description = '请输入中文商品详情';
         }
+        if (
+            effectiveFulfillmentType === 'digital' &&
+            (!Number.isInteger(manualDeliverySlaMinutes) ||
+                manualDeliverySlaMinutes < 5 ||
+                manualDeliverySlaMinutes > 525600)
+        ) {
+            setActiveTab('BASIC');
+            showError('人工交付预计时长必须是 5 到 525600 分钟之间的整数');
+            return false;
+        }
 
         const variantErrors: Record<number, { sku?: string; price?: string; stock?: string }> = {};
         const skuCounts = variants.reduce<Record<string, number>>((counts, variant) => {
@@ -906,7 +1088,11 @@ export function ProductEditor() {
             if (v.price === '' || isNaN(parseFloat(v.price)) || parseFloat(v.price) < 0) {
                 rowErr.price = '请输入有效的非负金额';
             }
+            const requiresManualStock =
+                effectiveFulfillmentType === 'physical' ||
+                (v.digitalDeliveryMode !== 'auto_card' && v.digitalStockPolicy === 'limited');
             if (
+                requiresManualStock &&
                 v.stockOnHand !== '' &&
                 (!Number.isInteger(Number(v.stockOnHand)) || Number(v.stockOnHand) < 0)
             ) {
@@ -941,10 +1127,8 @@ export function ProductEditor() {
     // 真实提交保存 (严格两阶段处理与明确阶段归因)
     const handleSave = async () => {
         if (!validateForm()) return;
-        const customFieldErrors = validateCustomFieldValues(
-            productCustomFieldDefinitions,
-            dynamicCustomFieldValues,
-        );
+
+        const customFieldErrors = validateCustomFieldValues(productExtensionFields, dynamicCustomFieldValues);
         if (Object.keys(customFieldErrors).length > 0) {
             setActiveTab('BASIC');
             showError(Object.values(customFieldErrors)[0] ?? '商品扩展字段校验失败');
@@ -958,7 +1142,7 @@ export function ProductEditor() {
         const generatedSlug = slug.trim() || createSlugFromName(productName);
         const localizedFieldsFor = (languageCode: string) => {
             const customFields = localizedCustomFieldInputFromValues(
-                productCustomFieldDefinitions,
+                productExtensionFields,
                 dynamicCustomFieldValues,
                 languageCode,
             );
@@ -1012,10 +1196,15 @@ export function ProductEditor() {
                                 assetIds: selectedAssetIds,
                                 facetValueIds:
                                     selectedFacetValueIds.length > 0 ? selectedFacetValueIds : undefined,
-                                customFields: customFieldInputFromValues(
-                                    productCustomFieldDefinitions,
-                                    dynamicCustomFieldValues,
-                                ),
+                                customFields: {
+                                    fulfillmentType: effectiveFulfillmentType,
+                                    refundPolicy,
+                                    manualDeliverySlaMinutes,
+                                    ...customFieldInputFromValues(
+                                        productExtensionFields,
+                                        dynamicCustomFieldValues,
+                                    ),
+                                },
                                 translations: [
                                     {
                                         languageCode: SOURCE_LANGUAGE_CODE,
@@ -1040,7 +1229,7 @@ export function ProductEditor() {
                 try {
                     await syncProductOptionGroups(newProductId, []);
                 } catch (err: unknown) {
-                    void navigate(`/catalog/products/${newProductId}`, { replace: true });
+                    navigate(`/catalog/products/${newProductId}`, { replace: true });
                     showError(
                         `[阶段 2：商品已创建，但规格模板分配失败] ${toUserFacingError(err, '请稍后重试')}`,
                     );
@@ -1056,7 +1245,7 @@ export function ProductEditor() {
                             sku: v.sku.trim(),
                             enabled: v.enabled,
                             price: Math.round(parseFloat(v.price) * 100),
-                            stockOnHand: v.stockOnHand === '' ? 0 : Number(v.stockOnHand),
+                            ...variantFulfillmentInput(v, effectiveFulfillmentType),
                             optionIds: v.optionIds,
                             translations: [
                                 {
@@ -1071,7 +1260,7 @@ export function ProductEditor() {
                         });
                     } catch (err: unknown) {
                         // SPU 已创建但规格失败，如实告知用户，不能冒充成功
-                        void navigate(`/catalog/products/${newProductId}`, { replace: true });
+                        navigate(`/catalog/products/${newProductId}`, { replace: true });
                         showError(
                             `[阶段 3：商品与规格模板已保存，但 SKU 变体创建失败] ${toUserFacingError(err, '请稍后重试')}`,
                         );
@@ -1086,7 +1275,7 @@ export function ProductEditor() {
                     await syncProductChannels(newProductId, activeChannelId ? [activeChannelId] : []);
                     await syncProductCollections(newProductId);
                 } catch (err: unknown) {
-                    void navigate(`/catalog/products/${newProductId}`, { replace: true });
+                    navigate(`/catalog/products/${newProductId}`, { replace: true });
                     showError(
                         `[阶段 4：商品与 SKU 已保存，但销售店铺或分类归属保存失败] ${toUserFacingError(err, '请稍后重试')}`,
                     );
@@ -1095,7 +1284,7 @@ export function ProductEditor() {
                 }
 
                 showNotice(`商品《${productName}》及 ${variants.length} 个规格变体已全部发布入库！`);
-                void navigate(`/catalog/products/${newProductId}`, { replace: true });
+                navigate(`/catalog/products/${newProductId}`, { replace: true });
             } else {
                 const existingVariants = variants.filter(v => v.id && !v.isNew);
                 const newVariants = variants.filter(v => v.isNew);
@@ -1129,10 +1318,15 @@ export function ProductEditor() {
                                 featuredAssetId,
                                 assetIds: selectedAssetIds,
                                 facetValueIds: selectedFacetValueIds,
-                                customFields: customFieldInputFromValues(
-                                    productCustomFieldDefinitions,
-                                    dynamicCustomFieldValues,
-                                ),
+                                customFields: {
+                                    fulfillmentType: effectiveFulfillmentType,
+                                    refundPolicy,
+                                    manualDeliverySlaMinutes,
+                                    ...customFieldInputFromValues(
+                                        productExtensionFields,
+                                        dynamicCustomFieldValues,
+                                    ),
+                                },
                                 translations: updateTranslations,
                             },
                         },
@@ -1167,7 +1361,7 @@ export function ProductEditor() {
                                         sku: v.sku.trim(),
                                         ...(original?.enabled !== v.enabled ? { enabled: v.enabled } : {}),
                                         price: Math.round(parseFloat(v.price) * 100),
-                                        stockOnHand: v.stockOnHand === '' ? 0 : Number(v.stockOnHand),
+                                        ...variantFulfillmentInput(v, effectiveFulfillmentType),
                                         optionIds: v.optionIds,
                                         translations: [
                                             {
@@ -1195,7 +1389,7 @@ export function ProductEditor() {
                                     sku: v.sku.trim(),
                                     enabled: v.enabled,
                                     price: Math.round(parseFloat(v.price) * 100),
-                                    stockOnHand: v.stockOnHand === '' ? 0 : Number(v.stockOnHand),
+                                    ...variantFulfillmentInput(v, effectiveFulfillmentType),
                                     optionIds: v.optionIds,
                                     translations: [
                                         {
@@ -1287,7 +1481,7 @@ export function ProductEditor() {
                     </button>
                     <button
                         type="button"
-                        onClick={() => void handleSave()}
+                        onClick={handleSave}
                         disabled={
                             saving ||
                             productLoading ||
@@ -1297,11 +1491,7 @@ export function ProductEditor() {
                             !catalogChannelsData?.activeChannel ||
                             (!isCreateMode && !productData?.product)
                         }
-                        className={[
-                            'flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2 text-xs',
-                            'font-bold text-white shadow-sm transition-colors hover:bg-blue-700',
-                            'cursor-pointer disabled:opacity-50',
-                        ].join(' ')}
+                        className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg text-xs font-bold transition-colors shadow-sm cursor-pointer disabled:opacity-50"
                     >
                         {saving ? (
                             <RefreshCw className="w-4 h-4 animate-spin" />
@@ -1318,36 +1508,23 @@ export function ProductEditor() {
                 <button
                     type="button"
                     onClick={() => setActiveTab('BASIC')}
-                    className={[
-                        'flex cursor-pointer items-center gap-1.5 border-b-2 py-3.5 transition-colors',
-                        activeTab === 'BASIC'
-                            ? 'border-blue-600 text-blue-600'
-                            : 'border-transparent text-slate-500 hover:text-slate-800',
-                    ].join(' ')}
+                    className={`py-3.5 border-b-2 transition-colors flex items-center gap-1.5 cursor-pointer ${activeTab === 'BASIC' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
                 >
                     <Sliders className="w-3.5 h-3.5" /> SPU 基础图文与主图
                 </button>
                 <button
                     type="button"
                     onClick={() => setActiveTab('VARIANTS')}
-                    className={[
-                        'flex cursor-pointer items-center gap-1.5 border-b-2 py-3.5 transition-colors',
-                        activeTab === 'VARIANTS'
-                            ? 'border-blue-600 text-blue-600'
-                            : 'border-transparent text-slate-500 hover:text-slate-800',
-                    ].join(' ')}
+                    className={`py-3.5 border-b-2 transition-colors flex items-center gap-1.5 cursor-pointer ${activeTab === 'VARIANTS' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
                 >
-                    <Layers className="w-3.5 h-3.5" /> SKU 变体与库存 ({variants.length})
+                    <Layers className="w-3.5 h-3.5" />
+                    {effectiveFulfillmentType === 'digital' ? 'SKU 变体与交付' : 'SKU 变体与库存'} (
+                    {variants.length})
                 </button>
                 <button
                     type="button"
                     onClick={() => setActiveTab('FACETS_COLLECTIONS')}
-                    className={[
-                        'flex cursor-pointer items-center gap-1.5 border-b-2 py-3.5 transition-colors',
-                        activeTab === 'FACETS_COLLECTIONS'
-                            ? 'border-blue-600 text-blue-600'
-                            : 'border-transparent text-slate-500 hover:text-slate-800',
-                    ].join(' ')}
+                    className={`py-3.5 border-b-2 transition-colors flex items-center gap-1.5 cursor-pointer ${activeTab === 'FACETS_COLLECTIONS' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
                 >
                     <Tag className="w-3.5 h-3.5" /> 标签属性与分类 (
                     {selectedFacetValueIds.length + selectedCollectionIds.length})
@@ -1355,7 +1532,9 @@ export function ProductEditor() {
             </div>
 
             {/* Main Form Body */}
-            <div className="mx-auto w-full max-w-5xl flex-1 space-y-6 overflow-y-auto p-5 sm:p-8">
+            <div
+                className={`mx-auto w-full ${contentWidthClass} flex-1 space-y-6 overflow-y-auto p-5 sm:p-8`}
+            >
                 {/* 成功通知 */}
                 {notification && (
                     <div
@@ -1444,7 +1623,7 @@ export function ProductEditor() {
                         </div>
                         <button
                             type="button"
-                            onClick={() => void refetchProduct()}
+                            onClick={() => refetchProduct()}
                             className="px-3 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded font-bold cursor-pointer"
                         >
                             重试查询
@@ -1497,12 +1676,7 @@ export function ProductEditor() {
                                         className="w-4 h-4 text-blue-600 rounded"
                                     />
                                     <span
-                                        className={[
-                                            'rounded px-2 py-0.5 text-[11px] font-bold',
-                                            enabled
-                                                ? 'bg-emerald-100 text-emerald-800'
-                                                : 'bg-slate-100 text-slate-600',
-                                        ].join(' ')}
+                                        className={`text-[11px] font-bold px-2 py-0.5 rounded ${enabled ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}
                                     >
                                         {enabled ? '已上架' : '放入仓库'}
                                     </span>
@@ -1529,13 +1703,7 @@ export function ProductEditor() {
                                         placeholder="输入商品名称，如：无线主动降噪头戴耳机 Pro Max"
                                         aria-invalid={Boolean(formErrors.name)}
                                         aria-describedby={formErrors.name ? 'product-name-error' : undefined}
-                                        className={[
-                                            'w-full rounded-lg border bg-white p-2.5 text-xs font-bold',
-                                            'focus:outline-none focus:ring-1',
-                                            formErrors.name
-                                                ? 'border-rose-500 focus:ring-rose-500'
-                                                : 'border-slate-300 focus:ring-blue-500',
-                                        ].join(' ')}
+                                        className={`w-full text-xs font-bold border rounded-lg p-2.5 bg-white focus:outline-none focus:ring-1 ${formErrors.name ? 'border-rose-500 focus:ring-rose-500' : 'border-slate-300 focus:ring-blue-500'}`}
                                     />
                                     {formErrors.name && (
                                         <p id="product-name-error" className="text-rose-500 text-[11px] mt-1">
@@ -1557,10 +1725,7 @@ export function ProductEditor() {
                                         value={slug}
                                         onChange={e => setSlug(e.target.value)}
                                         placeholder="例如：wireless-noise-cancelling-headphones (留空将根据商品标题自动生成)"
-                                        className={[
-                                            'w-full rounded-lg border border-slate-300 bg-white p-2.5',
-                                            'font-mono text-xs focus:outline-none focus:ring-1 focus:ring-blue-500',
-                                        ].join(' ')}
+                                        className="w-full text-xs font-mono border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
                                     />
                                 </div>
 
@@ -1588,13 +1753,7 @@ export function ProductEditor() {
                                         aria-describedby={
                                             formErrors.description ? 'product-description-error' : undefined
                                         }
-                                        className={[
-                                            'w-full rounded-xl border bg-white p-3 text-xs leading-relaxed',
-                                            'focus:outline-none focus:ring-1',
-                                            formErrors.description
-                                                ? 'border-rose-500 focus:ring-rose-500'
-                                                : 'border-slate-300 focus:ring-blue-500',
-                                        ].join(' ')}
+                                        className={`w-full rounded-xl border bg-white p-3 text-xs leading-relaxed focus:outline-none focus:ring-1 ${formErrors.description ? 'border-rose-500 focus:ring-rose-500' : 'border-slate-300 focus:ring-blue-500'}`}
                                     />
                                     {formErrors.description && (
                                         <p
@@ -1609,6 +1768,109 @@ export function ProductEditor() {
                                     </p>
                                 </div>
                             </div>
+                        </div>
+
+                        {/* 商品级履约类型与售后政策 */}
+                        <div className="space-y-5 rounded-xl border border-slate-200 bg-white p-6 shadow-2xs">
+                            <div className="border-b border-slate-100 pb-3">
+                                <h3 className="text-sm font-bold text-slate-900">商品类型与交付政策</h3>
+                                <p className="mt-1 text-xs leading-5 text-slate-400">
+                                    商品类型固定在 SPU 级，同一商品下所有 SKU 使用相同类型；数字交付方式仍按
+                                    SKU 配置。
+                                </p>
+                            </div>
+
+                            <div className="grid gap-4 md:grid-cols-2">
+                                <div>
+                                    <div className="mb-2 text-xs font-bold text-slate-700">商品类型</div>
+                                    {fixedFulfillmentType ? (
+                                        <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs leading-5 text-blue-800">
+                                            当前店铺为
+                                            <strong>
+                                                {commerceMode === 'DIGITAL_ONLY'
+                                                    ? '仅虚拟商品'
+                                                    : '仅实物商品'}
+                                            </strong>
+                                            模式，本商品固定为
+                                            <strong>
+                                                {fixedFulfillmentType === 'digital' ? '虚拟商品' : '实物商品'}
+                                            </strong>
+                                            。
+                                        </div>
+                                    ) : (
+                                        <div className="grid grid-cols-2 gap-2">
+                                            {(
+                                                [
+                                                    ['digital', '虚拟商品', '通过邮箱完成数字交付'],
+                                                    ['physical', '实物商品', '需要地址、库存与物流配送'],
+                                                ] as const
+                                            ).map(([value, label, detail]) => (
+                                                <button
+                                                    key={value}
+                                                    type="button"
+                                                    onClick={() => setFulfillmentType(value)}
+                                                    className={`rounded-lg border p-3 text-left transition-colors ${fulfillmentType === value ? 'border-blue-500 bg-blue-50 text-blue-800' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}
+                                                >
+                                                    <span className="block text-xs font-bold">{label}</span>
+                                                    <span className="mt-1 block text-[10px] leading-4">
+                                                        {detail}
+                                                    </span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div>
+                                    <label
+                                        htmlFor="product-refund-policy"
+                                        className="mb-2 block text-xs font-bold text-slate-700"
+                                    >
+                                        售后退款政策
+                                    </label>
+                                    <select
+                                        id="product-refund-policy"
+                                        value={refundPolicy}
+                                        onChange={event =>
+                                            setRefundPolicy(event.target.value as RefundPolicy)
+                                        }
+                                        className="w-full rounded-lg border border-slate-300 bg-white p-2.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                    >
+                                        <option value="MERCHANT_REVIEW">允许申请退款，由商家审核</option>
+                                        <option value="SEVEN_DAY_NO_REASON">7 天无理由</option>
+                                        <option value="NON_REFUNDABLE">不支持退款</option>
+                                    </select>
+                                    <p className="mt-2 text-[10px] leading-4 text-slate-400">
+                                        虚拟商品交付完成后的退款进入人工客服处理，不自动回收已发送的成品或卡密。
+                                    </p>
+                                </div>
+                            </div>
+
+                            {effectiveFulfillmentType === 'digital' && (
+                                <div className="max-w-sm">
+                                    <label
+                                        htmlFor="manual-delivery-sla"
+                                        className="mb-1 block text-xs font-bold text-slate-700"
+                                    >
+                                        人工交付预计时长（分钟）
+                                    </label>
+                                    <input
+                                        id="manual-delivery-sla"
+                                        type="number"
+                                        min="5"
+                                        max="525600"
+                                        step="5"
+                                        value={manualDeliverySlaMinutes}
+                                        onChange={event =>
+                                            setManualDeliverySlaMinutes(Number(event.target.value) || 0)
+                                        }
+                                        className="w-full rounded-lg border border-slate-300 bg-white p-2.5 text-xs font-mono text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                    />
+                                    <p className="mt-1 text-[10px] leading-4 text-slate-400">
+                                        仅人工交付 SKU 使用；商品页、结账页和订单详情会展示该预计时效。
+                                    </p>
+                                </div>
+                            )}
                         </div>
 
                         {/* 真实素材主图 */}
@@ -1648,10 +1910,7 @@ export function ProductEditor() {
                                                 setFeaturedAssetId(null);
                                                 setFeaturedAssetPreview(null);
                                             }}
-                                            className={[
-                                                'absolute right-1 top-1 rounded-full bg-black/60 p-1 text-white',
-                                                'opacity-0 transition-colors hover:bg-rose-600 group-hover:opacity-100',
-                                            ].join(' ')}
+                                            className="absolute top-1 right-1 p-1 bg-black/60 hover:bg-rose-600 text-white rounded-full transition-colors opacity-0 group-hover:opacity-100"
                                             title="移除主图"
                                             aria-label="移除商品主图"
                                         >
@@ -1674,11 +1933,7 @@ export function ProductEditor() {
                                         setAssetPickerMode('FEATURED');
                                         setIsAssetPickerOpen(true);
                                     }}
-                                    className={[
-                                        'flex w-full cursor-pointer flex-col items-center justify-center gap-2',
-                                        'rounded-xl border-2 border-dashed border-slate-200 p-6 text-center',
-                                        'transition-all hover:border-blue-400 hover:bg-blue-50/30',
-                                    ].join(' ')}
+                                    className="flex w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-200 p-6 text-center transition-all hover:border-blue-400 hover:bg-blue-50/30"
                                 >
                                     <ImageIcon className="w-8 h-8 text-slate-300" />
                                     <div className="text-xs font-bold text-slate-600">
@@ -1746,7 +2001,7 @@ export function ProductEditor() {
                             </div>
                         </div>
                         <DynamicCustomFieldsForm
-                            fields={productCustomFieldDefinitions}
+                            fields={productExtensionFields}
                             values={dynamicCustomFieldValues}
                             onChange={setDynamicCustomFieldValues}
                             disabled={saving}
@@ -1799,12 +2054,7 @@ export function ProductEditor() {
                                     return (
                                         <label
                                             key={channel.id}
-                                            className={[
-                                                'flex items-center gap-2 rounded-lg border px-3 py-2 text-xs',
-                                                isSelected
-                                                    ? 'border-blue-300 bg-white font-bold text-blue-800'
-                                                    : 'border-slate-200 bg-white/70 text-slate-600',
-                                            ].join(' ')}
+                                            className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs ${isSelected ? 'border-blue-300 bg-white font-bold text-blue-800' : 'border-slate-200 bg-white/70 text-slate-600'}`}
                                         >
                                             <input
                                                 type="checkbox"
@@ -1842,20 +2092,20 @@ export function ProductEditor() {
                             <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
                                 <div>
                                     <h3 className="text-sm font-bold text-slate-900">
-                                        SKU 规格变体与在手库存
+                                        {effectiveFulfillmentType === 'digital'
+                                            ? 'SKU 规格变体与数字交付'
+                                            : 'SKU 规格变体与在手库存'}
                                     </h3>
                                     <p className="text-xs text-slate-400 mt-0.5">
-                                        为商品配置不同规格型号、条形码 SKU、售价与初始库存
+                                        {effectiveFulfillmentType === 'digital'
+                                            ? '为每个 SKU 配置售价、交付方式和对应的虚拟库存规则'
+                                            : '为商品配置不同规格型号、条形码 SKU、售价与初始库存'}
                                     </p>
                                 </div>
                                 <button
                                     type="button"
                                     onClick={handleAddVariant}
-                                    className={[
-                                        'flex cursor-pointer items-center gap-1.5 rounded-lg bg-blue-600',
-                                        'px-3.5 py-1.5 text-xs font-bold text-white shadow-2xs',
-                                        'transition-colors hover:bg-blue-700',
-                                    ].join(' ')}
+                                    className="flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer shadow-2xs"
                                 >
                                     <Plus className="w-3.5 h-3.5" /> 添加 SKU 变体
                                 </button>
@@ -1873,10 +2123,7 @@ export function ProductEditor() {
                                         type="button"
                                         onClick={handleGenerateVariantMatrix}
                                         disabled={selectedOptionGroupIds.length === 0}
-                                        className={[
-                                            'rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700',
-                                            'hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50',
-                                        ].join(' ')}
+                                        className="rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
                                     >
                                         生成 SKU 矩阵
                                     </button>
@@ -1921,12 +2168,7 @@ export function ProductEditor() {
                                                                 : [...ids, group.id],
                                                         );
                                                     }}
-                                                    className={[
-                                                        'rounded-lg border px-3 py-2 text-left transition-colors',
-                                                        isSelected
-                                                            ? 'border-blue-500 bg-blue-50 text-blue-800'
-                                                            : 'border-slate-200 bg-white text-slate-600 hover:border-blue-300',
-                                                    ].join(' ')}
+                                                    className={`rounded-lg border px-3 py-2 text-left transition-colors ${isSelected ? 'border-blue-500 bg-blue-50 text-blue-800' : 'border-slate-200 bg-white text-slate-600 hover:border-blue-300'}`}
                                                 >
                                                     <div className="flex items-center gap-1.5 text-xs font-bold">
                                                         {isSelected && <Check className="h-3 w-3" />}
@@ -1976,8 +2218,18 @@ export function ProductEditor() {
                                                     售价 ({activeCurrencyCode}){' '}
                                                     <span className="text-rose-500">*</span>
                                                 </th>
-                                                <th className="p-3.5">在手库存 (OnHand)</th>
-                                                <th className="p-3.5">锁定库存</th>
+                                                {effectiveFulfillmentType === 'digital' ? (
+                                                    <>
+                                                        <th className="p-3.5 min-w-[150px]">数字交付方式</th>
+                                                        <th className="p-3.5 min-w-[130px]">库存规则</th>
+                                                        <th className="p-3.5">可售库存</th>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <th className="p-3.5">在手库存 (OnHand)</th>
+                                                        <th className="p-3.5">锁定库存</th>
+                                                    </>
+                                                )}
                                                 <th className="p-3.5 text-center">启用状态</th>
                                                 <th className="p-3.5 text-right w-16">操作</th>
                                             </tr>
@@ -2023,12 +2275,7 @@ export function ProductEditor() {
                                                                     )
                                                                 }
                                                                 placeholder="必须唯一编码"
-                                                                className={[
-                                                                    'w-full rounded border bg-white px-2 py-1 font-mono',
-                                                                    rowError?.sku
-                                                                        ? 'border-rose-500 text-rose-600'
-                                                                        : 'border-slate-300 text-slate-700',
-                                                                ].join(' ')}
+                                                                className={`w-full font-mono border rounded px-2 py-1 bg-white ${rowError?.sku ? 'border-rose-500 text-rose-600' : 'border-slate-300 text-slate-700'}`}
                                                             />
                                                             {rowError?.sku && (
                                                                 <div className="text-[10px] text-rose-500 mt-0.5">
@@ -2057,12 +2304,7 @@ export function ProductEditor() {
                                                                         )
                                                                     }
                                                                     placeholder="0.00"
-                                                                    className={[
-                                                                        'w-24 rounded border bg-white px-2 py-1 font-mono font-bold',
-                                                                        rowError?.price
-                                                                            ? 'border-rose-500 text-rose-600'
-                                                                            : 'border-slate-300 text-slate-900',
-                                                                    ].join(' ')}
+                                                                    className={`w-24 font-mono font-bold border rounded px-2 py-1 bg-white ${rowError?.price ? 'border-rose-500 text-rose-600' : 'border-slate-300 text-slate-900'}`}
                                                                 />
                                                             </div>
                                                             {rowError?.price && (
@@ -2072,32 +2314,137 @@ export function ProductEditor() {
                                                             )}
                                                         </td>
 
-                                                        {/* Stock on Hand */}
-                                                        <td className="p-3.5">
-                                                            <input
-                                                                type="number"
-                                                                aria-label={`第 ${index + 1} 行在手库存`}
-                                                                min="0"
-                                                                value={variant.stockOnHand}
-                                                                onChange={e =>
-                                                                    handleVariantFieldChange(
-                                                                        index,
-                                                                        'stockOnHand',
-                                                                        e.target.value === ''
-                                                                            ? ''
-                                                                            : parseInt(e.target.value, 10) ||
-                                                                                  0,
-                                                                    )
-                                                                }
-                                                                placeholder="0"
-                                                                className="w-20 font-mono font-bold text-slate-800 border border-slate-300 rounded px-2 py-1 bg-white"
-                                                            />
-                                                        </td>
+                                                        {effectiveFulfillmentType === 'digital' ? (
+                                                            <>
+                                                                <td className="p-3.5">
+                                                                    <select
+                                                                        aria-label={`第 ${index + 1} 行数字交付方式`}
+                                                                        value={variant.digitalDeliveryMode}
+                                                                        onChange={event =>
+                                                                            handleVariantFieldChange(
+                                                                                index,
+                                                                                'digitalDeliveryMode',
+                                                                                event.target
+                                                                                    .value as DigitalDeliveryMode,
+                                                                            )
+                                                                        }
+                                                                        className="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700"
+                                                                    >
+                                                                        <option value="manual_service">
+                                                                            人工交付
+                                                                        </option>
+                                                                        <option value="file_download">
+                                                                            文件下载
+                                                                        </option>
+                                                                        <option value="auto_card">
+                                                                            号池自动发卡
+                                                                        </option>
+                                                                    </select>
+                                                                </td>
+                                                                <td className="p-3.5">
+                                                                    {variant.digitalDeliveryMode ===
+                                                                    'file_download' ? (
+                                                                        <select
+                                                                            aria-label={`第 ${index + 1} 行数字库存规则`}
+                                                                            value={variant.digitalStockPolicy}
+                                                                            onChange={event =>
+                                                                                handleVariantFieldChange(
+                                                                                    index,
+                                                                                    'digitalStockPolicy',
+                                                                                    event.target
+                                                                                        .value as DigitalStockPolicy,
+                                                                                )
+                                                                            }
+                                                                            className="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700"
+                                                                        >
+                                                                            <option value="limited">
+                                                                                限制库存
+                                                                            </option>
+                                                                            <option value="unlimited">
+                                                                                无限库存
+                                                                            </option>
+                                                                        </select>
+                                                                    ) : (
+                                                                        <span className="rounded bg-slate-100 px-2 py-1 text-[11px] font-bold text-slate-600">
+                                                                            {variant.digitalDeliveryMode ===
+                                                                            'auto_card'
+                                                                                ? '号池实时库存'
+                                                                                : '手动限制库存'}
+                                                                        </span>
+                                                                    )}
+                                                                </td>
+                                                                <td className="p-3.5">
+                                                                    {variant.digitalDeliveryMode ===
+                                                                    'auto_card' ? (
+                                                                        <div className="space-y-1">
+                                                                            <div className="font-mono font-bold text-violet-700">
+                                                                                {variant.autoCardAvailableStock ??
+                                                                                    0}
+                                                                            </div>
+                                                                            <span className="text-[10px] text-slate-400">
+                                                                                只读，来自号池
+                                                                            </span>
+                                                                        </div>
+                                                                    ) : variant.digitalStockPolicy ===
+                                                                      'unlimited' ? (
+                                                                        <span className="font-bold text-emerald-700">
+                                                                            无限
+                                                                        </span>
+                                                                    ) : (
+                                                                        <input
+                                                                            type="number"
+                                                                            aria-label={`第 ${index + 1} 行可售库存`}
+                                                                            min="0"
+                                                                            value={variant.stockOnHand}
+                                                                            onChange={event =>
+                                                                                handleVariantFieldChange(
+                                                                                    index,
+                                                                                    'stockOnHand',
+                                                                                    event.target.value === ''
+                                                                                        ? ''
+                                                                                        : parseInt(
+                                                                                              event.target
+                                                                                                  .value,
+                                                                                          ) || 0,
+                                                                                )
+                                                                            }
+                                                                            placeholder="0"
+                                                                            className="w-20 rounded border border-slate-300 bg-white px-2 py-1 font-mono font-bold text-slate-800"
+                                                                        />
+                                                                    )}
+                                                                </td>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                {/* Stock on Hand */}
+                                                                <td className="p-3.5">
+                                                                    <input
+                                                                        type="number"
+                                                                        aria-label={`第 ${index + 1} 行在手库存`}
+                                                                        min="0"
+                                                                        value={variant.stockOnHand}
+                                                                        onChange={event =>
+                                                                            handleVariantFieldChange(
+                                                                                index,
+                                                                                'stockOnHand',
+                                                                                event.target.value === ''
+                                                                                    ? ''
+                                                                                    : parseInt(
+                                                                                          event.target.value,
+                                                                                      ) || 0,
+                                                                            )
+                                                                        }
+                                                                        placeholder="0"
+                                                                        className="w-20 rounded border border-slate-300 bg-white px-2 py-1 font-mono font-bold text-slate-800"
+                                                                    />
+                                                                </td>
 
-                                                        {/* Allocated Stock */}
-                                                        <td className="p-3.5 font-mono text-slate-400">
-                                                            {variant.stockAllocated || 0}
-                                                        </td>
+                                                                {/* Allocated Stock */}
+                                                                <td className="p-3.5 font-mono text-slate-400">
+                                                                    {variant.stockAllocated || 0}
+                                                                </td>
+                                                            </>
+                                                        )}
 
                                                         {/* Enabled */}
                                                         <td className="p-3.5 text-center">
@@ -2120,13 +2467,8 @@ export function ProductEditor() {
                                                         <td className="p-3.5 text-right">
                                                             <button
                                                                 type="button"
-                                                                onClick={() =>
-                                                                    void handleDeleteVariant(index)
-                                                                }
-                                                                className={[
-                                                                    'cursor-pointer rounded p-1 text-slate-400 transition-colors',
-                                                                    'hover:bg-rose-50 hover:text-rose-600',
-                                                                ].join(' ')}
+                                                                onClick={() => handleDeleteVariant(index)}
+                                                                className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors cursor-pointer"
                                                                 title="删除该规格"
                                                             >
                                                                 <Trash2 className="w-3.5 h-3.5" />
@@ -2208,13 +2550,7 @@ export function ProductEditor() {
                                                             key={fv.id}
                                                             type="button"
                                                             onClick={() => toggleFacetValue(fv.id)}
-                                                            className={[
-                                                                'flex cursor-pointer items-center gap-1 rounded-lg border',
-                                                                'px-3 py-1 text-xs font-medium transition-all',
-                                                                isSelected
-                                                                    ? 'border-blue-600 bg-blue-600 text-white shadow-2xs'
-                                                                    : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100',
-                                                            ].join(' ')}
+                                                            className={`px-3 py-1 text-xs font-medium rounded-lg border transition-all cursor-pointer flex items-center gap-1 ${isSelected ? 'bg-blue-600 text-white border-blue-600 shadow-2xs' : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'}`}
                                                         >
                                                             {isSelected && <Check className="w-3 h-3" />}
                                                             <span>{fv.name}</span>
@@ -2297,13 +2633,7 @@ export function ProductEditor() {
                                         return (
                                             <label
                                                 key={col.id}
-                                                className={[
-                                                    'flex cursor-pointer items-center gap-3 rounded-lg border p-3',
-                                                    'text-xs transition-colors',
-                                                    isSelected
-                                                        ? 'border-blue-400 bg-blue-50'
-                                                        : 'border-slate-200 bg-slate-50 hover:border-blue-300',
-                                                ].join(' ')}
+                                                className={`flex cursor-pointer items-center gap-3 rounded-lg border p-3 text-xs transition-colors ${isSelected ? 'border-blue-400 bg-blue-50' : 'border-slate-200 bg-slate-50 hover:border-blue-300'}`}
                                             >
                                                 <input
                                                     type="checkbox"
@@ -2471,13 +2801,7 @@ export function ProductEditor() {
                                                             );
                                                         }
                                                     }}
-                                                    className={[
-                                                        'group relative aspect-square cursor-pointer overflow-hidden',
-                                                        'rounded-xl border-2 transition-all',
-                                                        isSelected
-                                                            ? 'border-blue-600 shadow-md ring-2 ring-blue-400'
-                                                            : 'border-slate-200 hover:border-blue-300',
-                                                    ].join(' ')}
+                                                    className={`aspect-square rounded-xl border-2 overflow-hidden cursor-pointer relative group transition-all ${isSelected ? 'border-blue-600 ring-2 ring-blue-400 shadow-md' : 'border-slate-200 hover:border-blue-300'}`}
                                                 >
                                                     <img
                                                         src={asset.preview}

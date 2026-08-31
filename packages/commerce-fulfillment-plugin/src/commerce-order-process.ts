@@ -14,6 +14,7 @@ import {
 import { LockNotSupportedOnGivenDriverError } from 'typeorm';
 
 import { AutoCardService } from './auto-card.service';
+import { CommerceModeService } from './commerce-mode.service';
 import { digitalFulfillmentHandler } from './digital-fulfillment-handler';
 import {
     getOrderLineFulfillmentType,
@@ -21,6 +22,7 @@ import {
     isFileDownloadOrderLine,
     summarizeOrderFulfillment,
 } from './fulfillment-classification';
+import { ManualDigitalDeliveryService } from './manual-digital-delivery.service';
 import { ProductPackagingService } from './product-packaging.service';
 
 let orderService: OrderService;
@@ -31,6 +33,8 @@ let configService: ConfigService;
 let globalSettingsService: GlobalSettingsService;
 let autoCardService: AutoCardService;
 let productPackagingService: ProductPackagingService;
+let commerceModeService: CommerceModeService;
+let manualDigitalDeliveryService: ManualDigitalDeliveryService;
 
 export const commerceOrderProcess: OrderProcess<string> = {
     init(injector) {
@@ -42,6 +46,8 @@ export const commerceOrderProcess: OrderProcess<string> = {
         globalSettingsService = injector.get(GlobalSettingsService);
         autoCardService = injector.get(AutoCardService);
         productPackagingService = injector.get(ProductPackagingService);
+        commerceModeService = injector.get(CommerceModeService);
+        manualDigitalDeliveryService = injector.get(ManualDigitalDeliveryService);
     },
 
     async onTransitionStart(fromState, toState, { ctx, order }) {
@@ -54,17 +60,21 @@ export const commerceOrderProcess: OrderProcess<string> = {
         }
 
         const summary = summarizeOrderFulfillment(order);
+        const commerceMode = await commerceModeService.activeMode(ctx);
+        for (const line of order.lines) {
+            commerceModeService.assertProductTypeAllowed(commerceMode, getOrderLineFulfillmentType(line));
+        }
         if (entersPayment) {
             const autoCardError = await autoCardService.availabilityError(ctx, order);
             if (autoCardError) {
                 return autoCardError;
             }
-        }
-        if (!summary.containsPhysicalProducts) {
-            return;
+            if (summary.containsDigitalProducts && !isValidDeliveryEmail(order.customFields?.deliveryEmail)) {
+                return '虚拟商品订单必须填写有效的交付邮箱';
+            }
         }
 
-        if (entersPayment) {
+        if (entersPayment && summary.containsPhysicalProducts) {
             if (!hasCompleteShippingAddress(ctx, order.shippingAddress)) {
                 return ctx.translate('message.commerce-physical-order-requires-complete-address');
             }
@@ -74,17 +84,19 @@ export const commerceOrderProcess: OrderProcess<string> = {
         }
 
         const physicalLines = order.lines.filter(line => getOrderLineFulfillmentType(line) === 'physical');
+        const stockManagedLines = order.lines.filter(line => requiresStockAllocation(line));
         let lockedStockLevels: StockLevel[] | undefined;
-        const packagingRules = confirmsPayment
-            ? await productPackagingService.rulesForVariantIds(
-                  ctx,
-                  physicalLines.map(line => line.productVariantId),
-              )
-            : [];
-        if (confirmsPayment) {
+        const packagingRules =
+            confirmsPayment && physicalLines.length
+                ? await productPackagingService.rulesForVariantIds(
+                      ctx,
+                      physicalLines.map(line => line.productVariantId),
+                  )
+                : [];
+        if (confirmsPayment && stockManagedLines.length) {
             await productPackagingService.ensureStockLevelPairs(ctx, packagingRules);
             const variantIds = productPackagingService.variantIdsForLock(
-                physicalLines.map(line => line.productVariantId),
+                stockManagedLines.map(line => line.productVariantId),
                 packagingRules,
             );
             const stockQuery = () =>
@@ -116,7 +128,7 @@ export const commerceOrderProcess: OrderProcess<string> = {
             }
         }
 
-        for (const line of physicalLines) {
+        for (const line of stockManagedLines) {
             // Under MySQL REPEATABLE READ, a normal query after waiting for a row lock can
             // still see the transaction's older snapshot. Calculate from the locking read
             // itself so concurrent payment confirmations cannot both consume the same stock.
@@ -132,17 +144,18 @@ export const commerceOrderProcess: OrderProcess<string> = {
     },
 
     async onTransitionEnd(fromState, toState, { ctx, order }) {
+        if (toState === 'Cancelled') {
+            await manualDigitalDeliveryService.cancelOrder(ctx, order.id);
+        }
         if (
             fromState === 'ArrangingPayment' &&
             (toState === 'PaymentAuthorized' || toState === 'PaymentSettled')
         ) {
-            const physicalLines = order.lines.filter(
-                line => getOrderLineFulfillmentType(line) === 'physical',
-            );
-            if (physicalLines.length) {
+            const stockManagedLines = order.lines.filter(line => requiresStockAllocation(line));
+            if (stockManagedLines.length) {
                 await stockMovementService.createAllocationsForOrderLines(
                     ctx,
-                    physicalLines.map(line => ({ orderLineId: line.id, quantity: line.quantity })),
+                    stockManagedLines.map(line => ({ orderLineId: line.id, quantity: line.quantity })),
                 );
             }
         }
@@ -155,6 +168,7 @@ export const commerceOrderProcess: OrderProcess<string> = {
             relations: ['customer', 'lines', 'lines.productVariant'],
         });
         await autoCardService.allocateSettledOrder(ctx, settledOrder);
+        await manualDigitalDeliveryService.createSettledOrderTasks(ctx, settledOrder);
 
         const fileDownloadLines = settledOrder.lines.filter(line => isFileDownloadOrderLine(line));
         if (fileDownloadLines.length) {
@@ -171,6 +185,21 @@ export const commerceOrderProcess: OrderProcess<string> = {
         }
     },
 };
+
+function requiresStockAllocation(line: Order['lines'][number]): boolean {
+    if (getOrderLineFulfillmentType(line) === 'physical') {
+        return true;
+    }
+    if (line.customFields?.digitalDeliveryModeSnapshot === 'auto_card') {
+        return false;
+    }
+    return line.productVariant.customFields?.digitalStockPolicy === 'limited';
+}
+
+function isValidDeliveryEmail(value: string | null | undefined): boolean {
+    const email = value?.trim() ?? '';
+    return email.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(email);
+}
 
 async function saleableStockFromLockedRows(
     ctx: Parameters<typeof productVariantService.getSaleableStockLevel>[0],
