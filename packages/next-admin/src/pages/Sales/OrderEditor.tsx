@@ -33,6 +33,7 @@ import {
     REFUND_SALES_ORDER,
     TRANSITION_SALES_FULFILLMENT,
 } from '../../graphql/sales.graphql';
+import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import {
     formatAddress,
@@ -931,7 +932,9 @@ export function OrderEditor() {
                                 <div className="mt-3 space-y-2 text-xs text-slate-600">
                                     <div>
                                         <span className="text-slate-400">渠道：</span>
-                                        {order.channels.map(channel => channel.code).join('、') || '未返回'}
+                                        {order.channels
+                                            .map(channel => getChannelDisplayName(channel.code))
+                                            .join('、') || '未返回'}
                                     </div>
                                     <div>
                                         <span className="text-slate-400">配送：</span>

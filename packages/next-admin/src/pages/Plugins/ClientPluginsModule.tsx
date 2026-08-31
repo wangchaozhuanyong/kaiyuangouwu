@@ -26,6 +26,7 @@ import {
     type StorefrontContentItem,
     type StorefrontContentResult,
 } from '../../graphql/storefront.graphql';
+import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import {
     emptyBlockTranslation,
@@ -251,7 +252,9 @@ export function ClientPluginsModule() {
                 <section className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-4 text-xs">
                     <span className="text-slate-500">当前店铺</span>
                     <strong className="rounded bg-slate-100 px-2 py-1 text-slate-800">
-                        {content.data?.activeChannel.code ?? '—'}
+                        {content.data
+                            ? getChannelDisplayName(content.data.activeChannel.code)
+                            : '—'}
                     </strong>
                     <span className="rounded bg-slate-100 px-2 py-1 text-slate-600">
                         {catalog.length} 个已发布官方插件

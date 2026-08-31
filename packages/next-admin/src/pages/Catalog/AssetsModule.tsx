@@ -298,7 +298,7 @@ export function AssetsModule() {
     const readyFileCount = pendingFiles.filter(file => file.status === 'READY').length;
 
     return (
-        <div className="flex h-full flex-col bg-[#f8fafc]">
+        <div className="flex h-full flex-col bg-slate-50">
             <div className="flex shrink-0 flex-col gap-4 border-b border-slate-200 bg-white px-5 py-5 shadow-2xs sm:flex-row sm:items-center sm:justify-between sm:px-8">
                 <div>
                     <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">

@@ -12,6 +12,8 @@ import {
     Megaphone,
     Menu,
     MessageSquare,
+    Monitor,
+    Moon,
     Package,
     Palette,
     Percent,
@@ -23,6 +25,7 @@ import {
     ShoppingBag,
     Sparkles,
     Store,
+    Sun,
     Terminal,
     Ticket,
     User,
@@ -33,6 +36,7 @@ import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate, type NavigateOptions } from 'react-router-dom';
 import { logoutAdministrator, switchActiveChannel } from '../apollo';
 import { AccessibleDialogSurface } from '../components/AccessibleDialogSurface';
+import { ThemeToggleButton } from '../components/ThemeToggleButton';
 import {
     ACTIVE_ADMINISTRATOR_PROFILE_QUERY,
     CHANNEL_SWITCHER_QUERY,
@@ -40,6 +44,9 @@ import {
     type ChannelSwitcherData,
 } from '../graphql/auth.graphql';
 import { requestAppNavigation } from '../hooks/use-unsaved-changes-warning';
+import { useTheme } from '../theme/theme-context';
+import type { ThemePreference } from '../theme/theme';
+import { getChannelDisplayLabel } from '../utils/channel-display';
 import { toUserFacingError } from '../utils/user-facing-error';
 
 interface OpenTab {
@@ -48,11 +55,23 @@ interface OpenTab {
     label: string;
 }
 
+const THEME_OPTIONS: Array<{
+    value: ThemePreference;
+    label: string;
+    Icon: typeof Monitor;
+}> = [
+    { value: 'system', label: '自动', Icon: Monitor },
+    { value: 'light', label: '浅色', Icon: Sun },
+    { value: 'dark', label: '深色', Icon: Moon },
+];
+
 export function AppShell() {
     const location = useLocation();
     const routerNavigate = useNavigate();
+    const { preference: themePreference, resolvedTheme, setPreference: setThemePreference } =
+        useTheme();
     const navigate = (target: string, options?: NavigateOptions) => {
-        if (requestAppNavigation(target)) routerNavigate(target, options);
+        if (requestAppNavigation(target)) void routerNavigate(target, options);
     };
     const [isDesktop, setIsDesktop] = useState(() => window.matchMedia('(min-width: 1024px)').matches);
     const [isSidebarOpen, setIsSidebarOpen] = useState(
@@ -767,7 +786,7 @@ export function AppShell() {
                 inert={!isDesktop && isSidebarOpen ? true : undefined}
                 className="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative"
             >
-                <header className="z-10 flex h-14 shrink-0 items-center justify-between bg-white px-3 shadow-2xs sm:px-6">
+                <header className="relative z-30 flex h-14 shrink-0 items-center justify-between bg-white px-3 shadow-2xs sm:px-6">
                     <button
                         ref={sidebarToggleRef}
                         type="button"
@@ -795,7 +814,7 @@ export function AppShell() {
                                 {!channelData && <option value="">读取店铺…</option>}
                                 {channelData?.channels.items.map(channel => (
                                     <option key={channel.id} value={channel.token}>
-                                        {channel.code} · {channel.defaultCurrencyCode}
+                                        {getChannelDisplayLabel(channel)}
                                     </option>
                                 ))}
                             </select>
@@ -825,11 +844,15 @@ export function AppShell() {
                         >
                             <Search className="h-4 w-4" />
                         </button>
+                        <ThemeToggleButton />
                         {/* 右上角用户菜单 (包含个人中心与退出) */}
                         <div className="relative">
                             <button
                                 type="button"
-                                onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                                onClick={() => {
+                                    setIsMoreTabsOpen(false);
+                                    setIsUserMenuOpen(current => !current);
+                                }}
                                 className="w-8 h-8 bg-gradient-to-tr from-blue-600 to-indigo-600 text-white rounded-full flex items-center justify-center text-xs font-bold shadow-xs cursor-pointer hover:ring-2 hover:ring-blue-400 transition-all"
                                 aria-label="打开管理员菜单"
                                 aria-expanded={isUserMenuOpen}
@@ -886,12 +909,57 @@ export function AppShell() {
                                             </button>
                                         </div>
 
+                                        <div className="border-t border-slate-100 px-3 py-3">
+                                            <div className="mb-2 flex items-center justify-between px-1 text-slate-600">
+                                                <span className="flex items-center gap-2 font-medium">
+                                                    <Palette className="h-4 w-4 text-slate-400" />
+                                                    界面外观
+                                                </span>
+                                                <span className="text-[10px] text-slate-400">
+                                                    {resolvedTheme === 'dark' ? '深色生效中' : '浅色生效中'}
+                                                </span>
+                                            </div>
+                                            <div
+                                                className="grid grid-cols-3 gap-1 rounded-xl bg-slate-100 p-1"
+                                                role="group"
+                                                aria-label="选择界面外观"
+                                            >
+                                                {THEME_OPTIONS.map(option => {
+                                                    const isSelected = themePreference === option.value;
+                                                    const optionClassName = [
+                                                        'flex min-w-0 flex-col items-center gap-1 rounded-lg px-1 py-1.5',
+                                                        'text-[10px] font-medium transition-colors focus:outline-none',
+                                                        'focus:ring-2 focus:ring-blue-500',
+                                                        isSelected
+                                                            ? 'bg-white text-blue-600 shadow-sm'
+                                                            : 'text-slate-500 hover:bg-white/70 hover:text-slate-800',
+                                                    ].join(' ');
+                                                    return (
+                                                        <button
+                                                            key={option.value}
+                                                            type="button"
+                                                            role="menuitemradio"
+                                                            aria-checked={isSelected}
+                                                            onClick={() => setThemePreference(option.value)}
+                                                            className={optionClassName}
+                                                        >
+                                                            <option.Icon
+                                                                className="h-3.5 w-3.5"
+                                                                aria-hidden="true"
+                                                            />
+                                                            <span>{option.label}</span>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+
                                         <div className="border-t border-slate-100 pt-1">
                                             <button
                                                 type="button"
                                                 role="menuitem"
                                                 disabled={isLoggingOut}
-                                                onClick={handleLogout}
+                                                onClick={() => void handleLogout()}
                                                 className="w-full px-4 py-2 text-left text-rose-600 hover:bg-rose-50 flex items-center gap-2.5 cursor-pointer font-medium disabled:opacity-50"
                                             >
                                                 {isLoggingOut ? (
@@ -910,7 +978,7 @@ export function AppShell() {
                 </header>
 
                 {/* 标签栏 */}
-                <div className="h-10 bg-white border-b border-slate-200 border-t flex items-center justify-between shrink-0 select-none overflow-hidden">
+                <div className="relative z-20 h-10 shrink-0 select-none border-b border-t border-slate-200 bg-white flex items-center justify-between">
                     {/* 左侧标签列表 */}
                     <div className="flex-1 h-full flex items-center px-3 gap-1 overflow-hidden">
                         {tabs.map(tab => {
@@ -939,11 +1007,14 @@ export function AppShell() {
                     </div>
 
                     {/* 右侧【更多 (N) ▾】下拉按钮 */}
-                    <div className="h-full px-3 bg-white border-l border-slate-200 flex items-center justify-center shrink-0 z-20">
+                    <div className="relative z-20 flex h-full shrink-0 items-center justify-center border-l border-slate-200 bg-white px-3">
                         <button
                             type="button"
                             className={`px-2.5 py-1 rounded-md text-xs font-medium flex items-center gap-1 transition-all cursor-pointer ${isMoreTabsOpen ? 'bg-blue-50 text-blue-600 font-bold' : 'text-slate-600 hover:text-blue-600 hover:bg-slate-100'}`}
-                            onClick={() => setIsMoreTabsOpen(!isMoreTabsOpen)}
+                            onClick={() => {
+                                setIsUserMenuOpen(false);
+                                setIsMoreTabsOpen(current => !current);
+                            }}
                             aria-expanded={isMoreTabsOpen}
                             aria-controls="open-tabs-menu"
                             aria-haspopup="menu"

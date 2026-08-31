@@ -1,15 +1,18 @@
 import { gql } from '@apollo/client';
 import { useQuery } from '@apollo/client/react';
-import { lazy, useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 
 import { clearAuthSession, hasActiveChannelSelection, setInitialActiveChannel } from './apollo';
 import { ConfirmDialogProvider } from './components/ConfirmDialog';
-import { AppShell } from './layouts/AppShell';
 import { InitialPasswordChangeModule } from './pages/Auth/InitialPasswordChangeModule';
 import { LoginModule } from './pages/Auth/LoginModule';
 import { isAuthenticationRequiredError } from './utils/authentication-error';
 import { toUserFacingError } from './utils/user-facing-error';
+
+const AppShell = lazy(() =>
+    import('./layouts/AppShell').then(module => ({ default: module.AppShell })),
+);
 
 const ProfileModule = lazy(() =>
     import('./pages/Auth/ProfileModule').then(module => ({ default: module.ProfileModule })),
@@ -213,7 +216,17 @@ function AuthenticatedShell() {
         );
     }
 
-    return <AppShell />;
+    return (
+        <Suspense
+            fallback={
+                <div className="flex min-h-screen items-center justify-center bg-slate-50 text-sm font-medium text-slate-500">
+                    正在加载管理后台...
+                </div>
+            }
+        >
+            <AppShell />
+        </Suspense>
+    );
 }
 
 function App() {

@@ -1,14 +1,21 @@
+import { ApolloProvider } from '@apollo/client/react'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { ApolloProvider } from '@apollo/client/react'
+
 import { client } from './apollo'
 import App from './App.tsx'
+import { ThemeProvider } from './theme/ThemeProvider'
 import './index.css'
 
-createRoot(document.getElementById('root')!).render(
+const rootElement = document.getElementById('root')
+if (!rootElement) throw new Error('管理后台挂载节点不存在')
+
+createRoot(rootElement).render(
   <StrictMode>
-    <ApolloProvider client={client}>
-      <App />
-    </ApolloProvider>
+    <ThemeProvider>
+      <ApolloProvider client={client}>
+        <App />
+      </ApolloProvider>
+    </ThemeProvider>
   </StrictMode>,
 )

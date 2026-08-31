@@ -17,9 +17,14 @@ import {
 } from 'lucide-react';
 import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { sensitiveActionContext } from '../../apollo';
+import { sensitiveActionContext, switchActiveChannel } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
-import { DELETE_PRODUCT, GET_PRODUCTS } from '../../graphql/catalog.graphql';
+import { DELETE_PRODUCT, GET_CATALOG_CHANNELS, GET_PRODUCTS } from '../../graphql/catalog.graphql';
+import {
+    getCatalogEmptyStateDescription,
+    getChannelDisplayLabel,
+    isDefaultChannelCode,
+} from '../../utils/channel-display';
 
 interface ProductVariantItem {
     id: string;
@@ -66,6 +71,24 @@ interface GetProductsData {
     };
 }
 
+interface GetCatalogChannelsData {
+    activeChannel: {
+        id: string;
+        code: string;
+        token: string;
+        defaultCurrencyCode: string;
+    };
+    channels: {
+        items: Array<{
+            id: string;
+            code: string;
+            token: string;
+            defaultCurrencyCode: string;
+        }>;
+        totalItems: number;
+    };
+}
+
 const formatMoney = (amount: number, currencyCode: string) => {
     try {
         return new Intl.NumberFormat('zh-CN', {
@@ -90,6 +113,7 @@ export function CatalogModule() {
     );
     const [productToDelete, setProductToDelete] = useState<{ id: string; name: string } | null>(null);
     const [deletePassword, setDeletePassword] = useState('');
+    const [isSwitchingStore, setIsSwitchingStore] = useState(false);
     const deferredSearchTerm = useDeferredValue(searchTerm);
 
     useEffect(() => {
@@ -125,6 +149,10 @@ export function CatalogModule() {
         fetchPolicy: 'cache-and-network',
         notifyOnNetworkStatusChange: true,
     });
+    const activeChannelQuery = useQuery<GetCatalogChannelsData>(GET_CATALOG_CHANNELS, {
+        variables: { options: { skip: 0, take: 100, sort: { code: 'ASC' } } },
+        fetchPolicy: 'cache-first',
+    });
 
     const [deleteProductMutation, { loading: deleting }] = useMutation<{
         deleteProduct: { result: string; message?: string };
@@ -151,6 +179,14 @@ export function CatalogModule() {
     const totalItems = data?.products?.totalItems ?? 0;
     const totalPages = Math.ceil(totalItems / pageSize) || 1;
     const productList = data?.products?.items ?? [];
+    const activeChannel = activeChannelQuery.data?.activeChannel;
+    const activeChannelLabel = activeChannel ? getChannelDisplayLabel(activeChannel) : '当前店铺';
+    const defaultChannel = activeChannelQuery.data?.channels.items.find(channel =>
+        isDefaultChannelCode(channel.code),
+    );
+    const canSwitchToDefault = Boolean(
+        defaultChannel && activeChannel && defaultChannel.id !== activeChannel.id,
+    );
 
     const handleDeleteConfirm = () => {
         if (!productToDelete) return;
@@ -164,8 +200,25 @@ export function CatalogModule() {
         });
     };
 
+    const handleSwitchToDefaultStore = async () => {
+        if (!defaultChannel || isSwitchingStore) return;
+        setIsSwitchingStore(true);
+        try {
+            await switchActiveChannel(defaultChannel.token);
+            setPage(0);
+            showNotice('已切换到默认店铺');
+        } catch (switchError) {
+            showNotice(
+                switchError instanceof Error ? switchError.message : '切换默认店铺失败，请稍后重试',
+                'error',
+            );
+        } finally {
+            setIsSwitchingStore(false);
+        }
+    };
+
     return (
-        <div className="h-full flex flex-col bg-[#f8fafc]">
+        <div className="h-full flex flex-col bg-slate-50">
             {/* Header */}
             <div className="flex shrink-0 flex-col gap-4 border-b border-slate-200 bg-white px-5 py-5 shadow-2xs sm:flex-row sm:items-center sm:justify-between sm:px-8">
                 <div>
@@ -197,6 +250,12 @@ export function CatalogModule() {
 
             {/* Main Content */}
             <div className="mx-auto w-full max-w-7xl flex-1 space-y-5 overflow-y-auto p-5 sm:p-8">
+                <div className="flex flex-col gap-1 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs text-blue-900 sm:flex-row sm:items-center sm:justify-between">
+                    <span>
+                        当前数据范围：<strong>{activeChannelLabel}</strong>
+                    </span>
+                    <span className="text-[11px] text-blue-700">商品、库存和价格按店铺独立显示</span>
+                </div>
                 {notification && (
                     <div
                         role="status"
@@ -323,17 +382,30 @@ export function CatalogModule() {
                                 </div>
                                 <div className="text-sm font-bold text-slate-700">暂无匹配的商品</div>
                                 <p className="text-xs text-slate-400 max-w-xs">
-                                    {searchTerm
-                                        ? `未找到与 “${searchTerm}” 相关的商品，请尝试更换关键词。`
-                                        : '店铺当前尚未发布任何商品，点击下方按钮开始创建第一个商品。'}
+                                    {getCatalogEmptyStateDescription({
+                                        channelCode: activeChannel?.code,
+                                        searchTerm,
+                                    })}
                                 </p>
-                                <button
-                                    type="button"
-                                    onClick={() => navigate('/catalog/products/new')}
-                                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer mt-2"
-                                >
-                                    发布新商品
-                                </button>
+                                <div className="mt-2 flex flex-wrap justify-center gap-2">
+                                    {canSwitchToDefault && (
+                                        <button
+                                            type="button"
+                                            onClick={() => void handleSwitchToDefaultStore()}
+                                            disabled={isSwitchingStore}
+                                            className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-xs font-bold text-blue-700 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+                                        >
+                                            {isSwitchingStore ? '正在切换…' : '查看默认店铺商品'}
+                                        </button>
+                                    )}
+                                    <button
+                                        type="button"
+                                        onClick={() => navigate('/catalog/products/new')}
+                                        className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-blue-700"
+                                    >
+                                        发布新商品
+                                    </button>
+                                </div>
                             </div>
                         )}
 

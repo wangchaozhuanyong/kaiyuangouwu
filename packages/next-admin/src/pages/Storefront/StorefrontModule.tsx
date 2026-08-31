@@ -29,6 +29,7 @@ import {
     type StorefrontContentBlock,
     type StorefrontContentResult,
 } from '../../graphql/storefront.graphql';
+import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { StorefrontBlockEditor } from './StorefrontBlockEditor';
 import {
@@ -224,7 +225,9 @@ export function StorefrontModule() {
                         />
                         <Metric
                             label="当前店铺"
-                            value={query.data?.activeChannel.code ?? '—'}
+                            value={
+                                query.data ? getChannelDisplayName(query.data.activeChannel.code) : '—'
+                            }
                             detail={`${heroCount} 张首页轮播图`}
                         />
                     </section>
