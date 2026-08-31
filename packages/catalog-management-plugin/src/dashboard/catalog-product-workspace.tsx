@@ -109,7 +109,7 @@ export function CatalogProductWorkspace({
     const productId = context.entity?.id;
     const productUpdatedAt = context.entity?.updatedAt;
     const queryClient = useQueryClient();
-    const queryKey = ['catalog-product-workspace', productId];
+    const queryKey = useMemo(() => ['catalog-product-workspace', productId], [productId]);
     const workspaceQuery = useQuery({
         queryKey,
         queryFn: () => api.query<CatalogWorkspaceRecord>(catalogProductWorkspaceQuery, { productId }),
@@ -166,6 +166,7 @@ export function CatalogProductWorkspace({
     const [dirtyIds, setDirtyIds] = useState<Set<string>>(new Set());
     const [lotDraft, setLotDraft] = useState<LotDraft | null>(null);
     const [newVariantDraft, setNewVariantDraft] = useState<NewVariantDraft | null>(null);
+    const [newVariantOpen, setNewVariantOpen] = useState(false);
     const newVariantIsDirty = useMemo(
         () =>
             newVariantDraft != null &&
@@ -261,6 +262,7 @@ export function CatalogProductWorkspace({
         },
         onSuccess: async () => {
             setNewVariantDraft(null);
+            setNewVariantOpen(false);
             toast.success('SKU 已创建，价格、成本、库存策略已同步保存');
             await Promise.all([
                 queryClient.invalidateQueries({ queryKey }),
@@ -376,18 +378,12 @@ export function CatalogProductWorkspace({
     };
     const openNewVariant = () => {
         if (!creationContext || !stockLocationId) return;
-        setNewVariantDraft(emptyNewVariant(creationContext.name));
+        setNewVariantDraft(current => current ?? emptyNewVariant(creationContext.name));
+        setNewVariantOpen(true);
     };
     const closeNewVariant = () => {
-        if (!newVariantDraft) return;
-        const initial = emptyNewVariant(creationContext?.name ?? '');
-        if (
-            JSON.stringify(newVariantDraft) !== JSON.stringify(initial) &&
-            !window.confirm('放弃尚未保存的 SKU？')
-        ) {
-            return;
-        }
-        setNewVariantDraft(null);
+        // 收起抽屉时保留草稿，重新打开可以继续填写，避免误触遮罩后丢失数据。
+        setNewVariantOpen(false);
     };
 
     return (
@@ -489,7 +485,8 @@ export function CatalogProductWorkspace({
                     <Table>
                         <TableHeader>
                             <TableRow>
-                                <TableHead className="min-w-40">SKU / 状态</TableHead>
+                                <TableHead className="min-w-40">SKU</TableHead>
+                                <TableHead className="min-w-28">销售状态</TableHead>
                                 <TableHead className="min-w-36">条码</TableHead>
                                 <TableHead className="min-w-36">规格</TableHead>
                                 <TableHead className="min-w-48">供货商</TableHead>
@@ -514,21 +511,24 @@ export function CatalogProductWorkspace({
                                         key={variant.id}
                                         className={dirtyIds.has(variant.id) ? 'bg-primary/5' : undefined}
                                     >
-                                        <TableCell>
+                                        <TableCell className="align-top">
                                             <Input
                                                 value={draft.sku}
                                                 onChange={e =>
                                                     updateDraft(variant.id, { sku: e.target.value })
                                                 }
                                             />
-                                            <div className="mt-2 flex items-center gap-2">
+                                        </TableCell>
+                                        <TableCell className="align-top">
+                                            <div className="flex min-h-9 items-center gap-2">
                                                 <Switch
                                                     checked={draft.enabled}
                                                     onCheckedChange={enabled =>
                                                         updateDraft(variant.id, { enabled })
                                                     }
+                                                    aria-label={`${draft.enabled ? '停用' : '启用'} SKU`}
                                                 />
-                                                <span className="text-xs">
+                                                <span className="text-xs whitespace-nowrap">
                                                     {draft.enabled ? '启用' : '停用'}
                                                 </span>
                                             </div>
@@ -781,6 +781,7 @@ export function CatalogProductWorkspace({
                 onSave={() => lotDraft && lotMutation.mutate(lotDraft)}
             />
             <NewVariantEditor
+                open={newVariantOpen}
                 draft={newVariantDraft}
                 productName={creationContext?.name ?? ''}
                 optionGroups={creationContext?.optionGroups ?? []}
@@ -795,6 +796,7 @@ export function CatalogProductWorkspace({
 }
 
 function NewVariantEditor({
+    open,
     draft,
     productName,
     optionGroups,
@@ -804,6 +806,7 @@ function NewVariantEditor({
     onClose,
     onSave,
 }: Readonly<{
+    open: boolean;
     draft: NewVariantDraft | null;
     productName: string;
     optionGroups: Array<{
@@ -822,18 +825,18 @@ function NewVariantEditor({
     const selectedOptionCount = Object.values(draft.optionIds).filter(Boolean).length;
     const margin = calculateDraftMargin(draft.sellingPrice, draft.purchaseCost);
     return (
-        <Sheet open onOpenChange={open => !open && onClose()}>
+        <Sheet open={open} onOpenChange={nextOpen => !nextOpen && onClose()}>
             <SheetContent
-                className="flex w-full flex-col overflow-y-auto sm:max-w-[640px]"
+                className="flex w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-[640px]"
                 data-catalog-option-validation="catalog-product-option-validation"
             >
-                <SheetHeader>
+                <SheetHeader className="shrink-0 border-b px-6 py-5 pr-14">
                     <SheetTitle>新增 SKU</SheetTitle>
                     <SheetDescription>
                         在 {productName} 下创建规格、价格、成本和当前仓库库存，保存后仍停留在本商品。
                     </SheetDescription>
                 </SheetHeader>
-                <div className="grid flex-1 content-start gap-4 py-6 sm:grid-cols-2">
+                <div className="grid min-h-0 flex-1 content-start gap-4 overflow-y-auto p-6 sm:grid-cols-2">
                     <Field label="SKU 名称" className="sm:col-span-2">
                         <Input
                             value={draft.name}
@@ -962,7 +965,7 @@ function NewVariantEditor({
                         />
                     </div>
                 </div>
-                <SheetFooter className="border-t pt-4">
+                <SheetFooter className="shrink-0 border-t px-6 py-4 sm:flex-row sm:justify-end">
                     <Button type="button" variant="outline" onClick={onClose} disabled={pending}>
                         取消
                     </Button>

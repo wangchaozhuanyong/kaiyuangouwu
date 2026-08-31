@@ -440,7 +440,7 @@ export function PaginatedListDataTable<
     }, {});
 
     function refetchPaginatedList() {
-        queryClient.invalidateQueries({ queryKey });
+        void queryClient.refetchQueries({ queryKey, type: 'active' });
     }
 
     registerRefresher?.(refetchPaginatedList);

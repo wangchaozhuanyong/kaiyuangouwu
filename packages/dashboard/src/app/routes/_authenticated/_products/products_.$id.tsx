@@ -565,7 +565,10 @@ export function ProductEditor({
             toast.success(
                 creatingNewEntity ? t`Successfully created product` : t`Successfully updated product`,
             );
-            void queryClient.invalidateQueries({ queryKey: ['PaginatedListDataTable'] });
+            await queryClient.invalidateQueries({
+                queryKey: ['PaginatedListDataTable'],
+                refetchType: 'active',
+            });
             if (!creatingNewEntity) {
                 window.dispatchEvent(new CustomEvent(WORKSPACE_COMMITTED_EVENT, { detail: { productId } }));
             }
