@@ -1,5 +1,5 @@
 /* eslint-disable max-len -- Tailwind utility strings must remain intact for static extraction. */
-import { Link } from '@tanstack/react-router';
+import { useNavigate, useRouter } from '@tanstack/react-router';
 import clsx from 'clsx';
 import {
     Bell,
@@ -162,6 +162,8 @@ export function BottomNavigation({
     navigationBlock?: StorefrontContentBlock;
 }) {
     const isZh = language === 'zh';
+    const navigate = useNavigate();
+    const router = useRouter();
     const items = resolveBottomNavigationItems(navigationBlock, language);
     const exactActiveItem = items.find(item => item.routeName === activeRoute);
     const activeItemRoute = exactActiveItem?.routeName ?? groupedActiveRoute(activeRoute);
@@ -176,14 +178,31 @@ export function BottomNavigation({
                 const isActive = activeItemRoute === item.routeName;
                 const Icon = targetIcons[item.target];
                 return (
-                    <Link
+                    <a
                         key={item.key}
                         className={cn(
                             'flex w-[56px] min-w-[56px] flex-col items-center justify-center justify-self-center rounded-xl border-0 bg-transparent p-0.5 text-slate-500 transition-transform active:scale-95 lg:gap-[3px] lg:hover:bg-slate-100 lg:hover:text-slate-900',
                             isActive && 'font-bold text-slate-900 lg:hover:bg-transparent',
                         )}
                         aria-current={isActive ? 'page' : undefined}
-                        to={item.target}
+                        href={item.target}
+                        onClick={event => {
+                            if (
+                                event.defaultPrevented ||
+                                event.button !== 0 ||
+                                event.metaKey ||
+                                event.ctrlKey ||
+                                event.shiftKey ||
+                                event.altKey
+                            ) {
+                                return;
+                            }
+                            event.preventDefault();
+                            void navigate({ to: item.target });
+                        }}
+                        onFocus={() => void router.preloadRoute({ to: item.target })}
+                        onMouseEnter={() => void router.preloadRoute({ to: item.target })}
+                        onTouchStart={() => void router.preloadRoute({ to: item.target })}
                     >
                         <span className="relative flex h-[24px] w-[26px] items-center justify-center">
                             {item.iconUrl ? (
@@ -219,7 +238,7 @@ export function BottomNavigation({
                         >
                             {item.label}
                         </span>
-                    </Link>
+                    </a>
                 );
             })}
         </nav>

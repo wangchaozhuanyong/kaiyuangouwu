@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { ShopApiTimeoutError } from './api';
 import {
     PUBLIC_QUERY_CACHE_KEY,
     PUBLIC_QUERY_CACHE_MAX_AGE,
@@ -9,6 +10,7 @@ import {
     publicQueryMeta,
     restorePublicQueryCache,
     storefrontQueryKeys,
+    storefrontQueryRetry,
     storefrontRefetchPolicy,
 } from './query-client';
 
@@ -32,6 +34,12 @@ describe('public React Query session cache', () => {
         expect(queryDefaults?.refetchOnWindowFocus).toBe(storefrontRefetchPolicy);
         expect(storefrontRefetchPolicy({ meta: publicQueryMeta() })).toBe(true);
         expect(storefrontRefetchPolicy({})).toBe(true);
+    });
+
+    it('does not retry a request after the server timeout', () => {
+        expect(storefrontQueryRetry(0, new ShopApiTimeoutError('timeout'))).toBe(false);
+        expect(storefrontQueryRetry(0, new Error('network'))).toBe(true);
+        expect(storefrontQueryRetry(1, new Error('network'))).toBe(false);
     });
 
     it('deduplicates concurrent queries and refreshes after invalidation', async () => {

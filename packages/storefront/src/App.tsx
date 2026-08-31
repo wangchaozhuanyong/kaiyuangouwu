@@ -1,4 +1,4 @@
-import { useIsFetching, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Outlet, useNavigate, useRouter, useRouterState } from '@tanstack/react-router';
 import { WifiOff } from 'lucide-react';
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -18,7 +18,12 @@ import {
     serializeManualStorefrontLanguagePreference,
     uiCopy,
 } from './i18n';
-import { offlineLoadError, QueryLoadState, resolveQueryLoadState } from './loading-state';
+import {
+    offlineLoadError,
+    QueryLoadState,
+    resolveQueryLoadState,
+    shouldShowGlobalProgress,
+} from './loading-state';
 import { configureMoneyDisplay } from './money-display';
 import { orderStatusRefreshInterval } from './order-refresh';
 import {
@@ -30,7 +35,7 @@ import {
 import { invalidateStorefrontRealtimeQueries } from './realtime-updates';
 import { captureReferralAttribution } from './referral-attribution';
 import { productDescriptionText } from './rich-text';
-import { PageSkeleton } from './route-loading';
+import { RoutePageSkeleton } from './route-loading';
 import { useProductsByIdsQuery } from './route-queries';
 import { DEFAULT_HERO_IMAGE } from './storefront-images';
 import {
@@ -271,6 +276,9 @@ export function App() {
     const tanstackNavigate = useNavigate();
     const routerLocation = useRouterState({ select: state => state.location });
     const isNavigationPending = useRouterState({ select: state => state.status === 'pending' });
+    const resolvedRouterLocation = useRouterState({ select: state => state.resolvedLocation });
+    const displayedRouterLocation =
+        isNavigationPending && resolvedRouterLocation ? resolvedRouterLocation : routerLocation;
     const route = useMemo(
         () =>
             routeFromRouterLocation(
@@ -278,6 +286,14 @@ export function App() {
                 routerLocation.search as Record<string, unknown>,
             ),
         [routerLocation.pathname, routerLocation.search],
+    );
+    const displayedRoute = useMemo(
+        () =>
+            routeFromRouterLocation(
+                displayedRouterLocation.pathname,
+                displayedRouterLocation.search as Record<string, unknown>,
+            ),
+        [displayedRouterLocation.pathname, displayedRouterLocation.search],
     );
     const [{ market, language }, setStorefrontContext] = useState<{
         market: MarketConfig;
@@ -626,9 +642,14 @@ export function App() {
               : cartQuery.error
                 ? text.loadError
                 : null;
-    const activeQueryFetchCount = useIsFetching({
-        queryKey: storefrontQueryKeys.scope(storefrontQueryKeys.market(market), vendureLanguageCode),
-    });
+    const showGlobalProgress = shouldShowGlobalProgress(isNavigationPending, [
+        productsQuery,
+        collectionsQuery,
+        configQuery,
+        contentQuery,
+        cartQuery,
+        customerQuery,
+    ]);
     const setCart = useCallback(
         (nextCart: StorefrontCart) => queryClient.setQueryData(cartQueryKey, nextCart),
         [market.code, market.currencyCode, queryClient, vendureLanguageCode],
@@ -1633,17 +1654,21 @@ export function App() {
                             : 'You are offline. Some actions may fail.'}
                     </div>
                 )}
-                {(isNavigationPending || activeQueryFetchCount > 0) && (
+                {showGlobalProgress && (
                     <div className="navigation-progress" role="progressbar" aria-label={text.loading} />
                 )}
                 <div id="storefront-content">
-                    <Suspense fallback={<PageSkeleton label={isZh ? '正在加载页面' : 'Loading page'} />}>
+                    <Suspense
+                        fallback={
+                            <RoutePageSkeleton pathname={routerLocation.pathname} language={language} />
+                        }
+                    >
                         <Outlet />
                     </Suspense>
                 </div>
-                {shouldShowBottomNavigation(route.name, navigationBlock) && (
+                {shouldShowBottomNavigation(displayedRoute.name, navigationBlock) && (
                     <BottomNavigation
-                        activeRoute={route.name}
+                        activeRoute={displayedRoute.name}
                         cartQuantity={cart?.totalQuantity ?? 0}
                         language={language}
                         navigationBlock={navigationBlock}

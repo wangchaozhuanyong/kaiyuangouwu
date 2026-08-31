@@ -1,6 +1,6 @@
-import { createBrowserHistory, createRouter } from '@tanstack/react-router';
+import { createBrowserHistory, createRouter, useRouterState } from '@tanstack/react-router';
 
-import { PageSkeleton } from './route-loading';
+import { RoutePageSkeleton } from './route-loading';
 import { routeTree } from './routeTree.gen';
 import { getStorefrontScrollRestorationKey, routeFromHash, routeHref } from './storefront-router';
 
@@ -30,10 +30,17 @@ export const router = createRouter({
     parseSearch: parseStorefrontSearch,
     stringifySearch: stringifyStorefrontSearch,
     defaultPreload: 'intent',
-    defaultPendingComponent: PageSkeleton,
+    defaultPendingMs: 150,
+    defaultPendingMinMs: 250,
+    defaultPendingComponent: StorefrontPendingPage,
     scrollRestoration: true,
     getScrollRestorationKey: getStorefrontScrollRestorationKey,
 });
+
+function StorefrontPendingPage() {
+    const pathname = useRouterState({ select: state => state.location.pathname });
+    return <RoutePageSkeleton pathname={pathname} />;
+}
 
 declare module '@tanstack/react-router' {
     interface Register {

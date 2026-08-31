@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { offlineLoadError, resolveQueryLoadState } from './loading-state';
+import { offlineLoadError, resolveQueryLoadState, shouldShowGlobalProgress } from './loading-state';
 
 describe('query loading state', () => {
     it('keeps cached data visible during background errors or paused refreshes', () => {
@@ -30,5 +30,12 @@ describe('query loading state', () => {
     it('provides localized offline guidance', () => {
         expect(offlineLoadError('zh')).toContain('网络');
         expect(offlineLoadError('en')).toContain('offline');
+    });
+
+    it('shows global progress for navigation or unresolved first loads only', () => {
+        expect(shouldShowGlobalProgress(true, [])).toBe(true);
+        expect(shouldShowGlobalProgress(false, [{ data: undefined, fetchStatus: 'fetching' }])).toBe(true);
+        expect(shouldShowGlobalProgress(false, [{ data: [], fetchStatus: 'fetching' }])).toBe(false);
+        expect(shouldShowGlobalProgress(false, [{ data: undefined, fetchStatus: 'idle' }])).toBe(false);
     });
 });

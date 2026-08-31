@@ -1,11 +1,17 @@
 import { DehydratedState, QueryClient, dehydrate, hydrate } from '@tanstack/react-query';
 
+import { ShopApiTimeoutError } from './api';
+
 export const PUBLIC_QUERY_STALE_TIME = 60_000;
 export const ROUTE_QUERY_STALE_TIME = 60_000;
 export const PUBLIC_QUERY_GC_TIME = 30 * 60_000;
 export const PUBLIC_QUERY_CACHE_MAX_AGE = 5 * 60_000;
 export const PUBLIC_QUERY_CACHE_KEY = 'vendure-storefront-public-query-cache:v2';
 const PUBLIC_QUERY_CACHE_VERSION = 2;
+
+export function storefrontQueryRetry(failureCount: number, error: unknown): boolean {
+    return !(error instanceof ShopApiTimeoutError) && failureCount < 1;
+}
 
 interface PersistedPublicQueryCache {
     version: number;
@@ -17,7 +23,7 @@ export function createStorefrontQueryClient(): QueryClient {
     return new QueryClient({
         defaultOptions: {
             queries: {
-                retry: 1,
+                retry: storefrontQueryRetry,
                 staleTime: ROUTE_QUERY_STALE_TIME,
                 gcTime: PUBLIC_QUERY_GC_TIME,
                 refetchOnMount: storefrontRefetchPolicy,
