@@ -40,6 +40,7 @@ export const RUNTIME_PACKAGE_ASSETS = Object.freeze({
     'storefront-catalog-plugin': ['dist'],
     'storefront-content-plugin': ['dist'],
     'storefront-review-plugin': ['dist'],
+    'telemetry-plugin': ['dist'],
 });
 
 const STOREFRONT_MEDIA_RUNTIME_FILES = Object.freeze(
@@ -56,6 +57,7 @@ export const REQUIRED_RUNTIME_FILES = Object.freeze([
     'packages/content-translation-plugin/dist/index.js',
     'packages/image-generation-plugin/dist/index.js',
     'packages/two-factor-dashboard-plugin/dist/index.js',
+    'packages/telemetry-plugin/dist/index.js',
     'packages/storefront/dist/index.html',
     'packages/dev-server/scripts/sync-storefront-media.mjs',
     'packages/dev-server/scripts/repair-inventory-inheritance.mjs',

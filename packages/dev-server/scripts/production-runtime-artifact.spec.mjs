@@ -30,6 +30,11 @@ void test('runtime artifact includes catalog management plugin build output', ()
     assert.ok(REQUIRED_RUNTIME_FILES.includes('packages/catalog-management-plugin/dist/index.js'));
 });
 
+void test('runtime artifact includes the telemetry plugin required by dev-server', () => {
+    assert.deepEqual(RUNTIME_PACKAGE_ASSETS['telemetry-plugin'], ['dist']);
+    assert.ok(REQUIRED_RUNTIME_FILES.includes('packages/telemetry-plugin/dist/index.js'));
+});
+
 void test('runtime verification rejects missing Vendure workspace packages', async () => {
     const fixtureRoot = await mkdtemp(path.join(tmpdir(), 'vendure-runtime-workspace-link-'));
     try {
