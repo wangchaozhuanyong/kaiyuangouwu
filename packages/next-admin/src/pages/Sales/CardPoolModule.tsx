@@ -1,0 +1,1325 @@
+import { useMutation, useQuery } from '@apollo/client/react';
+import {
+    AlertCircle,
+    CheckCircle2,
+    ChevronLeft,
+    ChevronRight,
+    Copy,
+    Eye,
+    KeyRound,
+    LoaderCircle,
+    PackageCheck,
+    Plus,
+    RefreshCw,
+    RotateCcw,
+    Search,
+    Settings2,
+    ShieldOff,
+    UploadCloud,
+    X,
+} from 'lucide-react';
+import { useDeferredValue, useState } from 'react';
+import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
+import { useConfirmDialog } from '../../components/confirm-dialog-context';
+import {
+    AUTO_CARD_VARIANTS_QUERY,
+    AUTO_CARD_WORKSPACE_QUERY,
+    IMPORT_AUTO_CARD_ITEMS_MUTATION,
+    PREVIEW_AUTO_CARD_IMPORT_MUTATION,
+    RETRY_AUTO_CARD_DELIVERY_MUTATION,
+    REVEAL_AUTO_CARD_ITEM_MUTATION,
+    SET_AUTO_CARD_ITEM_ENABLED_MUTATION,
+    UPDATE_AUTO_CARD_CONFIG_MUTATION,
+    type AutoCardConfigRecord,
+    type AutoCardDeliveryRecord,
+    type AutoCardFieldRecord,
+    type AutoCardImportPreviewResult,
+    type AutoCardPoolItemRecord,
+    type AutoCardVariantRecord,
+    type AutoCardVariantsResult,
+    type AutoCardWorkspaceResult,
+} from '../../graphql/fulfillment.graphql';
+import { useUrlTab } from '../../hooks/use-url-tab';
+import { toUserFacingError } from '../../utils/user-facing-error';
+import { formatDateTime } from './sales-utils';
+
+type Tab = 'POOL' | 'DELIVERIES';
+const CARD_POOL_TABS = { pool: 'POOL', deliveries: 'DELIVERIES' } as const;
+const VARIANT_LOOKUP_SIZE = 50;
+const POOL_PAGE_SIZE = 50;
+const DELIVERY_PAGE_SIZE = 30;
+
+export function CardPoolModule() {
+    const [selectedVariantId, setSelectedVariantId] = useState('');
+    const [tab, setTab] = useUrlTab<Tab>(CARD_POOL_TABS, 'pool');
+    const [poolState, setPoolState] = useState('ALL');
+    const [search, setSearch] = useState('');
+    const [variantSearch, setVariantSearch] = useState('');
+    const [poolPage, setPoolPage] = useState(0);
+    const [deliveryPage, setDeliveryPage] = useState(0);
+    const [notice, setNotice] = useState('');
+    const [actionError, setActionError] = useState('');
+    const [importOpen, setImportOpen] = useState(false);
+    const [configOpen, setConfigOpen] = useState(false);
+    const deferredVariantSearch = useDeferredValue(variantSearch.trim());
+    const variantsQuery = useQuery<AutoCardVariantsResult>(AUTO_CARD_VARIANTS_QUERY, {
+        variables: {
+            options: {
+                take: VARIANT_LOOKUP_SIZE,
+                sort: { name: 'ASC' },
+                filter: {
+                    _and: [
+                        { fulfillmentType: { eq: 'digital' } },
+                        { digitalDeliveryMode: { eq: 'auto_card' } },
+                        ...(deferredVariantSearch
+                            ? [
+                                  {
+                                      _or: [
+                                          { name: { contains: deferredVariantSearch } },
+                                          { sku: { contains: deferredVariantSearch } },
+                                      ],
+                                  },
+                              ]
+                            : []),
+                    ],
+                },
+            },
+        },
+        fetchPolicy: 'cache-and-network',
+    });
+    const variants = variantsQuery.data?.productVariants.items ?? [];
+    const selectedVariant = variants.find(item => item.id === selectedVariantId) ?? variants[0] ?? null;
+    const workspaceQuery = useQuery<AutoCardWorkspaceResult>(AUTO_CARD_WORKSPACE_QUERY, {
+        variables: {
+            productVariantId: selectedVariant?.id ?? '',
+            poolOptions: {
+                skip: poolPage * POOL_PAGE_SIZE,
+                take: POOL_PAGE_SIZE,
+                state: poolState === 'ALL' ? null : poolState,
+            },
+            deliveryOptions: {
+                productVariantId: selectedVariant?.id ?? '',
+                skip: deliveryPage * DELIVERY_PAGE_SIZE,
+                take: DELIVERY_PAGE_SIZE,
+            },
+        },
+        skip: !selectedVariant,
+        fetchPolicy: 'cache-and-network',
+        pollInterval: 15_000,
+    });
+    const config = workspaceQuery.data?.autoCardConfig ?? null;
+    const completed = async (message: string) => {
+        setNotice(message);
+        setActionError('');
+        await Promise.all([workspaceQuery.refetch(), variantsQuery.refetch()]);
+    };
+
+    return (
+        <div className="flex h-full flex-col bg-slate-50">
+            <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-4 sm:px-8">
+                <div className="mx-auto flex w-full max-w-[1500px] flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+                    <div>
+                        <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
+                            <KeyRound className="h-5 w-5 text-blue-600" />
+                            虚拟卡密库
+                        </h1>
+                        <p className="mt-1 text-xs text-slate-500">
+                            按 SKU 管理加密卡密库存、批量导入和自动交付异常
+                        </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                        <button
+                            type="button"
+                            onClick={() =>
+                                void Promise.all([workspaceQuery.refetch(), variantsQuery.refetch()])
+                            }
+                            disabled={workspaceQuery.loading || variantsQuery.loading}
+                            className={secondaryButton}
+                        >
+                            <RefreshCw
+                                className={`h-4 w-4 ${workspaceQuery.loading || variantsQuery.loading ? 'animate-spin' : ''}`}
+                            />
+                            刷新
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setConfigOpen(true)}
+                            disabled={!selectedVariant}
+                            className={secondaryButton}
+                        >
+                            <Settings2 className="h-4 w-4" />
+                            卡密格式
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setImportOpen(true)}
+                            disabled={!selectedVariant || !config?.enabled}
+                            className={primaryButton}
+                        >
+                            <UploadCloud className="h-4 w-4" />
+                            批量导入
+                        </button>
+                    </div>
+                </div>
+            </header>
+            <main className="mx-auto w-full max-w-[1500px] flex-1 space-y-4 overflow-y-auto p-5 sm:p-8">
+                {notice && (
+                    <Message kind="success" onClose={() => setNotice('')}>
+                        {notice}
+                    </Message>
+                )}
+                {actionError && (
+                    <Message kind="error" onClose={() => setActionError('')}>
+                        {actionError}
+                    </Message>
+                )}
+                <section className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-4 sm:flex-row sm:items-end sm:justify-between">
+                    <label className="block w-full max-w-lg text-[10px] font-bold text-slate-500">
+                        查找卡密 SKU
+                        <span className="relative mt-1 block">
+                            <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                            <input
+                                value={variantSearch}
+                                onChange={event => {
+                                    setVariantSearch(event.target.value);
+                                    setSelectedVariantId('');
+                                    setPoolPage(0);
+                                    setDeliveryPage(0);
+                                }}
+                                placeholder="输入商品名、规格名或 SKU 编码"
+                                className={`${inputClass} pl-8`}
+                            />
+                        </span>
+                    </label>
+                    <span className="text-[10px] text-slate-400">
+                        {variantsQuery.data
+                            ? `找到 ${variantsQuery.data.productVariants.totalItems} 个自动发卡 SKU`
+                            : '正在查询…'}
+                    </span>
+                </section>
+                {variantsQuery.loading && !variantsQuery.data ? (
+                    <LoadingState text="正在读取卡密 SKU…" />
+                ) : variantsQuery.error ? (
+                    <ErrorState
+                        message={variantsQuery.error.message}
+                        onRetry={() => void variantsQuery.refetch()}
+                    />
+                ) : !variants.length ? (
+                    <EmptyState />
+                ) : (
+                    <>
+                        <section className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 xl:flex-row xl:items-center xl:justify-between">
+                            <div>
+                                <div className="text-[10px] font-bold text-slate-400">当前卡密 SKU</div>
+                                <select
+                                    value={selectedVariant?.id ?? ''}
+                                    onChange={event => {
+                                        setSelectedVariantId(event.target.value);
+                                        setPoolPage(0);
+                                        setDeliveryPage(0);
+                                    }}
+                                    className={`${inputClass} mt-1 min-w-80`}
+                                >
+                                    {variants.map(item => (
+                                        <option key={item.id} value={item.id}>
+                                            {item.product.name} / {item.name} · {item.sku}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                            {config ? (
+                                <div className="flex flex-wrap gap-2 text-[10px]">
+                                    <StatusPill
+                                        ok={config.enabled}
+                                        text={config.enabled ? '自动发卡已启用' : '自动发卡已停用'}
+                                    />
+                                    <StatusPill
+                                        ok={config.availableCount > config.lowStockThreshold}
+                                        text={
+                                            config.availableCount > config.lowStockThreshold
+                                                ? '库存充足'
+                                                : '低库存预警'
+                                        }
+                                    />
+                                    <span className="rounded bg-slate-100 px-2 py-1 text-slate-600">
+                                        格式：{config.formatName} · 分隔符 {config.delimiter}
+                                    </span>
+                                </div>
+                            ) : (
+                                <div className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                                    该 SKU 尚未配置卡密格式，请先点击“卡密格式”。
+                                </div>
+                            )}
+                        </section>
+                        {config && (
+                            <section className="grid overflow-hidden rounded-xl border border-slate-200 bg-white sm:grid-cols-3 xl:grid-cols-6">
+                                <Metric
+                                    label="可用库存"
+                                    value={config.availableCount}
+                                    tone={
+                                        config.availableCount <= config.lowStockThreshold ? 'amber' : 'green'
+                                    }
+                                />
+                                <Metric label="已分配" value={config.assignedCount} />
+                                <Metric label="已停用" value={config.disabledCount} />
+                                <Metric
+                                    label="待库存交付"
+                                    value={config.waitingDeliveryCount}
+                                    tone={config.waitingDeliveryCount ? 'rose' : 'slate'}
+                                />
+                                <Metric
+                                    label="低库存 SKU"
+                                    value={variantsQuery.data?.autoCardTodoSummary.lowStockSkuCount ?? 0}
+                                    tone="amber"
+                                />
+                                <Metric
+                                    label="人工复核"
+                                    value={variantsQuery.data?.autoCardTodoSummary.manualReviewCount ?? 0}
+                                    tone="rose"
+                                />
+                            </section>
+                        )}
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="inline-flex w-max rounded-lg border border-slate-200 bg-white p-1">
+                                <TabButton active={tab === 'POOL'} onClick={() => setTab('POOL')}>
+                                    库存明细 {workspaceQuery.data?.autoCardPoolItems.totalItems ?? 0}
+                                </TabButton>
+                                <TabButton active={tab === 'DELIVERIES'} onClick={() => setTab('DELIVERIES')}>
+                                    交付记录 {workspaceQuery.data?.autoCardDeliveries.totalItems ?? 0}
+                                </TabButton>
+                            </div>
+                            {tab === 'POOL' && (
+                                <div className="flex gap-2">
+                                    <div className="relative">
+                                        <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                                        <input
+                                            value={search}
+                                            onChange={event => setSearch(event.target.value)}
+                                            placeholder="筛选当前页序号或脱敏字段"
+                                            className={`${inputClass} w-64 pl-8`}
+                                        />
+                                    </div>
+                                    <select
+                                        value={poolState}
+                                        onChange={event => {
+                                            setPoolState(event.target.value);
+                                            setPoolPage(0);
+                                        }}
+                                        className={inputClass}
+                                    >
+                                        <option value="ALL">全部状态</option>
+                                        <option value="AVAILABLE">可用</option>
+                                        <option value="ASSIGNED">已分配</option>
+                                        <option value="DISABLED">已停用</option>
+                                    </select>
+                                </div>
+                            )}
+                        </div>
+                        {workspaceQuery.loading && !workspaceQuery.data ? (
+                            <LoadingState text="正在读取真实卡密库存…" />
+                        ) : workspaceQuery.error ? (
+                            <ErrorState
+                                message={workspaceQuery.error.message}
+                                onRetry={() => void workspaceQuery.refetch()}
+                            />
+                        ) : tab === 'POOL' ? (
+                            <div className="space-y-3">
+                                <PoolTable
+                                    items={workspaceQuery.data?.autoCardPoolItems.items ?? []}
+                                    search={search}
+                                    onChanged={completed}
+                                    onError={setActionError}
+                                />
+                                <Pagination
+                                    page={poolPage}
+                                    pageSize={POOL_PAGE_SIZE}
+                                    totalItems={workspaceQuery.data?.autoCardPoolItems.totalItems ?? 0}
+                                    loading={workspaceQuery.loading}
+                                    onPageChange={setPoolPage}
+                                />
+                            </div>
+                        ) : (
+                            <div className="space-y-3">
+                                <DeliveriesTable
+                                    items={workspaceQuery.data?.autoCardDeliveries.items ?? []}
+                                    onChanged={completed}
+                                    onError={setActionError}
+                                />
+                                <Pagination
+                                    page={deliveryPage}
+                                    pageSize={DELIVERY_PAGE_SIZE}
+                                    totalItems={workspaceQuery.data?.autoCardDeliveries.totalItems ?? 0}
+                                    loading={workspaceQuery.loading}
+                                    onPageChange={setDeliveryPage}
+                                />
+                            </div>
+                        )}
+                    </>
+                )}
+            </main>
+            {configOpen && selectedVariant && (
+                <ConfigDialog
+                    variant={selectedVariant}
+                    config={config}
+                    onClose={() => setConfigOpen(false)}
+                    onCompleted={async message => {
+                        setConfigOpen(false);
+                        await completed(message);
+                    }}
+                    onError={setActionError}
+                />
+            )}
+            {importOpen && selectedVariant && config && (
+                <ImportDialog
+                    variant={selectedVariant}
+                    config={config}
+                    onClose={() => setImportOpen(false)}
+                    onCompleted={async message => {
+                        setImportOpen(false);
+                        await completed(message);
+                    }}
+                    onError={setActionError}
+                />
+            )}
+        </div>
+    );
+}
+
+function PoolTable({
+    items,
+    search,
+    onChanged,
+    onError,
+}: {
+    items: AutoCardPoolItemRecord[];
+    search: string;
+    onChanged: (message: string) => Promise<void>;
+    onError: (message: string) => void;
+}) {
+    const requestConfirmation = useConfirmDialog();
+    const [revealed, setRevealed] = useState<{ id: string; fields: AutoCardFieldRecord[] } | null>(null);
+    const [disableItem, setDisableItem] = useState<AutoCardPoolItemRecord | null>(null);
+    const [reveal, revealState] = useMutation<{ revealAutoCardPoolItem: AutoCardFieldRecord[] }>(
+        REVEAL_AUTO_CARD_ITEM_MUTATION,
+    );
+    const [setEnabled, enabledState] = useMutation(SET_AUTO_CARD_ITEM_ENABLED_MUTATION);
+    const filtered = items.filter(
+        item =>
+            !search.trim() ||
+            `${item.sequence} ${item.maskedFields.map(field => field.value).join(' ')}`
+                .toLowerCase()
+                .includes(search.trim().toLowerCase()),
+    );
+    const revealItem = async (item: AutoCardPoolItemRecord) => {
+        if (
+            !(await requestConfirmation({
+                title: '查看完整卡密？',
+                description: '卡密属于敏感信息。请确认当前环境安全，并且本次查看确有业务需要。',
+                confirmLabel: '查看明文',
+                tone: 'warning',
+            }))
+        )
+            return;
+        try {
+            const response = await reveal({ variables: { id: item.id } });
+            const fields = response.data?.revealAutoCardPoolItem;
+            if (!fields) throw new Error('后端未返回卡密字段');
+            setRevealed({ id: item.id, fields });
+        } catch (error) {
+            onError(errorText(error));
+        }
+    };
+    const enable = async (item: AutoCardPoolItemRecord) => {
+        try {
+            await setEnabled({ variables: { id: item.id, enabled: true, reason: null } });
+            await onChanged('卡密已恢复为可用状态');
+        } catch (error) {
+            onError(errorText(error));
+        }
+    };
+    return (
+        <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+            <div className="overflow-x-auto">
+                <table className="w-full min-w-[1000px] text-left text-xs">
+                    <thead>
+                        <tr className={theadClass}>
+                            <th className="p-4">序号</th>
+                            <th className="p-4">卡密字段（脱敏）</th>
+                            <th className="p-4">状态</th>
+                            <th className="p-4">入库时间</th>
+                            <th className="p-4">分配时间</th>
+                            <th className="p-4">关联交付</th>
+                            <th className="p-4">停用原因</th>
+                            <th className="p-4 text-right">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                        {filtered.map(item => (
+                            <tr key={item.id} className="hover:bg-slate-50">
+                                <td className="p-4 font-mono font-bold text-slate-700">#{item.sequence}</td>
+                                <td className="p-4">
+                                    <div className="space-y-1">
+                                        {item.maskedFields.map(field => (
+                                            <div key={field.key}>
+                                                <span className="text-[9px] text-slate-400">
+                                                    {field.label}：
+                                                </span>
+                                                <code className="font-mono text-[10px] text-slate-700">
+                                                    {field.value}
+                                                </code>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </td>
+                                <td className="p-4">
+                                    <PoolStateBadge state={item.state} />
+                                </td>
+                                <td className="p-4 text-[10px] text-slate-500">
+                                    {formatDateTime(item.createdAt)}
+                                </td>
+                                <td className="p-4 text-[10px] text-slate-500">
+                                    {item.assignedAt ? formatDateTime(item.assignedAt) : '—'}
+                                </td>
+                                <td className="p-4 font-mono text-[10px] text-slate-500">
+                                    {item.deliveryId ?? '—'}
+                                </td>
+                                <td className="max-w-48 p-4 text-[10px] text-rose-600">
+                                    {item.disabledReason ?? '—'}
+                                </td>
+                                <td className="p-4">
+                                    <div className="flex justify-end gap-1">
+                                        <button
+                                            type="button"
+                                            onClick={() => void revealItem(item)}
+                                            disabled={revealState.loading}
+                                            className={iconButton}
+                                            aria-label="查看明文"
+                                        >
+                                            <Eye className="h-4 w-4" />
+                                        </button>
+                                        {item.state === 'AVAILABLE' && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setDisableItem(item)}
+                                                className={`${iconButton} text-rose-600`}
+                                                aria-label="停用"
+                                            >
+                                                <ShieldOff className="h-4 w-4" />
+                                            </button>
+                                        )}
+                                        {item.state === 'DISABLED' && (
+                                            <button
+                                                type="button"
+                                                onClick={() => void enable(item)}
+                                                disabled={enabledState.loading}
+                                                className={`${iconButton} text-emerald-600`}
+                                                aria-label="恢复可用"
+                                            >
+                                                <RotateCcw className="h-4 w-4" />
+                                            </button>
+                                        )}
+                                    </div>
+                                </td>
+                            </tr>
+                        ))}
+                        {!filtered.length && <EmptyRow colSpan={8} text="当前条件下没有卡密库存" />}
+                    </tbody>
+                </table>
+            </div>
+            {revealed && <RevealDialog value={revealed} onClose={() => setRevealed(null)} />}
+            {disableItem && (
+                <DisableDialog
+                    item={disableItem}
+                    onClose={() => setDisableItem(null)}
+                    onCompleted={async () => {
+                        setDisableItem(null);
+                        await onChanged('卡密已停用，不会再自动分配');
+                    }}
+                    onError={onError}
+                />
+            )}
+        </section>
+    );
+}
+
+function DeliveriesTable({
+    items,
+    onChanged,
+    onError,
+}: {
+    items: AutoCardDeliveryRecord[];
+    onChanged: (message: string) => Promise<void>;
+    onError: (message: string) => void;
+}) {
+    const requestConfirmation = useConfirmDialog();
+    const [retry, state] = useMutation(RETRY_AUTO_CARD_DELIVERY_MUTATION);
+    const resend = async (item: AutoCardDeliveryRecord) => {
+        if (
+            !(await requestConfirmation({
+                title: `重试订单 ${item.order.code} 的卡密交付？`,
+                description: '系统会沿用原卡密重新分配或发送，不会重复出库。',
+                confirmLabel: '确认重试',
+                tone: 'warning',
+            }))
+        )
+            return;
+        try {
+            await retry({ variables: { id: item.id } });
+            await onChanged('卡密交付重试已进入队列');
+        } catch (error) {
+            onError(errorText(error));
+        }
+    };
+    return (
+        <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+            <div className="overflow-x-auto">
+                <table className="w-full min-w-[1050px] text-left text-xs">
+                    <thead>
+                        <tr className={theadClass}>
+                            <th className="p-4">订单</th>
+                            <th className="p-4">商品 / SKU</th>
+                            <th className="p-4">收件邮箱</th>
+                            <th className="p-4">数量</th>
+                            <th className="p-4">交付状态</th>
+                            <th className="p-4">尝试次数</th>
+                            <th className="p-4">发送时间</th>
+                            <th className="p-4">错误</th>
+                            <th className="p-4 text-right">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                        {items.map(item => (
+                            <tr key={item.id} className="hover:bg-slate-50">
+                                <td className="p-4">
+                                    <div className="font-mono font-bold text-blue-700">{item.order.code}</div>
+                                    <div className="mt-1 text-[9px] text-slate-400">{item.order.state}</div>
+                                </td>
+                                <td className="p-4">
+                                    <strong className="text-slate-800">{item.productName}</strong>
+                                    <div className="mt-1 font-mono text-[9px] text-slate-400">{item.sku}</div>
+                                </td>
+                                <td className="p-4 text-slate-600">{item.recipientEmail}</td>
+                                <td className="p-4 font-mono font-bold">{item.quantity}</td>
+                                <td className="p-4">
+                                    <DeliveryStateBadge state={item.state} />
+                                </td>
+                                <td className="p-4 font-mono text-slate-500">{item.attemptCount}</td>
+                                <td className="p-4 text-[10px] text-slate-500">
+                                    {item.sentAt ? formatDateTime(item.sentAt) : '—'}
+                                </td>
+                                <td className="max-w-56 p-4">
+                                    <span
+                                        className="line-clamp-2 text-[10px] text-rose-600"
+                                        title={item.lastError ?? ''}
+                                    >
+                                        {item.lastError ?? '—'}
+                                    </span>
+                                </td>
+                                <td className="p-4 text-right">
+                                    <button
+                                        type="button"
+                                        onClick={() => void resend(item)}
+                                        disabled={state.loading}
+                                        className={secondaryButton}
+                                    >
+                                        <RefreshCw className="h-3.5 w-3.5" />
+                                        {item.state === 'SENT' ? '重新发送' : '重试交付'}
+                                    </button>
+                                </td>
+                            </tr>
+                        ))}
+                        {!items.length && <EmptyRow colSpan={9} text="当前 SKU 暂无卡密交付记录" />}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    );
+}
+
+function ConfigDialog({
+    variant,
+    config,
+    onClose,
+    onCompleted,
+    onError,
+}: {
+    variant: AutoCardVariantRecord;
+    config: AutoCardConfigRecord | null;
+    onClose: () => void;
+    onCompleted: (message: string) => Promise<void>;
+    onError: (message: string) => void;
+}) {
+    const [enabled, setEnabled] = useState(config?.enabled ?? true);
+    const [formatName, setFormatName] = useState(config?.formatName ?? '账号与密码');
+    const [delimiter, setDelimiter] = useState(config?.delimiter ?? '----');
+    const [fields, setFields] = useState(
+        config?.fields ?? [
+            { key: 'account', label: '账号', labelEn: 'Account', secret: false },
+            { key: 'password', label: '密码', labelEn: 'Password', secret: true },
+        ],
+    );
+    const [instructionsZh, setInstructionsZh] = useState(
+        config?.instructionsZh ?? '请妥善保管卡密，并按商品说明完成兑换。',
+    );
+    const [instructionsEn, setInstructionsEn] = useState(
+        config?.instructionsEn ?? 'Keep your credentials safe and follow the product instructions.',
+    );
+    const [threshold, setThreshold] = useState(config?.lowStockThreshold ?? 10);
+    const [save, state] = useMutation(UPDATE_AUTO_CARD_CONFIG_MUTATION);
+    const updateField = (index: number, patch: Partial<(typeof fields)[number]>) =>
+        setFields(current => current.map((item, i) => (i === index ? { ...item, ...patch } : item)));
+    const submit = async () => {
+        if (
+            !formatName.trim() ||
+            !delimiter ||
+            !fields.length ||
+            fields.some(field => !field.key.trim() || !field.label.trim())
+        )
+            return onError('请填写格式名称、分隔符及完整字段定义');
+        if (new Set(fields.map(field => field.key.trim())).size !== fields.length)
+            return onError('字段 key 不能重复');
+        try {
+            await save({
+                variables: {
+                    input: {
+                        productVariantId: variant.id,
+                        enabled,
+                        formatName: formatName.trim(),
+                        delimiter,
+                        fields: fields.map(field => ({
+                            key: field.key.trim(),
+                            label: field.label.trim(),
+                            labelEn: field.labelEn.trim() || null,
+                            secret: field.secret,
+                        })),
+                        instructionsZh: instructionsZh.trim() || null,
+                        instructionsEn: instructionsEn.trim() || null,
+                        lowStockThreshold: threshold,
+                    },
+                },
+            });
+            await onCompleted('卡密格式与预警阈值已保存');
+        } catch (error) {
+            onError(errorText(error));
+        }
+    };
+    return (
+        <Modal
+            title="卡密格式与自动交付"
+            description={`${variant.product.name} / ${variant.name} · ${variant.sku}`}
+            onClose={onClose}
+        >
+            <label className="mb-5 flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs">
+                <span>
+                    <strong className="block text-slate-800">启用卡密自动交付</strong>
+                    <span className="mt-1 block text-[10px] text-slate-400">
+                        停用后新订单不会从该 SKU 自动取卡
+                    </span>
+                </span>
+                <input
+                    type="checkbox"
+                    checked={enabled}
+                    onChange={event => setEnabled(event.target.checked)}
+                />
+            </label>
+            <div className="grid gap-4 sm:grid-cols-3">
+                <Field label="格式名称 *">
+                    <input
+                        value={formatName}
+                        onChange={event => setFormatName(event.target.value)}
+                        className={inputClass}
+                    />
+                </Field>
+                <Field label="字段分隔符 *">
+                    <input
+                        value={delimiter}
+                        onChange={event => setDelimiter(event.target.value)}
+                        className={`${inputClass} font-mono`}
+                    />
+                </Field>
+                <Field label="低库存阈值">
+                    <input
+                        type="number"
+                        min={0}
+                        value={threshold}
+                        onChange={event => setThreshold(Math.max(0, Number(event.target.value) || 0))}
+                        className={inputClass}
+                    />
+                </Field>
+            </div>
+            <div className="mt-5">
+                <div className="mb-2 flex items-center justify-between">
+                    <strong className="text-xs text-slate-700">卡密字段</strong>
+                    <button
+                        type="button"
+                        onClick={() =>
+                            setFields(current => [
+                                ...current,
+                                { key: '', label: '', labelEn: '', secret: true },
+                            ])
+                        }
+                        className="text-[10px] font-bold text-blue-600"
+                    >
+                        <Plus className="mr-1 inline h-3 w-3" />
+                        添加字段
+                    </button>
+                </div>
+                <div className="space-y-2">
+                    {fields.map((field, index) => (
+                        <div
+                            key={index}
+                            className="grid gap-2 rounded-lg border border-slate-200 p-3 sm:grid-cols-[1fr_1fr_1fr_auto_auto]"
+                        >
+                            <input
+                                value={field.key}
+                                onChange={event => updateField(index, { key: event.target.value })}
+                                placeholder="key"
+                                className={`${inputClass} font-mono`}
+                            />
+                            <input
+                                value={field.label}
+                                onChange={event => updateField(index, { label: event.target.value })}
+                                placeholder="中文标签"
+                                className={inputClass}
+                            />
+                            <input
+                                value={field.labelEn}
+                                onChange={event => updateField(index, { labelEn: event.target.value })}
+                                placeholder="English label"
+                                className={inputClass}
+                            />
+                            <label className="flex items-center gap-1 text-[10px] text-slate-600">
+                                <input
+                                    type="checkbox"
+                                    checked={field.secret}
+                                    onChange={event => updateField(index, { secret: event.target.checked })}
+                                />
+                                敏感
+                            </label>
+                            <button
+                                type="button"
+                                onClick={() => setFields(current => current.filter((_, i) => i !== index))}
+                                disabled={fields.length === 1}
+                                className="text-rose-600 disabled:opacity-30"
+                            >
+                                移除
+                            </button>
+                        </div>
+                    ))}
+                </div>
+            </div>
+            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                <Field label="中文交付说明">
+                    <textarea
+                        rows={4}
+                        value={instructionsZh}
+                        onChange={event => setInstructionsZh(event.target.value)}
+                        className={inputClass}
+                    />
+                </Field>
+                <Field label="English instructions">
+                    <textarea
+                        rows={4}
+                        value={instructionsEn}
+                        onChange={event => setInstructionsEn(event.target.value)}
+                        className={inputClass}
+                    />
+                </Field>
+            </div>
+            <ModalActions
+                onClose={onClose}
+                onSave={() => void submit()}
+                saving={state.loading}
+                saveLabel="保存卡密配置"
+            />
+        </Modal>
+    );
+}
+
+function ImportDialog({
+    variant,
+    config,
+    onClose,
+    onCompleted,
+    onError,
+}: {
+    variant: AutoCardVariantRecord;
+    config: AutoCardConfigRecord;
+    onClose: () => void;
+    onCompleted: (message: string) => Promise<void>;
+    onError: (message: string) => void;
+}) {
+    const [rawText, setRawText] = useState('');
+    const [previewResult, setPreviewResult] = useState<
+        AutoCardImportPreviewResult['previewAutoCardPoolImport'] | null
+    >(null);
+    const [preview, previewState] = useMutation<AutoCardImportPreviewResult>(
+        PREVIEW_AUTO_CARD_IMPORT_MUTATION,
+    );
+    const [importItems, importState] = useMutation<{
+        importAutoCardPoolItems: { importedCount: number; duplicateCount: number; availableCount: number };
+    }>(IMPORT_AUTO_CARD_ITEMS_MUTATION);
+    const runPreview = async () => {
+        if (!rawText.trim()) return onError('请输入需要导入的卡密内容');
+        try {
+            const response = await preview({
+                variables: { input: { productVariantId: variant.id, rawText } },
+            });
+            const result = response.data?.previewAutoCardPoolImport;
+            if (!result) throw new Error('后端未返回导入预览');
+            setPreviewResult(result);
+        } catch (error) {
+            onError(errorText(error));
+        }
+    };
+    const commit = async () => {
+        if (!previewResult?.validCount || previewResult.invalidCount) return;
+        try {
+            const response = await importItems({
+                variables: { input: { productVariantId: variant.id, rawText } },
+            });
+            const result = response.data?.importAutoCardPoolItems;
+            if (!result) throw new Error('后端未返回导入结果');
+            await onCompleted(
+                `卡密导入完成：新增 ${result.importedCount} 条，重复 ${result.duplicateCount} 条，当前可用 ${result.availableCount} 条`,
+            );
+        } catch (error) {
+            onError(errorText(error));
+        }
+    };
+    return (
+        <Modal
+            title="批量导入卡密"
+            description={`${variant.product.name} / ${variant.name} · 每行一条，字段按“${config.delimiter}”分隔`}
+            onClose={onClose}
+        >
+            <div className="rounded-lg bg-blue-50 p-3 text-[10px] leading-5 text-blue-800">
+                字段顺序：{config.fields.map(field => field.label).join(` ${config.delimiter} `)}
+                。预览只返回脱敏结果，导入后密文存储。
+            </div>
+            <textarea
+                rows={10}
+                value={rawText}
+                onChange={event => {
+                    setRawText(event.target.value);
+                    setPreviewResult(null);
+                }}
+                placeholder={config.fields.map(field => field.label).join(config.delimiter)}
+                className={`${inputClass} mt-4 font-mono leading-5`}
+                spellCheck={false}
+            />
+            {previewResult && (
+                <div
+                    className={`mt-4 rounded-xl border p-4 text-xs ${previewResult.invalidCount ? 'border-rose-200 bg-rose-50' : 'border-emerald-200 bg-emerald-50'}`}
+                >
+                    <div className="flex gap-4 font-bold">
+                        <span className="text-emerald-700">有效 {previewResult.validCount}</span>
+                        <span className="text-rose-700">错误 {previewResult.invalidCount}</span>
+                    </div>
+                    {previewResult.rows.slice(0, 3).map(row => (
+                        <div key={row.lineNumber} className="mt-2 font-mono text-[9px] text-slate-600">
+                            第 {row.lineNumber} 行：
+                            {row.fields.map(field => `${field.label}=${field.value}`).join('；')}
+                        </div>
+                    ))}
+                    {previewResult.errors.map(error => (
+                        <div key={error.lineNumber} className="mt-2 text-[10px] text-rose-700">
+                            第 {error.lineNumber} 行：{error.message}
+                        </div>
+                    ))}
+                </div>
+            )}
+            <div className="mt-6 flex justify-end gap-2 border-t border-slate-100 pt-4">
+                <button
+                    type="button"
+                    onClick={onClose}
+                    disabled={previewState.loading || importState.loading}
+                    className={secondaryButton}
+                >
+                    取消
+                </button>
+                {!previewResult ? (
+                    <button
+                        type="button"
+                        onClick={() => void runPreview()}
+                        disabled={previewState.loading || !rawText.trim()}
+                        className={primaryButton}
+                    >
+                        {previewState.loading && <LoaderCircle className="h-3.5 w-3.5 animate-spin" />}
+                        校验并预览
+                    </button>
+                ) : (
+                    <button
+                        type="button"
+                        onClick={() => void commit()}
+                        disabled={
+                            importState.loading ||
+                            previewResult.invalidCount > 0 ||
+                            previewResult.validCount === 0
+                        }
+                        className={primaryButton}
+                    >
+                        {importState.loading && <LoaderCircle className="h-3.5 w-3.5 animate-spin" />}确认导入{' '}
+                        {previewResult.validCount} 条
+                    </button>
+                )}
+            </div>
+        </Modal>
+    );
+}
+
+function RevealDialog({
+    value,
+    onClose,
+}: {
+    value: { id: string; fields: AutoCardFieldRecord[] };
+    onClose: () => void;
+}) {
+    const [copied, setCopied] = useState('');
+    return (
+        <Modal
+            title="卡密明文"
+            description="敏感操作已由后端权限控制，请勿在不安全环境截图或转发"
+            onClose={onClose}
+        >
+            <div className="space-y-2">
+                {value.fields.map(field => (
+                    <div
+                        key={field.key}
+                        className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 p-3"
+                    >
+                        <div>
+                            <div className="text-[9px] text-slate-400">{field.label}</div>
+                            <code className="mt-1 block break-all font-mono text-xs font-bold text-slate-800">
+                                {field.value}
+                            </code>
+                        </div>
+                        <button
+                            type="button"
+                            aria-label={`复制${field.label}`}
+                            title={`复制${field.label}`}
+                            onClick={async () => {
+                                await navigator.clipboard.writeText(field.value);
+                                setCopied(field.key);
+                            }}
+                            className={iconButton}
+                        >
+                            {copied === field.key ? (
+                                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                            ) : (
+                                <Copy className="h-4 w-4" />
+                            )}
+                        </button>
+                    </div>
+                ))}
+            </div>
+            <div className="mt-5 flex justify-end">
+                <button type="button" onClick={onClose} className={primaryButton}>
+                    关闭明文
+                </button>
+            </div>
+        </Modal>
+    );
+}
+function DisableDialog({
+    item,
+    onClose,
+    onCompleted,
+    onError,
+}: {
+    item: AutoCardPoolItemRecord;
+    onClose: () => void;
+    onCompleted: () => Promise<void>;
+    onError: (message: string) => void;
+}) {
+    const [reason, setReason] = useState('');
+    const [setEnabled, state] = useMutation(SET_AUTO_CARD_ITEM_ENABLED_MUTATION);
+    const submit = async () => {
+        if (!reason.trim()) return onError('请填写停用原因');
+        try {
+            await setEnabled({ variables: { id: item.id, enabled: false, reason: reason.trim() } });
+            await onCompleted();
+        } catch (error) {
+            onError(errorText(error));
+        }
+    };
+    return (
+        <Modal
+            title={`停用卡密 #${item.sequence}`}
+            description="停用后不会被新订单分配，之后可以恢复"
+            onClose={onClose}
+        >
+            <Field label="停用原因 *">
+                <textarea
+                    rows={4}
+                    value={reason}
+                    onChange={event => setReason(event.target.value)}
+                    className={inputClass}
+                    autoFocus
+                />
+            </Field>
+            <ModalActions
+                onClose={onClose}
+                onSave={() => void submit()}
+                saving={state.loading}
+                saveLabel="确认停用"
+            />
+        </Modal>
+    );
+}
+function PoolStateBadge({ state }: { state: AutoCardPoolItemRecord['state'] }) {
+    const labels = { AVAILABLE: '可用', ASSIGNED: '已分配', DISABLED: '已停用' };
+    const classes =
+        state === 'AVAILABLE'
+            ? 'bg-emerald-50 text-emerald-700'
+            : state === 'ASSIGNED'
+              ? 'bg-blue-50 text-blue-700'
+              : 'bg-slate-100 text-slate-500';
+    return <span className={`rounded px-2 py-1 text-[9px] font-bold ${classes}`}>{labels[state]}</span>;
+}
+function DeliveryStateBadge({ state }: { state: AutoCardDeliveryRecord['state'] }) {
+    const labels = {
+        WAITING_STOCK: '等待库存',
+        ALLOCATED: '已分配待发送',
+        RETRYING: '重试中',
+        SENT: '已发送',
+        MANUAL_REVIEW: '人工复核',
+    };
+    const classes =
+        state === 'SENT'
+            ? 'bg-emerald-50 text-emerald-700'
+            : state === 'MANUAL_REVIEW' || state === 'WAITING_STOCK'
+              ? 'bg-rose-50 text-rose-700'
+              : 'bg-blue-50 text-blue-700';
+    return <span className={`rounded px-2 py-1 text-[9px] font-bold ${classes}`}>{labels[state]}</span>;
+}
+function StatusPill({ ok, text }: { ok: boolean; text: string }) {
+    return (
+        <span
+            className={`rounded px-2 py-1 font-bold ${ok ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}
+        >
+            {text}
+        </span>
+    );
+}
+function Metric({
+    label,
+    value,
+    tone = 'slate',
+}: {
+    label: string;
+    value: number;
+    tone?: 'slate' | 'green' | 'amber' | 'rose';
+}) {
+    const colors = {
+        slate: 'text-slate-900',
+        green: 'text-emerald-700',
+        amber: 'text-amber-700',
+        rose: 'text-rose-700',
+    };
+    return (
+        <div className="border-b border-slate-100 p-4 last:border-0 sm:border-b-0 sm:border-r sm:last:border-r-0">
+            <div className="text-[9px] font-bold text-slate-400">{label}</div>
+            <div className={`mt-1 font-mono text-xl font-bold ${colors[tone]}`}>{value}</div>
+        </div>
+    );
+}
+function Pagination({
+    page,
+    pageSize,
+    totalItems,
+    loading,
+    onPageChange,
+}: {
+    page: number;
+    pageSize: number;
+    totalItems: number;
+    loading: boolean;
+    onPageChange: (page: number) => void;
+}) {
+    const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+    return (
+        <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 text-[10px] text-slate-500">
+            <span>
+                共 {totalItems} 条，第 {Math.min(page + 1, totalPages)} / {totalPages} 页
+            </span>
+            <div className="flex gap-2">
+                <button
+                    type="button"
+                    onClick={() => onPageChange(Math.max(0, page - 1))}
+                    disabled={page === 0 || loading}
+                    className={iconButton}
+                    aria-label="上一页"
+                >
+                    <ChevronLeft className="h-4 w-4" />
+                </button>
+                <button
+                    type="button"
+                    onClick={() => onPageChange(Math.min(totalPages - 1, page + 1))}
+                    disabled={page >= totalPages - 1 || loading}
+                    className={iconButton}
+                    aria-label="下一页"
+                >
+                    <ChevronRight className="h-4 w-4" />
+                </button>
+            </div>
+        </div>
+    );
+}
+function TabButton({
+    active,
+    onClick,
+    children,
+}: {
+    active: boolean;
+    onClick: () => void;
+    children: React.ReactNode;
+}) {
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            className={`rounded-md px-3 py-1.5 text-xs font-bold ${active ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
+        >
+            {children}
+        </button>
+    );
+}
+function Modal({
+    title,
+    description,
+    onClose,
+    children,
+}: {
+    title: string;
+    description?: string;
+    onClose: () => void;
+    children: React.ReactNode;
+}) {
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
+            <AccessibleDialogSurface
+                accessibleName={title}
+                onRequestClose={onClose}
+                className="max-h-[94vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl"
+            >
+                <div className="mb-5 flex items-start justify-between gap-4">
+                    <div>
+                        <h2 className="font-bold text-slate-900">{title}</h2>
+                        {description && (
+                            <p className="mt-1 text-xs leading-5 text-slate-400">{description}</p>
+                        )}
+                    </div>
+                    <button type="button" onClick={onClose} className="p-1 text-slate-400" aria-label="关闭">
+                        <X className="h-5 w-5" />
+                    </button>
+                </div>
+                {children}
+            </AccessibleDialogSurface>
+        </div>
+    );
+}
+function ModalActions({
+    onClose,
+    onSave,
+    saving,
+    saveLabel,
+}: {
+    onClose: () => void;
+    onSave: () => void;
+    saving: boolean;
+    saveLabel: string;
+}) {
+    return (
+        <div className="mt-6 flex justify-end gap-2 border-t border-slate-100 pt-4">
+            <button type="button" onClick={onClose} disabled={saving} className={secondaryButton}>
+                取消
+            </button>
+            <button type="button" onClick={onSave} disabled={saving} className={primaryButton}>
+                {saving && <LoaderCircle className="h-3.5 w-3.5 animate-spin" />}
+                {saveLabel}
+            </button>
+        </div>
+    );
+}
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+    return (
+        <label className="block text-xs font-bold text-slate-700">
+            <span className="mb-1.5 block">{label}</span>
+            {children}
+        </label>
+    );
+}
+function EmptyState() {
+    return (
+        <div className="flex min-h-96 flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center">
+            <PackageCheck className="h-9 w-9 text-slate-300" />
+            <h2 className="mt-3 text-sm font-bold text-slate-700">没有自动发卡 SKU</h2>
+            <p className="mt-1 max-w-lg text-xs leading-5 text-slate-400">
+                先在商品编辑页将 SKU 设置为“数字商品 / 卡密自动交付”，之后再回来配置卡密格式并导入库存。
+            </p>
+        </div>
+    );
+}
+function EmptyRow({ colSpan, text }: { colSpan: number; text: string }) {
+    return (
+        <tr>
+            <td colSpan={colSpan} className="p-12 text-center text-xs text-slate-400">
+                {text}
+            </td>
+        </tr>
+    );
+}
+function LoadingState({ text }: { text: string }) {
+    return (
+        <div className="flex min-h-96 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-xs text-slate-500">
+            <LoaderCircle className="h-4 w-4 animate-spin" />
+            {text}
+        </div>
+    );
+}
+function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
+    return (
+        <div className="flex min-h-96 flex-col items-center justify-center rounded-xl border border-rose-200 bg-white p-6 text-center">
+            <AlertCircle className="h-8 w-8 text-rose-500" />
+            <h2 className="mt-3 text-sm font-bold text-slate-800">卡密数据加载失败</h2>
+            <p className="mt-1 max-w-lg text-xs text-rose-600">{toUserFacingError(message)}</p>
+            <button type="button" onClick={onRetry} className={`${secondaryButton} mt-4`}>
+                重试
+            </button>
+        </div>
+    );
+}
+function Message({
+    kind,
+    onClose,
+    children,
+}: {
+    kind: 'success' | 'error';
+    onClose: () => void;
+    children: React.ReactNode;
+}) {
+    const success = kind === 'success';
+    return (
+        <div
+            className={`flex items-center gap-2 rounded-xl border p-3 text-xs ${success ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-rose-200 bg-rose-50 text-rose-800'}`}
+        >
+            {success ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
+            <span className="flex-1">{children}</span>
+            <button type="button" onClick={onClose} aria-label="关闭">
+                <X className="h-4 w-4" />
+            </button>
+        </div>
+    );
+}
+function errorText(error: unknown) {
+    return toUserFacingError(error, '卡密操作失败，请稍后重试');
+}
+const inputClass =
+    'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-normal text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-50 disabled:text-slate-400';
+const primaryButton =
+    'flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50';
+const secondaryButton =
+    'flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50';
+const iconButton = 'inline-flex rounded-lg p-2 text-slate-500 hover:bg-slate-100 disabled:opacity-40';
+const theadClass = 'border-b border-slate-200 bg-slate-50 text-[10px] font-bold text-slate-500';

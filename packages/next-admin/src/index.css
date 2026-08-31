@@ -1,0 +1,30 @@
+@import 'tailwindcss';
+
+@layer base {
+    body {
+        background-color: #f0f2f5;
+        color: #1e293b;
+    }
+}
+
+@layer utilities {
+    .scrollbar-hidden {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+    }
+
+    .scrollbar-hidden::-webkit-scrollbar {
+        display: none;
+    }
+
+    @media (max-width: 767px) {
+        .mobile-scrollbar-hidden {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        .mobile-scrollbar-hidden::-webkit-scrollbar {
+            display: none;
+        }
+    }
+}

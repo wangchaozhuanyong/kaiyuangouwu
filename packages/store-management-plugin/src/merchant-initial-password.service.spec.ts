@@ -99,19 +99,47 @@ describe('MerchantInitialPasswordService', () => {
         expect(passwordCipher.check).not.toHaveBeenCalled();
     });
 
-    it.each(['refundOrder', 'settleRefund', 'cancelOrder', 'updateRole', 'rotateApiKey'])(
-        'requires the current password for %s',
-        async fieldName => {
-            const rejected = createService(null, false);
-            await expect(
-                rejected.service.assertSensitiveAdminMutation(
-                    { activeUserId: 'user-1', apiType: 'admin' } as any,
-                    fieldName,
-                    undefined,
-                ),
-            ).rejects.toThrow('当前账号密码不正确');
-        },
-    );
+    it('requires the current password only when updating the active administrator password', async () => {
+        const passwordUpdate = createService(null, false);
+        await expect(
+            passwordUpdate.service.assertSensitiveAdminMutation(
+                { activeUserId: 'user-1', apiType: 'admin' } as any,
+                'updateActiveAdministrator',
+                undefined,
+                { input: { password: 'SafePassword9!' } },
+            ),
+        ).rejects.toThrow('当前账号密码不正确');
+
+        const profileUpdate = createService(null, false);
+        await expect(
+            profileUpdate.service.assertSensitiveAdminMutation(
+                { activeUserId: 'user-1', apiType: 'admin' } as any,
+                'updateActiveAdministrator',
+                undefined,
+                { input: { firstName: '商家', lastName: '管理员' } },
+            ),
+        ).resolves.toBeUndefined();
+        expect(profileUpdate.passwordCipher.check).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        'refundOrder',
+        'settleRefund',
+        'cancelOrder',
+        'updateRole',
+        'rotateApiKey',
+        'adjustReferralBalance',
+        'processReferralWithdrawal',
+    ])('requires the current password for %s', async fieldName => {
+        const rejected = createService(null, false);
+        await expect(
+            rejected.service.assertSensitiveAdminMutation(
+                { activeUserId: 'user-1', apiType: 'admin' } as any,
+                fieldName,
+                undefined,
+            ),
+        ).rejects.toThrow('当前账号密码不正确');
+    });
 
     it('requires the current password only when a bulk product update changes enabled state', async () => {
         const protectedUpdate = createService(null, false);
@@ -131,6 +159,29 @@ describe('MerchantInitialPasswordService', () => {
                 'updateProductVariants',
                 undefined,
                 { input: [{ id: 'variant-1', facetValueIds: ['facet-value-1'] }] },
+            ),
+        ).resolves.toBeUndefined();
+        expect(ordinaryUpdate.passwordCipher.check).not.toHaveBeenCalled();
+    });
+
+    it('requires the current password only when a single product update changes enabled state', async () => {
+        const protectedUpdate = createService(null, false);
+        await expect(
+            protectedUpdate.service.assertSensitiveAdminMutation(
+                { activeUserId: 'user-1', apiType: 'admin' } as any,
+                'updateProduct',
+                undefined,
+                { input: { id: 'product-1', enabled: true } },
+            ),
+        ).rejects.toThrow('当前账号密码不正确');
+
+        const ordinaryUpdate = createService(null, false);
+        await expect(
+            ordinaryUpdate.service.assertSensitiveAdminMutation(
+                { activeUserId: 'user-1', apiType: 'admin' } as any,
+                'updateProduct',
+                undefined,
+                { input: { id: 'product-1', facetValueIds: ['facet-value-1'] } },
             ),
         ).resolves.toBeUndefined();
         expect(ordinaryUpdate.passwordCipher.check).not.toHaveBeenCalled();
