@@ -113,10 +113,7 @@ const storefrontEntrySecret = configuredValue(
     'STOREFRONT_ENTRY_SECRET',
     'development-storefront-entry-secret',
 );
-const dashboardAppDir =
-    path.basename(__dirname) === 'dist'
-        ? path.join(__dirname, './dashboard')
-        : path.join(__dirname, './dist/dashboard');
+const dashboardAppDir = path.join(serverRoot, '../next-admin/dist');
 const corsOrigins = process.env.VENDURE_CORS_ORIGINS?.split(',')
     .map(origin => origin.trim())
     .filter(Boolean);

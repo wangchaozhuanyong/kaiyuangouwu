@@ -2,6 +2,7 @@ import { gql } from '@apollo/client';
 import { useQuery } from '@apollo/client/react';
 import { lazy, useEffect, useState } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+
 import { clearAuthSession, hasActiveChannelSelection, setInitialActiveChannel } from './apollo';
 import { ConfirmDialogProvider } from './components/ConfirmDialog';
 import { AppShell } from './layouts/AppShell';
@@ -218,7 +219,7 @@ function AuthenticatedShell() {
 function App() {
     return (
         <ConfirmDialogProvider>
-            <BrowserRouter>
+            <BrowserRouter basename={import.meta.env.BASE_URL}>
                 <Routes>
                     <Route path="/login" element={<LoginModule />} />
 

@@ -46,6 +46,10 @@ VITE_VENDURE_ADMIN_API_URL=http://localhost:3000/admin-api
 
 前端同时支持 Vendure Cookie 与 Bearer Token 登录。不要在代码或环境示例中写入真实账号、密码或 API Key。
 
+生产构建固定挂载在 `/dashboard/`，未显式设置 `VITE_VENDURE_ADMIN_API_URL` 时使用同域
+`/admin-api`。生产运行产物必须包含 `packages/next-admin/dist`，并由 Vendure
+`DashboardPlugin` 提供 SPA 路由回退。
+
 ## 后端联调
 
 对应后端位于 `../dev-server`。其开发启动默认执行仓库迁移，并可能按环境变量同步数据库结构。联调前必须确认：

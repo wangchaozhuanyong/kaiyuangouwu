@@ -62,7 +62,7 @@ verification_result:
 - PM2 进程：`vendure-api`、`vendure-worker`
 - PM2 生产环境固定设置 `VENDURE_DISABLE_TELEMETRY=true`，防止 Vendure 的文件系统兜底在不可变运行目录内写入 `.vendure/.installation-id`
 - Storefront 静态目录：`/var/www/kaiyuangouwu-current/packages/storefront/dist`
-- Dashboard 静态目录：`/var/www/kaiyuangouwu-current/packages/dev-server/dist/dashboard`（由 Vendure API 插件提供）
+- Dashboard 静态目录：`/var/www/kaiyuangouwu-current/packages/next-admin/dist`（由 Vendure API 的 `DashboardPlugin` 提供）
 - Nginx 配置基线：`deploy/nginx/damatong.conf`
 - TLS 协议只在 `deploy/nginx/damatong.conf` 的 `http` 作用域声明一次，固定为 `ssl_protocols TLSv1.2 TLSv1.3;`；生产机 `/etc/nginx/nginx.conf` 不得保留发行版默认的重复 `ssl_protocols` 声明。
 - 数据库：同一 EC2 上的 MySQL 8.0，使用 `single-host` 生产模式；每日逻辑备份与恢复演练脚本位于 `deploy/systemd/`。
@@ -128,7 +128,7 @@ GitHub OIDC 临时角色通过 AWS SSM 执行只读检查：物理可用内存�
 它只会读取 `kaiyuangouwu-current` 与 `current-sha` 指向的最后一个已验证运行包，要求两者 SHA 一致，
 并通过 `deploy/recover-current-production-runtime.sh` 在同一生产锁内重建 PM2 进程；不会回退 Git、数据库或版本标记。
 
-若仓库根命令与当次改动范围不匹配，以 `package.json` 的现有脚本和本次实际测试清单为准，并在发布记录中写明。构建 Dashboard 前必须使用干净的 `packages/dev-server/dist`，避免旧 Vite 哈希文件混入。
+若仓库根命令与当次改动范围不匹配，以 `package.json` 的现有脚本和本次实际测试清单为准，并在发布记录中写明。构建 Dashboard 前必须使用干净的 `packages/next-admin/dist` 与 `packages/dev-server/dist`，避免旧 Vite 哈希文件混入。生产 Dashboard 只能来自 `packages/next-admin/dist`，不得回退到 Vendure 默认 Dashboard 构建。
 
 ### 提示词 Skill 自动升级
 
@@ -143,7 +143,7 @@ GitHub OIDC 临时角色通过 AWS SSM 执行只读检查：物理可用内存�
 
 1. **单一版本标识**：发布开始时锁定一个完整的 40 位 `TARGET_SHA`。远端分支、隔离工作树、构建产物、服务器代码和发布记录必须全部等于该 SHA。
 2. **远端只能快进**：推送前记录 `origin/main` 的 `BASE_MAIN_SHA`，确认它是 `TARGET_SHA` 的祖先；使用普通 `git push`，禁止 `--force`。如果推送因远端已更新而失败，重新拉取、验证和构建，不能用旧本地分支覆盖远端。
-3. **只从干净提交构建**：从 `TARGET_SHA` 创建 detached 隔离工作树；要求 `git status --porcelain` 为空。构建前明确清空该隔离工作树内的 `packages/dev-server/dist` 和 `packages/storefront/dist`，不复用开发目录或上次发布目录。
+3. **只从干净提交构建**：从 `TARGET_SHA` 创建 detached 隔离工作树；要求 `git status --porcelain` 为空。构建前明确清空该隔离工作树内的 `packages/next-admin/dist`、`packages/dev-server/dist` 和 `packages/storefront/dist`，不复用开发目录或上次发布目录。
 4. **产物不可变且可验证**：候选目录名必须包含 `TARGET_SHA`、UTC 时间、`linux-x64` 且不得复用。产物必须由 `build:production-runtime` 生成，包含 Git SHA、构建时间、Bun/Node 版本、运行依赖清单和所有普通文件的 SHA-256 清单；上传后必须先运行自带验证器。
 5. **服务器串行发布**：服务器使用 `flock` 获取唯一发布锁。锁内再次确认 `origin/main == TARGET_SHA`、当前运行提交是 `TARGET_SHA` 的祖先、受版本控制文件无本地修改；不满足时拒绝部署。
 6. **代码只做快进更新**：服务器仓库只允许 `git merge --ff-only origin/main`，正常发布禁止 `reset --hard`、强制切分支或覆盖式同步。数据库、`.env`、上传资产和数字交付文件不参与代码同步。

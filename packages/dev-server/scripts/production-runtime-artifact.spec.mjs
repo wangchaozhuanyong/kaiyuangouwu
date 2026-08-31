@@ -35,6 +35,12 @@ void test('runtime artifact includes the telemetry plugin required by dev-server
     assert.ok(REQUIRED_RUNTIME_FILES.includes('packages/telemetry-plugin/dist/index.js'));
 });
 
+void test('runtime artifact serves the standalone next-admin application', () => {
+    assert.deepEqual(RUNTIME_PACKAGE_ASSETS['next-admin'], ['dist']);
+    assert.ok(REQUIRED_RUNTIME_FILES.includes('packages/next-admin/dist/index.html'));
+    assert.ok(!REQUIRED_RUNTIME_FILES.includes('packages/dev-server/dist/dashboard/index.html'));
+});
+
 void test('runtime verification rejects missing Vendure workspace packages', async () => {
     const fixtureRoot = await mkdtemp(path.join(tmpdir(), 'vendure-runtime-workspace-link-'));
     try {

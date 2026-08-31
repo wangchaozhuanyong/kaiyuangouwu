@@ -9,7 +9,7 @@ const ACTIVE_CHANNEL_TOKEN_KEY = 'vendure-active-channel-token';
 const SENSITIVE_ACTION_PASSWORD_HEADER = 'x-vendure-sensitive-action-password';
 
 export const ADMIN_API_URL = import.meta.env.VITE_VENDURE_ADMIN_API_URL?.trim()
-  || 'http://localhost:3000/admin-api';
+  || '/admin-api';
 
 export const getServerHealthUrl = () => {
   const apiUrl = new URL(ADMIN_API_URL, window.location.origin);
