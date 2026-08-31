@@ -135,16 +135,12 @@ describe('product image navigation layers', () => {
             variants: [{ ...digitalProduct.variants[0], autoCardAvailableStock: 0 }],
         };
         const markup = renderToStaticMarkup(
-            <ProductCard
-                product={soldOutProduct}
-                market={market}
-                locale={market.locale}
-                onOpen={vi.fn()}
-            />,
+            <ProductCard product={soldOutProduct} market={market} locale={market.locale} onOpen={vi.fn()} />,
         );
 
         expect(markup).toContain('已售罄');
         expect(markup).toContain('whitespace-nowrap');
+        expect(markup).toContain('items-center justify-between gap-2');
         expect(markup).not.toContain('-webkit-line-clamp:2');
     });
 

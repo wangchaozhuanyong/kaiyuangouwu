@@ -84,22 +84,22 @@ export function ProductCard({
                 {trimText(product.description, 26)}
             </span>
 
-            <footer className="mt-auto flex min-h-[42px] px-2.5 pt-2">
-                <div className="flex min-w-0 flex-col gap-0.5 [&_b]:text-[16px] [&_b]:font-extrabold [&_b]:leading-[1.2] [&_b]:tracking-[-0.02em] [&_b]:text-[var(--accent)] [&_b]:[font-family:var(--font-numeric)]">
+            <footer className="mt-auto flex min-h-[42px] items-center justify-between gap-2 px-2.5 pt-2">
+                <div className="min-w-0 [&_b]:text-[16px] [&_b]:font-extrabold [&_b]:leading-[1.2] [&_b]:tracking-[-0.02em] [&_b]:text-[var(--accent)] [&_b]:[font-family:var(--font-numeric)]">
                     <PriceDisplay
                         value={variant ? variant.priceWithTax : 0}
                         currency={variant ? variant.currencyCode : market.currencyCode}
                         locale={locale}
                     />
-                    <small
-                        className={cn(
-                            'overflow-hidden text-ellipsis whitespace-nowrap text-[10.5px] font-medium text-[var(--muted)]',
-                            availability.soldOut && 'text-red-600',
-                        )}
-                    >
-                        {stockLabel}
-                    </small>
                 </div>
+                <small
+                    className={cn(
+                        'min-w-0 max-w-[52%] shrink overflow-hidden text-ellipsis whitespace-nowrap text-right text-[10.5px] font-medium text-[var(--muted)]',
+                        availability.soldOut && 'text-red-600',
+                    )}
+                >
+                    {stockLabel}
+                </small>
             </footer>
         </article>
     );
