@@ -96,6 +96,7 @@ import {
     refreshStoreUsdtRatesTask,
     syncAutomaticStoreCurrencyPricesTask,
 } from './store-currency-tasks';
+import { StoreDeprovisionService } from './store-deprovision.service';
 import { StorePaymentReportingService } from './store-payment-reporting.service';
 import { StoreProfileAdminResolver } from './store-profile.resolver';
 import { StoreProfileService } from './store-profile.service';
@@ -161,6 +162,7 @@ import {
         MerchantCatalogAccessService,
         MerchantInitialPasswordService,
         StoreActivationReadinessService,
+        StoreDeprovisionService,
         StoreProfileService,
         StorefrontActivationService,
         StoreCommerceSettingsService,

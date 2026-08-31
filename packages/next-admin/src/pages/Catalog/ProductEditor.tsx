@@ -20,9 +20,21 @@ import {
 } from 'lucide-react';
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import type { CustomFieldValueMap } from '../../custom-fields/custom-field-types';
+
 import { client, sensitiveActionContext } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
+import {
+    addCustomFieldsToDocument,
+    customFieldInputFromValues,
+    customFieldValuesFromEntity,
+    localizedCustomFieldInputFromValues,
+    validateCustomFieldValues,
+} from '../../custom-fields/custom-field-utils';
+import { useCustomFieldDefinitions } from '../../custom-fields/custom-fields-context';
+import { DynamicCustomFieldsForm } from '../../custom-fields/DynamicCustomFieldsForm';
+import { NextAdminActions, NextAdminPageBlocks } from '../../extensions/extension-hosts';
 import {
     ADD_OPTION_GROUP_TO_PRODUCT,
     ASSIGN_PRODUCTS_TO_CHANNEL,
@@ -125,6 +137,7 @@ interface ProductDetailRecord {
     name: string;
     slug: string;
     description: string;
+    customFields?: Record<string, unknown> | null;
     featuredAsset?: { id: string; preview: string; name: string } | null;
     assets: Array<{ id: string; name: string; preview: string }>;
     translations: Array<{
@@ -133,6 +146,7 @@ interface ProductDetailRecord {
         name: string;
         slug: string;
         description: string;
+        customFields?: Record<string, unknown> | null;
     }>;
     optionGroups: Array<{ id: string }>;
     facetValues: Array<{ id: string }>;
@@ -166,6 +180,7 @@ interface ProductEditorSnapshotInput {
     selectedChannelIds: string[];
     selectedOptionGroupIds: string[];
     variants: ProductVariantState[];
+    dynamicCustomFields: CustomFieldValueMap;
 }
 
 const serializeProductEditor = (input: ProductEditorSnapshotInput) =>
@@ -205,6 +220,14 @@ export function ProductEditor() {
     const navigate = useNavigate();
     const productId = params.id;
     const isCreateMode = !productId || productId === 'new';
+    const productCustomFieldDefinitions = useCustomFieldDefinitions('Product');
+    const productDetailDocument = useMemo(
+        () =>
+            addCustomFieldsToDocument(GET_PRODUCT_DETAIL, 'Product', productCustomFieldDefinitions, [
+                'product',
+            ]),
+        [productCustomFieldDefinitions],
+    );
 
     const [activeTab, setActiveTab] = useUrlTab<ProductEditorTab>(PRODUCT_EDITOR_TABS, 'basic');
 
@@ -213,7 +236,7 @@ export function ProductEditor() {
     const [slug, setSlug] = useState('');
     const [enabled, setEnabled] = useState(true);
     const [description, setDescription] = useState('');
-    const [translationId, setTranslationId] = useState<string | undefined>(undefined);
+    const [dynamicCustomFieldValues, setDynamicCustomFieldValues] = useState<CustomFieldValueMap>({});
 
     // 素材与图片关联 (使用真实 Asset ID)
     const [featuredAssetId, setFeaturedAssetId] = useState<string | null>(null);
@@ -282,7 +305,7 @@ export function ProductEditor() {
         refetch: refetchProduct,
     } = useQuery<{
         product: ProductDetailRecord | null;
-    }>(GET_PRODUCT_DETAIL, {
+    }>(productDetailDocument, {
         variables: { id: productId },
         skip: isCreateMode,
         fetchPolicy: 'network-only',
@@ -424,6 +447,9 @@ export function ProductEditor() {
             setSlug(sourceTranslation?.slug || p.slug || '');
             setEnabled(p.enabled ?? true);
             setDescription(sourceTranslation?.description || p.description || '');
+            setDynamicCustomFieldValues(
+                customFieldValuesFromEntity(productCustomFieldDefinitions, p.customFields, p.translations),
+            );
 
             if (p.featuredAsset) {
                 setFeaturedAssetId(p.featuredAsset.id);
@@ -446,8 +472,6 @@ export function ProductEditor() {
                     .filter(collection => hasDirectProductAssignment(collection.filters, p.id))
                     .map(collection => collection.id),
             );
-
-            setTranslationId(sourceTranslation?.id);
 
             if (p.variants.length > 0) {
                 setVariants(
@@ -482,6 +506,7 @@ export function ProductEditor() {
             setSlug('');
             setEnabled(true);
             setDescription('');
+            setDynamicCustomFieldValues({});
             setFeaturedAssetId(null);
             setFeaturedAssetPreview(null);
             setSelectedAssetIds([]);
@@ -492,7 +517,7 @@ export function ProductEditor() {
             setKnownOptionGroups({});
             setVariants([]);
         }
-    }, [productData, isCreateMode]);
+    }, [productData, isCreateMode, productCustomFieldDefinitions]);
 
     useEffect(() => {
         if (productData?.product) {
@@ -517,9 +542,11 @@ export function ProductEditor() {
                 selectedChannelIds,
                 selectedOptionGroupIds,
                 variants,
+                dynamicCustomFields: dynamicCustomFieldValues,
             }),
         [
             description,
+            dynamicCustomFieldValues,
             enabled,
             featuredAssetId,
             productName,
@@ -547,6 +574,7 @@ export function ProductEditor() {
                 selectedChannelIds: activeChannelId ? [activeChannelId] : [],
                 selectedOptionGroupIds: [],
                 variants: [],
+                dynamicCustomFields: {},
             });
         }
         const product = productData?.product;
@@ -585,8 +613,13 @@ export function ProductEditor() {
                 optionIds: variant.options.map(option => option.id),
                 isNew: false,
             })),
+            dynamicCustomFields: customFieldValuesFromEntity(
+                productCustomFieldDefinitions,
+                product.customFields,
+                product.translations,
+            ),
         });
-    }, [catalogChannelsData?.activeChannel.id, isCreateMode, productData]);
+    }, [catalogChannelsData?.activeChannel.id, isCreateMode, productCustomFieldDefinitions, productData]);
     const hasUnsavedChanges =
         !productLoading &&
         baselineEditorSnapshot !== null &&
@@ -596,7 +629,7 @@ export function ProductEditor() {
         '当前商品还有未保存的修改，离开后这些内容将丢失。确定离开吗？',
     );
     const leaveToProductList = () => {
-        if (confirmLeave()) navigate('/catalog/list');
+        if (confirmLeave()) void navigate('/catalog/list');
     };
 
     // Mutations
@@ -908,12 +941,63 @@ export function ProductEditor() {
     // 真实提交保存 (严格两阶段处理与明确阶段归因)
     const handleSave = async () => {
         if (!validateForm()) return;
+        const customFieldErrors = validateCustomFieldValues(
+            productCustomFieldDefinitions,
+            dynamicCustomFieldValues,
+        );
+        if (Object.keys(customFieldErrors).length > 0) {
+            setActiveTab('BASIC');
+            showError(Object.values(customFieldErrors)[0] ?? '商品扩展字段校验失败');
+            return;
+        }
 
         setSaving(true);
         setErrorMessage('');
         const completedStages: string[] = [];
 
         const generatedSlug = slug.trim() || createSlugFromName(productName);
+        const localizedFieldsFor = (languageCode: string) => {
+            const customFields = localizedCustomFieldInputFromValues(
+                productCustomFieldDefinitions,
+                dynamicCustomFieldValues,
+                languageCode,
+            );
+            return Object.keys(customFields).length > 0 ? { customFields } : {};
+        };
+        const updateTranslations = productData?.product
+            ? [
+                  ...productData.product.translations.map(translation => ({
+                      id: translation.id,
+                      languageCode: translation.languageCode,
+                      name:
+                          translation.languageCode === SOURCE_LANGUAGE_CODE
+                              ? productName.trim()
+                              : translation.name,
+                      slug:
+                          translation.languageCode === SOURCE_LANGUAGE_CODE
+                              ? generatedSlug
+                              : translation.slug,
+                      description:
+                          translation.languageCode === SOURCE_LANGUAGE_CODE
+                              ? description.trim()
+                              : translation.description,
+                      ...localizedFieldsFor(translation.languageCode),
+                  })),
+                  ...(productData.product.translations.some(
+                      translation => translation.languageCode === SOURCE_LANGUAGE_CODE,
+                  )
+                      ? []
+                      : [
+                            {
+                                languageCode: SOURCE_LANGUAGE_CODE,
+                                name: productName.trim(),
+                                slug: generatedSlug,
+                                description: description.trim(),
+                                ...localizedFieldsFor(SOURCE_LANGUAGE_CODE),
+                            },
+                        ]),
+              ]
+            : [];
 
         try {
             if (isCreateMode) {
@@ -928,12 +1012,17 @@ export function ProductEditor() {
                                 assetIds: selectedAssetIds,
                                 facetValueIds:
                                     selectedFacetValueIds.length > 0 ? selectedFacetValueIds : undefined,
+                                customFields: customFieldInputFromValues(
+                                    productCustomFieldDefinitions,
+                                    dynamicCustomFieldValues,
+                                ),
                                 translations: [
                                     {
                                         languageCode: SOURCE_LANGUAGE_CODE,
                                         name: productName.trim(),
                                         slug: generatedSlug,
                                         description: description.trim(),
+                                        ...localizedFieldsFor(SOURCE_LANGUAGE_CODE),
                                     },
                                 ],
                             },
@@ -951,7 +1040,7 @@ export function ProductEditor() {
                 try {
                     await syncProductOptionGroups(newProductId, []);
                 } catch (err: unknown) {
-                    navigate(`/catalog/products/${newProductId}`, { replace: true });
+                    void navigate(`/catalog/products/${newProductId}`, { replace: true });
                     showError(
                         `[阶段 2：商品已创建，但规格模板分配失败] ${toUserFacingError(err, '请稍后重试')}`,
                     );
@@ -982,7 +1071,7 @@ export function ProductEditor() {
                         });
                     } catch (err: unknown) {
                         // SPU 已创建但规格失败，如实告知用户，不能冒充成功
-                        navigate(`/catalog/products/${newProductId}`, { replace: true });
+                        void navigate(`/catalog/products/${newProductId}`, { replace: true });
                         showError(
                             `[阶段 3：商品与规格模板已保存，但 SKU 变体创建失败] ${toUserFacingError(err, '请稍后重试')}`,
                         );
@@ -997,7 +1086,7 @@ export function ProductEditor() {
                     await syncProductChannels(newProductId, activeChannelId ? [activeChannelId] : []);
                     await syncProductCollections(newProductId);
                 } catch (err: unknown) {
-                    navigate(`/catalog/products/${newProductId}`, { replace: true });
+                    void navigate(`/catalog/products/${newProductId}`, { replace: true });
                     showError(
                         `[阶段 4：商品与 SKU 已保存，但销售店铺或分类归属保存失败] ${toUserFacingError(err, '请稍后重试')}`,
                     );
@@ -1006,7 +1095,7 @@ export function ProductEditor() {
                 }
 
                 showNotice(`商品《${productName}》及 ${variants.length} 个规格变体已全部发布入库！`);
-                navigate(`/catalog/products/${newProductId}`, { replace: true });
+                void navigate(`/catalog/products/${newProductId}`, { replace: true });
             } else {
                 const existingVariants = variants.filter(v => v.id && !v.isNew);
                 const newVariants = variants.filter(v => v.isNew);
@@ -1040,15 +1129,11 @@ export function ProductEditor() {
                                 featuredAssetId,
                                 assetIds: selectedAssetIds,
                                 facetValueIds: selectedFacetValueIds,
-                                translations: [
-                                    {
-                                        id: translationId,
-                                        languageCode: SOURCE_LANGUAGE_CODE,
-                                        name: productName.trim(),
-                                        slug: generatedSlug,
-                                        description: description.trim(),
-                                    },
-                                ],
+                                customFields: customFieldInputFromValues(
+                                    productCustomFieldDefinitions,
+                                    dynamicCustomFieldValues,
+                                ),
+                                translations: updateTranslations,
                             },
                         },
                         context: changesProductEnabledState ? enabledMutationContext : undefined,
@@ -1160,6 +1245,10 @@ export function ProductEditor() {
             {/* Top Header */}
             <div className="flex shrink-0 flex-col gap-4 border-b border-slate-200 bg-white px-5 py-4 shadow-2xs sm:flex-row sm:items-center sm:justify-between sm:px-8">
                 <div className="flex items-center gap-3">
+                    <NextAdminActions
+                        pageId="product-detail"
+                        entity={(productData?.product as unknown as Record<string, unknown>) ?? null}
+                    />
                     <button
                         type="button"
                         onClick={leaveToProductList}
@@ -1198,7 +1287,7 @@ export function ProductEditor() {
                     </button>
                     <button
                         type="button"
-                        onClick={handleSave}
+                        onClick={() => void handleSave()}
                         disabled={
                             saving ||
                             productLoading ||
@@ -1208,7 +1297,11 @@ export function ProductEditor() {
                             !catalogChannelsData?.activeChannel ||
                             (!isCreateMode && !productData?.product)
                         }
-                        className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg text-xs font-bold transition-colors shadow-sm cursor-pointer disabled:opacity-50"
+                        className={[
+                            'flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2 text-xs',
+                            'font-bold text-white shadow-sm transition-colors hover:bg-blue-700',
+                            'cursor-pointer disabled:opacity-50',
+                        ].join(' ')}
                     >
                         {saving ? (
                             <RefreshCw className="w-4 h-4 animate-spin" />
@@ -1225,21 +1318,36 @@ export function ProductEditor() {
                 <button
                     type="button"
                     onClick={() => setActiveTab('BASIC')}
-                    className={`py-3.5 border-b-2 transition-colors flex items-center gap-1.5 cursor-pointer ${activeTab === 'BASIC' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+                    className={[
+                        'flex cursor-pointer items-center gap-1.5 border-b-2 py-3.5 transition-colors',
+                        activeTab === 'BASIC'
+                            ? 'border-blue-600 text-blue-600'
+                            : 'border-transparent text-slate-500 hover:text-slate-800',
+                    ].join(' ')}
                 >
                     <Sliders className="w-3.5 h-3.5" /> SPU 基础图文与主图
                 </button>
                 <button
                     type="button"
                     onClick={() => setActiveTab('VARIANTS')}
-                    className={`py-3.5 border-b-2 transition-colors flex items-center gap-1.5 cursor-pointer ${activeTab === 'VARIANTS' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+                    className={[
+                        'flex cursor-pointer items-center gap-1.5 border-b-2 py-3.5 transition-colors',
+                        activeTab === 'VARIANTS'
+                            ? 'border-blue-600 text-blue-600'
+                            : 'border-transparent text-slate-500 hover:text-slate-800',
+                    ].join(' ')}
                 >
                     <Layers className="w-3.5 h-3.5" /> SKU 变体与库存 ({variants.length})
                 </button>
                 <button
                     type="button"
                     onClick={() => setActiveTab('FACETS_COLLECTIONS')}
-                    className={`py-3.5 border-b-2 transition-colors flex items-center gap-1.5 cursor-pointer ${activeTab === 'FACETS_COLLECTIONS' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+                    className={[
+                        'flex cursor-pointer items-center gap-1.5 border-b-2 py-3.5 transition-colors',
+                        activeTab === 'FACETS_COLLECTIONS'
+                            ? 'border-blue-600 text-blue-600'
+                            : 'border-transparent text-slate-500 hover:text-slate-800',
+                    ].join(' ')}
                 >
                     <Tag className="w-3.5 h-3.5" /> 标签属性与分类 (
                     {selectedFacetValueIds.length + selectedCollectionIds.length})
@@ -1256,6 +1364,13 @@ export function ProductEditor() {
                     >
                         <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" /> {notification}
                     </div>
+                )}
+
+                {!isCreateMode && productData?.product && (
+                    <NextAdminPageBlocks
+                        pageId="product-detail"
+                        entity={productData.product as unknown as Record<string, unknown>}
+                    />
                 )}
 
                 {/* 错误提示 */}
@@ -1329,7 +1444,7 @@ export function ProductEditor() {
                         </div>
                         <button
                             type="button"
-                            onClick={() => refetchProduct()}
+                            onClick={() => void refetchProduct()}
                             className="px-3 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded font-bold cursor-pointer"
                         >
                             重试查询
@@ -1382,7 +1497,12 @@ export function ProductEditor() {
                                         className="w-4 h-4 text-blue-600 rounded"
                                     />
                                     <span
-                                        className={`text-[11px] font-bold px-2 py-0.5 rounded ${enabled ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}
+                                        className={[
+                                            'rounded px-2 py-0.5 text-[11px] font-bold',
+                                            enabled
+                                                ? 'bg-emerald-100 text-emerald-800'
+                                                : 'bg-slate-100 text-slate-600',
+                                        ].join(' ')}
                                     >
                                         {enabled ? '已上架' : '放入仓库'}
                                     </span>
@@ -1409,7 +1529,13 @@ export function ProductEditor() {
                                         placeholder="输入商品名称，如：无线主动降噪头戴耳机 Pro Max"
                                         aria-invalid={Boolean(formErrors.name)}
                                         aria-describedby={formErrors.name ? 'product-name-error' : undefined}
-                                        className={`w-full text-xs font-bold border rounded-lg p-2.5 bg-white focus:outline-none focus:ring-1 ${formErrors.name ? 'border-rose-500 focus:ring-rose-500' : 'border-slate-300 focus:ring-blue-500'}`}
+                                        className={[
+                                            'w-full rounded-lg border bg-white p-2.5 text-xs font-bold',
+                                            'focus:outline-none focus:ring-1',
+                                            formErrors.name
+                                                ? 'border-rose-500 focus:ring-rose-500'
+                                                : 'border-slate-300 focus:ring-blue-500',
+                                        ].join(' ')}
                                     />
                                     {formErrors.name && (
                                         <p id="product-name-error" className="text-rose-500 text-[11px] mt-1">
@@ -1431,7 +1557,10 @@ export function ProductEditor() {
                                         value={slug}
                                         onChange={e => setSlug(e.target.value)}
                                         placeholder="例如：wireless-noise-cancelling-headphones (留空将根据商品标题自动生成)"
-                                        className="w-full text-xs font-mono border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                        className={[
+                                            'w-full rounded-lg border border-slate-300 bg-white p-2.5',
+                                            'font-mono text-xs focus:outline-none focus:ring-1 focus:ring-blue-500',
+                                        ].join(' ')}
                                     />
                                 </div>
 
@@ -1459,7 +1588,13 @@ export function ProductEditor() {
                                         aria-describedby={
                                             formErrors.description ? 'product-description-error' : undefined
                                         }
-                                        className={`w-full rounded-xl border bg-white p-3 text-xs leading-relaxed focus:outline-none focus:ring-1 ${formErrors.description ? 'border-rose-500 focus:ring-rose-500' : 'border-slate-300 focus:ring-blue-500'}`}
+                                        className={[
+                                            'w-full rounded-xl border bg-white p-3 text-xs leading-relaxed',
+                                            'focus:outline-none focus:ring-1',
+                                            formErrors.description
+                                                ? 'border-rose-500 focus:ring-rose-500'
+                                                : 'border-slate-300 focus:ring-blue-500',
+                                        ].join(' ')}
                                     />
                                     {formErrors.description && (
                                         <p
@@ -1513,7 +1648,10 @@ export function ProductEditor() {
                                                 setFeaturedAssetId(null);
                                                 setFeaturedAssetPreview(null);
                                             }}
-                                            className="absolute top-1 right-1 p-1 bg-black/60 hover:bg-rose-600 text-white rounded-full transition-colors opacity-0 group-hover:opacity-100"
+                                            className={[
+                                                'absolute right-1 top-1 rounded-full bg-black/60 p-1 text-white',
+                                                'opacity-0 transition-colors hover:bg-rose-600 group-hover:opacity-100',
+                                            ].join(' ')}
                                             title="移除主图"
                                             aria-label="移除商品主图"
                                         >
@@ -1536,7 +1674,11 @@ export function ProductEditor() {
                                         setAssetPickerMode('FEATURED');
                                         setIsAssetPickerOpen(true);
                                     }}
-                                    className="flex w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-200 p-6 text-center transition-all hover:border-blue-400 hover:bg-blue-50/30"
+                                    className={[
+                                        'flex w-full cursor-pointer flex-col items-center justify-center gap-2',
+                                        'rounded-xl border-2 border-dashed border-slate-200 p-6 text-center',
+                                        'transition-all hover:border-blue-400 hover:bg-blue-50/30',
+                                    ].join(' ')}
                                 >
                                     <ImageIcon className="w-8 h-8 text-slate-300" />
                                     <div className="text-xs font-bold text-slate-600">
@@ -1603,6 +1745,21 @@ export function ProductEditor() {
                                 )}
                             </div>
                         </div>
+                        <DynamicCustomFieldsForm
+                            fields={productCustomFieldDefinitions}
+                            values={dynamicCustomFieldValues}
+                            onChange={setDynamicCustomFieldValues}
+                            disabled={saving}
+                            title="商品扩展属性"
+                            languageCodes={[
+                                ...new Set([
+                                    SOURCE_LANGUAGE_CODE,
+                                    ...(productData?.product?.translations.map(
+                                        translation => translation.languageCode,
+                                    ) ?? []),
+                                ]),
+                            ]}
+                        />
                     </div>
                 )}
 
@@ -1642,7 +1799,12 @@ export function ProductEditor() {
                                     return (
                                         <label
                                             key={channel.id}
-                                            className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs ${isSelected ? 'border-blue-300 bg-white font-bold text-blue-800' : 'border-slate-200 bg-white/70 text-slate-600'}`}
+                                            className={[
+                                                'flex items-center gap-2 rounded-lg border px-3 py-2 text-xs',
+                                                isSelected
+                                                    ? 'border-blue-300 bg-white font-bold text-blue-800'
+                                                    : 'border-slate-200 bg-white/70 text-slate-600',
+                                            ].join(' ')}
                                         >
                                             <input
                                                 type="checkbox"
@@ -1689,7 +1851,11 @@ export function ProductEditor() {
                                 <button
                                     type="button"
                                     onClick={handleAddVariant}
-                                    className="flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer shadow-2xs"
+                                    className={[
+                                        'flex cursor-pointer items-center gap-1.5 rounded-lg bg-blue-600',
+                                        'px-3.5 py-1.5 text-xs font-bold text-white shadow-2xs',
+                                        'transition-colors hover:bg-blue-700',
+                                    ].join(' ')}
                                 >
                                     <Plus className="w-3.5 h-3.5" /> 添加 SKU 变体
                                 </button>
@@ -1707,7 +1873,10 @@ export function ProductEditor() {
                                         type="button"
                                         onClick={handleGenerateVariantMatrix}
                                         disabled={selectedOptionGroupIds.length === 0}
-                                        className="rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+                                        className={[
+                                            'rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700',
+                                            'hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50',
+                                        ].join(' ')}
                                     >
                                         生成 SKU 矩阵
                                     </button>
@@ -1752,7 +1921,12 @@ export function ProductEditor() {
                                                                 : [...ids, group.id],
                                                         );
                                                     }}
-                                                    className={`rounded-lg border px-3 py-2 text-left transition-colors ${isSelected ? 'border-blue-500 bg-blue-50 text-blue-800' : 'border-slate-200 bg-white text-slate-600 hover:border-blue-300'}`}
+                                                    className={[
+                                                        'rounded-lg border px-3 py-2 text-left transition-colors',
+                                                        isSelected
+                                                            ? 'border-blue-500 bg-blue-50 text-blue-800'
+                                                            : 'border-slate-200 bg-white text-slate-600 hover:border-blue-300',
+                                                    ].join(' ')}
                                                 >
                                                     <div className="flex items-center gap-1.5 text-xs font-bold">
                                                         {isSelected && <Check className="h-3 w-3" />}
@@ -1849,7 +2023,12 @@ export function ProductEditor() {
                                                                     )
                                                                 }
                                                                 placeholder="必须唯一编码"
-                                                                className={`w-full font-mono border rounded px-2 py-1 bg-white ${rowError?.sku ? 'border-rose-500 text-rose-600' : 'border-slate-300 text-slate-700'}`}
+                                                                className={[
+                                                                    'w-full rounded border bg-white px-2 py-1 font-mono',
+                                                                    rowError?.sku
+                                                                        ? 'border-rose-500 text-rose-600'
+                                                                        : 'border-slate-300 text-slate-700',
+                                                                ].join(' ')}
                                                             />
                                                             {rowError?.sku && (
                                                                 <div className="text-[10px] text-rose-500 mt-0.5">
@@ -1878,7 +2057,12 @@ export function ProductEditor() {
                                                                         )
                                                                     }
                                                                     placeholder="0.00"
-                                                                    className={`w-24 font-mono font-bold border rounded px-2 py-1 bg-white ${rowError?.price ? 'border-rose-500 text-rose-600' : 'border-slate-300 text-slate-900'}`}
+                                                                    className={[
+                                                                        'w-24 rounded border bg-white px-2 py-1 font-mono font-bold',
+                                                                        rowError?.price
+                                                                            ? 'border-rose-500 text-rose-600'
+                                                                            : 'border-slate-300 text-slate-900',
+                                                                    ].join(' ')}
                                                                 />
                                                             </div>
                                                             {rowError?.price && (
@@ -1901,7 +2085,8 @@ export function ProductEditor() {
                                                                         'stockOnHand',
                                                                         e.target.value === ''
                                                                             ? ''
-                                                                            : parseInt(e.target.value) || 0,
+                                                                            : parseInt(e.target.value, 10) ||
+                                                                                  0,
                                                                     )
                                                                 }
                                                                 placeholder="0"
@@ -1935,8 +2120,13 @@ export function ProductEditor() {
                                                         <td className="p-3.5 text-right">
                                                             <button
                                                                 type="button"
-                                                                onClick={() => handleDeleteVariant(index)}
-                                                                className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors cursor-pointer"
+                                                                onClick={() =>
+                                                                    void handleDeleteVariant(index)
+                                                                }
+                                                                className={[
+                                                                    'cursor-pointer rounded p-1 text-slate-400 transition-colors',
+                                                                    'hover:bg-rose-50 hover:text-rose-600',
+                                                                ].join(' ')}
                                                                 title="删除该规格"
                                                             >
                                                                 <Trash2 className="w-3.5 h-3.5" />
@@ -2018,7 +2208,13 @@ export function ProductEditor() {
                                                             key={fv.id}
                                                             type="button"
                                                             onClick={() => toggleFacetValue(fv.id)}
-                                                            className={`px-3 py-1 text-xs font-medium rounded-lg border transition-all cursor-pointer flex items-center gap-1 ${isSelected ? 'bg-blue-600 text-white border-blue-600 shadow-2xs' : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'}`}
+                                                            className={[
+                                                                'flex cursor-pointer items-center gap-1 rounded-lg border',
+                                                                'px-3 py-1 text-xs font-medium transition-all',
+                                                                isSelected
+                                                                    ? 'border-blue-600 bg-blue-600 text-white shadow-2xs'
+                                                                    : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100',
+                                                            ].join(' ')}
                                                         >
                                                             {isSelected && <Check className="w-3 h-3" />}
                                                             <span>{fv.name}</span>
@@ -2101,7 +2297,13 @@ export function ProductEditor() {
                                         return (
                                             <label
                                                 key={col.id}
-                                                className={`flex cursor-pointer items-center gap-3 rounded-lg border p-3 text-xs transition-colors ${isSelected ? 'border-blue-400 bg-blue-50' : 'border-slate-200 bg-slate-50 hover:border-blue-300'}`}
+                                                className={[
+                                                    'flex cursor-pointer items-center gap-3 rounded-lg border p-3',
+                                                    'text-xs transition-colors',
+                                                    isSelected
+                                                        ? 'border-blue-400 bg-blue-50'
+                                                        : 'border-slate-200 bg-slate-50 hover:border-blue-300',
+                                                ].join(' ')}
                                             >
                                                 <input
                                                     type="checkbox"
@@ -2269,7 +2471,13 @@ export function ProductEditor() {
                                                             );
                                                         }
                                                     }}
-                                                    className={`aspect-square rounded-xl border-2 overflow-hidden cursor-pointer relative group transition-all ${isSelected ? 'border-blue-600 ring-2 ring-blue-400 shadow-md' : 'border-slate-200 hover:border-blue-300'}`}
+                                                    className={[
+                                                        'group relative aspect-square cursor-pointer overflow-hidden',
+                                                        'rounded-xl border-2 transition-all',
+                                                        isSelected
+                                                            ? 'border-blue-600 shadow-md ring-2 ring-blue-400'
+                                                            : 'border-slate-200 hover:border-blue-300',
+                                                    ].join(' ')}
                                                 >
                                                     <img
                                                         src={asset.preview}

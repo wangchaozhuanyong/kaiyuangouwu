@@ -18,13 +18,11 @@ import {
     Package,
     Palette,
     Percent,
-    Puzzle,
     RotateCcw,
     Search,
     Settings2,
     ShieldCheck,
     ShoppingBag,
-    Sparkles,
     Store,
     Sun,
     Terminal,
@@ -33,7 +31,16 @@ import {
     Users,
     X,
 } from 'lucide-react';
-import React, { startTransition, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import React, {
+    startTransition,
+    Suspense,
+    useCallback,
+    useEffect,
+    useLayoutEffect,
+    useMemo,
+    useRef,
+    useState,
+} from 'react';
 import {
     Outlet,
     NavLink as RouterNavLink,
@@ -46,11 +53,23 @@ import type { ThemePreference } from '../theme/theme';
 
 import { logoutAdministrator, switchActiveChannel } from '../apollo';
 import { AccessibleDialogSurface } from '../components/AccessibleDialogSurface';
+import { AdminPermissionsProvider } from '../components/admin-permissions-context';
 import { ThemeToggleButton } from '../components/ThemeToggleButton';
+import { CustomFieldsProvider } from '../custom-fields/CustomFieldsProvider';
+import {
+    getNextAdminExtensionNavItems,
+    getNextAdminExtensionRoute,
+    preloadNextAdminExtensionRoute,
+} from '../extensions/extension-api';
 import { APP_SHELL_BOOTSTRAP_QUERY, type AppShellBootstrapData } from '../graphql/auth.graphql';
 import { requestAppNavigation } from '../hooks/use-unsaved-changes-warning';
 import { preloadCommonRoutes, preloadRoute } from '../route-modules';
 import { useTheme } from '../theme/theme-context';
+import {
+    canAccessAdminPath,
+    getRequiredPermissionsForAdminPath,
+    hasAnyAdminPermission,
+} from '../utils/admin-permissions';
 import { getChannelDisplayLabel } from '../utils/channel-display';
 import { toUserFacingError } from '../utils/user-facing-error';
 
@@ -60,9 +79,20 @@ interface OpenTab {
     label: string;
 }
 
-function NavLink({ onFocus, onMouseEnter, onPointerDown, to, ...props }: NavLinkProps) {
+function NavLink({
+    allowed = true,
+    onFocus,
+    onMouseEnter,
+    onPointerDown,
+    to,
+    ...props
+}: NavLinkProps & { allowed?: boolean }) {
+    if (!allowed) return null;
     const preload = () => {
-        if (typeof to === 'string') preloadRoute(to);
+        if (typeof to === 'string') {
+            preloadRoute(to);
+            preloadNextAdminExtensionRoute(to);
+        }
     };
 
     return (
@@ -102,6 +132,7 @@ export function AppShell() {
     const navigate = (target: string, options?: NavigateOptions) => {
         if (!requestAppNavigation(target)) return;
         preloadRoute(target);
+        preloadNextAdminExtensionRoute(target);
         startTransition(() => void routerNavigate(target, options));
     };
     const [isDesktop, setIsDesktop] = useState(() => window.matchMedia('(min-width: 1024px)').matches);
@@ -141,9 +172,28 @@ export function AppShell() {
         : '管';
     const isSuperAdmin =
         activeAdministrator?.user.roles.some(role => role.code === '__super_admin_role__') ?? false;
-    const isSuperAdminRoute =
-        location.pathname.startsWith('/plugins/ai-access') ||
-        location.pathname.startsWith('/settings/system-ops');
+    const activePermissions = useMemo(() => {
+        const permissions =
+            channelData?.me?.channels.find(channel => channel.id === channelData.activeChannel?.id)
+                ?.permissions ?? [];
+        return isSuperAdmin && !permissions.includes('SuperAdmin')
+            ? [...permissions, 'SuperAdmin']
+            : permissions;
+    }, [channelData, isSuperAdmin]);
+    const canAccessPath = useCallback(
+        (path: string) => {
+            const extensionRoute = getNextAdminExtensionRoute(path);
+            return extensionRoute
+                ? hasAnyAdminPermission(activePermissions, extensionRoute.permissions ?? [])
+                : canAccessAdminPath(path, activePermissions);
+        },
+        [activePermissions],
+    );
+    const currentRoutePermissions =
+        getNextAdminExtensionRoute(location.pathname)?.permissions ??
+        getRequiredPermissionsForAdminPath(location.pathname);
+    const currentRouteRequiresPermission = currentRoutePermissions.length > 0;
+    const canAccessCurrentRoute = canAccessPath(location.pathname);
     const channelsError = appShellError;
     const channelsLoading = appShellLoading;
     const profileError = appShellError;
@@ -193,6 +243,65 @@ export function AppShell() {
     ]);
 
     const [isMoreTabsOpen, setIsMoreTabsOpen] = useState(false);
+    const tabListRef = useRef<HTMLDivElement>(null);
+    const tabMeasurementRefs = useRef(new Map<string, HTMLDivElement>());
+    const [visibleTabPaths, setVisibleTabPaths] = useState(() => tabs.map(tab => tab.path));
+    const tabLayout = useMemo(() => tabs.map(({ path, label }) => ({ path, label })), [tabs]);
+
+    useLayoutEffect(() => {
+        const tabList = tabListRef.current;
+        if (!tabList) return;
+
+        const gap = 4;
+        const recalculateVisibleTabs = () => {
+            const availableWidth = tabList.clientWidth;
+            const measuredTabs = tabLayout.map(tab => ({
+                path: tab.path,
+                width: tabMeasurementRefs.current.get(tab.path)?.offsetWidth ?? 0,
+            }));
+            if (!availableWidth || measuredTabs.some(tab => !tab.width)) return;
+
+            const fittingPaths: string[] = [];
+            let usedWidth = 0;
+            for (const tab of measuredTabs) {
+                const nextWidth = usedWidth + (fittingPaths.length ? gap : 0) + tab.width;
+                if (nextWidth > availableWidth) break;
+                fittingPaths.push(tab.path);
+                usedWidth = nextWidth;
+            }
+
+            const activePath = location.pathname;
+            if (activePath && !fittingPaths.includes(activePath)) {
+                const activeTab = measuredTabs.find(tab => tab.path === activePath);
+                if (activeTab && activeTab.width <= availableWidth) {
+                    while (fittingPaths.length > 0 && usedWidth + gap + activeTab.width > availableWidth) {
+                        const removedPath = fittingPaths.pop();
+                        const removedTab = measuredTabs.find(tab => tab.path === removedPath);
+                        usedWidth -= (removedTab?.width ?? 0) + (fittingPaths.length ? gap : 0);
+                    }
+                    fittingPaths.push(activePath);
+                }
+            }
+
+            const fittingPathSet = new Set(fittingPaths);
+            const nextVisiblePaths = tabLayout.map(tab => tab.path).filter(path => fittingPathSet.has(path));
+            setVisibleTabPaths(previousPaths =>
+                previousPaths.length === nextVisiblePaths.length &&
+                previousPaths.every((path, index) => path === nextVisiblePaths[index])
+                    ? previousPaths
+                    : nextVisiblePaths,
+            );
+        };
+
+        recalculateVisibleTabs();
+        const observer =
+            typeof ResizeObserver !== 'undefined' ? new ResizeObserver(recalculateVisibleTabs) : null;
+        observer?.observe(tabList);
+        return () => observer?.disconnect();
+    }, [tabLayout, location.pathname]);
+
+    const visibleTabs = tabs.filter(tab => visibleTabPaths.includes(tab.path));
+    const overflowTabs = tabs.filter(tab => !visibleTabPaths.includes(tab.path));
 
     // 全局 ⌘K 键盘快捷键与方向键/回车监听
     // 当前路由是外部导航状态，需要同步手风琴分组和已打开标签。
@@ -286,7 +395,8 @@ export function AppShell() {
             '/settings/system-ops': '系统运维 [超管]',
         };
 
-        let currentTitle = routeTitles[location.pathname];
+        let currentTitle =
+            getNextAdminExtensionRoute(location.pathname)?.title ?? routeTitles[location.pathname];
         if (!currentTitle) {
             if (location.pathname.startsWith('/catalog/products/')) {
                 currentTitle = '编辑商品详情';
@@ -375,93 +485,89 @@ export function AppShell() {
 
     // ⌘K 快捷检索字典
     const allCmdItems = useMemo(
-        () => [
-            { title: '工作台经营大盘与待办', path: '/dashboard', cat: '工作台', icon: LayoutDashboard },
-            { title: '商品列表与多条件筛选', path: '/catalog/list', cat: '商品', icon: Package },
-            { title: '分类树、多规格模板与标签', path: '/catalog/categories', cat: '商品', icon: FolderTree },
-            { title: '多仓库存总盘与出入库流水', path: '/catalog/inventory', cat: '商品', icon: Boxes },
-            { title: '虚拟卡密与自动发货库', path: '/catalog/card-pool', cat: '商品', icon: KeyRound },
-            { title: '素材媒体库管理', path: '/catalog/assets', cat: '商品', icon: Palette },
-            {
-                title: '全量交易订单与待发货打单',
-                path: '/sales/orders',
-                cat: '订单与售后',
-                icon: ShoppingBag,
-            },
-            { title: '售后退款工单审核流', path: '/sales/after-sales', cat: '订单与售后', icon: RotateCcw },
-            {
-                title: '买家评价审核与官方回复',
-                path: '/sales/reviews',
-                cat: '订单与售后',
-                icon: MessageSquare,
-            },
-            { title: '客户资料、分组与订单关系', path: '/customers/list', cat: '客户', icon: Users },
-            { title: '优惠券、促销规则与秒杀专场', path: '/marketing/promotions', cat: '营销', icon: Ticket },
-            { title: '分销返利团队与提现审批', path: '/marketing/referrals', cat: '营销', icon: Users },
-            {
-                title: '可视化首页装修与移动端视口',
-                path: '/storefront/decoration',
-                cat: '店铺',
-                icon: Palette,
-            },
-            {
-                title: '全站公告、法律页面与推广落地页',
-                path: '/storefront/content',
-                cat: '店铺',
-                icon: Megaphone,
-            },
-            {
-                title: '客户端官方插件装配中心',
-                path: '/plugins/client-plugins',
-                cat: '插件与服务',
-                icon: Puzzle,
-            },
-            {
-                title: 'AI 智能生图服务配置 (运营端)',
-                path: '/plugins/ai-settings',
-                cat: '插件与服务',
-                icon: Sparkles,
-            },
-            ...(isSuperAdmin
-                ? [
-                      {
-                          title: 'AI 服务商密钥接入',
-                          path: '/plugins/ai-access',
-                          cat: '插件与服务',
-                          icon: Terminal,
-                      },
-                  ]
-                : []),
-            {
-                title: '实体内容多语言自动翻译',
-                path: '/plugins/translations',
-                cat: '插件与服务',
-                icon: Sparkles,
-            },
-            {
-                title: '店铺设置 (多店铺/支付/运费/税率/域名)',
-                path: '/settings/store-profile',
-                cat: '系统与权限',
-                icon: Settings2,
-            },
-            {
-                title: '员工账号列表与角色权限矩阵',
-                path: '/settings/team',
-                cat: '系统与权限',
-                icon: ShieldCheck,
-            },
-            ...(isSuperAdmin
-                ? [
-                      {
-                          title: '系统运维、任务队列与全局配置',
-                          path: '/settings/system-ops',
-                          cat: '系统与权限',
-                          icon: Terminal,
-                      },
-                  ]
-                : []),
-        ],
-        [isSuperAdmin],
+        () =>
+            [
+                { title: '工作台经营大盘与待办', path: '/dashboard', cat: '工作台', icon: LayoutDashboard },
+                { title: '商品列表与多条件筛选', path: '/catalog/list', cat: '商品', icon: Package },
+                {
+                    title: '分类树、多规格模板与标签',
+                    path: '/catalog/categories',
+                    cat: '商品',
+                    icon: FolderTree,
+                },
+                { title: '多仓库存总盘与出入库流水', path: '/catalog/inventory', cat: '商品', icon: Boxes },
+                { title: '虚拟卡密与自动发货库', path: '/catalog/card-pool', cat: '商品', icon: KeyRound },
+                { title: '素材媒体库管理', path: '/catalog/assets', cat: '商品', icon: Palette },
+                {
+                    title: '全量交易订单与待发货打单',
+                    path: '/sales/orders',
+                    cat: '订单与售后',
+                    icon: ShoppingBag,
+                },
+                {
+                    title: '售后退款工单审核流',
+                    path: '/sales/after-sales',
+                    cat: '订单与售后',
+                    icon: RotateCcw,
+                },
+                {
+                    title: '买家评价审核与官方回复',
+                    path: '/sales/reviews',
+                    cat: '订单与售后',
+                    icon: MessageSquare,
+                },
+                { title: '客户资料、分组与订单关系', path: '/customers/list', cat: '客户', icon: Users },
+                {
+                    title: '优惠券、促销规则与秒杀专场',
+                    path: '/marketing/promotions',
+                    cat: '营销',
+                    icon: Ticket,
+                },
+                { title: '分销返利团队与提现审批', path: '/marketing/referrals', cat: '营销', icon: Users },
+                {
+                    title: '可视化首页装修与移动端视口',
+                    path: '/storefront/decoration',
+                    cat: '店铺',
+                    icon: Palette,
+                },
+                {
+                    title: '全站公告、法律页面与推广落地页',
+                    path: '/storefront/content',
+                    cat: '店铺',
+                    icon: Megaphone,
+                },
+                ...getNextAdminExtensionNavItems('plugins')
+                    .filter(route => route.commandPalette !== false)
+                    .map(route => ({
+                        title: route.title,
+                        path: route.path,
+                        cat: '插件与服务',
+                        icon: route.navItem?.icon ?? Blocks,
+                    })),
+                {
+                    title: '店铺设置 (多店铺/支付/运费/税率/域名)',
+                    path: '/settings/store-profile',
+                    cat: '系统与权限',
+                    icon: Settings2,
+                },
+                {
+                    title: '员工账号列表与角色权限矩阵',
+                    path: '/settings/team',
+                    cat: '系统与权限',
+                    icon: ShieldCheck,
+                },
+                ...(isSuperAdmin
+                    ? [
+                          {
+                              title: '系统运维、任务队列与全局配置',
+                              path: '/settings/system-ops',
+                              cat: '系统与权限',
+                              icon: Terminal,
+                          },
+                      ]
+                    : []),
+            ].filter(item => canAccessPath(item.path)),
+        [canAccessPath, isSuperAdmin],
     );
 
     const filteredCmdItems = useMemo(() => {
@@ -548,6 +654,7 @@ export function AppShell() {
                 >
                     {/* 1. 📊 工作台 */}
                     <NavLink
+                        allowed={canAccessPath('/dashboard')}
                         to="/dashboard"
                         aria-label="工作台"
                         className={({ isActive }) =>
@@ -596,19 +703,39 @@ export function AppShell() {
                         <div
                             className={`overflow-hidden transition-[max-height,margin] duration-150 ease-out ${isSidebarOpen && openMenu === 'catalog' ? 'max-h-96 mt-1 space-y-0.5' : 'max-h-0'}`}
                         >
-                            <NavLink to="/catalog/list" className={navItemClass}>
+                            <NavLink
+                                allowed={canAccessPath('/catalog/list')}
+                                to="/catalog/list"
+                                className={navItemClass}
+                            >
                                 商品列表
                             </NavLink>
-                            <NavLink to="/catalog/categories" className={navItemClass}>
+                            <NavLink
+                                allowed={canAccessPath('/catalog/categories')}
+                                to="/catalog/categories"
+                                className={navItemClass}
+                            >
                                 分类与属性
                             </NavLink>
-                            <NavLink to="/catalog/inventory" className={navItemClass}>
+                            <NavLink
+                                allowed={canAccessPath('/catalog/inventory')}
+                                to="/catalog/inventory"
+                                className={navItemClass}
+                            >
                                 库存与仓库
                             </NavLink>
-                            <NavLink to="/catalog/card-pool" className={navItemClass}>
+                            <NavLink
+                                allowed={canAccessPath('/catalog/card-pool')}
+                                to="/catalog/card-pool"
+                                className={navItemClass}
+                            >
                                 数字商品与卡密
                             </NavLink>
-                            <NavLink to="/catalog/assets" className={navItemClass}>
+                            <NavLink
+                                allowed={canAccessPath('/catalog/assets')}
+                                to="/catalog/assets"
+                                className={navItemClass}
+                            >
                                 素材媒体库
                             </NavLink>
                         </div>
@@ -638,13 +765,25 @@ export function AppShell() {
                         <div
                             className={`overflow-hidden transition-[max-height,margin] duration-150 ease-out ${isSidebarOpen && openMenu === 'sales' ? 'max-h-60 mt-1 space-y-0.5' : 'max-h-0'}`}
                         >
-                            <NavLink to="/sales/orders" className={navItemClass}>
+                            <NavLink
+                                allowed={canAccessPath('/sales/orders')}
+                                to="/sales/orders"
+                                className={navItemClass}
+                            >
                                 订单列表
                             </NavLink>
-                            <NavLink to="/sales/after-sales" className={navItemClass}>
+                            <NavLink
+                                allowed={canAccessPath('/sales/after-sales')}
+                                to="/sales/after-sales"
+                                className={navItemClass}
+                            >
                                 售后与退款
                             </NavLink>
-                            <NavLink to="/sales/reviews" className={navItemClass}>
+                            <NavLink
+                                allowed={canAccessPath('/sales/reviews')}
+                                to="/sales/reviews"
+                                className={navItemClass}
+                            >
                                 买家评价管理
                             </NavLink>
                         </div>
@@ -652,6 +791,7 @@ export function AppShell() {
 
                     {/* 4. 👥 客户 */}
                     <NavLink
+                        allowed={canAccessPath('/customers/list')}
                         to="/customers/list"
                         aria-label="客户管理"
                         className={({ isActive }) =>
@@ -690,10 +830,18 @@ export function AppShell() {
                         <div
                             className={`overflow-hidden transition-[max-height,margin] duration-150 ease-out ${isSidebarOpen && openMenu === 'marketing' ? 'max-h-60 mt-1 space-y-0.5' : 'max-h-0'}`}
                         >
-                            <NavLink to="/marketing/promotions" className={navItemClass}>
+                            <NavLink
+                                allowed={canAccessPath('/marketing/promotions')}
+                                to="/marketing/promotions"
+                                className={navItemClass}
+                            >
                                 优惠与促销
                             </NavLink>
-                            <NavLink to="/marketing/referrals" className={navItemClass}>
+                            <NavLink
+                                allowed={canAccessPath('/marketing/referrals')}
+                                to="/marketing/referrals"
+                                className={navItemClass}
+                            >
                                 分销与返利
                             </NavLink>
                         </div>
@@ -723,10 +871,18 @@ export function AppShell() {
                         <div
                             className={`overflow-hidden transition-[max-height,margin] duration-150 ease-out ${isSidebarOpen && openMenu === 'storefront' ? 'max-h-60 mt-1 space-y-0.5' : 'max-h-0'}`}
                         >
-                            <NavLink to="/storefront/decoration" className={navItemClass}>
+                            <NavLink
+                                allowed={canAccessPath('/storefront/decoration')}
+                                to="/storefront/decoration"
+                                className={navItemClass}
+                            >
                                 商城装修
                             </NavLink>
-                            <NavLink to="/storefront/content" className={navItemClass}>
+                            <NavLink
+                                allowed={canAccessPath('/storefront/content')}
+                                to="/storefront/content"
+                                className={navItemClass}
+                            >
                                 内容与页面
                             </NavLink>
                         </div>
@@ -766,20 +922,16 @@ export function AppShell() {
                         <div
                             className={`overflow-hidden transition-[max-height,margin] duration-150 ease-out ${isSidebarOpen && openMenu === 'plugins' ? 'max-h-80 mt-1 space-y-0.5' : 'max-h-0'}`}
                         >
-                            <NavLink to="/plugins/client-plugins" className={navItemClass}>
-                                客户端插件中心
-                            </NavLink>
-                            <NavLink to="/plugins/ai-settings" className={navItemClass}>
-                                AI 生图设置
-                            </NavLink>
-                            {isSuperAdmin && (
-                                <NavLink to="/plugins/ai-access" className={navItemClass}>
-                                    AI 服务商接入
+                            {getNextAdminExtensionNavItems('plugins').map(route => (
+                                <NavLink
+                                    key={route.id}
+                                    allowed={canAccessPath(route.path)}
+                                    to={route.path}
+                                    className={navItemClass}
+                                >
+                                    {route.navItem?.label ?? route.title}
                                 </NavLink>
-                            )}
-                            <NavLink to="/plugins/translations" className={navItemClass}>
-                                多语言内容翻译
-                            </NavLink>
+                            ))}
                         </div>
                     </div>
 
@@ -807,13 +959,21 @@ export function AppShell() {
                         <div
                             className={`overflow-hidden transition-[max-height,margin] duration-150 ease-out ${isSidebarOpen && openMenu === 'settings' ? 'max-h-60 mt-1 space-y-0.5' : 'max-h-0'}`}
                         >
-                            <NavLink to="/settings/store-profile" className={navItemClass}>
+                            <NavLink
+                                allowed={canAccessPath('/settings/store-profile')}
+                                to="/settings/store-profile"
+                                className={navItemClass}
+                            >
                                 店铺综合设置
                             </NavLink>
-                            <NavLink to="/settings/team" className={navItemClass}>
+                            <NavLink
+                                allowed={canAccessPath('/settings/team')}
+                                to="/settings/team"
+                                className={navItemClass}
+                            >
                                 员工与权限
                             </NavLink>
-                            {isSuperAdmin && (
+                            {canAccessPath('/settings/system-ops') && (
                                 <NavLink to="/settings/system-ops" className={navItemClass}>
                                     系统运维
                                 </NavLink>
@@ -1023,8 +1183,11 @@ export function AppShell() {
                 {/* 标签栏 */}
                 <div className="relative z-20 h-10 shrink-0 select-none border-b border-t border-slate-200 bg-white flex items-center justify-between">
                     {/* 左侧标签列表 */}
-                    <div className="flex-1 h-full flex items-center px-3 gap-1 overflow-hidden">
-                        {tabs.map(tab => {
+                    <div
+                        ref={tabListRef}
+                        className="flex-1 h-full min-w-0 flex items-center px-3 gap-1 overflow-hidden"
+                    >
+                        {visibleTabs.map(tab => {
                             const isActive = location.pathname === tab.path;
                             return (
                                 <div
@@ -1049,30 +1212,57 @@ export function AppShell() {
                         })}
                     </div>
 
+                    <div
+                        aria-hidden="true"
+                        className="absolute -z-10 h-0 overflow-hidden opacity-0 pointer-events-none"
+                    >
+                        {tabs.map(tab => (
+                            <div
+                                key={tab.path}
+                                ref={element => {
+                                    if (element) tabMeasurementRefs.current.set(tab.path, element);
+                                    else tabMeasurementRefs.current.delete(tab.path);
+                                }}
+                                className="inline-flex shrink-0 items-center rounded-md border text-xs font-bold"
+                            >
+                                <span className="px-3 py-1">{tab.label}</span>
+                                {tabs.length > 1 && (
+                                    <span className="mr-1 rounded-full p-0.5">
+                                        <X className="h-3 w-3" />
+                                    </span>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+
                     {/* 右侧【更多 (N) ▾】下拉按钮 */}
                     <div className="relative z-20 flex h-full shrink-0 items-center justify-center border-l border-slate-200 bg-white px-3">
                         <button
                             type="button"
-                            className={`px-2.5 py-1 rounded-md text-xs font-medium flex items-center gap-1 transition-all cursor-pointer ${isMoreTabsOpen ? 'bg-blue-50 text-blue-600 font-bold' : 'text-slate-600 hover:text-blue-600 hover:bg-slate-100'}`}
+                            className={`px-2.5 py-1 rounded-md text-xs font-medium flex items-center gap-1 transition-all ${overflowTabs.length ? 'cursor-pointer' : 'cursor-default'} ${isMoreTabsOpen ? 'bg-blue-50 text-blue-600 font-bold' : 'text-slate-600 hover:text-blue-600 hover:bg-slate-100'}`}
                             onClick={() => {
+                                if (!overflowTabs.length) return;
                                 setIsUserMenuOpen(false);
                                 setIsMoreTabsOpen(current => !current);
                             }}
-                            aria-expanded={isMoreTabsOpen}
-                            aria-controls="open-tabs-menu"
+                            aria-expanded={overflowTabs.length > 0 && isMoreTabsOpen}
+                            aria-controls={overflowTabs.length ? 'open-tabs-menu' : undefined}
                             aria-haspopup="menu"
+                            disabled={!overflowTabs.length}
                         >
                             <span>更多</span>
-                            <span className="text-[10px] font-mono bg-slate-100 text-slate-600 px-1 rounded">
-                                {tabs.length}
-                            </span>
+                            {overflowTabs.length > 0 && (
+                                <span className="text-[10px] font-mono bg-slate-100 text-slate-600 px-1 rounded">
+                                    {overflowTabs.length}
+                                </span>
+                            )}
                             <ChevronDown
                                 className={`w-3.5 h-3.5 transition-transform ${isMoreTabsOpen ? 'rotate-180 text-blue-600' : ''}`}
                             />
                         </button>
 
                         {/* 更多标签下拉弹窗 */}
-                        {isMoreTabsOpen && (
+                        {isMoreTabsOpen && overflowTabs.length > 0 && (
                             <>
                                 <div
                                     className="fixed inset-0 z-30"
@@ -1084,7 +1274,7 @@ export function AppShell() {
                                     className="absolute top-10 right-2 w-64 bg-white rounded-2xl shadow-2xl border border-slate-200 py-2 z-40 max-h-96 overflow-y-auto animate-scaleIn"
                                 >
                                     <div className="px-4 pb-2 mb-1 border-b border-slate-100 flex items-center justify-between text-xs font-bold text-slate-600">
-                                        <span>已打开标签 ({tabs.length})</span>
+                                        <span>更多标签 ({overflowTabs.length})</span>
                                         <div className="flex gap-2 text-[11px]">
                                             {tabs.length > 1 && (
                                                 <button
@@ -1118,7 +1308,7 @@ export function AppShell() {
                                     </div>
 
                                     <div className="divide-y divide-slate-50">
-                                        {tabs.map(tab => {
+                                        {overflowTabs.map(tab => {
                                             const isActive = location.pathname === tab.path;
                                             return (
                                                 <div
@@ -1147,7 +1337,7 @@ export function AppShell() {
                                                             aria-label={`关闭${tab.label}标签`}
                                                             onClick={e => {
                                                                 closeTab(e, tab.path);
-                                                                if (tabs.length === 2)
+                                                                if (overflowTabs.length === 1)
                                                                     setIsMoreTabsOpen(false);
                                                             }}
                                                         >
@@ -1170,11 +1360,11 @@ export function AppShell() {
                     tabIndex={-1}
                     className="flex-1 overflow-hidden relative outline-none"
                 >
-                    {isSuperAdminRoute && profileLoading ? (
+                    {currentRouteRequiresPermission && profileLoading ? (
                         <div className="flex h-full items-center justify-center text-xs font-medium text-slate-500">
                             正在核验访问权限…
                         </div>
-                    ) : isSuperAdminRoute && profileError ? (
+                    ) : currentRouteRequiresPermission && profileError ? (
                         <div className="flex h-full items-center justify-center overflow-y-auto p-6">
                             <section
                                 className="w-full max-w-md rounded-2xl border border-rose-200 bg-white p-8 text-center shadow-sm"
@@ -1197,13 +1387,13 @@ export function AppShell() {
                                 </button>
                             </section>
                         </div>
-                    ) : isSuperAdminRoute && !isSuperAdmin ? (
+                    ) : currentRouteRequiresPermission && !canAccessCurrentRoute ? (
                         <div className="flex h-full items-center justify-center overflow-y-auto p-6">
                             <section className="w-full max-w-md rounded-2xl border border-amber-200 bg-white p-8 text-center shadow-sm">
                                 <ShieldCheck className="mx-auto h-10 w-10 text-amber-500" />
                                 <h1 className="mt-4 text-base font-bold text-slate-900">当前账号无权访问</h1>
                                 <p className="mt-2 text-xs leading-5 text-slate-500">
-                                    该页面包含平台级密钥或系统运维操作，仅超级管理员可使用。
+                                    当前账号缺少访问该页面所需的权限，请联系管理员调整角色授权。
                                 </p>
                                 <button
                                     type="button"
@@ -1227,7 +1417,11 @@ export function AppShell() {
                                 </div>
                             }
                         >
-                            <Outlet />
+                            <AdminPermissionsProvider permissions={activePermissions}>
+                                <CustomFieldsProvider>
+                                    <Outlet />
+                                </CustomFieldsProvider>
+                            </AdminPermissionsProvider>
                         </Suspense>
                     )}
                 </div>
