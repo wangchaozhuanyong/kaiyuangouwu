@@ -64,19 +64,24 @@ Run dashboard e2e tests from `packages/dashboard`:
 CI=true VITE_TEST_PORT=5176 bunx playwright test --config e2e/playwright.config.ts <test-path> --reporter=list
 ```
 
-## Commits & Branches
+## Commits, Pull Requests & Branches
 
-- Include `Fixes #ISSUE_NUMBER` in body, or `Relates to #ISSUE_NUMBER` if not a full fix
-- `master` — bug fixes (default PR target)
-- `minor` — new features
-- `major` — breaking changes
+- `main` is the only integration and release branch for this repository. Never push directly to `main`.
+- Start each task from the latest `origin/main` in a dedicated branch and, when the current workspace is dirty, a dedicated worktree.
+- Run the package-scoped lint, tests and build before pushing. Use the full repository checks only when the change crosses package boundaries.
+- Push the task branch, open a PR targeting `main`, and merge only after the required `all-passed` CI check succeeds.
+- No human approval is required for owner-maintained PRs, but the PR and CI gate are still mandatory so every merge remains reviewable and reproducible.
+- Delete the task branch after merge. GitHub is configured to delete merged remote branches automatically; remove the local task branch and temporary worktree as part of cleanup.
+- CI validates code only. It must not deploy from pull requests or ordinary pushes. Production builds and deployments remain explicit, separate operations governed by `deploy/DEPLOYMENT_RUNBOOK.md`.
+- This owner-maintained repository does not use the inherited Vendure CLA assistant, SonarQube scan, Vercel PR preview, or upstream PR-title gate.
+- Use a clear Conventional Commit-style PR title when practical, without making title formatting a merge blocker.
 
 ### Mandatory Production Branch & Release Evidence Policy
 
 - Production-bound changes must first be merged into `main` as an intentional, reviewed diff. Before merging, update the source branch against the latest `origin/main` and inspect both the complete diff and changed-file list. Never merge or commit an old workspace, release directory, WIP snapshot, or historical branch wholesale.
 - Production may deploy only an exact 40-character commit currently reachable from `origin/main`, or an immutable formal release tag that resolves to such a commit. Never deploy an uncommitted workspace, feature branch, stale worktree, movable tag, or manually selected `dist` directory.
 - Do not force-push `main` or move/reuse a formal release tag. If `origin/main` changes after validation, stop, update the release candidate, and repeat the checks and build.
-- Delete an already-merged remote feature or hotfix branch only after the production deployment and verification succeed and the deployment record is complete. Keep an active maintenance branch or rollback tag only when its owner and purpose are documented.
+- Delete merged feature and hotfix branches after the merge is verified on `origin/main`; production releases must use the immutable `main` SHA or a formal release tag rather than retaining task branches. Keep an active maintenance branch or rollback tag only when its owner and purpose are documented.
 - Every production deployment record must include the source branch, production ref (`main` or formal tag), full commit SHA, formal release tag when used, CI artifact name, artifact SHA-256 (or immutable container image digest), artifact workflow run, deployment workflow run, environment, UTC deployment time, operator, previous production SHA, and verification result. A mutable image version or tag alone is not sufficient evidence.
 - Roll back only to a previously verified immutable artifact and record the rollback reason and SHA. Do not rewind `main`, rebuild from an old branch, or copy old build output over the active runtime.
 - Missing branch ancestry, immutable artifact identity, deployment evidence, or post-deploy verification is a release blocker. Do not bypass it with a manual copy or direct server build.
