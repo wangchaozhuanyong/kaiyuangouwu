@@ -239,6 +239,28 @@ Credentials and targets are read only from environment variables; they are never
 arguments. Unset `INVENTORY_REPAIR_CHANNEL_CODES` and `INVENTORY_INHERIT_SKUS` after the one-time
 repair.
 
+## Repairing reviewed SQLite foreign-key violations
+
+The local SQLite repair is intentionally limited to orphan translation rows for product variants,
+facets, facet values, product options and product option groups. It refuses any violation outside
+that whitelist and never deletes products, variants, orders, customers or other parent records.
+
+Review the exact row IDs without writing:
+
+```bash
+DB=sqlite bun run repair:sqlite-foreign-keys -- --dry-run
+```
+
+Apply the reviewed plan locally:
+
+```bash
+DB=sqlite bun run repair:sqlite-foreign-keys -- --apply
+```
+
+Apply mode creates an online backup under `local-backups/` before opening an immediate transaction,
+then requires `PRAGMA foreign_key_check` to return zero. It refuses to run when
+`NODE_ENV=production` and is safe to repeat after a successful repair.
+
 ## Testing custom ui extension compilation
 
 In order to compile ui extensions within this monorepo, you need to add the following entry to

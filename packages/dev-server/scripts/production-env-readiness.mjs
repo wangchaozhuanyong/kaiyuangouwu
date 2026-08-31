@@ -21,11 +21,17 @@ const operationsControls = [
     ...profileOperationsControls['managed-services'],
     ...profileOperationsControls['single-host'],
 ];
+const identifierPlaceholderPattern = /^(?:admin|administrator|changeme|example|superadmin|replace[-_].*)$/iu;
 const placeholderPattern = /^(?:abc|admin|changeme|example|password|superadmin|vendure-dev|replace[-_])/iu;
 const base58Alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
 
 function normalized(value) {
     return String(value ?? '').trim();
+}
+
+function isConfiguredAdminIdentifier(value) {
+    const identifier = normalized(value);
+    return Boolean(identifier) && !identifierPlaceholderPattern.test(identifier);
 }
 
 function pushCheck(checks, { id, title, passed, detail, unresolved = false }) {
@@ -213,14 +219,10 @@ export function evaluateProductionEnvironment(env, role, controls = {}) {
     pushCheck(checks, {
         id: 'admin-identifier',
         title: '非默认超级管理员账号',
-        passed:
-            Boolean(normalized(env.SUPERADMIN_USERNAME)) &&
-            normalized(env.SUPERADMIN_USERNAME) !== 'superadmin',
-        detail:
-            Boolean(normalized(env.SUPERADMIN_USERNAME)) &&
-            normalized(env.SUPERADMIN_USERNAME) !== 'superadmin'
-                ? 'configured'
-                : 'missing or default',
+        passed: isConfiguredAdminIdentifier(env.SUPERADMIN_USERNAME),
+        detail: isConfiguredAdminIdentifier(env.SUPERADMIN_USERNAME)
+            ? 'configured'
+            : 'missing, default, or placeholder',
     });
     pushCheck(checks, {
         id: 'admin-password',

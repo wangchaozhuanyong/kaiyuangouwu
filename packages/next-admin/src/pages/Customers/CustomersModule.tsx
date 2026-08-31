@@ -1,3 +1,4 @@
+/* eslint-disable max-len -- Tailwind utility lists are intentionally kept as single JSX attributes. */
 import { useMutation, useQuery } from '@apollo/client/react';
 import {
     AlertCircle,
@@ -19,8 +20,9 @@ import {
     Users,
     X,
 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+
 import { sensitiveActionContext } from '../../apollo';
 import {
     ADD_CUSTOMER_NOTE_MUTATION,
@@ -42,6 +44,7 @@ import {
     UPDATE_CUSTOMER_MUTATION,
 } from '../../graphql/customers.graphql';
 import { useAccessibleDialog } from '../../hooks/use-accessible-dialog';
+import { useUrlListState } from '../../hooks/use-url-list-state';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import {
     formatDateTime,
@@ -92,9 +95,10 @@ function errorText(error: unknown) {
 
 export function CustomersModule() {
     const navigate = useNavigate();
-    const [searchTerm, setSearchTerm] = useState('');
-    const [selectedGroupId, setSelectedGroupId] = useState('ALL');
-    const [page, setPage] = useState(0);
+    const { page, searchParams, searchTerm, setFilter, setPage, setSearchTerm } = useUrlListState();
+    const selectedGroupId = searchParams.get('group') ?? 'ALL';
+    const setSelectedGroupId = (groupId: string) => setFilter('group', groupId, 'ALL');
+    const deferredSearchTerm = useDeferredValue(searchTerm);
     const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
     const [groupManagerOpen, setGroupManagerOpen] = useState(false);
     const [notice, setNotice] = useState('');
@@ -106,24 +110,24 @@ export function CustomersModule() {
             skip: page * PAGE_SIZE,
             take: PAGE_SIZE,
             sort: { createdAt: 'DESC' },
-            filter: customerFilter(searchTerm),
+            filter: customerFilter(deferredSearchTerm),
         }),
-        [page, searchTerm],
+        [deferredSearchTerm, page],
     );
 
     const allCustomers = useQuery<CustomersResult>(CUSTOMERS_QUERY, {
         variables: { options },
         skip: selectedGroupId !== 'ALL',
-        fetchPolicy: 'cache-and-network',
+        fetchPolicy: 'cache-first',
     });
     const groupCustomers = useQuery<CustomerGroupMembersResult>(CUSTOMER_GROUP_MEMBERS_QUERY, {
         variables: { id: selectedGroupId, options },
         skip: selectedGroupId === 'ALL',
-        fetchPolicy: 'cache-and-network',
+        fetchPolicy: 'cache-first',
     });
     const groupQuery = useQuery<CustomerGroupsResult>(CUSTOMER_GROUPS_QUERY, {
         variables: { options: { skip: 0, take: 100, sort: { name: 'ASC' } } },
-        fetchPolicy: 'cache-and-network',
+        fetchPolicy: 'cache-first',
     });
     const {
         data: groupData,
@@ -233,7 +237,6 @@ export function CustomersModule() {
                                 value={searchTerm}
                                 onChange={event => {
                                     setSearchTerm(event.target.value);
-                                    setPage(0);
                                 }}
                                 aria-label="搜索客户"
                                 placeholder="搜索姓名、手机号或邮箱"
@@ -244,7 +247,6 @@ export function CustomersModule() {
                                     type="button"
                                     onClick={() => {
                                         setSearchTerm('');
-                                        setPage(0);
                                     }}
                                     className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-700"
                                     aria-label="清空搜索"
@@ -258,7 +260,6 @@ export function CustomersModule() {
                                 active={selectedGroupId === 'ALL'}
                                 onClick={() => {
                                     setSelectedGroupId('ALL');
-                                    setPage(0);
                                 }}
                                 label="全部客户"
                             />
@@ -268,7 +269,6 @@ export function CustomersModule() {
                                     active={selectedGroupId === group.id}
                                     onClick={() => {
                                         setSelectedGroupId(group.id);
-                                        setPage(0);
                                     }}
                                     label={`${group.name} ${group.customers.totalItems}`}
                                 />
@@ -537,7 +537,7 @@ function CustomerDrawer({
                 aria-label="关闭客户详情"
             />
             <aside
-                ref={drawerDialogRef as React.RefObject<HTMLElement>}
+                ref={drawerDialogRef}
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby={drawerTitleId}

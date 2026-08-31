@@ -63,6 +63,56 @@ export const ACTIVE_ADMINISTRATOR_PROFILE_QUERY = gql`
     }
 `;
 
+export const APP_SHELL_BOOTSTRAP_QUERY = gql`
+    query NextAdminAppShellBootstrap($options: ChannelListOptions) {
+        activeAdministrator {
+            id
+            createdAt
+            updatedAt
+            firstName
+            lastName
+            emailAddress
+            user {
+                id
+                identifier
+                verified
+                lastLogin
+                authenticationMethods {
+                    id
+                    strategy
+                    createdAt
+                }
+                roles {
+                    id
+                    code
+                    description
+                    channels {
+                        id
+                        code
+                    }
+                }
+            }
+        }
+        activeChannel {
+            id
+            code
+            token
+            defaultCurrencyCode
+            defaultLanguageCode
+        }
+        channels(options: $options) {
+            items {
+                id
+                code
+                token
+                defaultCurrencyCode
+                defaultLanguageCode
+            }
+            totalItems
+        }
+    }
+`;
+
 export const UPDATE_ACTIVE_ADMINISTRATOR_MUTATION = gql`
     mutation NextAdminUpdateActiveAdministrator($input: UpdateActiveAdministratorInput!) {
         updateActiveAdministrator(input: $input) {
@@ -129,3 +179,5 @@ export interface ChannelSwitcherData {
         totalItems: number;
     };
 }
+
+export type AppShellBootstrapData = ActiveAdministratorProfileData & ChannelSwitcherData;
