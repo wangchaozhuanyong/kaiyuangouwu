@@ -1481,7 +1481,7 @@ function OrderCard({
 
     const line = order.lines[0];
     const firstLineName = line?.productVariant.name ?? (isZh ? '订单商品' : 'Order item');
-    const hasMultipleLines = order.lines.length > 1;
+    const productPresentation = orderProductPresentation(line, order.lines.length - 1, language);
 
     const formattedTime = order.orderPlacedAt ? formatBusinessDate(locale, order.orderPlacedAt) : '';
 
@@ -1499,33 +1499,37 @@ function OrderCard({
             </header>
             <button className={orderPageClassName('order-card-product')} type="button" onClick={onOpen}>
                 <OrderImage order={order} />
-                <div className={orderPageClassName('order-product-info')}>
-                    <strong className={orderPageClassName('order-product-title')}>{firstLineName}</strong>
-                    {hasMultipleLines ? (
-                        <small className={orderPageClassName('order-product-spec')}>
-                            {isZh
-                                ? `另有 ${order.lines.length - 1} 种商品`
-                                : `${order.lines.length - 1} more items`}
-                        </small>
-                    ) : null}
-                    <div className={orderPageClassName('order-product-tags')}>
-                        <span className={orderPageClassName('order-product-tag')}>
-                            {isZh ? '商品信息' : 'Product details'}
-                        </span>
-                        <span className={orderPageClassName('order-product-tag')}>
-                            {isZh ? '售后入口' : 'Returns'}
-                        </span>
+                <div className={orderPageClassName('order-product-content')}>
+                    <div className={orderPageClassName('order-product-heading')}>
+                        <strong className={orderPageClassName('order-product-title')}>{firstLineName}</strong>
+                        <b className={orderPageClassName('order-product-price')}>
+                            {formatMoney(
+                                line?.linePriceWithTax ?? order.totalWithTax,
+                                order.currencyCode,
+                                locale,
+                            )}
+                        </b>
                     </div>
-                </div>
-                <div className={orderPageClassName('order-product-meta')}>
-                    <b className={orderPageClassName('order-product-price')}>
-                        {formatMoney(
-                            line?.linePriceWithTax ?? order.totalWithTax,
-                            order.currencyCode,
-                            locale,
-                        )}
-                    </b>
-                    <small className={orderPageClassName('order-product-qty')}>×{order.totalQuantity}</small>
+                    <small className={orderPageClassName('order-product-spec')}>
+                        {productPresentation.description}
+                    </small>
+                    <div className={orderPageClassName('order-product-bottom')}>
+                        <div className={orderPageClassName('order-product-tags')}>
+                            {productPresentation.tags.map((tag, index) => (
+                                <span
+                                    key={`${index}-${tag}`}
+                                    className={orderPageClassName(
+                                        `order-product-tag ${index === 1 ? 'is-service' : ''}`,
+                                    )}
+                                >
+                                    {tag}
+                                </span>
+                            ))}
+                        </div>
+                        <small className={orderPageClassName('order-product-qty')}>
+                            ×{order.totalQuantity}
+                        </small>
+                    </div>
                 </div>
             </button>
             <footer className={orderPageClassName('order-card-footer')}>
@@ -1579,6 +1583,63 @@ function OrderCard({
             </footer>
         </article>
     );
+}
+
+function orderProductPresentation(
+    line: OrderSummary['lines'][number] | undefined,
+    additionalLineCount: number,
+    language: StorefrontLanguage,
+): { description: string; tags: [string, string] } {
+    const isZh = language === 'zh';
+    if (!line) {
+        return {
+            description: isZh ? '查看订单了解商品与交付信息' : 'Open the order for item and delivery details',
+            tags: isZh ? ['订单商品', '详情可查'] : ['Order item', 'Details available'],
+        };
+    }
+
+    const fulfillmentType =
+        line.customFields.fulfillmentTypeSnapshot ?? line.productVariant.customFields.fulfillmentType;
+    const deliveryMode =
+        line.customFields.digitalDeliveryModeSnapshot ??
+        line.productVariant.customFields.digitalDeliveryMode ??
+        'manual_service';
+    const hasAdditionalLines = additionalLineCount > 0;
+    const additionalItemsDescription = isZh
+        ? `另有 ${additionalLineCount} 种商品，详情中可查看`
+        : `${additionalLineCount} more ${additionalLineCount === 1 ? 'item' : 'items'} in this order`;
+
+    if (fulfillmentType === 'physical') {
+        return {
+            description: hasAdditionalLines
+                ? additionalItemsDescription
+                : isZh
+                  ? '商家发货后可查看配送进度'
+                  : 'Track delivery after the item ships',
+            tags: isZh ? ['实体商品', '物流可查'] : ['Physical item', 'Tracking'],
+        };
+    }
+
+    const digitalCopy = {
+        auto_card: {
+            description: isZh ? '支付后自动发送至下单邮箱' : 'Sent automatically to your checkout email',
+            tag: isZh ? '自动发货' : 'Auto delivery',
+        },
+        file_download: {
+            description: isZh ? '支付后可在订单详情中下载' : 'Download from the order details after payment',
+            tag: isZh ? '文件下载' : 'Download',
+        },
+        manual_service: {
+            description: isZh ? '支付后由商家按订单信息处理' : 'The merchant handles delivery after payment',
+            tag: isZh ? '人工服务' : 'Manual service',
+        },
+    } as const;
+    const presentation = digitalCopy[deliveryMode];
+
+    return {
+        description: hasAdditionalLines ? additionalItemsDescription : presentation.description,
+        tags: isZh ? ['数字商品', presentation.tag] : ['Digital item', presentation.tag],
+    };
 }
 
 function SubHeader({
