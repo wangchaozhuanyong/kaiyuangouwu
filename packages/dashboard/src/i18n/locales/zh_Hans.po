@@ -1625,8 +1625,8 @@ msgid "Current store"
 msgstr "当前店铺"
 
 #: src/app/routes/_authenticated/_products/components/generate-variants-panel.tsx
-#~ msgid "Delivered to the checkout email after payment; no shipping or stock."
-#~ msgstr "付款后发送至结账邮箱，无需配送和库存。"
+msgid "Delivered to the checkout email after payment; no shipping or stock."
+msgstr "付款后发送至结账邮箱，无需配送和库存。"
 
 #: src/app/routes/_authenticated/_system/job-queue.tsx
 msgid "Every 5 seconds"
@@ -6484,13 +6484,13 @@ msgstr "复制{entityName}"
 msgid "Order lines"
 msgstr "订单行"
 
-#: src/app/routes/_authenticated/_products/products.tsx
-msgid "Brand"
-msgstr "品牌"
-
 #: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
 msgid "Refund policy"
 msgstr "退款政策"
+
+#: src/app/routes/_authenticated/_products/products.tsx
+msgid "Brand"
+msgstr "品牌"
 
 #: src/lib/components/data-table/views-sheet.tsx
 msgid "Failed to rename global view"
@@ -6654,7 +6654,6 @@ msgid "Assign {entityType} to channels"
 msgstr "将{entityType}分配到店铺"
 
 #: src/app/routes/_authenticated/_products/components/add-product-variant-dialog.tsx
-#: src/app/routes/_authenticated/_products/components/generate-variants-panel.tsx
 msgid "Delivered to the checkout email after payment; no shipping is required."
 msgstr "付款后发送至结账邮箱，无需配送。"
 
@@ -7381,7 +7380,6 @@ msgstr "请填写完整收货地址，包括邮政编码和联系电话"
 #: src/app/routes/_authenticated/_option-groups/option-groups_.$id.tsx
 #: src/app/routes/_authenticated/_option-groups/option-groups.tsx
 #: src/app/routes/_authenticated/_products/components/option-groups-editor.tsx
-#: src/app/routes/_authenticated/_products/components/option-value-input.tsx
 msgid "Option Values"
 msgstr "规格值"
 

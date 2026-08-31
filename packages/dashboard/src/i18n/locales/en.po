@@ -172,8 +172,8 @@ msgid "Add store"
 msgstr "Add store"
 
 #: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
-msgid "Failed to update product delivery method"
-msgstr "Failed to update product delivery method"
+#~ msgid "Failed to update product delivery method"
+#~ msgstr "Failed to update product delivery method"
 
 #: src/app/routes/_authenticated/_global-settings/global-settings.tsx
 msgid "Global out of stock threshold"
@@ -383,6 +383,10 @@ msgstr "Test this shipping method by simulating an order to see if it's eligible
 #: src/app/routes/_authenticated/_roles/components/expandable-permissions.tsx
 msgid "Permissions for {0}"
 msgstr "Permissions for {0}"
+
+#: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
+msgid "Failed to update product policy"
+msgstr "Failed to update product policy"
 
 #: src/app/routes/_authenticated/_stock-locations/stock-locations_.$id.tsx
 #: src/app/routes/_authenticated/_stock-locations/stock-locations.tsx
@@ -783,6 +787,10 @@ msgstr "Gross price: <0/>"
 msgid "Go to next page"
 msgstr "Go to next page"
 
+#: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
+msgid "All SKUs will become digital. Physical stock, packaging, and shipping settings will no longer apply."
+msgstr "All SKUs will become digital. Physical stock, packaging, and shipping settings will no longer apply."
+
 #: src/lib/components/shared/rich-text-editor/link-dialog.tsx
 msgid "Remove link"
 msgstr "Remove link"
@@ -1030,8 +1038,8 @@ msgid "Tax rate: {taxRate}%"
 msgstr "Tax rate: {taxRate}%"
 
 #: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
-msgid "All SKUs will use email delivery and inventory tracking will be disabled. Existing orders keep their recorded delivery type."
-msgstr "All SKUs will use email delivery and inventory tracking will be disabled. Existing orders keep their recorded delivery type."
+#~ msgid "All SKUs will use email delivery and inventory tracking will be disabled. Existing orders keep their recorded delivery type."
+#~ msgstr "All SKUs will use email delivery and inventory tracking will be disabled. Existing orders keep their recorded delivery type."
 
 #: src/app/routes/_authenticated/_shipping-methods/components/shipping-method-test-result-wrapper.tsx
 msgid "Please add products and complete the shipping address to run the test."
@@ -1056,6 +1064,10 @@ msgstr "Select address"
 #: src/app/routes/_authenticated/_payment-methods/payment-methods_.$id.tsx
 msgid "Payment eligibility checker"
 msgstr "Payment eligibility checker"
+
+#: src/app/routes/_authenticated/_product-variants/product-variants_.$id.tsx
+msgid "This downloadable item uses the sellable inventory entered below."
+msgstr "This downloadable item uses the sellable inventory entered below."
 
 #: src/lib/framework/dashboard-widget/metrics-widget/index.tsx
 msgid "Check the connection and try again"
@@ -1248,8 +1260,8 @@ msgid "Name (Simplified Chinese)"
 msgstr "Name (Simplified Chinese)"
 
 #: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
-msgid "No shipping address or shipping method is required. Inventory tracking is disabled and the order is delivered to the email entered at checkout after payment."
-msgstr "No shipping address or shipping method is required. Inventory tracking is disabled and the order is delivered to the email entered at checkout after payment."
+#~ msgid "No shipping address or shipping method is required. Inventory tracking is disabled and the order is delivered to the email entered at checkout after payment."
+#~ msgstr "No shipping address or shipping method is required. Inventory tracking is disabled and the order is delivered to the email entered at checkout after payment."
 
 #. placeholder {0}: formatCurrency(refund.totalRefundableAmount, order.currencyCode)
 #: src/app/routes/_authenticated/_orders/components/refund-order-dialog.tsx
@@ -1362,6 +1374,10 @@ msgstr "Supported currencies"
 #: src/lib/components/layout/channel-switcher.tsx
 msgid "Switch store"
 msgstr "Switch store"
+
+#: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
+msgid "This store only sells digital products. Product type is fixed to email delivery."
+msgstr "This store only sells digital products. Product type is fixed to email delivery."
 
 #: src/app/routes/_authenticated/_orders/components/order-detail-shared.tsx
 #: src/app/routes/_authenticated/_orders/orders_.$id_.modify.tsx
@@ -1609,8 +1625,8 @@ msgid "Current store"
 msgstr "Current store"
 
 #: src/app/routes/_authenticated/_products/components/generate-variants-panel.tsx
-#~ msgid "Delivered to the checkout email after payment; no shipping or stock."
-#~ msgstr "Delivered to the checkout email after payment; no shipping or stock."
+msgid "Delivered to the checkout email after payment; no shipping or stock."
+msgstr "Delivered to the checkout email after payment; no shipping or stock."
 
 #: src/app/routes/_authenticated/_system/job-queue.tsx
 msgid "Every 5 seconds"
@@ -1801,6 +1817,10 @@ msgstr "No results found"
 msgid "Off"
 msgstr "Off"
 
+#: src/app/routes/_authenticated/_product-variants/product-variants_.$id.tsx
+msgid "This is the sellable quantity for the digital SKU. Warehouse, packaging and shipping settings do not apply."
+msgstr "This is the sellable quantity for the digital SKU. Warehouse, packaging and shipping settings do not apply."
+
 #: src/lib/components/data-input/datetime-input.tsx
 msgid "Set minute to {minute}"
 msgstr "Set minute to {minute}"
@@ -1813,6 +1833,10 @@ msgstr "System configuration"
 #: src/app/routes/_authenticated/_products/products_.$id.tsx
 msgid "Templates define the selectable specifications for this product and are used to generate SKUs."
 msgstr "Templates define the selectable specifications for this product and are used to generate SKUs."
+
+#: src/app/routes/_authenticated/_products/products.tsx
+msgid "Uncategorized"
+msgstr "Uncategorized"
 
 #: src/app/routes/_authenticated/_tax-rates/tax-rates_.$id.tsx
 #: src/app/routes/_authenticated/_tax-rates/tax-rates_.$id.tsx
@@ -1885,6 +1909,10 @@ msgstr "Failed to delete {0} {entityName}: {message}"
 msgid "Test your shipping methods by simulating a new order."
 msgstr "Test your shipping methods by simulating a new order."
 
+#: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
+msgid "Uses stock, a physical address, shipping, warehouse operations, packaging and automatic unpacking."
+msgstr "Uses stock, a physical address, shipping, warehouse operations, packaging and automatic unpacking."
+
 #: src/app/routes/_authenticated/_products/components/add-product-variant-dialog.tsx
 #: src/app/routes/_authenticated/_products/components/generate-variants-panel.tsx
 #: src/app/routes/_authenticated/_products/products_.$id.tsx
@@ -1951,6 +1979,7 @@ msgid "Payment Methods"
 msgstr "Payment Methods"
 
 #: src/app/routes/_authenticated/_product-variants/product-variants_.$id.tsx
+#: src/app/routes/_authenticated/_products/components/product-variants-table.tsx
 msgid "Stock"
 msgstr "Stock"
 
@@ -2007,11 +2036,16 @@ msgstr "{cancellableCount, plural, one {Cancel {cancellableCount} task} other {C
 msgid "Item added to order"
 msgstr "Item added to order"
 
+#: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
+msgid "Shown on product, checkout, and order pages for manually delivered SKUs."
+msgstr "Shown on product, checkout, and order pages for manually delivered SKUs."
+
 #: src/lib/components/shared/asset/asset-preview.tsx
 msgid "Edit focal point"
 msgstr "Edit focal point"
 
 #: src/app/routes/_authenticated/_orders/components/fulfillment-details.tsx
+#: src/app/routes/_authenticated/_product-variants/product-variants_.$id.tsx
 #: src/app/routes/_authenticated/_products/products_.$id_.variants.tsx
 msgid "Digital delivery"
 msgstr "Digital delivery"
@@ -2398,10 +2432,9 @@ msgstr "Product type"
 msgid "Select a target collection to move {0} to."
 msgstr "Select a target product group to move {0} to."
 
-#. placeholder {0}: variants.length
 #: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
-msgid "{0} SKUs will use this setting"
-msgstr "{0} SKUs will use this setting"
+#~ msgid "{0} SKUs will use this setting"
+#~ msgstr "{0} SKUs will use this setting"
 
 #. placeholder {0}: error.message
 #: src/app/routes/_authenticated/_orders/orders_.draft.$id.tsx
@@ -2490,8 +2523,8 @@ msgid "Deleted {deleted} {entityName}"
 msgstr "Deleted {deleted} {entityName}"
 
 #: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
-msgid "Product delivery method updated"
-msgstr "Product delivery method updated"
+#~ msgid "Product delivery method updated"
+#~ msgstr "Product delivery method updated"
 
 #. placeholder {0}: error.message
 #: src/app/routes/_authenticated/_orders/orders_.draft.$id.tsx
@@ -2566,6 +2599,10 @@ msgstr "Change the date range to view historical business trends"
 #: src/app/routes/_authenticated/_orders/components/order-history/default-order-history-components.tsx
 msgid "Reason:"
 msgstr "Reason:"
+
+#: src/app/routes/_authenticated/_product-variants/product-variants_.$id.tsx
+msgid "This downloadable item can be sold without an inventory limit."
+msgstr "This downloadable item can be sold without an inventory limit."
 
 #: src/app/routes/_authenticated/_orders/components/order-detail-shared.tsx
 #: src/app/routes/_authenticated/_orders/orders_.$id_.modify.tsx
@@ -2930,6 +2967,11 @@ msgstr "Create and add another child"
 msgid "Are you sure you want to delete this address?"
 msgstr "Are you sure you want to delete this address?"
 
+#: src/app/routes/_authenticated/_products/components/add-product-variant-dialog.tsx
+#: src/app/routes/_authenticated/_products/components/generate-variants-panel.tsx
+msgid "This store only supports physical products delivered by logistics."
+msgstr "This store only supports physical products delivered by logistics."
+
 #: src/app/routes/_authenticated/_products/components/add-option-group-dialog.tsx
 msgid "Failed to assign option group"
 msgstr "Failed to assign option group"
@@ -2941,6 +2983,10 @@ msgstr "Failed to update asset"
 #: src/lib/components/data-table/save-view-dialog.tsx
 msgid "A view with this name already exists"
 msgstr "A view with this name already exists"
+
+#: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
+msgid "Manual delivery estimate (minutes)"
+msgstr "Manual delivery estimate (minutes)"
 
 #: src/app/routes/_authenticated/_stock-locations/stock-locations_.$id.tsx
 msgid "Successfully updated stock location"
@@ -3012,6 +3058,10 @@ msgstr "Filter attribute values"
 #: src/app/routes/_authenticated/_assets/assets_.$id.tsx
 msgid "Successfully updated asset"
 msgstr "Successfully updated asset"
+
+#: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
+msgid "Change this product to {selectedLabel}?"
+msgstr "Change this product to {selectedLabel}?"
 
 #: src/lib/components/layout/nav-user.tsx
 msgid "Theme"
@@ -3509,6 +3559,11 @@ msgstr "Details and configuration"
 msgid "Failed to set shipping address for order: {0}"
 msgstr "Failed to set shipping address for order: {0}"
 
+#: src/app/routes/_authenticated/_products/components/add-product-variant-dialog.tsx
+#: src/app/routes/_authenticated/_products/components/generate-variants-panel.tsx
+msgid "This store only supports digital products delivered by email."
+msgstr "This store only supports digital products delivered by email."
+
 #: src/app/routes/_authenticated/_system/job-queue.tsx
 #: src/app/routes/_authenticated/_system/job-queue.tsx
 #: src/app/routes/_authenticated/_system/job-queue.tsx
@@ -3519,13 +3574,17 @@ msgstr "Cancel Task"
 msgid "Discard the unsaved product variant?"
 msgstr "Discard the unsaved product SKU?"
 
+#: src/app/routes/_authenticated/_product-variants/product-variants_.$id.tsx
+msgid "Credential pool auto-delivery"
+msgstr "Credential pool auto-delivery"
+
 #: src/app/routes/_authenticated/_promotions/promotions_.$id.tsx
 msgid "Ends at"
 msgstr "Ends at"
 
 #: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
-msgid "Apply {selectedLabel} to all SKUs?"
-msgstr "Apply {selectedLabel} to all SKUs?"
+#~ msgid "Apply {selectedLabel} to all SKUs?"
+#~ msgstr "Apply {selectedLabel} to all SKUs?"
 
 #. placeholder {0}: table.getState().pagination.pageIndex + 1
 #. placeholder {1}: table.getPageCount() || 1
@@ -4033,6 +4092,7 @@ msgstr "Loading tax category..."
 msgid "Force remove option group"
 msgstr "Force remove option group"
 
+#: src/app/routes/_authenticated/_product-variants/product-variants_.$id.tsx
 #: src/app/routes/_authenticated/_products/products_.$id_.variants.tsx
 #: src/app/routes/_authenticated/_products/products_.$id_.variants.tsx
 msgid "File download"
@@ -4335,6 +4395,10 @@ msgstr "Building, unit, room, etc."
 msgid "Default content language"
 msgstr "Default content language"
 
+#: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
+msgid "{variantCount} SKUs inherit the product type"
+msgstr "{variantCount} SKUs inherit the product type"
+
 #: src/app/routes/_authenticated/_products/products_.$id_.variants.tsx
 msgid "Configure automatic delivery"
 msgstr "Configure automatic delivery"
@@ -4414,8 +4478,8 @@ msgid "Remove asset"
 msgstr "Remove asset"
 
 #: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
-msgid "All SKUs will require shipping. Configure stock and shipping methods before accepting orders."
-msgstr "All SKUs will require shipping. Configure stock and shipping methods before accepting orders."
+#~ msgid "All SKUs will require shipping. Configure stock and shipping methods before accepting orders."
+#~ msgstr "All SKUs will require shipping. Configure stock and shipping methods before accepting orders."
 
 #: src/app/routes/_authenticated/_channels/channels_.$id.tsx
 msgid "Supported content languages"
@@ -4761,6 +4825,8 @@ msgstr "Rotate API Key"
 msgid "Large"
 msgstr "Large"
 
+#: src/app/routes/_authenticated/_products/products.tsx
+#: src/app/routes/_authenticated/_products/products.tsx
 #: src/app/routes/_authenticated/_tax-rates/tax-rates.tsx
 msgid "Category"
 msgstr "Category"
@@ -4878,6 +4944,14 @@ msgstr "Failed to reorder items"
 #: src/app/routes/_authenticated/_shipping-methods/components/test-shipping-methods-result.tsx
 msgid "No eligible shipping methods found for this order."
 msgstr "No eligible shipping methods found for this order."
+
+#: src/app/routes/_authenticated/_product-variants/product-variants_.$id.tsx
+msgid "Manual email delivery"
+msgstr "Manual email delivery"
+
+#: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
+msgid "Product policy updated"
+msgstr "Product policy updated"
 
 #: src/app/routes/_authenticated/_products/components/product-option-editor-sheet.tsx
 #: src/app/routes/_authenticated/_products/components/product-options-table.tsx
@@ -5041,9 +5115,14 @@ msgid "Channels"
 msgstr "Sales channels"
 
 #: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
+#: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
+msgid "Save product policy"
+msgstr "Save product policy"
+
+#: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
 #: src/app/routes/_authenticated/_products/products.tsx
-msgid "Mixed product"
-msgstr "Mixed product"
+#~ msgid "Mixed product"
+#~ msgstr "Mixed product"
 
 #: src/app/routes/_authenticated/_orders/components/order-history/default-order-history-components.tsx
 msgid "Shipping refunded"
@@ -5091,6 +5170,10 @@ msgstr "New product"
 #: src/app/routes/_authenticated/_collections/components/collection-quick-create-sheet.tsx
 msgid "No parent collection (top level)"
 msgstr "No parent product group (top level)"
+
+#: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
+msgid "Refund request with merchant review"
+msgstr "Refund request with merchant review"
 
 #: src/lib/components/shared/assign-to-channel-dialog.tsx
 msgid "Failed for: {failedCodes}"
@@ -5272,6 +5355,7 @@ msgid "Select seller"
 msgstr "Select merchant"
 
 #: src/app/routes/_authenticated/_orders/orders.tsx
+#: src/app/routes/_authenticated/_product-variants/product-variants_.$id.tsx
 msgid "Delivery method"
 msgstr "Delivery method"
 
@@ -5979,8 +6063,8 @@ msgid "Light"
 msgstr "Light"
 
 #: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
-msgid "This product contains both physical and digital SKUs. You can keep editing each SKU separately, or choose one type below to apply it to every SKU."
-msgstr "This product contains both physical and digital SKUs. You can keep editing each SKU separately, or choose one type below to apply it to every SKU."
+#~ msgid "This product contains both physical and digital SKUs. You can keep editing each SKU separately, or choose one type below to apply it to every SKU."
+#~ msgstr "This product contains both physical and digital SKUs. You can keep editing each SKU separately, or choose one type below to apply it to every SKU."
 
 #: src/lib/components/data-table/data-table-view-options.tsx
 msgid "Reset"
@@ -6022,6 +6106,10 @@ msgstr "Unable to load records"
 #: src/app/routes/_authenticated/_collections/components/collection-visibility-switch.tsx
 msgid "Visible"
 msgstr "Visible"
+
+#: src/app/routes/_authenticated/_product-variants/product-variants_.$id.tsx
+msgid "Limit sellable inventory"
+msgstr "Limit sellable inventory"
 
 #: src/lib/components/data-table/human-readable-operator.tsx
 msgid "does not contain"
@@ -6249,6 +6337,10 @@ msgstr "Shipped"
 msgid "Failed to assign all products"
 msgstr "Failed to assign all products"
 
+#: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
+msgid "Non-refundable"
+msgstr "Non-refundable"
+
 #: src/app/routes/_authenticated/_zones/components/zone-bulk-actions.tsx
 msgid "Removed {countryCount} countries/regions from zone"
 msgstr "Removed {countryCount} countries/regions from zone"
@@ -6391,6 +6483,10 @@ msgstr "Duplicate {entityName}"
 #: src/app/routes/_authenticated/_orders/orders_.$id_.modify.tsx
 msgid "Order lines"
 msgstr "Order lines"
+
+#: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
+msgid "Refund policy"
+msgstr "Refund policy"
 
 #: src/app/routes/_authenticated/_products/products.tsx
 msgid "Brand"
@@ -6558,7 +6654,6 @@ msgid "Assign {entityType} to channels"
 msgstr "Assign {entityType} to sales channels"
 
 #: src/app/routes/_authenticated/_products/components/add-product-variant-dialog.tsx
-#: src/app/routes/_authenticated/_products/components/generate-variants-panel.tsx
 msgid "Delivered to the checkout email after payment; no shipping is required."
 msgstr "Delivered to the checkout email after payment; no shipping is required."
 
@@ -6709,6 +6804,10 @@ msgstr "Basic information"
 msgid "Clear filter"
 msgstr "Clear filter"
 
+#: src/app/routes/_authenticated/_product-variants/product-variants_.$id.tsx
+msgid "Paid orders enter the manual delivery workbench. Sellable inventory is entered below and is restored only when the order is cancelled before delivery."
+msgstr "Paid orders enter the manual delivery workbench. Sellable inventory is entered below and is restored only when the order is cancelled before delivery."
+
 #: src/app/routes/_authenticated/_zones/zones.tsx
 msgid "Regions"
 msgstr "Regions"
@@ -6755,8 +6854,8 @@ msgstr "Failed to disable products"
 #~ msgstr "Global settings"
 
 #: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
-msgid "Customers enter a shipping address and select a shipping method. Orders use stock and are fulfilled with logistics tracking."
-msgstr "Customers enter a shipping address and select a shipping method. Orders use stock and are fulfilled with logistics tracking."
+#~ msgid "Customers enter a shipping address and select a shipping method. Orders use stock and are fulfilled with logistics tracking."
+#~ msgstr "Customers enter a shipping address and select a shipping method. Orders use stock and are fulfilled with logistics tracking."
 
 #: src/lib/components/data-table/views-sheet.tsx
 msgid "No global views have been created yet."
@@ -6947,6 +7046,10 @@ msgstr "Add coupon code"
 #: src/app/routes/_authenticated/_orders/orders_.draft.$id.tsx
 msgid "Coupon code set for order"
 msgstr "Coupon code set for order"
+
+#: src/app/routes/_authenticated/_products/components/product-variants-table.tsx
+msgid "Digital stock"
+msgstr "Digital stock"
 
 #: src/lib/components/data-table/data-table-column-header.tsx
 msgid "Change sort order"
@@ -7365,6 +7468,10 @@ msgstr "A scheduled background task registered by a plugin or business extension
 msgid "Are you sure you want to delete this item? This action cannot be undone."
 msgstr "Are you sure you want to delete this item? This action cannot be undone."
 
+#: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
+msgid "Uses the checkout delivery email and the SKU-level automatic card, manual service, or file-download workflow."
+msgstr "Uses the checkout delivery email and the SKU-level automatic card, manual service, or file-download workflow."
+
 #: src/lib/framework/page/detail-page.tsx
 msgid "Updated successfully"
 msgstr "Updated successfully"
@@ -7469,6 +7576,10 @@ msgstr "Failed to update product group"
 #: src/app/routes/_authenticated/_product-variants/product-variants_.$id.tsx
 msgid "Price and tax"
 msgstr "Price and tax"
+
+#: src/app/routes/_authenticated/_product-variants/product-variants_.$id.tsx
+msgid "Inventory is read-only and equals the available records in the credential pool. Configure and replenish it in Automatic credential delivery."
+msgstr "Inventory is read-only and equals the available records in the credential pool. Configure and replenish it in Automatic credential delivery."
 
 #: src/app/routes/_authenticated/_orders/components/order-history/order-history-container.tsx
 msgid "Order not found"
@@ -7659,6 +7770,10 @@ msgstr "Loading customer group..."
 #: src/lib/components/layout/manage-languages-dialog.tsx
 msgid "Failed to load global settings"
 msgstr "Failed to load global settings"
+
+#: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
+msgid "This store only sells physical products. Product type is fixed to logistics delivery."
+msgstr "This store only sells physical products. Product type is fixed to logistics delivery."
 
 #: src/app/routes/_authenticated/_option-groups/components/option-group-products-block.tsx
 msgid "No products are linked to this template"
@@ -8436,6 +8551,10 @@ msgstr "Successfully updated filter attribute"
 msgid "Strikethrough"
 msgstr "Strikethrough"
 
+#: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
+msgid "All SKUs will become physical and require stock, a delivery address, and shipping configuration."
+msgstr "All SKUs will become physical and require stock, a delivery address, and shipping configuration."
+
 #: src/app/routes/_authenticated/_products/components/product-collections-panel.tsx
 msgid "Product group not found"
 msgstr "Product group not found"
@@ -8471,6 +8590,11 @@ msgstr "New filter attribute"
 msgid "Are you sure you want to remove this option group from the product?"
 msgstr "Are you sure you want to remove this option group from the product?"
 
+#: src/app/routes/_authenticated/_product-variants/product-variants_.$id.tsx
+#: src/app/routes/_authenticated/_product-variants/product-variants_.$id.tsx
+msgid "Digital inventory"
+msgstr "Digital inventory"
+
 #: src/lib/components/shared/rich-text-editor/image-dialog.tsx
 msgid "Description (alt)"
 msgstr "Description (alt)"
@@ -8503,8 +8627,8 @@ msgid "Next Execution"
 msgstr "Next Execution"
 
 #: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
-msgid "All SKUs use this setting"
-msgstr "All SKUs use this setting"
+#~ msgid "All SKUs use this setting"
+#~ msgstr "All SKUs use this setting"
 
 #: src/lib/components/shared/history-timeline/history-note-checkbox.tsx
 msgid "Note is private"
@@ -8573,8 +8697,8 @@ msgstr "is less than"
 
 #: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
 #: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
-msgid "Apply to all SKUs"
-msgstr "Apply to all SKUs"
+#~ msgid "Apply to all SKUs"
+#~ msgstr "Apply to all SKUs"
 
 #: src/app/routes/_authenticated/_orders/components/payment-details.tsx
 msgid "Refund ID"
@@ -8709,6 +8833,10 @@ msgstr "Open specification template library"
 msgid "New Seller"
 msgstr "New Merchant"
 
+#: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
+msgid "Seven-day no-reason return"
+msgstr "Seven-day no-reason return"
+
 #: src/lib/components/shared/rich-text-editor/image-dialog.tsx
 msgid "Edit image"
 msgstr "Edit image"
@@ -8792,6 +8920,10 @@ msgstr "Name, SKU, barcode, price, cost, margin, stock and shelf life are calcul
 msgid "Browse and select one or more assets"
 msgstr "Browse and select one or more assets"
 
+#: src/app/routes/_authenticated/_products/components/product-fulfillment-type-panel.tsx
+msgid "Confirm and save"
+msgstr "Confirm and save"
+
 #: src/app/routes/_authenticated/_collections/components/move-collections-dialog.tsx
 msgid "Loading collections..."
 msgstr "Loading product groups..."
@@ -8862,6 +8994,10 @@ msgstr "SKU code"
 #: src/app/routes/_authenticated/_products/products_.$id_.variants.tsx
 msgid "SKU"
 msgstr "SKU"
+
+#: src/app/routes/_authenticated/_product-variants/product-variants_.$id.tsx
+msgid "Unlimited inventory"
+msgstr "Unlimited inventory"
 
 #: src/lib/components/shared/rich-text-editor/responsive-toolbar.tsx
 msgid "More formatting options"
