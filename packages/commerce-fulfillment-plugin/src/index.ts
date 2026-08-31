@@ -49,6 +49,8 @@ export { AutoCardConfig } from './entities/auto-card-config.entity';
 export { AutoCardDeliveryEvent } from './entities/auto-card-delivery-event.entity';
 export { AutoCardDelivery } from './entities/auto-card-delivery.entity';
 export { AutoCardPoolItem } from './entities/auto-card-pool-item.entity';
+export { PackagingUnpackEvent } from './entities/packaging-unpack-event.entity';
+export { ProductPackagingRule } from './entities/product-packaging-rule.entity';
 export {
     getOrderLineDigitalDeliveryMode,
     getOrderLineFulfillmentType,
@@ -69,4 +71,8 @@ export type {
     OrderConfirmationTokenPayload,
     OrderConfirmationTokenResult,
 } from './order-confirmation-token.service';
+export { PackagingStockLocationStrategy } from './packaging-stock-location-strategy';
+export { calculateAutoUnpack } from './product-packaging-calculation';
+export { ProductPackagingService } from './product-packaging.service';
+export type { ProductPackagingStockSummary } from './product-packaging.service';
 export type { FulfillmentType } from './types';

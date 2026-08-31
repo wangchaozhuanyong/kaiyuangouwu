@@ -271,8 +271,28 @@ const autoCardAdminTypes = gql`
     }
 `;
 
+const productPackagingTypes = gql`
+    type ProductPackagingRule implements Node {
+        id: ID!
+        createdAt: DateTime!
+        updatedAt: DateTime!
+        enabled: Boolean!
+        autoUnpack: Boolean!
+        unitLabel: String!
+        packageLabel: String!
+        unitsPerPackage: Int!
+        unitVariant: ProductVariant!
+        packageVariant: ProductVariant!
+    }
+
+    extend type Product {
+        packaging: ProductPackagingRule
+    }
+`;
+
 export const shopApiExtensions = gql`
     ${afterSalesTypes}
+    ${productPackagingTypes}
 
     enum AutoCardDeliveryState {
         WAITING_STOCK
@@ -369,6 +389,43 @@ export const shopApiExtensions = gql`
 export const adminApiExtensions = gql`
     ${afterSalesTypes}
     ${autoCardAdminTypes}
+    ${productPackagingTypes}
+
+    type ProductPackagingStockSummary {
+        unitStockOnHand: Int!
+        unitStockAllocated: Int!
+        unitStockAvailable: Int!
+        packageStockOnHand: Int!
+        packageStockAllocated: Int!
+        packageStockAvailable: Int!
+        convertibleUnitStock: Int!
+    }
+
+    type PackagingUnpackEvent implements Node {
+        id: ID!
+        createdAt: DateTime!
+        updatedAt: DateTime!
+        reason: String!
+        packagesOpened: Int!
+        unitsCreated: Int!
+        packageStockBefore: Int!
+        packageStockAfter: Int!
+        unitStockBefore: Int!
+        unitStockAfter: Int!
+        stockLocation: StockLocation!
+        order: Order
+    }
+
+    input UpdateProductPackagingInput {
+        productId: ID!
+        unitVariantId: ID!
+        packageVariantId: ID!
+        unitLabel: String!
+        packageLabel: String!
+        unitsPerPackage: Int!
+        enabled: Boolean!
+        autoUnpack: Boolean!
+    }
 
     extend type AfterSalesEvent {
         actorId: String
@@ -402,6 +459,9 @@ export const adminApiExtensions = gql`
         autoCardPoolItems(productVariantId: ID!, options: AutoCardPoolItemListOptions): AutoCardPoolItemList!
         autoCardDeliveries(options: AutoCardDeliveryListOptions): AutoCardDeliveryList!
         autoCardTodoSummary: AutoCardTodoSummary!
+        productPackaging(productId: ID!): ProductPackagingRule
+        productPackagingStock(productId: ID!): ProductPackagingStockSummary
+        productPackagingUnpackEvents(productId: ID!, take: Int = 20): [PackagingUnpackEvent!]!
     }
 
     extend type Mutation {
@@ -412,5 +472,6 @@ export const adminApiExtensions = gql`
         revealAutoCardPoolItem(id: ID!): [AutoCardField!]!
         setAutoCardPoolItemEnabled(id: ID!, enabled: Boolean!, reason: String): AutoCardPoolItem!
         retryAutoCardDelivery(id: ID!): AutoCardDelivery!
+        updateProductPackaging(input: UpdateProductPackagingInput!): ProductPackagingRule!
     }
 `;

@@ -1,11 +1,12 @@
-import type { OperationsNavigationTitles } from './operations-navigation';
 import { msg } from '@lingui/core/macro';
 import { defineDashboardExtension } from '@vendure/dashboard';
+import type { OperationsNavigationTitles } from './operations-navigation';
 
 import { afterSalesRoute } from './after-sales-page';
 import { autoCardRoute } from './auto-card-page';
 import { organizeOperationsNavigation } from './operations-navigation';
 import { OperationsTodoWidget } from './operations-todo-widget';
+import { ProductPackagingPageBlock } from './product-packaging-page-block';
 import { reviewModerationRoute } from './review-moderation-page';
 import { StoreOverviewWidget } from './store-overview-widget';
 
@@ -61,6 +62,20 @@ const navigationTitles = {
 
 defineDashboardExtension({
     routes: [afterSalesRoute, autoCardRoute, reviewModerationRoute],
+    pageBlocks: [
+        {
+            id: 'product-packaging',
+            title: undefined,
+            location: {
+                pageId: 'product-detail',
+                column: 'main',
+                position: { blockId: 'product-fulfillment-type', order: 'after' },
+            },
+            component: ProductPackagingPageBlock,
+            shouldRender: context => Boolean(context.entity?.id),
+            requiresPermission: ['UpdateProduct'],
+        },
+    ],
     widgets: [
         {
             id: 'store-overview-widget',

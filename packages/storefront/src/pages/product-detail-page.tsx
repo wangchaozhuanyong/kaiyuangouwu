@@ -1,4 +1,3 @@
-import type { RouteState } from '../storefront-router';
 import { useNavigate, useRouter } from '@tanstack/react-router';
 import {
     CircleCheck,
@@ -11,6 +10,7 @@ import {
     Truck,
 } from 'lucide-react';
 import { Suspense, useEffect, useState } from 'react';
+import type { RouteState } from '../storefront-router';
 
 import { ShopApi } from '../api';
 import { LazySharePosterModal } from '../lazy-storefront-pages';
@@ -100,6 +100,9 @@ export function ProductDetailPage() {
     const availability = productAvailability(variant);
     const unavailable = availability.soldOut;
     const stockLabel = productAvailabilityLabel(availability, language);
+    const packaging = product.packaging?.enabled ? product.packaging : null;
+    const isUnitVariant = packaging?.unitVariant.id === variant?.id;
+    const isPackageVariant = packaging?.packageVariant.id === variant?.id;
     const similarProducts = products.filter(item => item.id !== product.id).slice(0, 4);
     const descriptionText = productDescriptionText(product.description);
     const descriptionHtml = sanitizeProductDescription(product.description);
@@ -199,9 +202,7 @@ export function ProductDetailPage() {
                             </del>
                         ) : null}
                     </p>
-                    <span>
-                        {stockLabel}
-                    </span>
+                    <span>{stockLabel}</span>
                 </div>
                 <div className="detail-tags">
                     <span>
@@ -279,6 +280,30 @@ export function ProductDetailPage() {
                         </button>
                     ))}
                 </div>
+                {packaging && (
+                    <p className="detail-packaging-note">
+                        <strong>
+                            1 {packaging.packageLabel} = {packaging.unitsPerPackage} {packaging.unitLabel}
+                        </strong>
+                        <span>
+                            {isPackageVariant
+                                ? isZh
+                                    ? `当前按${packaging.packageLabel}价结算，库存按${packaging.packageLabel}扣减。`
+                                    : `This option uses the package price and deducts package stock.`
+                                : isUnitVariant
+                                  ? packaging.autoUnpack
+                                      ? isZh
+                                          ? `当前按${packaging.unitLabel}计价；散件不足时，系统自动拆最少数量的整${packaging.packageLabel}补充库存。`
+                                          : `Priced per ${packaging.unitLabel}; when loose stock is short, the minimum number of packages is opened automatically.`
+                                      : isZh
+                                        ? `当前按${packaging.unitLabel}计价，库存按散件扣减。`
+                                        : `Priced per ${packaging.unitLabel} and deducted from loose stock.`
+                                  : isZh
+                                    ? `包装换算仅适用于“${packaging.unitVariant.name}”和“${packaging.packageVariant.name}”。`
+                                    : `Packaging conversion applies to ${packaging.unitVariant.name} and ${packaging.packageVariant.name}.`}
+                        </span>
+                    </p>
+                )}
             </section>
             <div className="detail-info-row">
                 <span>{isDigital ? (isZh ? '获取方式' : 'Access') : isZh ? '送至' : 'Deliver to'}</span>

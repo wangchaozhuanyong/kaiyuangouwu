@@ -11,6 +11,7 @@ describe('commerceOrderProcess digital fulfillment', () => {
     const stockMovementService = { createAllocationsForOrderLines: vi.fn() };
     const stockQueryBuilder = {
         setLock: vi.fn().mockReturnThis(),
+        leftJoinAndSelect: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
         orderBy: vi.fn().mockReturnThis(),
         addOrderBy: vi.fn().mockReturnThis(),
@@ -45,6 +46,12 @@ describe('commerceOrderProcess digital fulfillment', () => {
         availabilityError: vi.fn().mockResolvedValue(undefined),
         allocateSettledOrder: vi.fn().mockResolvedValue([]),
     };
+    const productPackagingService = {
+        rulesForVariantIds: vi.fn().mockResolvedValue([]),
+        ensureStockLevelPairs: vi.fn().mockResolvedValue(undefined),
+        variantIdsForLock: vi.fn((variantIds: string[]) => variantIds),
+        autoUnpackForOrder: vi.fn().mockResolvedValue(undefined),
+    };
 
     beforeEach(async () => {
         vi.clearAllMocks();
@@ -60,6 +67,7 @@ describe('commerceOrderProcess digital fulfillment', () => {
             configService,
             globalSettingsService,
             autoCardService,
+            productPackagingService,
         ];
         await commerceOrderProcess.init?.({ get: vi.fn(() => services.shift()) } as any);
         hydratedOrder = undefined;

@@ -107,6 +107,19 @@ const productFields = `
     }
 `;
 
+const productPackagingFields = `
+    packaging {
+        id
+        enabled
+        autoUnpack
+        unitLabel
+        packageLabel
+        unitsPerPackage
+        unitVariant { id name sku }
+        packageVariant { id name sku }
+    }
+`;
+
 const orderFields = `
     id
     code
@@ -752,7 +765,10 @@ export class ShopApi {
         const result = await this.request<{ product: Product | null }>(
             `
                 query StorefrontProduct($id: ID!) {
-                    product(id: $id) { ${productFields} }
+                    product(id: $id) {
+                        ${productFields}
+                        ${productPackagingFields}
+                    }
                 }
             `,
             { id },

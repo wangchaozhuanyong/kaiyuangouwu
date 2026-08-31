@@ -39,6 +39,17 @@ export interface ProductVariant {
     };
 }
 
+export interface ProductPackaging {
+    id: string;
+    enabled: boolean;
+    autoUnpack: boolean;
+    unitLabel: string;
+    packageLabel: string;
+    unitsPerPackage: number;
+    unitVariant: Pick<ProductVariant, 'id' | 'name' | 'sku'>;
+    packageVariant: Pick<ProductVariant, 'id' | 'name' | 'sku'>;
+}
+
 export interface Product {
     id: string;
     createdAt: string;
@@ -49,6 +60,7 @@ export interface Product {
     assets: Asset[];
     collections: Array<Pick<CollectionSummary, 'id' | 'name' | 'slug' | 'parentId'>>;
     variants: ProductVariant[];
+    packaging?: ProductPackaging | null;
 }
 
 export type ProductSearchSort = 'recommended' | 'sales' | 'newest' | 'name' | 'price-asc' | 'price-desc';
