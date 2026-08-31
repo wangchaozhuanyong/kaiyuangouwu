@@ -32,6 +32,30 @@ readonly image_health_json="$(
 )"
 IMAGE_HEALTH_JSON="${image_health_json}" node -e "
 const snapshot = JSON.parse(process.env.IMAGE_HEALTH_JSON || '{}');
+const metrics = {
+    status: snapshot.status,
+    recentCallStatus: snapshot.recentCallStatus,
+    workerStatus: snapshot.workerStatus,
+    workerStale: snapshot.workerStale,
+    queueStale: snapshot.queueStale,
+    queuedOutputs: snapshot.queuedOutputs,
+    activeOutputs: snapshot.activeOutputs,
+    attempts24h: snapshot.attempts24h,
+    successes24h: snapshot.successes24h,
+    failures24h: snapshot.failures24h,
+    unknowns24h: snapshot.unknowns24h,
+    successRate: snapshot.successRate,
+    unknownRate: snapshot.unknownRate,
+    missingCostCount: snapshot.missingCostCount,
+    missingCostRate: snapshot.missingCostRate,
+    failureBuckets: Array.isArray(snapshot.failureBuckets)
+        ? snapshot.failureBuckets.map(({ code, count }) => ({ code, count }))
+        : [],
+    keyRedundancy: Array.isArray(snapshot.keyRedundancy)
+        ? snapshot.keyRedundancy.map(({ scope, healthyKeyCount }) => ({ scope, healthyKeyCount }))
+        : [],
+};
+process.stdout.write('AI_IMAGE_METRICS ' + JSON.stringify(metrics) + '\n');
 for (const alert of snapshot.alerts || []) {
     process.stderr.write('AI_IMAGE_' + alert.severity + ' ' + alert.code + ' ' + alert.message + '\n');
 }
