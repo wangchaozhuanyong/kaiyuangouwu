@@ -228,6 +228,10 @@ test.describe('Product group hierarchy workflow', () => {
 });
 
 test('deletes a product group from the list row actions', async ({ page }) => {
+    // This flow combines API setup, sensitive-action confirmation and fallback cleanup.
+    // Shared CI runners can exceed the default 30-second budget before cleanup completes.
+    test.slow();
+
     const client = new VendureAdminClient(page);
     await client.login();
     const suffix = Date.now();
