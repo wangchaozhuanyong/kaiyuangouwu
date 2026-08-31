@@ -508,7 +508,8 @@ export class ImageGenerationQueueService implements OnApplicationBootstrap, OnAp
                 storedAsset = undefined;
             }
             const failureDetails = classified.telemetry;
-            const affectsProviderHealth = classified.affectsProviderHealth;
+            const affectsCredentialHealth = classified.affectsCredentialHealth;
+            const affectsModelHealth = classified.affectsModelHealth;
             const safelyRejected = failureDetails.httpStatus === 401 || failureDetails.httpStatus === 403;
             const failureDecision = decideImageOutputFailure({
                 retryable: classified.retryable || safelyRejected,
@@ -517,7 +518,7 @@ export class ImageGenerationQueueService implements OnApplicationBootstrap, OnAp
                 retries: 2,
             });
             const failureMessage = classified.publicMessage;
-            if (selectedCredential && providerStage !== 'CLAIMED' && affectsProviderHealth) {
+            if (selectedCredential && providerStage !== 'CLAIMED' && affectsCredentialHealth) {
                 await this.configService
                     .recordCredentialRuntimeFailure(ctx, selectedCredential, {
                         httpStatus: failureDetails.httpStatus,
@@ -539,7 +540,7 @@ export class ImageGenerationQueueService implements OnApplicationBootstrap, OnAp
                 );
             }
             if (
-                affectsProviderHealth &&
+                affectsModelHealth &&
                 !(error instanceof RetryableImageProviderError) &&
                 (providerStage === 'REQUEST_STARTED' || providerStage === 'RESPONSE_RECEIVED')
             ) {

@@ -289,6 +289,12 @@ void test('scheduled production monitor checks memory, processes, and health thr
     assert.match(script, /attempts24h/u);
     assert.match(script, /failureBuckets/u);
     assert.match(script, /healthyKeyCount/u);
+    assert.match(script, /failureCode = 'IMAGE_RESOLUTION_MISMATCH'/u);
+    assert.match(script, /actualCostMicrounits IS NULL/u);
+    assert.match(script, /AI_IMAGE_RESOLUTION_MISMATCH model=/u);
+    assert.match(script, /AI_IMAGE_MISSING_COST model=/u);
+    assert.match(script, /REGEXP_SUBSTR\(errorMessage/u);
+    assert.doesNotMatch(script, /printf[^\n]*errorMessage/u);
     assert.match(script, /https:\/\/damatong\.net\/health/u);
     assert.match(script, /verify-dashboard-assets\.mjs/u);
     assert.match(script, /pm2 jlist/u);

@@ -10,7 +10,8 @@ export interface ImageGenerationFailure {
     code: ImageGenerationFailureCode;
     publicMessage: string;
     rawMessage: string;
-    affectsProviderHealth: boolean;
+    affectsCredentialHealth: boolean;
+    affectsModelHealth: boolean;
     ambiguous: boolean;
     retryable: boolean;
     telemetry: ProviderTelemetry;
@@ -32,13 +33,21 @@ export function classifyImageGenerationFailure(
             false,
             false,
             false,
+            false,
         );
     }
     if (status === 401 || status === 403) {
-        return failure('UPSTREAM_AUTH', '生图服务鉴权失败，本张费用已退回，请稍后再试', true, false, true);
+        return failure(
+            'UPSTREAM_AUTH',
+            '生图服务鉴权失败，本张费用已退回，请稍后再试',
+            true,
+            true,
+            false,
+            true,
+        );
     }
     if (status === 429 || error instanceof RetryableImageProviderError) {
-        return failure('UPSTREAM_RATE_LIMIT', '生图服务繁忙，系统将稍后重试', true, false, true);
+        return failure('UPSTREAM_RATE_LIMIT', '生图服务繁忙，系统将稍后重试', true, true, false, true);
     }
     if (
         normalized.includes('没有可路由') ||
@@ -46,14 +55,28 @@ export function classifyImageGenerationFailure(
         normalized.includes('尚未配置') ||
         normalized.includes('凭证不可用')
     ) {
-        return failure('CREDENTIAL_UNAVAILABLE', '当前生图服务暂不可用，本张费用已退回', false, false, false);
+        return failure(
+            'CREDENTIAL_UNAVAILABLE',
+            '当前生图服务暂不可用，本张费用已退回',
+            false,
+            false,
+            false,
+            false,
+        );
     }
     if (error instanceof AmbiguousImageProviderError) {
         const code = normalized.includes('超时') ? 'UPSTREAM_TIMEOUT' : 'UPSTREAM_NETWORK';
-        return failure(code, '生成结果暂时无法确认，系统正在核对，请勿重复提交', true, true, false);
+        return failure(code, '生成结果暂时无法确认，系统正在核对，请勿重复提交', true, true, true, false);
     }
     if (normalized.includes('25mb') || normalized.includes('超过安全大小')) {
-        return failure('IMAGE_TOO_LARGE', '生成图片超过平台大小限制，本张费用已退回', false, false, false);
+        return failure(
+            'IMAGE_TOO_LARGE',
+            '生成图片超过平台大小限制，本张费用已退回',
+            false,
+            false,
+            false,
+            false,
+        );
     }
     if (
         normalized.includes('分辨率') ||
@@ -64,17 +87,19 @@ export function classifyImageGenerationFailure(
             'IMAGE_RESOLUTION_MISMATCH',
             '生成图片尺寸不符合所选规格，本张费用已退回',
             false,
+            true,
             false,
             false,
         );
     }
     if (stage === 'ASSET_STORED') {
-        return failure('SETTLEMENT', '图片已生成，系统正在恢复结算', false, false, false);
+        return failure('SETTLEMENT', '图片已生成，系统正在恢复结算', false, false, false, false);
     }
     if (typeof status === 'number' && status >= 500) {
         return failure(
             'UPSTREAM_HTTP',
             '生成结果暂时无法确认，系统正在核对，请勿重复提交',
+            true,
             true,
             true,
             false,
@@ -87,23 +112,34 @@ export function classifyImageGenerationFailure(
             invalid ? 'UPSTREAM_INVALID_RESPONSE' : 'CREDENTIAL_UNAVAILABLE',
             invalid ? '生图服务返回异常，本张费用已退回，请稍后重试' : '当前生图服务暂不可用，本张费用已退回',
             invalid,
+            invalid,
             false,
             false,
         );
     }
     if (stage === 'RESPONSE_RECEIVED') {
-        return failure('STORAGE', '图片保存失败，本张费用已退回，请稍后重试', false, false, false);
+        return failure('STORAGE', '图片保存失败，本张费用已退回，请稍后重试', false, false, false, false);
     }
-    return failure('UNKNOWN_RESULT', '生图处理失败，本张费用已退回，请稍后重试', false, false, false);
+    return failure('UNKNOWN_RESULT', '生图处理失败，本张费用已退回，请稍后重试', false, false, false, false);
 
     function failure(
         code: ImageGenerationFailureCode,
         publicMessage: string,
-        affectsProviderHealth: boolean,
+        affectsCredentialHealth: boolean,
+        affectsModelHealth: boolean,
         ambiguous: boolean,
         retryable: boolean,
     ): ImageGenerationFailure {
-        return { code, publicMessage, rawMessage, affectsProviderHealth, ambiguous, retryable, telemetry };
+        return {
+            code,
+            publicMessage,
+            rawMessage,
+            affectsCredentialHealth,
+            affectsModelHealth,
+            ambiguous,
+            retryable,
+            telemetry,
+        };
     }
 }
 

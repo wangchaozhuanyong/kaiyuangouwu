@@ -364,7 +364,7 @@ curl -sS -N --max-time 2 https://damatong.net/storefront-realtime/events | sed -
 另外检查：
 
 - `pm2 jlist` 中 `vendure-api`、`vendure-worker` 均为 `online`；
-- `Monitor Production Health` 输出一行不含凭据的 `AI_IMAGE_METRICS` JSON；使用其中的 24 小时成功/失败/UNKNOWN、缺失成本、失败桶和健康 Key 数定位 AI 告警；
+- `Monitor Production Health` 输出一行不含凭据的 `AI_IMAGE_METRICS` JSON；使用其中的 24 小时成功/失败/UNKNOWN、缺失成本、失败桶和健康 Key 数定位 AI 告警；监控还会按模型、供应商、请求档位和实际像素输出脱敏的 `AI_IMAGE_RESOLUTION_MISMATCH`，并按模型、供应商和结果输出 `AI_IMAGE_MISSING_COST`，不会打印提示词、客户信息、Key、原始错误或上游响应；
 - `127.0.0.1:3002` 正常监听，公网不直接暴露 3002；
 - `/storefront-realtime/events` 不缓冲 SSE，连接断开后前端能自动重连；
 - 公网 `https://damatong.net/admin-api` 仍被 Nginx 拒绝；
