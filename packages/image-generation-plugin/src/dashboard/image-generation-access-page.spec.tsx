@@ -81,6 +81,7 @@ vi.mock('@vendure/dashboard', async () => {
                         baseUrl: 'https://relay.example.com/v1',
                         apiKeyLast4: '1234',
                         textModelId: 'gpt-5.4-mini',
+                        orchestrationModelId: 'gpt-5.4-mini',
                         providerHealthStatus: 'HEALTHY',
                         providerHealthMessage: '连接正常',
                         priority: 10,
@@ -90,6 +91,17 @@ vi.mock('@vendure/dashboard', async () => {
                         modelCodes: [],
                     },
                 ],
+                imagePromptRoutingConfig: {
+                    id: 'routing-1',
+                    strategy: 'FIXED',
+                    primaryCredentialCode: 'openai-primary',
+                    primaryModelId: 'gpt-5.4-mini',
+                    primaryAvailable: true,
+                    fallbackEnabled: false,
+                    fallbackCredentialCode: null,
+                    fallbackModelId: null,
+                    fallbackAvailable: false,
+                },
                 imageGenerationAdminConfig: { models: [] },
             },
             error: null,
@@ -108,6 +120,14 @@ import {
 import { ImageAdminConfigRecord } from './image-generation.graphql';
 
 describe('ImageGenerationAccessPage', () => {
+    it('renders the unified prompt routing settings separately from the Key pool', () => {
+        const markup = renderToStaticMarkup(<ImageGenerationAccessPage />);
+
+        expect(markup).toContain('提示词优化统一设置');
+        expect(markup).toContain('实际主路由');
+        expect(markup).toContain('gpt-5.4-mini');
+    });
+
     it('converts date filters from the browser local day to API timestamps', () => {
         expect(toLocalDayBoundary('2026-08-30', false)).toBe(new Date(2026, 7, 30, 0, 0, 0, 0).toISOString());
         expect(toLocalDayBoundary('2026-08-30', true)).toBe(
@@ -165,6 +185,7 @@ describe('ImageGenerationAccessPage', () => {
                     baseUrl: 'https://relay.example.com/v1',
                     apiKeyLast4: '1234',
                     textModelId: 'gpt-5.4-mini',
+                    orchestrationModelId: 'gpt-5.4-mini',
                     providerHealthStatus: 'HEALTHY',
                     providerHealthMessage: '连接正常',
                     priority: 10,

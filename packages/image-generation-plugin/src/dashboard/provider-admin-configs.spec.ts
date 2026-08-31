@@ -28,6 +28,7 @@ describe('normalizeProviderAdminConfigs', () => {
             baseUrl: 'https://relay.example.com/v1',
             apiKeyLast4: '1234',
             textModelId: 'gpt-5.4-mini',
+            orchestrationModelId: 'gpt-5.4-mini',
             providerHealthStatus: 'HEALTHY',
             providerHealthMessage: '连接正常',
             priority: 10,

@@ -34,8 +34,11 @@ export class ImageProviderCredential extends VendureEntity {
     @Column({ type: 'varchar', length: 8, default: '' })
     apiKeyLast4: string;
 
-    @Column({ type: 'varchar', length: 160 })
+    @Column({ type: 'varchar', length: 160, default: '' })
     textModelId: string;
+
+    @Column({ type: 'varchar', length: 160, default: '' })
+    orchestrationModelId: string;
 
     @Column({ type: Date, nullable: true })
     lastTestedAt: Date | null;

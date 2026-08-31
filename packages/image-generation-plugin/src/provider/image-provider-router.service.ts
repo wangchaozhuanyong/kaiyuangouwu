@@ -35,6 +35,9 @@ export class ImageProviderRouterService {
                 .andWhere('credential.purpose IN (:...purposes)', { purposes: [input.purpose, 'BOTH'] })
                 .orderBy('credential.priority', 'ASC')
                 .addOrderBy('credential.id', 'ASC');
+            if (input.purpose === 'PROMPT') {
+                query.andWhere("credential.textModelId <> ''");
+            }
             if (input.modelConfigId) {
                 applyModelBindingPolicy(query, input.modelConfigId, txCtx.channelId);
             }
@@ -65,6 +68,53 @@ export class ImageProviderRouterService {
         });
     }
 
+    async selectByCode(
+        ctx: RequestContext,
+        code: string,
+        purpose: 'PROMPT' | 'IMAGE' = 'PROMPT',
+    ): Promise<ImageProviderRoute> {
+        return this.connection.withTransaction(ctx, async txCtx => {
+            const repository = this.connection.getRepository(txCtx, ImageProviderCredential);
+            const query = repository
+                .createQueryBuilder('credential')
+                .where('credential.code = :code', { code })
+                .andWhere('credential.enabled = :enabled', { enabled: true })
+                .andWhere('credential.archivedAt IS NULL')
+                .andWhere('credential.healthStatus = :health', { health: 'HEALTHY' })
+                .andWhere('(credential.cooldownUntil IS NULL OR credential.cooldownUntil <= :now)', {
+                    now: new Date(),
+                })
+                .andWhere('credential.purpose IN (:...purposes)', { purposes: [purpose, 'BOTH'] });
+            if (supportsLock(this.connection.rawConnection.options.type)) query.setLock('pessimistic_write');
+            const credential = await query.getOne();
+            if (!credential) throw new UserInputError(`统一提示词路由 Key ${code} 当前不可用`);
+            credential.lastUsedAt = new Date();
+            await repository.save(credential, { reload: false });
+            return { credential, selectionReason: `统一固定路由 Key ${credential.code}` };
+        });
+    }
+
+    async hasAvailableByCode(
+        ctx: RequestContext,
+        code: string,
+        purpose: 'PROMPT' | 'IMAGE' = 'PROMPT',
+    ): Promise<boolean> {
+        return (
+            (await this.connection
+                .getRepository(ctx, ImageProviderCredential)
+                .createQueryBuilder('credential')
+                .where('credential.code = :code', { code })
+                .andWhere('credential.enabled = :enabled', { enabled: true })
+                .andWhere('credential.archivedAt IS NULL')
+                .andWhere('credential.healthStatus = :health', { health: 'HEALTHY' })
+                .andWhere('(credential.cooldownUntil IS NULL OR credential.cooldownUntil <= :now)', {
+                    now: new Date(),
+                })
+                .andWhere('credential.purpose IN (:...purposes)', { purposes: [purpose, 'BOTH'] })
+                .getCount()) > 0
+        );
+    }
+
     async hasAvailable(
         ctx: RequestContext,
         input: { scope: ImageProviderScope; purpose: 'PROMPT' | 'IMAGE'; modelConfigId?: ID },
@@ -80,6 +130,9 @@ export class ImageProviderRouterService {
                 now: new Date(),
             })
             .andWhere('credential.purpose IN (:...purposes)', { purposes: [input.purpose, 'BOTH'] });
+        if (input.purpose === 'PROMPT') {
+            query.andWhere("credential.textModelId <> ''");
+        }
         if (input.modelConfigId) {
             applyModelBindingPolicy(query, input.modelConfigId, ctx.channelId);
         }

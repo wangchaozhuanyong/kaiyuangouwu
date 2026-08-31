@@ -13,6 +13,7 @@ import { ImageGenerationRuntimeStatus } from './entities/image-generation-runtim
 import { ImageModelConfig } from './entities/image-model-config.entity';
 import { ImagePrivateAsset } from './entities/image-private-asset.entity';
 import { ImagePromptOptimization } from './entities/image-prompt-optimization.entity';
+import { ImagePromptRoutingConfig } from './entities/image-prompt-routing-config.entity';
 import { ImagePromptSkillRelease } from './entities/image-prompt-skill-release.entity';
 import { ImageProviderCredentialModel } from './entities/image-provider-credential-model.entity';
 import { ImageProviderCredential } from './entities/image-provider-credential.entity';
@@ -52,6 +53,7 @@ import { ImageGenerationPluginOptions } from './types';
         ImageModelConfig,
         ImagePromptSkillRelease,
         ImagePromptOptimization,
+        ImagePromptRoutingConfig,
         ImagePrivateAsset,
         ImageGenerationJob,
         ImageGenerationOutput,

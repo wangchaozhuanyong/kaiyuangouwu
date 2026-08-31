@@ -71,7 +71,12 @@ export class ImageProviderClient {
         const baseUrl = await this.safeUrls.validate(credential.baseUrl);
         const apiKey = this.cipher.decrypt(credential.encryptedApiKey);
         if (protocol === 'OPENAI_RESPONSES_IMAGE') {
-            return this.openAiResponsesImage(baseUrl, apiKey, credential.textModelId, input);
+            return this.openAiResponsesImage(
+                baseUrl,
+                apiKey,
+                credential.orchestrationModelId || credential.textModelId,
+                input,
+            );
         }
         if (protocol === 'OPENAI_IMAGES') return this.openAiImages(baseUrl, apiKey, input);
         if (protocol === 'OPENAI_COMPATIBLE_CHAT') return this.openAiChat(baseUrl, apiKey, input);
@@ -83,16 +88,18 @@ export class ImageProviderClient {
 
     async optimizePrompt(
         credential: ImageProviderCredential,
+        rawModelId: string,
         systemPrompt: string,
         userPrompt: string,
     ): Promise<ProviderPromptResult> {
-        if (!credential.enabled || !credential.textModelId.trim()) {
+        const configuredModelId = rawModelId.trim();
+        if (!credential.enabled || !configuredModelId) {
             throw new DefinitiveImageProviderError('提示词优化模型尚未配置');
         }
         const baseUrl = await this.safeUrls.validate(credential.baseUrl);
         const apiKey = this.cipher.decrypt(credential.encryptedApiKey);
         if (credential.scope === 'GEMINI') {
-            const modelId = credential.textModelId.trim().replace(/^models\//iu, '');
+            const modelId = configuredModelId.replace(/^models\//iu, '');
             const { payload: geminiResponse, telemetry: geminiTelemetry } = await this.requestJson(
                 this.safeUrls.endpoint(baseUrl, `models/${encodeURIComponent(modelId)}:generateContent`),
                 apiKey,
@@ -116,7 +123,7 @@ export class ImageProviderClient {
             this.safeUrls.endpoint(baseUrl, 'chat/completions'),
             apiKey,
             {
-                model: credential.textModelId,
+                model: configuredModelId,
                 temperature: 0.2,
                 response_format: { type: 'json_object' },
                 messages: [
@@ -148,16 +155,22 @@ export class ImageProviderClient {
             });
             await response.body?.cancel().catch(() => undefined);
             if (response.ok) {
-                const textModel = await this.testModel(credential, credential.textModelId);
-                if (!textModel.ok) {
-                    return { ok: false, message: `中转站可连接，但文本编排模型不可用：${textModel.message}` };
+                const modelIds = [
+                    (credential.textModelId ?? '').trim(),
+                    credential.scope === 'OPENAI' ? (credential.orchestrationModelId ?? '').trim() : '',
+                ].filter((value, index, values) => Boolean(value) && values.indexOf(value) === index);
+                for (const modelId of modelIds) {
+                    const model = await this.testModel(credential, modelId);
+                    if (!model.ok) {
+                        return { ok: false, message: `中转站可连接，但兼容模型不可用：${model.message}` };
+                    }
                 }
+                const modelSummary = modelIds.length ? `，兼容模型 ${modelIds.join('、')} 已验证` : '';
+                return { ok: true, message: `连接成功${modelSummary}` };
             }
             return {
-                ok: response.ok,
-                message: response.ok
-                    ? `连接成功，文本编排模型 ${credential.textModelId} 已验证`
-                    : `中转站模型列表端点返回 HTTP ${response.status}`,
+                ok: false,
+                message: `中转站模型列表端点返回 HTTP ${response.status}`,
             };
         } catch (error) {
             return { ok: false, message: safeError(error) };
