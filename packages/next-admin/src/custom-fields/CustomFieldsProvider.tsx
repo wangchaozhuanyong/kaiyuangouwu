@@ -1,8 +1,10 @@
 import { useQuery } from '@apollo/client/react';
 import { RefreshCw } from 'lucide-react';
 import { useMemo, type ReactNode } from 'react';
-import { toUserFacingError } from '../utils/user-facing-error';
 import type { CustomFieldServerConfigData } from './custom-field-types';
+
+import { toUserFacingError } from '../utils/user-facing-error';
+
 import { CustomFieldsContext } from './custom-fields-context';
 import { CUSTOM_FIELD_SERVER_CONFIG_QUERY } from './custom-fields.graphql';
 

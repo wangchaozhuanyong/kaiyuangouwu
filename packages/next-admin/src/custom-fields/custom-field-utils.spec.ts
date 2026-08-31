@@ -2,6 +2,7 @@ import { gql } from '@apollo/client';
 import { print } from 'graphql';
 import { describe, expect, it } from 'vitest';
 import type { CustomFieldDefinition } from './custom-field-types';
+
 import {
     addCustomFieldsToDocument,
     customFieldInputFromValues,

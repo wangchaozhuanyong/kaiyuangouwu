@@ -1,5 +1,7 @@
-import { Component, useMemo, type ErrorInfo, type ReactNode } from 'react';
+import { Component, useMemo, type ReactNode } from 'react';
+
 import { useAdminPermissions } from '../hooks/use-admin-permissions';
+
 import { getNextAdminActions, getNextAdminPageBlocks, type NextAdminPageBlockContext } from './extension-api';
 
 class ExtensionBoundary extends Component<{ children: ReactNode; extensionId: string }, { failed: boolean }> {
@@ -7,10 +9,6 @@ class ExtensionBoundary extends Component<{ children: ReactNode; extensionId: st
 
     static getDerivedStateFromError() {
         return { failed: true };
-    }
-
-    componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-        console.error(`Next Admin extension failed: ${this.props.extensionId}`, error, errorInfo);
     }
 
     render() {

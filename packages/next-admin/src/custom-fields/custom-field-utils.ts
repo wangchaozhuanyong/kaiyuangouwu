@@ -33,15 +33,21 @@ function relationValue(value: unknown, list: boolean) {
         return Array.isArray(value)
             ? value.map(item =>
                   typeof item === 'object' && item !== null && 'id' in item
-                      ? String((item as { id: unknown }).id)
-                      : String(item),
+                      ? scalarString(item.id)
+                      : scalarString(item),
               )
             : [];
     }
     if (typeof value === 'object' && value !== null && 'id' in value) {
-        return String((value as { id: unknown }).id);
+        return scalarString(value.id);
     }
     return value ?? null;
+}
+
+function scalarString(value: unknown) {
+    return typeof value === 'string' || typeof value === 'number' || typeof value === 'bigint'
+        ? String(value)
+        : '';
 }
 
 export function customFieldValuesFromEntity(
@@ -163,9 +169,7 @@ function selectionForField(field: CustomFieldDefinition | StructFieldDefinition)
     return {
         kind: Kind.FIELD,
         name: { kind: Kind.NAME, value: field.name },
-        ...(selections?.length
-            ? { selectionSet: { kind: Kind.SELECTION_SET, selections } as SelectionSetNode }
-            : {}),
+        ...(selections?.length ? { selectionSet: { kind: Kind.SELECTION_SET, selections } } : {}),
     };
 }
 
@@ -225,7 +229,7 @@ export function addCustomFieldsToDocument<T extends DocumentNode>(
 ): T {
     const visibleFields = fields.filter(isDashboardVisibleCustomField);
     if (visibleFields.length === 0) return document;
-    const clone = structuredClone(document) as T;
+    const clone = structuredClone(document);
     const rootNames = new Set(rootFieldNames);
 
     for (const definition of clone.definitions) {

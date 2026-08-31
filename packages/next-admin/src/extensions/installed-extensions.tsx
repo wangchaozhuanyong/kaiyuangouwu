@@ -2,7 +2,9 @@
 import { Puzzle, Sparkles, Terminal } from 'lucide-react';
 import { lazy, type ComponentType } from 'react';
 import { Navigate } from 'react-router-dom';
+
 import { routeModuleLoaders } from '../route-modules';
+
 import { defineNextAdminExtension } from './extension-api';
 
 const AiImageSettingsModule = lazy(() =>

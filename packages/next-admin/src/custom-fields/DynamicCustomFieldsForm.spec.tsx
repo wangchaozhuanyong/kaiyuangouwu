@@ -1,7 +1,8 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { DynamicCustomFieldsForm } from './DynamicCustomFieldsForm';
 import type { CustomFieldDefinition } from './custom-field-types';
+
+import { DynamicCustomFieldsForm } from './DynamicCustomFieldsForm';
 
 describe('DynamicCustomFieldsForm', () => {
     it('renders dashboard-visible fields supplied by the backend configuration', () => {

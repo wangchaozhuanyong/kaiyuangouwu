@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { EntityCustomFieldsDefinition } from './custom-field-types';
+
 import { getCustomFieldDefinitions } from './custom-fields-context';
 
 describe('custom field definitions context', () => {

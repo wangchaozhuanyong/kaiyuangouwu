@@ -1,8 +1,10 @@
 import { Plus, Trash2 } from 'lucide-react';
 import { createElement, useMemo, useState } from 'react';
+import type { CustomFieldDefinition, CustomFieldValueMap, StructFieldDefinition } from './custom-field-types';
+
 import { getNextAdminCustomFieldComponent } from '../extensions/extension-api';
 import { useAdminPermissions } from '../hooks/use-admin-permissions';
-import type { CustomFieldDefinition, CustomFieldValueMap, StructFieldDefinition } from './custom-field-types';
+
 import {
     isDashboardVisibleCustomField,
     localizedText,
@@ -148,7 +150,11 @@ function CustomFieldControl({
                         type="button"
                         onClick={() => onChange([...items, defaultValueForField(field)])}
                         disabled={disabled}
-                        className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-slate-300 px-3 py-2 text-xs font-semibold text-slate-600 hover:border-blue-300 hover:text-blue-700 disabled:opacity-40"
+                        className={[
+                            'flex w-full items-center justify-center gap-1.5 rounded-lg border',
+                            'border-dashed border-slate-300 px-3 py-2 text-xs font-semibold',
+                            'text-slate-600 hover:border-blue-300 hover:text-blue-700 disabled:opacity-40',
+                        ].join(' ')}
                     >
                         <Plus className="h-3.5 w-3.5" /> 添加一项
                     </button>
@@ -220,8 +226,11 @@ function ScalarInput({
     languageCode: string;
     languageCodes?: readonly string[];
 }) {
-    const inputClass =
-        'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100 disabled:text-slate-500';
+    const inputClass = [
+        'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs outline-none',
+        'focus:border-blue-500 focus:ring-2 focus:ring-blue-100',
+        'disabled:bg-slate-100 disabled:text-slate-500',
+    ].join(' ');
     if (field.type === 'boolean') {
         return (
             <label className="flex min-h-9 items-center gap-2 text-xs text-slate-700">
@@ -257,7 +266,7 @@ function ScalarInput({
     if (field.options?.length) {
         return (
             <select
-                value={value == null ? '' : String(value)}
+                value={stringValue(value)}
                 onChange={event => onChange(event.target.value || null)}
                 disabled={disabled}
                 className={inputClass}
@@ -274,7 +283,7 @@ function ScalarInput({
     if (field.type === 'text') {
         return (
             <textarea
-                value={value == null ? '' : String(value)}
+                value={stringValue(value)}
                 onChange={event => onChange(event.target.value)}
                 disabled={disabled}
                 rows={4}
@@ -349,9 +358,20 @@ function defaultValueForField(field: CustomFieldDefinition | StructFieldDefiniti
 }
 
 function dateTimeLocalValue(value: unknown, isDateTime: boolean) {
-    if (!isDateTime || !value) return value == null ? '' : String(value);
-    const date = new Date(String(value));
+    if (!isDateTime || !value) return stringValue(value);
+    const serialized = stringValue(value);
+    if (!serialized) return '';
+    const date = new Date(serialized);
     if (Number.isNaN(date.getTime())) return '';
     const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
     return local.toISOString().slice(0, 16);
+}
+
+function stringValue(value: unknown) {
+    if (typeof value === 'string') return value;
+    if (typeof value === 'number' || typeof value === 'bigint' || typeof value === 'boolean') {
+        return String(value);
+    }
+    if (value instanceof Date) return value.toISOString();
+    return '';
 }
