@@ -46,7 +46,98 @@ import {
     saveManualDigitalDeliveryDraftMutation,
 } from './manual-digital-delivery.graphql';
 
-const title = msg({ id: 'operations.manualDelivery.title', message: 'Manual digital delivery' });
+const messages = {
+    title: msg({ id: 'operations.manualDelivery.title', message: 'Manual digital delivery' }),
+    account: msg({ id: 'operations.manualDelivery.account', message: 'Account' }),
+    password: msg({ id: 'operations.manualDelivery.password', message: 'Password' }),
+    passwordKey: msg({ id: 'operations.manualDelivery.passwordKey', message: 'Password / key' }),
+    draftSaved: msg({ id: 'operations.manualDelivery.draftSaved', message: 'Draft saved' }),
+    deliveryQueued: msg({
+        id: 'operations.manualDelivery.deliveryQueued',
+        message: 'Delivery queued for email',
+    }),
+    originalDeliveryQueued: msg({
+        id: 'operations.manualDelivery.originalDeliveryQueued',
+        message: 'Original delivery queued again',
+    }),
+    refresh: msg({ id: 'operations.manualDelivery.refresh', message: 'Refresh' }),
+    listTitle: msg({
+        id: 'operations.manualDelivery.listTitle',
+        message: 'Tasks and delivery history',
+    }),
+    listDescription: msg({
+        id: 'operations.manualDelivery.listDescription',
+        message: 'Enter exactly one package per purchased unit and verify the recipient before publishing.',
+    }),
+    loadError: msg({
+        id: 'operations.manualDelivery.loadError',
+        message: 'Could not load manual delivery tasks',
+    }),
+    orderProduct: msg({ id: 'operations.manualDelivery.orderProduct', message: 'Order / product' }),
+    email: msg({ id: 'operations.manualDelivery.email', message: 'Email' }),
+    quantity: msg({ id: 'operations.manualDelivery.quantity', message: 'Qty' }),
+    sla: msg({ id: 'operations.manualDelivery.sla', message: 'SLA' }),
+    status: msg({ id: 'operations.manualDelivery.status', message: 'Status' }),
+    actions: msg({ id: 'operations.manualDelivery.actions', message: 'Actions' }),
+    overdue: msg({ id: 'operations.manualDelivery.overdue', message: 'Overdue' }),
+    open: msg({ id: 'operations.manualDelivery.open', message: 'Open' }),
+    view: msg({ id: 'operations.manualDelivery.view', message: 'View' }),
+    resend: msg({ id: 'operations.manualDelivery.resend', message: 'Resend original delivery' }),
+    dialogTitle: msg({
+        id: 'operations.manualDelivery.dialogTitle',
+        message: 'Prepare and publish delivery',
+    }),
+    package: msg({ id: 'operations.manualDelivery.package', message: 'Package' }),
+    accountOptional: msg({
+        id: 'operations.manualDelivery.accountOptional',
+        message: 'Account (optional)',
+    }),
+    passwordOptional: msg({
+        id: 'operations.manualDelivery.passwordOptional',
+        message: 'Password / key (optional)',
+    }),
+    instructions: msg({ id: 'operations.manualDelivery.instructions', message: 'Instructions' }),
+    attachments: msg({ id: 'operations.manualDelivery.attachments', message: 'Attachments' }),
+    asset: msg({ id: 'operations.manualDelivery.asset', message: 'Asset' }),
+    removeAttachment: msg({
+        id: 'operations.manualDelivery.removeAttachment',
+        message: 'Remove attachment',
+    }),
+    selectAttachments: msg({
+        id: 'operations.manualDelivery.selectAttachments',
+        message: 'Select attachments',
+    }),
+    finalPreview: msg({
+        id: 'operations.manualDelivery.finalPreview',
+        message: 'Final email preview',
+    }),
+    recipient: msg({ id: 'operations.manualDelivery.recipient', message: 'Recipient' }),
+    auditTrail: msg({ id: 'operations.manualDelivery.auditTrail', message: 'Audit trail' }),
+    saveDraft: msg({ id: 'operations.manualDelivery.saveDraft', message: 'Save draft' }),
+    verifiedPublish: msg({
+        id: 'operations.manualDelivery.verifiedPublish',
+        message: 'Verified, publish email',
+    }),
+    selectDeliveryAttachments: msg({
+        id: 'operations.manualDelivery.selectDeliveryAttachments',
+        message: 'Select delivery attachments',
+    }),
+    stateWaiting: msg({ id: 'operations.manualDelivery.state.waiting', message: 'Waiting' }),
+    stateDraft: msg({ id: 'operations.manualDelivery.state.draft', message: 'Draft' }),
+    stateSending: msg({ id: 'operations.manualDelivery.state.sending', message: 'Sending' }),
+    stateSent: msg({ id: 'operations.manualDelivery.state.sent', message: 'Delivered' }),
+    stateEmailFailed: msg({
+        id: 'operations.manualDelivery.state.emailFailed',
+        message: 'Email failed',
+    }),
+    stateManualReview: msg({
+        id: 'operations.manualDelivery.state.manualReview',
+        message: 'Manual review',
+    }),
+    stateCancelled: msg({ id: 'operations.manualDelivery.state.cancelled', message: 'Cancelled' }),
+};
+
+type ManualDeliveryText = { [key in keyof typeof messages]: string };
 
 interface PackageDraft {
     account: string;
@@ -60,18 +151,18 @@ export const manualDigitalDeliveryRoute: DashboardRouteDefinition = {
         sectionId: 'sales',
         id: 'manual-digital-delivery',
         url: '/manual-digital-delivery',
-        title: title.id,
+        title: messages.title.id,
         icon: Clock3,
         requiresPermission: ['ReadOrder'],
     },
     path: '/manual-digital-delivery',
-    loader: () => ({ breadcrumb: () => title.id }),
+    loader: () => ({ breadcrumb: () => messages.title.id }),
     component: () => <ManualDigitalDeliveryPage />,
 };
 
 function ManualDigitalDeliveryPage() {
-    const { t, i18n } = useLingui();
-    const isZh = i18n.locale.toLowerCase().startsWith('zh');
+    const { t } = useLingui();
+    const text = translateMessages(t);
     const { activeChannel } = useChannel();
     const [selected, setSelected] = useState<ManualDeliveryRecord | null>(null);
     const [packages, setPackages] = useState<PackageDraft[]>([]);
@@ -109,7 +200,7 @@ function ManualDigitalDeliveryPage() {
                     ? [
                           {
                               key: 'account',
-                              label: isZh ? '账号' : 'Account',
+                              label: text.account,
                               value: item.account.trim(),
                               secret: false,
                           },
@@ -119,7 +210,7 @@ function ManualDigitalDeliveryPage() {
                     ? [
                           {
                               key: 'password',
-                              label: isZh ? '密码' : 'Password',
+                              label: text.password,
                               value: item.password.trim(),
                               secret: true,
                           },
@@ -137,7 +228,7 @@ function ManualDigitalDeliveryPage() {
     const saveMutation = useMutation({
         mutationFn: () => api.mutate(saveManualDigitalDeliveryDraftMutation, { input: input() }),
         onSuccess: () => {
-            toast.success(isZh ? '草稿已保存' : 'Draft saved');
+            toast.success(text.draftSaved);
             closeAndRefresh();
         },
         onError: error => toast.error(errorMessage(error)),
@@ -145,7 +236,7 @@ function ManualDigitalDeliveryPage() {
     const publishMutation = useMutation({
         mutationFn: () => api.mutate(publishManualDigitalDeliveryMutation, { input: input() }),
         onSuccess: () => {
-            toast.success(isZh ? '成品已进入邮件发送队列' : 'Delivery queued for email');
+            toast.success(text.deliveryQueued);
             closeAndRefresh();
         },
         onError: error => toast.error(errorMessage(error)),
@@ -153,7 +244,7 @@ function ManualDigitalDeliveryPage() {
     const retryMutation = useMutation({
         mutationFn: (id: string) => api.mutate(retryManualDigitalDeliveryMutation, { id }),
         onSuccess: () => {
-            toast.success(isZh ? '已使用原成品重新发送' : 'Original delivery queued again');
+            toast.success(text.originalDeliveryQueued);
             void query.refetch();
         },
         onError: error => toast.error(errorMessage(error)),
@@ -163,12 +254,12 @@ function ManualDigitalDeliveryPage() {
 
     return (
         <Page pageId="manual-digital-delivery">
-            <PageTitle>{t(title)}</PageTitle>
+            <PageTitle>{text.title}</PageTitle>
             <PageActionBar>
                 <PageActionBarRight>
                     <Button variant="outline" onClick={() => void query.refetch()}>
                         <RefreshCw />
-                        {isZh ? '刷新' : 'Refresh'}
+                        {text.refresh}
                     </Button>
                 </PageActionBarRight>
             </PageActionBar>
@@ -176,31 +267,25 @@ function ManualDigitalDeliveryPage() {
                 <PageBlock
                     column="main"
                     blockId="manual-delivery-list"
-                    title={isZh ? '待处理与发送记录' : 'Tasks and delivery history'}
-                    description={
-                        isZh
-                            ? '按购买数量录入等量成品；发布前核对收件邮箱、商品和最终内容。'
-                            : 'Enter exactly one package per purchased unit and verify the recipient before publishing.'
-                    }
+                    title={text.listTitle}
+                    description={text.listDescription}
                 >
                     {query.isPending ? (
                         <Skeleton className="h-64 w-full" />
                     ) : query.isError ? (
                         <Alert variant="destructive">
-                            <AlertDescription>
-                                {isZh ? '人工交付任务加载失败' : 'Could not load manual delivery tasks'}
-                            </AlertDescription>
+                            <AlertDescription>{text.loadError}</AlertDescription>
                         </Alert>
                     ) : (
                         <Table>
                             <TableHeader>
                                 <TableRow>
-                                    <TableHead>{isZh ? '订单/商品' : 'Order / product'}</TableHead>
-                                    <TableHead>{isZh ? '邮箱' : 'Email'}</TableHead>
-                                    <TableHead>{isZh ? '数量' : 'Qty'}</TableHead>
-                                    <TableHead>{isZh ? '时效' : 'SLA'}</TableHead>
-                                    <TableHead>{isZh ? '状态' : 'Status'}</TableHead>
-                                    <TableHead className="text-right">{isZh ? '操作' : 'Actions'}</TableHead>
+                                    <TableHead>{text.orderProduct}</TableHead>
+                                    <TableHead>{text.email}</TableHead>
+                                    <TableHead>{text.quantity}</TableHead>
+                                    <TableHead>{text.sla}</TableHead>
+                                    <TableHead>{text.status}</TableHead>
+                                    <TableHead className="text-right">{text.actions}</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -218,9 +303,7 @@ function ManualDigitalDeliveryPage() {
                                         <TableCell>{item.quantity}</TableCell>
                                         <TableCell className={item.overdue ? 'text-destructive' : ''}>
                                             {item.overdue
-                                                ? isZh
-                                                    ? '已超时'
-                                                    : 'Overdue'
+                                                ? text.overdue
                                                 : new Date(item.expectedAt).toLocaleString()}
                                         </TableCell>
                                         <TableCell>
@@ -233,7 +316,7 @@ function ManualDigitalDeliveryPage() {
                                                           : 'outline'
                                                 }
                                             >
-                                                {stateLabel(item.state, isZh)}
+                                                {stateLabel(item.state, text)}
                                             </Badge>
                                         </TableCell>
                                         <TableCell>
@@ -245,12 +328,8 @@ function ManualDigitalDeliveryPage() {
                                                 >
                                                     <Eye />
                                                     {['WAITING_PROCESSING', 'DRAFT'].includes(item.state)
-                                                        ? isZh
-                                                            ? '处理'
-                                                            : 'Open'
-                                                        : isZh
-                                                          ? '查看'
-                                                          : 'View'}
+                                                        ? text.open
+                                                        : text.view}
                                                 </Button>
                                                 {['EMAIL_FAILED', 'MANUAL_REVIEW', 'SENT'].includes(
                                                     item.state,
@@ -262,7 +341,7 @@ function ManualDigitalDeliveryPage() {
                                                         onClick={() => retryMutation.mutate(item.id)}
                                                     >
                                                         <RotateCcw />
-                                                        {isZh ? '重发原成品' : 'Resend'}
+                                                        {text.resend}
                                                     </Button>
                                                 )}
                                             </div>
@@ -277,23 +356,23 @@ function ManualDigitalDeliveryPage() {
             <Dialog open={Boolean(selected)} onOpenChange={open => !open && setSelected(null)}>
                 <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
                     <DialogHeader>
-                        <DialogTitle>
-                            {isZh ? '录入并发布人工成品' : 'Prepare and publish delivery'}
-                        </DialogTitle>
+                        <DialogTitle>{text.dialogTitle}</DialogTitle>
                         <DialogDescription>
                             {selected
-                                ? `${selected.order.code} · ${selected.productName} · ${selected.recipientEmail} · ${isZh ? '数量' : 'Qty'} ${selected.quantity}`
+                                ? `${selected.order.code} · ${selected.productName} · ${selected.recipientEmail} · ${text.quantity} ${selected.quantity}`
                                 : ''}
                         </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4">
                         {packages.map((item, index) => (
                             <section key={index} className="space-y-3 rounded-lg border p-4">
-                                <strong>{isZh ? `第 ${index + 1} 份成品` : `Package ${index + 1}`}</strong>
+                                <strong>
+                                    {text.package} {index + 1}
+                                </strong>
                                 <div className="grid gap-3 md:grid-cols-2">
                                     <Field
                                         disabled={!isEditable}
-                                        label={isZh ? '账号（选填）' : 'Account (optional)'}
+                                        label={text.accountOptional}
                                         value={item.account}
                                         onChange={value =>
                                             updatePackage(setPackages, packages, index, 'account', value)
@@ -301,7 +380,7 @@ function ManualDigitalDeliveryPage() {
                                     />
                                     <Field
                                         disabled={!isEditable}
-                                        label={isZh ? '密码/密钥（选填）' : 'Password / key (optional)'}
+                                        label={text.passwordOptional}
                                         value={item.password}
                                         onChange={value =>
                                             updatePackage(setPackages, packages, index, 'password', value)
@@ -309,7 +388,7 @@ function ManualDigitalDeliveryPage() {
                                     />
                                 </div>
                                 <Label>
-                                    {isZh ? '自由文本说明' : 'Instructions'}
+                                    {text.instructions}
                                     <Textarea
                                         disabled={!isEditable}
                                         className="mt-2"
@@ -326,16 +405,16 @@ function ManualDigitalDeliveryPage() {
                                     />
                                 </Label>
                                 <div className="space-y-2">
-                                    <Label>{isZh ? '附件' : 'Attachments'}</Label>
+                                    <Label>{text.attachments}</Label>
                                     <div className="flex flex-wrap gap-2">
                                         {item.attachmentAssetIds.map(assetId => (
                                             <Badge key={assetId} variant="secondary">
-                                                Asset #{assetId}
+                                                {text.asset} #{assetId}
                                                 {isEditable && (
                                                     <button
                                                         type="button"
                                                         className="ml-1"
-                                                        aria-label={isZh ? '移除附件' : 'Remove attachment'}
+                                                        aria-label={text.removeAttachment}
                                                         onClick={() =>
                                                             updatePackage(
                                                                 setPackages,
@@ -362,7 +441,7 @@ function ManualDigitalDeliveryPage() {
                                             onClick={() => setAssetPickerPackageIndex(index)}
                                         >
                                             <Paperclip />
-                                            {isZh ? '从素材库选择附件' : 'Select attachments'}
+                                            {text.selectAttachments}
                                         </Button>
                                     )}
                                 </div>
@@ -371,30 +450,32 @@ function ManualDigitalDeliveryPage() {
                     </div>
                     {selected && (
                         <section className="space-y-2 rounded-lg border bg-muted/30 p-4">
-                            <strong>{isZh ? '最终邮件预览' : 'Final email preview'}</strong>
+                            <strong>{text.finalPreview}</strong>
                             <p className="text-sm">
-                                {isZh ? '收件人' : 'Recipient'}：{selected.recipientEmail}
+                                {text.recipient}: {selected.recipientEmail}
                             </p>
                             <p className="text-sm">
-                                {selected.productName} · {isZh ? '数量' : 'Qty'} {selected.quantity}
+                                {selected.productName} · {text.quantity} {selected.quantity}
                             </p>
                             {packages.map((item, index) => (
                                 <div key={index} className="rounded border bg-background p-2 text-sm">
-                                    <strong>{isZh ? `第 ${index + 1} 份` : `Package ${index + 1}`}</strong>
+                                    <strong>
+                                        {text.package} {index + 1}
+                                    </strong>
                                     {item.account && (
                                         <p>
-                                            {isZh ? '账号' : 'Account'}：{item.account}
+                                            {text.account}: {item.account}
                                         </p>
                                     )}
                                     {item.password && (
                                         <p>
-                                            {isZh ? '密码/密钥' : 'Password / key'}：{item.password}
+                                            {text.passwordKey}: {item.password}
                                         </p>
                                     )}
                                     {item.note && <p className="whitespace-pre-wrap">{item.note}</p>}
                                     {item.attachmentAssetIds.length > 0 && (
                                         <p>
-                                            {isZh ? '附件' : 'Attachments'}：
+                                            {text.attachments}:{' '}
                                             {item.attachmentAssetIds.map(id => `#${id}`).join(', ')}
                                         </p>
                                     )}
@@ -404,7 +485,7 @@ function ManualDigitalDeliveryPage() {
                     )}
                     {selected?.events.length ? (
                         <section className="space-y-2 rounded-lg border p-4">
-                            <strong>{isZh ? '审计记录' : 'Audit trail'}</strong>
+                            <strong>{text.auditTrail}</strong>
                             {selected.events.map(event => (
                                 <div
                                     key={event.id}
@@ -426,14 +507,14 @@ function ManualDigitalDeliveryPage() {
                                 onClick={() => saveMutation.mutate()}
                             >
                                 <Save />
-                                {isZh ? '保存草稿' : 'Save draft'}
+                                {text.saveDraft}
                             </Button>
                             <Button
                                 disabled={publishMutation.isPending || packages.length !== selected?.quantity}
                                 onClick={() => publishMutation.mutate()}
                             >
                                 <Send />
-                                {isZh ? '预览已核对，发布邮件' : 'Verified, publish email'}
+                                {text.verifiedPublish}
                             </Button>
                         </DialogFooter>
                     )}
@@ -443,7 +524,7 @@ function ManualDigitalDeliveryPage() {
                 open={assetPickerPackageIndex !== null}
                 onClose={() => setAssetPickerPackageIndex(null)}
                 multiSelect
-                title={isZh ? '选择人工交付附件' : 'Select delivery attachments'}
+                title={text.selectDeliveryAttachments}
                 onSelect={assets => {
                     if (assetPickerPackageIndex === null) return;
                     const current = packages[assetPickerPackageIndex]?.attachmentAssetIds ?? [];
@@ -490,27 +571,23 @@ function updatePackage<K extends keyof PackageDraft>(
     setter(items.map((item, itemIndex) => (itemIndex === index ? { ...item, [key]: value } : item)));
 }
 
-function stateLabel(state: ManualDeliveryRecord['state'], isZh: boolean): string {
-    const labels = isZh
-        ? {
-              WAITING_PROCESSING: '待处理',
-              DRAFT: '草稿',
-              SENDING: '发送中',
-              SENT: '已交付',
-              EMAIL_FAILED: '邮件失败',
-              MANUAL_REVIEW: '人工核查',
-              CANCELLED: '已取消',
-          }
-        : {
-              WAITING_PROCESSING: 'Waiting',
-              DRAFT: 'Draft',
-              SENDING: 'Sending',
-              SENT: 'Delivered',
-              EMAIL_FAILED: 'Email failed',
-              MANUAL_REVIEW: 'Manual review',
-              CANCELLED: 'Cancelled',
-          };
+function stateLabel(state: ManualDeliveryRecord['state'], text: ManualDeliveryText): string {
+    const labels: Record<ManualDeliveryRecord['state'], string> = {
+        WAITING_PROCESSING: text.stateWaiting,
+        DRAFT: text.stateDraft,
+        SENDING: text.stateSending,
+        SENT: text.stateSent,
+        EMAIL_FAILED: text.stateEmailFailed,
+        MANUAL_REVIEW: text.stateManualReview,
+        CANCELLED: text.stateCancelled,
+    };
     return labels[state];
+}
+
+function translateMessages(t: ReturnType<typeof useLingui>['t']): ManualDeliveryText {
+    return Object.fromEntries(
+        Object.entries(messages).map(([key, descriptor]) => [key, t(descriptor)]),
+    ) as ManualDeliveryText;
 }
 
 function errorMessage(error: unknown): string {

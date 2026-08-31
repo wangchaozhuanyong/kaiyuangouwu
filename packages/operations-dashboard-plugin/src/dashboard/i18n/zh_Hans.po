@@ -673,6 +673,221 @@ msgid "operations.autoCard.waiting"
 msgstr "等待补货"
 
 #. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.account"
+msgstr "账号"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.accountOptional"
+msgstr "账号（选填）"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.actions"
+msgstr "操作"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.asset"
+msgstr "素材"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.attachments"
+msgstr "附件"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.auditTrail"
+msgstr "审计记录"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.deliveryQueued"
+msgstr "成品已进入邮件发送队列"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.dialogTitle"
+msgstr "录入并发布人工成品"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.draftSaved"
+msgstr "草稿已保存"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.email"
+msgstr "邮箱"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.finalPreview"
+msgstr "最终邮件预览"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.instructions"
+msgstr "自由文本说明"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.listDescription"
+msgstr "按购买数量录入等量成品；发布前核对收件邮箱、商品和最终内容。"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.listTitle"
+msgstr "待处理与发送记录"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.loadError"
+msgstr "人工交付任务加载失败"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.open"
+msgstr "处理"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.orderProduct"
+msgstr "订单/商品"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.originalDeliveryQueued"
+msgstr "已使用原成品重新发送"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.overdue"
+msgstr "已超时"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.package"
+msgstr "成品"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.password"
+msgstr "密码"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.passwordKey"
+msgstr "密码/密钥"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.passwordOptional"
+msgstr "密码/密钥（选填）"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.quantity"
+msgstr "数量"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.recipient"
+msgstr "收件人"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.refresh"
+msgstr "刷新"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.removeAttachment"
+msgstr "移除附件"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.resend"
+msgstr "重发原成品"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.saveDraft"
+msgstr "保存草稿"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.selectAttachments"
+msgstr "从素材库选择附件"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.selectDeliveryAttachments"
+msgstr "选择人工交付附件"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.sla"
+msgstr "时效"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.state.cancelled"
+msgstr "已取消"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.state.draft"
+msgstr "草稿"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.state.emailFailed"
+msgstr "邮件失败"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.state.manualReview"
+msgstr "人工核查"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.state.sending"
+msgstr "发送中"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.state.sent"
+msgstr "已交付"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.state.waiting"
+msgstr "待处理"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.status"
+msgstr "状态"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.title"
+msgstr "人工数字交付"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.verifiedPublish"
+msgstr "预览已核对，发布邮件"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.view"
+msgstr "查看"
+
+#. js-lingui-explicit-id
 #: src/dashboard/index.tsx
 msgid "operations.nav.accountsAndAccess"
 msgstr "账号与权限"
@@ -874,13 +1089,13 @@ msgstr "保存包装设置"
 
 #. js-lingui-explicit-id
 #: src/dashboard/product-packaging-page-block.tsx
-msgid "operations.productPackaging.saveError"
-msgstr "包装设置保存失败"
+msgid "operations.productPackaging.saved"
+msgstr "包装与自动拆包设置已保存"
 
 #. js-lingui-explicit-id
 #: src/dashboard/product-packaging-page-block.tsx
-msgid "operations.productPackaging.saved"
-msgstr "包装与自动拆包设置已保存"
+msgid "operations.productPackaging.saveError"
+msgstr "包装设置保存失败"
 
 #. js-lingui-explicit-id
 #: src/dashboard/product-packaging-page-block.tsx
@@ -914,6 +1129,11 @@ msgstr "散装单位名称"
 
 #. js-lingui-explicit-id
 #: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.unitsPerPackage"
+msgstr "每包装单位数"
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
 msgid "operations.productPackaging.unitStock"
 msgstr "可用散装数"
 
@@ -921,11 +1141,6 @@ msgstr "可用散装数"
 #: src/dashboard/product-packaging-page-block.tsx
 msgid "operations.productPackaging.unitVariant"
 msgstr "散装 SKU"
-
-#. js-lingui-explicit-id
-#: src/dashboard/product-packaging-page-block.tsx
-msgid "operations.productPackaging.unitsPerPackage"
-msgstr "每包装单位数"
 
 #. js-lingui-explicit-id
 #: src/dashboard/product-packaging-page-block.tsx

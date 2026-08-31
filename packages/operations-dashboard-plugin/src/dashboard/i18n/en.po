@@ -673,6 +673,221 @@ msgid "operations.autoCard.waiting"
 msgstr "Waiting for stock"
 
 #. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.account"
+msgstr "Account"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.accountOptional"
+msgstr "Account (optional)"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.actions"
+msgstr "Actions"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.asset"
+msgstr "Asset"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.attachments"
+msgstr "Attachments"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.auditTrail"
+msgstr "Audit trail"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.deliveryQueued"
+msgstr "Delivery queued for email"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.dialogTitle"
+msgstr "Prepare and publish delivery"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.draftSaved"
+msgstr "Draft saved"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.email"
+msgstr "Email"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.finalPreview"
+msgstr "Final email preview"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.instructions"
+msgstr "Instructions"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.listDescription"
+msgstr "Enter exactly one package per purchased unit and verify the recipient before publishing."
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.listTitle"
+msgstr "Tasks and delivery history"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.loadError"
+msgstr "Could not load manual delivery tasks"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.open"
+msgstr "Open"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.orderProduct"
+msgstr "Order / product"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.originalDeliveryQueued"
+msgstr "Original delivery queued again"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.overdue"
+msgstr "Overdue"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.package"
+msgstr "Package"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.password"
+msgstr "Password"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.passwordKey"
+msgstr "Password / key"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.passwordOptional"
+msgstr "Password / key (optional)"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.quantity"
+msgstr "Qty"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.recipient"
+msgstr "Recipient"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.refresh"
+msgstr "Refresh"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.removeAttachment"
+msgstr "Remove attachment"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.resend"
+msgstr "Resend original delivery"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.saveDraft"
+msgstr "Save draft"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.selectAttachments"
+msgstr "Select attachments"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.selectDeliveryAttachments"
+msgstr "Select delivery attachments"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.sla"
+msgstr "SLA"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.state.cancelled"
+msgstr "Cancelled"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.state.draft"
+msgstr "Draft"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.state.emailFailed"
+msgstr "Email failed"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.state.manualReview"
+msgstr "Manual review"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.state.sending"
+msgstr "Sending"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.state.sent"
+msgstr "Delivered"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.state.waiting"
+msgstr "Waiting"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.status"
+msgstr "Status"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.title"
+msgstr "Manual digital delivery"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.verifiedPublish"
+msgstr "Verified, publish email"
+
+#. js-lingui-explicit-id
+#: src/dashboard/manual-digital-delivery-page.tsx
+msgid "operations.manualDelivery.view"
+msgstr "View"
+
+#. js-lingui-explicit-id
 #: src/dashboard/index.tsx
 msgid "operations.nav.accountsAndAccess"
 msgstr "Accounts & access"
@@ -874,13 +1089,13 @@ msgstr "Save packaging settings"
 
 #. js-lingui-explicit-id
 #: src/dashboard/product-packaging-page-block.tsx
-msgid "operations.productPackaging.saveError"
-msgstr "Could not save packaging settings"
+msgid "operations.productPackaging.saved"
+msgstr "Packaging and automatic unpacking settings saved"
 
 #. js-lingui-explicit-id
 #: src/dashboard/product-packaging-page-block.tsx
-msgid "operations.productPackaging.saved"
-msgstr "Packaging and automatic unpacking settings saved"
+msgid "operations.productPackaging.saveError"
+msgstr "Could not save packaging settings"
 
 #. js-lingui-explicit-id
 #: src/dashboard/product-packaging-page-block.tsx
@@ -914,6 +1129,11 @@ msgstr "Loose-unit label"
 
 #. js-lingui-explicit-id
 #: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.unitsPerPackage"
+msgstr "Units per package"
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
 msgid "operations.productPackaging.unitStock"
 msgstr "Loose units available"
 
@@ -921,11 +1141,6 @@ msgstr "Loose units available"
 #: src/dashboard/product-packaging-page-block.tsx
 msgid "operations.productPackaging.unitVariant"
 msgstr "Loose-unit variant"
-
-#. js-lingui-explicit-id
-#: src/dashboard/product-packaging-page-block.tsx
-msgid "operations.productPackaging.unitsPerPackage"
-msgstr "Units per package"
 
 #. js-lingui-explicit-id
 #: src/dashboard/product-packaging-page-block.tsx
