@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { ShopApi } from './api';
 import { LogisticsPage, OrderDetailPage, OrdersPage } from './order-pages';
 import { createStorefrontQueryClient, storefrontQueryKeys } from './query-client';
+import { orderPageStyles } from './tailwind/order-page-styles';
 import { ActiveCustomer, MarketConfig, Order, StorefrontLanguage } from './types';
 
 vi.mock('@tanstack/react-router', () => ({ useNavigate: () => vi.fn() }));
@@ -151,8 +152,43 @@ describe('OrdersPage route query', () => {
         const markup = renderOrders([order]);
 
         expect(markup).toContain('订单测试商品');
+        expect(markup).toContain('商家发货后可查看配送进度');
+        expect(markup).toContain('实体商品');
+        expect(markup).toContain('物流可查');
+        expect(markup).not.toContain('商品信息');
+        expect(markup).not.toContain('售后入口');
         expect(markup).not.toContain('aria-label="Loading"');
         expect(markup).not.toContain('TEST-1');
+    });
+
+    it('uses actual digital delivery attributes as the product explanation and tags', () => {
+        const digitalOrder: Order = {
+            ...order,
+            lines: [
+                {
+                    ...order.lines[0],
+                    customFields: {
+                        fulfillmentTypeSnapshot: 'digital',
+                        digitalDeliveryModeSnapshot: 'auto_card',
+                    },
+                    productVariant: {
+                        ...order.lines[0].productVariant,
+                        customFields: { fulfillmentType: 'digital', digitalDeliveryMode: 'auto_card' },
+                    },
+                },
+            ],
+        };
+        const markup = renderOrders([digitalOrder]);
+
+        expect(markup).toContain('支付后自动发送至下单邮箱');
+        expect(markup).toContain('数字商品');
+        expect(markup).toContain('自动发货');
+    });
+
+    it('keeps the product information column exactly as tall as the product image', () => {
+        expect(orderPageStyles['order-card-product']).toContain('[&>img]:[height:76px]');
+        expect(orderPageStyles['order-product-content']).toContain('[height:76px]');
+        expect(orderPageStyles['order-card-product']).toContain('[padding:12px_0]');
     });
 });
 
