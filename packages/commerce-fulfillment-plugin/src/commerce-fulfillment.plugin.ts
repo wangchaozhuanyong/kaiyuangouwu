@@ -13,6 +13,7 @@ import {
     AutoCardAdminResolver,
     AutoCardOrderResolver,
     AutoCardProductVariantResolver,
+    AutoCardShopProductVariantResolver,
 } from './auto-card.resolver';
 import { AutoCardService } from './auto-card.service';
 import { CommerceI18nService } from './commerce-i18n.service';
@@ -122,6 +123,7 @@ import './types';
             AfterSalesShopResolver,
             AutoCardOrderResolver,
             AutoCardProductVariantResolver,
+            AutoCardShopProductVariantResolver,
             CommerceModeShopResolver,
             ProductPackagingProductResolver,
             ManualDigitalDeliveryOrderResolver,

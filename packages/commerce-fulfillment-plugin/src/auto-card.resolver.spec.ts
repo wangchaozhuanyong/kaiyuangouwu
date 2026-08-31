@@ -1,9 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import {
-    AutoCardProductVariantResolver,
-    normalizePublicSaleableStockLevel,
-} from './auto-card.resolver';
+import { AutoCardShopProductVariantResolver, normalizePublicSaleableStockLevel } from './auto-card.resolver';
 
 describe('public product availability resolver', () => {
     it('exposes finite saleable stock and clamps negative stock to zero', () => {
@@ -19,7 +16,7 @@ describe('public product availability resolver', () => {
     it('uses Vendure saleable stock for non-auto-card variants', async () => {
         const productVariantService = { getSaleableStockLevel: vi.fn().mockResolvedValue(7) };
         const autoCardService = { availableStockForVariant: vi.fn() };
-        const resolver = new AutoCardProductVariantResolver(
+        const resolver = new AutoCardShopProductVariantResolver(
             autoCardService as never,
             productVariantService as never,
         );
@@ -43,7 +40,7 @@ describe('public product availability resolver', () => {
     it('uses the available card pool for auto-card variants', async () => {
         const autoCardService = { availableStockForVariant: vi.fn().mockResolvedValue(4) };
         const productVariantService = { getSaleableStockLevel: vi.fn() };
-        const resolver = new AutoCardProductVariantResolver(
+        const resolver = new AutoCardShopProductVariantResolver(
             autoCardService as never,
             productVariantService as never,
         );
