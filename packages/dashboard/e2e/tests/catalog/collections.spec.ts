@@ -5,6 +5,11 @@ import { createCrudTestSuite } from '../../utils/crud-test-factory.js';
 import { confirmSensitiveAction } from '../../utils/sensitive-action.js';
 import { VendureAdminClient } from '../../utils/vendure-admin-client.js';
 
+// These tests create, update and delete collections against the same test database.
+// Running them in parallel can leave collection mutations waiting on one another on
+// slower CI runners, so keep the file deterministic while the suite stays sharded.
+test.describe.configure({ mode: 'serial' });
+
 // #4388 — When navigating to a collection detail page and back, the previously
 // expanded collection rows should be re-expanded. The fix persists expanded IDs
 // in the URL (?expanded=1,2) so the tree is restored on re-mount.
@@ -228,10 +233,6 @@ test.describe('Product group hierarchy workflow', () => {
 });
 
 test('deletes a product group from the list row actions', async ({ page }) => {
-    // This flow combines API setup, sensitive-action confirmation and fallback cleanup.
-    // Shared CI runners can exceed the default 30-second budget before cleanup completes.
-    test.slow();
-
     const client = new VendureAdminClient(page);
     await client.login();
     const suffix = Date.now();
