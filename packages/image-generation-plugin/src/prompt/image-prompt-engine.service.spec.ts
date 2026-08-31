@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+    firstSuccessfulFixedPromptRoute,
     firstSuccessfulPromptProvider,
     ImagePromptEngineService,
     optimizerSystemPrompt,
@@ -36,6 +37,24 @@ describe('prompt optimization daily quota boundary', () => {
 });
 
 describe('prompt provider failover', () => {
+    it('uses only the configured fixed primary and fallback routes in order', async () => {
+        const attempts: string[] = [];
+        const routes = [
+            { role: 'PRIMARY' as const, credentialCode: 'gemini-primary', modelId: 'gemini-2.5-flash' },
+            { role: 'FALLBACK' as const, credentialCode: 'openai-fallback', modelId: 'gpt-5.4-mini' },
+        ];
+
+        const result = await firstSuccessfulFixedPromptRoute(routes, route => {
+            attempts.push(route.credentialCode);
+            return route.role === 'PRIMARY'
+                ? Promise.reject(new Error('Gemini unavailable'))
+                : Promise.resolve(route.modelId);
+        });
+
+        expect(result).toBe('gpt-5.4-mini');
+        expect(attempts).toEqual(['gemini-primary', 'openai-fallback']);
+    });
+
     it('tries GPT/OpenAI first and falls back to Gemini', async () => {
         const attempts: string[] = [];
 

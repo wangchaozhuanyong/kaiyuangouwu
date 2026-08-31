@@ -37,6 +37,7 @@ describe('ImageProviderClient', () => {
         baseUrl: 'https://relay.example.com/v1',
         encryptedApiKey: 'encrypted',
         textModelId: 'text-model',
+        orchestrationModelId: 'orchestration-model',
         healthStatus: 'HEALTHY',
     });
 
@@ -70,6 +71,7 @@ describe('ImageProviderClient', () => {
 
         const result = await client.optimizePrompt(
             geminiCredential,
+            'models/gemini-3.1-flash-lite',
             'Return strict JSON',
             'Make a product photo',
         );
@@ -126,7 +128,7 @@ describe('ImageProviderClient', () => {
         expect(init.headers).toEqual(expect.objectContaining({ 'idempotency-key': 'image-responses-1' }));
         expect(parseJsonRequestBody(init)).toEqual(
             expect.objectContaining({
-                model: 'text-model',
+                model: 'orchestration-model',
                 input: [
                     expect.objectContaining({
                         role: 'user',

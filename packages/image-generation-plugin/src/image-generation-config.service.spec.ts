@@ -121,6 +121,9 @@ describe('ImageGenerationConfigService prompt provider availability', () => {
             { sourceHash: 'hash' } as never,
         );
         vi.spyOn(service as never, 'synchronizeActiveSkillRelease').mockResolvedValue(undefined);
+        vi.spyOn(service as never, 'getOrCreatePromptRoutingConfig').mockResolvedValue({
+            strategy: 'AUTO',
+        });
         vi.spyOn(service as never, 'getConfig').mockResolvedValue({
             enabled: true,
             promptOptimizationEnabled: true,
@@ -162,6 +165,9 @@ describe('ImageGenerationConfigService prompt provider availability', () => {
             { sourceHash: 'hash' } as never,
         );
         vi.spyOn(service as never, 'synchronizeActiveSkillRelease').mockResolvedValue(undefined);
+        vi.spyOn(service as never, 'getOrCreatePromptRoutingConfig').mockResolvedValue({
+            strategy: 'AUTO',
+        });
         vi.spyOn(service as never, 'getConfig').mockResolvedValue({
             enabled: true,
             promptOptimizationEnabled: true,
@@ -296,6 +302,65 @@ describe('ImageGenerationConfigService provider bindings', () => {
                 modelCodes: [],
             }),
         ).rejects.toThrow('稳定代码创建后不能修改');
+    });
+});
+
+describe('ImageGenerationConfigService unified prompt routing', () => {
+    it('rejects using the same Key for primary and fallback routes', async () => {
+        const repository = { save: vi.fn() };
+        const router = {
+            findByCode: vi.fn().mockResolvedValue({ code: 'gemini-primary', purpose: 'PROMPT' }),
+        };
+        const service = new ImageGenerationConfigService(
+            {},
+            { getRepository: vi.fn(() => repository) } as never,
+            {} as never,
+            {} as never,
+            {} as never,
+            router as never,
+            {} as never,
+        );
+        vi.spyOn(service as never, 'getOrCreatePromptRoutingConfig').mockResolvedValue({
+            strategy: 'AUTO',
+        });
+
+        await expect(
+            service.savePromptRoutingConfig({} as never, {
+                strategy: 'FIXED',
+                primaryCredentialCode: 'gemini-primary',
+                primaryModelId: 'gemini-2.5-flash',
+                fallbackEnabled: true,
+                fallbackCredentialCode: 'gemini-primary',
+                fallbackModelId: 'gemini-2.0-flash',
+            }),
+        ).rejects.toThrow('主路由和备用路由必须使用不同的 Key');
+        expect(repository.save).not.toHaveBeenCalled();
+    });
+
+    it('prevents archiving a Key referenced by the active fixed route', async () => {
+        const repository = {
+            findOne: vi.fn().mockResolvedValue({ id: 'key-1', code: 'openai-primary', archivedAt: null }),
+            update: vi.fn(),
+        };
+        const service = new ImageGenerationConfigService(
+            {},
+            { getRepository: vi.fn(() => repository) } as never,
+            {} as never,
+            {} as never,
+            {} as never,
+            {} as never,
+            {} as never,
+        );
+        vi.spyOn(service as never, 'getOrCreatePromptRoutingConfig').mockResolvedValue({
+            strategy: 'FIXED',
+            primaryCredentialCode: 'openai-primary',
+            fallbackEnabled: false,
+        });
+
+        await expect(service.archiveCredential({} as never, 'key-1')).rejects.toThrow(
+            '该 Key 正被统一提示词路由使用',
+        );
+        expect(repository.update).not.toHaveBeenCalled();
     });
 });
 

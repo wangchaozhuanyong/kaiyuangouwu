@@ -72,6 +72,7 @@ const providerConfigFields = gql`
         baseUrl
         apiKeyLast4
         textModelId
+        orchestrationModelId
         providerHealthStatus
         providerHealthMessage
         providerRuntimeStatus
@@ -87,11 +88,29 @@ const providerConfigFields = gql`
     }
 `;
 
+const promptRoutingConfigFields = gql`
+    fragment ImagePromptRoutingConfigFields on ImagePromptRoutingConfig {
+        id
+        strategy
+        primaryCredentialCode
+        primaryModelId
+        primaryAvailable
+        fallbackEnabled
+        fallbackCredentialCode
+        fallbackModelId
+        fallbackAvailable
+    }
+`;
+
 export const imageProviderAdminQuery = gql`
     ${providerConfigFields}
+    ${promptRoutingConfigFields}
     query ImageProviderAdmin {
         imageProviderAdminConfigs {
             ...ImageProviderAdminConfigFields
+        }
+        imagePromptRoutingConfig {
+            ...ImagePromptRoutingConfigFields
         }
         imageGenerationAdminConfig {
             models {
@@ -364,6 +383,25 @@ export const saveImageCredentialMutation = gql`
     }
 `;
 
+export const saveImagePromptRoutingMutation = gql`
+    ${promptRoutingConfigFields}
+    mutation SaveImagePromptRouting($input: SaveImagePromptRoutingConfigInput!) {
+        saveImagePromptRoutingConfig(input: $input) {
+            ...ImagePromptRoutingConfigFields
+        }
+    }
+`;
+
+export const testImagePromptRouteMutation = gql`
+    mutation TestImagePromptRoute($input: TestImagePromptRouteInput!) {
+        testImagePromptRoute(input: $input) {
+            ok
+            message
+            testedAt
+        }
+    }
+`;
+
 export const testImageProviderMutation = gql`
     mutation TestImageProvider($id: ID!, $enableOnSuccess: Boolean) {
         testImageProviderCredential(id: $id, enableOnSuccess: $enableOnSuccess) {
@@ -507,6 +545,7 @@ export interface ImageProviderAdminConfigRecord {
     baseUrl: string;
     apiKeyLast4: string;
     textModelId: string;
+    orchestrationModelId: string;
     providerHealthStatus: string;
     providerHealthMessage?: string | null;
     providerRuntimeStatus?: string;
@@ -519,6 +558,18 @@ export interface ImageProviderAdminConfigRecord {
     cooldownUntil?: string | null;
     lastUsedAt?: string | null;
     modelCodes: string[];
+}
+
+export interface ImagePromptRoutingConfigRecord {
+    id: string;
+    strategy: 'AUTO' | 'FIXED';
+    primaryCredentialCode?: string | null;
+    primaryModelId?: string | null;
+    primaryAvailable: boolean;
+    fallbackEnabled: boolean;
+    fallbackCredentialCode?: string | null;
+    fallbackModelId?: string | null;
+    fallbackAvailable: boolean;
 }
 
 export interface ImageAdminJobRecord {
@@ -705,5 +756,6 @@ export interface ImageAdminOperationsQueryResult {
 
 export interface ImageProviderAdminQueryResult {
     imageProviderAdminConfigs: ImageProviderAdminConfigRecord[];
+    imagePromptRoutingConfig: ImagePromptRoutingConfigRecord;
     imageGenerationAdminConfig: { models: Array<{ code: string; displayNameZh: string }> };
 }

@@ -15,6 +15,11 @@ const commonTypes = gql`
         GEMINI
     }
 
+    enum ImagePromptRoutingStrategy {
+        AUTO
+        FIXED
+    }
+
     enum ImageReferenceMode {
         NONE
         STYLE
@@ -331,6 +336,7 @@ export const adminApiExtensions = gql`
         baseUrl: String!
         apiKeyLast4: String!
         textModelId: String!
+        orchestrationModelId: String!
         providerHealthStatus: String!
         providerHealthMessage: String
         providerRuntimeStatus: String!
@@ -343,6 +349,18 @@ export const adminApiExtensions = gql`
         cooldownUntil: DateTime
         lastUsedAt: DateTime
         modelCodes: [String!]!
+    }
+
+    type ImagePromptRoutingConfig {
+        id: ID!
+        strategy: ImagePromptRoutingStrategy!
+        primaryCredentialCode: String
+        primaryModelId: String
+        primaryAvailable: Boolean!
+        fallbackEnabled: Boolean!
+        fallbackCredentialCode: String
+        fallbackModelId: String
+        fallbackAvailable: Boolean!
     }
 
     type ImageProviderConnectionResult {
@@ -560,11 +578,26 @@ export const adminApiExtensions = gql`
         purpose: String!
         baseUrl: String!
         apiKey: String
-        textModelId: String!
+        textModelId: String
+        orchestrationModelId: String
         enabled: Boolean!
         priority: Int!
         weight: Int!
         modelCodes: [String!]!
+    }
+
+    input SaveImagePromptRoutingConfigInput {
+        strategy: ImagePromptRoutingStrategy!
+        primaryCredentialCode: String
+        primaryModelId: String
+        fallbackEnabled: Boolean!
+        fallbackCredentialCode: String
+        fallbackModelId: String
+    }
+
+    input TestImagePromptRouteInput {
+        credentialCode: String!
+        modelId: String!
     }
 
     input SaveImageModelInput {
@@ -593,6 +626,7 @@ export const adminApiExtensions = gql`
     extend type Query {
         imageGenerationAdminConfig: ImageGenerationAdminConfig!
         imageProviderAdminConfigs: [ImageProviderAdminConfig!]!
+        imagePromptRoutingConfig: ImagePromptRoutingConfig!
         imageGenerationJobs(skip: Int, take: Int, state: ImageGenerationState): ImageGenerationJobList!
         imagePromptSkillReleases: [ImagePromptSkillRelease!]!
         imagePromptOptimizationAudit(skip: Int, take: Int): ImagePromptOptimizationAuditList!
@@ -605,6 +639,8 @@ export const adminApiExtensions = gql`
     extend type Mutation {
         saveImageGenerationConfig(input: SaveImageGenerationConfigInput!): ImageGenerationAdminConfig!
         saveImageProviderCredential(input: SaveImageProviderCredentialInput!): ImageProviderAdminConfig!
+        saveImagePromptRoutingConfig(input: SaveImagePromptRoutingConfigInput!): ImagePromptRoutingConfig!
+        testImagePromptRoute(input: TestImagePromptRouteInput!): ImageProviderConnectionResult!
         testImageProviderConnection(scope: ImageProviderScope!): ImageProviderConnectionResult!
         testImageProviderCredential(id: ID!, enableOnSuccess: Boolean): ImageProviderConnectionResult!
         archiveImageProviderCredential(id: ID!): Boolean!

@@ -30,7 +30,7 @@
 
 ## 中转站接入
 
-超级管理员在“系统 → AI 生图接入”分别设置 OpenAI 与 Gemini 的 HTTPS 基础地址、API Key 和文本模型 ID。OpenAI 的文本模型同时用于提示词优化和 Responses 图片工具编排，实测可用 `gpt-5.4-mini`；图片工具内的模型仍是各模型卡配置的图片模型。提示词优化优先使用健康的 OpenAI Key，OpenAI 不可用时自动尝试健康的 Gemini 提示词 Key，两者都不可用时使用本地规则兜底。生图凭证按模型协议自动路由。API Key 使用 AES-256-GCM 加密后入库，后台只回显末四位。
+超级管理员在“系统 → AI 服务接入”维护 OpenAI 与 Gemini 的 HTTPS 基础地址和 API Key，并在页面顶部统一设置提示词优化路由。`FIXED` 模式明确指定平台级主 Key + 模型及可选备用 Key + 模型，不会静默跨供应商；`AUTO` 模式保留 OpenAI → Gemini、Key 优先级和权重轮询的兼容行为。OpenAI Responses 生图编排模型已拆成 Key 上独立的 `orchestrationModelId`，不再与提示词模型共用字段；图片工具内的模型仍由各模型卡配置。两条固定路由都不可用或模型结果无效时使用本地规则兜底。API Key 使用 AES-256-GCM 加密后入库，后台只回显末四位。
 
 适配器支持：
 

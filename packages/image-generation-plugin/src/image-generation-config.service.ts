@@ -8,6 +8,7 @@ import { IMAGE_GENERATION_OPTIONS, launchModelDefinitions, retiredLaunchModelCod
 import { ImageGenerationConfig } from './entities/image-generation-config.entity';
 import { ImageGenerationCostEvent } from './entities/image-generation-cost-event.entity';
 import { ImageModelConfig } from './entities/image-model-config.entity';
+import { ImagePromptRoutingConfig } from './entities/image-prompt-routing-config.entity';
 import { ImagePromptSkillRelease } from './entities/image-prompt-skill-release.entity';
 import { ImageProviderCredentialModel } from './entities/image-provider-credential-model.entity';
 import { ImageProviderCredential } from './entities/image-provider-credential.entity';
@@ -20,11 +21,14 @@ import { ImageProviderCipherService } from './security/image-provider-cipher.ser
 import { SafeProviderUrlService } from './security/safe-provider-url.service';
 import {
     ImageGenerationPluginOptions,
+    ImagePromptRoutingStrategy,
     ImageProviderProtocol,
     ImageProviderScope,
     SaveImageGenerationConfigInput,
     SaveImageModelInput,
+    SaveImagePromptRoutingConfigInput,
     SaveImageProviderCredentialInput,
+    TestImagePromptRouteInput,
 } from './types';
 
 const DEFAULT_TERMS_ZH =
@@ -146,6 +150,7 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
                 baseUrl: '',
                 apiKeyLast4: '',
                 textModelId: '',
+                orchestrationModelId: '',
                 providerHealthStatus: 'UNCONFIGURED',
                 providerHealthMessage: null,
                 providerRuntimeStatus: 'NO_RECENT_CALLS',
@@ -206,6 +211,7 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
             baseUrl: credential?.baseUrl ?? '',
             apiKeyLast4: credential?.apiKeyLast4 ?? '',
             textModelId: credential?.textModelId ?? '',
+            orchestrationModelId: credential?.orchestrationModelId ?? '',
             providerHealthStatus: credential?.healthStatus ?? 'UNCONFIGURED',
             providerHealthMessage: credential?.healthMessage ?? null,
             providerRuntimeStatus,
@@ -241,15 +247,21 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
             })),
         );
         const availableModels = readiness.filter(item => item.available).map(item => item.model);
-        const promptOptimizerModelIds = [
-            ...new Set(
-                (
-                    await Promise.all(
-                        PROVIDER_SCOPES.map(scope => this.providerRouter.availablePromptModelIds(ctx, scope)),
-                    )
-                ).flat(),
-            ),
-        ];
+        const routing = await this.getOrCreatePromptRoutingConfig(ctx);
+        const promptOptimizerModelIds =
+            promptRoutingStrategy(routing.strategy) === 'FIXED'
+                ? await this.fixedPromptOptimizerModelIds(ctx, routing)
+                : [
+                      ...new Set(
+                          (
+                              await Promise.all(
+                                  PROVIDER_SCOPES.map(scope =>
+                                      this.providerRouter.availablePromptModelIds(ctx, scope),
+                                  ),
+                              )
+                          ).flat(),
+                      ),
+                  ];
         const optimizerAvailable = promptOptimizerModelIds.length > 0;
         const promptPrice = quoteImageMoney(
             ctx,
@@ -277,6 +289,101 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
             maxQuantity: 4,
             models: availableModels.map(model => shopModelView(ctx, model)),
         };
+    }
+
+    async promptRoutingConfig(ctx: RequestContext) {
+        const config = await this.getOrCreatePromptRoutingConfig(ctx);
+        const primaryAvailable = config.primaryCredentialCode
+            ? await this.providerRouter.hasAvailableByCode(ctx, config.primaryCredentialCode)
+            : false;
+        const fallbackAvailable =
+            config.fallbackEnabled && config.fallbackCredentialCode
+                ? await this.providerRouter.hasAvailableByCode(ctx, config.fallbackCredentialCode)
+                : false;
+        return {
+            ...config,
+            strategy: promptRoutingStrategy(config.strategy),
+            primaryAvailable,
+            fallbackAvailable,
+        };
+    }
+
+    async savePromptRoutingConfig(ctx: RequestContext, input: SaveImagePromptRoutingConfigInput) {
+        const strategy = promptRoutingStrategy(input.strategy);
+        const config = await this.getOrCreatePromptRoutingConfig(ctx);
+        if (strategy === 'AUTO') {
+            Object.assign(config, {
+                strategy,
+                primaryCredentialCode: null,
+                primaryModelId: null,
+                fallbackEnabled: false,
+                fallbackCredentialCode: null,
+                fallbackModelId: null,
+            });
+        } else {
+            const primaryCredentialCode = requiredCode(input.primaryCredentialCode ?? '');
+            const primaryModelId = requiredText(input.primaryModelId ?? '', 160, '主提示词模型 ID');
+            await this.assertPromptRouteCredential(ctx, primaryCredentialCode, '主路由');
+            const fallbackEnabled = Boolean(input.fallbackEnabled);
+            let fallbackCredentialCode: string | null = null;
+            let fallbackModelId: string | null = null;
+            if (fallbackEnabled) {
+                fallbackCredentialCode = requiredCode(input.fallbackCredentialCode ?? '');
+                fallbackModelId = requiredText(input.fallbackModelId ?? '', 160, '备用提示词模型 ID');
+                if (fallbackCredentialCode === primaryCredentialCode) {
+                    throw new UserInputError('主路由和备用路由必须使用不同的 Key');
+                }
+                await this.assertPromptRouteCredential(ctx, fallbackCredentialCode, '备用路由');
+            }
+            Object.assign(config, {
+                strategy,
+                primaryCredentialCode,
+                primaryModelId,
+                fallbackEnabled,
+                fallbackCredentialCode,
+                fallbackModelId,
+            });
+        }
+        await this.connection.getRepository(ctx, ImagePromptRoutingConfig).save(config, { reload: false });
+        return this.promptRoutingConfig(ctx);
+    }
+
+    async testPromptRoute(ctx: RequestContext, input: TestImagePromptRouteInput) {
+        const credentialCode = requiredCode(input.credentialCode);
+        const modelId = requiredText(input.modelId, 160, '提示词模型 ID');
+        const credential = await this.assertPromptRouteCredential(ctx, credentialCode, '测试路由');
+        const result = await this.providerClient.testModel(credential, modelId);
+        return { ...result, testedAt: new Date() };
+    }
+
+    async promptRoutingPlan(ctx: RequestContext) {
+        const config = await this.getOrCreatePromptRoutingConfig(ctx);
+        if (promptRoutingStrategy(config.strategy) !== 'FIXED') {
+            return { strategy: 'AUTO' as const, routes: [] };
+        }
+        const routes: Array<{
+            role: 'PRIMARY' | 'FALLBACK';
+            credentialCode: string;
+            modelId: string;
+        }> = [
+            {
+                role: 'PRIMARY' as const,
+                credentialCode: config.primaryCredentialCode ?? '',
+                modelId: config.primaryModelId ?? '',
+            },
+        ];
+        if (config.fallbackEnabled) {
+            routes.push({
+                role: 'FALLBACK' as const,
+                credentialCode: config.fallbackCredentialCode ?? '',
+                modelId: config.fallbackModelId ?? '',
+            });
+        }
+        return { strategy: 'FIXED' as const, routes };
+    }
+
+    routePromptCredentialByCode(ctx: RequestContext, code: string) {
+        return this.providerRouter.selectByCode(ctx, code, 'PROMPT');
     }
 
     async saveConfig(ctx: RequestContext, input: SaveImageGenerationConfigInput) {
@@ -378,12 +485,22 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
         const apiKey = input.apiKey?.trim();
         if (!credential && !apiKey) throw new UserInputError('首次配置必须填写 API Key');
         const normalizedBaseUrl = baseUrl.toString().replace(/\/$/u, '');
-        const textModelId = requiredText(input.textModelId, 160, '提示词优化模型 ID');
+        const textModelId = optionalText(input.textModelId, 160, '兼容模式提示词模型 ID');
+        const orchestrationModelId = optionalText(
+            input.orchestrationModelId,
+            160,
+            'OpenAI Responses 生图编排模型 ID',
+        );
+        if (scope !== 'OPENAI' && orchestrationModelId) {
+            throw new UserInputError('只有 OpenAI Key 可以配置 Responses 生图编排模型');
+        }
         const connectionChanged =
             !credential ||
             Boolean(apiKey) ||
+            credential.scope !== scope ||
             credential.baseUrl !== normalizedBaseUrl ||
-            credential.textModelId !== textModelId;
+            credential.textModelId !== textModelId ||
+            credential.orchestrationModelId !== orchestrationModelId;
         const encryptedApiKey = apiKey ? this.cipher.encrypt(apiKey) : credential?.encryptedApiKey;
         if (!encryptedApiKey) throw new UserInputError('首次配置必须填写 API Key');
         const healthStatus = connectionChanged ? 'UNTESTED' : (credential?.healthStatus ?? 'UNTESTED');
@@ -397,6 +514,7 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
             enabled: Boolean(input.enabled && healthStatus === 'HEALTHY'),
             baseUrl: normalizedBaseUrl,
             textModelId,
+            orchestrationModelId,
             encryptedApiKey,
             apiKeyLast4: apiKey ? apiKey.slice(-4) : (credential?.apiKeyLast4 ?? ''),
             healthStatus,
@@ -476,6 +594,18 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
     }
 
     async archiveCredential(ctx: RequestContext, id: ID): Promise<boolean> {
+        const credential = await this.connection.getRepository(ctx, ImageProviderCredential).findOne({
+            where: { id },
+        });
+        if (!credential || credential.archivedAt) return false;
+        const routing = await this.getOrCreatePromptRoutingConfig(ctx);
+        if (
+            promptRoutingStrategy(routing.strategy) === 'FIXED' &&
+            (routing.primaryCredentialCode === credential.code ||
+                (routing.fallbackEnabled && routing.fallbackCredentialCode === credential.code))
+        ) {
+            throw new UserInputError('该 Key 正被统一提示词路由使用，请先修改统一路由设置');
+        }
         const result = await this.connection
             .getRepository(ctx, ImageProviderCredential)
             .update({ id }, { enabled: false, archivedAt: new Date(), healthMessage: '已归档' });
@@ -731,6 +861,7 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
                     scope: credential.scope,
                     baseUrl: credential.baseUrl,
                     textModelId: credential.textModelId,
+                    orchestrationModelId: credential.orchestrationModelId,
                     encryptedApiKey: credential.encryptedApiKey,
                 }),
             )
@@ -804,6 +935,78 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
         });
         if (credential || scope !== 'OPENAI') return credential;
         return repository.findOne({ where: { scope: 'GLOBAL' } });
+    }
+
+    private async getOrCreatePromptRoutingConfig(ctx: RequestContext): Promise<ImagePromptRoutingConfig> {
+        const repository = this.connection.getRepository(ctx, ImagePromptRoutingConfig);
+        let config = await repository.findOne({ where: { singletonKey: 'GLOBAL' } });
+        if (config) return config;
+        try {
+            config = await repository.save(
+                new ImagePromptRoutingConfig({
+                    singletonKey: 'GLOBAL',
+                    strategy: 'AUTO',
+                    primaryCredentialCode: null,
+                    primaryModelId: null,
+                    fallbackEnabled: false,
+                    fallbackCredentialCode: null,
+                    fallbackModelId: null,
+                }),
+            );
+        } catch (error) {
+            config = await repository.findOne({ where: { singletonKey: 'GLOBAL' } });
+            if (!config) throw error;
+        }
+        return config;
+    }
+
+    private async assertPromptRouteCredential(
+        ctx: RequestContext,
+        code: string,
+        label: string,
+    ): Promise<ImageProviderCredential> {
+        const credential = await this.providerRouter.findByCode(ctx, code);
+        if (!credential) throw new UserInputError(`${label} Key 不存在或已归档`);
+        if (credential.purpose !== 'PROMPT' && credential.purpose !== 'BOTH') {
+            throw new UserInputError(`${label} Key 必须允许提示词用途`);
+        }
+        return credential;
+    }
+
+    private async fixedPromptOptimizerModelIds(
+        ctx: RequestContext,
+        config: ImagePromptRoutingConfig,
+    ): Promise<string[]> {
+        const routes = [
+            {
+                enabled: true,
+                credentialCode: config.primaryCredentialCode,
+                modelId: config.primaryModelId,
+            },
+            {
+                enabled: config.fallbackEnabled,
+                credentialCode: config.fallbackCredentialCode,
+                modelId: config.fallbackModelId,
+            },
+        ];
+        const availability = await Promise.all(
+            routes.map(async route => ({
+                ...route,
+                available:
+                    route.enabled &&
+                    Boolean(route.credentialCode) &&
+                    Boolean(route.modelId?.trim()) &&
+                    (await this.providerRouter.hasAvailableByCode(ctx, route.credentialCode ?? '')),
+            })),
+        );
+        return [
+            ...new Set(
+                availability
+                    .filter(route => route.available)
+                    .map(route => route.modelId?.trim() ?? '')
+                    .filter(Boolean),
+            ),
+        ];
     }
 
     private async synchronizeActiveSkillRelease(): Promise<void> {
@@ -993,6 +1196,12 @@ function requiredText(value: string, maxLength: number, label: string): string {
     return normalized;
 }
 
+function optionalText(value: string | null | undefined, maxLength: number, label: string): string {
+    const normalized = value?.trim() ?? '';
+    if (normalized.length > maxLength) throw new UserInputError(`${label}不能超过 ${maxLength} 个字符`);
+    return normalized;
+}
+
 function requiredCode(value: string): string {
     const normalized = value.trim().toLowerCase();
     if (!/^[a-z0-9][a-z0-9_-]{2,63}$/u.test(normalized)) {
@@ -1013,6 +1222,11 @@ function assertNonNegativeInteger(value: number, label: string): void {
 function providerScope(value: string): ImageProviderScope {
     if (PROVIDER_SCOPES.includes(value as ImageProviderScope)) return value as ImageProviderScope;
     throw new UserInputError('中转站类型无效');
+}
+
+function promptRoutingStrategy(value: string): ImagePromptRoutingStrategy {
+    if (value === 'AUTO' || value === 'FIXED') return value;
+    throw new UserInputError('提示词路由策略无效');
 }
 
 export function providerScopeForModel(

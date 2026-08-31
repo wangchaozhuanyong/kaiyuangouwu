@@ -9,6 +9,7 @@ export type ImageProviderProtocol =
     | 'GEMINI_NATIVE'
     | 'GEMINI_NATIVE_STREAM';
 export type ImageProviderScope = 'OPENAI' | 'GEMINI';
+export type ImagePromptRoutingStrategy = 'AUTO' | 'FIXED';
 export type ImageGenerationState =
     'QUEUED' | 'RUNNING' | 'PARTIAL_SUCCESS' | 'SUCCEEDED' | 'FAILED' | 'UNKNOWN' | 'CANCELLED';
 export type ImageOutputState = 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'UNKNOWN' | 'CANCELLED';
@@ -67,11 +68,26 @@ export interface SaveImageProviderCredentialInput {
     purpose: 'PROMPT' | 'IMAGE' | 'BOTH';
     baseUrl: string;
     apiKey?: string | null;
-    textModelId: string;
+    textModelId?: string | null;
+    orchestrationModelId?: string | null;
     enabled: boolean;
     priority: number;
     weight: number;
     modelCodes: string[];
+}
+
+export interface SaveImagePromptRoutingConfigInput {
+    strategy: ImagePromptRoutingStrategy;
+    primaryCredentialCode?: string | null;
+    primaryModelId?: string | null;
+    fallbackEnabled: boolean;
+    fallbackCredentialCode?: string | null;
+    fallbackModelId?: string | null;
+}
+
+export interface TestImagePromptRouteInput {
+    credentialCode: string;
+    modelId: string;
 }
 
 export interface SaveImageModelInput {

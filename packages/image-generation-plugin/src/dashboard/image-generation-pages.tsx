@@ -59,6 +59,7 @@ import {
     ImageAdminQueryResult,
     ImageAiUsageRecordDetailQueryResult,
     ImageAiUsageRecordsQueryResult,
+    ImagePromptRoutingConfigRecord,
     ImageProviderAdminConfigRecord,
     ImageProviderAdminQueryResult,
     activateImageSkillMutation,
@@ -74,8 +75,10 @@ import {
     saveImageCredentialMutation,
     saveImageGenerationConfigMutation,
     saveImageModelMutation,
+    saveImagePromptRoutingMutation,
     smokeTestImageModelMutation,
     testImageModelMutation,
+    testImagePromptRouteMutation,
     testImageProviderMutation,
 } from './image-generation.graphql';
 import { imageProtocolOption, imageProtocolOptionsForModel } from './image-protocol-options';
@@ -2051,7 +2054,14 @@ export function ImageGenerationAccessPage() {
             .filter(config => {
                 const matchesSearch =
                     !normalizedSearch ||
-                    [config.name, config.code, config.apiKeyLast4, config.baseUrl, config.textModelId]
+                    [
+                        config.name,
+                        config.code,
+                        config.apiKeyLast4,
+                        config.baseUrl,
+                        config.textModelId,
+                        config.orchestrationModelId,
+                    ]
                         .join(' ')
                         .toLowerCase()
                         .includes(normalizedSearch);
@@ -2117,6 +2127,18 @@ export function ImageGenerationAccessPage() {
                 </PageActionBarRight>
             </PageActionBar>
             <PageLayout>
+                <PageBlock
+                    column="full"
+                    blockId="image-prompt-routing"
+                    title="提示词优化统一设置"
+                    description="平台统一决定提示词优化使用哪个 Key 和模型；店铺只控制是否开启及计费规则。"
+                >
+                    <PromptRoutingSettings
+                        config={query.data.imagePromptRoutingConfig}
+                        credentials={configs}
+                        onChanged={() => void query.refetch()}
+                    />
+                </PageBlock>
                 <PageBlock
                     column="full"
                     blockId="image-access-summary"
@@ -2252,6 +2274,261 @@ export function ImageGenerationAccessPage() {
                 />
             ) : null}
         </Page>
+    );
+}
+
+interface PromptRoutingDraft {
+    strategy: 'AUTO' | 'FIXED';
+    primaryCredentialCode: string;
+    primaryModelId: string;
+    fallbackEnabled: boolean;
+    fallbackCredentialCode: string;
+    fallbackModelId: string;
+}
+
+function PromptRoutingSettings({
+    config,
+    credentials,
+    onChanged,
+}: Readonly<{
+    config: ImagePromptRoutingConfigRecord;
+    credentials: ImageProviderAdminConfigRecord[];
+    onChanged: () => void;
+}>) {
+    const [draft, setDraft] = useState<PromptRoutingDraft>(() => promptRoutingDraft(config));
+    useEffect(() => {
+        setDraft(promptRoutingDraft(config));
+    }, [
+        config.strategy,
+        config.primaryCredentialCode,
+        config.primaryModelId,
+        config.fallbackEnabled,
+        config.fallbackCredentialCode,
+        config.fallbackModelId,
+    ]);
+    const promptCredentials = credentials.filter(credential =>
+        ['PROMPT', 'BOTH'].includes(credential.purpose),
+    );
+    const primary = credentials.find(credential => credential.code === draft.primaryCredentialCode);
+    const fallback = credentials.find(credential => credential.code === draft.fallbackCredentialCode);
+    const update = <K extends keyof PromptRoutingDraft>(key: K, value: PromptRoutingDraft[K]) =>
+        setDraft(current => ({ ...current, [key]: value }));
+    const save = useMutation({
+        mutationFn: () =>
+            api.mutate(saveImagePromptRoutingMutation, {
+                input: {
+                    strategy: draft.strategy,
+                    primaryCredentialCode: draft.primaryCredentialCode || null,
+                    primaryModelId: draft.primaryModelId || null,
+                    fallbackEnabled: draft.strategy === 'FIXED' && draft.fallbackEnabled,
+                    fallbackCredentialCode: draft.fallbackCredentialCode || null,
+                    fallbackModelId: draft.fallbackModelId || null,
+                },
+            }),
+        onSuccess: () => {
+            toast.success('统一提示词路由已保存');
+            onChanged();
+        },
+        onError: error => toast.error(errorMessage(error)),
+    });
+    const test = useMutation({
+        mutationFn: ({ credentialCode, modelId }: { credentialCode: string; modelId: string }) =>
+            api.mutate<{ testImagePromptRoute: { ok: boolean; message: string } }>(
+                testImagePromptRouteMutation,
+                { input: { credentialCode, modelId } },
+            ),
+        onSuccess: result =>
+            (result.testImagePromptRoute.ok ? toast.success : toast.error)(
+                result.testImagePromptRoute.message,
+            ),
+        onError: error => toast.error(errorMessage(error)),
+    });
+    const fixedDraftValid = Boolean(
+        draft.primaryCredentialCode.trim() &&
+        draft.primaryModelId.trim() &&
+        (!draft.fallbackEnabled ||
+            (draft.fallbackCredentialCode.trim() &&
+                draft.fallbackModelId.trim() &&
+                draft.fallbackCredentialCode !== draft.primaryCredentialCode)),
+    );
+    return (
+        <div className="space-y-5">
+            <div className="grid gap-4 lg:grid-cols-[12rem_1fr_auto] lg:items-end">
+                <Field label="路由策略" htmlFor="prompt-routing-strategy">
+                    <select
+                        id="prompt-routing-strategy"
+                        className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+                        value={draft.strategy}
+                        onChange={event => update('strategy', event.target.value as 'AUTO' | 'FIXED')}
+                    >
+                        <option value="AUTO">AUTO 兼容模式</option>
+                        <option value="FIXED">统一固定路由</option>
+                    </select>
+                </Field>
+                <div className="rounded-md border bg-muted/20 px-3 py-2 text-sm">
+                    {draft.strategy === 'AUTO' ? (
+                        <span className="text-muted-foreground">
+                            按 OpenAI → Gemini、Key 优先级和权重自动选择，并读取各 Key 的兼容模型 ID。
+                        </span>
+                    ) : (
+                        <span>
+                            实际主路由：
+                            {primary ? `${primary.name}（${providerName(primary.scope)}）` : '未选择'}
+                            {' · '}
+                            {draft.primaryModelId || '未填写模型'}
+                        </span>
+                    )}
+                </div>
+                <Button
+                    type="button"
+                    onClick={() => save.mutate()}
+                    disabled={save.isPending || (draft.strategy === 'FIXED' && !fixedDraftValid)}
+                >
+                    {save.isPending ? (
+                        <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                        <Save className="mr-2 h-4 w-4" />
+                    )}
+                    保存统一设置
+                </Button>
+            </div>
+            {draft.strategy === 'FIXED' ? (
+                <div className="space-y-4 border-t pt-5">
+                    <PromptRouteRow
+                        label="主路由"
+                        credentialCode={draft.primaryCredentialCode}
+                        modelId={draft.primaryModelId}
+                        credentials={promptCredentials}
+                        available={
+                            config.strategy === 'FIXED' &&
+                            config.primaryCredentialCode === draft.primaryCredentialCode &&
+                            config.primaryModelId === draft.primaryModelId &&
+                            config.primaryAvailable
+                        }
+                        testing={test.isPending}
+                        onCredentialChange={value => update('primaryCredentialCode', value)}
+                        onModelChange={value => update('primaryModelId', value)}
+                        onTest={() =>
+                            test.mutate({
+                                credentialCode: draft.primaryCredentialCode,
+                                modelId: draft.primaryModelId,
+                            })
+                        }
+                    />
+                    <div className="flex items-center justify-between rounded-md border px-3 py-2">
+                        <div>
+                            <div className="text-sm font-medium">启用备用路由</div>
+                            <div className="text-xs text-muted-foreground">
+                                主路由失败后只尝试这里指定的备用 Key。
+                            </div>
+                        </div>
+                        <Switch
+                            aria-label="启用备用提示词路由"
+                            checked={draft.fallbackEnabled}
+                            onCheckedChange={checked => update('fallbackEnabled', checked)}
+                        />
+                    </div>
+                    {draft.fallbackEnabled ? (
+                        <PromptRouteRow
+                            label="备用路由"
+                            credentialCode={draft.fallbackCredentialCode}
+                            modelId={draft.fallbackModelId}
+                            credentials={promptCredentials.filter(
+                                credential => credential.code !== draft.primaryCredentialCode,
+                            )}
+                            available={
+                                config.strategy === 'FIXED' &&
+                                config.fallbackEnabled &&
+                                config.fallbackCredentialCode === draft.fallbackCredentialCode &&
+                                config.fallbackModelId === draft.fallbackModelId &&
+                                config.fallbackAvailable
+                            }
+                            testing={test.isPending}
+                            onCredentialChange={value => update('fallbackCredentialCode', value)}
+                            onModelChange={value => update('fallbackModelId', value)}
+                            onTest={() =>
+                                test.mutate({
+                                    credentialCode: draft.fallbackCredentialCode,
+                                    modelId: draft.fallbackModelId,
+                                })
+                            }
+                        />
+                    ) : null}
+                </div>
+            ) : null}
+            {draft.strategy === 'FIXED' && fallback ? (
+                <p className="text-xs text-muted-foreground">
+                    备用路由：{fallback.name}（{providerName(fallback.scope)}） ·{' '}
+                    {draft.fallbackModelId || '未填写模型'}
+                </p>
+            ) : null}
+        </div>
+    );
+}
+
+function PromptRouteRow({
+    label,
+    credentialCode,
+    modelId,
+    credentials,
+    available,
+    testing,
+    onCredentialChange,
+    onModelChange,
+    onTest,
+}: Readonly<{
+    label: string;
+    credentialCode: string;
+    modelId: string;
+    credentials: ImageProviderAdminConfigRecord[];
+    available: boolean;
+    testing: boolean;
+    onCredentialChange: (value: string) => void;
+    onModelChange: (value: string) => void;
+    onTest: () => void;
+}>) {
+    return (
+        <div className="grid gap-3 rounded-lg border p-4 lg:grid-cols-[10rem_minmax(14rem,1fr)_minmax(14rem,1fr)_auto] lg:items-end">
+            <div>
+                <div className="text-sm font-medium">{label}</div>
+                <Badge className="mt-2" variant={available ? 'success' : 'secondary'}>
+                    {available ? '当前可用' : '当前不可用'}
+                </Badge>
+            </div>
+            <Field label="调用 Key" htmlFor={`prompt-route-key-${label}`}>
+                <select
+                    id={`prompt-route-key-${label}`}
+                    className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+                    value={credentialCode}
+                    onChange={event => onCredentialChange(event.target.value)}
+                >
+                    <option value="">请选择提示词 Key</option>
+                    {credentials.map(credential => (
+                        <option key={credential.code} value={credential.code}>
+                            {credential.name} · {providerName(credential.scope)} · {credential.code}
+                        </option>
+                    ))}
+                </select>
+            </Field>
+            <Field label="提示词调用模型 ID" htmlFor={`prompt-route-model-${label}`}>
+                <Input
+                    id={`prompt-route-model-${label}`}
+                    maxLength={160}
+                    placeholder="填写该 Key 实际可调用的模型"
+                    value={modelId}
+                    onChange={event => onModelChange(event.target.value)}
+                />
+            </Field>
+            <Button
+                type="button"
+                variant="outline"
+                disabled={testing || !credentialCode.trim() || !modelId.trim()}
+                onClick={onTest}
+            >
+                {testing ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : null}
+                测试路由
+            </Button>
+        </div>
     );
 }
 
@@ -2548,6 +2825,7 @@ export function ProviderCredentialEditorSheet({
                     baseUrl: draft.baseUrl,
                     apiKey: draft.apiKey || null,
                     textModelId: draft.textModelId,
+                    orchestrationModelId: draft.orchestrationModelId,
                     enabled: draft.enabled,
                     priority: draft.priority,
                     weight: draft.weight,
@@ -2783,11 +3061,7 @@ export function ProviderCredentialEditorSheet({
                                     />
                                 </Field>
                                 <Field
-                                    label={
-                                        draft.scope === 'OPENAI'
-                                            ? '提示词优化 / Responses 编排模型 ID'
-                                            : 'Gemini 提示词优化模型 ID'
-                                    }
+                                    label="AUTO 兼容模式提示词模型 ID（可选）"
                                     htmlFor="provider-key-text-model"
                                 >
                                     <Input
@@ -2795,13 +3069,32 @@ export function ProviderCredentialEditorSheet({
                                         maxLength={160}
                                         placeholder={
                                             draft.scope === 'OPENAI'
-                                                ? '例如中转站可用的 GPT 文本模型'
-                                                : '例如中转站可用的 Gemini 文本模型'
+                                                ? 'AUTO 模式下使用的 GPT 文本模型'
+                                                : 'AUTO 模式下使用的 Gemini 文本模型'
                                         }
                                         value={draft.textModelId}
                                         onChange={event => update('textModelId', event.target.value)}
                                     />
                                 </Field>
+                                {draft.scope === 'OPENAI' ? (
+                                    <Field
+                                        label="Responses 生图编排模型 ID（可选）"
+                                        htmlFor="provider-key-orchestration-model"
+                                    >
+                                        <Input
+                                            id="provider-key-orchestration-model"
+                                            maxLength={160}
+                                            placeholder="仅 OPENAI_RESPONSES_IMAGE 协议使用"
+                                            value={draft.orchestrationModelId}
+                                            onChange={event =>
+                                                update('orchestrationModelId', event.target.value)
+                                            }
+                                        />
+                                    </Field>
+                                ) : null}
+                                <p className="text-xs text-muted-foreground">
+                                    统一固定路由的提示词模型在页面顶部设置，不再绑定到单个 Key。
+                                </p>
                                 <p className="text-xs text-muted-foreground">
                                     生产环境只允许 HTTPS，并拒绝 localhost、内网、云元数据地址和重定向。
                                 </p>
@@ -3032,10 +3325,22 @@ interface ProviderCredentialDraft {
     baseUrl: string;
     apiKey: string;
     textModelId: string;
+    orchestrationModelId: string;
     enabled: boolean;
     priority: number;
     weight: number;
     modelCodes: string[];
+}
+
+function promptRoutingDraft(config: ImagePromptRoutingConfigRecord): PromptRoutingDraft {
+    return {
+        strategy: config.strategy,
+        primaryCredentialCode: config.primaryCredentialCode ?? '',
+        primaryModelId: config.primaryModelId ?? '',
+        fallbackEnabled: config.fallbackEnabled,
+        fallbackCredentialCode: config.fallbackCredentialCode ?? '',
+        fallbackModelId: config.fallbackModelId ?? '',
+    };
 }
 
 function credentialDraft(config: ImageProviderAdminConfigRecord): ProviderCredentialDraft {
@@ -3047,6 +3352,7 @@ function credentialDraft(config: ImageProviderAdminConfigRecord): ProviderCreden
         baseUrl: config.baseUrl,
         apiKey: '',
         textModelId: config.textModelId,
+        orchestrationModelId: config.orchestrationModelId,
         enabled: config.credentialEnabled,
         priority: config.priority,
         weight: config.weight,
@@ -3060,8 +3366,8 @@ function providerCredentialDraftError(draft: ProviderCredentialDraft, existing: 
         return 'Key 稳定编码只能包含小写字母、数字、下划线和连字符，长度 3 到 64 位';
     if (!draft.baseUrl.trim()) return 'API Base URL 不能为空';
     if (!existing && !draft.apiKey.trim()) return '首次配置必须填写 API Key';
-    if (!draft.textModelId.trim() || draft.textModelId.trim().length > 160)
-        return '提示词优化模型 ID 为必填项，最多 160 个字符';
+    if (draft.textModelId.trim().length > 160) return '兼容模式提示词模型 ID 最多 160 个字符';
+    if (draft.orchestrationModelId.trim().length > 160) return 'Responses 生图编排模型 ID 最多 160 个字符';
     if (!Number.isSafeInteger(draft.priority) || draft.priority < 0 || draft.priority > 10_000)
         return 'Key 优先级必须是 0 到 10000 的整数';
     if (!Number.isSafeInteger(draft.weight) || draft.weight < 1 || draft.weight > 1_000)
@@ -3079,6 +3385,7 @@ function credentialInput(config: ImageProviderAdminConfigRecord, enabled: boolea
         baseUrl: config.baseUrl,
         apiKey: null,
         textModelId: config.textModelId,
+        orchestrationModelId: config.orchestrationModelId,
         enabled,
         priority: config.priority,
         weight: config.weight,
@@ -3141,6 +3448,7 @@ function emptyCredential(code: string): ImageProviderAdminConfigRecord {
         baseUrl: '',
         apiKeyLast4: '',
         textModelId: '',
+        orchestrationModelId: '',
         providerHealthStatus: 'UNCONFIGURED',
         providerHealthMessage: null,
         providerRuntimeStatus: 'NO_RECENT_CALLS',

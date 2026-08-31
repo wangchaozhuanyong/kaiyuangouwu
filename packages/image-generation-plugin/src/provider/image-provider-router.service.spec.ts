@@ -3,6 +3,44 @@ import { describe, expect, it, vi } from 'vitest';
 import { ImageProviderRouterService, selectSmoothWeightedCredential } from './image-provider-router.service';
 
 describe('ImageProviderRouterService', () => {
+    it('selects the exact healthy prompt Key configured by the unified route', async () => {
+        const credential = {
+            id: 7,
+            code: 'gemini-primary',
+            enabled: true,
+            healthStatus: 'HEALTHY',
+            purpose: 'PROMPT',
+            lastUsedAt: null,
+        };
+        const queryBuilder = {
+            where: vi.fn(),
+            andWhere: vi.fn(),
+            getOne: vi.fn().mockResolvedValue(credential),
+        };
+        for (const method of ['where', 'andWhere'] as const) {
+            queryBuilder[method].mockReturnValue(queryBuilder);
+        }
+        const repository = {
+            createQueryBuilder: vi.fn(() => queryBuilder),
+            save: vi.fn().mockResolvedValue(credential),
+        };
+        const connection = {
+            rawConnection: { options: { type: 'sqljs' } },
+            withTransaction: vi.fn((_ctx, work) => work({})),
+            getRepository: vi.fn(() => repository),
+        };
+        const service = new ImageProviderRouterService(connection as any);
+
+        const route = await service.selectByCode({} as any, 'gemini-primary');
+
+        expect(route.credential).toBe(credential);
+        expect(route.selectionReason).toContain('gemini-primary');
+        expect(queryBuilder.where).toHaveBeenCalledWith('credential.code = :code', {
+            code: 'gemini-primary',
+        });
+        expect(credential.lastUsedAt).toBeInstanceOf(Date);
+    });
+
     it('does not expire a healthy credential based on its last test timestamp', async () => {
         const queryBuilder = {
             where: vi.fn(),
@@ -26,6 +64,7 @@ describe('ImageProviderRouterService', () => {
         expect(queryBuilder.andWhere).toHaveBeenCalledWith('credential.healthStatus = :health', {
             health: 'HEALTHY',
         });
+        expect(queryBuilder.andWhere).toHaveBeenCalledWith("credential.textModelId <> ''");
         expect(queryBuilder.andWhere.mock.calls.flat().join(' ')).not.toContain('lastTestedAt');
         expect(queryBuilder.andWhere.mock.calls.flat().join(' ')).not.toContain('freshAfter');
     });

@@ -98,6 +98,45 @@ const PROVIDER_CONFIGS = gql`
     }
 `;
 
+const PROMPT_ROUTING_CONFIG = gql`
+    query ImagePromptRoutingConfigE2E {
+        imagePromptRoutingConfig {
+            strategy
+            primaryCredentialCode
+            primaryModelId
+            primaryAvailable
+            fallbackEnabled
+            fallbackCredentialCode
+            fallbackModelId
+            fallbackAvailable
+        }
+    }
+`;
+
+const SAVE_PROMPT_ROUTING = gql`
+    mutation SaveImagePromptRoutingE2E($input: SaveImagePromptRoutingConfigInput!) {
+        saveImagePromptRoutingConfig(input: $input) {
+            strategy
+            primaryCredentialCode
+            primaryModelId
+            primaryAvailable
+            fallbackEnabled
+            fallbackCredentialCode
+            fallbackModelId
+            fallbackAvailable
+        }
+    }
+`;
+
+const TEST_PROMPT_ROUTE = gql`
+    mutation TestImagePromptRouteE2E($input: TestImagePromptRouteInput!) {
+        testImagePromptRoute(input: $input) {
+            ok
+            message
+        }
+    }
+`;
+
 const SAVE_MODEL = gql`
     mutation SaveImageModelE2E($input: SaveImageModelInput!) {
         saveImageModel(input: $input) {
@@ -369,6 +408,10 @@ describe('AI image generation full flow', () => {
             customerCount: 0,
         });
         await adminClient.asSuperAdmin();
+        adminClient.setRequestHeader(
+            'x-vendure-sensitive-action-password',
+            config.authOptions.superadminCredentials.password,
+        );
 
         const credential = await adminClient.query(SAVE_CREDENTIAL, {
             input: {
@@ -379,6 +422,7 @@ describe('AI image generation full flow', () => {
                 baseUrl: 'https://1.1.1.1/v1',
                 apiKey: 'relay-e2e-secret-key',
                 textModelId: 'prompt-e2e-model',
+                orchestrationModelId: 'responses-e2e-model',
                 enabled: true,
                 priority: 10,
                 weight: 1,
@@ -430,6 +474,46 @@ describe('AI image generation full flow', () => {
         );
         expect(providerAuthorizations.get('1.1.1.1')).toBe('Bearer relay-e2e-secret-key');
         expect(providerAuthorizations.get('8.8.8.8')).toBe('Bearer gemini-e2e-secret-key');
+        expect((await adminClient.query(PROMPT_ROUTING_CONFIG)).imagePromptRoutingConfig.strategy).toBe(
+            'AUTO',
+        );
+        expect(
+            (
+                await adminClient.query(TEST_PROMPT_ROUTE, {
+                    input: {
+                        credentialCode: 'gemini-e2e-primary',
+                        modelId: 'gemini-e2e-text-model',
+                    },
+                })
+            ).testImagePromptRoute.ok,
+        ).toBe(true);
+        expect(
+            (
+                await adminClient.query(SAVE_PROMPT_ROUTING, {
+                    input: {
+                        strategy: 'FIXED',
+                        primaryCredentialCode: 'gemini-e2e-primary',
+                        primaryModelId: 'gemini-e2e-text-model',
+                        fallbackEnabled: true,
+                        fallbackCredentialCode: 'openai-e2e-primary',
+                        fallbackModelId: 'prompt-e2e-model',
+                    },
+                })
+            ).saveImagePromptRoutingConfig,
+        ).toMatchObject({
+            strategy: 'FIXED',
+            primaryCredentialCode: 'gemini-e2e-primary',
+            primaryAvailable: false,
+            fallbackCredentialCode: 'openai-e2e-primary',
+            fallbackAvailable: false,
+        });
+        expect(
+            (
+                await adminClient.query(SAVE_PROMPT_ROUTING, {
+                    input: { strategy: 'AUTO', fallbackEnabled: false },
+                })
+            ).saveImagePromptRoutingConfig,
+        ).toMatchObject({ strategy: 'AUTO', fallbackEnabled: false });
 
         await adminClient.query(SAVE_MODEL, {
             input: {
@@ -465,6 +549,7 @@ describe('AI image generation full flow', () => {
                 baseUrl: 'https://1.1.1.1/v1',
                 apiKey: null,
                 textModelId: 'prompt-e2e-model',
+                orchestrationModelId: 'responses-e2e-model',
                 enabled: true,
                 priority: 10,
                 weight: 1,

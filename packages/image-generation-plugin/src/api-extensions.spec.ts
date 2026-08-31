@@ -42,5 +42,9 @@ describe('image generation GraphQL surface', () => {
         expect(schema).toContain('supportedModels');
         expect(schema).toContain('routingStrategy');
         expect(schema).toContain('skillAutoActivateEnabled');
+        expect(schema).toContain('imagePromptRoutingConfig');
+        expect(schema).toContain('saveImagePromptRoutingConfig');
+        expect(schema).toContain('testImagePromptRoute');
+        expect(schema).toContain('orchestrationModelId');
     });
 });

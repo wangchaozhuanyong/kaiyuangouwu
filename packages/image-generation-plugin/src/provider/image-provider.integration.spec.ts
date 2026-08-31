@@ -201,7 +201,12 @@ describe('ImageProviderClient mock relay integration', () => {
     });
 
     it('optimizes prompts through the configured text model', async () => {
-        const result = await client().optimizePrompt(credential, 'Return JSON', 'make this prompt better');
+        const result = await client().optimizePrompt(
+            credential,
+            'prompt-model',
+            'Return JSON',
+            'make this prompt better',
+        );
 
         expect(result.text).toBe('{"subject":"product"}');
         expect(result.telemetry?.httpStatus).toBe(200);
@@ -220,6 +225,7 @@ describe('ImageProviderClient mock relay integration', () => {
 
         const result = await client().optimizePrompt(
             geminiCredential,
+            'gemini-text-model',
             'Return JSON',
             'make this prompt better',
         );

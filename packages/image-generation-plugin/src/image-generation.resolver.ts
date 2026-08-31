@@ -14,7 +14,9 @@ import {
     OptimizeImagePromptInput,
     SaveImageGenerationConfigInput,
     SaveImageModelInput,
+    SaveImagePromptRoutingConfigInput,
     SaveImageProviderCredentialInput,
+    TestImagePromptRouteInput,
 } from './types';
 
 @Resolver()
@@ -140,6 +142,12 @@ export class ImageGenerationAdminResolver {
     }
 
     @Query()
+    @Allow(Permission.SuperAdmin)
+    imagePromptRoutingConfig(@Ctx() ctx: RequestContext) {
+        return this.configService.promptRoutingConfig(ctx);
+    }
+
+    @Query()
     @Allow(manageImageGenerationPermission.Read)
     imageGenerationJobs(
         @Ctx() ctx: RequestContext,
@@ -210,6 +218,21 @@ export class ImageGenerationAdminResolver {
         @Args('input') input: SaveImageProviderCredentialInput,
     ) {
         return this.configService.saveCredential(ctx, input);
+    }
+
+    @Mutation()
+    @Allow(Permission.SuperAdmin)
+    saveImagePromptRoutingConfig(
+        @Ctx() ctx: RequestContext,
+        @Args('input') input: SaveImagePromptRoutingConfigInput,
+    ) {
+        return this.configService.savePromptRoutingConfig(ctx, input);
+    }
+
+    @Mutation()
+    @Allow(Permission.SuperAdmin)
+    testImagePromptRoute(@Ctx() ctx: RequestContext, @Args('input') input: TestImagePromptRouteInput) {
+        return this.configService.testPromptRoute(ctx, input);
     }
 
     @Mutation()
