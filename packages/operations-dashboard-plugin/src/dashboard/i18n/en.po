@@ -783,6 +783,156 @@ msgid "operations.nav.workbench"
 msgstr "Workspace"
 
 #. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.autoUnpack"
+msgstr "Automatically unpack when loose stock is short"
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.chooseVariant"
+msgstr "Choose a variant"
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.convertibleStock"
+msgstr "Total saleable loose units"
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.description"
+msgstr "Link package and loose-unit variants. When loose stock is short, packages are opened at payment confirmation."
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.enabled"
+msgstr "Enable package selling"
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.history"
+msgstr "Recent unpacking records"
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.invalidPair"
+msgstr "The loose-unit and package variants must be different."
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.invalidQuantity"
+msgstr "Units per package must be an integer of 2 or more."
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.loadError"
+msgstr "Could not load packaging settings"
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.needVariants"
+msgstr "At least two variants are required. Create a loose-unit SKU and a package SKU in the variants section above."
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.noHistory"
+msgstr "No automatic unpacking has occurred yet."
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.order"
+msgstr "Order"
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.packageDefault"
+msgstr "case"
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.packageLabel"
+msgstr "Package label"
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.packageStock"
+msgstr "Packages available"
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.packageVariant"
+msgstr "Package variant"
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.retry"
+msgstr "Retry"
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.save"
+msgstr "Save packaging settings"
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.saveError"
+msgstr "Could not save packaging settings"
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.saved"
+msgstr "Packaging and automatic unpacking settings saved"
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.saving"
+msgstr "Saving"
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.stockTitle"
+msgstr "Current stock"
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.title"
+msgstr "Packaging & automatic unpacking"
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.trackingRequired"
+msgstr "Both package and loose-unit variants must track inventory."
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.unitDefault"
+msgstr "bottle"
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.unitLabel"
+msgstr "Loose-unit label"
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.unitStock"
+msgstr "Loose units available"
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.unitVariant"
+msgstr "Loose-unit variant"
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.unitsPerPackage"
+msgstr "Units per package"
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.warehouse"
+msgstr "Warehouse"
+
+#. js-lingui-explicit-id
 #: src/dashboard/review-moderation-page.tsx
 msgid "operations.reviews.activeStore"
 msgstr "Active store"

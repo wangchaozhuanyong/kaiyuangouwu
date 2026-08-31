@@ -783,6 +783,156 @@ msgid "operations.nav.workbench"
 msgstr "工作台"
 
 #. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.autoUnpack"
+msgstr "散装库存不足时自动拆包"
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.chooseVariant"
+msgstr "选择 SKU"
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.convertibleStock"
+msgstr "可销售散装总数"
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.description"
+msgstr "关联整包装与散装 SKU。散装库存不足时，在付款确认时自动拆包。"
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.enabled"
+msgstr "启用整包装销售"
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.history"
+msgstr "最近拆包记录"
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.invalidPair"
+msgstr "散装 SKU 与整包装 SKU 不能相同。"
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.invalidQuantity"
+msgstr "每包装单位数必须是大于或等于 2 的整数。"
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.loadError"
+msgstr "包装设置加载失败"
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.needVariants"
+msgstr "至少需要两个 SKU。请在上方 SKU 区域创建一个散装 SKU 和一个整包装 SKU。"
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.noHistory"
+msgstr "暂无自动拆包记录。"
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.order"
+msgstr "订单"
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.packageDefault"
+msgstr "箱"
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.packageLabel"
+msgstr "整包装单位名称"
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.packageStock"
+msgstr "可用整包装数"
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.packageVariant"
+msgstr "整包装 SKU"
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.retry"
+msgstr "重试"
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.save"
+msgstr "保存包装设置"
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.saveError"
+msgstr "包装设置保存失败"
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.saved"
+msgstr "包装与自动拆包设置已保存"
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.saving"
+msgstr "保存中"
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.stockTitle"
+msgstr "当前库存"
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.title"
+msgstr "包装与自动拆包"
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.trackingRequired"
+msgstr "整包装和散装 SKU 都必须启用库存跟踪。"
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.unitDefault"
+msgstr "瓶"
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.unitLabel"
+msgstr "散装单位名称"
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.unitStock"
+msgstr "可用散装数"
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.unitVariant"
+msgstr "散装 SKU"
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.unitsPerPackage"
+msgstr "每包装单位数"
+
+#. js-lingui-explicit-id
+#: src/dashboard/product-packaging-page-block.tsx
+msgid "operations.productPackaging.warehouse"
+msgstr "仓库"
+
+#. js-lingui-explicit-id
 #: src/dashboard/review-moderation-page.tsx
 msgid "operations.reviews.activeStore"
 msgstr "当前店铺"
