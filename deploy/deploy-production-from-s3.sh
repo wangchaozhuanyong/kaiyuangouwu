@@ -178,8 +178,31 @@ retain_release_file "${checksum_path}" "${releases_dir}/${checksum_name}"
 node "${memory_guard}" --stage pre-migration --check
 printf 'DEPLOY_MIGRATION_BEGIN\n'
 sudo -n systemctl start vendure-mysql-backup.service
-[[ "$(sudo -n systemctl show vendure-mysql-backup.service -p Result --value)" == "success" ]] ||
+readonly backup_service="vendure-mysql-backup.service"
+readonly backup_result="$(sudo -n systemctl show "${backup_service}" -p Result --value)"
+[[ "${backup_result}" == "success" ]] ||
     fail 'the pre-migration database backup failed'
+readonly backup_invocation_id="$(
+    sudo -n systemctl show "${backup_service}" -p InvocationID --value
+)"
+[[ "${backup_invocation_id}" =~ ^[0-9a-f]{32}$ ]] ||
+    fail 'the pre-migration database backup invocation is invalid'
+readonly backup_evidence="$(
+    sudo -n journalctl --quiet --no-pager --output=cat \
+        "_SYSTEMD_INVOCATION_ID=${backup_invocation_id}" |
+        grep -E '^Created verified MySQL backup: /var/backups/vendure-mysql/vendure-[0-9]{8}T[0-9]{6}Z\.sql\.gz offsite=yes$' |
+        tail -n 1 || true
+)"
+if [[ "${backup_evidence}" =~ ^Created\ verified\ MySQL\ backup:\ (/var/backups/vendure-mysql/vendure-[0-9]{8}T[0-9]{6}Z\.sql\.gz)\ offsite=yes$ ]]; then
+    backup_file="${BASH_REMATCH[1]}"
+else
+    fail 'the pre-migration database backup evidence is missing or offsite upload was not verified'
+fi
+readonly backup_file
+sudo -n test -s "${backup_file}" || fail 'the verified database backup file is missing'
+sudo -n test -s "${backup_file}.sha256" || fail 'the verified database backup checksum is missing'
+printf 'DEPLOY_BACKUP_OK file=%s offsite=yes invocation_id=%s\n' \
+    "${backup_file}" "${backup_invocation_id}"
 
 set -a
 # shellcheck disable=SC1090
@@ -205,20 +228,35 @@ rollback_needed=1
 VENDURE_DEPLOYMENT_ID="${deployment_id}" \
     "${repository}/deploy/switch-production-runtime.sh" "${candidate}" 9>&-
 
+api_ready_attempt=0
 for attempt in $(seq 1 30); do
-    if curl --fail --silent --show-error --max-time 10 http://127.0.0.1:3002/health >/dev/null; then
+    if curl --fail --silent --max-time 10 http://127.0.0.1:3002/health >/dev/null 2>&1; then
+        api_ready_attempt="${attempt}"
         break
     fi
-    [[ "${attempt}" != "30" ]] || fail 'candidate API health check did not pass'
+    if [[ "${attempt}" == "30" ]]; then
+        curl --fail --silent --show-error --max-time 10 \
+            http://127.0.0.1:3002/health >/dev/null || true
+        fail 'candidate API health check did not pass'
+    fi
     sleep 2
 done
+printf 'PRODUCTION_API_READY phase=post-switch attempts=%s\n' "${api_ready_attempt}"
+ai_health_ready_attempt=0
 for attempt in $(seq 1 45); do
-    if curl --fail --silent --show-error --max-time 10 http://127.0.0.1:3002/image-generation/health >/dev/null; then
+    if curl --fail --silent --max-time 10 \
+        http://127.0.0.1:3002/image-generation/health >/dev/null 2>&1; then
+        ai_health_ready_attempt="${attempt}"
         break
     fi
-    [[ "${attempt}" != "45" ]] || fail 'candidate AI image worker health check did not pass'
+    if [[ "${attempt}" == "45" ]]; then
+        curl --fail --silent --show-error --max-time 10 \
+            http://127.0.0.1:3002/image-generation/health >/dev/null || true
+        fail 'candidate AI image worker health check did not pass'
+    fi
     sleep 2
 done
+printf 'PRODUCTION_AI_HEALTH_READY attempts=%s\n' "${ai_health_ready_attempt}"
 node "${repository}/deploy/verify-dashboard-assets.mjs" \
     --dashboard-url http://127.0.0.1:3002/dashboard/ \
     --release-id "${target_sha}"

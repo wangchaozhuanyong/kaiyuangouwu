@@ -97,12 +97,16 @@ done
 # Start the API and worker sequentially so their cold-start allocation does not
 # overlap on the single-host production instance.
 VENDURE_RUNTIME_DIR="${candidate}" pm2 start "${ecosystem}" --only vendure-api --update-env
+api_ready_attempt=0
 for attempt in $(seq 1 30); do
-    if curl --fail --silent --show-error --max-time 10 http://127.0.0.1:3002/health >/dev/null; then
+    if curl --fail --silent --max-time 10 http://127.0.0.1:3002/health >/dev/null 2>&1; then
+        api_ready_attempt="${attempt}"
         break
     fi
     if [[ "${attempt}" == "30" ]]; then
         printf '%s\n' 'Candidate API health check failed; PM2 diagnostics follow:' >&2
+        curl --fail --silent --show-error --max-time 10 \
+            http://127.0.0.1:3002/health >/dev/null || true
         pm2 jlist | node -e '
 let input = "";
 process.stdin.on("data", chunk => (input += chunk)).on("end", () => {
@@ -123,6 +127,7 @@ process.stdin.on("data", chunk => (input += chunk)).on("end", () => {
     fi
     sleep 2
 done
+printf 'PRODUCTION_API_READY phase=pre-worker attempts=%s\n' "${api_ready_attempt}"
 VENDURE_RUNTIME_DIR="${candidate}" pm2 start "${ecosystem}" --only vendure-worker --update-env
 
 CANDIDATE="${candidate}" node <<'NODE'

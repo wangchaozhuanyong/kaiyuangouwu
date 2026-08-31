@@ -112,6 +112,11 @@ void test('production runtime switch rebuilds PM2 definitions for an immutable r
     assert.match(script, /pm2 start/u);
     assert.match(script, /--only vendure-api/u);
     assert.match(script, /127\.0\.0\.1:3002\/health/u);
+    assert.match(script, /PRODUCTION_API_READY phase=pre-worker attempts=/u);
+    assert.match(
+        script,
+        /curl --fail --silent --max-time 10 http:\/\/127\.0\.0\.1:3002\/health >\/dev\/null 2>&1/u,
+    );
     assert.match(script, /--only vendure-worker/u);
     assert.ok(script.indexOf('--only vendure-api') < script.indexOf('--only vendure-worker'));
     assert.match(script, /pm_cwd/u);
@@ -164,6 +169,10 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.match(script, /sha256sum --check/u);
     assert.match(script, /verify-runtime\.mjs" --expected-sha/u);
     assert.match(script, /vendure-mysql-backup\.service/u);
+    assert.match(script, /_SYSTEMD_INVOCATION_ID/u);
+    assert.match(script, /Created verified MySQL backup:/u);
+    assert.match(script, /offsite=yes/u);
+    assert.match(script, /DEPLOY_BACKUP_OK/u);
     assert.match(script, /initialize-production-usdt-secrets\.mjs/u);
     assert.ok(
         script.indexOf('initialize-production-usdt-secrets.mjs') <
@@ -173,6 +182,8 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.match(script, /switch-production-runtime\.sh/u);
     assert.match(script, /127\.0\.0\.1:3002\/image-generation\/health/u);
     assert.match(script, /candidate AI image worker health check did not pass/u);
+    assert.match(script, /PRODUCTION_API_READY phase=post-switch attempts=/u);
+    assert.match(script, /PRODUCTION_AI_HEALTH_READY attempts=/u);
     assert.match(script, /vendure-production-healthcheck\.timer/u);
     assert.match(script, /systemctl start vendure-production-healthcheck\.service/u);
     assert.match(script, /rollback 1/u);
@@ -274,6 +285,10 @@ void test('scheduled production monitor checks memory, processes, and health thr
     assert.match(script, /127\.0\.0\.1:3002\/health/u);
     assert.match(script, /127\.0\.0\.1:3002\/image-generation\/health/u);
     assert.match(script, /AI_IMAGE_/u);
+    assert.match(script, /AI_IMAGE_METRICS/u);
+    assert.match(script, /attempts24h/u);
+    assert.match(script, /failureBuckets/u);
+    assert.match(script, /healthyKeyCount/u);
     assert.match(script, /https:\/\/damatong\.net\/health/u);
     assert.match(script, /verify-dashboard-assets\.mjs/u);
     assert.match(script, /pm2 jlist/u);
