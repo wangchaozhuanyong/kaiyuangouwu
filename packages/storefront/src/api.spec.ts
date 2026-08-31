@@ -69,6 +69,22 @@ describe('ShopApi storefront mutations', () => {
         expect(request.variables).toEqual({ options: { take: 16, sort: { name: 'ASC' } } });
     });
 
+    it('loads packaging conversion details for the product page', async () => {
+        const fetchMock = mockGraphQlResponse({ product: null });
+
+        await new ShopApi(market).product('product-1');
+
+        const request = JSON.parse(jsonRequestBody(fetchMock.mock.calls[0][1])) as {
+            query: string;
+            variables: Record<string, unknown>;
+        };
+        expect(request.variables).toEqual({ id: 'product-1' });
+        expect(request.query).toContain('packaging {');
+        expect(request.query).toContain('unitsPerPackage');
+        expect(request.query).toContain('unitVariant { id name sku }');
+        expect(request.query).toContain('packageVariant { id name sku }');
+    });
+
     it('requests localized content with Vendure language query context', async () => {
         const fetchMock = mockGraphQlResponse({
             storefrontContent: [],

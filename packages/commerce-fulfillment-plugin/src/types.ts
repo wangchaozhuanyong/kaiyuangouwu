@@ -11,6 +11,17 @@ import { AutoCardDeliveryState, AutoCardPoolItemState, DigitalDeliveryMode } fro
 
 export type FulfillmentType = 'physical' | 'digital';
 
+export interface UpdateProductPackagingInput {
+    productId: ID;
+    unitVariantId: ID;
+    packageVariantId: ID;
+    unitLabel: string;
+    packageLabel: string;
+    unitsPerPackage: number;
+    enabled: boolean;
+    autoUnpack: boolean;
+}
+
 export interface UpdateAutoCardConfigInput {
     productVariantId: ID;
     enabled: boolean;

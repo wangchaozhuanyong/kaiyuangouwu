@@ -21,6 +21,7 @@ import {
     isFileDownloadOrderLine,
     summarizeOrderFulfillment,
 } from './fulfillment-classification';
+import { ProductPackagingService } from './product-packaging.service';
 
 let orderService: OrderService;
 let productVariantService: ProductVariantService;
@@ -29,6 +30,7 @@ let connection: TransactionalConnection;
 let configService: ConfigService;
 let globalSettingsService: GlobalSettingsService;
 let autoCardService: AutoCardService;
+let productPackagingService: ProductPackagingService;
 
 export const commerceOrderProcess: OrderProcess<string> = {
     init(injector) {
@@ -39,6 +41,7 @@ export const commerceOrderProcess: OrderProcess<string> = {
         configService = injector.get(ConfigService);
         globalSettingsService = injector.get(GlobalSettingsService);
         autoCardService = injector.get(AutoCardService);
+        productPackagingService = injector.get(ProductPackagingService);
     },
 
     async onTransitionStart(fromState, toState, { ctx, order }) {
@@ -72,21 +75,44 @@ export const commerceOrderProcess: OrderProcess<string> = {
 
         const physicalLines = order.lines.filter(line => getOrderLineFulfillmentType(line) === 'physical');
         let lockedStockLevels: StockLevel[] | undefined;
+        const packagingRules = confirmsPayment
+            ? await productPackagingService.rulesForVariantIds(
+                  ctx,
+                  physicalLines.map(line => line.productVariantId),
+              )
+            : [];
         if (confirmsPayment) {
-            const variantIds = [...new Set(physicalLines.map(line => String(line.productVariant.id)))].sort();
-            try {
-                lockedStockLevels = await connection
+            await productPackagingService.ensureStockLevelPairs(ctx, packagingRules);
+            const variantIds = productPackagingService.variantIdsForLock(
+                physicalLines.map(line => line.productVariantId),
+                packagingRules,
+            );
+            const stockQuery = () =>
+                connection
                     .getRepository(ctx, StockLevel)
                     .createQueryBuilder('stock')
-                    .setLock('pessimistic_write')
+                    .leftJoinAndSelect('stock.stockLocation', 'stockLocation')
+                    .leftJoinAndSelect('stockLocation.channels', 'channel')
                     .where('stock.productVariantId IN (:...variantIds)', { variantIds })
                     .orderBy('stock.productVariantId', 'ASC')
-                    .addOrderBy('stock.stockLocationId', 'ASC')
-                    .getMany();
+                    .addOrderBy('stock.stockLocationId', 'ASC');
+            try {
+                lockedStockLevels = await stockQuery().setLock('pessimistic_write').getMany();
             } catch (error) {
                 if (!(error instanceof LockNotSupportedOnGivenDriverError)) {
                     throw error;
                 }
+                lockedStockLevels = await stockQuery().getMany();
+            }
+            const unpackError = await productPackagingService.autoUnpackForOrder(
+                ctx,
+                order,
+                physicalLines,
+                packagingRules,
+                lockedStockLevels,
+            );
+            if (unpackError) {
+                return unpackError;
             }
         }
 

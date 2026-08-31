@@ -35,6 +35,8 @@ import { AutoCardConfig } from './entities/auto-card-config.entity';
 import { AutoCardDeliveryEvent } from './entities/auto-card-delivery-event.entity';
 import { AutoCardDelivery } from './entities/auto-card-delivery.entity';
 import { AutoCardPoolItem } from './entities/auto-card-pool-item.entity';
+import { PackagingUnpackEvent } from './entities/packaging-unpack-event.entity';
+import { ProductPackagingRule } from './entities/product-packaging-rule.entity';
 import { FulfillmentModelService } from './fulfillment-model.service';
 import { manualServiceFulfillmentHandler } from './manual-service-fulfillment-handler';
 import { OrderConfirmationTokenService } from './order-confirmation-token.service';
@@ -42,7 +44,10 @@ import { OrderConfirmationResolver } from './order-confirmation.resolver';
 import { CustomerOrderCancellationResolver, OrderFulfillmentResolver } from './order-fulfillment.resolver';
 import { OrderOperationsAdminResolver } from './order-operations.resolver';
 import { OrderOperationsService } from './order-operations.service';
+import { PackagingStockLocationStrategy } from './packaging-stock-location-strategy';
 import { PhysicalOnlyStockAllocationStrategy } from './physical-only-stock-allocation-strategy';
+import { ProductPackagingAdminResolver, ProductPackagingProductResolver } from './product-packaging.resolver';
+import { ProductPackagingService } from './product-packaging.service';
 import './types';
 
 @VendurePlugin({
@@ -55,6 +60,8 @@ import './types';
         AutoCardPoolItem,
         AutoCardDelivery,
         AutoCardDeliveryEvent,
+        ProductPackagingRule,
+        PackagingUnpackEvent,
     ],
     controllers: [DigitalDeliveryController],
     providers: [
@@ -69,10 +76,17 @@ import './types';
         DigitalDeliveryTokenService,
         OrderConfirmationTokenService,
         OrderOperationsService,
+        ProductPackagingService,
     ],
     adminApiExtensions: {
         schema: adminApiExtensions,
-        resolvers: [AfterSalesAdminResolver, OrderOperationsAdminResolver, AutoCardAdminResolver],
+        resolvers: [
+            AfterSalesAdminResolver,
+            OrderOperationsAdminResolver,
+            AutoCardAdminResolver,
+            ProductPackagingAdminResolver,
+            ProductPackagingProductResolver,
+        ],
     },
     shopApiExtensions: {
         schema: shopApiExtensions,
@@ -83,6 +97,7 @@ import './types';
             AfterSalesShopResolver,
             AutoCardOrderResolver,
             AutoCardProductVariantResolver,
+            ProductPackagingProductResolver,
         ],
     },
     configuration: config => {
@@ -195,6 +210,7 @@ import './types';
         config.shippingOptions.shippingEligibilityCheckers.push(supportedDestinationEligibilityChecker);
         config.shippingOptions.shippingLineAssignmentStrategy = new CommerceShippingLineAssignmentStrategy();
         config.orderOptions.stockAllocationStrategy = new PhysicalOnlyStockAllocationStrategy();
+        config.catalogOptions.stockLocationStrategy = new PackagingStockLocationStrategy();
         config.orderOptions.orderByCodeAccessStrategy = new AuthenticatedOrderByCodeAccessStrategy();
         config.orderOptions.process = [
             commerceOrderProcess,

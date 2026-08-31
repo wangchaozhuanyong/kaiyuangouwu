@@ -7060,6 +7060,28 @@ img.fatal-error-mark {
     box-shadow: 0 2px 8px rgba(37, 99, 235, 0.15);
 }
 
+.detail-packaging-note {
+    margin: 12px 0 0;
+    padding: 10px 12px;
+    border: 1px solid color-mix(in srgb, var(--accent) 20%, white);
+    border-radius: 8px;
+    background: var(--accent-soft);
+    display: grid;
+    gap: 3px;
+    color: var(--accent-ink);
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.detail-packaging-note strong {
+    font-size: 13px;
+    font-weight: var(--font-weight-semibold);
+}
+
+.detail-packaging-note span {
+    color: var(--text);
+}
+
 .detail-info-row {
     margin-top: 9px;
     padding: 10px 14px;

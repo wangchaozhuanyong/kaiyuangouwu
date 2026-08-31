@@ -16,8 +16,20 @@ jobs:
   CLAAssistant:
     runs-on: ubuntu-latest
     steps:
+      - name: Detect CI Bot configuration
+        id: config
+        env:
+          CI_BOT_APP_ID: ${{ secrets.CI_BOT_APP_ID }}
+          CI_BOT_APP_PRIVATE_KEY: ${{ secrets.CI_BOT_APP_PRIVATE_KEY }}
+        run: |
+          if [[ -n "$CI_BOT_APP_ID" && -n "$CI_BOT_APP_PRIVATE_KEY" ]]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: Generate CI Bot Token
         id: app-token
+        if: ${{ steps.config.outputs.configured == 'true' }}
         uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2.2.2
         with:
           app-id: ${{ secrets.CI_BOT_APP_ID }}
@@ -38,11 +50,13 @@ jobs:
         if: (github.event.comment.body == 'recheck' || github.event.comment.body == 'I have read the CLA Document and I hereby sign the CLA') || github.event_name == 'pull_request_target'
         uses: contributor-assistant/github-action@9340315624c6e16cef1f2c63bdeb0f0c49c6f474 # v2.4.0
         env:
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          # Use the dedicated bot token when configured, otherwise use the workflow token.
+          # The latter keeps CLA checks functional in repositories without bot secrets.
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token || github.token }}
         with:
           path-to-signatures: 'license/signatures/version1/cla.json'
           path-to-document: 'https://github.com/vendurehq/vendure/blob/master/license/CLA.md'
-          branch: 'master'
+          branch: 'main'
           allowlist: user1,bot*
 
           # the followings are the optional inputs - If the optional inputs are not given, then default values will be taken
