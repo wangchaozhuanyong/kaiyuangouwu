@@ -9375,6 +9375,124 @@ img.fatal-error-mark {
     border-radius: 7px;
 }
 
+.page-skeleton--route {
+    min-height: 65vh;
+}
+
+.page-skeleton--route > * {
+    display: block;
+    background: linear-gradient(90deg, #e8ecea 25%, #f7f8f8 42%, #e8ecea 62%);
+    background-size: 300% 100%;
+    animation: shimmer 1.25s infinite;
+}
+
+.skeleton-route-header {
+    width: 62%;
+    height: 30px;
+    margin: 8px 0 18px;
+    border-radius: 7px;
+}
+
+.skeleton-chip-row {
+    display: flex !important;
+    gap: 8px;
+    margin-bottom: 18px;
+    background: transparent !important;
+    animation: none !important;
+}
+
+.skeleton-chip-row > span {
+    width: 74px;
+    height: 28px;
+    border-radius: 999px;
+}
+
+.skeleton-home-grid {
+    display: grid !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 9px;
+    background: transparent !important;
+    animation: none !important;
+}
+
+.skeleton-home-grid > span {
+    height: 58px;
+    border-radius: 7px;
+}
+
+.skeleton-catalog-list {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    background: transparent !important;
+    animation: none !important;
+}
+
+.skeleton-catalog-list > span {
+    min-height: 168px;
+    border-radius: 10px;
+}
+
+.skeleton-detail-media {
+    aspect-ratio: 1;
+    width: 100%;
+    border-radius: 12px;
+}
+
+.skeleton-detail-copy {
+    display: grid !important;
+    gap: 10px;
+    margin-top: 18px;
+    background: transparent !important;
+    animation: none !important;
+}
+
+.skeleton-detail-copy > span:nth-child(1) {
+    width: 72%;
+    height: 24px;
+    border-radius: 5px;
+}
+
+.skeleton-detail-copy > span:nth-child(2) {
+    width: 38%;
+    height: 20px;
+    border-radius: 5px;
+}
+
+.skeleton-detail-copy > span:nth-child(3) {
+    width: 100%;
+    height: 80px;
+    border-radius: 8px;
+}
+
+.skeleton-service-grid,
+.skeleton-account-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    background: transparent !important;
+    animation: none !important;
+}
+
+.skeleton-service-grid > span,
+.skeleton-account-grid > span {
+    min-height: 112px;
+    border-radius: 10px;
+}
+
+.skeleton-account-card,
+.skeleton-checkout-card {
+    height: 112px;
+    border-radius: 12px;
+}
+
+.skeleton-checkout-action {
+    width: 100%;
+    height: 48px;
+    margin-top: 18px;
+    border-radius: 10px;
+}
+
 .list-skeleton {
     display: grid;
     gap: 12px;

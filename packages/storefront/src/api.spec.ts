@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { ShopApi, ShopApiError, ShopApiTimeoutError } from './api';
+import { SHOP_API_QUERY_TIMEOUT_MS, ShopApi, ShopApiError, ShopApiTimeoutError } from './api';
 import { MarketConfig } from './types';
 
 const market: MarketConfig = {
@@ -29,6 +29,7 @@ function jsonRequestBody(init?: RequestInit): string {
 }
 
 afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
 });
 
@@ -215,6 +216,53 @@ describe('ShopApi storefront mutations', () => {
         await vi.advanceTimersByTimeAsync(45_000);
         await rejection;
         vi.useRealTimers();
+    });
+
+    it('times out an unresolved storefront query without retrying it', async () => {
+        vi.useFakeTimers();
+        const fetchMock = vi.fn((_url: string, init?: RequestInit) => {
+            return new Promise<Response>((_resolve, reject) => {
+                init?.signal?.addEventListener('abort', () =>
+                    reject(new DOMException('Aborted', 'AbortError')),
+                );
+            });
+        });
+        vi.stubGlobal('fetch', fetchMock);
+
+        const request = new ShopApi(market).products();
+        const rejection = expect(request).rejects.toEqual(
+            expect.objectContaining<Partial<ShopApiTimeoutError>>({
+                name: 'ShopApiTimeoutError',
+                message: '请求超时，请检查网络后重试',
+                resultUnknown: false,
+            }),
+        );
+
+        await vi.advanceTimersByTimeAsync(SHOP_API_QUERY_TIMEOUT_MS);
+        await rejection;
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('propagates caller cancellation through the query timeout signal', async () => {
+        const requestSignal: { current: AbortSignal | null } = { current: null };
+        const fetchMock = vi.fn((_url: string, init?: RequestInit) => {
+            requestSignal.current = init?.signal ?? null;
+            return new Promise<Response>((_resolve, reject) => {
+                requestSignal.current?.addEventListener(
+                    'abort',
+                    () => reject(new DOMException('Aborted', 'AbortError')),
+                    { once: true },
+                );
+            });
+        });
+        vi.stubGlobal('fetch', fetchMock);
+        const controller = new AbortController();
+        const pending = new ShopApi(market).products(16, controller.signal);
+
+        controller.abort(new DOMException('Caller cancelled', 'AbortError'));
+
+        await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+        expect(requestSignal.current?.aborted).toBe(true);
     });
     it('switches the active checkout order to the selected settlement currency', async () => {
         const order = {
@@ -862,7 +910,7 @@ describe('ShopApi storefront mutations', () => {
         const request = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as {
             variables: { input: Record<string, unknown> };
         };
-        expect(fetchMock.mock.calls[0][1]?.signal).toBe(controller.signal);
+        expect(fetchMock.mock.calls[0][1]?.signal).toBeInstanceOf(AbortSignal);
         expect(request.variables.input).toMatchObject({
             collectionId: 'collection-1',
             fulfillmentType: 'DIGITAL',

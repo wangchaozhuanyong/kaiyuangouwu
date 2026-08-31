@@ -57,9 +57,14 @@ const AUTH_TOKEN_HEADER = 'vendure-auth-token';
 const AUTH_TOKEN_STORAGE_PREFIX = 'vendure-shop-auth-token';
 const NATIVE_CATALOG_BATCH_SIZE = 100;
 const STOREFRONT_CATALOG_MAX_TAKE = 48;
+export const SHOP_API_QUERY_TIMEOUT_MS = 20_000;
 const SEND_CLIENT_CHANNEL_TOKEN =
     import.meta.env.VITE_CLIENT_CHANNEL_SWITCHING === 'true' ||
     (import.meta.env.DEV && import.meta.env.VITE_CLIENT_CHANNEL_SWITCHING !== 'false');
+
+function isStorefrontQuery(document: string): boolean {
+    return /^\s*(?:query\b|\{)/u.test(document);
+}
 
 interface StorefrontContentQueryResult {
     storefrontContent: StorefrontContentBlock[];
@@ -2279,7 +2284,9 @@ export class ShopApi {
         const requestUrl =
             `${API_URL}${languageSeparator}languageCode=${encodeURIComponent(this.languageCode)}` +
             `&currencyCode=${encodeURIComponent(this.market.currencyCode)}`;
-        const timeout = createRequestSignal(signal, timeoutMs);
+        const effectiveTimeoutMs =
+            timeoutMs ?? (isStorefrontQuery(query) ? SHOP_API_QUERY_TIMEOUT_MS : undefined);
+        const timeout = createRequestSignal(signal, effectiveTimeoutMs);
         let response: Response;
         let rawBody: string;
         try {
