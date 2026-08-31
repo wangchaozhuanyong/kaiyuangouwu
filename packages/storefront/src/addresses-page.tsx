@@ -3,6 +3,7 @@ import { ArrowLeft, CircleCheck, MapPin, Pencil, Plus, Trash2, X } from 'lucide-
 import { FormEvent, ReactNode, useEffect, useId, useRef, useState } from 'react';
 
 import { ShopApi } from './api';
+import { acquireBodyScrollLock } from './scroll-lock';
 import { routeNavigateOptions } from './storefront-router';
 import {
     ActiveCustomer,
@@ -409,7 +410,7 @@ function Sheet({
         const dialog = dialogRef.current;
         if (!dialog) return;
         previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-        const overflow = document.body.style.overflow;
+        const releaseBodyScrollLock = acquireBodyScrollLock();
         const selector =
             'button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
         const items = () => Array.from(dialog.querySelectorAll<HTMLElement>(selector));
@@ -438,12 +439,11 @@ function Sheet({
                 first.focus();
             }
         };
-        document.body.style.overflow = 'hidden';
         document.addEventListener('keydown', keydown);
         return () => {
             cancelAnimationFrame(frame);
             document.removeEventListener('keydown', keydown);
-            document.body.style.overflow = overflow;
+            releaseBodyScrollLock();
             previousFocus.current?.focus();
         };
     }, []);

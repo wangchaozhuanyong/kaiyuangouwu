@@ -22,6 +22,7 @@ import { ShopApi } from './api';
 import { compactUiCopy } from './i18n';
 import { formatDisplayMoney } from './money-display';
 import { variantCanIncreaseQuantity } from './product-availability';
+import { acquireBodyScrollLock } from './scroll-lock';
 import { routeNavigateOptions } from './storefront-router';
 import { SafeImage } from './storefront-ui/product-display';
 import { checkoutPageStyles, pageClassName } from './tailwind/checkout-page-styles';
@@ -983,10 +984,7 @@ function CheckoutItemsGroup({
                                         type="button"
                                         disabled={
                                             quantityUpdatingVariantId === line.productVariant.id ||
-                                            !variantCanIncreaseQuantity(
-                                                line.productVariant,
-                                                line.quantity,
-                                            )
+                                            !variantCanIncreaseQuantity(line.productVariant, line.quantity)
                                         }
                                         onClick={() =>
                                             onQuantity?.(line.productVariant.id, line.quantity + 1)
@@ -1160,7 +1158,7 @@ function Sheet({
         const dialog = dialogRef.current;
         if (!dialog) return;
         previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-        const previousOverflow = document.body.style.overflow;
+        const releaseBodyScrollLock = acquireBodyScrollLock();
         const selector =
             'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
         const focusable = () =>
@@ -1192,12 +1190,11 @@ function Sheet({
                 first.focus();
             }
         };
-        document.body.style.overflow = 'hidden';
         document.addEventListener('keydown', keydown);
         return () => {
             cancelAnimationFrame(frame);
             document.removeEventListener('keydown', keydown);
-            document.body.style.overflow = previousOverflow;
+            releaseBodyScrollLock();
             previousFocus.current?.focus();
         };
     }, []);

@@ -384,6 +384,7 @@ export const adminApiExtensions = gql`
         take: Int
         state: AfterSalesState
         states: [AfterSalesState!]
+        search: String
     }
 
     input TransitionAfterSalesRequestInput {

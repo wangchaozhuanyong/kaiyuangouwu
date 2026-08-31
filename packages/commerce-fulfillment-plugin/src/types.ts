@@ -60,6 +60,7 @@ export interface AfterSalesRequestListOptions {
     take?: number | null;
     state?: AfterSalesState | null;
     states?: AfterSalesState[] | null;
+    search?: string | null;
 }
 
 export interface TransitionAfterSalesRequestInput {

@@ -13,6 +13,7 @@ export interface StorefrontReviewListOptions {
     skip?: number | null;
     take?: number | null;
     state?: StorefrontReviewState | null;
+    search?: string | null;
 }
 
 export interface StorefrontReviewCandidate {

@@ -40,17 +40,17 @@ function createHarness(
     } as any;
     let savedReview: any;
     const reviewRepository = {
-        findOne: vi.fn(async (options: any) => {
-            if (options.where.orderLineId) return overrides.existingReview ?? null;
-            if (!savedReview) return null;
-            return { ...savedReview, state: overrides.reviewState ?? savedReview.state };
+        findOne: vi.fn((options: any) => {
+            if (options.where.orderLineId) return Promise.resolve(overrides.existingReview ?? null);
+            if (!savedReview) return Promise.resolve(null);
+            return Promise.resolve({ ...savedReview, state: overrides.reviewState ?? savedReview.state });
         }),
         find: vi.fn().mockResolvedValue([]),
         findAndCount: vi.fn().mockResolvedValue([[], 0]),
         average: vi.fn().mockResolvedValue(4.5),
-        save: vi.fn(async (review: any) => {
+        save: vi.fn((review: any) => {
             savedReview = { ...review, id: 'review-1', createdAt: new Date(), updatedAt: new Date() };
-            return savedReview;
+            return Promise.resolve(savedReview);
         }),
         update: vi.fn().mockResolvedValue({ affected: 1 }),
     };
@@ -73,17 +73,19 @@ function createHarness(
     };
     const customerService = { findOneByUserId: vi.fn().mockResolvedValue(customer) };
     const translations = {
-        prepareLocalizedFields: vi.fn(async fields =>
-            fields.map((field: any) => ({
-                path: field.path,
-                sourceText: field.sourceText,
-                translatedText: `translated-${field.path}`,
-                status: 'AUTO_TRANSLATED',
-                origin: 'AUTO',
-                locked: false,
-            })),
+        prepareLocalizedFields: vi.fn(fields =>
+            Promise.resolve(
+                fields.map((field: any) => ({
+                    path: field.path,
+                    sourceText: field.sourceText,
+                    translatedText: `translated-${field.path}`,
+                    status: 'AUTO_TRANSLATED',
+                    origin: 'AUTO',
+                    locked: false,
+                })),
+            ),
         ),
-        recordPreparedFields: vi.fn(async () => undefined),
+        recordPreparedFields: vi.fn(() => Promise.resolve(undefined)),
     };
     const service = new StorefrontReviewService(
         connection as any,
@@ -115,6 +117,24 @@ describe('StorefrontReviewService', () => {
             totalItems: 0,
             averageRating: 4.5,
         });
+    });
+
+    it('searches the admin review queue across content, customer, product and SKU', async () => {
+        const test = createHarness();
+
+        await test.service.findForAdmin(test.ctx, { state: 'PENDING', search: ' keyboard ' });
+
+        const options = test.reviewRepository.findAndCount.mock.calls[0][0];
+        expect(options.where).toHaveLength(5);
+        expect(options.where).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({ title: expect.objectContaining({ _type: 'like' }) }),
+                expect.objectContaining({ body: expect.objectContaining({ _type: 'like' }) }),
+                expect.objectContaining({ customerName: expect.objectContaining({ _type: 'like' }) }),
+                expect.objectContaining({ productName: expect.objectContaining({ _type: 'like' }) }),
+                expect.objectContaining({ sku: expect.objectContaining({ _type: 'like' }) }),
+            ]),
+        );
     });
 
     it('finds review candidates independently of the account order preview limit', async () => {

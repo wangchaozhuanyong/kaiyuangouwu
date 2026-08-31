@@ -18,6 +18,7 @@ import { createPortal } from 'react-dom';
 
 import { QueryLoadState } from '../loading-state';
 import { PageSkeleton } from '../route-loading';
+import { acquireBodyScrollLock } from '../scroll-lock';
 import { routeFromLocation, RouteName } from '../storefront-router';
 import { StorefrontContentBlock, StorefrontContentTargetType, StorefrontLanguage } from '../types';
 
@@ -441,7 +442,7 @@ export function Sheet({
 
         previousFocusRef.current =
             document.activeElement instanceof HTMLElement ? document.activeElement : null;
-        const previousOverflow = document.body.style.overflow;
+        const releaseBodyScrollLock = acquireBodyScrollLock();
         const focusableSelector = [
             'a[href]',
             'button:not([disabled])',
@@ -486,12 +487,11 @@ export function Sheet({
             }
         };
 
-        document.body.style.overflow = 'hidden';
         document.addEventListener('keydown', handleKeyDown);
         return () => {
             window.cancelAnimationFrame(focusFrame);
             document.removeEventListener('keydown', handleKeyDown);
-            document.body.style.overflow = previousOverflow;
+            releaseBodyScrollLock();
             previousFocusRef.current?.focus();
         };
     }, []);

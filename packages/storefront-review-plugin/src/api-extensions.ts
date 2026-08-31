@@ -50,6 +50,7 @@ const commonReviewTypes = gql`
         skip: Int
         take: Int
         state: StorefrontReviewState
+        search: String
     }
 
     input SubmitStorefrontReviewInput {

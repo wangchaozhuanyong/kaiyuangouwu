@@ -3,6 +3,7 @@ import QRCode from 'qrcode';
 import { useEffect, useRef, useState } from 'react';
 
 import { storefrontWebpUrl } from './responsive-image';
+import { acquireBodyScrollLock } from './scroll-lock';
 import { Product, StorefrontLanguage } from './types';
 
 export async function createQrCodeSvgDataUrl(value: string): Promise<string> {
@@ -43,6 +44,11 @@ export function SharePosterModal({
     const mainImageSource = product.featuredAsset?.preview ?? product.assets[0]?.preview ?? '';
     const mainImage = mainImageSource ? storefrontWebpUrl(mainImageSource, 'detail') : '';
     const storefrontLogo = logoUrl ? storefrontWebpUrl(logoUrl, 'thumbnail') : '';
+
+    useEffect(() => {
+        const releaseBodyScrollLock = acquireBodyScrollLock();
+        return releaseBodyScrollLock;
+    }, []);
 
     useEffect(() => {
         if (!productUrl) return;

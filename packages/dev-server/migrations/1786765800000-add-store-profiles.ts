@@ -88,23 +88,30 @@ export class AddStoreProfiles1786765800000 implements MigrationInterface {
         const channels = (await queryRunner.query(
             `SELECT ${identifier('id')} FROM ${identifier('channel')} ORDER BY ${identifier('id')} ASC`,
         )) as Array<{ id: string | number }>;
-        if (channels.length > 0) {
-            await queryRunner.manager
-                .createQueryBuilder()
-                .insert()
-                .into('store_profile')
-                .values(
-                    channels.map((channel, index) => ({
-                        channelId: channel.id,
-                        status: 'DRAFT',
-                        isPublished: false,
-                        sortOrder: index,
-                        descriptionZh: '',
-                        descriptionEn: '',
-                        logoAssetId: null,
-                    })),
-                )
-                .execute();
+        const columnNames = [
+            'channelId',
+            'status',
+            'isPublished',
+            'sortOrder',
+            'descriptionZh',
+            'descriptionEn',
+            'logoAssetId',
+        ];
+        for (const [index, channel] of channels.entries()) {
+            const placeholders = columnNames.map((_, parameterIndex) =>
+                databaseType === 'postgres' || databaseType === 'cockroachdb'
+                    ? `$${parameterIndex + 1}`
+                    : '?',
+            );
+            // Use raw SQL instead of the current StoreProfile entity metadata. Newer entity
+            // fields are introduced by later migrations and must not leak into this historical
+            // insert when bootstrapping a clean database.
+            await queryRunner.query(
+                `INSERT INTO ${identifier('store_profile')} (${columnNames
+                    .map(identifier)
+                    .join(', ')}) VALUES (${placeholders.join(', ')})`,
+                [channel.id, 'DRAFT', booleanFalse, index, '', '', null],
+            );
         }
     }
 

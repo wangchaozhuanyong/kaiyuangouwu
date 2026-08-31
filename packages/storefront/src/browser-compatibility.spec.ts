@@ -42,14 +42,26 @@ describe('browser compatibility policy', () => {
     });
 
     it('locks the production build to the documented evergreen baseline', () => {
-        expect(viteConfig).toContain(
-            "target: ['chrome111', 'edge111', 'firefox128', 'safari16.4']",
-        );
+        expect(viteConfig).toContain("target: ['chrome111', 'edge111', 'firefox128', 'safari16.4']");
     });
 
     it('keeps section actions large enough for touch input', () => {
         expect(stylesheet).toMatch(
             /\.section-header-action-btn,[\s\S]*?\.section-header > button\s*\{[^}]*min-width:\s*44px;[^}]*min-height:\s*32px;/u,
+        );
+    });
+
+    it('prevents mobile WebKit input focus from zooming the storefront', () => {
+        expect(stylesheet).toMatch(
+            /@media \(max-width:\s*1023px\)[\s\S]*?input:not\(\[type='checkbox'\]\)[\s\S]*?font-size:\s*16px\s*!important;/u,
+        );
+    });
+
+    it('keeps page and sheet geometry inside the viewport', () => {
+        expect(stylesheet).toMatch(/html\s*\{[\s\S]*?overflow-x:\s*clip;/u);
+        expect(stylesheet).toMatch(/\.sheet-layer\s*\{[^}]*width:\s*100vw;[^}]*position:\s*fixed;/u);
+        expect(stylesheet).toMatch(
+            /@media \(min-width:\s*1024px\)[\s\S]*?\.sheet-layer\s*\{[^}]*left:\s*50%;[^}]*transform:\s*translateX\(-50%\);/u,
         );
     });
 
@@ -63,8 +75,7 @@ describe('browser compatibility policy', () => {
         expect(legacyGuard).not.toMatch(/\b(?:const|let|class)\b|=>|\?\./u);
         expect(
             runLegacyGuard({
-                userAgent:
-                    'Mozilla/5.0 (Windows NT 6.1; Trident/7.0; rv:11.0) like Gecko',
+                userAgent: 'Mozilla/5.0 (Windows NT 6.1; Trident/7.0; rv:11.0) like Gecko',
                 documentMode: 11,
             }),
         ).toBe('/unsupported-browser.html?from=%2Fcheckout%3Fstep%3Dpayment%23confirm');

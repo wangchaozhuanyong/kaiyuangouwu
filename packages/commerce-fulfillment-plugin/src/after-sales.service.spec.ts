@@ -101,17 +101,19 @@ function createHarness(
     };
     const customerService = { findOneByUserId: vi.fn().mockResolvedValue(customer) };
     const translations = {
-        prepareLocalizedFields: vi.fn(async fields =>
-            fields.map((field: any) => ({
-                path: field.path,
-                sourceText: field.sourceText,
-                translatedText: `translated-${field.path}`,
-                status: 'AUTO_TRANSLATED',
-                origin: 'AUTO',
-                locked: false,
-            })),
+        prepareLocalizedFields: vi.fn(fields =>
+            Promise.resolve(
+                fields.map((field: any) => ({
+                    path: field.path,
+                    sourceText: field.sourceText,
+                    translatedText: `translated-${field.path}`,
+                    status: 'AUTO_TRANSLATED',
+                    origin: 'AUTO',
+                    locked: false,
+                })),
+            ),
         ),
-        recordPreparedFields: vi.fn(async () => undefined),
+        recordPreparedFields: vi.fn(() => Promise.resolve(undefined)),
     };
     const service = new AfterSalesService(connection as any, customerService as any, translations as any);
     const ctx = {
@@ -225,6 +227,24 @@ describe('AfterSalesService', () => {
                     }),
                 }),
             }),
+        );
+    });
+
+    it('searches after-sales work by request, order or customer identity', async () => {
+        const test = createHarness();
+        test.requestRepository.findAndCount.mockResolvedValue([[], 0]);
+
+        await test.service.findForAdmin(test.ctx, { search: ' AS-2026 ' });
+
+        const call = test.requestRepository.findAndCount.mock.calls[0][0];
+        expect(call.where).toHaveLength(4);
+        expect(call.where).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({ code: expect.objectContaining({ _type: 'like' }) }),
+                expect.objectContaining({ customerName: expect.objectContaining({ _type: 'like' }) }),
+                expect.objectContaining({ customerEmail: expect.objectContaining({ _type: 'like' }) }),
+                expect.objectContaining({ order: expect.objectContaining({ code: expect.anything() }) }),
+            ]),
         );
     });
 

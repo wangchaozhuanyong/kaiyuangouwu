@@ -31,6 +31,7 @@ import { offlineLoadError } from './loading-state';
 import { ORDER_STATUS_REFRESH_INTERVAL, orderNeedsStatusRefresh } from './order-refresh';
 import { PUBLIC_QUERY_GC_TIME, ROUTE_QUERY_STALE_TIME, storefrontQueryKeys } from './query-client';
 import { PageSkeleton } from './route-loading';
+import { acquireBodyScrollLock } from './scroll-lock';
 import { routeNavigateOptions } from './storefront-router';
 import { SafeImage } from './storefront-ui/product-display';
 import { orderPageStyles, pageClassName } from './tailwind/order-page-styles';
@@ -1203,7 +1204,7 @@ function AfterSalesRequestSheet({
         const dialog = dialogRef.current;
         if (!dialog) return;
         previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-        const previousOverflow = document.body.style.overflow;
+        const releaseBodyScrollLock = acquireBodyScrollLock();
         const selector =
             'button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
         const focusable = () => Array.from(dialog.querySelectorAll<HTMLElement>(selector));
@@ -1232,12 +1233,11 @@ function AfterSalesRequestSheet({
                 first.focus();
             }
         };
-        document.body.style.overflow = 'hidden';
         document.addEventListener('keydown', keydown);
         return () => {
             cancelAnimationFrame(frame);
             document.removeEventListener('keydown', keydown);
-            document.body.style.overflow = previousOverflow;
+            releaseBodyScrollLock();
             previousFocus.current?.focus();
         };
     }, []);
@@ -1818,7 +1818,7 @@ function CancelOrderSheet({
         const dialog = dialogRef.current;
         if (!dialog) return;
         previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-        const previousOverflow = document.body.style.overflow;
+        const releaseBodyScrollLock = acquireBodyScrollLock();
         const selector = 'button:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
         const focusable = () => Array.from(dialog.querySelectorAll<HTMLElement>(selector));
         const frame = requestAnimationFrame(() => (focusable()[0] ?? dialog).focus());
@@ -1846,12 +1846,11 @@ function CancelOrderSheet({
                 first.focus();
             }
         };
-        document.body.style.overflow = 'hidden';
         document.addEventListener('keydown', keydown);
         return () => {
             cancelAnimationFrame(frame);
             document.removeEventListener('keydown', keydown);
-            document.body.style.overflow = previousOverflow;
+            releaseBodyScrollLock();
             previousFocus.current?.focus();
         };
     }, []);

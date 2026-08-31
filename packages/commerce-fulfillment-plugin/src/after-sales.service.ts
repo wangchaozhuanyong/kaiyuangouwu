@@ -12,7 +12,7 @@ import {
     UserInputError,
 } from '@vendure/core';
 import { randomBytes } from 'node:crypto';
-import { In, LockNotSupportedOnGivenDriverError } from 'typeorm';
+import { FindOptionsWhere, In, Like, LockNotSupportedOnGivenDriverError } from 'typeorm';
 
 import {
     activeAfterSalesStates,
@@ -86,11 +86,21 @@ export class AfterSalesService {
             : options.state
               ? [options.state]
               : [];
+        const baseWhere: FindOptionsWhere<AfterSalesRequest> = {
+            channelId: ctx.channelId,
+            ...(selectedStates.length ? { state: In(selectedStates) } : {}),
+        };
+        const search = options.search?.trim().slice(0, 200);
+        const where: FindOptionsWhere<AfterSalesRequest> | Array<FindOptionsWhere<AfterSalesRequest>> = search
+            ? [
+                  { ...baseWhere, code: Like(`%${search}%`) },
+                  { ...baseWhere, customerName: Like(`%${search}%`) },
+                  { ...baseWhere, customerEmail: Like(`%${search}%`) },
+                  { ...baseWhere, order: { code: Like(`%${search}%`) } },
+              ]
+            : baseWhere;
         const [items, totalItems] = await this.connection.getRepository(ctx, AfterSalesRequest).findAndCount({
-            where: {
-                channelId: ctx.channelId,
-                ...(selectedStates.length ? { state: In(selectedStates) } : {}),
-            },
+            where,
             relations: { items: true, events: true, order: true, refund: true },
             order: { createdAt: 'DESC', events: { createdAt: 'ASC' } },
             skip,

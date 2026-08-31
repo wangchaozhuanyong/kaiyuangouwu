@@ -2,6 +2,7 @@ import { Check, Copy, Download, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 import { referralShareUrl } from './referral-attribution';
+import { acquireBodyScrollLock } from './scroll-lock';
 import { createQrCodeSvgDataUrl } from './share-poster-modal';
 import { ReferralPosterTemplate, StorefrontLanguage } from './types';
 
@@ -109,6 +110,11 @@ export function ReferralPosterModal({
     const [copied, setCopied] = useState(false);
     const style = styles.find(item => item.id === selectedId) ?? styles[0];
     const shareUrl = referralShareUrl(inviteCode, 'POSTER');
+
+    useEffect(() => {
+        const releaseBodyScrollLock = acquireBodyScrollLock();
+        return releaseBodyScrollLock;
+    }, []);
 
     useEffect(() => {
         if (!styles.some(item => item.id === selectedId)) setSelectedId(styles[0]?.id ?? '');

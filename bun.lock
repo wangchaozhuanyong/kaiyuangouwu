@@ -510,6 +510,7 @@
         "@vendure/storefront-catalog-plugin": "0.1.0",
         "@vendure/storefront-content-plugin": "0.1.0",
         "@vendure/storefront-review-plugin": "0.1.0",
+        "@vendure/telemetry-plugin": "3.7.2",
         "@vendure/two-factor-dashboard-plugin": "0.1.0",
         "dotenv": "^16.6.1",
       },

@@ -12,7 +12,7 @@ import {
     UserInputError,
     translateDeep,
 } from '@vendure/core';
-import { In, LockNotSupportedOnGivenDriverError } from 'typeorm';
+import { FindOptionsWhere, In, Like, LockNotSupportedOnGivenDriverError } from 'typeorm';
 
 import { StorefrontReview } from './entities/storefront-review.entity';
 import { storefrontReviewStates } from './review.constants';
@@ -138,10 +138,20 @@ export class StorefrontReviewService {
             throw new UserInputError('评价状态筛选条件无效');
         }
         const repository = this.connection.getRepository(ctx, StorefrontReview);
-        const where = {
+        const baseWhere: FindOptionsWhere<StorefrontReview> = {
             channelId: ctx.channelId,
             ...(options.state ? { state: options.state } : {}),
         };
+        const search = options.search?.trim().slice(0, 200);
+        const where: FindOptionsWhere<StorefrontReview> | Array<FindOptionsWhere<StorefrontReview>> = search
+            ? [
+                  { ...baseWhere, title: Like(`%${search}%`) },
+                  { ...baseWhere, body: Like(`%${search}%`) },
+                  { ...baseWhere, customerName: Like(`%${search}%`) },
+                  { ...baseWhere, productName: Like(`%${search}%`) },
+                  { ...baseWhere, sku: Like(`%${search}%`) },
+              ]
+            : baseWhere;
         const [[items, totalItems], averageRating] = await Promise.all([
             repository.findAndCount({
                 where,

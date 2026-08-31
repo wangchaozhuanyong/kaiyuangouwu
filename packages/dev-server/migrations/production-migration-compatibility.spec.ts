@@ -551,17 +551,15 @@ describe('production migration compatibility', () => {
     });
 
     it('creates the store profile table with portable MySQL column types and backfills Channels', async () => {
-        const execute = vi.fn(async () => undefined);
-        const values = vi.fn(() => ({ execute }));
-        const into = vi.fn(() => ({ values }));
-        const insert = vi.fn(() => ({ into }));
         const createdTables: Table[] = [];
+        const query = vi.fn(async (statement: string) =>
+            statement.startsWith('SELECT') ? [{ id: 1 }, { id: 2 }] : undefined,
+        );
         const queryRunner = {
             connection: { options: { type: 'mysql' } },
             hasTable: vi.fn(async () => false),
             createTable: vi.fn(async (table: Table) => createdTables.push(table)),
-            query: vi.fn(async () => [{ id: 1 }, { id: 2 }]),
-            manager: { createQueryBuilder: vi.fn(() => ({ insert })) },
+            query,
         } as unknown as QueryRunner;
 
         await new AddStoreProfiles1786765800000().up(queryRunner);
@@ -582,11 +580,12 @@ describe('production migration compatibility', () => {
             default: 0,
         });
         expect(createdTables[0].findColumnByName('descriptionZh')?.default).toBeUndefined();
-        expect(values).toHaveBeenCalledWith([
-            expect.objectContaining({ channelId: 1, status: 'DRAFT', sortOrder: 0 }),
-            expect.objectContaining({ channelId: 2, status: 'DRAFT', sortOrder: 1 }),
-        ]);
-        expect(execute).toHaveBeenCalledOnce();
+        expect(query).toHaveBeenCalledTimes(3);
+        expect(query.mock.calls[1][0]).toContain(
+            'INSERT INTO `store_profile` (`channelId`, `status`, `isPublished`, `sortOrder`',
+        );
+        expect(query.mock.calls[1][1]).toEqual([1, 'DRAFT', 0, 0, '', '', null]);
+        expect(query.mock.calls[2][1]).toEqual([2, 'DRAFT', 0, 1, '', '', null]);
     });
 
     it('creates MySQL content tables without defaults on text columns', async () => {

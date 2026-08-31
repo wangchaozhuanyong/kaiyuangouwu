@@ -67,6 +67,7 @@ html {
     scroll-behavior: smooth;
     scrollbar-width: thin;
     scrollbar-color: #cbd3d0 transparent;
+    overflow-x: clip;
 }
 
 body {
@@ -74,6 +75,24 @@ body {
     min-height: 100dvh;
     margin: 0;
     background: var(--bg);
+    overflow-x: clip;
+}
+
+@supports not (overflow: clip) {
+    html,
+    body {
+        overflow-x: hidden;
+    }
+}
+
+/* iOS Safari and X5 zoom focused controls below 16px. Keep the visual layout
+   stable while preserving user-controlled page zoom for accessibility. */
+@media (max-width: 1023px) {
+    input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']),
+    select,
+    textarea {
+        font-size: 16px !important;
+    }
 }
 
 html::-webkit-scrollbar,
@@ -10845,6 +10864,7 @@ img.fatal-error-mark {
     .sheet-layer {
         width: min(100%, var(--app-width));
         left: 50%;
+        transform: translateX(-50%);
         align-items: stretch;
         justify-content: flex-end;
     }
