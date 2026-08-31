@@ -43,6 +43,7 @@ import { GenerateVariantsPanel } from './components/generate-variants-panel.js';
 import { ProductCollectionSelector } from './components/product-collection-selector.js';
 import { ProductCollectionsPanel } from './components/product-collections-panel.js';
 import { ProductFulfillmentTypePanel } from './components/product-fulfillment-type-panel.js';
+import { getProductLevelFulfillmentType } from './components/product-fulfillment-type.js';
 import { ProductOptionGroupBadge } from './components/product-option-group-badge.js';
 import { ProductVariantsTable } from './components/product-variants-table.js';
 import {
@@ -847,7 +848,9 @@ export function ProductEditor({
                         }
                     >
                         <ProductFulfillmentTypePanel
-                            variants={entity.variants}
+                            productId={entity.id}
+                            customFields={entity.customFields}
+                            variantCount={entity.variants.length}
                             onUpdated={() => {
                                 refreshEntity();
                                 refreshRef.current();
@@ -859,6 +862,9 @@ export function ProductEditor({
                     <PageBlock column="main" blockId="product-variants-table">
                         <ProductVariantsTable
                             productId={productId}
+                            digitalInventory={
+                                getProductLevelFulfillmentType(entity.customFields) === 'digital'
+                            }
                             registerRefresher={refresher => {
                                 refreshRef.current = refresher;
                             }}

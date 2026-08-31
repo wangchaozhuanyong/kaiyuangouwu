@@ -465,6 +465,42 @@ export const adminApiExtensions = gql`
         descriptionEn: String
         internalNote: String
         logoAssetId: ID
+        currentPassword: String
+    }
+
+    type StoreDeprovisionImpact {
+        profileId: ID!
+        channelId: ID!
+        channelCode: String!
+        status: StoreProfileStatus!
+        isDefaultChannel: Boolean!
+        isProvisioningTemplate: Boolean!
+        isActiveChannel: Boolean!
+        orderCount: Int!
+        productCount: Int!
+        customerCount: Int!
+        administratorCount: Int!
+        domainCount: Int!
+        extensionRecordCount: Int!
+        sellerWillBeDeleted: Boolean!
+        roleWillBeDeleted: Boolean!
+        blockers: [String!]!
+        canDeprovision: Boolean!
+    }
+
+    input DeprovisionStoreInput {
+        profileId: ID!
+        expectedUpdatedAt: DateTime!
+        confirmCode: String!
+        currentPassword: String!
+    }
+
+    type DeprovisionStoreResult {
+        channelId: ID!
+        channelCode: String!
+        deletedAdministratorCount: Int!
+        deletedRole: Boolean!
+        deletedSeller: Boolean!
     }
 
     input UpdateMyStoreProfileInput {
@@ -1074,6 +1110,7 @@ export const adminApiExtensions = gql`
     extend type Query {
         storeProvisioningTemplates: [Channel!]!
         storeProfiles: [StoreProfile!]!
+        storeDeprovisionImpact(profileId: ID!): StoreDeprovisionImpact!
         myStoreProfile: StoreProfile!
         myStoreCommerceConfiguration: StoreCommerceConfiguration!
         myStoreCurrencyConfiguration: StoreCurrencyConfiguration!
@@ -1113,6 +1150,8 @@ export const adminApiExtensions = gql`
     extend type Mutation {
         provisionStore(input: ProvisionStoreInput!): ProvisionStoreResult!
         updateStoreProfile(input: UpdateStoreProfileInput!): StoreProfile!
+        suspendStore(profileId: ID!, expectedUpdatedAt: DateTime!, currentPassword: String!): StoreProfile!
+        deprovisionStore(input: DeprovisionStoreInput!): DeprovisionStoreResult!
         updateMyStoreProfile(input: UpdateMyStoreProfileInput!): StoreProfile!
         updateMyStoreCommerceConfiguration(
             input: UpdateMyStoreCommerceConfigurationInput!

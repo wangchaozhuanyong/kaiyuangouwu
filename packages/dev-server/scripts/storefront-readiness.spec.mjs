@@ -50,6 +50,7 @@ function channel(code, overrides = {}) {
         availableLanguageCodes: ['en', 'zh_Hans'],
         defaultCurrencyCode: currencyCode,
         availableCurrencyCodes: [currencyCode],
+        customFields: { commerceMode: 'PHYSICAL_ONLY' },
         pricesIncludeTax: false,
         defaultTaxZone: {
             id: `${String(countryCode)}-tax`,
@@ -302,6 +303,43 @@ void test('allows global digital sales even when the physical shipping method is
         report.checks.find(check => check.id === 'global-physical-shipping-my-malaysia')?.status,
         'pass',
     );
+});
+
+void test('does not require physical delivery configuration for a digital-only store', () => {
+    const snapshot = readySnapshot();
+    snapshot.channels[0].customFields.commerceMode = 'DIGITAL_ONLY';
+    snapshot.channels[0].defaultShippingZone = null;
+    snapshot.channels[0].shippingMethods = [];
+    snapshot.channels[0].availableCountryCodes = [];
+    snapshot.channels[0].products[0].variants[0].customFields.fulfillmentType = 'digital';
+
+    const report = evaluateStorefrontReadiness(snapshot, approvedTaxPolicy);
+    const ids = new Set(report.checks.map(check => check.id));
+
+    assert.equal(report.ready, true);
+    assert.equal(ids.has('shipping-zone-my-malaysia'), false);
+    assert.equal(ids.has('shipping-methods-my-malaysia'), false);
+    assert.equal(ids.has('global-country-availability-my-malaysia'), false);
+    assert.equal(ids.has('global-physical-shipping-my-malaysia'), false);
+});
+
+void test('does not count referral balance as a production payment provider', () => {
+    const snapshot = readySnapshot();
+    snapshot.channels[0].paymentMethods = [
+        {
+            code: 'referral-balance',
+            name: 'Referral balance',
+            description: 'Internal customer balance',
+            enabled: true,
+            handler: { code: 'referral-balance-payment' },
+        },
+    ];
+
+    const report = evaluateStorefrontReadiness(snapshot, approvedTaxPolicy);
+    const paymentCheck = report.checks.find(check => check.id === 'payments-my-malaysia');
+
+    assert.equal(paymentCheck?.status, 'blocker');
+    assert.match(paymentCheck?.detail ?? '', /non-production methods: referral-balance/u);
 });
 
 void test('blocks a global physical catalog when shipping remains regional', () => {

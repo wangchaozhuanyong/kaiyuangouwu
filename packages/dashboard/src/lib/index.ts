@@ -299,6 +299,7 @@ export * from './hooks/use-alerts-context.js';
 export * from './hooks/use-alerts.js';
 export * from './hooks/use-auth.js';
 export * from './hooks/use-channel.js';
+export * from './hooks/use-commerce-mode.js';
 export * from './hooks/use-custom-field-config.js';
 export * from './hooks/use-data-table-context.js';
 export * from './hooks/use-display-locale.js';

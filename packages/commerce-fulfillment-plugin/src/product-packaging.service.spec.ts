@@ -7,9 +7,9 @@ import { ProductPackagingService } from './product-packaging.service';
 
 describe('ProductPackagingService automatic unpacking', () => {
     it('opens the minimum packages, transfers stock and publishes stock movements', async () => {
-        const stockLevelSave = vi.fn().mockImplementation(values => values);
-        const stockAdjustmentSave = vi.fn().mockImplementation(values => values);
-        const unpackEventSave = vi.fn().mockImplementation(value => value);
+        const stockLevelSave = vi.fn().mockImplementation(values => Promise.resolve(values));
+        const stockAdjustmentSave = vi.fn().mockImplementation(values => Promise.resolve(values));
+        const unpackEventSave = vi.fn().mockImplementation(value => Promise.resolve(value));
         const connection = {
             getRepository: vi.fn((_ctx: unknown, entity: unknown) => {
                 if (entity === StockLevel) return { save: stockLevelSave };

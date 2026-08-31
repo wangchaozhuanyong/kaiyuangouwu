@@ -23,6 +23,17 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { client, sensitiveActionContext } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
+import { DynamicCustomFieldsForm } from '../../custom-fields/DynamicCustomFieldsForm';
+import type { CustomFieldValueMap } from '../../custom-fields/custom-field-types';
+import {
+    addCustomFieldsToDocument,
+    customFieldInputFromValues,
+    customFieldValuesFromEntity,
+    localizedCustomFieldInputFromValues,
+    validateCustomFieldValues,
+} from '../../custom-fields/custom-field-utils';
+import { useCustomFieldDefinitions } from '../../custom-fields/custom-fields-context';
+import { NextAdminActions, NextAdminPageBlocks } from '../../extensions/extension-hosts';
 import {
     ADD_OPTION_GROUP_TO_PRODUCT,
     ASSIGN_PRODUCTS_TO_CHANNEL,
@@ -44,9 +55,22 @@ import {
     UPDATE_PRODUCT,
     UPDATE_PRODUCT_VARIANTS,
 } from '../../graphql/catalog.graphql';
+import {
+    STORE_COMMERCE_MODE_QUERY,
+    type DigitalDeliveryMode,
+    type DigitalStockPolicy,
+    type FulfillmentType,
+    type RefundPolicy,
+    type StoreCommerceModeData,
+} from '../../graphql/commerce.graphql';
 import { useUnsavedChangesWarning } from '../../hooks/use-unsaved-changes-warning';
 import { useUrlTab } from '../../hooks/use-url-tab';
 import { getChannelDisplayName } from '../../utils/channel-display';
+import {
+    fulfillmentTypeForMode,
+    stockPolicyForDeliveryMode,
+    trackInventoryForDigitalVariant,
+} from '../../utils/commerce-mode';
 import {
     hasDirectProductAssignment,
     setDirectProductAssignment,
@@ -63,6 +87,11 @@ const PRODUCT_EDITOR_TABS = {
 const SOURCE_LANGUAGE_CODE = 'zh_Hans';
 const LOOKUP_PAGE_SIZE = 30;
 const ASSET_PAGE_SIZE = 40;
+const PRODUCT_MANAGED_CUSTOM_FIELDS = [
+    'fulfillmentType',
+    'refundPolicy',
+    'manualDeliverySlaMinutes',
+] as const;
 
 interface ProductVariantState {
     id?: string;
@@ -72,6 +101,9 @@ interface ProductVariantState {
     stockOnHand: number | '';
     stockAllocated: number;
     enabled: boolean;
+    digitalDeliveryMode: DigitalDeliveryMode;
+    digitalStockPolicy: DigitalStockPolicy;
+    autoCardAvailableStock?: number | null;
     optionIds: string[];
     isNew?: boolean;
 }
@@ -125,6 +157,13 @@ interface ProductDetailRecord {
     name: string;
     slug: string;
     description: string;
+    customFields?:
+        | ({
+              fulfillmentType?: FulfillmentType | null;
+              refundPolicy?: RefundPolicy | null;
+              manualDeliverySlaMinutes?: number | null;
+          } & Record<string, unknown>)
+        | null;
     featuredAsset?: { id: string; preview: string; name: string } | null;
     assets: Array<{ id: string; name: string; preview: string }>;
     translations: Array<{
@@ -133,6 +172,7 @@ interface ProductDetailRecord {
         name: string;
         slug: string;
         description: string;
+        customFields?: Record<string, unknown> | null;
     }>;
     optionGroups: Array<{ id: string }>;
     facetValues: Array<{ id: string }>;
@@ -146,6 +186,13 @@ interface ProductDetailRecord {
         price: number;
         stockOnHand: number;
         stockAllocated: number;
+        trackInventory: string;
+        autoCardAvailableStock?: number | null;
+        customFields?: {
+            fulfillmentType?: FulfillmentType | null;
+            digitalDeliveryMode?: DigitalDeliveryMode | null;
+            digitalStockPolicy?: DigitalStockPolicy | null;
+        } | null;
         options: Array<{ id: string }>;
         translations: Array<{
             languageCode: string;
@@ -159,6 +206,9 @@ interface ProductEditorSnapshotInput {
     slug: string;
     enabled: boolean;
     description: string;
+    fulfillmentType: FulfillmentType;
+    refundPolicy: RefundPolicy;
+    manualDeliverySlaMinutes: number;
     featuredAssetId: string | null;
     selectedAssetIds: string[];
     selectedFacetValueIds: string[];
@@ -166,6 +216,7 @@ interface ProductEditorSnapshotInput {
     selectedChannelIds: string[];
     selectedOptionGroupIds: string[];
     variants: ProductVariantState[];
+    dynamicCustomFields: CustomFieldValueMap;
 }
 
 const serializeProductEditor = (input: ProductEditorSnapshotInput) =>
@@ -184,6 +235,8 @@ const serializeProductEditor = (input: ProductEditorSnapshotInput) =>
             stockOnHand: variant.stockOnHand,
             stockAllocated: variant.stockAllocated,
             enabled: variant.enabled,
+            digitalDeliveryMode: variant.digitalDeliveryMode,
+            digitalStockPolicy: variant.digitalStockPolicy,
             optionIds: [...variant.optionIds].sort(),
             isNew: Boolean(variant.isNew),
         })),
@@ -199,21 +252,72 @@ const createSlugFromName = (value: string) => {
     return normalized || `product-${Date.now().toString(36)}`;
 };
 
+const variantFulfillmentInput = (variant: ProductVariantState, fulfillmentType: FulfillmentType) => {
+    if (fulfillmentType === 'physical') {
+        return {
+            stockOnHand: variant.stockOnHand === '' ? 0 : Number(variant.stockOnHand),
+            trackInventory: 'INHERIT' as const,
+            customFields: {
+                digitalStockPolicy: 'limited' as const,
+            },
+        };
+    }
+    const digitalStockPolicy = stockPolicyForDeliveryMode(
+        variant.digitalDeliveryMode,
+        variant.digitalStockPolicy,
+    );
+    return {
+        stockOnHand:
+            variant.digitalDeliveryMode === 'auto_card' || digitalStockPolicy === 'unlimited'
+                ? 0
+                : variant.stockOnHand === ''
+                  ? 0
+                  : Number(variant.stockOnHand),
+        trackInventory: trackInventoryForDigitalVariant(variant.digitalDeliveryMode, digitalStockPolicy),
+        customFields: {
+            digitalDeliveryMode: variant.digitalDeliveryMode,
+            digitalStockPolicy,
+        },
+    };
+};
+
 export function ProductEditor() {
     const requestConfirmation = useConfirmDialog();
     const params = useParams<{ id: string }>();
     const navigate = useNavigate();
     const productId = params.id;
     const isCreateMode = !productId || productId === 'new';
+    const productCustomFieldDefinitions = useCustomFieldDefinitions('Product');
+    const productExtensionFields = useMemo(
+        () =>
+            productCustomFieldDefinitions.filter(
+                field =>
+                    !PRODUCT_MANAGED_CUSTOM_FIELDS.includes(
+                        field.name as (typeof PRODUCT_MANAGED_CUSTOM_FIELDS)[number],
+                    ),
+            ),
+        [productCustomFieldDefinitions],
+    );
+    const productDetailDocument = useMemo(
+        () =>
+            addCustomFieldsToDocument(GET_PRODUCT_DETAIL, 'Product', productCustomFieldDefinitions, [
+                'product',
+            ]),
+        [productCustomFieldDefinitions],
+    );
 
     const [activeTab, setActiveTab] = useUrlTab<ProductEditorTab>(PRODUCT_EDITOR_TABS, 'basic');
+    const contentWidthClass = activeTab === 'VARIANTS' ? 'max-w-none' : 'max-w-5xl';
 
     // SPU 基础字段 (严格无演示默认数据)
     const [productName, setProductName] = useState('');
     const [slug, setSlug] = useState('');
     const [enabled, setEnabled] = useState(true);
     const [description, setDescription] = useState('');
-    const [translationId, setTranslationId] = useState<string | undefined>(undefined);
+    const [fulfillmentType, setFulfillmentType] = useState<FulfillmentType>('digital');
+    const [refundPolicy, setRefundPolicy] = useState<RefundPolicy>('MERCHANT_REVIEW');
+    const [manualDeliverySlaMinutes, setManualDeliverySlaMinutes] = useState(1440);
+    const [dynamicCustomFieldValues, setDynamicCustomFieldValues] = useState<CustomFieldValueMap>({});
 
     // 素材与图片关联 (使用真实 Asset ID)
     const [featuredAssetId, setFeaturedAssetId] = useState<string | null>(null);
@@ -273,6 +377,12 @@ export function ProductEditor() {
     }>(GET_ACTIVE_CHANNEL, { fetchPolicy: 'cache-first' });
     const activeCurrencyCode =
         channelData?.activeChannel.currencyCode ?? channelData?.activeChannel.defaultCurrencyCode ?? 'CNY';
+    const commerceModeQuery = useQuery<StoreCommerceModeData>(STORE_COMMERCE_MODE_QUERY, {
+        fetchPolicy: 'cache-first',
+    });
+    const commerceMode = commerceModeQuery.data?.myStoreCommerceMode.mode ?? 'HYBRID';
+    const fixedFulfillmentType = fulfillmentTypeForMode(commerceMode);
+    const effectiveFulfillmentType = fixedFulfillmentType ?? fulfillmentType;
 
     // 1. 查询已有商品详情 (若为编辑模式)
     const {
@@ -282,7 +392,7 @@ export function ProductEditor() {
         refetch: refetchProduct,
     } = useQuery<{
         product: ProductDetailRecord | null;
-    }>(GET_PRODUCT_DETAIL, {
+    }>(productDetailDocument, {
         variables: { id: productId },
         skip: isCreateMode,
         fetchPolicy: 'network-only',
@@ -424,6 +534,22 @@ export function ProductEditor() {
             setSlug(sourceTranslation?.slug || p.slug || '');
             setEnabled(p.enabled ?? true);
             setDescription(sourceTranslation?.description || p.description || '');
+            setFulfillmentType(
+                fixedFulfillmentType ??
+                    (p.customFields?.fulfillmentType === 'physical' ? 'physical' : 'digital'),
+            );
+            setRefundPolicy(
+                p.customFields?.refundPolicy === 'SEVEN_DAY_NO_REASON' ||
+                    p.customFields?.refundPolicy === 'NON_REFUNDABLE'
+                    ? p.customFields.refundPolicy
+                    : 'MERCHANT_REVIEW',
+            );
+            setManualDeliverySlaMinutes(
+                Math.min(525600, Math.max(5, p.customFields?.manualDeliverySlaMinutes ?? 1440)),
+            );
+            setDynamicCustomFieldValues(
+                customFieldValuesFromEntity(productExtensionFields, p.customFields, p.translations),
+            );
 
             if (p.featuredAsset) {
                 setFeaturedAssetId(p.featuredAsset.id);
@@ -447,8 +573,6 @@ export function ProductEditor() {
                     .map(collection => collection.id),
             );
 
-            setTranslationId(sourceTranslation?.id);
-
             if (p.variants.length > 0) {
                 setVariants(
                     p.variants.map(variant => {
@@ -468,6 +592,17 @@ export function ProductEditor() {
                             stockOnHand: variant.stockOnHand,
                             stockAllocated: variant.stockAllocated,
                             enabled: variant.enabled,
+                            digitalDeliveryMode:
+                                variant.customFields?.digitalDeliveryMode === 'auto_card' ||
+                                variant.customFields?.digitalDeliveryMode === 'file_download'
+                                    ? variant.customFields.digitalDeliveryMode
+                                    : 'manual_service',
+                            digitalStockPolicy:
+                                variant.customFields?.digitalStockPolicy === 'pool_derived' ||
+                                variant.customFields?.digitalStockPolicy === 'unlimited'
+                                    ? variant.customFields.digitalStockPolicy
+                                    : 'limited',
+                            autoCardAvailableStock: variant.autoCardAvailableStock,
                             optionIds: variant.options.map(option => option.id),
                             isNew: false,
                         };
@@ -482,6 +617,10 @@ export function ProductEditor() {
             setSlug('');
             setEnabled(true);
             setDescription('');
+            setFulfillmentType(fixedFulfillmentType ?? 'digital');
+            setRefundPolicy('MERCHANT_REVIEW');
+            setManualDeliverySlaMinutes(1440);
+            setDynamicCustomFieldValues({});
             setFeaturedAssetId(null);
             setFeaturedAssetPreview(null);
             setSelectedAssetIds([]);
@@ -492,7 +631,11 @@ export function ProductEditor() {
             setKnownOptionGroups({});
             setVariants([]);
         }
-    }, [productData, isCreateMode]);
+    }, [fixedFulfillmentType, productData, isCreateMode, productExtensionFields]);
+
+    useEffect(() => {
+        if (fixedFulfillmentType) setFulfillmentType(fixedFulfillmentType);
+    }, [fixedFulfillmentType]);
 
     useEffect(() => {
         if (productData?.product) {
@@ -510,6 +653,9 @@ export function ProductEditor() {
                 slug,
                 enabled,
                 description,
+                fulfillmentType: effectiveFulfillmentType,
+                refundPolicy,
+                manualDeliverySlaMinutes,
                 featuredAssetId,
                 selectedAssetIds,
                 selectedFacetValueIds,
@@ -517,12 +663,17 @@ export function ProductEditor() {
                 selectedChannelIds,
                 selectedOptionGroupIds,
                 variants,
+                dynamicCustomFields: dynamicCustomFieldValues,
             }),
         [
             description,
+            dynamicCustomFieldValues,
             enabled,
+            effectiveFulfillmentType,
             featuredAssetId,
+            manualDeliverySlaMinutes,
             productName,
+            refundPolicy,
             selectedAssetIds,
             selectedChannelIds,
             selectedCollectionIds,
@@ -540,6 +691,9 @@ export function ProductEditor() {
                 slug: '',
                 enabled: true,
                 description: '',
+                fulfillmentType: fixedFulfillmentType ?? 'digital',
+                refundPolicy: 'MERCHANT_REVIEW',
+                manualDeliverySlaMinutes: 1440,
                 featuredAssetId: null,
                 selectedAssetIds: [],
                 selectedFacetValueIds: [],
@@ -547,6 +701,7 @@ export function ProductEditor() {
                 selectedChannelIds: activeChannelId ? [activeChannelId] : [],
                 selectedOptionGroupIds: [],
                 variants: [],
+                dynamicCustomFields: {},
             });
         }
         const product = productData?.product;
@@ -559,6 +714,18 @@ export function ProductEditor() {
             slug: sourceTranslation?.slug || product.slug || '',
             enabled: product.enabled,
             description: sourceTranslation?.description || product.description || '',
+            fulfillmentType:
+                fixedFulfillmentType ??
+                (product.customFields?.fulfillmentType === 'physical' ? 'physical' : 'digital'),
+            refundPolicy:
+                product.customFields?.refundPolicy === 'SEVEN_DAY_NO_REASON' ||
+                product.customFields?.refundPolicy === 'NON_REFUNDABLE'
+                    ? product.customFields.refundPolicy
+                    : 'MERCHANT_REVIEW',
+            manualDeliverySlaMinutes: Math.min(
+                525600,
+                Math.max(5, product.customFields?.manualDeliverySlaMinutes ?? 1440),
+            ),
             featuredAssetId: product.featuredAsset?.id ?? null,
             selectedAssetIds: product.assets.map(asset => asset.id),
             selectedFacetValueIds: product.facetValues.map(value => value.id),
@@ -582,11 +749,33 @@ export function ProductEditor() {
                 stockOnHand: variant.stockOnHand,
                 stockAllocated: variant.stockAllocated,
                 enabled: variant.enabled,
+                digitalDeliveryMode:
+                    variant.customFields?.digitalDeliveryMode === 'auto_card' ||
+                    variant.customFields?.digitalDeliveryMode === 'file_download'
+                        ? variant.customFields.digitalDeliveryMode
+                        : 'manual_service',
+                digitalStockPolicy:
+                    variant.customFields?.digitalStockPolicy === 'pool_derived' ||
+                    variant.customFields?.digitalStockPolicy === 'unlimited'
+                        ? variant.customFields.digitalStockPolicy
+                        : 'limited',
+                autoCardAvailableStock: variant.autoCardAvailableStock,
                 optionIds: variant.options.map(option => option.id),
                 isNew: false,
             })),
+            dynamicCustomFields: customFieldValuesFromEntity(
+                productExtensionFields,
+                product.customFields,
+                product.translations,
+            ),
         });
-    }, [catalogChannelsData?.activeChannel.id, isCreateMode, productData]);
+    }, [
+        catalogChannelsData?.activeChannel.id,
+        fixedFulfillmentType,
+        isCreateMode,
+        productData,
+        productExtensionFields,
+    ]);
     const hasUnsavedChanges =
         !productLoading &&
         baselineEditorSnapshot !== null &&
@@ -635,7 +824,19 @@ export function ProductEditor() {
         value: ProductVariantState[K],
     ) => {
         const updated = [...variants];
-        updated[index] = { ...updated[index], [field]: value };
+        const current = updated[index];
+        updated[index] = {
+            ...current,
+            [field]: value,
+            ...(field === 'digitalDeliveryMode'
+                ? {
+                      digitalStockPolicy: stockPolicyForDeliveryMode(
+                          value as DigitalDeliveryMode,
+                          current.digitalStockPolicy,
+                      ),
+                  }
+                : {}),
+        };
         setVariants(updated);
 
         // 清除对应字段的表单错误
@@ -656,6 +857,8 @@ export function ProductEditor() {
                 stockOnHand: '',
                 stockAllocated: 0,
                 enabled: true,
+                digitalDeliveryMode: 'manual_service',
+                digitalStockPolicy: 'limited',
                 optionIds: [],
                 isNew: true,
             },
@@ -712,6 +915,8 @@ export function ProductEditor() {
                 stockOnHand: '',
                 stockAllocated: 0,
                 enabled: true,
+                digitalDeliveryMode: 'manual_service',
+                digitalStockPolicy: 'limited',
                 optionIds: combination.map(option => option.id),
                 isNew: true,
             }));
@@ -856,6 +1061,16 @@ export function ProductEditor() {
         if (!description.trim()) {
             errors.description = '请输入中文商品详情';
         }
+        if (
+            effectiveFulfillmentType === 'digital' &&
+            (!Number.isInteger(manualDeliverySlaMinutes) ||
+                manualDeliverySlaMinutes < 5 ||
+                manualDeliverySlaMinutes > 525600)
+        ) {
+            setActiveTab('BASIC');
+            showError('人工交付预计时长必须是 5 到 525600 分钟之间的整数');
+            return false;
+        }
 
         const variantErrors: Record<number, { sku?: string; price?: string; stock?: string }> = {};
         const skuCounts = variants.reduce<Record<string, number>>((counts, variant) => {
@@ -873,7 +1088,11 @@ export function ProductEditor() {
             if (v.price === '' || isNaN(parseFloat(v.price)) || parseFloat(v.price) < 0) {
                 rowErr.price = '请输入有效的非负金额';
             }
+            const requiresManualStock =
+                effectiveFulfillmentType === 'physical' ||
+                (v.digitalDeliveryMode !== 'auto_card' && v.digitalStockPolicy === 'limited');
             if (
+                requiresManualStock &&
                 v.stockOnHand !== '' &&
                 (!Number.isInteger(Number(v.stockOnHand)) || Number(v.stockOnHand) < 0)
             ) {
@@ -909,11 +1128,60 @@ export function ProductEditor() {
     const handleSave = async () => {
         if (!validateForm()) return;
 
+        const customFieldErrors = validateCustomFieldValues(productExtensionFields, dynamicCustomFieldValues);
+        if (Object.keys(customFieldErrors).length > 0) {
+            setActiveTab('BASIC');
+            showError(Object.values(customFieldErrors)[0] ?? '商品扩展字段校验失败');
+            return;
+        }
+
         setSaving(true);
         setErrorMessage('');
         const completedStages: string[] = [];
 
         const generatedSlug = slug.trim() || createSlugFromName(productName);
+        const localizedFieldsFor = (languageCode: string) => {
+            const customFields = localizedCustomFieldInputFromValues(
+                productExtensionFields,
+                dynamicCustomFieldValues,
+                languageCode,
+            );
+            return Object.keys(customFields).length > 0 ? { customFields } : {};
+        };
+        const updateTranslations = productData?.product
+            ? [
+                  ...productData.product.translations.map(translation => ({
+                      id: translation.id,
+                      languageCode: translation.languageCode,
+                      name:
+                          translation.languageCode === SOURCE_LANGUAGE_CODE
+                              ? productName.trim()
+                              : translation.name,
+                      slug:
+                          translation.languageCode === SOURCE_LANGUAGE_CODE
+                              ? generatedSlug
+                              : translation.slug,
+                      description:
+                          translation.languageCode === SOURCE_LANGUAGE_CODE
+                              ? description.trim()
+                              : translation.description,
+                      ...localizedFieldsFor(translation.languageCode),
+                  })),
+                  ...(productData.product.translations.some(
+                      translation => translation.languageCode === SOURCE_LANGUAGE_CODE,
+                  )
+                      ? []
+                      : [
+                            {
+                                languageCode: SOURCE_LANGUAGE_CODE,
+                                name: productName.trim(),
+                                slug: generatedSlug,
+                                description: description.trim(),
+                                ...localizedFieldsFor(SOURCE_LANGUAGE_CODE),
+                            },
+                        ]),
+              ]
+            : [];
 
         try {
             if (isCreateMode) {
@@ -928,12 +1196,22 @@ export function ProductEditor() {
                                 assetIds: selectedAssetIds,
                                 facetValueIds:
                                     selectedFacetValueIds.length > 0 ? selectedFacetValueIds : undefined,
+                                customFields: {
+                                    fulfillmentType: effectiveFulfillmentType,
+                                    refundPolicy,
+                                    manualDeliverySlaMinutes,
+                                    ...customFieldInputFromValues(
+                                        productExtensionFields,
+                                        dynamicCustomFieldValues,
+                                    ),
+                                },
                                 translations: [
                                     {
                                         languageCode: SOURCE_LANGUAGE_CODE,
                                         name: productName.trim(),
                                         slug: generatedSlug,
                                         description: description.trim(),
+                                        ...localizedFieldsFor(SOURCE_LANGUAGE_CODE),
                                     },
                                 ],
                             },
@@ -967,7 +1245,7 @@ export function ProductEditor() {
                             sku: v.sku.trim(),
                             enabled: v.enabled,
                             price: Math.round(parseFloat(v.price) * 100),
-                            stockOnHand: v.stockOnHand === '' ? 0 : Number(v.stockOnHand),
+                            ...variantFulfillmentInput(v, effectiveFulfillmentType),
                             optionIds: v.optionIds,
                             translations: [
                                 {
@@ -1040,15 +1318,16 @@ export function ProductEditor() {
                                 featuredAssetId,
                                 assetIds: selectedAssetIds,
                                 facetValueIds: selectedFacetValueIds,
-                                translations: [
-                                    {
-                                        id: translationId,
-                                        languageCode: SOURCE_LANGUAGE_CODE,
-                                        name: productName.trim(),
-                                        slug: generatedSlug,
-                                        description: description.trim(),
-                                    },
-                                ],
+                                customFields: {
+                                    fulfillmentType: effectiveFulfillmentType,
+                                    refundPolicy,
+                                    manualDeliverySlaMinutes,
+                                    ...customFieldInputFromValues(
+                                        productExtensionFields,
+                                        dynamicCustomFieldValues,
+                                    ),
+                                },
+                                translations: updateTranslations,
                             },
                         },
                         context: changesProductEnabledState ? enabledMutationContext : undefined,
@@ -1082,7 +1361,7 @@ export function ProductEditor() {
                                         sku: v.sku.trim(),
                                         ...(original?.enabled !== v.enabled ? { enabled: v.enabled } : {}),
                                         price: Math.round(parseFloat(v.price) * 100),
-                                        stockOnHand: v.stockOnHand === '' ? 0 : Number(v.stockOnHand),
+                                        ...variantFulfillmentInput(v, effectiveFulfillmentType),
                                         optionIds: v.optionIds,
                                         translations: [
                                             {
@@ -1110,7 +1389,7 @@ export function ProductEditor() {
                                     sku: v.sku.trim(),
                                     enabled: v.enabled,
                                     price: Math.round(parseFloat(v.price) * 100),
-                                    stockOnHand: v.stockOnHand === '' ? 0 : Number(v.stockOnHand),
+                                    ...variantFulfillmentInput(v, effectiveFulfillmentType),
                                     optionIds: v.optionIds,
                                     translations: [
                                         {
@@ -1160,6 +1439,10 @@ export function ProductEditor() {
             {/* Top Header */}
             <div className="flex shrink-0 flex-col gap-4 border-b border-slate-200 bg-white px-5 py-4 shadow-2xs sm:flex-row sm:items-center sm:justify-between sm:px-8">
                 <div className="flex items-center gap-3">
+                    <NextAdminActions
+                        pageId="product-detail"
+                        entity={(productData?.product as unknown as Record<string, unknown>) ?? null}
+                    />
                     <button
                         type="button"
                         onClick={leaveToProductList}
@@ -1234,7 +1517,9 @@ export function ProductEditor() {
                     onClick={() => setActiveTab('VARIANTS')}
                     className={`py-3.5 border-b-2 transition-colors flex items-center gap-1.5 cursor-pointer ${activeTab === 'VARIANTS' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
                 >
-                    <Layers className="w-3.5 h-3.5" /> SKU 变体与库存 ({variants.length})
+                    <Layers className="w-3.5 h-3.5" />
+                    {effectiveFulfillmentType === 'digital' ? 'SKU 变体与交付' : 'SKU 变体与库存'} (
+                    {variants.length})
                 </button>
                 <button
                     type="button"
@@ -1247,7 +1532,9 @@ export function ProductEditor() {
             </div>
 
             {/* Main Form Body */}
-            <div className="mx-auto w-full max-w-5xl flex-1 space-y-6 overflow-y-auto p-5 sm:p-8">
+            <div
+                className={`mx-auto w-full ${contentWidthClass} flex-1 space-y-6 overflow-y-auto p-5 sm:p-8`}
+            >
                 {/* 成功通知 */}
                 {notification && (
                     <div
@@ -1256,6 +1543,13 @@ export function ProductEditor() {
                     >
                         <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" /> {notification}
                     </div>
+                )}
+
+                {!isCreateMode && productData?.product && (
+                    <NextAdminPageBlocks
+                        pageId="product-detail"
+                        entity={productData.product as unknown as Record<string, unknown>}
+                    />
                 )}
 
                 {/* 错误提示 */}
@@ -1476,6 +1770,109 @@ export function ProductEditor() {
                             </div>
                         </div>
 
+                        {/* 商品级履约类型与售后政策 */}
+                        <div className="space-y-5 rounded-xl border border-slate-200 bg-white p-6 shadow-2xs">
+                            <div className="border-b border-slate-100 pb-3">
+                                <h3 className="text-sm font-bold text-slate-900">商品类型与交付政策</h3>
+                                <p className="mt-1 text-xs leading-5 text-slate-400">
+                                    商品类型固定在 SPU 级，同一商品下所有 SKU 使用相同类型；数字交付方式仍按
+                                    SKU 配置。
+                                </p>
+                            </div>
+
+                            <div className="grid gap-4 md:grid-cols-2">
+                                <div>
+                                    <div className="mb-2 text-xs font-bold text-slate-700">商品类型</div>
+                                    {fixedFulfillmentType ? (
+                                        <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs leading-5 text-blue-800">
+                                            当前店铺为
+                                            <strong>
+                                                {commerceMode === 'DIGITAL_ONLY'
+                                                    ? '仅虚拟商品'
+                                                    : '仅实物商品'}
+                                            </strong>
+                                            模式，本商品固定为
+                                            <strong>
+                                                {fixedFulfillmentType === 'digital' ? '虚拟商品' : '实物商品'}
+                                            </strong>
+                                            。
+                                        </div>
+                                    ) : (
+                                        <div className="grid grid-cols-2 gap-2">
+                                            {(
+                                                [
+                                                    ['digital', '虚拟商品', '通过邮箱完成数字交付'],
+                                                    ['physical', '实物商品', '需要地址、库存与物流配送'],
+                                                ] as const
+                                            ).map(([value, label, detail]) => (
+                                                <button
+                                                    key={value}
+                                                    type="button"
+                                                    onClick={() => setFulfillmentType(value)}
+                                                    className={`rounded-lg border p-3 text-left transition-colors ${fulfillmentType === value ? 'border-blue-500 bg-blue-50 text-blue-800' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}
+                                                >
+                                                    <span className="block text-xs font-bold">{label}</span>
+                                                    <span className="mt-1 block text-[10px] leading-4">
+                                                        {detail}
+                                                    </span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div>
+                                    <label
+                                        htmlFor="product-refund-policy"
+                                        className="mb-2 block text-xs font-bold text-slate-700"
+                                    >
+                                        售后退款政策
+                                    </label>
+                                    <select
+                                        id="product-refund-policy"
+                                        value={refundPolicy}
+                                        onChange={event =>
+                                            setRefundPolicy(event.target.value as RefundPolicy)
+                                        }
+                                        className="w-full rounded-lg border border-slate-300 bg-white p-2.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                    >
+                                        <option value="MERCHANT_REVIEW">允许申请退款，由商家审核</option>
+                                        <option value="SEVEN_DAY_NO_REASON">7 天无理由</option>
+                                        <option value="NON_REFUNDABLE">不支持退款</option>
+                                    </select>
+                                    <p className="mt-2 text-[10px] leading-4 text-slate-400">
+                                        虚拟商品交付完成后的退款进入人工客服处理，不自动回收已发送的成品或卡密。
+                                    </p>
+                                </div>
+                            </div>
+
+                            {effectiveFulfillmentType === 'digital' && (
+                                <div className="max-w-sm">
+                                    <label
+                                        htmlFor="manual-delivery-sla"
+                                        className="mb-1 block text-xs font-bold text-slate-700"
+                                    >
+                                        人工交付预计时长（分钟）
+                                    </label>
+                                    <input
+                                        id="manual-delivery-sla"
+                                        type="number"
+                                        min="5"
+                                        max="525600"
+                                        step="5"
+                                        value={manualDeliverySlaMinutes}
+                                        onChange={event =>
+                                            setManualDeliverySlaMinutes(Number(event.target.value) || 0)
+                                        }
+                                        className="w-full rounded-lg border border-slate-300 bg-white p-2.5 text-xs font-mono text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                    />
+                                    <p className="mt-1 text-[10px] leading-4 text-slate-400">
+                                        仅人工交付 SKU 使用；商品页、结账页和订单详情会展示该预计时效。
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+
                         {/* 真实素材主图 */}
                         <div className="bg-white rounded-xl shadow-2xs border border-slate-200 p-6 space-y-4">
                             <div className="border-b border-slate-100 pb-3 flex justify-between items-center">
@@ -1603,6 +2000,21 @@ export function ProductEditor() {
                                 )}
                             </div>
                         </div>
+                        <DynamicCustomFieldsForm
+                            fields={productExtensionFields}
+                            values={dynamicCustomFieldValues}
+                            onChange={setDynamicCustomFieldValues}
+                            disabled={saving}
+                            title="商品扩展属性"
+                            languageCodes={[
+                                ...new Set([
+                                    SOURCE_LANGUAGE_CODE,
+                                    ...(productData?.product?.translations.map(
+                                        translation => translation.languageCode,
+                                    ) ?? []),
+                                ]),
+                            ]}
+                        />
                     </div>
                 )}
 
@@ -1680,10 +2092,14 @@ export function ProductEditor() {
                             <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
                                 <div>
                                     <h3 className="text-sm font-bold text-slate-900">
-                                        SKU 规格变体与在手库存
+                                        {effectiveFulfillmentType === 'digital'
+                                            ? 'SKU 规格变体与数字交付'
+                                            : 'SKU 规格变体与在手库存'}
                                     </h3>
                                     <p className="text-xs text-slate-400 mt-0.5">
-                                        为商品配置不同规格型号、条形码 SKU、售价与初始库存
+                                        {effectiveFulfillmentType === 'digital'
+                                            ? '为每个 SKU 配置售价、交付方式和对应的虚拟库存规则'
+                                            : '为商品配置不同规格型号、条形码 SKU、售价与初始库存'}
                                     </p>
                                 </div>
                                 <button
@@ -1802,8 +2218,18 @@ export function ProductEditor() {
                                                     售价 ({activeCurrencyCode}){' '}
                                                     <span className="text-rose-500">*</span>
                                                 </th>
-                                                <th className="p-3.5">在手库存 (OnHand)</th>
-                                                <th className="p-3.5">锁定库存</th>
+                                                {effectiveFulfillmentType === 'digital' ? (
+                                                    <>
+                                                        <th className="p-3.5 min-w-[150px]">数字交付方式</th>
+                                                        <th className="p-3.5 min-w-[130px]">库存规则</th>
+                                                        <th className="p-3.5">可售库存</th>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <th className="p-3.5">在手库存 (OnHand)</th>
+                                                        <th className="p-3.5">锁定库存</th>
+                                                    </>
+                                                )}
                                                 <th className="p-3.5 text-center">启用状态</th>
                                                 <th className="p-3.5 text-right w-16">操作</th>
                                             </tr>
@@ -1888,31 +2314,137 @@ export function ProductEditor() {
                                                             )}
                                                         </td>
 
-                                                        {/* Stock on Hand */}
-                                                        <td className="p-3.5">
-                                                            <input
-                                                                type="number"
-                                                                aria-label={`第 ${index + 1} 行在手库存`}
-                                                                min="0"
-                                                                value={variant.stockOnHand}
-                                                                onChange={e =>
-                                                                    handleVariantFieldChange(
-                                                                        index,
-                                                                        'stockOnHand',
-                                                                        e.target.value === ''
-                                                                            ? ''
-                                                                            : parseInt(e.target.value) || 0,
-                                                                    )
-                                                                }
-                                                                placeholder="0"
-                                                                className="w-20 font-mono font-bold text-slate-800 border border-slate-300 rounded px-2 py-1 bg-white"
-                                                            />
-                                                        </td>
+                                                        {effectiveFulfillmentType === 'digital' ? (
+                                                            <>
+                                                                <td className="p-3.5">
+                                                                    <select
+                                                                        aria-label={`第 ${index + 1} 行数字交付方式`}
+                                                                        value={variant.digitalDeliveryMode}
+                                                                        onChange={event =>
+                                                                            handleVariantFieldChange(
+                                                                                index,
+                                                                                'digitalDeliveryMode',
+                                                                                event.target
+                                                                                    .value as DigitalDeliveryMode,
+                                                                            )
+                                                                        }
+                                                                        className="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700"
+                                                                    >
+                                                                        <option value="manual_service">
+                                                                            人工交付
+                                                                        </option>
+                                                                        <option value="file_download">
+                                                                            文件下载
+                                                                        </option>
+                                                                        <option value="auto_card">
+                                                                            号池自动发卡
+                                                                        </option>
+                                                                    </select>
+                                                                </td>
+                                                                <td className="p-3.5">
+                                                                    {variant.digitalDeliveryMode ===
+                                                                    'file_download' ? (
+                                                                        <select
+                                                                            aria-label={`第 ${index + 1} 行数字库存规则`}
+                                                                            value={variant.digitalStockPolicy}
+                                                                            onChange={event =>
+                                                                                handleVariantFieldChange(
+                                                                                    index,
+                                                                                    'digitalStockPolicy',
+                                                                                    event.target
+                                                                                        .value as DigitalStockPolicy,
+                                                                                )
+                                                                            }
+                                                                            className="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700"
+                                                                        >
+                                                                            <option value="limited">
+                                                                                限制库存
+                                                                            </option>
+                                                                            <option value="unlimited">
+                                                                                无限库存
+                                                                            </option>
+                                                                        </select>
+                                                                    ) : (
+                                                                        <span className="rounded bg-slate-100 px-2 py-1 text-[11px] font-bold text-slate-600">
+                                                                            {variant.digitalDeliveryMode ===
+                                                                            'auto_card'
+                                                                                ? '号池实时库存'
+                                                                                : '手动限制库存'}
+                                                                        </span>
+                                                                    )}
+                                                                </td>
+                                                                <td className="p-3.5">
+                                                                    {variant.digitalDeliveryMode ===
+                                                                    'auto_card' ? (
+                                                                        <div className="space-y-1">
+                                                                            <div className="font-mono font-bold text-violet-700">
+                                                                                {variant.autoCardAvailableStock ??
+                                                                                    0}
+                                                                            </div>
+                                                                            <span className="text-[10px] text-slate-400">
+                                                                                只读，来自号池
+                                                                            </span>
+                                                                        </div>
+                                                                    ) : variant.digitalStockPolicy ===
+                                                                      'unlimited' ? (
+                                                                        <span className="font-bold text-emerald-700">
+                                                                            无限
+                                                                        </span>
+                                                                    ) : (
+                                                                        <input
+                                                                            type="number"
+                                                                            aria-label={`第 ${index + 1} 行可售库存`}
+                                                                            min="0"
+                                                                            value={variant.stockOnHand}
+                                                                            onChange={event =>
+                                                                                handleVariantFieldChange(
+                                                                                    index,
+                                                                                    'stockOnHand',
+                                                                                    event.target.value === ''
+                                                                                        ? ''
+                                                                                        : parseInt(
+                                                                                              event.target
+                                                                                                  .value,
+                                                                                          ) || 0,
+                                                                                )
+                                                                            }
+                                                                            placeholder="0"
+                                                                            className="w-20 rounded border border-slate-300 bg-white px-2 py-1 font-mono font-bold text-slate-800"
+                                                                        />
+                                                                    )}
+                                                                </td>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                {/* Stock on Hand */}
+                                                                <td className="p-3.5">
+                                                                    <input
+                                                                        type="number"
+                                                                        aria-label={`第 ${index + 1} 行在手库存`}
+                                                                        min="0"
+                                                                        value={variant.stockOnHand}
+                                                                        onChange={event =>
+                                                                            handleVariantFieldChange(
+                                                                                index,
+                                                                                'stockOnHand',
+                                                                                event.target.value === ''
+                                                                                    ? ''
+                                                                                    : parseInt(
+                                                                                          event.target.value,
+                                                                                      ) || 0,
+                                                                            )
+                                                                        }
+                                                                        placeholder="0"
+                                                                        className="w-20 rounded border border-slate-300 bg-white px-2 py-1 font-mono font-bold text-slate-800"
+                                                                    />
+                                                                </td>
 
-                                                        {/* Allocated Stock */}
-                                                        <td className="p-3.5 font-mono text-slate-400">
-                                                            {variant.stockAllocated || 0}
-                                                        </td>
+                                                                {/* Allocated Stock */}
+                                                                <td className="p-3.5 font-mono text-slate-400">
+                                                                    {variant.stockAllocated || 0}
+                                                                </td>
+                                                            </>
+                                                        )}
 
                                                         {/* Enabled */}
                                                         <td className="p-3.5 text-center">

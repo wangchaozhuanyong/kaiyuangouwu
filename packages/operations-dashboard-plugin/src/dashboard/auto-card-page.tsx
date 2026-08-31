@@ -89,7 +89,7 @@ const messages = {
     settingsDescription: msg({
         id: 'operations.autoCard.settingsDescription',
         message:
-            'Each pasted line is one sellable credential. Field order controls parsing and email display.',
+            'Each pasted line is one sellable credential. Fields validate the line; delivery preserves and emails the original imported format.',
     }),
     enabled: msg({ id: 'operations.autoCard.enabled', message: 'Enable automatic delivery' }),
     enabledDescription: msg({

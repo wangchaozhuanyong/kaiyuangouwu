@@ -10,6 +10,7 @@ import {
     orderItemsArePartiallyDelivered,
     OrderLine,
     OrderService,
+    Product,
     ProductVariantService,
     RequestContext,
     RequestContextService,
@@ -85,7 +86,7 @@ export interface AutoCardEmailPayload {
     sku: string;
     isChinese: boolean;
     instructions: string;
-    credentials: Array<{ number: number; fields: AutoCardDisplayField[] }>;
+    credentials: Array<{ number: number; rawPayload: string; fields: AutoCardDisplayField[] }>;
 }
 
 @Injectable()
@@ -136,6 +137,12 @@ export class AutoCardService {
         const variant = await this.productVariantService.findOne(ctx, input.productVariantId);
         if (!variant) {
             throw new UserInputError('商品 SKU 不存在或不属于当前店铺');
+        }
+        const product = await this.connection.getRepository(ctx, Product).findOne({
+            where: { id: variant.productId },
+        });
+        if (product?.customFields?.fulfillmentType !== 'digital') {
+            throw new UserInputError('只有虚拟商品 SKU 才能启用号池自动发卡');
         }
         const repository = this.connection.getRepository(ctx, AutoCardConfig);
         let config = await repository.findOne({
@@ -232,6 +239,7 @@ export class AutoCardService {
                     ...variant.customFields,
                     fulfillmentType: 'digital',
                     digitalDeliveryMode: 'auto_card',
+                    digitalStockPolicy: 'pool_derived',
                 },
             },
         ]);
@@ -306,6 +314,7 @@ export class AutoCardService {
                         state: 'AVAILABLE',
                         sequence: ++sequence,
                         encryptedPayload: this.cipher.encrypt(row.values),
+                        encryptedRawPayload: this.cipher.encrypt({ rawPayload: row.rawPayload }),
                         fingerprint: this.cipher.fingerprint(config.id, row.values),
                         assignedAt: null,
                         disabledReason: null,
@@ -525,6 +534,13 @@ export class AutoCardService {
         if (!['ALLOCATED', 'RETRYING', 'SENT'].includes(delivery.state)) {
             throw new Error('当前发卡记录尚未分配卡密');
         }
+        if (delivery.poolItems.length !== delivery.quantity) {
+            delivery.state = 'MANUAL_REVIEW';
+            delivery.lastError = `发卡数量异常：订单需要 ${delivery.quantity} 份，实际绑定 ${delivery.poolItems.length} 份`;
+            await this.connection.getRepository(ctx, AutoCardDelivery).save(delivery);
+            await this.addEvent(ctx, delivery, 'MANUAL_REVIEW', delivery.lastError);
+            throw new Error(delivery.lastError);
+        }
         const fields = parseAutoCardFieldsJson(delivery.schemaSnapshot);
         const isChinese = delivery.languageCode === 'zh_Hans';
         return {
@@ -542,6 +558,9 @@ export class AutoCardService {
                     const values = this.cipher.decrypt(item.encryptedPayload);
                     return {
                         number: index + 1,
+                        rawPayload: item.encryptedRawPayload
+                            ? (this.cipher.decrypt(item.encryptedRawPayload).rawPayload ?? '')
+                            : fields.map(field => values[field.key] ?? '').join(delivery.config.delimiter),
                         fields: fields.map(field => ({
                             ...field,
                             label: autoCardFieldLabel(field, isChinese),

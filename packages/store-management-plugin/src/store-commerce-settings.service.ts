@@ -67,6 +67,12 @@ export class StoreCommerceSettingsService {
         const taxZoneName = taxZone?.name ?? null;
         const shippingZoneName = shippingZone?.name ?? null;
         const managedTaxEnabled = taxZoneName === storeZoneName(channel.code, 'tax');
+        const commerceMode = channel.customFields?.commerceMode ?? 'DIGITAL_ONLY';
+        const shippingReady =
+            Boolean(countryCode && shippingMethod) &&
+            shippingZoneName === storeZoneName(channel.code, 'shipping') &&
+            shippingMethod?.calculator?.code === SHIPPING_CALCULATOR_CODE &&
+            shippingMethod?.checker?.code === SHIPPING_CHECKER_CODE;
 
         return {
             channelId: channel.id,
@@ -117,11 +123,9 @@ export class StoreCommerceSettingsService {
             estimateMaxDays: numericArg(shippingMethod?.calculator?.args, 'estimateMaxDays', 3),
             blockedPostalPrefixes: stringArg(shippingMethod?.checker?.args, 'blockedPostalPrefixes', ''),
             ready:
-                Boolean(countryCode && shippingMethod) &&
+                Boolean(countryCode) &&
                 (!managedTaxEnabled || Boolean(taxRate)) &&
-                shippingZoneName === storeZoneName(channel.code, 'shipping') &&
-                shippingMethod?.calculator?.code === SHIPPING_CALCULATOR_CODE &&
-                shippingMethod?.checker?.code === SHIPPING_CHECKER_CODE,
+                (commerceMode === 'DIGITAL_ONLY' || shippingReady),
         };
     }
 

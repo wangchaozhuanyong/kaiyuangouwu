@@ -24,26 +24,34 @@ import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { sensitiveActionContext } from '../../apollo';
+import { useConfirmDialog } from '../../components/confirm-dialog-context';
 import {
     ADD_CUSTOMER_NOTE_MUTATION,
     ADD_CUSTOMER_TO_GROUP_MUTATION,
+    CREATE_CUSTOMER_ADDRESS_MUTATION,
     CREATE_CUSTOMER_GROUP_MUTATION,
     CUSTOMERS_QUERY,
+    CUSTOMER_ADDRESS_COUNTRIES_QUERY,
     CUSTOMER_DETAIL_QUERY,
     CUSTOMER_GROUPS_QUERY,
     CUSTOMER_GROUP_MEMBERS_QUERY,
+    CustomerAddressCountriesResult,
+    CustomerAddressRecord,
     CustomerDetailResult,
     CustomerGroupMembersResult,
     CustomerGroupRecord,
     CustomerGroupsResult,
     CustomerListRecord,
     CustomersResult,
+    DELETE_CUSTOMER_ADDRESS_MUTATION,
     DELETE_CUSTOMER_GROUP_MUTATION,
     REMOVE_CUSTOMER_FROM_GROUP_MUTATION,
+    UPDATE_CUSTOMER_ADDRESS_MUTATION,
     UPDATE_CUSTOMER_GROUP_MUTATION,
     UPDATE_CUSTOMER_MUTATION,
 } from '../../graphql/customers.graphql';
 import { useAccessibleDialog } from '../../hooks/use-accessible-dialog';
+import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { useUrlListState } from '../../hooks/use-url-list-state';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import {
@@ -71,6 +79,67 @@ const emptyCustomerForm: CustomerForm = {
     emailAddress: '',
     phoneNumber: '',
 };
+
+interface CustomerAddressForm {
+    fullName: string;
+    company: string;
+    streetLine1: string;
+    streetLine2: string;
+    city: string;
+    province: string;
+    postalCode: string;
+    countryCode: string;
+    phoneNumber: string;
+    defaultShippingAddress: boolean;
+    defaultBillingAddress: boolean;
+}
+
+const emptyCustomerAddressForm: CustomerAddressForm = {
+    fullName: '',
+    company: '',
+    streetLine1: '',
+    streetLine2: '',
+    city: '',
+    province: '',
+    postalCode: '',
+    countryCode: '',
+    phoneNumber: '',
+    defaultShippingAddress: false,
+    defaultBillingAddress: false,
+};
+
+function addressToForm(address: CustomerAddressRecord | null): CustomerAddressForm {
+    if (!address) return emptyCustomerAddressForm;
+    return {
+        fullName: address.fullName ?? '',
+        company: address.company ?? '',
+        streetLine1: address.streetLine1,
+        streetLine2: address.streetLine2 ?? '',
+        city: address.city ?? '',
+        province: address.province ?? '',
+        postalCode: address.postalCode ?? '',
+        countryCode: address.country?.code ?? '',
+        phoneNumber: address.phoneNumber ?? '',
+        defaultShippingAddress: Boolean(address.defaultShippingAddress),
+        defaultBillingAddress: Boolean(address.defaultBillingAddress),
+    };
+}
+
+function addressInput(form: CustomerAddressForm) {
+    return {
+        fullName: form.fullName.trim() || null,
+        company: form.company.trim() || null,
+        streetLine1: form.streetLine1.trim(),
+        streetLine2: form.streetLine2.trim() || null,
+        city: form.city.trim() || null,
+        province: form.province.trim() || null,
+        postalCode: form.postalCode.trim() || null,
+        countryCode: form.countryCode,
+        phoneNumber: form.phoneNumber.trim() || null,
+        defaultShippingAddress: form.defaultShippingAddress,
+        defaultBillingAddress: form.defaultBillingAddress,
+    };
+}
 
 function customerName(customer: Pick<CustomerListRecord, 'firstName' | 'lastName' | 'emailAddress'>) {
     return [customer.lastName, customer.firstName].filter(Boolean).join('') || customer.emailAddress;
@@ -182,7 +251,7 @@ export function CustomersModule() {
     return (
         <div className="flex h-full flex-col bg-slate-50">
             <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-4 sm:px-8">
-                <div className="mx-auto flex w-full max-w-[1500px] flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                         <h1 className="text-xl font-bold text-slate-900">客户管理</h1>
                         <p className="mt-1 text-xs text-slate-500">
@@ -212,7 +281,7 @@ export function CustomersModule() {
                 </div>
             </header>
 
-            <main className="mx-auto w-full max-w-[1500px] flex-1 space-y-4 overflow-y-auto p-5 sm:p-8">
+            <main className="w-full max-w-none flex-1 space-y-4 overflow-y-auto p-5 sm:p-8">
                 {notice && (
                     <StatusMessage kind="success" onClose={() => setNotice('')}>
                         {notice}
@@ -445,13 +514,33 @@ function CustomerDrawer({
     const [formDraft, setFormDraft] = useState<CustomerForm | null>(null);
     const [note, setNote] = useState('');
     const [selectedGroup, setSelectedGroup] = useState('');
+    const [addressEditor, setAddressEditor] = useState<CustomerAddressRecord | 'create' | null>(null);
+
+    const { hasAnyPermission } = useAdminPermissions();
+    const canCreateAddress = hasAnyPermission(['CreateCustomer']);
+    const canUpdateCustomer = hasAnyPermission(['UpdateCustomer']);
+    const canDeleteAddress = hasAnyPermission(['DeleteCustomer']);
+    const requestConfirmation = useConfirmDialog();
+    const countriesQuery = useQuery<CustomerAddressCountriesResult>(CUSTOMER_ADDRESS_COUNTRIES_QUERY, {
+        skip: !addressEditor,
+        fetchPolicy: 'cache-first',
+    });
 
     const [updateCustomer, updateState] = useMutation(UPDATE_CUSTOMER_MUTATION);
+    const [createAddress, createAddressState] = useMutation(CREATE_CUSTOMER_ADDRESS_MUTATION);
+    const [updateAddress, updateAddressState] = useMutation(UPDATE_CUSTOMER_ADDRESS_MUTATION);
+    const [deleteAddress, deleteAddressState] = useMutation(DELETE_CUSTOMER_ADDRESS_MUTATION);
     const [addNote, noteState] = useMutation(ADD_CUSTOMER_NOTE_MUTATION);
     const [addToGroup, addGroupState] = useMutation(ADD_CUSTOMER_TO_GROUP_MUTATION);
     const [removeFromGroup, removeGroupState] = useMutation(REMOVE_CUSTOMER_FROM_GROUP_MUTATION);
     const actionPending =
-        updateState.loading || noteState.loading || addGroupState.loading || removeGroupState.loading;
+        updateState.loading ||
+        noteState.loading ||
+        addGroupState.loading ||
+        removeGroupState.loading ||
+        createAddressState.loading ||
+        updateAddressState.loading ||
+        deleteAddressState.loading;
     const { dialogRef: drawerDialogRef, titleId: drawerTitleId } = useAccessibleDialog(
         onClose,
         Boolean(customerId),
@@ -523,6 +612,48 @@ function CustomerDrawer({
             setSelectedGroup('');
             await refetch();
             await onChanged(kind === 'add' ? '客户已加入分组' : '客户已移出分组');
+        } catch (mutationError) {
+            onError(errorText(mutationError));
+        }
+    };
+    const saveAddress = async (addressForm: CustomerAddressForm) => {
+        if (!customer || !addressEditor) return;
+        if (!addressForm.streetLine1.trim()) return onError('请填写详细地址');
+        if (!addressForm.countryCode) return onError('请选择国家或地区');
+        try {
+            if (addressEditor === 'create') {
+                await createAddress({
+                    variables: { customerId: customer.id, input: addressInput(addressForm) },
+                });
+            } else {
+                await updateAddress({
+                    variables: {
+                        input: { id: addressEditor.id, ...addressInput(addressForm) },
+                    },
+                });
+            }
+            setAddressEditor(null);
+            await refetch();
+            await onChanged(addressEditor === 'create' ? '客户地址已新增' : '客户地址已更新');
+        } catch (mutationError) {
+            onError(errorText(mutationError));
+        }
+    };
+    const removeAddress = async (address: CustomerAddressRecord) => {
+        const confirmed = await requestConfirmation({
+            title: '删除客户地址？',
+            description: `将删除「${address.fullName || customerName(customer!)}」的这条地址。该操作无法撤销。`,
+            confirmLabel: '删除地址',
+            tone: 'danger',
+        });
+        if (!confirmed) return;
+        try {
+            const result = await deleteAddress({ variables: { id: address.id } });
+            const success = (result.data as { deleteCustomerAddress?: { success?: boolean } } | undefined)
+                ?.deleteCustomerAddress?.success;
+            if (!success) throw new Error('后端未确认地址已删除');
+            await refetch();
+            await onChanged('客户地址已删除');
         } catch (mutationError) {
             onError(errorText(mutationError));
         }
@@ -624,7 +755,7 @@ function CustomerDrawer({
                                         <CircleUserRound className="h-4 w-4 text-blue-600" />
                                         基础资料
                                     </h3>
-                                    {!editing && (
+                                    {!editing && canUpdateCustomer && (
                                         <button
                                             type="button"
                                             onClick={() => setEditing(true)}
@@ -668,22 +799,24 @@ function CustomerDrawer({
                                                 className="inline-flex items-center gap-1 rounded-lg bg-blue-50 px-2.5 py-1 text-[11px] font-bold text-blue-700"
                                             >
                                                 {group.name}
-                                                <button
-                                                    type="button"
-                                                    onClick={() => void changeGroup('remove', group.id)}
-                                                    disabled={actionPending}
-                                                    className="text-blue-400 hover:text-rose-600"
-                                                    aria-label={`移出${group.name}`}
-                                                >
-                                                    <X className="h-3 w-3" />
-                                                </button>
+                                                {canUpdateCustomer && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => void changeGroup('remove', group.id)}
+                                                        disabled={actionPending}
+                                                        className="text-blue-400 hover:text-rose-600"
+                                                        aria-label={`移出${group.name}`}
+                                                    >
+                                                        <X className="h-3 w-3" />
+                                                    </button>
+                                                )}
                                             </span>
                                         ))
                                     ) : (
                                         <span className="text-xs text-slate-400">尚未加入任何分组</span>
                                     )}
                                 </div>
-                                {availableGroups.length > 0 && (
+                                {canUpdateCustomer && availableGroups.length > 0 && (
                                     <div className="mt-3 flex gap-2">
                                         <select
                                             value={selectedGroup}
@@ -709,10 +842,22 @@ function CustomerDrawer({
                                 )}
                             </section>
                             <section className="rounded-xl border border-slate-200 p-4">
-                                <h3 className="mb-3 flex items-center gap-1.5 text-xs font-bold text-slate-900">
-                                    <MapPin className="h-4 w-4 text-emerald-600" />
-                                    收货地址
-                                </h3>
+                                <div className="mb-3 flex items-center justify-between gap-3">
+                                    <h3 className="flex items-center gap-1.5 text-xs font-bold text-slate-900">
+                                        <MapPin className="h-4 w-4 text-emerald-600" />
+                                        客户地址
+                                    </h3>
+                                    {canCreateAddress && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setAddressEditor('create')}
+                                            className="flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:underline"
+                                        >
+                                            <Plus className="h-3 w-3" />
+                                            新增地址
+                                        </button>
+                                    )}
+                                </div>
                                 <div className="space-y-2">
                                     {customer.addresses?.length ? (
                                         customer.addresses.map(address => (
@@ -720,13 +865,52 @@ function CustomerDrawer({
                                                 key={address.id}
                                                 className="rounded-lg bg-slate-50 p-3 text-xs text-slate-700"
                                             >
-                                                <div className="flex flex-wrap items-center gap-2 font-bold text-slate-900">
-                                                    <span>{address.fullName || customerName(customer)}</span>
-                                                    <span>{address.phoneNumber || customer.phoneNumber}</span>
-                                                    {address.defaultShippingAddress && (
-                                                        <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[9px] text-emerald-700">
-                                                            默认收货
+                                                <div className="flex items-start justify-between gap-3">
+                                                    <div className="flex flex-wrap items-center gap-2 font-bold text-slate-900">
+                                                        <span>
+                                                            {address.fullName || customerName(customer)}
                                                         </span>
+                                                        <span>
+                                                            {address.phoneNumber || customer.phoneNumber}
+                                                        </span>
+                                                        {address.defaultShippingAddress && (
+                                                            <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[9px] text-emerald-700">
+                                                                默认收货
+                                                            </span>
+                                                        )}
+                                                        {address.defaultBillingAddress && (
+                                                            <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[9px] text-blue-700">
+                                                                默认账单
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    {(canUpdateCustomer || canDeleteAddress) && (
+                                                        <div className="flex shrink-0 gap-1">
+                                                            {canUpdateCustomer && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setAddressEditor(address)}
+                                                                    disabled={actionPending}
+                                                                    className="rounded p-1 text-slate-400 hover:bg-white hover:text-blue-600"
+                                                                    aria-label="编辑地址"
+                                                                >
+                                                                    <Edit3 className="h-3.5 w-3.5" />
+                                                                </button>
+                                                            )}
+                                                            {canDeleteAddress && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() =>
+                                                                        void removeAddress(address)
+                                                                    }
+                                                                    disabled={actionPending}
+                                                                    className="rounded p-1 text-slate-400 hover:bg-white hover:text-rose-600"
+                                                                    aria-label="删除地址"
+                                                                >
+                                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                                </button>
+                                                            )}
+                                                        </div>
                                                     )}
                                                 </div>
                                                 <p className="mt-1 leading-5 text-slate-500">
@@ -757,24 +941,28 @@ function CustomerDrawer({
                                     当前读取最近 {customer.history.items.length} /{' '}
                                     {customer.history.totalItems} 条客户历史中的内部备注
                                 </p>
-                                <div className="flex gap-2">
-                                    <textarea
-                                        value={note}
-                                        onChange={event => setNote(event.target.value)}
-                                        rows={2}
-                                        maxLength={500}
-                                        placeholder="记录回访、偏好或异常情况，仅后台可见"
-                                        className="min-w-0 flex-1 rounded-lg border border-slate-300 p-2.5 text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                                    />
-                                    <button
-                                        type="button"
-                                        onClick={() => void saveNote()}
-                                        disabled={!note.trim() || noteState.loading}
-                                        className="self-end rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
-                                    >
-                                        保存
-                                    </button>
-                                </div>
+                                {canUpdateCustomer ? (
+                                    <div className="flex gap-2">
+                                        <textarea
+                                            value={note}
+                                            onChange={event => setNote(event.target.value)}
+                                            rows={2}
+                                            maxLength={500}
+                                            placeholder="记录回访、偏好或异常情况，仅后台可见"
+                                            className="min-w-0 flex-1 rounded-lg border border-slate-300 p-2.5 text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => void saveNote()}
+                                            disabled={!note.trim() || noteState.loading}
+                                            className="self-end rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
+                                        >
+                                            保存
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <p className="text-xs text-slate-400">当前账号仅可查看跟进记录</p>
+                                )}
                                 <div className="mt-3 space-y-2">
                                     {customer.history.items.filter(isCustomerNote).length ? (
                                         customer.history.items.filter(isCustomerNote).map(entry => (
@@ -861,7 +1049,153 @@ function CustomerDrawer({
                     </button>
                 </div>
             </aside>
+            {addressEditor && (
+                <CustomerAddressEditor
+                    key={addressEditor === 'create' ? 'create' : addressEditor.id}
+                    address={addressEditor === 'create' ? null : addressEditor}
+                    countries={countriesQuery.data?.countries.items ?? []}
+                    countriesLoading={countriesQuery.loading}
+                    pending={createAddressState.loading || updateAddressState.loading}
+                    onClose={() => setAddressEditor(null)}
+                    onSave={formValue => void saveAddress(formValue)}
+                />
+            )}
         </>
+    );
+}
+
+function CustomerAddressEditor({
+    address,
+    countries,
+    countriesLoading,
+    pending,
+    onClose,
+    onSave,
+}: {
+    address: CustomerAddressRecord | null;
+    countries: Array<{ id: string; code: string; name: string }>;
+    countriesLoading: boolean;
+    pending: boolean;
+    onClose: () => void;
+    onSave: (form: CustomerAddressForm) => void;
+}) {
+    const [form, setForm] = useState(() => addressToForm(address));
+    const countryOptions =
+        form.countryCode && !countries.some(country => country.code === form.countryCode)
+            ? [
+                  {
+                      id: form.countryCode,
+                      code: form.countryCode,
+                      name: address?.country?.name ?? form.countryCode,
+                  },
+                  ...countries,
+              ]
+            : countries;
+    return (
+        <Modal
+            title={address ? '编辑客户地址' : '新增客户地址'}
+            description="国家或地区必须使用后台已启用的国家代码。"
+            onClose={onClose}
+            width="max-w-2xl"
+        >
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <TextInput
+                    label="收件人"
+                    value={form.fullName}
+                    onChange={value => setForm({ ...form, fullName: value })}
+                />
+                <TextInput
+                    label="手机号"
+                    value={form.phoneNumber}
+                    onChange={value => setForm({ ...form, phoneNumber: value })}
+                />
+                <TextInput
+                    label="公司"
+                    value={form.company}
+                    onChange={value => setForm({ ...form, company: value })}
+                />
+                <label className="text-xs font-bold text-slate-700">
+                    国家或地区 *
+                    <select
+                        value={form.countryCode}
+                        onChange={event => setForm({ ...form, countryCode: event.target.value })}
+                        disabled={countriesLoading}
+                        className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-xs font-normal outline-none focus:border-blue-500"
+                    >
+                        <option value="">{countriesLoading ? '正在加载…' : '请选择'}</option>
+                        {countryOptions.map(country => (
+                            <option key={country.id} value={country.code}>
+                                {country.name}（{country.code}）
+                            </option>
+                        ))}
+                    </select>
+                </label>
+                <div className="sm:col-span-2">
+                    <TextInput
+                        label="详细地址 *"
+                        value={form.streetLine1}
+                        onChange={value => setForm({ ...form, streetLine1: value })}
+                    />
+                </div>
+                <div className="sm:col-span-2">
+                    <TextInput
+                        label="地址补充"
+                        value={form.streetLine2}
+                        onChange={value => setForm({ ...form, streetLine2: value })}
+                    />
+                </div>
+                <TextInput
+                    label="城市"
+                    value={form.city}
+                    onChange={value => setForm({ ...form, city: value })}
+                />
+                <TextInput
+                    label="州 / 省"
+                    value={form.province}
+                    onChange={value => setForm({ ...form, province: value })}
+                />
+                <TextInput
+                    label="邮政编码"
+                    value={form.postalCode}
+                    onChange={value => setForm({ ...form, postalCode: value })}
+                />
+            </div>
+            <div className="mt-4 flex flex-wrap gap-4 rounded-lg bg-slate-50 p-3 text-xs text-slate-700">
+                <label className="flex items-center gap-2">
+                    <input
+                        type="checkbox"
+                        checked={form.defaultShippingAddress}
+                        onChange={event => setForm({ ...form, defaultShippingAddress: event.target.checked })}
+                    />
+                    设为默认收货地址
+                </label>
+                <label className="flex items-center gap-2">
+                    <input
+                        type="checkbox"
+                        checked={form.defaultBillingAddress}
+                        onChange={event => setForm({ ...form, defaultBillingAddress: event.target.checked })}
+                    />
+                    设为默认账单地址
+                </label>
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+                <button
+                    type="button"
+                    onClick={onClose}
+                    className="rounded-lg bg-slate-100 px-4 py-2 text-xs font-bold text-slate-700"
+                >
+                    取消
+                </button>
+                <button
+                    type="button"
+                    onClick={() => onSave(form)}
+                    disabled={pending || !form.streetLine1.trim() || !form.countryCode}
+                    className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
+                >
+                    {pending ? '保存中…' : address ? '保存地址' : '新增地址'}
+                </button>
+            </div>
+        </Modal>
     );
 }
 

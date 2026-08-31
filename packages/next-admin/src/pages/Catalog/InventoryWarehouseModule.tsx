@@ -142,6 +142,9 @@ export function InventoryWarehouseModule() {
     const requestConfirmation = useConfirmDialog();
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useUrlTab<InventoryTab>(INVENTORY_TABS, 'all');
+    const contentWidthClass = ['ALL', 'LOW_STOCK', 'OUT_OF_STOCK'].includes(activeTab)
+        ? 'max-w-none'
+        : 'max-w-7xl';
     const [searchTerm, setSearchTerm] = useState('');
     const deferredSearchTerm = useDeferredValue(searchTerm.trim());
     const [page, setPage] = useState(0);
@@ -561,7 +564,9 @@ export function InventoryWarehouseModule() {
                 ))}
             </div>
 
-            <div className="mx-auto w-full max-w-7xl flex-1 space-y-5 overflow-y-auto p-5 sm:p-8">
+            <div
+                className={`mx-auto w-full ${contentWidthClass} flex-1 space-y-5 overflow-y-auto p-5 sm:p-8`}
+            >
                 {notification && (
                     <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3.5 text-xs font-medium text-emerald-800">
                         <CheckCircle2 className="h-4 w-4" />

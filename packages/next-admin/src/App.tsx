@@ -5,6 +5,8 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 
 import { clearAuthSession, hasActiveChannelSelection, setInitialActiveChannel } from './apollo';
 import { ConfirmDialogProvider } from './components/ConfirmDialog';
+import { getNextAdminExtensionRoutes } from './extensions/extension-api';
+import './extensions/installed-extensions';
 import { InitialPasswordChangeModule } from './pages/Auth/InitialPasswordChangeModule';
 import { LoginModule } from './pages/Auth/LoginModule';
 import { routeModuleLoaders } from './route-modules';
@@ -33,9 +35,6 @@ const InventoryWarehouseModule = lazy(() =>
         default: module.InventoryWarehouseModule,
     })),
 );
-const CardPoolModule = lazy(() =>
-    routeModuleLoaders.cardPool().then(module => ({ default: module.CardPoolModule })),
-);
 const AssetsModule = lazy(() =>
     routeModuleLoaders.assets().then(module => ({ default: module.AssetsModule })),
 );
@@ -43,45 +42,14 @@ const SalesModule = lazy(() => routeModuleLoaders.sales().then(module => ({ defa
 const OrderEditor = lazy(() =>
     routeModuleLoaders.orderEditor().then(module => ({ default: module.OrderEditor })),
 );
-const AfterSalesModule = lazy(() =>
-    routeModuleLoaders.afterSales().then(module => ({ default: module.AfterSalesModule })),
+const DraftOrderEditor = lazy(() =>
+    routeModuleLoaders.orderWorkflow().then(module => ({ default: module.DraftOrderEditor })),
 );
-const ReviewsModule = lazy(() =>
-    routeModuleLoaders.reviews().then(module => ({ default: module.ReviewsModule })),
+const ModifyOrderEditor = lazy(() =>
+    routeModuleLoaders.orderWorkflow().then(module => ({ default: module.ModifyOrderEditor })),
 );
 const CustomersModule = lazy(() =>
     routeModuleLoaders.customers().then(module => ({ default: module.CustomersModule })),
-);
-const PromotionsModule = lazy(() =>
-    routeModuleLoaders.promotions().then(module => ({ default: module.PromotionsModule })),
-);
-const ReferralsModule = lazy(() =>
-    routeModuleLoaders.referrals().then(module => ({ default: module.ReferralsModule })),
-);
-const StorefrontModule = lazy(() =>
-    routeModuleLoaders.storefront().then(module => ({ default: module.StorefrontModule })),
-);
-const StorefrontContentModule = lazy(() =>
-    routeModuleLoaders.storefrontContent().then(module => ({
-        default: module.StorefrontContentModule,
-    })),
-);
-const ClientPluginsModule = lazy(() =>
-    routeModuleLoaders.clientPlugins().then(module => ({ default: module.ClientPluginsModule })),
-);
-const AiImageSettingsModule = lazy(() =>
-    routeModuleLoaders.aiImageSettings().then(module => ({
-        default: module.AiImageSettingsModule,
-    })),
-);
-const AiImageAccessModule = lazy(() =>
-    routeModuleLoaders.aiImageAccess().then(module => ({ default: module.AiImageAccessModule })),
-);
-const TranslationsModule = lazy(() =>
-    routeModuleLoaders.translations().then(module => ({ default: module.TranslationsModule })),
-);
-const StoreSettingsModule = lazy(() =>
-    routeModuleLoaders.storeSettings().then(module => ({ default: module.StoreSettingsModule })),
 );
 const RolesModule = lazy(() => routeModuleLoaders.roles().then(module => ({ default: module.RolesModule })));
 const SystemOpsModule = lazy(() =>
@@ -231,7 +199,6 @@ function App() {
                             <Route path="products/:id" element={<ProductEditor />} />
                             <Route path="categories" element={<CategoriesModule />} />
                             <Route path="inventory" element={<InventoryWarehouseModule />} />
-                            <Route path="card-pool" element={<CardPoolModule />} />
                             <Route path="assets" element={<AssetsModule />} />
                             <Route path="products" element={<Navigate to="/catalog/list" replace />} />
                             <Route path="variants" element={<Navigate to="/catalog/list" replace />} />
@@ -257,9 +224,9 @@ function App() {
                         <Route path="sales">
                             <Route index element={<Navigate to="orders" replace />} />
                             <Route path="orders" element={<SalesModule />} />
+                            <Route path="orders/draft/:id" element={<DraftOrderEditor />} />
+                            <Route path="orders/:id/modify" element={<ModifyOrderEditor />} />
                             <Route path="orders/:id" element={<OrderEditor />} />
-                            <Route path="after-sales" element={<AfterSalesModule />} />
-                            <Route path="reviews" element={<ReviewsModule />} />
                             <Route
                                 path="shipments"
                                 element={<Navigate to="/sales/orders?tab=to-fulfill" replace />}
@@ -275,8 +242,6 @@ function App() {
                         {/* 5. 🎯 营销 */}
                         <Route path="marketing">
                             <Route index element={<Navigate to="promotions" replace />} />
-                            <Route path="promotions" element={<PromotionsModule />} />
-                            <Route path="referrals" element={<ReferralsModule />} />
                             <Route path="coupons" element={<Navigate to="/marketing/promotions" replace />} />
                             <Route
                                 path="flash-sales"
@@ -291,8 +256,6 @@ function App() {
                         {/* 6. 🎨 店铺 (已去除重复的 /storefront/assets) */}
                         <Route path="storefront">
                             <Route index element={<Navigate to="decoration" replace />} />
-                            <Route path="decoration" element={<StorefrontModule />} />
-                            <Route path="content" element={<StorefrontContentModule />} />
                             <Route path="blocks" element={<Navigate to="/storefront/decoration" replace />} />
                             <Route
                                 path="announcements"
@@ -307,17 +270,19 @@ function App() {
                         {/* 7. 🔌 插件与服务 */}
                         <Route path="plugins">
                             <Route index element={<Navigate to="client-plugins" replace />} />
-                            <Route path="client-plugins" element={<ClientPluginsModule />} />
-                            <Route path="ai-settings" element={<AiImageSettingsModule />} />
-                            <Route path="ai-access" element={<AiImageAccessModule />} />
-                            <Route path="translations" element={<TranslationsModule />} />
                             <Route path="*" element={<Navigate to="client-plugins" replace />} />
                         </Route>
+
+                        {getNextAdminExtensionRoutes().map(route => {
+                            const Component = route.component;
+                            return (
+                                <Route key={route.id} path={route.path.slice(1)} element={<Component />} />
+                            );
+                        })}
 
                         {/* 8. ⚙️ 系统与权限 */}
                         <Route path="settings">
                             <Route index element={<Navigate to="store-profile" replace />} />
-                            <Route path="store-profile" element={<StoreSettingsModule />} />
                             <Route path="team" element={<RolesModule />} />
                             <Route path="system-ops" element={<SystemOpsModule />} />
                             <Route

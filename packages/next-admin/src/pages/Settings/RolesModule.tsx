@@ -21,6 +21,7 @@ import {
     CREATE_ADMINISTRATOR_MUTATION,
     CREATE_ROLE_MUTATION,
     DELETE_ADMINISTRATOR_MUTATION,
+    DELETE_ROLE_MUTATION,
     TEAM_MANAGEMENT_QUERY,
     UPDATE_ADMINISTRATOR_MUTATION,
     UPDATE_ROLE_MUTATION,
@@ -125,7 +126,7 @@ export function RolesModule() {
     return (
         <div className="flex h-full flex-col bg-slate-50">
             <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-4 sm:px-8">
-                <div className="mx-auto flex w-full max-w-[1500px] flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                             <Shield className="h-5 w-5 text-blue-600" />
@@ -158,7 +159,7 @@ export function RolesModule() {
                     </div>
                 </div>
             </header>
-            <main className="mx-auto w-full max-w-[1500px] flex-1 space-y-4 overflow-y-auto p-5 sm:p-8">
+            <main className="w-full max-w-none flex-1 space-y-4 overflow-y-auto p-5 sm:p-8">
                 {notice && (
                     <Message kind="success" onClose={() => setNotice('')}>
                         {notice}
@@ -216,6 +217,8 @@ export function RolesModule() {
                                 .length
                         }
                         onEdit={setRoleEditor}
+                        onChanged={completed}
+                        onError={setActionError}
                     />
                 )}
             </main>
@@ -369,11 +372,45 @@ function RolesTable({
     roles,
     memberCount,
     onEdit,
+    onChanged,
+    onError,
 }: {
     roles: RoleRecord[];
     memberCount: (id: string) => number;
     onEdit: (role: RoleRecord) => void;
+    onChanged: (message: string) => Promise<void>;
+    onError: (message: string) => void;
 }) {
+    const requestConfirmation = useConfirmDialog();
+    const [remove, state] = useMutation<{
+        deleteRole: { result: string; message?: string | null };
+    }>(DELETE_ROLE_MUTATION);
+    const destroy = async (role: RoleRecord) => {
+        if (isSystemRole(role)) return;
+        const count = memberCount(role.id);
+        const confirmation = await requestConfirmation({
+            title: `删除角色“${role.description || role.code}”？`,
+            description:
+                count > 0
+                    ? `当前仍有 ${count} 名员工关联此角色。后端会校验是否允许删除，请先确认员工仍有其它有效角色。`
+                    : '删除后无法恢复，请输入当前管理员密码确认。',
+            confirmLabel: '验证并删除',
+            tone: 'danger',
+            requireCurrentPassword: true,
+        });
+        if (!confirmation) return;
+        try {
+            const response = await remove({
+                variables: { id: role.id },
+                context: sensitiveActionContext(confirmation.currentPassword ?? ''),
+            });
+            const result = response.data?.deleteRole;
+            if (result?.result !== 'DELETED') throw new Error(result?.message || '角色删除失败');
+            await onChanged('角色已删除');
+        } catch (error) {
+            onError(errorText(error));
+        }
+    };
     return (
         <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
             <div className="overflow-x-auto">
@@ -418,14 +455,27 @@ function RolesTable({
                                         {role.permissions.length} 项
                                     </td>
                                     <td className="p-4">{memberCount(role.id)} 人</td>
-                                    <td className="p-4 text-right">
-                                        <button
-                                            type="button"
-                                            onClick={() => onEdit(role)}
-                                            className={secondaryButton}
-                                        >
-                                            {system ? '查看权限' : '配置权限'}
-                                        </button>
+                                    <td className="p-4">
+                                        <div className="flex justify-end gap-1">
+                                            <button
+                                                type="button"
+                                                onClick={() => onEdit(role)}
+                                                className={secondaryButton}
+                                            >
+                                                {system ? '查看权限' : '配置权限'}
+                                            </button>
+                                            {!system && (
+                                                <button
+                                                    type="button"
+                                                    disabled={state.loading}
+                                                    onClick={() => void destroy(role)}
+                                                    className={`${iconButton} text-rose-600 disabled:opacity-30`}
+                                                    aria-label={`删除角色${role.description || role.code}`}
+                                                >
+                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                </button>
+                                            )}
+                                        </div>
                                     </td>
                                 </tr>
                             );

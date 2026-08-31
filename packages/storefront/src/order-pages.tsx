@@ -874,6 +874,7 @@ export function OrderDetailPage({
     const fulfillments = order.fulfillments ?? [];
     const digitalDeliveries = order.digitalDeliveries ?? [];
     const autoCardDeliveries = order.autoCardDeliveries ?? [];
+    const manualDigitalDeliveries = order.manualDigitalDeliveries ?? [];
     const readyDownloads = digitalDeliveries.filter(
         delivery => delivery.status === 'READY' && delivery.downloadUrl,
     );
@@ -885,7 +886,9 @@ export function OrderDetailPage({
                 line.customFields.fulfillmentTypeSnapshot !== 'digital' &&
                 line.productVariant.customFields.fulfillmentType !== 'digital',
         );
-    const refundableLines = order.lines.filter(line => !isAutoCardLine(line));
+    const refundableLines = order.lines.filter(
+        line => line.customFields.refundPolicySnapshot !== 'NON_REFUNDABLE',
+    );
     const canRequestAfterSales =
         refundableLines.length > 0 &&
         ['PaymentSettled', 'PartiallyShipped', 'Shipped', 'Delivered'].includes(order.state);
@@ -972,19 +975,7 @@ export function OrderDetailPage({
                         <ProductVariantImage variant={line.productVariant} alt={line.productVariant.name} />
                         <div>
                             <strong>{line.productVariant.name}</strong>
-                            <em>
-                                {isAutoCardLine(line)
-                                    ? isZh
-                                        ? '虚拟商品 · 邮箱自动发卡 · 不支持退款'
-                                        : 'Digital credentials · email delivery · non-refundable'
-                                    : line.productVariant.customFields.fulfillmentType === 'digital'
-                                      ? isZh
-                                          ? '数字商品 · 自动交付'
-                                          : 'Digital · automatic delivery'
-                                      : isZh
-                                        ? '普通商品 · 售后支持'
-                                        : 'Physical · returns available'}
-                            </em>
+                            <em>{orderLinePolicyLabel(line, language)}</em>
                         </div>
                         <span>
                             <b>
@@ -1060,6 +1051,39 @@ export function OrderDetailPage({
                                     </small>
                                 </span>
                                 <em>{autoCardDeliveryStatus(delivery.state, language)}</em>
+                            </article>
+                        ))}
+                    </div>
+                </section>
+            )}
+            {!!manualDigitalDeliveries.length && (
+                <section
+                    className={orderPageClassName('digital-delivery-panel manual-digital-delivery-panel')}
+                    aria-labelledby="manual-digital-delivery-title"
+                >
+                    <header>
+                        <div>
+                            <Clock3 aria-hidden="true" />
+                            <strong id="manual-digital-delivery-title">
+                                {isZh ? '人工虚拟交付' : 'Manual digital delivery'}
+                            </strong>
+                        </div>
+                        <small>
+                            {isZh
+                                ? '商家完成后会将对应数量的成品发送到订单交付邮箱。'
+                                : 'The merchant will email the exact purchased quantity when preparation is complete.'}
+                        </small>
+                    </header>
+                    <div>
+                        {manualDigitalDeliveries.map(delivery => (
+                            <article key={delivery.id}>
+                                <span>
+                                    <strong>{delivery.productName}</strong>
+                                    <small>
+                                        {isZh ? '数量' : 'Qty'} × {delivery.quantity}
+                                    </small>
+                                </span>
+                                <em>{manualDigitalDeliveryStatus(delivery, locale, language)}</em>
                             </article>
                         ))}
                     </div>
@@ -2166,6 +2190,59 @@ function autoCardDeliveryStatus(
         MANUAL_REVIEW: language === 'zh' ? '发送异常，已转人工处理' : 'Delivery needs manual review',
     };
     return labels[state];
+}
+
+function manualDigitalDeliveryStatus(
+    delivery: NonNullable<Order['manualDigitalDeliveries']>[number],
+    locale: string,
+    language: StorefrontLanguage,
+): string {
+    if (delivery.state === 'SENT') return language === 'zh' ? '已发送到交付邮箱' : 'Sent to delivery email';
+    if (delivery.state === 'EMAIL_FAILED')
+        return language === 'zh' ? '邮件发送失败，正在重试' : 'Email failed; retrying';
+    if (delivery.state === 'MANUAL_REVIEW')
+        return language === 'zh' ? '交付异常，已转人工核查' : 'Delivery needs manual review';
+    if (delivery.state === 'CANCELLED') return language === 'zh' ? '交付任务已取消' : 'Delivery cancelled';
+    if (delivery.overdue)
+        return language === 'zh' ? '已超过预计时间，请联系商家' : 'Past estimate; contact the merchant';
+    return language === 'zh'
+        ? `预计 ${formatOrderDate(delivery.expectedAt, locale)} 前完成`
+        : `Expected by ${formatOrderDate(delivery.expectedAt, locale)}`;
+}
+
+function orderLinePolicyLabel(line: Order['lines'][number], language: StorefrontLanguage): string {
+    const isZh = language === 'zh';
+    const digital = line.customFields.fulfillmentTypeSnapshot === 'digital';
+    const mode = line.customFields.digitalDeliveryModeSnapshot;
+    const delivery =
+        mode === 'auto_card'
+            ? isZh
+                ? '虚拟商品 · 邮箱自动发卡'
+                : 'Digital credentials · email delivery'
+            : mode === 'file_download'
+              ? isZh
+                  ? '虚拟商品 · 文件下载'
+                  : 'Digital · file download'
+              : digital
+                ? isZh
+                    ? '虚拟商品 · 人工交付'
+                    : 'Digital · manual delivery'
+                : isZh
+                  ? '实物商品 · 物流配送'
+                  : 'Physical · shipping';
+    const policy =
+        line.customFields.refundPolicySnapshot === 'NON_REFUNDABLE'
+            ? isZh
+                ? '不支持退款'
+                : 'Non-refundable'
+            : line.customFields.refundPolicySnapshot === 'SEVEN_DAY_NO_REASON'
+              ? isZh
+                  ? '7天无理由'
+                  : 'Seven-day return'
+              : isZh
+                ? '退款需商家审核'
+                : 'Merchant-reviewed refunds';
+    return `${delivery} · ${policy}`;
 }
 
 function digitalDeliveryStatus(

@@ -16,6 +16,12 @@ const sharedEnvironment = {
     TZ: 'Asia/Shanghai',
     RUN_JOB_QUEUE: '0',
     RUN_MIGRATIONS: 'false',
+    // Public, non-secret routing invariants for the Damatong production ingress.
+    // Keeping these in the PM2 definition prevents an omitted encrypted env value
+    // from silently falling back to the local development hostname.
+    STORE_DOMAIN_CNAME_TARGET: 'damatong.net',
+    STORE_DOMAIN_ROUTING_MODE: 'require-domain',
+    STORE_DOMAIN_BYPASS_HOSTS: '',
     // Vendure's telemetry fallback writes .vendure/.installation-id below cwd,
     // which would mutate the verified immutable runtime directory.
     VENDURE_DISABLE_TELEMETRY: 'true',

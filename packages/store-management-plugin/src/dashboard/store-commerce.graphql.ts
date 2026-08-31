@@ -33,6 +33,14 @@ export const myStoreCommerceConfigurationQuery = gql`
     ${storeCommerceConfigurationFields}
 
     query MyStoreCommerceConfiguration {
+        myStoreCommerceMode {
+            mode
+            conflicts {
+                code
+                message
+                entityId
+            }
+        }
         myStoreCommerceConfiguration {
             ...StoreCommerceConfigurationFields
         }
@@ -46,6 +54,35 @@ export const myStoreCommerceConfigurationQuery = gql`
         }
     }
 `;
+
+export const myStoreCommerceModeQuery = gql`
+    query MyStoreCommerceModeForNavigation {
+        myStoreCommerceMode {
+            mode
+        }
+    }
+`;
+
+export const updateMyStoreCommerceModeMutation = gql`
+    mutation UpdateMyStoreCommerceMode($mode: StoreCommerceMode!) {
+        updateMyStoreCommerceMode(mode: $mode) {
+            mode
+            conflicts {
+                code
+                message
+                entityId
+            }
+        }
+    }
+`;
+
+export type StoreCommerceMode = 'DIGITAL_ONLY' | 'PHYSICAL_ONLY' | 'HYBRID';
+
+export interface MyStoreCommerceModeResult {
+    myStoreCommerceMode: {
+        mode: StoreCommerceMode;
+    };
+}
 
 export const updateMyStoreCommerceConfigurationMutation = gql`
     ${storeCommerceConfigurationFields}
@@ -92,8 +129,19 @@ export interface StoreCountryRecord {
 }
 
 export interface MyStoreCommerceConfigurationResult {
+    myStoreCommerceMode: {
+        mode: StoreCommerceMode;
+        conflicts: Array<{ code: string; message: string; entityId: string }>;
+    };
     myStoreCommerceConfiguration: StoreCommerceConfigurationRecord;
     countries: { items: StoreCountryRecord[] };
+}
+
+export interface UpdateMyStoreCommerceModeResult {
+    updateMyStoreCommerceMode: {
+        mode: StoreCommerceMode;
+        conflicts: Array<{ code: string; message: string; entityId: string }>;
+    };
 }
 
 export interface UpdateMyStoreCommerceConfigurationResult {

@@ -9,6 +9,7 @@ import {
     CustomerAddress,
     CustomerAddressInput,
     CustomerAddressUpdateInput,
+    CustomerDeliveryEmail,
     CustomerOrderCounts,
     ImageGenerationJob,
     ImageModelQuotaStatus,
@@ -32,6 +33,7 @@ import {
     ReferralProgram,
     RegisterCustomerInput,
     ShippingMethod,
+    StoreCommerceMode,
     StoreCouponUsageRecord,
     StoreCustomerCoupon,
     StorefrontCart,
@@ -93,6 +95,7 @@ const productFields = `
     featuredAsset { id preview }
     assets { id preview }
     collections { id name slug parentId }
+    customFields { fulfillmentType refundPolicy manualDeliverySlaMinutes }
     variants {
         id
         name
@@ -103,7 +106,7 @@ const productFields = `
         autoCardAvailableStock
         featuredAsset { id preview }
         product { id name featuredAsset { id preview } }
-        customFields { fulfillmentType digitalDeliveryMode }
+        customFields { fulfillmentType digitalDeliveryMode digitalStockPolicy }
     }
 `;
 
@@ -164,6 +167,21 @@ const orderFields = `
         sentAt
         orderLineId
     }
+    manualDigitalDeliveries {
+        id
+        createdAt
+        updatedAt
+        state
+        productName
+        sku
+        quantity
+        expectedAt
+        overdue
+        attemptCount
+        lastError
+        sentAt
+        orderLineId
+    }
     lines {
         id
         quantity
@@ -179,9 +197,9 @@ const orderFields = `
             autoCardAvailableStock
             featuredAsset { id preview }
             product { id name featuredAsset { id preview } }
-            customFields { fulfillmentType digitalDeliveryMode }
+            customFields { fulfillmentType digitalDeliveryMode digitalStockPolicy }
         }
-        customFields { fulfillmentTypeSnapshot digitalDeliveryModeSnapshot }
+        customFields { fulfillmentTypeSnapshot digitalDeliveryModeSnapshot refundPolicySnapshot manualDeliverySlaMinutesSnapshot }
     }
     checkoutFulfillment {
         fulfillmentType
@@ -2123,20 +2141,90 @@ export class ShopApi {
         return this.assertOrder(result.setOrderCustomFields);
     }
 
-    async setDeliveryEmail(deliveryEmail: string): Promise<Order> {
-        const result = await this.request<{ setOrderCustomFields: Order & ErrorResult }>(
+    async setDeliveryEmail(
+        inputOrEmail:
+            | string
+            | {
+                  contactId?: string;
+                  emailAddress?: string;
+                  confirmEmailAddress?: string;
+                  label?: string;
+                  saveToAddressBook?: boolean;
+                  isDefault?: boolean;
+              },
+    ): Promise<Order> {
+        const input =
+            typeof inputOrEmail === 'string'
+                ? { emailAddress: inputOrEmail, confirmEmailAddress: inputOrEmail }
+                : inputOrEmail;
+        const result = await this.request<{ setActiveOrderDeliveryEmail: Order }>(
             `
-                mutation SetStorefrontDeliveryEmail($input: UpdateOrderInput!) {
-                    setOrderCustomFields(input: $input) {
-                        __typename
-                        ... on Order { ${orderFields} }
-                        ... on ErrorResult { errorCode message }
-                    }
+                mutation SetStorefrontDeliveryEmail($input: SetActiveOrderDeliveryEmailInput!) {
+                    setActiveOrderDeliveryEmail(input: $input) { ${orderFields} }
                 }
             `,
-            { input: { customFields: { deliveryEmail } } },
+            { input },
         );
-        return this.assertOrder(result.setOrderCustomFields);
+        return result.setActiveOrderDeliveryEmail;
+    }
+
+    async myDeliveryEmails(signal?: AbortSignal): Promise<CustomerDeliveryEmail[]> {
+        const result = await this.request<{ myDeliveryEmails: CustomerDeliveryEmail[] }>(
+            `
+                query MyDeliveryEmails {
+                    myDeliveryEmails { id emailAddress label isDefault confirmedAt }
+                }
+            `,
+            undefined,
+            signal,
+        );
+        return result.myDeliveryEmails;
+    }
+
+    async activeStoreCommerceMode(signal?: AbortSignal): Promise<StoreCommerceMode> {
+        const result = await this.request<{ activeStoreCommerceMode: StoreCommerceMode }>(
+            `query ActiveStoreCommerceMode { activeStoreCommerceMode }`,
+            undefined,
+            signal,
+        );
+        return result.activeStoreCommerceMode;
+    }
+
+    async saveDeliveryEmail(input: {
+        emailAddress: string;
+        confirmEmailAddress: string;
+        label?: string;
+        isDefault?: boolean;
+    }): Promise<CustomerDeliveryEmail> {
+        const result = await this.request<{ saveMyDeliveryEmail: CustomerDeliveryEmail }>(
+            `
+                mutation SaveMyDeliveryEmail($input: SaveCustomerDeliveryEmailInput!) {
+                    saveMyDeliveryEmail(input: $input) { id emailAddress label isDefault confirmedAt }
+                }
+            `,
+            { input },
+        );
+        return result.saveMyDeliveryEmail;
+    }
+
+    async setDefaultDeliveryEmail(id: string): Promise<CustomerDeliveryEmail> {
+        const result = await this.request<{ setMyDefaultDeliveryEmail: CustomerDeliveryEmail }>(
+            `
+                mutation SetMyDefaultDeliveryEmail($id: ID!) {
+                    setMyDefaultDeliveryEmail(id: $id) { id emailAddress label isDefault confirmedAt }
+                }
+            `,
+            { id },
+        );
+        return result.setMyDefaultDeliveryEmail;
+    }
+
+    async deleteDeliveryEmail(id: string): Promise<boolean> {
+        const result = await this.request<{ deleteMyDeliveryEmail: boolean }>(
+            `mutation DeleteMyDeliveryEmail($id: ID!) { deleteMyDeliveryEmail(id: $id) }`,
+            { id },
+        );
+        return result.deleteMyDeliveryEmail;
     }
 
     async setCustomer(input: Record<string, string>): Promise<void> {

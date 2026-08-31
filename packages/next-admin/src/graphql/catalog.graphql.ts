@@ -11,6 +11,11 @@ export const GET_PRODUCTS = gql`
                 name
                 slug
                 description
+                customFields {
+                    fulfillmentType
+                    refundPolicy
+                    manualDeliverySlaMinutes
+                }
                 featuredAsset {
                     id
                     preview
@@ -26,6 +31,13 @@ export const GET_PRODUCTS = gql`
                     stockOnHand
                     stockAllocated
                     enabled
+                    trackInventory
+                    autoCardAvailableStock
+                    customFields {
+                        fulfillmentType
+                        digitalDeliveryMode
+                        digitalStockPolicy
+                    }
                 }
                 facetValues {
                     id
@@ -58,6 +70,11 @@ export const GET_PRODUCT_DETAIL = gql`
             name
             slug
             description
+            customFields {
+                fulfillmentType
+                refundPolicy
+                manualDeliverySlaMinutes
+            }
             featuredAsset {
                 id
                 preview
@@ -114,6 +131,12 @@ export const GET_PRODUCT_DETAIL = gql`
                 }
                 useGlobalOutOfStockThreshold
                 trackInventory
+                autoCardAvailableStock
+                customFields {
+                    fulfillmentType
+                    digitalDeliveryMode
+                    digitalStockPolicy
+                }
                 featuredAsset {
                     id
                     preview

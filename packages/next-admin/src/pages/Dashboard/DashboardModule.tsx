@@ -49,7 +49,6 @@ import {
     getOrderStateClass,
     getOrderStateLabel,
 } from '../Sales/sales-utils';
-
 type DashboardWidgetId =
     | 'METRICS'
     | 'SHIPMENTS'
@@ -203,7 +202,6 @@ export function DashboardModule() {
     const refreshAll = () => {
         setRangeEnd(Date.now());
     };
-
     const toggleWidget = (widgetId: DashboardWidgetId) => {
         setWidgetPreferences(previous => ({
             ...previous,

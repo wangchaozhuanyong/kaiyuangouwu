@@ -25,11 +25,11 @@ import { assertFound, idsAreEqual } from '../../common/utils';
 import { TransactionalConnection } from '../../connection/transactional-connection';
 import { Channel } from '../../entity/channel/channel.entity';
 import { FacetValue } from '../../entity/facet-value/facet-value.entity';
+import { ProductOptionGroup } from '../../entity/product-option-group/product-option-group.entity';
+import { ProductOption } from '../../entity/product-option/product-option.entity';
+import { ProductVariant } from '../../entity/product-variant/product-variant.entity';
 import { ProductTranslation } from '../../entity/product/product-translation.entity';
 import { Product } from '../../entity/product/product.entity';
-import { ProductOption } from '../../entity/product-option/product-option.entity';
-import { ProductOptionGroup } from '../../entity/product-option-group/product-option-group.entity';
-import { ProductVariant } from '../../entity/product-variant/product-variant.entity';
 import { EventBus } from '../../event-bus/event-bus';
 import { ProductChannelEvent } from '../../event-bus/events/product-channel-event';
 import { ProductEvent } from '../../event-bus/events/product-event';
@@ -87,6 +87,10 @@ export class ProductService {
             options?.filter,
             'sku',
         );
+        const hasCollectionIdFilter = this.listQueryBuilder.filterObjectHasProperty<ProductFilterParameter>(
+            options?.filter,
+            'collectionId',
+        );
         if (hasFacetValueIdFilter) {
             effectiveRelations.push('facetValues');
             customPropertyMap.facetValueId = 'facetValues.id';
@@ -94,6 +98,10 @@ export class ProductService {
         if (hasSkuFilter) {
             effectiveRelations.push('variants');
             customPropertyMap.sku = 'variants.sku';
+        }
+        if (hasCollectionIdFilter) {
+            effectiveRelations.push('variants', 'variants.collections');
+            customPropertyMap.collectionId = 'variants.collections.id';
         }
         const hasOptionGroupIdFilter = this.listQueryBuilder.filterObjectHasProperty<ProductFilterParameter>(
             options?.filter,

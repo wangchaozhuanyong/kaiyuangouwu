@@ -368,7 +368,6 @@ function translateMessages(t: ReturnType<typeof useLingui>['t']): ProductPackagi
         Object.entries(messages).map(([key, descriptor]) => [key, t(descriptor)]),
     ) as ProductPackagingText;
 }
-
 function BlockHeading({ title, description }: Readonly<{ title: string; description: string }>) {
     return (
         <div>

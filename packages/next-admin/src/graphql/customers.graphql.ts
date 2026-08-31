@@ -144,6 +144,18 @@ export const CUSTOMER_DETAIL_QUERY = gql`
     }
 `;
 
+export const CUSTOMER_ADDRESS_COUNTRIES_QUERY = gql`
+    query AdminCustomerAddressCountries {
+        countries(options: { take: 250, sort: { name: ASC }, filter: { enabled: { eq: true } } }) {
+            items {
+                id
+                code
+                name
+            }
+        }
+    }
+`;
+
 export const UPDATE_CUSTOMER_MUTATION = gql`
     mutation AdminUpdateCustomer($input: UpdateCustomerInput!) {
         updateCustomer(input: $input) {
@@ -155,6 +167,30 @@ export const UPDATE_CUSTOMER_MUTATION = gql`
                 errorCode
                 message
             }
+        }
+    }
+`;
+
+export const CREATE_CUSTOMER_ADDRESS_MUTATION = gql`
+    mutation AdminCreateCustomerAddress($customerId: ID!, $input: CreateAddressInput!) {
+        createCustomerAddress(customerId: $customerId, input: $input) {
+            id
+        }
+    }
+`;
+
+export const UPDATE_CUSTOMER_ADDRESS_MUTATION = gql`
+    mutation AdminUpdateCustomerAddress($input: UpdateAddressInput!) {
+        updateCustomerAddress(input: $input) {
+            id
+        }
+    }
+`;
+
+export const DELETE_CUSTOMER_ADDRESS_MUTATION = gql`
+    mutation AdminDeleteCustomerAddress($id: ID!) {
+        deleteCustomerAddress(id: $id) {
+            success
         }
     }
 `;
@@ -267,6 +303,12 @@ export interface CustomerAddressRecord {
     phoneNumber: string | null;
     defaultShippingAddress: boolean | null;
     defaultBillingAddress: boolean | null;
+}
+
+export interface CustomerAddressCountriesResult {
+    countries: {
+        items: Array<{ id: string; code: string; name: string }>;
+    };
 }
 
 export interface CustomerHistoryRecord {

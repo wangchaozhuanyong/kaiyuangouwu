@@ -31,6 +31,7 @@ import {
     ActiveCustomer,
     CustomerAddress,
     CustomerAddressInput,
+    CustomerDeliveryEmail,
     MarketConfig,
     Order,
     ProductVariant,
@@ -134,6 +135,29 @@ export function CheckoutPage({
         order?.lines.filter(line => line.productVariant.customFields.fulfillmentType === 'physical') ?? [];
     const digitalLines =
         order?.lines.filter(line => line.productVariant.customFields.fulfillmentType === 'digital') ?? [];
+    const hasDigitalProducts = digitalLines.length > 0;
+    const [deliveryEmails, setDeliveryEmails] = useState<CustomerDeliveryEmail[]>([]);
+    const [selectedDeliveryEmailId, setSelectedDeliveryEmailId] = useState('');
+
+    useEffect(() => {
+        if (!customer || !hasDigitalProducts) {
+            setDeliveryEmails([]);
+            setSelectedDeliveryEmailId('');
+            return;
+        }
+        const controller = new AbortController();
+        void api
+            .myDeliveryEmails(controller.signal)
+            .then(items => {
+                setDeliveryEmails(items);
+                const matching = items.find(item => item.emailAddress === order?.customFields.deliveryEmail);
+                setSelectedDeliveryEmailId(matching?.id ?? items.find(item => item.isDefault)?.id ?? '');
+            })
+            .catch(() => {
+                if (!controller.signal.aborted) setDeliveryEmails([]);
+            });
+        return () => controller.abort();
+    }, [api, customer, hasDigitalProducts, order?.customFields.deliveryEmail]);
 
     const updateDirectQuantity = async (productVariantId: string, quantity: number) => {
         if (!cart || quantity < 1) return;
@@ -224,12 +248,35 @@ export function CheckoutPage({
                 return typeof val === 'string' ? val : fallback;
             };
 
-            if (isDigitalOnly) {
-                const deliveryEmail = normalizeDeliveryEmail(getString('deliveryEmail'));
-                if (!deliveryEmail) {
-                    throw new Error(isZh ? '请填写有效的交付邮箱' : 'Enter a valid delivery email address');
+            if (hasDigitalProducts) {
+                const selectedContactId = getString('deliveryEmailContactId');
+                if (selectedContactId) {
+                    await api.setDeliveryEmail({ contactId: selectedContactId });
+                } else {
+                    const deliveryEmail = normalizeDeliveryEmail(getString('deliveryEmail'));
+                    const confirmationEmail = normalizeDeliveryEmail(getString('confirmDeliveryEmail'));
+                    if (!deliveryEmail) {
+                        throw new Error(
+                            isZh ? '请填写有效的交付邮箱' : 'Enter a valid delivery email address',
+                        );
+                    }
+                    if (deliveryEmail !== confirmationEmail) {
+                        throw new Error(
+                            isZh ? '两次输入的交付邮箱不一致' : 'The delivery email entries do not match',
+                        );
+                    }
+                    await api.setDeliveryEmail({
+                        emailAddress: deliveryEmail,
+                        confirmEmailAddress: confirmationEmail,
+                        saveToAddressBook: Boolean(customer && data.get('saveDeliveryEmail')),
+                        isDefault: Boolean(customer && data.get('defaultDeliveryEmail')),
+                    });
                 }
-                await api.setDeliveryEmail(deliveryEmail);
+            }
+            if (isDigitalOnly) {
+                const deliveryEmail = selectedDeliveryEmailId
+                    ? (deliveryEmails.find(item => item.id === selectedDeliveryEmailId)?.emailAddress ?? '')
+                    : (normalizeDeliveryEmail(getString('deliveryEmail')) ?? '');
                 if (!customerPrepared) {
                     await api.setCustomer({
                         firstName: 'Digital',
@@ -429,7 +476,7 @@ export function CheckoutPage({
                 onSubmit={event => void submit(event)}
             >
                 {directPurchase && renderCheckoutItems()}
-                {isDigitalOnly ? (
+                {hasDigitalProducts && (
                     <section
                         className={checkoutPageClassName(
                             'checkout-section checkout-digital-delivery-section',
@@ -446,24 +493,70 @@ export function CheckoutPage({
                             </div>
                             <span>{isZh ? '邮箱交付' : 'Email delivery'}</span>
                         </header>
-                        <label className={checkoutPageClassName('digital-delivery-email-field')}>
-                            <span>{isZh ? '交付邮箱' : 'Delivery email'}</span>
-                            <input
-                                name="deliveryEmail"
-                                type="email"
-                                inputMode="email"
-                                autoComplete="email"
-                                defaultValue={
-                                    order.customFields.deliveryEmail ??
-                                    customer?.emailAddress ??
-                                    order.customer?.emailAddress ??
-                                    ''
-                                }
-                                required
-                            />
-                        </label>
+                        {deliveryEmails.length > 0 && (
+                            <label className={checkoutPageClassName('digital-delivery-email-field')}>
+                                <span>{isZh ? '选择已保存邮箱' : 'Saved delivery email'}</span>
+                                <select
+                                    name="deliveryEmailContactId"
+                                    value={selectedDeliveryEmailId}
+                                    onChange={event => setSelectedDeliveryEmailId(event.target.value)}
+                                >
+                                    {deliveryEmails.map(item => (
+                                        <option key={item.id} value={item.id}>
+                                            {item.label ? `${item.label} · ` : ''}
+                                            {item.emailAddress}
+                                            {item.isDefault ? (isZh ? '（默认）' : ' (default)') : ''}
+                                        </option>
+                                    ))}
+                                    <option value="">{isZh ? '使用新邮箱' : 'Use a new email'}</option>
+                                </select>
+                            </label>
+                        )}
+                        {!selectedDeliveryEmailId && (
+                            <>
+                                <label className={checkoutPageClassName('digital-delivery-email-field')}>
+                                    <span>{isZh ? '交付邮箱' : 'Delivery email'}</span>
+                                    <input
+                                        name="deliveryEmail"
+                                        type="email"
+                                        inputMode="email"
+                                        autoComplete="email"
+                                        defaultValue={
+                                            order.customFields.deliveryEmail ??
+                                            customer?.emailAddress ??
+                                            order.customer?.emailAddress ??
+                                            ''
+                                        }
+                                        required
+                                    />
+                                </label>
+                                <label className={checkoutPageClassName('digital-delivery-email-field')}>
+                                    <span>{isZh ? '再次输入交付邮箱' : 'Confirm delivery email'}</span>
+                                    <input
+                                        name="confirmDeliveryEmail"
+                                        type="email"
+                                        inputMode="email"
+                                        autoComplete="email"
+                                        required
+                                    />
+                                </label>
+                                {customer && (
+                                    <div className={checkoutPageClassName('checkout-delivery-email-options')}>
+                                        <label>
+                                            <input name="saveDeliveryEmail" type="checkbox" defaultChecked />{' '}
+                                            {isZh ? '保存为交付邮箱' : 'Save to delivery emails'}
+                                        </label>
+                                        <label>
+                                            <input name="defaultDeliveryEmail" type="checkbox" />{' '}
+                                            {isZh ? '设为默认邮箱' : 'Set as default'}
+                                        </label>
+                                    </div>
+                                )}
+                            </>
+                        )}
                     </section>
-                ) : !customer ? (
+                )}
+                {!customer && !isDigitalOnly ? (
                     <section className={checkoutPageClassName('checkout-section checkout-contact-section')}>
                         <h2>{isZh ? '联系信息' : 'Contact'}</h2>
                         <div className={checkoutPageClassName('form-grid')}>
@@ -939,23 +1032,7 @@ function CheckoutItemsGroup({
                         <ProductVariantImage variant={line.productVariant} alt={line.productVariant.name} />
                         <div>
                             <strong>{line.productVariant.name}</strong>
-                            <em>
-                                {line.productVariant.customFields.digitalDeliveryMode === 'auto_card'
-                                    ? isZh
-                                        ? `付款后邮箱自动发卡 · 不支持退款 · 可用 ${line.productVariant.autoCardAvailableStock ?? 0} 份`
-                                        : `Automatic email delivery · non-refundable · ${line.productVariant.autoCardAvailableStock ?? 0} available`
-                                    : line.productVariant.customFields.digitalDeliveryMode === 'file_download'
-                                      ? isZh
-                                          ? '付款后可在订单内下载文件'
-                                          : 'Download the file from your order after payment'
-                                      : line.productVariant.customFields.fulfillmentType === 'digital'
-                                        ? isZh
-                                            ? '付款后由商家处理，进度与结果通过订单和邮箱通知'
-                                            : 'Processed by the merchant after payment with order and email updates'
-                                        : isZh
-                                          ? '配送与售后信息以订单为准'
-                                          : 'Returns available'}
-                            </em>
+                            <em>{checkoutLinePolicyText(line, isZh)}</em>
                         </div>
                         <span className={checkoutPageClassName('checkout-line-meta')}>
                             <b>
@@ -1003,6 +1080,54 @@ function CheckoutItemsGroup({
             </div>
         </section>
     );
+}
+
+function checkoutLinePolicyText(line: Order['lines'][number], isZh: boolean): string {
+    const mode = line.productVariant.customFields.digitalDeliveryMode;
+    const policy = line.customFields.refundPolicySnapshot ?? 'MERCHANT_REVIEW';
+    const policyText =
+        policy === 'NON_REFUNDABLE'
+            ? isZh
+                ? '不支持退款，交付异常可联系客服'
+                : 'Non-refundable; support is available for delivery issues'
+            : policy === 'SEVEN_DAY_NO_REASON'
+              ? isZh
+                  ? '支持7天无理由'
+                  : 'Seven-day no-reason return'
+              : isZh
+                ? '可申请退款，由商家审核'
+                : 'Refund requests are reviewed by the merchant';
+    if (mode === 'auto_card') {
+        const stock = line.productVariant.autoCardAvailableStock ?? 0;
+        return isZh
+            ? `付款后邮箱自动发卡 · ${policyText} · 可用 ${stock} 份`
+            : `Automatic email delivery · ${policyText} · ${stock} available`;
+    }
+    if (mode === 'file_download') {
+        return `${isZh ? '付款后可在订单内下载文件' : 'Download the file from your order after payment'} · ${policyText}`;
+    }
+    if (line.productVariant.customFields.fulfillmentType === 'digital') {
+        const sla = formatCheckoutSla(line.customFields.manualDeliverySlaMinutesSnapshot ?? 1440, isZh);
+        return isZh
+            ? `付款后由商家处理，预计${sla}内发送至邮箱 · ${policyText}`
+            : `Merchant processed and emailed within ${sla} · ${policyText}`;
+    }
+    return isZh
+        ? `配送与售后信息以订单为准 · ${policyText}`
+        : `Shipping and returns follow the order · ${policyText}`;
+}
+
+function formatCheckoutSla(minutesInput: number, isZh: boolean): string {
+    const minutes = Math.max(5, Math.trunc(minutesInput));
+    if (minutes % 1440 === 0) {
+        const days = minutes / 1440;
+        return isZh ? `${days}天` : `${days} ${days === 1 ? 'day' : 'days'}`;
+    }
+    if (minutes % 60 === 0) {
+        const hours = minutes / 60;
+        return isZh ? `${hours}小时` : `${hours} ${hours === 1 ? 'hour' : 'hours'}`;
+    }
+    return isZh ? `${minutes}分钟` : `${minutes} minutes`;
 }
 function PriceSummary({
     order,

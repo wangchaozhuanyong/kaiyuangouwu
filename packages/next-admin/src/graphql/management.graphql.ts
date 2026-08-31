@@ -80,6 +80,15 @@ export const UPDATE_ROLE_MUTATION = gql`
     }
 `;
 
+export const DELETE_ROLE_MUTATION = gql`
+    mutation NextAdminDeleteRole($id: ID!) {
+        deleteRole(id: $id) {
+            result
+            message
+        }
+    }
+`;
+
 export const CREATE_ADMINISTRATOR_MUTATION = gql`
     mutation NextAdminCreateAdministrator($input: CreateAdministratorInput!) {
         createAdministrator(input: $input) {
@@ -164,6 +173,10 @@ export const STORE_MANAGEMENT_QUERY = gql`
                 }
             }
         }
+        activeChannel {
+            id
+            defaultLanguageCode
+        }
         storeProfiles {
             ...NextAdminStoreProfileFields
         }
@@ -191,6 +204,26 @@ export const STORE_MANAGEMENT_QUERY = gql`
                 code
                 enabled
                 updatedAt
+                translations {
+                    id
+                    languageCode
+                    name
+                    description
+                }
+                checker {
+                    code
+                    args {
+                        name
+                        value
+                    }
+                }
+                handler {
+                    code
+                    args {
+                        name
+                        value
+                    }
+                }
             }
         }
         shippingMethods(options: $shippingMethodOptions) {
@@ -202,6 +235,86 @@ export const STORE_MANAGEMENT_QUERY = gql`
                 code
                 fulfillmentHandlerCode
                 updatedAt
+                translations {
+                    id
+                    languageCode
+                    name
+                    description
+                }
+                checker {
+                    code
+                    args {
+                        name
+                        value
+                    }
+                }
+                calculator {
+                    code
+                    args {
+                        name
+                        value
+                    }
+                }
+            }
+        }
+        paymentMethodEligibilityCheckers {
+            code
+            description
+            args {
+                name
+                type
+                required
+                defaultValue
+                label
+                description
+            }
+        }
+        paymentMethodHandlers {
+            code
+            description
+            args {
+                name
+                type
+                required
+                defaultValue
+                label
+                description
+            }
+        }
+        shippingEligibilityCheckers {
+            code
+            description
+            args {
+                name
+                type
+                required
+                defaultValue
+                label
+                description
+            }
+        }
+        shippingCalculators {
+            code
+            description
+            args {
+                name
+                type
+                required
+                defaultValue
+                label
+                description
+            }
+        }
+        fulfillmentHandlers {
+            code
+            description
+            args {
+                name
+                type
+                required
+                defaultValue
+                label
+                description
             }
         }
     }
@@ -232,6 +345,11 @@ export const BUSINESS_SETTINGS_QUERY = gql`
                 id
                 name
             }
+        }
+        globalSettings {
+            availableLanguages
+            trackInventory
+            outOfStockThreshold
         }
         zones(options: $zoneOptions) {
             totalItems
@@ -354,6 +472,60 @@ export const PROVISION_STORE_MUTATION = gql`
     }
 `;
 
+export const STORE_DEPROVISION_IMPACT_QUERY = gql`
+    query NextAdminStoreDeprovisionImpact($profileId: ID!) {
+        storeDeprovisionImpact(profileId: $profileId) {
+            profileId
+            channelId
+            channelCode
+            status
+            isDefaultChannel
+            isProvisioningTemplate
+            isActiveChannel
+            orderCount
+            productCount
+            customerCount
+            administratorCount
+            domainCount
+            extensionRecordCount
+            sellerWillBeDeleted
+            roleWillBeDeleted
+            blockers
+            canDeprovision
+        }
+    }
+`;
+
+export const SUSPEND_STORE_MUTATION = gql`
+    mutation NextAdminSuspendStore(
+        $profileId: ID!
+        $expectedUpdatedAt: DateTime!
+        $currentPassword: String!
+    ) {
+        suspendStore(
+            profileId: $profileId
+            expectedUpdatedAt: $expectedUpdatedAt
+            currentPassword: $currentPassword
+        ) {
+            id
+            updatedAt
+            status
+        }
+    }
+`;
+
+export const DEPROVISION_STORE_MUTATION = gql`
+    mutation NextAdminDeprovisionStore($input: DeprovisionStoreInput!) {
+        deprovisionStore(input: $input) {
+            channelId
+            channelCode
+            deletedAdministratorCount
+            deletedRole
+            deletedSeller
+        }
+    }
+`;
+
 export const UPDATE_STORE_PROFILE_MUTATION = gql`
     ${STORE_PROFILE_FIELDS}
     mutation NextAdminUpdateStoreProfile($input: UpdateStoreProfileInput!) {
@@ -371,11 +543,181 @@ export const CREATE_SELLER_MUTATION = gql`
     }
 `;
 
+export const UPDATE_SELLER_MUTATION = gql`
+    mutation NextAdminUpdateSeller($input: UpdateSellerInput!) {
+        updateSeller(input: $input) {
+            id
+            name
+        }
+    }
+`;
+
+export const DELETE_SELLER_MUTATION = gql`
+    mutation NextAdminDeleteSeller($id: ID!) {
+        deleteSeller(id: $id) {
+            result
+            message
+        }
+    }
+`;
+
+export const CREATE_PAYMENT_METHOD_MUTATION = gql`
+    mutation NextAdminCreatePaymentMethod($input: CreatePaymentMethodInput!) {
+        createPaymentMethod(input: $input) {
+            id
+        }
+    }
+`;
+
 export const UPDATE_PAYMENT_METHOD_MUTATION = gql`
     mutation NextAdminTogglePaymentMethod($input: UpdatePaymentMethodInput!) {
         updatePaymentMethod(input: $input) {
             id
             enabled
+        }
+    }
+`;
+
+export const DELETE_PAYMENT_METHOD_MUTATION = gql`
+    mutation NextAdminDeletePaymentMethod($id: ID!, $force: Boolean) {
+        deletePaymentMethod(id: $id, force: $force) {
+            result
+            message
+        }
+    }
+`;
+
+export const CREATE_SHIPPING_METHOD_MUTATION = gql`
+    mutation NextAdminCreateShippingMethod($input: CreateShippingMethodInput!) {
+        createShippingMethod(input: $input) {
+            id
+        }
+    }
+`;
+
+export const UPDATE_SHIPPING_METHOD_MUTATION = gql`
+    mutation NextAdminUpdateShippingMethod($input: UpdateShippingMethodInput!) {
+        updateShippingMethod(input: $input) {
+            id
+        }
+    }
+`;
+
+export const DELETE_SHIPPING_METHOD_MUTATION = gql`
+    mutation NextAdminDeleteShippingMethod($id: ID!) {
+        deleteShippingMethod(id: $id) {
+            result
+            message
+        }
+    }
+`;
+
+export const UPDATE_BUSINESS_TAX_CATEGORY_MUTATION = gql`
+    mutation NextAdminUpdateBusinessTaxCategory($input: UpdateTaxCategoryInput!) {
+        updateTaxCategory(input: $input) {
+            id
+            name
+            isDefault
+        }
+    }
+`;
+
+export const DELETE_BUSINESS_TAX_CATEGORY_MUTATION = gql`
+    mutation NextAdminDeleteBusinessTaxCategory($id: ID!) {
+        deleteTaxCategory(id: $id) {
+            result
+            message
+        }
+    }
+`;
+
+export const DELETE_BUSINESS_TAX_RATE_MUTATION = gql`
+    mutation NextAdminDeleteBusinessTaxRate($id: ID!) {
+        deleteTaxRate(id: $id) {
+            result
+            message
+        }
+    }
+`;
+
+export const UPDATE_BUSINESS_ZONE_MUTATION = gql`
+    mutation NextAdminUpdateBusinessZone($input: UpdateZoneInput!) {
+        updateZone(input: $input) {
+            id
+            name
+        }
+    }
+`;
+
+export const DELETE_BUSINESS_ZONE_MUTATION = gql`
+    mutation NextAdminDeleteBusinessZone($id: ID!) {
+        deleteZone(id: $id) {
+            result
+            message
+        }
+    }
+`;
+
+export const ADD_BUSINESS_ZONE_MEMBERS_MUTATION = gql`
+    mutation NextAdminAddBusinessZoneMembers($zoneId: ID!, $memberIds: [ID!]!) {
+        addMembersToZone(zoneId: $zoneId, memberIds: $memberIds) {
+            id
+        }
+    }
+`;
+
+export const REMOVE_BUSINESS_ZONE_MEMBERS_MUTATION = gql`
+    mutation NextAdminRemoveBusinessZoneMembers($zoneId: ID!, $memberIds: [ID!]!) {
+        removeMembersFromZone(zoneId: $zoneId, memberIds: $memberIds) {
+            id
+        }
+    }
+`;
+
+export const CREATE_BUSINESS_COUNTRY_MUTATION = gql`
+    mutation NextAdminCreateBusinessCountry($input: CreateCountryInput!) {
+        createCountry(input: $input) {
+            id
+            code
+            name
+            enabled
+        }
+    }
+`;
+
+export const UPDATE_BUSINESS_COUNTRY_MUTATION = gql`
+    mutation NextAdminUpdateBusinessCountry($input: UpdateCountryInput!) {
+        updateCountry(input: $input) {
+            id
+            code
+            name
+            enabled
+        }
+    }
+`;
+
+export const DELETE_BUSINESS_COUNTRY_MUTATION = gql`
+    mutation NextAdminDeleteBusinessCountry($id: ID!) {
+        deleteCountry(id: $id) {
+            result
+            message
+        }
+    }
+`;
+
+export const UPDATE_GLOBAL_SETTINGS_MUTATION = gql`
+    mutation NextAdminUpdateGlobalSettings($input: UpdateGlobalSettingsInput!) {
+        updateGlobalSettings(input: $input) {
+            ... on GlobalSettings {
+                id
+                availableLanguages
+                trackInventory
+                outOfStockThreshold
+            }
+            ... on ErrorResult {
+                errorCode
+                message
+            }
         }
     }
 `;
@@ -636,11 +978,37 @@ export interface StoreProfileRecord {
     };
 }
 
+export interface ConfigurableOperationDefinitionRecord {
+    code: string;
+    description: string;
+    args: Array<{
+        name: string;
+        type: string;
+        required: boolean;
+        defaultValue: unknown;
+        label: string | null;
+        description: string | null;
+    }>;
+}
+
+export interface ConfigurableOperationRecord {
+    code: string;
+    args: Array<{ name: string; value: string }>;
+}
+
+export interface ManagementTranslationRecord {
+    id: string;
+    languageCode: string;
+    name: string;
+    description: string;
+}
+
 export interface StoreManagementResult {
     activeAdministrator: {
         id: string;
         user: { roles: Array<{ id: string; code: string }> };
     } | null;
+    activeChannel: { id: string; defaultLanguageCode: string };
     storeProfiles: StoreProfileRecord[];
     storeProvisioningTemplates: Array<{
         id: string;
@@ -661,6 +1029,9 @@ export interface StoreManagementResult {
             code: string;
             enabled: boolean;
             updatedAt: string;
+            translations: ManagementTranslationRecord[];
+            checker: ConfigurableOperationRecord | null;
+            handler: ConfigurableOperationRecord;
         }>;
     };
     shippingMethods: {
@@ -672,8 +1043,16 @@ export interface StoreManagementResult {
             code: string;
             fulfillmentHandlerCode: string;
             updatedAt: string;
+            translations: ManagementTranslationRecord[];
+            checker: ConfigurableOperationRecord;
+            calculator: ConfigurableOperationRecord;
         }>;
     };
+    paymentMethodEligibilityCheckers: ConfigurableOperationDefinitionRecord[];
+    paymentMethodHandlers: ConfigurableOperationDefinitionRecord[];
+    shippingEligibilityCheckers: ConfigurableOperationDefinitionRecord[];
+    shippingCalculators: ConfigurableOperationDefinitionRecord[];
+    fulfillmentHandlers: ConfigurableOperationDefinitionRecord[];
 }
 
 export interface BusinessSettingsResult {
@@ -687,8 +1066,14 @@ export interface BusinessSettingsResult {
         pricesIncludeTax: boolean;
         trackInventory: boolean | null;
         outOfStockThreshold: number | null;
+        customFields?: Record<string, unknown> | null;
         defaultTaxZone: { id: string; name: string } | null;
         defaultShippingZone: { id: string; name: string } | null;
+    };
+    globalSettings: {
+        availableLanguages: string[];
+        trackInventory: boolean;
+        outOfStockThreshold: number;
     };
     zones: {
         totalItems: number;
@@ -725,6 +1110,26 @@ export interface StoreDomainRecord {
     verificationRecordValue: string;
     verifiedAt: string | null;
     lastVerificationError: string | null;
+}
+
+export interface StoreDeprovisionImpactRecord {
+    profileId: string;
+    channelId: string;
+    channelCode: string;
+    status: 'DRAFT' | 'ACTIVE' | 'SUSPENDED';
+    isDefaultChannel: boolean;
+    isProvisioningTemplate: boolean;
+    isActiveChannel: boolean;
+    orderCount: number;
+    productCount: number;
+    customerCount: number;
+    administratorCount: number;
+    domainCount: number;
+    extensionRecordCount: number;
+    sellerWillBeDeleted: boolean;
+    roleWillBeDeleted: boolean;
+    blockers: string[];
+    canDeprovision: boolean;
 }
 
 export interface StoreDomainsResult {

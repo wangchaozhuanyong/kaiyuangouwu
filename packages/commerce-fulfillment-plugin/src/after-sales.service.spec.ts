@@ -2,12 +2,20 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { AfterSalesService } from './after-sales.service';
 
-function orderLine(type: 'physical' | 'digital' = 'physical', digitalDeliveryMode = 'file_download') {
+function orderLine(
+    type: 'physical' | 'digital' = 'physical',
+    digitalDeliveryMode = 'file_download',
+    refundPolicy = 'MERCHANT_REVIEW',
+) {
     return {
         id: 'line-1',
         quantity: 2,
         proratedUnitPriceWithTax: 4_900,
-        customFields: { fulfillmentTypeSnapshot: type, digitalDeliveryModeSnapshot: digitalDeliveryMode },
+        customFields: {
+            fulfillmentTypeSnapshot: type,
+            digitalDeliveryModeSnapshot: digitalDeliveryMode,
+            refundPolicySnapshot: refundPolicy,
+        },
         productVariant: {
             name: type === 'digital' ? 'Digital guide' : 'Physical product',
             sku: type === 'digital' ? 'DIGITAL-1' : 'PHYSICAL-1',
@@ -177,7 +185,7 @@ describe('AfterSalesService', () => {
         ).rejects.toThrow('数字商品只能申请仅退款');
     });
 
-    it('rejects all refund requests for automatically delivered credentials', async () => {
+    it('allows auto-card refund requests to use the product refund policy', async () => {
         const test = createHarness({ line: orderLine('digital', 'auto_card') });
 
         await expect(
@@ -188,7 +196,21 @@ describe('AfterSalesService', () => {
                 description: 'The credential email has not arrived.',
                 items: [{ orderLineId: 'line-1', quantity: 1 }],
             }),
-        ).rejects.toThrow('自动发卡商品不支持申请退款');
+        ).resolves.toMatchObject({ state: 'PENDING' });
+    });
+
+    it('blocks self-service refunds only when the product snapshot is non-refundable', async () => {
+        const test = createHarness({ line: orderLine('digital', 'auto_card', 'NON_REFUNDABLE') });
+
+        await expect(
+            test.service.create(test.ctx, {
+                orderId: 'order-1',
+                type: 'REFUND_ONLY',
+                reason: 'DIGITAL_CONTENT_ISSUE',
+                description: 'The credential email has not arrived.',
+                items: [{ orderLineId: 'line-1', quantity: 1 }],
+            }),
+        ).rejects.toThrow('所选商品不支持自助退款');
     });
 
     it('prevents active requests from exceeding the order-line quantity', async () => {

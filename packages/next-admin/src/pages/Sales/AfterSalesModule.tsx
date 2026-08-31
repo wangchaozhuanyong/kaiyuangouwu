@@ -249,7 +249,7 @@ export function AfterSalesModule() {
     return (
         <div className="flex h-full flex-col bg-slate-50">
             <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-5 sm:px-8">
-                <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4">
+                <div className="flex w-full flex-wrap items-center justify-between gap-4">
                     <div>
                         <h1 className="text-xl font-semibold tracking-tight text-slate-950">
                             售后与退款工单
@@ -274,7 +274,7 @@ export function AfterSalesModule() {
                 aria-label="售后状态筛选"
                 className="scrollbar-hidden shrink-0 overflow-x-auto border-b border-slate-200 bg-white px-5 sm:px-8"
             >
-                <div className="mx-auto flex max-w-7xl min-w-max gap-6">
+                <div className="flex w-full min-w-max gap-6">
                     {tabs.map(tab => (
                         <button
                             key={tab.id}
@@ -294,7 +294,7 @@ export function AfterSalesModule() {
             </nav>
 
             <div className="flex-1 overflow-y-auto p-5 sm:p-8">
-                <div className="mx-auto max-w-7xl space-y-4">
+                <div className="w-full max-w-none space-y-4">
                     {notification && (
                         <div
                             role="status"

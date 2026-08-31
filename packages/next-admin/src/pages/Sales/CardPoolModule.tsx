@@ -117,7 +117,7 @@ export function CardPoolModule() {
     return (
         <div className="flex h-full flex-col bg-slate-50">
             <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-4 sm:px-8">
-                <div className="mx-auto flex w-full max-w-[1500px] flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+                <div className="flex w-full flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
                     <div>
                         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                             <KeyRound className="h-5 w-5 text-blue-600" />
@@ -162,7 +162,7 @@ export function CardPoolModule() {
                     </div>
                 </div>
             </header>
-            <main className="mx-auto w-full max-w-[1500px] flex-1 space-y-4 overflow-y-auto p-5 sm:p-8">
+            <main className="w-full max-w-none flex-1 space-y-4 overflow-y-auto p-5 sm:p-8">
                 {notice && (
                     <Message kind="success" onClose={() => setNotice('')}>
                         {notice}

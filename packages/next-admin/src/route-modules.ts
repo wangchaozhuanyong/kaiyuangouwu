@@ -9,6 +9,7 @@ export const routeModuleLoaders = {
     assets: () => import('./pages/Catalog/AssetsModule'),
     sales: () => import('./pages/Sales/SalesModule'),
     orderEditor: () => import('./pages/Sales/OrderEditor'),
+    orderWorkflow: () => import('./pages/Sales/OrderWorkflowEditor'),
     afterSales: () => import('./pages/Sales/AfterSalesModule'),
     reviews: () => import('./pages/Storefront/ReviewsModule'),
     customers: () => import('./pages/Customers/CustomersModule'),
@@ -38,6 +39,8 @@ export function getRouteModuleKey(target: string): RouteModuleKey | null {
     if (pathname === '/catalog/card-pool') return 'cardPool';
     if (pathname === '/catalog/assets') return 'assets';
     if (pathname.startsWith('/catalog')) return 'catalog';
+    if (/^\/sales\/orders\/draft\/[^/]+$/.test(pathname)) return 'orderWorkflow';
+    if (/^\/sales\/orders\/[^/]+\/modify$/.test(pathname)) return 'orderWorkflow';
     if (/^\/sales\/orders\/[^/]+$/.test(pathname)) return 'orderEditor';
     if (pathname === '/sales/after-sales') return 'afterSales';
     if (pathname === '/sales/reviews') return 'reviews';

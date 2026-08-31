@@ -16,39 +16,72 @@ import {
     RefreshCw,
     Store,
     Trash2,
-    Truck,
     X,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { client } from '../../apollo';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
+import { DynamicCustomFieldsForm } from '../../custom-fields/DynamicCustomFieldsForm';
+import type { CustomFieldValueMap } from '../../custom-fields/custom-field-types';
 import {
+    addCustomFieldsToDocument,
+    customFieldInputFromValues,
+    customFieldValuesFromEntity,
+    validateCustomFieldValues,
+} from '../../custom-fields/custom-field-utils';
+import { useCustomFieldDefinitions } from '../../custom-fields/custom-fields-context';
+import {
+    STORE_COMMERCE_MODE_QUERY,
+    UPDATE_STORE_COMMERCE_MODE_MUTATION,
+    type StoreCommerceMode,
+    type StoreCommerceModeData,
+} from '../../graphql/commerce.graphql';
+import {
+    ADD_BUSINESS_ZONE_MEMBERS_MUTATION,
     BUSINESS_SETTINGS_QUERY,
+    CREATE_BUSINESS_COUNTRY_MUTATION,
     CREATE_BUSINESS_TAX_CATEGORY_MUTATION,
     CREATE_BUSINESS_TAX_RATE_MUTATION,
     CREATE_BUSINESS_ZONE_MUTATION,
     CREATE_SELLER_MUTATION,
     CREATE_STORE_DOMAIN_MUTATION,
+    DELETE_BUSINESS_COUNTRY_MUTATION,
+    DELETE_BUSINESS_TAX_CATEGORY_MUTATION,
+    DELETE_BUSINESS_TAX_RATE_MUTATION,
+    DELETE_BUSINESS_ZONE_MUTATION,
+    DELETE_SELLER_MUTATION,
     DELETE_STORE_DOMAIN_MUTATION,
+    DEPROVISION_STORE_MUTATION,
     PROVISION_STORE_MUTATION,
+    REMOVE_BUSINESS_ZONE_MEMBERS_MUTATION,
     SET_PRIMARY_STORE_DOMAIN_MUTATION,
+    STORE_DEPROVISION_IMPACT_QUERY,
     STORE_DOMAINS_QUERY,
     STORE_MANAGEMENT_QUERY,
+    SUSPEND_STORE_MUTATION,
     UPDATE_BUSINESS_CHANNEL_MUTATION,
+    UPDATE_BUSINESS_COUNTRY_MUTATION,
+    UPDATE_BUSINESS_TAX_CATEGORY_MUTATION,
     UPDATE_BUSINESS_TAX_RATE_MUTATION,
-    UPDATE_PAYMENT_METHOD_MUTATION,
+    UPDATE_BUSINESS_ZONE_MUTATION,
+    UPDATE_GLOBAL_SETTINGS_MUTATION,
+    UPDATE_SELLER_MUTATION,
     UPDATE_STORE_PROFILE_MUTATION,
     VERIFY_STORE_DOMAIN_MUTATION,
     type BusinessSettingsResult,
+    type StoreDeprovisionImpactRecord,
     type StoreDomainRecord,
     type StoreDomainsResult,
     type StoreManagementResult,
     type StoreProfileRecord,
 } from '../../graphql/management.graphql';
 import { useAccessibleDialog } from '../../hooks/use-accessible-dialog';
+import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { useUrlTab } from '../../hooks/use-url-tab';
 import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatDateTime } from '../Sales/sales-utils';
+import { PaymentShippingManager } from './PaymentShippingManager';
 
 type Tab = 'STORES' | 'DOMAINS' | 'SELLERS' | 'PAYMENT_SHIPPING' | 'BUSINESS';
 const STORE_SETTINGS_TABS = {
@@ -60,9 +93,11 @@ const STORE_SETTINGS_TABS = {
 } as const;
 
 export function StoreSettingsModule() {
+    const { hasAnyPermission } = useAdminPermissions();
     const [tab, setTab] = useUrlTab<Tab>(STORE_SETTINGS_TABS, 'stores');
     const [selectedStoreId, setSelectedStoreId] = useState('');
     const [storeEditor, setStoreEditor] = useState<StoreProfileRecord | null>(null);
+    const [deprovisionProfile, setDeprovisionProfile] = useState<StoreProfileRecord | null>(null);
     const [provisionOpen, setProvisionOpen] = useState(false);
     const [sellerOpen, setSellerOpen] = useState(false);
     const [notice, setNotice] = useState('');
@@ -130,9 +165,14 @@ export function StoreSettingsModule() {
         [query.data?.storeProfiles],
     );
     const selectedProfile = profiles.find(profile => profile.id === selectedStoreId) ?? profiles[0] ?? null;
-    const isSuperAdmin =
-        query.data?.activeAdministrator?.user.roles.some(role => role.code === '__super_admin_role__') ??
-        false;
+    const canReadBusinessSettings = hasAnyPermission([
+        'ReadSettings',
+        'ReadChannel',
+        'ReadCountry',
+        'ReadZone',
+        'ReadTaxCategory',
+        'ReadTaxRate',
+    ]);
 
     const completed = async (message: string) => {
         setNotice(message);
@@ -152,7 +192,7 @@ export function StoreSettingsModule() {
                             店铺综合设置
                         </h1>
                         <p className="mt-1 text-xs text-slate-500">
-                            店铺、域名、商家、支付配送及平台业务基础配置集中管理
+                            店铺、域名、商家、支付交付及平台业务基础配置集中管理
                         </p>
                     </div>
                     <div className="flex gap-2">
@@ -215,9 +255,9 @@ export function StoreSettingsModule() {
                             onClick={() => setTab('PAYMENT_SHIPPING')}
                             icon={<CreditCard className="h-3.5 w-3.5" />}
                         >
-                            支付与配送
+                            支付与交付
                         </TabButton>
-                        {isSuperAdmin && (
+                        {canReadBusinessSettings && (
                             <TabButton
                                 active={tab === 'BUSINESS'}
                                 onClick={() => setTab('BUSINESS')}
@@ -253,7 +293,16 @@ export function StoreSettingsModule() {
                     <ErrorState message={query.error.message} onRetry={() => void query.refetch()} />
                 ) : (
                     <>
-                        {tab === 'STORES' && <StoresPanel profiles={profiles} onEdit={setStoreEditor} />}
+                        {tab === 'STORES' && (
+                            <div className="space-y-4">
+                                <CommerceModePanel onChanged={completed} onError={setActionError} />
+                                <StoresPanel
+                                    profiles={profiles}
+                                    onEdit={setStoreEditor}
+                                    onDeprovision={setDeprovisionProfile}
+                                />
+                            </div>
+                        )}
                         {tab === 'DOMAINS' && (
                             <DomainsPanel
                                 profile={selectedProfile}
@@ -261,24 +310,23 @@ export function StoreSettingsModule() {
                                 onError={setActionError}
                             />
                         )}
-                        {tab === 'SELLERS' && <SellersPanel sellers={query.data?.sellers.items ?? []} />}
+                        {tab === 'SELLERS' && (
+                            <SellersPanel
+                                sellers={query.data?.sellers.items ?? []}
+                                onChanged={completed}
+                                onError={setActionError}
+                            />
+                        )}
                         {tab === 'PAYMENT_SHIPPING' && (
-                            <PaymentShippingPanel
+                            <PaymentShippingManager
                                 data={query.data!}
                                 onChanged={completed}
                                 onError={setActionError}
                             />
                         )}
-                        {tab === 'BUSINESS' &&
-                            (isSuperAdmin ? (
-                                <BusinessBasicsPanel onChanged={completed} onError={setActionError} />
-                            ) : (
-                                <EmptyState
-                                    icon={<ReceiptText className="h-8 w-8" />}
-                                    title="当前账号无权管理平台业务基础"
-                                    detail="税率、区域与渠道基础参数仅允许平台超级管理员修改。"
-                                />
-                            ))}
+                        {tab === 'BUSINESS' && canReadBusinessSettings && (
+                            <BusinessBasicsPanel onChanged={completed} onError={setActionError} />
+                        )}
                     </>
                 )}
             </main>
@@ -287,6 +335,20 @@ export function StoreSettingsModule() {
                     profile={storeEditor}
                     onClose={() => setStoreEditor(null)}
                     onCompleted={completed}
+                    onError={setActionError}
+                />
+            )}
+            {deprovisionProfile && (
+                <StoreDeprovisionDialog
+                    profile={deprovisionProfile}
+                    onClose={() => {
+                        setDeprovisionProfile(null);
+                        void query.refetch();
+                    }}
+                    onCompleted={async message => {
+                        setDeprovisionProfile(null);
+                        await completed(message);
+                    }}
                     onError={setActionError}
                 />
             )}
@@ -313,12 +375,128 @@ export function StoreSettingsModule() {
     );
 }
 
+function CommerceModePanel({
+    onChanged,
+    onError,
+}: {
+    onChanged: (message: string) => Promise<void>;
+    onError: (message: string) => void;
+}) {
+    const requestConfirmation = useConfirmDialog();
+    const modeQuery = useQuery<StoreCommerceModeData>(STORE_COMMERCE_MODE_QUERY, {
+        fetchPolicy: 'cache-and-network',
+    });
+    const currentMode = modeQuery.data?.myStoreCommerceMode.mode ?? 'DIGITAL_ONLY';
+    const [selectedMode, setSelectedMode] = useState<StoreCommerceMode>(currentMode);
+    const [updateMode, updateState] = useMutation<{
+        updateMyStoreCommerceMode: StoreCommerceModeData['myStoreCommerceMode'];
+    }>(UPDATE_STORE_COMMERCE_MODE_MUTATION);
+
+    /* oxlint-disable react/set-state-in-effect */
+    useEffect(() => setSelectedMode(currentMode), [currentMode]);
+    /* oxlint-enable react/set-state-in-effect */
+
+    const submit = async () => {
+        if (selectedMode === currentMode) return;
+        const confirmation = await requestConfirmation({
+            title: '确认切换店铺经营模式？',
+            description:
+                '系统会检查不兼容商品、未完成订单和包装配置。存在冲突时会阻止切换，并且不会产生半完成修改。',
+            confirmLabel: '检查并切换',
+            tone: 'warning',
+        });
+        if (!confirmation) return;
+        try {
+            await updateMode({ variables: { mode: selectedMode } });
+            await Promise.all([
+                modeQuery.refetch(),
+                client.refetchQueries({
+                    include: ['NextAdminAppShellBootstrap', 'GetProducts'],
+                }),
+            ]);
+            await onChanged('当前店铺经营模式已更新，商品与后台模块已按新模式刷新');
+        } catch (error) {
+            onError(toUserFacingError(error, '经营模式切换失败，请检查冲突后重试'));
+        }
+    };
+
+    if (modeQuery.loading && !modeQuery.data) {
+        return (
+            <section className="rounded-xl border border-slate-200 bg-white p-5 text-xs text-slate-500">
+                正在读取当前店铺经营模式…
+            </section>
+        );
+    }
+
+    return (
+        <section className="rounded-xl border border-slate-200 bg-white p-5">
+            <div className="flex flex-col gap-4 border-b border-slate-100 pb-4 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                    <h2 className="text-sm font-bold text-slate-900">当前店铺经营模式</h2>
+                    <p className="mt-1 max-w-3xl text-xs leading-5 text-slate-400">
+                        控制可创建的商品类型、结账收货信息，以及后台显示的库存仓库或数字交付模块。
+                    </p>
+                </div>
+                <button
+                    type="button"
+                    onClick={() => void submit()}
+                    disabled={selectedMode === currentMode || updateState.loading}
+                    className={primaryButton}
+                >
+                    {updateState.loading ? '冲突检查中…' : '保存经营模式'}
+                </button>
+            </div>
+            <div className="mt-4 grid gap-3 md:grid-cols-3">
+                {(
+                    [
+                        [
+                            'DIGITAL_ONLY',
+                            '仅虚拟商品',
+                            '只收集交付邮箱；显示自动发卡、人工交付、文件下载和虚拟库存。',
+                        ],
+                        [
+                            'PHYSICAL_ONLY',
+                            '仅实物商品',
+                            '只收集实际地址；显示库存、仓库、物流、包装与自动拆箱。',
+                        ],
+                        [
+                            'HYBRID',
+                            '混合经营',
+                            '允许分别创建实物或虚拟商品；混合订单同时收集地址和交付邮箱。',
+                        ],
+                    ] as const
+                ).map(([mode, title, detail]) => (
+                    <button
+                        key={mode}
+                        type="button"
+                        onClick={() => setSelectedMode(mode)}
+                        aria-pressed={selectedMode === mode}
+                        className={`rounded-xl border p-4 text-left transition-colors ${selectedMode === mode ? 'border-blue-500 bg-blue-50' : 'border-slate-200 hover:bg-slate-50'}`}
+                    >
+                        <span className="flex items-center justify-between gap-2 text-xs font-bold text-slate-900">
+                            {title}
+                            {currentMode === mode && (
+                                <span className="rounded bg-emerald-100 px-2 py-0.5 text-[10px] text-emerald-700">
+                                    当前
+                                </span>
+                            )}
+                        </span>
+                        <span className="mt-2 block text-[11px] leading-5 text-slate-500">{detail}</span>
+                    </button>
+                ))}
+            </div>
+        </section>
+    );
+}
+
 function StoresPanel({
     profiles,
     onEdit,
+    onDeprovision,
 }: {
     profiles: StoreProfileRecord[];
     onEdit: (profile: StoreProfileRecord) => void;
+    onDeprovision: (profile: StoreProfileRecord) => void;
 }) {
     if (!profiles.length)
         return (
@@ -390,6 +568,14 @@ function StoresPanel({
                                 更新于 {formatDateTime(profile.updatedAt)}
                             </span>
                             <div className="flex gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => onDeprovision(profile)}
+                                    className={`${secondaryButton} text-rose-600`}
+                                >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                    安全清退
+                                </button>
                                 {profile.storefrontUrl && (
                                     <a
                                         href={profile.storefrontUrl}
@@ -643,129 +829,104 @@ function DomainsPanel({
     );
 }
 
-function SellersPanel({ sellers }: { sellers: StoreManagementResult['sellers']['items'] }) {
-    return (
-        <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-            <div className="overflow-x-auto">
-                <table className="w-full min-w-[650px] text-left text-xs">
-                    <thead>
-                        <tr className={theadClass}>
-                            <th className="p-4">商家主体</th>
-                            <th className="p-4">ID</th>
-                            <th className="p-4">创建时间</th>
-                            <th className="p-4">更新时间</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                        {sellers.map(seller => (
-                            <tr key={seller.id}>
-                                <td className="p-4 font-bold text-slate-900">{seller.name}</td>
-                                <td className="p-4 font-mono text-[10px] text-slate-400">{seller.id}</td>
-                                <td className="p-4 text-slate-500">{formatDateTime(seller.createdAt)}</td>
-                                <td className="p-4 text-slate-500">{formatDateTime(seller.updatedAt)}</td>
-                            </tr>
-                        ))}
-                        {!sellers.length && (
-                            <tr>
-                                <td colSpan={4} className="p-12 text-center text-slate-400">
-                                    暂无商家主体
-                                </td>
-                            </tr>
-                        )}
-                    </tbody>
-                </table>
-            </div>
-        </section>
-    );
-}
-
-function PaymentShippingPanel({
-    data,
+function SellersPanel({
+    sellers,
     onChanged,
     onError,
 }: {
-    data: StoreManagementResult;
+    sellers: StoreManagementResult['sellers']['items'];
     onChanged: (message: string) => Promise<void>;
     onError: (message: string) => void;
 }) {
-    const [toggle, state] = useMutation(UPDATE_PAYMENT_METHOD_MUTATION);
-    const changePayment = async (id: string, enabled: boolean) => {
+    const requestConfirmation = useConfirmDialog();
+    const [editing, setEditing] = useState<StoreManagementResult['sellers']['items'][number] | null>(null);
+    const [remove, state] = useMutation<{
+        deleteSeller: { result: string; message?: string | null };
+    }>(DELETE_SELLER_MUTATION);
+    const deleteSeller = async (seller: StoreManagementResult['sellers']['items'][number]) => {
+        const confirmed = await requestConfirmation({
+            title: '删除商家主体',
+            description: `确定删除“${seller.name}”？如果仍被 Channel 使用，后端会拒绝删除。`,
+            confirmLabel: '确认删除',
+            tone: 'danger',
+        });
+        if (!confirmed) return;
         try {
-            await toggle({ variables: { input: { id, enabled } } });
-            await onChanged(`支付方式已${enabled ? '启用' : '停用'}`);
+            const response = await remove({ variables: { id: seller.id } });
+            if (response.data?.deleteSeller.result !== 'DELETED')
+                throw new Error(response.data?.deleteSeller.message || '商家主体未删除');
+            await onChanged('商家主体已删除');
         } catch (error) {
             onError(errorText(error));
         }
     };
     return (
-        <div className="grid gap-4 xl:grid-cols-2">
+        <>
             <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-                <div className="border-b border-slate-100 p-5">
-                    <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                        <CreditCard className="h-4 w-4 text-blue-600" />
-                        支付方式
-                    </h2>
-                    <p className="mt-1 text-xs text-slate-400">
-                        这里只控制真实支付方式是否启用，密钥和处理器参数需在对应插件中配置
-                    </p>
-                </div>
-                <div className="divide-y divide-slate-100">
-                    {data.paymentMethods.items.map(item => (
-                        <div key={item.id} className="flex items-center justify-between gap-4 p-5">
-                            <div>
-                                <strong className="text-xs text-slate-900">{item.name}</strong>
-                                <p className="mt-1 font-mono text-[9px] text-slate-400">{item.code}</p>
-                                {item.description && (
-                                    <p className="mt-1 text-[10px] text-slate-500">{item.description}</p>
-                                )}
-                            </div>
-                            <label className="flex cursor-pointer items-center gap-2 text-[10px] font-bold text-slate-500">
-                                <input
-                                    type="checkbox"
-                                    checked={item.enabled}
-                                    onChange={event => void changePayment(item.id, event.target.checked)}
-                                    disabled={state.loading}
-                                />
-                                {item.enabled ? '已启用' : '已停用'}
-                            </label>
-                        </div>
-                    ))}
-                    {!data.paymentMethods.items.length && (
-                        <div className="p-10 text-center text-xs text-slate-400">未配置支付方式</div>
-                    )}
-                </div>
-            </section>
-            <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-                <div className="border-b border-slate-100 p-5">
-                    <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                        <Truck className="h-4 w-4 text-blue-600" />
-                        配送方式
-                    </h2>
-                    <p className="mt-1 text-xs text-slate-400">
-                        展示后端已注册的配送规则；费用来自计算器配置，不再伪造“统一运费”字段
-                    </p>
-                </div>
-                <div className="divide-y divide-slate-100">
-                    {data.shippingMethods.items.map(item => (
-                        <div key={item.id} className="p-5">
-                            <div className="flex items-center justify-between gap-3">
-                                <strong className="text-xs text-slate-900">{item.name}</strong>
-                                <span className="rounded bg-slate-100 px-2 py-1 font-mono text-[9px] text-slate-500">
-                                    {item.fulfillmentHandlerCode}
-                                </span>
-                            </div>
-                            <p className="mt-1 font-mono text-[9px] text-slate-400">{item.code}</p>
-                            {item.description && (
-                                <p className="mt-2 text-[10px] text-slate-500">{item.description}</p>
+                <div className="overflow-x-auto">
+                    <table className="w-full min-w-[650px] text-left text-xs">
+                        <thead>
+                            <tr className={theadClass}>
+                                <th className="p-4">商家主体</th>
+                                <th className="p-4">ID</th>
+                                <th className="p-4">创建时间</th>
+                                <th className="p-4">更新时间</th>
+                                <th className="p-4 text-right">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                            {sellers.map(seller => (
+                                <tr key={seller.id}>
+                                    <td className="p-4 font-bold text-slate-900">{seller.name}</td>
+                                    <td className="p-4 font-mono text-[10px] text-slate-400">{seller.id}</td>
+                                    <td className="p-4 text-slate-500">{formatDateTime(seller.createdAt)}</td>
+                                    <td className="p-4 text-slate-500">{formatDateTime(seller.updatedAt)}</td>
+                                    <td className="p-4">
+                                        <div className="flex justify-end gap-1">
+                                            <button
+                                                type="button"
+                                                onClick={() => setEditing(seller)}
+                                                className="rounded-md p-1.5 text-blue-600 hover:bg-blue-50"
+                                                aria-label={`编辑${seller.name}`}
+                                            >
+                                                <Pencil className="h-3.5 w-3.5" />
+                                            </button>
+                                            <button
+                                                type="button"
+                                                disabled={state.loading}
+                                                onClick={() => void deleteSeller(seller)}
+                                                className="rounded-md p-1.5 text-rose-600 hover:bg-rose-50"
+                                                aria-label={`删除${seller.name}`}
+                                            >
+                                                <Trash2 className="h-3.5 w-3.5" />
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))}
+                            {!sellers.length && (
+                                <tr>
+                                    <td colSpan={5} className="p-12 text-center text-slate-400">
+                                        暂无商家主体
+                                    </td>
+                                </tr>
                             )}
-                        </div>
-                    ))}
-                    {!data.shippingMethods.items.length && (
-                        <div className="p-10 text-center text-xs text-slate-400">未配置配送方式</div>
-                    )}
+                        </tbody>
+                    </table>
                 </div>
             </section>
-        </div>
+            {editing && (
+                <SellerDialog
+                    existing={editing}
+                    onClose={() => setEditing(null)}
+                    onCompleted={async message => {
+                        setEditing(null);
+                        await onChanged(message);
+                    }}
+                    onError={onError}
+                />
+            )}
+        </>
     );
 }
 
@@ -777,7 +938,15 @@ function BusinessBasicsPanel({
     onError: (message: string) => void;
 }) {
     const loadingAllBusinessSettingsRef = useRef(false);
-    const query = useQuery<BusinessSettingsResult>(BUSINESS_SETTINGS_QUERY, {
+    const channelCustomFieldDefinitions = useCustomFieldDefinitions('Channel');
+    const businessSettingsDocument = useMemo(
+        () =>
+            addCustomFieldsToDocument(BUSINESS_SETTINGS_QUERY, 'Channel', channelCustomFieldDefinitions, [
+                'activeChannel',
+            ]),
+        [channelCustomFieldDefinitions],
+    );
+    const query = useQuery<BusinessSettingsResult>(businessSettingsDocument, {
         variables: {
             zoneOptions: { skip: 0, take: 100, sort: { name: 'ASC' } },
             countryOptions: { skip: 0, take: 100, sort: { name: 'ASC' } },
@@ -870,9 +1039,15 @@ function BusinessBasicsPanel({
             <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-xs leading-5 text-blue-800">
                 这里集中管理平台级语言、币种、计税方式、国家区域和税率。普通店铺管理员只使用平台分配的配置，不能修改。
             </div>
+            <GlobalBusinessSettings
+                settings={query.data.globalSettings}
+                onChanged={refresh}
+                onError={onError}
+            />
             <ChannelBusinessSettings
                 channel={query.data.activeChannel}
                 zones={query.data.zones.items}
+                customFieldDefinitions={channelCustomFieldDefinitions}
                 onChanged={refresh}
                 onError={onError}
             />
@@ -887,6 +1062,7 @@ function BusinessBasicsPanel({
                 <ZoneBusinessSettings
                     zones={query.data.zones.items}
                     countries={query.data.countries.items}
+                    languageCode={query.data.activeChannel.defaultLanguageCode}
                     onChanged={refresh}
                     onError={onError}
                 />
@@ -895,14 +1071,103 @@ function BusinessBasicsPanel({
     );
 }
 
+function GlobalBusinessSettings({
+    settings,
+    onChanged,
+    onError,
+}: {
+    settings: BusinessSettingsResult['globalSettings'];
+    onChanged: (message: string) => Promise<void>;
+    onError: (message: string) => void;
+}) {
+    const [languages, setLanguages] = useState(settings.availableLanguages.join(', '));
+    const [trackInventory, setTrackInventory] = useState(settings.trackInventory);
+    const [outOfStockThreshold, setOutOfStockThreshold] = useState(String(settings.outOfStockThreshold));
+    const [update, state] = useMutation<{
+        updateGlobalSettings: {
+            __typename: 'GlobalSettings' | 'ChannelDefaultLanguageError';
+            message?: string;
+        };
+    }>(UPDATE_GLOBAL_SETTINGS_MUTATION);
+    const submit = async () => {
+        const availableLanguages = splitCodes(languages);
+        const threshold = Number(outOfStockThreshold);
+        if (!availableLanguages.length) return onError('至少保留一种平台可用语言');
+        if (!Number.isInteger(threshold) || threshold < 0) return onError('全局缺货阈值必须为非负整数');
+        try {
+            const response = await update({
+                variables: {
+                    input: {
+                        availableLanguages,
+                        trackInventory,
+                        outOfStockThreshold: threshold,
+                    },
+                },
+            });
+            if (response.data?.updateGlobalSettings.__typename !== 'GlobalSettings')
+                throw new Error(response.data?.updateGlobalSettings.message || '全局设置更新被拒绝');
+            await onChanged('平台全局语言和库存默认值已更新');
+        } catch (error) {
+            onError(errorText(error));
+        }
+    };
+    return (
+        <section className="rounded-xl border border-slate-200 bg-white p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-4">
+                <div>
+                    <h2 className="text-sm font-bold text-slate-900">平台全局设置</h2>
+                    <p className="mt-1 text-xs text-slate-400">影响所有 Channel 可选语言和库存默认行为</p>
+                </div>
+                <button
+                    type="button"
+                    onClick={() => void submit()}
+                    disabled={state.loading}
+                    className={primaryButton}
+                >
+                    {state.loading ? '保存中…' : '保存全局设置'}
+                </button>
+            </div>
+            <div className="mt-4 grid gap-4 sm:grid-cols-3">
+                <Field label="平台可用语言代码">
+                    <input
+                        value={languages}
+                        onChange={event => setLanguages(event.target.value)}
+                        className={inputClass}
+                        placeholder="zh_Hans, en"
+                    />
+                </Field>
+                <Field label="全局缺货阈值">
+                    <input
+                        type="number"
+                        min="0"
+                        value={outOfStockThreshold}
+                        onChange={event => setOutOfStockThreshold(event.target.value)}
+                        className={inputClass}
+                    />
+                </Field>
+                <label className="flex items-center gap-2 pt-7 text-xs text-slate-700">
+                    <input
+                        type="checkbox"
+                        checked={trackInventory}
+                        onChange={event => setTrackInventory(event.target.checked)}
+                    />
+                    默认跟踪库存
+                </label>
+            </div>
+        </section>
+    );
+}
+
 function ChannelBusinessSettings({
     channel,
     zones,
+    customFieldDefinitions,
     onChanged,
     onError,
 }: {
     channel: BusinessSettingsResult['activeChannel'];
     zones: BusinessSettingsResult['zones']['items'];
+    customFieldDefinitions: ReturnType<typeof useCustomFieldDefinitions>;
     onChanged: (message: string) => Promise<void>;
     onError: (message: string) => void;
 }) {
@@ -915,9 +1180,17 @@ function ChannelBusinessSettings({
     const [pricesIncludeTax, setPricesIncludeTax] = useState(channel.pricesIncludeTax);
     const [trackInventory, setTrackInventory] = useState(channel.trackInventory ?? true);
     const [outOfStockThreshold, setOutOfStockThreshold] = useState(String(channel.outOfStockThreshold ?? 0));
+    const [customFieldValues, setCustomFieldValues] = useState<CustomFieldValueMap>(() =>
+        customFieldValuesFromEntity(customFieldDefinitions, channel.customFields),
+    );
     const [update, state] = useMutation<{
         updateChannel: { __typename: 'Channel' | 'LanguageNotAvailableError'; message?: string };
     }>(UPDATE_BUSINESS_CHANNEL_MUTATION);
+    /* oxlint-disable react/set-state-in-effect */
+    useEffect(() => {
+        setCustomFieldValues(customFieldValuesFromEntity(customFieldDefinitions, channel.customFields));
+    }, [channel.customFields, channel.id, customFieldDefinitions]);
+    /* oxlint-enable react/set-state-in-effect */
     const submit = async () => {
         const availableLanguageCodes = splitCodes(languages);
         const availableCurrencyCodes = splitCodes(currencies);
@@ -925,6 +1198,10 @@ function ChannelBusinessSettings({
         if (!availableCurrencyCodes.includes(defaultCurrency)) return onError('默认币种必须包含在可用币种中');
         const threshold = Number(outOfStockThreshold);
         if (!Number.isInteger(threshold) || threshold < 0) return onError('缺货阈值必须为非负整数');
+        const customFieldErrors = validateCustomFieldValues(customFieldDefinitions, customFieldValues);
+        if (Object.keys(customFieldErrors).length > 0) {
+            return onError(Object.values(customFieldErrors)[0] ?? '店铺扩展字段校验失败');
+        }
         try {
             const response = await update({
                 variables: {
@@ -939,6 +1216,7 @@ function ChannelBusinessSettings({
                         pricesIncludeTax,
                         trackInventory,
                         outOfStockThreshold: threshold,
+                        customFields: customFieldInputFromValues(customFieldDefinitions, customFieldValues),
                     },
                 },
             });
@@ -1055,6 +1333,15 @@ function ChannelBusinessSettings({
                     </label>
                 </div>
             </div>
+            <div className="mt-4">
+                <DynamicCustomFieldsForm
+                    fields={customFieldDefinitions}
+                    values={customFieldValues}
+                    onChange={setCustomFieldValues}
+                    disabled={state.loading}
+                    title="当前店铺扩展参数"
+                />
+            </div>
         </section>
     );
 }
@@ -1072,20 +1359,47 @@ function TaxBusinessSettings({
     onChanged: (message: string) => Promise<void>;
     onError: (message: string) => void;
 }) {
+    const requestConfirmation = useConfirmDialog();
+    const [editingCategoryId, setEditingCategoryId] = useState('');
     const [categoryName, setCategoryName] = useState('');
+    const [categoryDefault, setCategoryDefault] = useState(false);
+    const [editingRateId, setEditingRateId] = useState('');
     const [rateName, setRateName] = useState('');
     const [rateValue, setRateValue] = useState('');
     const [categoryId, setCategoryId] = useState(categories[0]?.id ?? '');
     const [zoneId, setZoneId] = useState(zones[0]?.id ?? '');
     const [createCategory, categoryState] = useMutation(CREATE_BUSINESS_TAX_CATEGORY_MUTATION);
+    const [updateCategory, updateCategoryState] = useMutation(UPDATE_BUSINESS_TAX_CATEGORY_MUTATION);
+    const [deleteCategory, deleteCategoryState] = useMutation<{
+        deleteTaxCategory: { result: string; message?: string | null };
+    }>(DELETE_BUSINESS_TAX_CATEGORY_MUTATION);
     const [createRate, rateState] = useMutation(CREATE_BUSINESS_TAX_RATE_MUTATION);
     const [updateRate, updateState] = useMutation(UPDATE_BUSINESS_TAX_RATE_MUTATION);
+    const [deleteRate, deleteRateState] = useMutation<{
+        deleteTaxRate: { result: string; message?: string | null };
+    }>(DELETE_BUSINESS_TAX_RATE_MUTATION);
     const addCategory = async () => {
         if (!categoryName.trim()) return;
         try {
-            await createCategory({ variables: { input: { name: categoryName.trim() } } });
+            if (editingCategoryId) {
+                await updateCategory({
+                    variables: {
+                        input: {
+                            id: editingCategoryId,
+                            name: categoryName.trim(),
+                            isDefault: categoryDefault,
+                        },
+                    },
+                });
+            } else {
+                await createCategory({
+                    variables: { input: { name: categoryName.trim(), isDefault: categoryDefault } },
+                });
+            }
+            setEditingCategoryId('');
             setCategoryName('');
-            await onChanged('税类已创建');
+            setCategoryDefault(false);
+            await onChanged(editingCategoryId ? '税类已更新' : '税类已创建');
         } catch (error) {
             onError(errorText(error));
         }
@@ -1095,12 +1409,13 @@ function TaxBusinessSettings({
         if (!rateName.trim() || !categoryId || !zoneId || !Number.isFinite(value) || value < 0)
             return onError('请完整填写税率名称、税类、区域和非负税率');
         try {
-            await createRate({
-                variables: { input: { name: rateName.trim(), value, categoryId, zoneId, enabled: true } },
-            });
+            const input = { name: rateName.trim(), value, categoryId, zoneId, enabled: true };
+            if (editingRateId) await updateRate({ variables: { input: { id: editingRateId, ...input } } });
+            else await createRate({ variables: { input } });
+            setEditingRateId('');
             setRateName('');
             setRateValue('');
-            await onChanged('税率已创建');
+            await onChanged(editingRateId ? '税率已更新' : '税率已创建');
         } catch (error) {
             onError(errorText(error));
         }
@@ -1113,7 +1428,47 @@ function TaxBusinessSettings({
             onError(errorText(error));
         }
     };
-    const busy = categoryState.loading || rateState.loading || updateState.loading;
+    const removeCategory = async (id: string, name: string) => {
+        const confirmed = await requestConfirmation({
+            title: `删除税类“${name}”？`,
+            description: '有关联税率或商品时，后端会拒绝不安全的删除。',
+            confirmLabel: '确认删除',
+            tone: 'danger',
+        });
+        if (!confirmed) return;
+        try {
+            const response = await deleteCategory({ variables: { id } });
+            if (response.data?.deleteTaxCategory.result !== 'DELETED')
+                throw new Error(response.data?.deleteTaxCategory.message || '税类未删除');
+            await onChanged('税类已删除');
+        } catch (error) {
+            onError(errorText(error));
+        }
+    };
+    const removeRate = async (id: string, name: string) => {
+        const confirmed = await requestConfirmation({
+            title: `删除税率“${name}”？`,
+            description: '删除后新订单不再使用该税率，历史订单数据不会改写。',
+            confirmLabel: '确认删除',
+            tone: 'danger',
+        });
+        if (!confirmed) return;
+        try {
+            const response = await deleteRate({ variables: { id } });
+            if (response.data?.deleteTaxRate.result !== 'DELETED')
+                throw new Error(response.data?.deleteTaxRate.message || '税率未删除');
+            await onChanged('税率已删除');
+        } catch (error) {
+            onError(errorText(error));
+        }
+    };
+    const busy =
+        categoryState.loading ||
+        updateCategoryState.loading ||
+        deleteCategoryState.loading ||
+        rateState.loading ||
+        updateState.loading ||
+        deleteRateState.loading;
     return (
         <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
             <div className="border-b border-slate-100 p-5">
@@ -1124,21 +1479,73 @@ function TaxBusinessSettings({
                 <p className="mt-1 text-xs text-slate-400">税率按“税类 + 区域”匹配订单</p>
             </div>
             <div className="space-y-4 p-5">
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                     <input
                         value={categoryName}
                         onChange={event => setCategoryName(event.target.value)}
-                        placeholder="新增税类名称"
-                        className={inputClass}
+                        placeholder={editingCategoryId ? '编辑税类名称' : '新增税类名称'}
+                        className={`${inputClass} min-w-56 flex-1`}
                     />
+                    <label className="flex items-center gap-2 px-2 text-xs text-slate-600">
+                        <input
+                            type="checkbox"
+                            checked={categoryDefault}
+                            onChange={event => setCategoryDefault(event.target.checked)}
+                        />
+                        默认税类
+                    </label>
                     <button
                         type="button"
                         onClick={() => void addCategory()}
                         disabled={busy || !categoryName.trim()}
                         className={secondaryButton}
                     >
-                        新增税类
+                        {editingCategoryId ? '保存税类' : '新增税类'}
                     </button>
+                    {editingCategoryId && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setEditingCategoryId('');
+                                setCategoryName('');
+                                setCategoryDefault(false);
+                            }}
+                            className={secondaryButton}
+                        >
+                            取消
+                        </button>
+                    )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                    {categories.map(category => (
+                        <span
+                            key={category.id}
+                            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-[10px] text-slate-700"
+                        >
+                            {category.name}
+                            {category.isDefault && <strong className="text-blue-600">默认</strong>}
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setEditingCategoryId(category.id);
+                                    setCategoryName(category.name);
+                                    setCategoryDefault(category.isDefault);
+                                }}
+                                className="ml-1 text-blue-600"
+                                aria-label={`编辑税类${category.name}`}
+                            >
+                                <Pencil className="h-3 w-3" />
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => void removeCategory(category.id, category.name)}
+                                className="text-rose-600"
+                                aria-label={`删除税类${category.name}`}
+                            >
+                                <Trash2 className="h-3 w-3" />
+                            </button>
+                        </span>
+                    ))}
                 </div>
                 <div className="grid gap-2 sm:grid-cols-2">
                     <input
@@ -1187,8 +1594,21 @@ function TaxBusinessSettings({
                     disabled={busy}
                     className={primaryButton}
                 >
-                    创建税率
+                    {editingRateId ? '保存税率' : '创建税率'}
                 </button>
+                {editingRateId && (
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setEditingRateId('');
+                            setRateName('');
+                            setRateValue('');
+                        }}
+                        className={secondaryButton}
+                    >
+                        取消编辑
+                    </button>
+                )}
             </div>
             <div className="divide-y divide-slate-100 border-t border-slate-100">
                 {rates.map(rate => (
@@ -1201,15 +1621,39 @@ function TaxBusinessSettings({
                                 {rate.category.name} / {rate.zone.name}
                             </p>
                         </div>
-                        <label className="flex items-center gap-2 text-[10px] font-bold text-slate-500">
-                            <input
-                                type="checkbox"
-                                checked={rate.enabled}
-                                onChange={event => void toggleRate(rate.id, event.target.checked)}
-                                disabled={busy}
-                            />
-                            {rate.enabled ? '已启用' : '已停用'}
-                        </label>
+                        <div className="flex items-center gap-2">
+                            <label className="flex items-center gap-2 text-[10px] font-bold text-slate-500">
+                                <input
+                                    type="checkbox"
+                                    checked={rate.enabled}
+                                    onChange={event => void toggleRate(rate.id, event.target.checked)}
+                                    disabled={busy}
+                                />
+                                {rate.enabled ? '已启用' : '已停用'}
+                            </label>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setEditingRateId(rate.id);
+                                    setRateName(rate.name);
+                                    setRateValue(String(rate.value));
+                                    setCategoryId(rate.category.id);
+                                    setZoneId(rate.zone.id);
+                                }}
+                                className="rounded p-1 text-blue-600"
+                                aria-label={`编辑税率${rate.name}`}
+                            >
+                                <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => void removeRate(rate.id, rate.name)}
+                                className="rounded p-1 text-rose-600"
+                                aria-label={`删除税率${rate.name}`}
+                            >
+                                <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                        </div>
                     </div>
                 ))}
                 {!rates.length && <div className="p-8 text-center text-xs text-slate-400">尚未配置税率</div>}
@@ -1221,28 +1665,133 @@ function TaxBusinessSettings({
 function ZoneBusinessSettings({
     zones,
     countries,
+    languageCode,
     onChanged,
     onError,
 }: {
     zones: BusinessSettingsResult['zones']['items'];
     countries: BusinessSettingsResult['countries']['items'];
+    languageCode: string;
     onChanged: (message: string) => Promise<void>;
     onError: (message: string) => void;
 }) {
+    const requestConfirmation = useConfirmDialog();
+    const [editingZoneId, setEditingZoneId] = useState('');
     const [name, setName] = useState('');
     const [memberIds, setMemberIds] = useState<string[]>([]);
     const [create, state] = useMutation(CREATE_BUSINESS_ZONE_MUTATION);
+    const [updateZone, updateZoneState] = useMutation(UPDATE_BUSINESS_ZONE_MUTATION);
+    const [addMembers, addMembersState] = useMutation(ADD_BUSINESS_ZONE_MEMBERS_MUTATION);
+    const [removeMembers, removeMembersState] = useMutation(REMOVE_BUSINESS_ZONE_MEMBERS_MUTATION);
+    const [deleteZone, deleteZoneState] = useMutation<{
+        deleteZone: { result: string; message?: string | null };
+    }>(DELETE_BUSINESS_ZONE_MUTATION);
+    const [editingCountryId, setEditingCountryId] = useState('');
+    const [countryCode, setCountryCode] = useState('');
+    const [countryName, setCountryName] = useState('');
+    const [countryEnabled, setCountryEnabled] = useState(true);
+    const [createCountry, createCountryState] = useMutation(CREATE_BUSINESS_COUNTRY_MUTATION);
+    const [updateCountry, updateCountryState] = useMutation(UPDATE_BUSINESS_COUNTRY_MUTATION);
+    const [deleteCountry, deleteCountryState] = useMutation<{
+        deleteCountry: { result: string; message?: string | null };
+    }>(DELETE_BUSINESS_COUNTRY_MUTATION);
     const submit = async () => {
         if (!name.trim() || memberIds.length === 0) return onError('请填写区域名称并选择至少一个国家/地区');
         try {
-            await create({ variables: { input: { name: name.trim(), memberIds } } });
+            if (editingZoneId) {
+                const existing = zones.find(zone => zone.id === editingZoneId);
+                await updateZone({ variables: { input: { id: editingZoneId, name: name.trim() } } });
+                const existingIds = existing?.members.map(member => member.id) ?? [];
+                const toAdd = memberIds.filter(id => !existingIds.includes(id));
+                const toRemove = existingIds.filter(id => !memberIds.includes(id));
+                if (toAdd.length)
+                    await addMembers({ variables: { zoneId: editingZoneId, memberIds: toAdd } });
+                if (toRemove.length)
+                    await removeMembers({ variables: { zoneId: editingZoneId, memberIds: toRemove } });
+            } else {
+                await create({ variables: { input: { name: name.trim(), memberIds } } });
+            }
+            const wasEditing = Boolean(editingZoneId);
+            setEditingZoneId('');
             setName('');
             setMemberIds([]);
-            await onChanged('国家/地区区域已创建');
+            await onChanged(wasEditing ? '国家/地区区域已更新' : '国家/地区区域已创建');
         } catch (error) {
             onError(errorText(error));
         }
     };
+    const removeZone = async (id: string, zoneName: string) => {
+        const confirmed = await requestConfirmation({
+            title: `删除区域“${zoneName}”？`,
+            description: '被 Channel、配送方式或税率引用时，后端会拒绝删除。',
+            confirmLabel: '确认删除',
+            tone: 'danger',
+        });
+        if (!confirmed) return;
+        try {
+            const response = await deleteZone({ variables: { id } });
+            if (response.data?.deleteZone.result !== 'DELETED')
+                throw new Error(response.data?.deleteZone.message || '区域未删除');
+            await onChanged('区域已删除');
+        } catch (error) {
+            onError(errorText(error));
+        }
+    };
+    const submitCountry = async () => {
+        if (!countryCode.trim() || !countryName.trim()) return onError('请填写国家代码和名称');
+        try {
+            const input = {
+                code: countryCode.trim().toUpperCase(),
+                enabled: countryEnabled,
+                translations: [{ languageCode, name: countryName.trim() }],
+            };
+            if (editingCountryId)
+                await updateCountry({ variables: { input: { id: editingCountryId, ...input } } });
+            else await createCountry({ variables: { input } });
+            const wasEditing = Boolean(editingCountryId);
+            setEditingCountryId('');
+            setCountryCode('');
+            setCountryName('');
+            setCountryEnabled(true);
+            await onChanged(wasEditing ? '国家/地区已更新' : '国家/地区已创建');
+        } catch (error) {
+            onError(errorText(error));
+        }
+    };
+    const toggleCountry = async (id: string, enabled: boolean) => {
+        try {
+            await updateCountry({ variables: { input: { id, enabled } } });
+            await onChanged(`国家/地区已${enabled ? '启用' : '停用'}`);
+        } catch (error) {
+            onError(errorText(error));
+        }
+    };
+    const removeCountry = async (id: string, displayName: string) => {
+        const confirmed = await requestConfirmation({
+            title: `删除国家/地区“${displayName}”？`,
+            description: '被业务区域或历史地址引用时，后端会拒绝不安全的删除。',
+            confirmLabel: '确认删除',
+            tone: 'danger',
+        });
+        if (!confirmed) return;
+        try {
+            const response = await deleteCountry({ variables: { id } });
+            if (response.data?.deleteCountry.result !== 'DELETED')
+                throw new Error(response.data?.deleteCountry.message || '国家/地区未删除');
+            await onChanged('国家/地区已删除');
+        } catch (error) {
+            onError(errorText(error));
+        }
+    };
+    const busy =
+        state.loading ||
+        updateZoneState.loading ||
+        addMembersState.loading ||
+        removeMembersState.loading ||
+        deleteZoneState.loading ||
+        createCountryState.loading ||
+        updateCountryState.loading ||
+        deleteCountryState.loading;
     return (
         <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
             <div className="border-b border-slate-100 p-5">
@@ -1256,7 +1805,7 @@ function ZoneBusinessSettings({
                 <input
                     value={name}
                     onChange={event => setName(event.target.value)}
-                    placeholder="区域名称，如：中国大陆"
+                    placeholder={editingZoneId ? '编辑区域名称' : '区域名称，如：中国大陆'}
                     className={inputClass}
                 />
                 <div className="max-h-48 overflow-y-auto rounded-lg border border-slate-200 p-2">
@@ -1290,24 +1839,151 @@ function ZoneBusinessSettings({
                 <button
                     type="button"
                     onClick={() => void submit()}
-                    disabled={state.loading || !name.trim() || memberIds.length === 0}
+                    disabled={busy || !name.trim() || memberIds.length === 0}
                     className={primaryButton}
                 >
-                    创建区域
+                    {editingZoneId ? '保存区域' : '创建区域'}
                 </button>
+                {editingZoneId && (
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setEditingZoneId('');
+                            setName('');
+                            setMemberIds([]);
+                        }}
+                        className={secondaryButton}
+                    >
+                        取消编辑
+                    </button>
+                )}
             </div>
             <div className="divide-y divide-slate-100 border-t border-slate-100">
                 {zones.map(zone => (
-                    <div key={zone.id} className="p-4">
-                        <strong className="text-xs text-slate-900">{zone.name}</strong>
-                        <p className="mt-1 line-clamp-2 text-[10px] leading-4 text-slate-400">
-                            {zone.members.map(member => member.name).join('、') || '尚无成员'}
-                        </p>
+                    <div key={zone.id} className="flex items-start justify-between gap-3 p-4">
+                        <div>
+                            <strong className="text-xs text-slate-900">{zone.name}</strong>
+                            <p className="mt-1 line-clamp-2 text-[10px] leading-4 text-slate-400">
+                                {zone.members.map(member => member.name).join('、') || '尚无成员'}
+                            </p>
+                        </div>
+                        <div className="flex gap-1">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setEditingZoneId(zone.id);
+                                    setName(zone.name);
+                                    setMemberIds(zone.members.map(member => member.id));
+                                }}
+                                className="rounded p-1 text-blue-600"
+                                aria-label={`编辑区域${zone.name}`}
+                            >
+                                <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => void removeZone(zone.id, zone.name)}
+                                className="rounded p-1 text-rose-600"
+                                aria-label={`删除区域${zone.name}`}
+                            >
+                                <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                        </div>
                     </div>
                 ))}
                 {!zones.length && (
                     <div className="p-8 text-center text-xs text-slate-400">尚未创建业务区域</div>
                 )}
+            </div>
+            <div className="space-y-3 border-t border-slate-100 p-5">
+                <h3 className="text-xs font-bold text-slate-800">国家/地区字典</h3>
+                <div className="grid gap-2 sm:grid-cols-2">
+                    <input
+                        value={countryCode}
+                        onChange={event => setCountryCode(event.target.value)}
+                        placeholder="国家代码，如 CN"
+                        className={inputClass}
+                    />
+                    <input
+                        value={countryName}
+                        onChange={event => setCountryName(event.target.value)}
+                        placeholder="显示名称"
+                        className={inputClass}
+                    />
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                    <label className="flex items-center gap-2 text-xs text-slate-600">
+                        <input
+                            type="checkbox"
+                            checked={countryEnabled}
+                            onChange={event => setCountryEnabled(event.target.checked)}
+                        />
+                        启用
+                    </label>
+                    <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void submitCountry()}
+                        className={secondaryButton}
+                    >
+                        {editingCountryId ? '保存国家/地区' : '新增国家/地区'}
+                    </button>
+                    {editingCountryId && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setEditingCountryId('');
+                                setCountryCode('');
+                                setCountryName('');
+                                setCountryEnabled(true);
+                            }}
+                            className={secondaryButton}
+                        >
+                            取消
+                        </button>
+                    )}
+                </div>
+                <div className="max-h-52 divide-y divide-slate-100 overflow-y-auto rounded-lg border border-slate-200">
+                    {countries.map(country => (
+                        <div
+                            key={country.id}
+                            className="flex items-center justify-between gap-2 p-2.5 text-[10px]"
+                        >
+                            <span className="truncate">
+                                {country.name} ({country.code})
+                            </span>
+                            <div className="flex items-center gap-1">
+                                <input
+                                    type="checkbox"
+                                    checked={country.enabled}
+                                    onChange={event => void toggleCountry(country.id, event.target.checked)}
+                                    aria-label={`${country.name}启用状态`}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setEditingCountryId(country.id);
+                                        setCountryCode(country.code);
+                                        setCountryName(country.name);
+                                        setCountryEnabled(country.enabled);
+                                    }}
+                                    className="rounded p-1 text-blue-600"
+                                    aria-label={`编辑${country.name}`}
+                                >
+                                    <Pencil className="h-3 w-3" />
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => void removeCountry(country.id, country.name)}
+                                    className="rounded p-1 text-rose-600"
+                                    aria-label={`删除${country.name}`}
+                                >
+                                    <Trash2 className="h-3 w-3" />
+                                </button>
+                            </div>
+                        </div>
+                    ))}
+                </div>
             </div>
         </section>
     );
@@ -1324,6 +2000,7 @@ function StoreEditor({
     onCompleted: (message: string) => Promise<void>;
     onError: (message: string) => void;
 }) {
+    const requestConfirmation = useConfirmDialog();
     const [nameZh, setNameZh] = useState(profile.channel.customFields.storefrontNameZh);
     const [nameEn, setNameEn] = useState(profile.channel.customFields.storefrontNameEn);
     const [descriptionZh, setDescriptionZh] = useState(profile.descriptionZh);
@@ -1336,20 +2013,34 @@ function StoreEditor({
         if (!nameZh.trim()) return onError('请填写中文店铺名称');
         if (status === 'ACTIVE' && !profile.activationReadiness.ready)
             return onError('上线检查未通过，暂时不能启用店铺');
+        const statusChanged = status !== profile.status;
+        let currentPassword: string | undefined;
+        if (statusChanged) {
+            const confirmation = await requestConfirmation({
+                title: '确认变更店铺运行状态？',
+                description: `将“${storeName(profile)}”从${storeStatusLabel(profile.status)}改为${storeStatusLabel(status)}。此操作需要验证当前管理员密码。`,
+                confirmLabel: '验证并变更',
+                tone: 'warning',
+                requireCurrentPassword: true,
+            });
+            if (!confirmation) return;
+            currentPassword = confirmation.currentPassword;
+        }
         try {
+            const input = {
+                id: profile.id,
+                expectedUpdatedAt: profile.updatedAt,
+                storefrontNameZh: nameZh.trim(),
+                storefrontNameEn: nameEn.trim(),
+                descriptionZh: descriptionZh.trim(),
+                descriptionEn: descriptionEn.trim(),
+                internalNote: internalNote.trim() || null,
+                sortOrder,
+                ...(statusChanged ? { status, currentPassword } : {}),
+            };
             await save({
                 variables: {
-                    input: {
-                        id: profile.id,
-                        expectedUpdatedAt: profile.updatedAt,
-                        storefrontNameZh: nameZh.trim(),
-                        storefrontNameEn: nameEn.trim(),
-                        descriptionZh: descriptionZh.trim(),
-                        descriptionEn: descriptionEn.trim(),
-                        internalNote: internalNote.trim() || null,
-                        status,
-                        sortOrder,
-                    },
+                    input,
                 },
             });
             await onCompleted('店铺档案已保存');
@@ -1418,7 +2109,9 @@ function StoreEditor({
                         <option value="ACTIVE" disabled={!profile.activationReadiness.ready}>
                             正常营业
                         </option>
-                        <option value="SUSPENDED">暂停营业</option>
+                        <option value="SUSPENDED" disabled={profile.status !== 'SUSPENDED'}>
+                            暂停营业（请使用安全清退）
+                        </option>
                     </select>
                 </Field>
                 <Field label="显示顺序">
@@ -1437,6 +2130,255 @@ function StoreEditor({
                 saveLabel="保存店铺档案"
             />
         </Modal>
+    );
+}
+
+function StoreDeprovisionDialog({
+    profile,
+    onClose,
+    onCompleted,
+    onError,
+}: {
+    profile: StoreProfileRecord;
+    onClose: () => void;
+    onCompleted: (message: string) => Promise<void>;
+    onError: (message: string) => void;
+}) {
+    const requestConfirmation = useConfirmDialog();
+    const [currentPassword, setCurrentPassword] = useState('');
+    const [confirmCode, setConfirmCode] = useState('');
+    const [expectedUpdatedAt, setExpectedUpdatedAt] = useState(profile.updatedAt);
+    const [localNotice, setLocalNotice] = useState('');
+    const [localError, setLocalError] = useState('');
+    const impactQuery = useQuery<{ storeDeprovisionImpact: StoreDeprovisionImpactRecord }>(
+        STORE_DEPROVISION_IMPACT_QUERY,
+        {
+            variables: { profileId: profile.id },
+            fetchPolicy: 'network-only',
+        },
+    );
+    const [suspendStore, suspendState] = useMutation<{
+        suspendStore: { id: string; updatedAt: string; status: StoreProfileRecord['status'] };
+    }>(SUSPEND_STORE_MUTATION);
+    const [deprovisionStore, deprovisionState] = useMutation<{
+        deprovisionStore: {
+            channelId: string;
+            channelCode: string;
+            deletedAdministratorCount: number;
+            deletedRole: boolean;
+            deletedSeller: boolean;
+        };
+    }>(DEPROVISION_STORE_MUTATION);
+    const impact = impactQuery.data?.storeDeprovisionImpact;
+    const busy = suspendState.loading || deprovisionState.loading;
+
+    const suspend = async () => {
+        if (!currentPassword) {
+            setLocalError('请输入当前管理员密码');
+            return;
+        }
+        setLocalError('');
+        setLocalNotice('');
+        try {
+            const response = await suspendStore({
+                variables: {
+                    profileId: profile.id,
+                    expectedUpdatedAt,
+                    currentPassword,
+                },
+            });
+            const updatedAt = response.data?.suspendStore.updatedAt;
+            if (!updatedAt) throw new Error('暂停营业后未返回最新店铺版本');
+            setExpectedUpdatedAt(updatedAt);
+            setCurrentPassword('');
+            setLocalNotice('店铺已暂停营业。若该店铺没有业务数据，可继续输入店铺编码执行彻底清退。');
+            await impactQuery.refetch();
+        } catch (error) {
+            setLocalError(errorText(error));
+        }
+    };
+
+    const deprovision = async () => {
+        if (!impact?.canDeprovision) {
+            setLocalError('当前店铺仍有阻止清退的条件，请先按列表处理');
+            return;
+        }
+        if (!currentPassword) {
+            setLocalError('请输入当前管理员密码');
+            return;
+        }
+        if (confirmCode.trim() !== impact.channelCode) {
+            setLocalError(`请输入完整店铺编码“${impact.channelCode}”`);
+            return;
+        }
+        const confirmation = await requestConfirmation({
+            title: '最后确认：彻底清退空店铺？',
+            description:
+                '系统将删除该空店铺的 Channel、店铺档案、专属管理员与专属角色。该操作不可撤销，但后端仍会再次检查订单、商品、客户及扩展数据。',
+            confirmLabel: '确认彻底清退',
+            tone: 'danger',
+        });
+        if (!confirmation) return;
+        setLocalError('');
+        try {
+            const response = await deprovisionStore({
+                variables: {
+                    input: {
+                        profileId: profile.id,
+                        expectedUpdatedAt,
+                        currentPassword,
+                        confirmCode: confirmCode.trim(),
+                    },
+                },
+            });
+            const result = response.data?.deprovisionStore;
+            if (!result) throw new Error('清退操作未返回结果');
+            await onCompleted(
+                `空店铺 ${result.channelCode} 已清退；移除 ${result.deletedAdministratorCount} 个专属管理员${result.deletedRole ? '、专属角色' : ''}${result.deletedSeller ? '和独占商家主体' : ''}`,
+            );
+        } catch (error) {
+            const message = errorText(error);
+            setLocalError(message);
+            onError(message);
+            await impactQuery.refetch().catch(() => undefined);
+        }
+    };
+
+    return (
+        <Modal
+            title="店铺安全清退"
+            description={`${storeName(profile)} · ${profile.channel.code} · 先看影响、再暂停，只有没有业务数据的店铺才允许彻底删除`}
+            onClose={onClose}
+        >
+            {impactQuery.loading && !impact ? (
+                <div className="flex min-h-48 items-center justify-center gap-2 text-xs text-slate-500">
+                    <LoaderCircle className="h-4 w-4 animate-spin" />
+                    正在检查订单、商品、客户及扩展数据…
+                </div>
+            ) : impactQuery.error || !impact ? (
+                <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-xs text-rose-700">
+                    <p>{impactQuery.error?.message ?? '清退影响读取失败'}</p>
+                    <button
+                        type="button"
+                        onClick={() => void impactQuery.refetch()}
+                        className="mt-3 font-bold underline"
+                    >
+                        重新检查
+                    </button>
+                </div>
+            ) : (
+                <>
+                    {localNotice && (
+                        <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-xs leading-5 text-emerald-800">
+                            {localNotice}
+                        </div>
+                    )}
+                    {localError && (
+                        <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 p-4 text-xs leading-5 text-rose-700">
+                            {localError}
+                        </div>
+                    )}
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                        <ImpactStat label="订单" value={impact.orderCount} />
+                        <ImpactStat label="商品" value={impact.productCount} />
+                        <ImpactStat label="客户" value={impact.customerCount} />
+                        <ImpactStat label="扩展记录" value={impact.extensionRecordCount} />
+                        <ImpactStat label="管理员" value={impact.administratorCount} />
+                        <ImpactStat label="独立域名" value={impact.domainCount} />
+                        <ImpactStat label="专属角色" value={impact.roleWillBeDeleted ? '会移除' : '不移除'} />
+                        <ImpactStat label="商家主体" value={impact.sellerWillBeDeleted ? '会移除' : '保留'} />
+                    </div>
+                    <div
+                        className={`mt-4 rounded-xl border p-4 ${impact.canDeprovision ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}
+                    >
+                        <div className="flex items-center gap-2 text-xs font-bold text-slate-900">
+                            {impact.canDeprovision ? (
+                                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                            ) : (
+                                <AlertCircle className="h-4 w-4 text-amber-600" />
+                            )}
+                            {impact.canDeprovision
+                                ? '该店铺满足彻底清退条件'
+                                : '当前只能查看或暂停，不能彻底删除'}
+                        </div>
+                        {impact.blockers.length > 0 && (
+                            <ul className="mt-3 space-y-1 text-[11px] leading-5 text-amber-900">
+                                {impact.blockers.map(blocker => (
+                                    <li key={blocker}>• {blocker}</li>
+                                ))}
+                            </ul>
+                        )}
+                    </div>
+                    <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                        <Field label="当前管理员密码 *">
+                            <input
+                                type="password"
+                                autoComplete="current-password"
+                                value={currentPassword}
+                                onChange={event => setCurrentPassword(event.target.value)}
+                                className={inputClass}
+                            />
+                        </Field>
+                        <Field label={`彻底清退时输入店铺编码：${impact.channelCode}`}>
+                            <input
+                                value={confirmCode}
+                                onChange={event => setConfirmCode(event.target.value)}
+                                placeholder={impact.channelCode}
+                                disabled={!impact.canDeprovision}
+                                className={inputClass}
+                            />
+                        </Field>
+                    </div>
+                    <div className="mt-6 flex flex-col-reverse gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:justify-end">
+                        <button type="button" onClick={onClose} disabled={busy} className={secondaryButton}>
+                            关闭
+                        </button>
+                        {impact.status !== 'SUSPENDED' && (
+                            <button
+                                type="button"
+                                onClick={() => void suspend()}
+                                disabled={
+                                    busy ||
+                                    impact.isDefaultChannel ||
+                                    impact.isProvisioningTemplate ||
+                                    impact.isActiveChannel
+                                }
+                                className="flex items-center justify-center gap-1.5 rounded-lg bg-amber-500 px-4 py-2 text-xs font-bold text-white hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                                {suspendState.loading && (
+                                    <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+                                )}
+                                先暂停营业
+                            </button>
+                        )}
+                        <button
+                            type="button"
+                            onClick={() => void deprovision()}
+                            disabled={
+                                !impact.canDeprovision || busy || confirmCode.trim() !== impact.channelCode
+                            }
+                            className="flex items-center justify-center gap-1.5 rounded-lg bg-rose-600 px-4 py-2 text-xs font-bold text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                            {deprovisionState.loading ? (
+                                <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                                <Trash2 className="h-3.5 w-3.5" />
+                            )}
+                            彻底清退空店铺
+                        </button>
+                    </div>
+                </>
+            )}
+        </Modal>
+    );
+}
+
+function ImpactStat({ label, value }: { label: string; value: string | number }) {
+    return (
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <div className="text-[10px] text-slate-400">{label}</div>
+            <div className="mt-1 text-sm font-bold text-slate-900">{value}</div>
+        </div>
     );
 }
 
@@ -1635,27 +2577,35 @@ function ProvisionStoreDialog({
 }
 
 function SellerDialog({
+    existing,
     onClose,
     onCompleted,
     onError,
 }: {
+    existing?: StoreManagementResult['sellers']['items'][number];
     onClose: () => void;
     onCompleted: (message: string) => Promise<void>;
     onError: (message: string) => void;
 }) {
-    const [name, setName] = useState('');
+    const [name, setName] = useState(existing?.name ?? '');
     const [create, state] = useMutation(CREATE_SELLER_MUTATION);
+    const [update, updateState] = useMutation(UPDATE_SELLER_MUTATION);
     const submit = async () => {
         if (!name.trim()) return onError('请填写商家主体名称');
         try {
-            await create({ variables: { input: { name: name.trim() } } });
-            await onCompleted('商家主体已创建');
+            if (existing) await update({ variables: { input: { id: existing.id, name: name.trim() } } });
+            else await create({ variables: { input: { name: name.trim() } } });
+            await onCompleted(existing ? '商家主体已更新' : '商家主体已创建');
         } catch (error) {
             onError(errorText(error));
         }
     };
     return (
-        <Modal title="新增商家主体" description="商家主体用于隔离商品、订单和店铺 Channel" onClose={onClose}>
+        <Modal
+            title={existing ? '编辑商家主体' : '新增商家主体'}
+            description="商家主体用于隔离商品、订单和店铺 Channel"
+            onClose={onClose}
+        >
             <Field label="商家主体名称 *">
                 <input
                     value={name}
@@ -1667,8 +2617,8 @@ function SellerDialog({
             <ModalActions
                 onClose={onClose}
                 onSave={() => void submit()}
-                saving={state.loading}
-                saveLabel="创建商家主体"
+                saving={state.loading || updateState.loading}
+                saveLabel={existing ? '保存商家主体' : '创建商家主体'}
             />
         </Modal>
     );
@@ -1708,6 +2658,12 @@ function storeName(profile: StoreProfileRecord) {
         profile.channel.customFields.storefrontNameEn ||
         getChannelDisplayName(profile.channel.code)
     );
+}
+
+function storeStatusLabel(status: StoreProfileRecord['status']) {
+    if (status === 'ACTIVE') return '正常营业';
+    if (status === 'SUSPENDED') return '暂停营业';
+    return '草稿';
 }
 function TabButton({
     active,

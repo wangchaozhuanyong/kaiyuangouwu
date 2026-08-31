@@ -208,6 +208,43 @@ export function ProductVariantEditor({
 
     // Filter out deleted prices for display
     const activePrices = prices?.filter(p => !p.delete) ?? [];
+    const variantCustomFields = (form.watch('customFields') ?? {}) as Record<string, unknown>;
+    const isDigitalVariant = variantCustomFields.fulfillmentType !== 'physical';
+    const digitalDeliveryMode =
+        variantCustomFields.digitalDeliveryMode === 'auto_card' ||
+        variantCustomFields.digitalDeliveryMode === 'file_download'
+            ? variantCustomFields.digitalDeliveryMode
+            : 'manual_service';
+    const digitalStockPolicy =
+        variantCustomFields.digitalStockPolicy === 'unlimited' ||
+        variantCustomFields.digitalStockPolicy === 'pool_derived'
+            ? variantCustomFields.digitalStockPolicy
+            : 'limited';
+    const showStockEditor =
+        !isDigitalVariant ||
+        digitalDeliveryMode === 'manual_service' ||
+        (digitalDeliveryMode === 'file_download' && digitalStockPolicy === 'limited');
+
+    const updateDigitalConfiguration = (updates: Record<string, unknown>) => {
+        const nextFields = { ...variantCustomFields, ...updates };
+        form.setValue('customFields', nextFields as never, { shouldDirty: true, shouldValidate: true });
+    };
+
+    const updateDigitalDeliveryMode = (mode: 'manual_service' | 'file_download' | 'auto_card') => {
+        if (mode === 'auto_card') {
+            updateDigitalConfiguration({ digitalDeliveryMode: mode, digitalStockPolicy: 'pool_derived' });
+            form.setValue('trackInventory', 'FALSE', { shouldDirty: true });
+        } else if (mode === 'manual_service') {
+            updateDigitalConfiguration({ digitalDeliveryMode: mode, digitalStockPolicy: 'limited' });
+            form.setValue('trackInventory', 'TRUE', { shouldDirty: true });
+        } else {
+            const policy = digitalStockPolicy === 'limited' ? 'limited' : 'unlimited';
+            updateDigitalConfiguration({ digitalDeliveryMode: mode, digitalStockPolicy: policy });
+            form.setValue('trackInventory', policy === 'limited' ? 'TRUE' : 'FALSE', {
+                shouldDirty: true,
+            });
+        }
+    };
 
     // Get used stock location IDs
     const usedStockLocationIds = stockLevels?.map(sl => sl.stockLocationId) ?? [];
@@ -331,6 +368,96 @@ export function ProductVariantEditor({
                         />
                     </DetailFormGrid>
                 </PageBlock>
+                {isDigitalVariant && (
+                    <PageBlock
+                        column="main"
+                        blockId="digital-delivery"
+                        title={<Trans>Digital delivery</Trans>}
+                    >
+                        <DetailFormGrid>
+                            <Field>
+                                <FieldLabel>
+                                    <Trans>Delivery method</Trans>
+                                </FieldLabel>
+                                <Select
+                                    value={digitalDeliveryMode}
+                                    onValueChange={value =>
+                                        value &&
+                                        updateDigitalDeliveryMode(
+                                            value as 'manual_service' | 'file_download' | 'auto_card',
+                                        )
+                                    }
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="manual_service">
+                                            <Trans>Manual email delivery</Trans>
+                                        </SelectItem>
+                                        <SelectItem value="file_download">
+                                            <Trans>File download</Trans>
+                                        </SelectItem>
+                                        <SelectItem value="auto_card">
+                                            <Trans>Credential pool auto-delivery</Trans>
+                                        </SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </Field>
+                            {digitalDeliveryMode === 'file_download' && (
+                                <Field>
+                                    <FieldLabel>
+                                        <Trans>Digital inventory</Trans>
+                                    </FieldLabel>
+                                    <Select
+                                        value={digitalStockPolicy === 'limited' ? 'limited' : 'unlimited'}
+                                        onValueChange={value => {
+                                            if (!value) return;
+                                            updateDigitalConfiguration({ digitalStockPolicy: value });
+                                            form.setValue(
+                                                'trackInventory',
+                                                value === 'limited' ? 'TRUE' : 'FALSE',
+                                                { shouldDirty: true },
+                                            );
+                                        }}
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="unlimited">
+                                                <Trans>Unlimited inventory</Trans>
+                                            </SelectItem>
+                                            <SelectItem value="limited">
+                                                <Trans>Limit sellable inventory</Trans>
+                                            </SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </Field>
+                            )}
+                        </DetailFormGrid>
+                        <p className="mt-3 text-sm text-muted-foreground">
+                            {digitalDeliveryMode === 'auto_card' ? (
+                                <Trans>
+                                    Inventory is read-only and equals the available records in the credential
+                                    pool. Configure and replenish it in Automatic credential delivery.
+                                </Trans>
+                            ) : digitalDeliveryMode === 'manual_service' ? (
+                                <Trans>
+                                    Paid orders enter the manual delivery workbench. Sellable inventory is
+                                    entered below and is restored only when the order is cancelled before
+                                    delivery.
+                                </Trans>
+                            ) : digitalStockPolicy === 'unlimited' ? (
+                                <Trans>This downloadable item can be sold without an inventory limit.</Trans>
+                            ) : (
+                                <Trans>
+                                    This downloadable item uses the sellable inventory entered below.
+                                </Trans>
+                            )}
+                        </p>
+                    </PageBlock>
+                )}
                 <CustomFieldsPageBlock column="main" entityType="ProductVariant" control={form.control} />
 
                 <PageBlock column="main" blockId="price-and-tax" title={<Trans>Price and tax</Trans>}>
@@ -394,119 +521,138 @@ export function ProductVariantEditor({
                         );
                     })}
                 </PageBlock>
-                <PageBlock column="main" blockId="stock" title={<Trans>Stock</Trans>}>
-                    <DetailFormGrid>
-                        <FormFieldWrapper
-                            control={form.control}
-                            name="trackInventory"
-                            label={<Trans>Stock levels</Trans>}
-                            renderFormControl={false}
-                            render={({ field }) => (
-                                <Select
-                                    items={{
-                                        INHERIT: t`Inherit from global settings`,
-                                        TRUE: t`Track`,
-                                        FALSE: t`Do not track`,
-                                    }}
-                                    onValueChange={val => {
-                                        if (val) {
-                                            field.onChange(val);
-                                        }
-                                    }}
-                                    value={field.value}
-                                >
-                                    <SelectTrigger className="">
-                                        <SelectValue placeholder={t`Select inventory tracking mode`} />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="INHERIT">
-                                            <Trans>Inherit from global settings</Trans>
-                                        </SelectItem>
-                                        <SelectItem value="TRUE">
-                                            <Trans>Track</Trans>
-                                        </SelectItem>
-                                        <SelectItem value="FALSE">
-                                            <Trans>Do not track</Trans>
-                                        </SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            )}
-                        />
-                        <FormFieldWrapper
-                            control={form.control}
-                            name="outOfStockThreshold"
-                            label={<Trans>Out-of-stock threshold</Trans>}
-                            description={
+                {showStockEditor && (
+                    <PageBlock
+                        column="main"
+                        blockId="stock"
+                        title={isDigitalVariant ? <Trans>Digital inventory</Trans> : <Trans>Stock</Trans>}
+                    >
+                        {isDigitalVariant && (
+                            <p className="mb-5 text-sm text-muted-foreground">
                                 <Trans>
-                                    Sets the stock level at which this variant is considered to be out of
-                                    stock. Using a negative value enables backorder support.
+                                    This is the sellable quantity for the digital SKU. Warehouse, packaging
+                                    and shipping settings do not apply.
                                 </Trans>
-                            }
-                            render={({ field }) => (
-                                <Input
-                                    type="number"
-                                    value={field.value}
-                                    onChange={e => field.onChange(e.target.valueAsNumber)}
-                                />
-                            )}
-                        />
-                        <FormFieldWrapper
-                            control={form.control}
-                            name="useGlobalOutOfStockThreshold"
-                            label={<Trans>Use global out-of-stock threshold</Trans>}
-                            description={
-                                <Trans>
-                                    Sets the stock level at which this variant is considered to be out of
-                                    stock. Using a negative value enables backorder support.
-                                </Trans>
-                            }
-                            render={({ field }) => (
-                                <Switch checked={field.value} onCheckedChange={field.onChange} />
-                            )}
-                        />
-                    </DetailFormGrid>
-                    {stockLevels?.map((stockLevel, index) => {
-                        const stockAllocated =
-                            entity?.stockLevels.find(sl => sl.stockLocation.id === stockLevel.stockLocationId)
-                                ?.stockAllocated ?? 0;
-                        const stockLocationName = stockLocationsData?.stockLocations.items?.find(
-                            sl => sl.id === stockLevel.stockLocationId,
-                        )?.name;
-                        const stockLocationNameLabel =
-                            stockLevels.length > 1 ? (
-                                <div className="text-muted-foreground">{stockLocationName}</div>
-                            ) : null;
-                        const stockLabel = (
-                            <>
-                                <Trans>Stock level</Trans>
-                                {stockLocationNameLabel}
-                            </>
-                        );
-                        return (
-                            <DetailFormGrid key={stockLevel.stockLocationId}>
+                            </p>
+                        )}
+                        {!isDigitalVariant && (
+                            <DetailFormGrid>
                                 <FormFieldWrapper
                                     control={form.control}
-                                    name={`stockLevels.${index}.stockOnHand`}
-                                    label={stockLabel}
-                                    render={({ field }) => <NumberInput {...field} value={field.value} />}
+                                    name="trackInventory"
+                                    label={<Trans>Stock levels</Trans>}
+                                    renderFormControl={false}
+                                    render={({ field }) => (
+                                        <Select
+                                            items={{
+                                                INHERIT: t`Inherit from global settings`,
+                                                TRUE: t`Track`,
+                                                FALSE: t`Do not track`,
+                                            }}
+                                            onValueChange={val => {
+                                                if (val) {
+                                                    field.onChange(val);
+                                                }
+                                            }}
+                                            value={field.value}
+                                        >
+                                            <SelectTrigger className="">
+                                                <SelectValue
+                                                    placeholder={t`Select inventory tracking mode`}
+                                                />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="INHERIT">
+                                                    <Trans>Inherit from global settings</Trans>
+                                                </SelectItem>
+                                                <SelectItem value="TRUE">
+                                                    <Trans>Track</Trans>
+                                                </SelectItem>
+                                                <SelectItem value="FALSE">
+                                                    <Trans>Do not track</Trans>
+                                                </SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    )}
                                 />
-                                <div>
-                                    <Field>
-                                        <FieldLabel>
-                                            <Trans>Allocated</Trans>
-                                        </FieldLabel>
-                                        <div className="text-sm pt-1.5">{stockAllocated}</div>
-                                    </Field>
-                                </div>
+                                <FormFieldWrapper
+                                    control={form.control}
+                                    name="outOfStockThreshold"
+                                    label={<Trans>Out-of-stock threshold</Trans>}
+                                    description={
+                                        <Trans>
+                                            Sets the stock level at which this variant is considered to be out
+                                            of stock. Using a negative value enables backorder support.
+                                        </Trans>
+                                    }
+                                    render={({ field }) => (
+                                        <Input
+                                            type="number"
+                                            value={field.value}
+                                            onChange={e => field.onChange(e.target.valueAsNumber)}
+                                        />
+                                    )}
+                                />
+                                <FormFieldWrapper
+                                    control={form.control}
+                                    name="useGlobalOutOfStockThreshold"
+                                    label={<Trans>Use global out-of-stock threshold</Trans>}
+                                    description={
+                                        <Trans>
+                                            Sets the stock level at which this variant is considered to be out
+                                            of stock. Using a negative value enables backorder support.
+                                        </Trans>
+                                    }
+                                    render={({ field }) => (
+                                        <Switch checked={field.value} onCheckedChange={field.onChange} />
+                                    )}
+                                />
                             </DetailFormGrid>
-                        );
-                    })}
-                    <AddStockLocationDropdown
-                        availableStockLocations={stockLocationsData?.stockLocations.items ?? []}
-                        usedStockLocationIds={usedStockLocationIds}
-                        onStockLocationSelect={handleAddStockLocation}
-                    />
-                </PageBlock>
+                        )}
+                        {stockLevels?.map((stockLevel, index) => {
+                            const stockAllocated =
+                                entity?.stockLevels.find(
+                                    sl => sl.stockLocation.id === stockLevel.stockLocationId,
+                                )?.stockAllocated ?? 0;
+                            const stockLocationName = stockLocationsData?.stockLocations.items?.find(
+                                sl => sl.id === stockLevel.stockLocationId,
+                            )?.name;
+                            const stockLocationNameLabel =
+                                stockLevels.length > 1 ? (
+                                    <div className="text-muted-foreground">{stockLocationName}</div>
+                                ) : null;
+                            const stockLabel = (
+                                <>
+                                    <Trans>Stock level</Trans>
+                                    {stockLocationNameLabel}
+                                </>
+                            );
+                            return (
+                                <DetailFormGrid key={stockLevel.stockLocationId}>
+                                    <FormFieldWrapper
+                                        control={form.control}
+                                        name={`stockLevels.${index}.stockOnHand`}
+                                        label={stockLabel}
+                                        render={({ field }) => <NumberInput {...field} value={field.value} />}
+                                    />
+                                    <div>
+                                        <Field>
+                                            <FieldLabel>
+                                                <Trans>Allocated</Trans>
+                                            </FieldLabel>
+                                            <div className="text-sm pt-1.5">{stockAllocated}</div>
+                                        </Field>
+                                    </div>
+                                </DetailFormGrid>
+                            );
+                        })}
+                        <AddStockLocationDropdown
+                            availableStockLocations={stockLocationsData?.stockLocations.items ?? []}
+                            usedStockLocationIds={usedStockLocationIds}
+                            onStockLocationSelect={handleAddStockLocation}
+                        />
+                    </PageBlock>
+                )}
 
                 <PageBlock column="side" blockId="facet-values" title={<Trans>Facet Values</Trans>}>
                     <FormFieldWrapper

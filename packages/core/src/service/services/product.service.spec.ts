@@ -2,9 +2,9 @@ import 'reflect-metadata';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { Product } from '../../entity/product/product.entity';
 import { ProductOptionGroup } from '../../entity/product-option-group/product-option-group.entity';
 import { ProductVariant } from '../../entity/product-variant/product-variant.entity';
+import { Product } from '../../entity/product/product.entity';
 
 import { ProductService } from './product.service';
 
@@ -85,5 +85,45 @@ describe('ProductService optimistic composite changes', () => {
         ).rejects.toThrow(/CONCURRENT_MODIFICATION/);
         expect(harness.productRepository.save).not.toHaveBeenCalled();
         expect(harness.eventBus.publish).not.toHaveBeenCalled();
+    });
+});
+
+describe('ProductService category filtering', () => {
+    it('maps collectionId filters through variant collection membership', async () => {
+        const query = { getManyAndCount: vi.fn().mockResolvedValue([[], 0]) };
+        const listQueryBuilder = {
+            filterObjectHasProperty: vi.fn((_filter, property) => property === 'collectionId'),
+            build: vi.fn().mockReturnValue(query),
+        };
+        const service = new ProductService(
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            listQueryBuilder as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            { translate: vi.fn() } as any,
+            {} as any,
+        );
+
+        await service.findAll(
+            { channelId: 'channel-1' } as any,
+            { filter: { collectionId: { eq: 'collection-1' } } } as any,
+        );
+
+        expect(listQueryBuilder.build).toHaveBeenCalledWith(
+            Product,
+            expect.anything(),
+            expect.objectContaining({
+                relations: expect.arrayContaining(['variants', 'variants.collections']),
+                customPropertyMap: expect.objectContaining({
+                    collectionId: 'variants.collections.id',
+                }),
+            }),
+        );
     });
 });

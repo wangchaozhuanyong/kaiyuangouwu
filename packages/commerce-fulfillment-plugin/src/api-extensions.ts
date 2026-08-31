@@ -290,9 +290,175 @@ const productPackagingTypes = gql`
     }
 `;
 
+const commerceModeTypes = gql`
+    enum StoreCommerceMode {
+        DIGITAL_ONLY
+        PHYSICAL_ONLY
+        HYBRID
+    }
+
+    type CommerceModeConflict {
+        code: String!
+        message: String!
+        entityId: ID!
+    }
+
+    type StoreCommerceModeConfiguration {
+        mode: StoreCommerceMode!
+        conflicts: [CommerceModeConflict!]!
+    }
+`;
+
+const manualDeliveryCommonTypes = gql`
+    enum ManualDigitalDeliveryState {
+        WAITING_PROCESSING
+        DRAFT
+        SENDING
+        SENT
+        EMAIL_FAILED
+        MANUAL_REVIEW
+        CANCELLED
+    }
+
+    type ManualDigitalOrderDelivery implements Node {
+        id: ID!
+        createdAt: DateTime!
+        updatedAt: DateTime!
+        state: ManualDigitalDeliveryState!
+        productName: String!
+        sku: String!
+        quantity: Int!
+        expectedAt: DateTime!
+        overdue: Boolean!
+        attemptCount: Int!
+        lastError: String
+        sentAt: DateTime
+        orderLineId: ID!
+    }
+`;
+
+const manualDeliveryAdminTypes = gql`
+    enum ManualDigitalDeliveryEventType {
+        TASK_CREATED
+        DRAFT_SAVED
+        PUBLISHED
+        EMAIL_SENT
+        EMAIL_FAILED
+        AUTO_RETRY
+        MANUAL_RETRY
+        MANUAL_REVIEW
+        CANCELLED
+    }
+
+    input ManualDigitalDeliveryFieldInput {
+        key: String!
+        label: String!
+        value: String!
+        secret: Boolean
+    }
+
+    input ManualDigitalDeliveryPackageInput {
+        fields: [ManualDigitalDeliveryFieldInput!]
+        note: String
+        attachmentAssetIds: [ID!]
+    }
+
+    input SaveManualDigitalDeliveryInput {
+        id: ID!
+        packages: [ManualDigitalDeliveryPackageInput!]!
+    }
+
+    input ManualDigitalDeliveryListOptions {
+        skip: Int
+        take: Int
+        state: ManualDigitalDeliveryState
+    }
+
+    type ManualDigitalDeliveryField {
+        key: String!
+        label: String!
+        value: String!
+        secret: Boolean!
+    }
+
+    type ManualDigitalDeliveryPackage {
+        fields: [ManualDigitalDeliveryField!]!
+        note: String!
+        attachmentAssetIds: [ID!]!
+    }
+
+    type ManualDigitalDeliveryEvent implements Node {
+        id: ID!
+        createdAt: DateTime!
+        updatedAt: DateTime!
+        type: ManualDigitalDeliveryEventType!
+        actorType: String!
+        actorId: String
+        note: String!
+    }
+
+    type ManualDigitalDelivery implements Node {
+        id: ID!
+        createdAt: DateTime!
+        updatedAt: DateTime!
+        state: ManualDigitalDeliveryState!
+        recipientEmail: String!
+        productName: String!
+        sku: String!
+        quantity: Int!
+        expectedAt: DateTime!
+        overdue: Boolean!
+        attemptCount: Int!
+        lastError: String
+        lastDispatchedAt: DateTime
+        sentAt: DateTime
+        fulfillmentId: String
+        order: Order!
+        orderLineId: ID!
+        packages: [ManualDigitalDeliveryPackage!]!
+        events: [ManualDigitalDeliveryEvent!]!
+    }
+
+    type ManualDigitalDeliveryList implements PaginatedList {
+        items: [ManualDigitalDelivery!]!
+        totalItems: Int!
+    }
+`;
+
+const customerDeliveryEmailTypes = gql`
+    type CustomerDeliveryEmail implements Node {
+        id: ID!
+        createdAt: DateTime!
+        updatedAt: DateTime!
+        emailAddress: String!
+        label: String!
+        isDefault: Boolean!
+        confirmedAt: DateTime!
+    }
+
+    input SaveCustomerDeliveryEmailInput {
+        emailAddress: String!
+        confirmEmailAddress: String!
+        label: String
+        isDefault: Boolean
+    }
+
+    input SetActiveOrderDeliveryEmailInput {
+        contactId: ID
+        emailAddress: String
+        confirmEmailAddress: String
+        label: String
+        saveToAddressBook: Boolean
+        isDefault: Boolean
+    }
+`;
+
 export const shopApiExtensions = gql`
     ${afterSalesTypes}
     ${productPackagingTypes}
+    ${commerceModeTypes}
+    ${manualDeliveryCommonTypes}
+    ${customerDeliveryEmailTypes}
 
     enum AutoCardDeliveryState {
         WAITING_STOCK
@@ -365,6 +531,7 @@ export const shopApiExtensions = gql`
         checkoutShipping: CheckoutShippingSummary
         digitalDeliveries: [DigitalDelivery!]!
         autoCardDeliveries: [AutoCardOrderDelivery!]!
+        manualDigitalDeliveries: [ManualDigitalOrderDelivery!]!
     }
 
     extend type ProductVariant {
@@ -377,12 +544,18 @@ export const shopApiExtensions = gql`
         cancelMyAuthorizedOrder(orderId: ID!, reason: String!): Order!
         createAfterSalesRequest(input: CreateAfterSalesRequestInput!): AfterSalesRequest!
         cancelMyAfterSalesRequest(id: ID!): AfterSalesRequest!
+        saveMyDeliveryEmail(input: SaveCustomerDeliveryEmailInput!): CustomerDeliveryEmail!
+        setMyDefaultDeliveryEmail(id: ID!): CustomerDeliveryEmail!
+        deleteMyDeliveryEmail(id: ID!): Boolean!
+        setActiveOrderDeliveryEmail(input: SetActiveOrderDeliveryEmailInput!): Order!
     }
 
     extend type Query {
+        activeStoreCommerceMode: StoreCommerceMode!
         storefrontOrderByConfirmationToken(token: String!): Order
         myAfterSalesRequests: [AfterSalesRequest!]!
         myAfterSalesRequest(id: ID!): AfterSalesRequest
+        myDeliveryEmails: [CustomerDeliveryEmail!]!
     }
 `;
 
@@ -390,6 +563,17 @@ export const adminApiExtensions = gql`
     ${afterSalesTypes}
     ${autoCardAdminTypes}
     ${productPackagingTypes}
+    ${commerceModeTypes}
+    ${manualDeliveryCommonTypes}
+    ${manualDeliveryAdminTypes}
+
+    extend type Order {
+        manualDigitalDeliveries: [ManualDigitalOrderDelivery!]!
+    }
+
+    extend type ProductVariant {
+        autoCardAvailableStock: Int
+    }
 
     type ProductPackagingStockSummary {
         unitStockOnHand: Int!
@@ -453,6 +637,9 @@ export const adminApiExtensions = gql`
     }
 
     extend type Query {
+        myStoreCommerceMode: StoreCommerceModeConfiguration!
+        manualDigitalDeliveries(options: ManualDigitalDeliveryListOptions): ManualDigitalDeliveryList!
+        manualDigitalDelivery(id: ID!): ManualDigitalDelivery
         afterSalesRequests(options: AfterSalesRequestListOptions): AfterSalesRequestList!
         physicalFulfillmentTodoCount: Int!
         autoCardConfig(productVariantId: ID!): AutoCardConfig
@@ -465,6 +652,10 @@ export const adminApiExtensions = gql`
     }
 
     extend type Mutation {
+        updateMyStoreCommerceMode(mode: StoreCommerceMode!): StoreCommerceModeConfiguration!
+        saveManualDigitalDeliveryDraft(input: SaveManualDigitalDeliveryInput!): ManualDigitalDelivery!
+        publishManualDigitalDelivery(input: SaveManualDigitalDeliveryInput!): ManualDigitalDelivery!
+        retryManualDigitalDelivery(id: ID!): ManualDigitalDelivery!
         transitionAfterSalesRequest(input: TransitionAfterSalesRequestInput!): AfterSalesRequest!
         updateAutoCardConfig(input: UpdateAutoCardConfigInput!): AutoCardConfig!
         previewAutoCardPoolImport(input: AutoCardImportInput!): AutoCardImportPreview!

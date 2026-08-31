@@ -1,0 +1,622 @@
+import { useMutation, useQuery } from '@apollo/client/react';
+import { CreditCard, Pencil, Plus, Trash2, Truck, X } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
+import { useConfirmDialog } from '../../components/confirm-dialog-context';
+import { STORE_COMMERCE_MODE_QUERY, type StoreCommerceModeData } from '../../graphql/commerce.graphql';
+import {
+    CREATE_PAYMENT_METHOD_MUTATION,
+    CREATE_SHIPPING_METHOD_MUTATION,
+    DELETE_PAYMENT_METHOD_MUTATION,
+    DELETE_SHIPPING_METHOD_MUTATION,
+    UPDATE_PAYMENT_METHOD_MUTATION,
+    UPDATE_SHIPPING_METHOD_MUTATION,
+    type ConfigurableOperationDefinitionRecord,
+    type ConfigurableOperationRecord,
+    type StoreManagementResult,
+} from '../../graphql/management.graphql';
+import { useAdminPermissions } from '../../hooks/use-admin-permissions';
+import { toUserFacingError } from '../../utils/user-facing-error';
+
+type PaymentMethodItem = StoreManagementResult['paymentMethods']['items'][number];
+type ShippingMethodItem = StoreManagementResult['shippingMethods']['items'][number];
+type EditorState =
+    { kind: 'payment'; item?: PaymentMethodItem } | { kind: 'shipping'; item?: ShippingMethodItem };
+
+const primaryButton =
+    'inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-50';
+const secondaryButton =
+    'inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50';
+const inputClass =
+    'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100';
+
+export function PaymentShippingManager({
+    data,
+    onChanged,
+    onError,
+}: {
+    data: StoreManagementResult;
+    onChanged: (message: string) => Promise<void>;
+    onError: (message: string) => void;
+}) {
+    const requestConfirmation = useConfirmDialog();
+    const commerceModeQuery = useQuery<StoreCommerceModeData>(STORE_COMMERCE_MODE_QUERY, {
+        fetchPolicy: 'cache-first',
+    });
+    const commerceMode = commerceModeQuery.data?.myStoreCommerceMode.mode ?? 'HYBRID';
+    const { hasAnyPermission } = useAdminPermissions();
+    const canCreatePayment = hasAnyPermission(['CreateSettings', 'CreatePaymentMethod']);
+    const canUpdatePayment = hasAnyPermission(['UpdateSettings', 'UpdatePaymentMethod']);
+    const canDeletePayment = hasAnyPermission(['DeleteSettings', 'DeletePaymentMethod']);
+    const canCreateShipping = hasAnyPermission(['CreateSettings', 'CreateShippingMethod']);
+    const canUpdateShipping = hasAnyPermission(['UpdateSettings', 'UpdateShippingMethod']);
+    const canDeleteShipping = hasAnyPermission(['DeleteSettings', 'DeleteShippingMethod']);
+    const [editor, setEditor] = useState<EditorState | null>(null);
+    const [togglePayment, toggleState] = useMutation(UPDATE_PAYMENT_METHOD_MUTATION);
+    const [deletePayment, deletePaymentState] = useMutation<{
+        deletePaymentMethod: { result: string; message?: string | null };
+    }>(DELETE_PAYMENT_METHOD_MUTATION);
+    const [deleteShipping, deleteShippingState] = useMutation<{
+        deleteShippingMethod: { result: string; message?: string | null };
+    }>(DELETE_SHIPPING_METHOD_MUTATION);
+
+    const changePayment = async (id: string, enabled: boolean) => {
+        try {
+            await togglePayment({ variables: { input: { id, enabled } } });
+            await onChanged(`支付方式已${enabled ? '启用' : '停用'}`);
+        } catch (error) {
+            onError(toUserFacingError(error, '支付方式状态更新失败'));
+        }
+    };
+
+    const removeMethod = async (state: EditorState) => {
+        if (!state.item) return;
+        const confirmed = await requestConfirmation({
+            title: state.kind === 'payment' ? '删除支付方式' : '删除配送方式',
+            description: `确定删除“${state.item.name}”？如果已有 Channel 或订单引用，后端会拒绝不安全的删除。`,
+            confirmLabel: '确认删除',
+            tone: 'danger',
+        });
+        if (!confirmed) return;
+        try {
+            let result: { result: string; message?: string | null } | undefined;
+            if (state.kind === 'payment') {
+                const response = await deletePayment({
+                    variables: { id: state.item.id, force: false },
+                });
+                result = response.data?.deletePaymentMethod;
+            } else {
+                const response = await deleteShipping({ variables: { id: state.item.id } });
+                result = response.data?.deleteShippingMethod;
+            }
+            if (result?.result !== 'DELETED') throw new Error(result?.message || '后端未删除该配置');
+            await onChanged(state.kind === 'payment' ? '支付方式已删除' : '配送方式已删除');
+        } catch (error) {
+            onError(toUserFacingError(error, '配置删除失败'));
+        }
+    };
+
+    const deleting = deletePaymentState.loading || deleteShippingState.loading;
+    return (
+        <>
+            <div className={`grid gap-4 ${commerceMode === 'DIGITAL_ONLY' ? '' : 'xl:grid-cols-2'}`}>
+                <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                    <div className="flex items-start justify-between gap-3 border-b border-slate-100 p-5">
+                        <div>
+                            <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                                <CreditCard className="h-4 w-4 text-blue-600" /> 支付方式
+                            </h2>
+                            <p className="mt-1 text-xs text-slate-400">
+                                管理名称、处理器、资格检查器与启停状态
+                            </p>
+                        </div>
+                        {canCreatePayment && (
+                            <button
+                                type="button"
+                                onClick={() => setEditor({ kind: 'payment' })}
+                                className={primaryButton}
+                            >
+                                <Plus className="h-3.5 w-3.5" /> 新增
+                            </button>
+                        )}
+                    </div>
+                    <div className="divide-y divide-slate-100">
+                        {data.paymentMethods.items.map(item => (
+                            <div key={item.id} className="flex items-center justify-between gap-4 p-5">
+                                <div className="min-w-0">
+                                    <strong className="text-xs text-slate-900">{item.name}</strong>
+                                    <p className="mt-1 font-mono text-[9px] text-slate-400">
+                                        {item.code} · {item.handler.code}
+                                    </p>
+                                    {item.description && (
+                                        <p className="mt-1 line-clamp-2 text-[10px] text-slate-500">
+                                            {item.description}
+                                        </p>
+                                    )}
+                                </div>
+                                <div className="flex shrink-0 items-center gap-2">
+                                    {canUpdatePayment && (
+                                        <label className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500">
+                                            <input
+                                                type="checkbox"
+                                                checked={item.enabled}
+                                                onChange={event =>
+                                                    void changePayment(item.id, event.target.checked)
+                                                }
+                                                disabled={toggleState.loading}
+                                            />
+                                            {item.enabled ? '启用' : '停用'}
+                                        </label>
+                                    )}
+                                    {canUpdatePayment && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setEditor({ kind: 'payment', item })}
+                                            className="rounded-md p-1.5 text-blue-600 hover:bg-blue-50"
+                                            aria-label={`编辑支付方式${item.name}`}
+                                        >
+                                            <Pencil className="h-3.5 w-3.5" />
+                                        </button>
+                                    )}
+                                    {canDeletePayment && (
+                                        <button
+                                            type="button"
+                                            disabled={deleting}
+                                            onClick={() => void removeMethod({ kind: 'payment', item })}
+                                            className="rounded-md p-1.5 text-rose-600 hover:bg-rose-50"
+                                            aria-label={`删除支付方式${item.name}`}
+                                        >
+                                            <Trash2 className="h-3.5 w-3.5" />
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                        {!data.paymentMethods.items.length && (
+                            <div className="p-10 text-center text-xs text-slate-400">未配置支付方式</div>
+                        )}
+                    </div>
+                </section>
+
+                {commerceMode !== 'DIGITAL_ONLY' && (
+                    <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                        <div className="flex items-start justify-between gap-3 border-b border-slate-100 p-5">
+                            <div>
+                                <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                                    <Truck className="h-4 w-4 text-blue-600" /> 配送方式
+                                </h2>
+                                <p className="mt-1 text-xs text-slate-400">
+                                    管理资格检查器、运费计算器和履约处理器
+                                </p>
+                            </div>
+                            {canCreateShipping && (
+                                <button
+                                    type="button"
+                                    onClick={() => setEditor({ kind: 'shipping' })}
+                                    className={primaryButton}
+                                >
+                                    <Plus className="h-3.5 w-3.5" /> 新增
+                                </button>
+                            )}
+                        </div>
+                        <div className="divide-y divide-slate-100">
+                            {data.shippingMethods.items.map(item => (
+                                <div key={item.id} className="flex items-center justify-between gap-4 p-5">
+                                    <div className="min-w-0">
+                                        <strong className="text-xs text-slate-900">{item.name}</strong>
+                                        <p className="mt-1 font-mono text-[9px] text-slate-400">
+                                            {item.code} · {item.calculator.code} ·{' '}
+                                            {item.fulfillmentHandlerCode}
+                                        </p>
+                                        {item.description && (
+                                            <p className="mt-1 line-clamp-2 text-[10px] text-slate-500">
+                                                {item.description}
+                                            </p>
+                                        )}
+                                    </div>
+                                    <div className="flex shrink-0 items-center gap-1">
+                                        {canUpdateShipping && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setEditor({ kind: 'shipping', item })}
+                                                className="rounded-md p-1.5 text-blue-600 hover:bg-blue-50"
+                                                aria-label={`编辑配送方式${item.name}`}
+                                            >
+                                                <Pencil className="h-3.5 w-3.5" />
+                                            </button>
+                                        )}
+                                        {canDeleteShipping && (
+                                            <button
+                                                type="button"
+                                                disabled={deleting}
+                                                onClick={() => void removeMethod({ kind: 'shipping', item })}
+                                                className="rounded-md p-1.5 text-rose-600 hover:bg-rose-50"
+                                                aria-label={`删除配送方式${item.name}`}
+                                            >
+                                                <Trash2 className="h-3.5 w-3.5" />
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                            {!data.shippingMethods.items.length && (
+                                <div className="p-10 text-center text-xs text-slate-400">未配置配送方式</div>
+                            )}
+                        </div>
+                    </section>
+                )}
+            </div>
+            {editor && (
+                <MethodEditorDialog
+                    state={editor}
+                    data={data}
+                    onClose={() => setEditor(null)}
+                    onCompleted={async message => {
+                        setEditor(null);
+                        await onChanged(message);
+                    }}
+                    onError={onError}
+                />
+            )}
+        </>
+    );
+}
+
+function MethodEditorDialog({
+    data,
+    onClose,
+    onCompleted,
+    onError,
+    state,
+}: {
+    data: StoreManagementResult;
+    onClose: () => void;
+    onCompleted: (message: string) => Promise<void>;
+    onError: (message: string) => void;
+    state: EditorState;
+}) {
+    const item = state.item;
+    const languageCode = item?.translations[0]?.languageCode ?? data.activeChannel.defaultLanguageCode;
+    const [code, setCode] = useState(item?.code ?? '');
+    const [name, setName] = useState(item?.name ?? '');
+    const [description, setDescription] = useState(item?.description ?? '');
+    const [enabled, setEnabled] = useState(state.kind === 'payment' ? (state.item?.enabled ?? true) : true);
+    const [checkerCode, setCheckerCode] = useState(item?.checker?.code ?? '');
+    const [handlerCode, setHandlerCode] = useState(
+        state.kind === 'payment' ? (state.item?.handler.code ?? '') : '',
+    );
+    const [calculatorCode, setCalculatorCode] = useState(
+        state.kind === 'shipping' ? (state.item?.calculator.code ?? '') : '',
+    );
+    const [fulfillmentHandler, setFulfillmentHandler] = useState(
+        state.kind === 'shipping' ? (state.item?.fulfillmentHandlerCode ?? '') : '',
+    );
+    const [checkerArgs, setCheckerArgs] = useState(() => argsToForm(item?.checker));
+    const [handlerArgs, setHandlerArgs] = useState(() =>
+        argsToForm(state.kind === 'payment' ? state.item?.handler : undefined),
+    );
+    const [calculatorArgs, setCalculatorArgs] = useState(() =>
+        argsToForm(state.kind === 'shipping' ? state.item?.calculator : undefined),
+    );
+    const [createPayment, createPaymentState] = useMutation(CREATE_PAYMENT_METHOD_MUTATION);
+    const [updatePayment, updatePaymentState] = useMutation(UPDATE_PAYMENT_METHOD_MUTATION);
+    const [createShipping, createShippingState] = useMutation(CREATE_SHIPPING_METHOD_MUTATION);
+    const [updateShipping, updateShippingState] = useMutation(UPDATE_SHIPPING_METHOD_MUTATION);
+    const busy =
+        createPaymentState.loading ||
+        updatePaymentState.loading ||
+        createShippingState.loading ||
+        updateShippingState.loading;
+
+    const checkerDefinitions =
+        state.kind === 'payment' ? data.paymentMethodEligibilityCheckers : data.shippingEligibilityCheckers;
+    const mainDefinitions = state.kind === 'payment' ? data.paymentMethodHandlers : data.shippingCalculators;
+    const translation = {
+        ...(item?.translations[0]?.id ? { id: item.translations[0].id } : {}),
+        languageCode,
+        name: name.trim(),
+        description: description.trim(),
+    };
+
+    const submit = async () => {
+        if (!code.trim() || !name.trim()) return onError('请填写配置代码和显示名称');
+        try {
+            const checker = checkerCode ? operationInput(checkerCode, checkerArgs, checkerDefinitions) : null;
+            if (state.kind === 'payment') {
+                if (!handlerCode) return onError('请选择支付处理器');
+                const input = {
+                    ...(item?.id ? { id: item.id } : {}),
+                    code: code.trim(),
+                    enabled,
+                    checker,
+                    handler: operationInput(handlerCode, handlerArgs, data.paymentMethodHandlers),
+                    translations: [translation],
+                };
+                if (item?.id) await updatePayment({ variables: { input } });
+                else await createPayment({ variables: { input } });
+                await onCompleted(item ? '支付方式已更新' : '支付方式已创建');
+            } else {
+                if (!checkerCode || !calculatorCode || !fulfillmentHandler)
+                    return onError('请选择资格检查器、运费计算器和履约处理器');
+                const input = {
+                    ...(item?.id ? { id: item.id } : {}),
+                    code: code.trim(),
+                    fulfillmentHandler,
+                    checker: operationInput(checkerCode, checkerArgs, data.shippingEligibilityCheckers),
+                    calculator: operationInput(calculatorCode, calculatorArgs, data.shippingCalculators),
+                    translations: [translation],
+                };
+                if (item?.id) await updateShipping({ variables: { input } });
+                else await createShipping({ variables: { input } });
+                await onCompleted(item ? '配送方式已更新' : '配送方式已创建');
+            }
+        } catch (error) {
+            onError(toUserFacingError(error, '配置保存失败，请检查处理器参数'));
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
+            <AccessibleDialogSurface
+                accessibleName={`${item ? '编辑' : '新增'}${state.kind === 'payment' ? '支付方式' : '配送方式'}`}
+                onRequestClose={onClose}
+                className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-2xl"
+            >
+                <header className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-5 py-4">
+                    <div>
+                        <h2 className="text-base font-bold text-slate-900">
+                            {item ? '编辑' : '新增'}
+                            {state.kind === 'payment' ? '支付方式' : '配送方式'}
+                        </h2>
+                        <p className="mt-1 text-xs text-slate-400">参数值会直接写入 Vendure 配置</p>
+                    </div>
+                    <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-500">
+                        <X className="h-4 w-4" />
+                    </button>
+                </header>
+                <div className="space-y-5 p-5">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                        <Field label="配置代码 *">
+                            <input
+                                value={code}
+                                onChange={event => setCode(event.target.value)}
+                                className={inputClass}
+                            />
+                        </Field>
+                        <Field label="显示名称 *">
+                            <input
+                                value={name}
+                                onChange={event => setName(event.target.value)}
+                                className={inputClass}
+                            />
+                        </Field>
+                    </div>
+                    <Field label="描述">
+                        <textarea
+                            value={description}
+                            onChange={event => setDescription(event.target.value)}
+                            rows={3}
+                            className={inputClass}
+                        />
+                    </Field>
+                    {state.kind === 'payment' && (
+                        <label className="flex items-center gap-2 text-xs font-bold text-slate-700">
+                            <input
+                                type="checkbox"
+                                checked={enabled}
+                                onChange={event => setEnabled(event.target.checked)}
+                            />
+                            启用该支付方式
+                        </label>
+                    )}
+                    <OperationEditor
+                        label={state.kind === 'payment' ? '资格检查器（可选）' : '资格检查器 *'}
+                        allowEmpty={state.kind === 'payment'}
+                        code={checkerCode}
+                        values={checkerArgs}
+                        definitions={checkerDefinitions}
+                        onCodeChange={nextCode => {
+                            setCheckerCode(nextCode);
+                            setCheckerArgs(defaultArgs(nextCode, checkerDefinitions));
+                        }}
+                        onValuesChange={setCheckerArgs}
+                    />
+                    {state.kind === 'payment' ? (
+                        <OperationEditor
+                            label="支付处理器 *"
+                            code={handlerCode}
+                            values={handlerArgs}
+                            definitions={mainDefinitions}
+                            onCodeChange={nextCode => {
+                                setHandlerCode(nextCode);
+                                setHandlerArgs(defaultArgs(nextCode, mainDefinitions));
+                            }}
+                            onValuesChange={setHandlerArgs}
+                        />
+                    ) : (
+                        <>
+                            <OperationEditor
+                                label="运费计算器 *"
+                                code={calculatorCode}
+                                values={calculatorArgs}
+                                definitions={mainDefinitions}
+                                onCodeChange={nextCode => {
+                                    setCalculatorCode(nextCode);
+                                    setCalculatorArgs(defaultArgs(nextCode, mainDefinitions));
+                                }}
+                                onValuesChange={setCalculatorArgs}
+                            />
+                            <Field label="履约处理器 *">
+                                <select
+                                    value={fulfillmentHandler}
+                                    onChange={event => setFulfillmentHandler(event.target.value)}
+                                    className={inputClass}
+                                >
+                                    <option value="">请选择</option>
+                                    {data.fulfillmentHandlers.map(definition => (
+                                        <option key={definition.code} value={definition.code}>
+                                            {definition.code}
+                                        </option>
+                                    ))}
+                                </select>
+                            </Field>
+                        </>
+                    )}
+                </div>
+                <footer className="sticky bottom-0 flex justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4">
+                    <button type="button" onClick={onClose} className={secondaryButton}>
+                        取消
+                    </button>
+                    <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void submit()}
+                        className={primaryButton}
+                    >
+                        {busy ? '保存中…' : '保存配置'}
+                    </button>
+                </footer>
+            </AccessibleDialogSurface>
+        </div>
+    );
+}
+
+function OperationEditor({
+    allowEmpty = false,
+    code,
+    definitions,
+    label,
+    onCodeChange,
+    onValuesChange,
+    values,
+}: {
+    allowEmpty?: boolean;
+    code: string;
+    definitions: ConfigurableOperationDefinitionRecord[];
+    label: string;
+    onCodeChange: (code: string) => void;
+    onValuesChange: (values: Record<string, string>) => void;
+    values: Record<string, string>;
+}) {
+    const definition = useMemo(
+        () => definitions.find(candidate => candidate.code === code),
+        [code, definitions],
+    );
+    return (
+        <section className="rounded-xl border border-slate-200 p-4">
+            <Field label={label}>
+                <select
+                    value={code}
+                    onChange={event => onCodeChange(event.target.value)}
+                    className={inputClass}
+                >
+                    <option value="">{allowEmpty ? '不使用检查器' : '请选择'}</option>
+                    {definitions.map(item => (
+                        <option key={item.code} value={item.code}>
+                            {item.code}
+                        </option>
+                    ))}
+                </select>
+            </Field>
+            {definition?.description && (
+                <p className="mt-2 text-[10px] leading-4 text-slate-400">{definition.description}</p>
+            )}
+            {definition && definition.args.length > 0 && (
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    {definition.args.map(arg => (
+                        <Field key={arg.name} label={`${arg.label || arg.name}${arg.required ? ' *' : ''}`}>
+                            {arg.type.toLowerCase().includes('boolean') ? (
+                                <select
+                                    value={values[arg.name] ?? 'false'}
+                                    onChange={event =>
+                                        onValuesChange({ ...values, [arg.name]: event.target.value })
+                                    }
+                                    className={inputClass}
+                                >
+                                    <option value="true">是</option>
+                                    <option value="false">否</option>
+                                </select>
+                            ) : (
+                                <input
+                                    type={arg.type.toLowerCase().includes('password') ? 'password' : 'text'}
+                                    value={values[arg.name] ?? ''}
+                                    onChange={event =>
+                                        onValuesChange({ ...values, [arg.name]: event.target.value })
+                                    }
+                                    placeholder={arg.description ?? undefined}
+                                    className={inputClass}
+                                />
+                            )}
+                        </Field>
+                    ))}
+                </div>
+            )}
+        </section>
+    );
+}
+
+function Field({ children, label }: { children: React.ReactNode; label: string }) {
+    return (
+        <label className="block text-xs font-bold text-slate-700">
+            {label}
+            <span className="mt-1.5 block">{children}</span>
+        </label>
+    );
+}
+
+function argsToForm(operation?: ConfigurableOperationRecord | null) {
+    return Object.fromEntries((operation?.args ?? []).map(arg => [arg.name, displayValue(arg.value)]));
+}
+
+function defaultArgs(code: string, definitions: ConfigurableOperationDefinitionRecord[]) {
+    const definition = definitions.find(candidate => candidate.code === code);
+    return Object.fromEntries(
+        (definition?.args ?? []).map(arg => [arg.name, displayValue(arg.defaultValue)]),
+    );
+}
+
+function displayValue(value: unknown) {
+    if (value == null) return '';
+    if (typeof value !== 'string') return String(value);
+    try {
+        const parsed = JSON.parse(value) as unknown;
+        return typeof parsed === 'string' ? parsed : String(parsed);
+    } catch {
+        return value;
+    }
+}
+
+function operationInput(
+    code: string,
+    values: Record<string, string>,
+    definitions: ConfigurableOperationDefinitionRecord[],
+) {
+    const definition = definitions.find(candidate => candidate.code === code);
+    if (!definition) throw new Error(`后端未注册处理器 ${code}`);
+    const argumentsInput = definition.args.map(arg => {
+        const raw = values[arg.name] ?? '';
+        if (arg.required && !raw.trim()) throw new Error(`${arg.label || arg.name} 为必填参数`);
+        return { name: arg.name, value: serializeValue(raw, arg.type) };
+    });
+    return { code, arguments: argumentsInput };
+}
+
+function serializeValue(raw: string, type: string) {
+    const normalizedType = type.toLowerCase();
+    if (normalizedType.includes('boolean')) return raw === 'true' ? 'true' : 'false';
+    if (
+        normalizedType.includes('int') ||
+        normalizedType.includes('float') ||
+        normalizedType.includes('number')
+    ) {
+        const numeric = Number(raw);
+        if (!Number.isFinite(numeric)) throw new Error(`“${raw}”不是有效数字`);
+        return JSON.stringify(numeric);
+    }
+    try {
+        JSON.parse(raw);
+        return raw;
+    } catch {
+        return JSON.stringify(raw);
+    }
+}

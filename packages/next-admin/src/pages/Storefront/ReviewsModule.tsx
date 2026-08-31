@@ -144,7 +144,7 @@ export function ReviewsModule() {
     return (
         <div className="flex h-full flex-col bg-slate-50">
             <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-5 sm:px-8">
-                <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4">
+                <div className="flex w-full flex-wrap items-center justify-between gap-4">
                     <div>
                         <h1 className="text-xl font-semibold tracking-tight text-slate-950">买家评价</h1>
                         <p className="mt-1 text-xs leading-5 text-slate-500">
@@ -166,7 +166,7 @@ export function ReviewsModule() {
                 aria-label="评价状态筛选"
                 className="scrollbar-hidden shrink-0 overflow-x-auto border-b border-slate-200 bg-white px-5 sm:px-8"
             >
-                <div className="mx-auto flex max-w-7xl min-w-max gap-6">
+                <div className="flex w-full min-w-max gap-6">
                     {tabs.map(tab => (
                         <button
                             key={tab.id}
@@ -186,7 +186,7 @@ export function ReviewsModule() {
             </nav>
 
             <div className="flex-1 overflow-y-auto p-5 sm:p-8">
-                <div className="mx-auto max-w-7xl space-y-4">
+                <div className="w-full max-w-none space-y-4">
                     <div className="grid gap-3 sm:grid-cols-2">
                         <div className="rounded-xl bg-slate-900 p-4 text-white">
                             <div className="text-[11px] text-slate-300">当前筛选</div>

@@ -108,6 +108,8 @@ const PAGE_SIZE = 50;
 
 export function PromotionsModule() {
     const [activeTab, setActiveTab] = useUrlTab<PromotionTab>(PROMOTION_TABS, 'coupons');
+    const contentWidthClass =
+        activeTab === 'REPORT' || activeTab === 'LEDGER' ? 'max-w-none' : 'max-w-[1500px]';
     const [searchTerm, setSearchTerm] = useState('');
     const [couponEditorOpen, setCouponEditorOpen] = useState(false);
     const [flashEditorOpen, setFlashEditorOpen] = useState(false);
@@ -234,7 +236,9 @@ export function PromotionsModule() {
     return (
         <div className="flex h-full flex-col bg-slate-50">
             <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-4 sm:px-8">
-                <div className="mx-auto flex w-full max-w-[1500px] flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div
+                    className={`mx-auto flex w-full ${contentWidthClass} flex-col gap-3 sm:flex-row sm:items-center sm:justify-between`}
+                >
                     <div>
                         <h1 className="text-xl font-bold text-slate-900">优惠与促销</h1>
                         <p className="mt-1 text-xs text-slate-500">
@@ -274,7 +278,9 @@ export function PromotionsModule() {
                     </div>
                 </div>
             </header>
-            <main className="mx-auto w-full max-w-[1500px] flex-1 space-y-4 overflow-y-auto p-5 sm:p-8">
+            <main
+                className={`mx-auto w-full ${contentWidthClass} flex-1 space-y-4 overflow-y-auto p-5 sm:p-8`}
+            >
                 {notice && (
                     <Message kind="success" onClose={() => setNotice('')}>
                         {notice}

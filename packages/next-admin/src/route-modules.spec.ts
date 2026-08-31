@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-
 import { getRouteModuleKey } from './route-modules';
 
 describe('getRouteModuleKey', () => {
@@ -13,6 +12,8 @@ describe('getRouteModuleKey', () => {
         expect(getRouteModuleKey('/catalog/products/new')).toBe('productEditor');
         expect(getRouteModuleKey('/catalog/products/42')).toBe('productEditor');
         expect(getRouteModuleKey('/sales/orders/42')).toBe('orderEditor');
+        expect(getRouteModuleKey('/sales/orders/draft/42')).toBe('orderWorkflow');
+        expect(getRouteModuleKey('/sales/orders/42/modify')).toBe('orderWorkflow');
     });
 
     it('ignores routes without a lazy module', () => {

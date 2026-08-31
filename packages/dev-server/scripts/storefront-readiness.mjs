@@ -10,6 +10,7 @@ const placeholderShippingLabels = new Set([
     'standard delivery',
     '标准配送',
 ]);
+const internalBalancePaymentCodes = new Set(['referral-balance', 'referral-balance-payment']);
 
 function normalizedText(values) {
     return values
@@ -197,6 +198,18 @@ function isPlaceholderShippingMethod(method) {
         .some(value => placeholderShippingLabels.has(value) || testContentPattern.test(value));
 }
 
+function isNonProductionPaymentMethod(method) {
+    const code = String(method.code ?? '').trim();
+    const handlerCode = String(method.handler?.code ?? '').trim();
+    return (
+        internalBalancePaymentCodes.has(code) ||
+        internalBalancePaymentCodes.has(handlerCode) ||
+        testContentPattern.test(
+            normalizedText([method.code, method.name, method.description, method.handler?.code]),
+        )
+    );
+}
+
 function incompleteProducts(products, currencyCode) {
     return products.filter(product => {
         if (!product.enabled || !product.featuredAsset?.id) return true;
@@ -260,6 +273,9 @@ export function evaluateStorefrontReadiness(snapshot, taxPolicy = {}) {
         });
         if (!channel) continue;
 
+        const commerceMode = String(channel.customFields?.commerceMode ?? 'HYBRID').toUpperCase();
+        const requiresPhysicalFulfillment = commerceMode !== 'DIGITAL_ONLY';
+
         const availableLanguageCodes = new Set(channel.availableLanguageCodes ?? []);
         const availableCurrencyCodes = new Set(channel.availableCurrencyCodes ?? []);
         pushCheck(checks, {
@@ -287,18 +303,20 @@ export function evaluateStorefrontReadiness(snapshot, taxPolicy = {}) {
             });
         }
 
-        const shippingMemberCodes = new Set(
-            (channel.defaultShippingZone?.members ?? []).map(member => String(member.code).toUpperCase()),
-        );
-        pushCheck(checks, {
-            id: `shipping-zone-${channelCode}`,
-            scope: channelCode,
-            title: '默认配送区已配置',
-            passed: Boolean(channel.defaultShippingZone?.id) && shippingMemberCodes.size > 0,
-            detail: `${String(channel.defaultShippingZone?.name ?? 'missing')} [${[
-                ...shippingMemberCodes,
-            ].join(', ')}]`,
-        });
+        if (requiresPhysicalFulfillment) {
+            const shippingMemberCodes = new Set(
+                (channel.defaultShippingZone?.members ?? []).map(member => String(member.code).toUpperCase()),
+            );
+            pushCheck(checks, {
+                id: `shipping-zone-${channelCode}`,
+                scope: channelCode,
+                title: '默认配送区已配置',
+                passed: Boolean(channel.defaultShippingZone?.id) && shippingMemberCodes.size > 0,
+                detail: `${String(channel.defaultShippingZone?.name ?? 'missing')} [${[
+                    ...shippingMemberCodes,
+                ].join(', ')}]`,
+            });
+        }
 
         if (taxEnabled) {
             const approvedTaxMode = taxPolicy[channelCode]?.pricesIncludeTax;
@@ -378,33 +396,33 @@ export function evaluateStorefrontReadiness(snapshot, taxPolicy = {}) {
         });
 
         const enabledPayments = (channel.paymentMethods ?? []).filter(method => method.enabled);
-        const testPayments = enabledPayments.filter(method =>
-            testContentPattern.test(
-                normalizedText([method.code, method.name, method.description, method.handler?.code]),
-            ),
-        );
+        const nonProductionPayments = enabledPayments.filter(isNonProductionPaymentMethod);
         pushCheck(checks, {
             id: `payments-${channelCode}`,
             scope: channelCode,
             title: '真实支付方式',
-            passed: enabledPayments.length > 0 && testPayments.length === 0,
-            detail: testPayments.length
-                ? `test methods: ${String(testPayments.map(method => String(method.code)).join(', '))}`
+            passed: enabledPayments.length > 0 && nonProductionPayments.length === 0,
+            detail: nonProductionPayments.length
+                ? `non-production methods: ${String(
+                      nonProductionPayments.map(method => String(method.code)).join(', '),
+                  )}`
                 : `${String(enabledPayments.length)} enabled methods`,
         });
 
-        const testShippingMethods = (channel.shippingMethods ?? []).filter(method =>
-            isPlaceholderShippingMethod(method),
-        );
-        pushCheck(checks, {
-            id: `shipping-methods-${channelCode}`,
-            scope: channelCode,
-            title: '真实配送方式',
-            passed: (channel.shippingMethods ?? []).length > 0 && testShippingMethods.length === 0,
-            detail: testShippingMethods.length
-                ? `test methods: ${String(testShippingMethods.map(method => String(method.code)).join(', '))}`
-                : `${String((channel.shippingMethods ?? []).length)} assigned methods`,
-        });
+        if (requiresPhysicalFulfillment) {
+            const testShippingMethods = (channel.shippingMethods ?? []).filter(method =>
+                isPlaceholderShippingMethod(method),
+            );
+            pushCheck(checks, {
+                id: `shipping-methods-${channelCode}`,
+                scope: channelCode,
+                title: '真实配送方式',
+                passed: (channel.shippingMethods ?? []).length > 0 && testShippingMethods.length === 0,
+                detail: testShippingMethods.length
+                    ? `test methods: ${String(testShippingMethods.map(method => String(method.code)).join(', '))}`
+                    : `${String((channel.shippingMethods ?? []).length)} assigned methods`,
+            });
+        }
 
         const products = channel.products ?? [];
         const temporaryProducts = demoProducts(products);
@@ -462,44 +480,47 @@ export function evaluateStorefrontReadiness(snapshot, taxPolicy = {}) {
                 : `${String((channel.couponCampaigns ?? []).length)} campaigns checked`,
         });
 
-        const availableCountryCodes = new Set(channel.availableCountryCodes ?? []);
-        pushCheck(checks, {
-            id: `global-country-availability-${channelCode}`,
-            scope: channelCode,
-            title: '独立站可用国家或地区',
-            passed: availableCountryCodes.size > 1,
-            detail: `${String(availableCountryCodes.size)} enabled countries or regions`,
-        });
+        if (requiresPhysicalFulfillment) {
+            const availableCountryCodes = new Set(channel.availableCountryCodes ?? []);
+            pushCheck(checks, {
+                id: `global-country-availability-${channelCode}`,
+                scope: channelCode,
+                title: '独立站可用国家或地区',
+                passed: availableCountryCodes.size > 1,
+                detail: `${String(availableCountryCodes.size)} enabled countries or regions`,
+            });
 
-        const physicalVariants = products
-            .flatMap(product => product.variants ?? [])
-            .filter(variant => variant.customFields?.fulfillmentType === 'physical');
-        const restrictedShippingMethods = (channel.shippingMethods ?? []).filter(method => {
-            if (method.checker?.code !== 'supported-destination-eligibility-checker') return false;
-            const allowed = method.checker.args?.find(arg => arg.name === 'allowedCountryCodes')?.value ?? '';
-            const allowedCodes = new Set(
-                String(allowed)
-                    .split(/[\s,;]+/u)
-                    .map(code => code.trim().toUpperCase())
-                    .filter(Boolean),
-            );
-            return (
-                allowedCodes.size > 0 &&
-                [...availableCountryCodes].some(code => !allowedCodes.has(String(code).toUpperCase()))
-            );
-        });
-        pushCheck(checks, {
-            id: `global-physical-shipping-${channelCode}`,
-            scope: channelCode,
-            title: '全球实物配送范围',
-            passed: physicalVariants.length === 0 || restrictedShippingMethods.length === 0,
-            detail:
-                physicalVariants.length === 0
-                    ? 'digital-only catalog; shipping restrictions do not limit sales'
-                    : restrictedShippingMethods.length
-                      ? `restricted methods: ${restrictedShippingMethods.map(method => method.code).join(', ')}`
-                      : `${String(physicalVariants.length)} physical variants with global coverage`,
-        });
+            const physicalVariants = products
+                .flatMap(product => product.variants ?? [])
+                .filter(variant => variant.customFields?.fulfillmentType === 'physical');
+            const restrictedShippingMethods = (channel.shippingMethods ?? []).filter(method => {
+                if (method.checker?.code !== 'supported-destination-eligibility-checker') return false;
+                const allowed =
+                    method.checker.args?.find(arg => arg.name === 'allowedCountryCodes')?.value ?? '';
+                const allowedCodes = new Set(
+                    String(allowed)
+                        .split(/[\s,;]+/u)
+                        .map(code => code.trim().toUpperCase())
+                        .filter(Boolean),
+                );
+                return (
+                    allowedCodes.size > 0 &&
+                    [...availableCountryCodes].some(code => !allowedCodes.has(String(code).toUpperCase()))
+                );
+            });
+            pushCheck(checks, {
+                id: `global-physical-shipping-${channelCode}`,
+                scope: channelCode,
+                title: '全球实物配送范围',
+                passed: physicalVariants.length === 0 || restrictedShippingMethods.length === 0,
+                detail:
+                    physicalVariants.length === 0
+                        ? 'no physical variants; shipping restrictions do not limit sales'
+                        : restrictedShippingMethods.length
+                          ? `restricted methods: ${restrictedShippingMethods.map(method => method.code).join(', ')}`
+                          : `${String(physicalVariants.length)} physical variants with global coverage`,
+            });
+        }
     }
 
     const summary = {
@@ -671,6 +692,9 @@ export async function readStorefrontReadiness({ apiOrigin, username, password, f
                         defaultCurrencyCode
                         availableCurrencyCodes
                         pricesIncludeTax
+                        customFields {
+                            commerceMode
+                        }
                         defaultTaxZone {
                             id
                             name

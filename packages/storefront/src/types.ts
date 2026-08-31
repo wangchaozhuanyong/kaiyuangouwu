@@ -3,6 +3,9 @@ export type StorefrontLanguage = 'zh' | 'en';
 export type VendureLanguageCode = 'zh_Hans' | 'en';
 export type FulfillmentType = 'physical' | 'digital';
 export type DigitalDeliveryMode = 'manual_service' | 'file_download' | 'auto_card';
+export type DigitalStockPolicy = 'pool_derived' | 'limited' | 'unlimited';
+export type RefundPolicy = 'MERCHANT_REVIEW' | 'SEVEN_DAY_NO_REASON' | 'NON_REFUNDABLE';
+export type StoreCommerceMode = 'DIGITAL_ONLY' | 'PHYSICAL_ONLY' | 'HYBRID';
 
 export interface Asset {
     id: string;
@@ -36,6 +39,7 @@ export interface ProductVariant {
     customFields: {
         fulfillmentType: FulfillmentType;
         digitalDeliveryMode?: DigitalDeliveryMode | null;
+        digitalStockPolicy?: DigitalStockPolicy | null;
     };
 }
 
@@ -61,6 +65,11 @@ export interface Product {
     collections: Array<Pick<CollectionSummary, 'id' | 'name' | 'slug' | 'parentId'>>;
     variants: ProductVariant[];
     packaging?: ProductPackaging | null;
+    customFields?: {
+        fulfillmentType: FulfillmentType;
+        refundPolicy: RefundPolicy;
+        manualDeliverySlaMinutes: number;
+    };
 }
 
 export type ProductSearchSort = 'recommended' | 'sales' | 'newest' | 'name' | 'price-asc' | 'price-desc';
@@ -91,7 +100,32 @@ export interface OrderLine {
     customFields: {
         fulfillmentTypeSnapshot: FulfillmentType;
         digitalDeliveryModeSnapshot?: DigitalDeliveryMode | null;
+        refundPolicySnapshot?: RefundPolicy | null;
+        manualDeliverySlaMinutesSnapshot?: number | null;
     };
+}
+
+export interface CustomerDeliveryEmail {
+    id: string;
+    emailAddress: string;
+    label: string;
+    isDefault: boolean;
+    confirmedAt: string;
+}
+
+export interface ManualDigitalOrderDelivery {
+    id: string;
+    state:
+        'WAITING_PROCESSING' | 'DRAFT' | 'SENDING' | 'SENT' | 'EMAIL_FAILED' | 'MANUAL_REVIEW' | 'CANCELLED';
+    productName: string;
+    sku: string;
+    quantity: number;
+    expectedAt: string;
+    overdue: boolean;
+    attemptCount: number;
+    lastError?: string | null;
+    sentAt?: string | null;
+    orderLineId: string;
 }
 
 export type AfterSalesType = 'REFUND_ONLY' | 'RETURN_AND_REFUND';
@@ -289,10 +323,12 @@ export interface Order {
     customFields: {
         customerNote?: string | null;
         deliveryEmail?: string | null;
+        deliveryEmailContactId?: string | null;
     };
     fulfillments?: OrderFulfillment[] | null;
     digitalDeliveries?: DigitalDelivery[] | null;
     autoCardDeliveries?: AutoCardOrderDelivery[] | null;
+    manualDigitalDeliveries?: ManualDigitalOrderDelivery[] | null;
     checkoutFulfillment?: CheckoutFulfillment;
     checkoutShipping?: CheckoutShipping | null;
 }

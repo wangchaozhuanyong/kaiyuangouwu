@@ -65,6 +65,19 @@ export const ACTIVE_ADMINISTRATOR_PROFILE_QUERY = gql`
 
 export const APP_SHELL_BOOTSTRAP_QUERY = gql`
     query NextAdminAppShellBootstrap($options: ChannelListOptions) {
+        myStoreCommerceMode {
+            mode
+        }
+        me {
+            id
+            identifier
+            channels {
+                id
+                code
+                token
+                permissions
+            }
+        }
         activeAdministrator {
             id
             createdAt
@@ -180,4 +193,21 @@ export interface ChannelSwitcherData {
     };
 }
 
-export type AppShellBootstrapData = ActiveAdministratorProfileData & ChannelSwitcherData;
+export interface CurrentAdministratorUser {
+    id: string;
+    identifier: string;
+    channels: Array<{
+        id: string;
+        code: string;
+        token: string;
+        permissions: string[];
+    }>;
+}
+
+export type AppShellBootstrapData = ActiveAdministratorProfileData &
+    ChannelSwitcherData & {
+        me: CurrentAdministratorUser | null;
+        myStoreCommerceMode: {
+            mode: 'DIGITAL_ONLY' | 'PHYSICAL_ONLY' | 'HYBRID';
+        };
+    };

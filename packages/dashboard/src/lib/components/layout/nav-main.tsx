@@ -80,6 +80,7 @@ function CollapsedSectionMenu({
                     >
                         <Link
                             to={subItem.url}
+                            data-navigation-id={subItem.id}
                             className={cn(
                                 'flex items-center rounded-sm px-2 py-1.5 text-sm outline-hidden',
                                 'hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring',
@@ -259,7 +260,7 @@ export function NavMain({ items }: Readonly<{ items: Array<NavMenuSection | NavM
         if ('url' in item) {
             return (
                 <NavItemWrapper key={item.id} locationId={item.id} order={item.order} offset={true}>
-                    <SidebarMenuItem>
+                    <SidebarMenuItem data-navigation-id={item.id}>
                         <SidebarMenuButton
                             tooltip={translateNavTitle(i18n, item.title)}
                             render={<Link to={item.url} />}
@@ -307,7 +308,7 @@ export function NavMain({ items }: Readonly<{ items: Array<NavMenuSection | NavM
                                         order={subItem.order}
                                         parentLocationId={item.id}
                                     >
-                                        <SidebarMenuSubItem>
+                                        <SidebarMenuSubItem data-navigation-id={subItem.id}>
                                             <SidebarMenuSubButton
                                                 render={<Link to={subItem.url} />}
                                                 isActive={isPathActive(subItem.url)}

@@ -4,6 +4,7 @@ import type { OperationsNavigationTitles } from './operations-navigation';
 
 import { afterSalesRoute } from './after-sales-page';
 import { autoCardRoute } from './auto-card-page';
+import { manualDigitalDeliveryRoute } from './manual-digital-delivery-page';
 import { organizeOperationsNavigation } from './operations-navigation';
 import { OperationsTodoWidget } from './operations-todo-widget';
 import { ProductPackagingPageBlock } from './product-packaging-page-block';
@@ -61,7 +62,7 @@ const navigationTitles = {
 } satisfies OperationsNavigationTitles;
 
 defineDashboardExtension({
-    routes: [afterSalesRoute, autoCardRoute, reviewModerationRoute],
+    routes: [afterSalesRoute, autoCardRoute, manualDigitalDeliveryRoute, reviewModerationRoute],
     pageBlocks: [
         {
             id: 'product-packaging',
@@ -72,7 +73,16 @@ defineDashboardExtension({
                 position: { blockId: 'product-fulfillment-type', order: 'after' },
             },
             component: ProductPackagingPageBlock,
-            shouldRender: context => Boolean(context.entity?.id),
+            shouldRender: context => {
+                const customFields = context.entity?.customFields;
+                return Boolean(
+                    context.entity?.id &&
+                    (!customFields ||
+                        typeof customFields !== 'object' ||
+                        !('fulfillmentType' in customFields) ||
+                        customFields.fulfillmentType !== 'digital'),
+                );
+            },
             requiresPermission: ['UpdateProduct'],
         },
     ],

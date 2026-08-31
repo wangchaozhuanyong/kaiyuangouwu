@@ -1,10 +1,20 @@
 export type FulfillmentType = 'physical' | 'digital';
 export type DigitalDeliveryMode = 'manual_service' | 'file_download' | 'auto_card';
+export type RefundPolicy = 'MERCHANT_REVIEW' | 'SEVEN_DAY_NO_REASON' | 'NON_REFUNDABLE';
 
 export type ProductFulfillmentType = FulfillmentType | 'mixed';
 
 export interface VariantWithFulfillmentType {
     customFields?: unknown;
+}
+
+export function getProductLevelFulfillmentType(customFields: unknown): FulfillmentType {
+    return customFields &&
+        typeof customFields === 'object' &&
+        'fulfillmentType' in customFields &&
+        customFields.fulfillmentType === 'physical'
+        ? 'physical'
+        : 'digital';
 }
 
 export function getNewVariantInventoryInput(stockOnHand: number) {
