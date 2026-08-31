@@ -50,7 +50,8 @@
     --root-page-end-gap: 24px;
     --subpage-end-gap: 24px;
     --footer-end-gap: 0px;
-    --layer-sticky: 10;
+    /* Keep sticky headers above product-card hit areas when their bounds overlap. */
+    --layer-sticky: 30;
     --layer-toast: 70;
 }
 
@@ -4185,6 +4186,16 @@ img.fatal-error-mark {
     margin-top: 1px;
 }
 
+.category-product-list .product-row-warranty {
+    margin-top: 1px;
+    font-size: 10.5px;
+}
+
+.category-product-list .product-row-stock {
+    max-width: 7em;
+    font-size: 11px;
+}
+
 .category-product-list .product-row-bottom {
     display: flex;
     align-items: flex-end;
@@ -4451,14 +4462,13 @@ img.fatal-error-mark {
     padding: 0;
     border: 0;
     background: transparent;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
+    display: block;
     overflow: hidden;
     font-weight: var(--font-weight-semibold);
     line-height: 1.4;
     text-align: left;
-    white-space: normal;
+    white-space: nowrap;
+    text-overflow: ellipsis;
 }
 
 .product-row-desc,
@@ -4471,6 +4481,33 @@ img.fatal-error-mark {
     font-size: 13px;
     white-space: nowrap;
     text-overflow: ellipsis;
+}
+
+.product-row-smart-line,
+.product-row-warranty,
+.product-row-stock {
+    max-width: 100%;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.product-row-warranty {
+    color: #94a3b8;
+    font-size: 11px;
+    line-height: 1.2;
+}
+
+.product-row-stock {
+    max-width: 8em;
+    align-self: center;
+    color: #059669;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.product-row-stock.is-sold-out {
+    color: var(--accent);
 }
 
 .product-row p {
