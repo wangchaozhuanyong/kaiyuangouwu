@@ -1,8 +1,21 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { AutoCardShopProductVariantResolver, normalizePublicSaleableStockLevel } from './auto-card.resolver';
+import {
+    autoCardAdminResolvers,
+    AutoCardProductVariantResolver,
+    AutoCardShopProductVariantResolver,
+    autoCardShopResolvers,
+    normalizePublicSaleableStockLevel,
+} from './auto-card.resolver';
 
 describe('public product availability resolver', () => {
+    it('registers the saleable stock resolver only for the Shop API schema', () => {
+        expect(autoCardAdminResolvers).toContain(AutoCardProductVariantResolver);
+        expect(autoCardAdminResolvers).not.toContain(AutoCardShopProductVariantResolver);
+        expect(autoCardShopResolvers).toContain(AutoCardProductVariantResolver);
+        expect(autoCardShopResolvers).toContain(AutoCardShopProductVariantResolver);
+    });
+
     it('exposes finite saleable stock and clamps negative stock to zero', () => {
         expect(normalizePublicSaleableStockLevel(12)).toBe(12);
         expect(normalizePublicSaleableStockLevel(-4)).toBe(0);

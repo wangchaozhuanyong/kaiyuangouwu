@@ -145,3 +145,10 @@ export function normalizePublicSaleableStockLevel(stockLevel: number): number | 
     if (!Number.isFinite(stockLevel)) return null;
     return Math.max(0, Math.floor(stockLevel));
 }
+
+export const autoCardAdminResolvers = [AutoCardAdminResolver, AutoCardProductVariantResolver];
+export const autoCardShopResolvers = [
+    AutoCardOrderResolver,
+    AutoCardProductVariantResolver,
+    AutoCardShopProductVariantResolver,
+];

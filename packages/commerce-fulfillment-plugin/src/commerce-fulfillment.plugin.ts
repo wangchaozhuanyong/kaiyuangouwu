@@ -9,12 +9,7 @@ import { AutoCardCipherService } from './auto-card-cipher.service';
 import { AutoCardEmailResultService } from './auto-card-email-result.service';
 import { autoCardFulfillmentHandler } from './auto-card-fulfillment-handler';
 import { reconcileAutoCardDeliveriesTask } from './auto-card-tasks';
-import {
-    AutoCardAdminResolver,
-    AutoCardOrderResolver,
-    AutoCardProductVariantResolver,
-    AutoCardShopProductVariantResolver,
-} from './auto-card.resolver';
+import { autoCardAdminResolvers, autoCardShopResolvers } from './auto-card.resolver';
 import { AutoCardService } from './auto-card.service';
 import { CommerceI18nService } from './commerce-i18n.service';
 import { CommerceModeAdminResolver, CommerceModeShopResolver } from './commerce-mode.resolver';
@@ -105,8 +100,7 @@ import './types';
         resolvers: [
             AfterSalesAdminResolver,
             OrderOperationsAdminResolver,
-            AutoCardAdminResolver,
-            AutoCardProductVariantResolver,
+            ...autoCardAdminResolvers,
             CommerceModeAdminResolver,
             ProductPackagingAdminResolver,
             ProductPackagingProductResolver,
@@ -121,9 +115,7 @@ import './types';
             OrderConfirmationResolver,
             CustomerOrderCancellationResolver,
             AfterSalesShopResolver,
-            AutoCardOrderResolver,
-            AutoCardProductVariantResolver,
-            AutoCardShopProductVariantResolver,
+            ...autoCardShopResolvers,
             CommerceModeShopResolver,
             ProductPackagingProductResolver,
             ManualDigitalDeliveryOrderResolver,
