@@ -374,7 +374,7 @@ export function GenerateVariantsPanel({
                                                 <p className="mt-1 text-sm font-normal text-muted-foreground">
                                                     <Trans>
                                                         Delivered to the checkout email after payment; no
-                                                        shipping or stock.
+                                                        shipping is required.
                                                     </Trans>
                                                 </p>
                                             </div>

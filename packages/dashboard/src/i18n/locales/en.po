@@ -1625,8 +1625,8 @@ msgid "Current store"
 msgstr "Current store"
 
 #: src/app/routes/_authenticated/_products/components/generate-variants-panel.tsx
-msgid "Delivered to the checkout email after payment; no shipping or stock."
-msgstr "Delivered to the checkout email after payment; no shipping or stock."
+#~ msgid "Delivered to the checkout email after payment; no shipping or stock."
+#~ msgstr "Delivered to the checkout email after payment; no shipping or stock."
 
 #: src/app/routes/_authenticated/_system/job-queue.tsx
 msgid "Every 5 seconds"
@@ -6654,6 +6654,7 @@ msgid "Assign {entityType} to channels"
 msgstr "Assign {entityType} to sales channels"
 
 #: src/app/routes/_authenticated/_products/components/add-product-variant-dialog.tsx
+#: src/app/routes/_authenticated/_products/components/generate-variants-panel.tsx
 msgid "Delivered to the checkout email after payment; no shipping is required."
 msgstr "Delivered to the checkout email after payment; no shipping is required."
 

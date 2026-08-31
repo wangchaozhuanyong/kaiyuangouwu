@@ -1625,8 +1625,8 @@ msgid "Current store"
 msgstr "当前店铺"
 
 #: src/app/routes/_authenticated/_products/components/generate-variants-panel.tsx
-msgid "Delivered to the checkout email after payment; no shipping or stock."
-msgstr "付款后发送至结账邮箱，无需配送和库存。"
+#~ msgid "Delivered to the checkout email after payment; no shipping or stock."
+#~ msgstr "付款后发送至结账邮箱，无需配送和库存。"
 
 #: src/app/routes/_authenticated/_system/job-queue.tsx
 msgid "Every 5 seconds"
@@ -6654,6 +6654,7 @@ msgid "Assign {entityType} to channels"
 msgstr "将{entityType}分配到店铺"
 
 #: src/app/routes/_authenticated/_products/components/add-product-variant-dialog.tsx
+#: src/app/routes/_authenticated/_products/components/generate-variants-panel.tsx
 msgid "Delivered to the checkout email after payment; no shipping is required."
 msgstr "付款后发送至结账邮箱，无需配送。"
 
