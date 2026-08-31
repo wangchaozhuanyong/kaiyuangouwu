@@ -15,17 +15,25 @@ permissions:
 jobs:
   CLAAssistant:
     runs-on: ubuntu-latest
-    env:
-      CI_BOT_APP_ID: ${{ secrets.CI_BOT_APP_ID }}
-      CI_BOT_APP_PRIVATE_KEY: ${{ secrets.CI_BOT_APP_PRIVATE_KEY }}
     steps:
+      - name: Detect CI Bot configuration
+        id: config
+        env:
+          CI_BOT_APP_ID: ${{ secrets.CI_BOT_APP_ID }}
+          CI_BOT_APP_PRIVATE_KEY: ${{ secrets.CI_BOT_APP_PRIVATE_KEY }}
+        run: |
+          if [[ -n "$CI_BOT_APP_ID" && -n "$CI_BOT_APP_PRIVATE_KEY" ]]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: Generate CI Bot Token
         id: app-token
-        if: ${{ env.CI_BOT_APP_ID != '' && env.CI_BOT_APP_PRIVATE_KEY != '' }}
+        if: ${{ steps.config.outputs.configured == 'true' }}
         uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2.2.2
         with:
-          app-id: ${{ env.CI_BOT_APP_ID }}
-          private-key: ${{ env.CI_BOT_APP_PRIVATE_KEY }}
+          app-id: ${{ secrets.CI_BOT_APP_ID }}
+          private-key: ${{ secrets.CI_BOT_APP_PRIVATE_KEY }}
           # Least privilege: the CLA assistant stores signatures (contents), comments on PRs
           # (pull-requests), and sets the CLA commit status that gates merge (statuses).
           # NOTE: we do NOT request `actions: write` — the vendure-ci-automation-bot App only
