@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 import { createCrudTestSuite } from '../../utils/crud-test-factory.js';
+import { expectProductEditorOpen } from '../../utils/product-test-helpers.js';
 import { VendureAdminClient } from '../../utils/vendure-admin-client.js';
 
 createCrudTestSuite({
@@ -49,6 +50,6 @@ test.describe('specification template product links', () => {
         const productLink = row.getByRole('link', { name: `Open product ${product.name}` });
         await expect(productLink).toBeVisible();
         await productLink.click();
-        await expect(page).toHaveURL(new RegExp(`/products/${product.id}$`));
+        await expectProductEditorOpen(page, product.id);
     });
 });

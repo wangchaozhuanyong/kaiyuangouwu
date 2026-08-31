@@ -297,6 +297,7 @@ function BusinessServicesCopyPage() {
                                                 aria-pressed={previewLanguage === languageCode}
                                                 onClick={() => setPreviewLanguage(languageCode)}
                                             >
+                                                {/* i18n-audit-ignore -- explicit language name in the bilingual preview switcher */}
                                                 {languageCode === 'zh_Hans' ? '中文' : 'English'}
                                             </Button>
                                         ))}

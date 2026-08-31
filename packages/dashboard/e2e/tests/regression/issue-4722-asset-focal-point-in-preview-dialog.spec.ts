@@ -61,6 +61,7 @@ test.describe('Issue 4722 — focal point editor in shared asset preview dialog'
 
         const setFocalPointTrigger = page.getByTestId('asset-preview-set-focal-point');
         await expect(setFocalPointTrigger).toBeVisible({ timeout: 5_000 });
+        const assetPreviewDialog = setFocalPointTrigger.locator('xpath=ancestor::*[@role="dialog"]');
 
         // Baseline "Not set", so the transition below is a real state change.
         const focalPointValue = page.getByTestId('asset-preview-focal-point-value');
@@ -77,7 +78,7 @@ test.describe('Issue 4722 — focal point editor in shared asset preview dialog'
         // Re-open: the saved coords must persist. Before the parent-sync fix,
         // EntityAssets held the stale focal point and the dialog reported "Not set".
         await page.keyboard.press('Escape');
-        await expect(page.getByRole('dialog')).toBeHidden({ timeout: 5_000 });
+        await expect(assetPreviewDialog).toBeHidden({ timeout: 5_000 });
 
         await featuredImage.click();
         await expect(focalPointValue).toContainText('0.50, 0.50', { timeout: 5_000 });

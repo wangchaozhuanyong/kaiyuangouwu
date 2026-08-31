@@ -230,6 +230,10 @@ msgstr "已成功更新税率"
 msgid "Enter custom reason..."
 msgstr "输入自定义原因..."
 
+#: src/app/routes/_authenticated/_products/products.tsx
+msgid "Apply filters"
+msgstr "应用筛选"
+
 #: src/lib/components/shared/asset/asset-gallery.tsx
 msgid "Type"
 msgstr "类型"
@@ -280,6 +284,10 @@ msgstr "删除行"
 #: src/app/routes/_authenticated/_shipping-methods/shipping-methods_.$id.tsx
 msgid "Conditions"
 msgstr "条件"
+
+#: src/app/routes/_authenticated/_products/products_.$id.tsx
+msgid "Select at least one product group so the product can be categorized."
+msgstr "至少选择一个商品分类，确保商品能够被正确归类。"
 
 #: src/app/routes/_authenticated/_orders/components/order-detail-shared.tsx
 msgid "No fulfillments"
@@ -336,6 +344,11 @@ msgstr "商家"
 #: src/lib/components/ui/combobox.tsx
 msgid "Options"
 msgstr "选项"
+
+#. placeholder {0}: creationContext.currencyCode
+#: src/app/routes/_authenticated/_products/products_.$id.tsx
+msgid "Purchase cost ({0})"
+msgstr "进货价（{0}）"
 
 #: src/app/routes/_authenticated/_assets/components/asset-bulk-actions.tsx
 msgid "Delete anyway"
@@ -576,6 +589,11 @@ msgstr "过去7天"
 msgid "Assigned products"
 msgstr "已归类商品"
 
+#: src/app/routes/_authenticated/_products/products_.$id.tsx
+#: src/app/routes/_authenticated/_products/products.tsx
+msgid "Product group"
+msgstr "商品分类"
+
 #: src/lib/components/layout/dev-mode-indicator.tsx
 #: src/lib/components/layout/nav-user.tsx
 msgid "Dev Mode"
@@ -613,6 +631,10 @@ msgstr "商品 SKU"
 #: src/app/routes/_authenticated/_customer-groups/customer-groups_.$id.tsx
 msgid "New customer group"
 msgstr "新客户组"
+
+#: src/app/routes/_authenticated/_products/products_.$id.tsx
+msgid "Package conversion"
+msgstr "包装换算"
 
 #. placeholder {0}: searchValue.trim()
 #: src/app/routes/_authenticated/_assets/components/asset-tags-editor.tsx
@@ -922,6 +944,10 @@ msgstr "搜索或筛选..."
 msgid "The storefront sends this token with API requests to select this store."
 msgstr "商城前台通过 API 请求携带此令牌来指定店铺。"
 
+#: src/app/routes/_authenticated/_products/products_.$id.tsx
+msgid "Current warehouse"
+msgstr "当前仓库"
+
 #: src/lib/components/shared/asset/asset-gallery.tsx
 msgid "Grid view"
 msgstr "网格视图"
@@ -1046,6 +1072,7 @@ msgstr "元数据"
 
 #: src/app/routes/_authenticated/_option-groups/components/option-group-products-block.tsx
 #: src/app/routes/_authenticated/_products/components/product-collection-selector.tsx
+#: src/app/routes/_authenticated/_products/products_.$id.tsx
 #: src/lib/components/data-table/data-table.tsx
 #: src/lib/providers/server-config.tsx
 msgid "Retry"
@@ -1176,6 +1203,10 @@ msgstr "确定要删除此草稿订单吗？"
 #: src/app/routes/_authenticated/_channels/channels_.$id.tsx
 msgid "Store setup"
 msgstr "店铺配置进度"
+
+#: src/app/routes/_authenticated/_products/products_.$id.tsx
+msgid "SKU sales status"
+msgstr "SKU 销售状态"
 
 #: src/app/routes/_authenticated/_orders/components/order-history/order-history-utils.tsx
 msgid "Fulfillment created"
@@ -1403,6 +1434,10 @@ msgstr "刷新数据"
 #: src/app/routes/_authenticated/_collections/collections_.$id.tsx
 msgid "Hidden from storefront"
 msgstr "前台隐藏"
+
+#: src/app/routes/_authenticated/_products/products.tsx
+msgid "For example: 30"
+msgstr "例如：30"
 
 #: src/app/routes/_authenticated/_system/settings-store.tsx
 msgid "Custom"
@@ -1682,6 +1717,11 @@ msgstr "更新促销活动失败"
 msgid "Images"
 msgstr "图片"
 
+#: src/app/routes/_authenticated/_products/products_.$id.tsx
+#: src/app/routes/_authenticated/_products/products.tsx
+msgid "Barcode"
+msgstr "条码"
+
 #: src/app/routes/_authenticated/_products/components/product-option-select.tsx
 msgid "Search {name}..."
 msgstr "搜索 {name}..."
@@ -1778,6 +1818,10 @@ msgstr "规格模板定义该商品可选择的规格，并用于生成 SKU。"
 #: src/app/routes/_authenticated/_tax-rates/tax-rates_.$id.tsx
 msgid "New tax rate"
 msgstr "新税率"
+
+#: src/app/routes/_authenticated/_products/products.tsx
+msgid "Enter any keyword"
+msgstr "输入任一关键字"
 
 #: src/app/routes/_authenticated/_orders/components/order-history/order-history-utils.tsx
 msgid "Payment transitioned"
@@ -1926,6 +1970,10 @@ msgstr "未知分类"
 msgid "Use global out-of-stock threshold"
 msgstr "使用全局缺货阈值"
 
+#: src/app/routes/_authenticated/_products/products.tsx
+msgid "Low stock only"
+msgstr "仅看低库存"
+
 #: src/app/routes/_authenticated/_tax-rates/tax-rates.tsx
 msgid "Edit the tax rate without leaving the list"
 msgstr "无需离开列表即可编辑税率"
@@ -2029,6 +2077,10 @@ msgstr "创建规格组失败"
 msgid "True"
 msgstr "是"
 
+#: src/app/routes/_authenticated/_products/products.tsx
+msgid "Advanced filters"
+msgstr "高级筛选"
+
 #: src/lib/components/shared/customer-selector.tsx
 msgid "Select customer"
 msgstr "选择客户"
@@ -2072,6 +2124,10 @@ msgstr "实物商品"
 #: src/app/routes/_authenticated/_orders/orders_.draft.$id.tsx
 msgid "Delete draft order"
 msgstr "删除草稿订单"
+
+#: src/app/routes/_authenticated/_products/products_.$id.tsx
+msgid "Maximum stock"
+msgstr "库存上限"
 
 #: src/app/routes/_authenticated/_payment-methods/payment-methods_.$id.tsx
 #: src/app/routes/_authenticated/_payment-methods/payment-methods_.$id.tsx
@@ -2262,6 +2318,7 @@ msgstr "示例格式"
 msgid "Are you sure you want to cancel this fulfillment? This action cannot be undone."
 msgstr "确定要取消这次履约吗？此操作无法撤销。"
 
+#: src/app/routes/_authenticated/_products/products.tsx
 #: src/lib/components/data-table/filters/data-table-number-filter.tsx
 msgid "Minimum"
 msgstr "最小值"
@@ -2284,6 +2341,7 @@ msgstr "在完整页面中打开"
 msgid "New option"
 msgstr "新选项"
 
+#: src/app/routes/_authenticated/_products/products.tsx
 #: src/app/routes/_authenticated/_products/products.tsx
 msgid "Create product"
 msgstr "创建商品"
@@ -2497,6 +2555,10 @@ msgstr "删除商品 SKU"
 msgid "No modifications made"
 msgstr "未进行修改"
 
+#: src/app/routes/_authenticated/_products/products_.$id.tsx
+msgid "Product creation context is still loading. Please try again shortly."
+msgstr "商品创建资料仍在加载，请稍后重试。"
+
 #: src/lib/framework/dashboard-widget/metrics-widget/index.tsx
 msgid "Change the date range to view historical business trends"
 msgstr "调整时间范围后可查看历史经营趋势"
@@ -2555,6 +2617,7 @@ msgid "Customer Groups"
 msgstr "客户组"
 
 #: src/app/routes/_authenticated/_payment-methods/payment-methods.tsx
+#: src/app/routes/_authenticated/_products/products.tsx
 #: src/app/routes/_authenticated/_system/scheduled-tasks.tsx
 #: src/app/routes/_authenticated/_tax-rates/tax-rates.tsx
 #: src/lib/components/data-display/boolean.tsx
@@ -3452,6 +3515,10 @@ msgstr "设置订单收货地址失败：{0}"
 msgid "Cancel Job"
 msgstr "取消任务"
 
+#: src/app/routes/_authenticated/_products/components/add-product-variant-dialog.tsx
+msgid "Discard the unsaved product variant?"
+msgstr "放弃未保存的 SKU？"
+
 #: src/app/routes/_authenticated/_promotions/promotions_.$id.tsx
 msgid "Ends at"
 msgstr "结束于"
@@ -3659,6 +3726,10 @@ msgstr "楼栋、单元、房间号（选填）"
 #: src/app/routes/_authenticated/_tax-rates/tax-rates.tsx
 msgid "Loading tax rate..."
 msgstr "正在加载税率..."
+
+#: src/app/routes/_authenticated/_products/products_.$id.tsx
+msgid "Select warehouse"
+msgstr "选择仓库"
 
 #: src/lib/components/data-table/human-readable-operator.tsx
 msgid "="
@@ -3946,6 +4017,10 @@ msgstr "无需离开筛选属性值面板即可编辑"
 msgid "Creating..."
 msgstr "正在创建..."
 
+#: src/app/routes/_authenticated/_products/products_.$id.tsx
+msgid "Product creation context is still loading"
+msgstr "商品创建资料仍在加载"
+
 #: src/lib/components/data-table/views-sheet.tsx
 msgid "Are you sure you want to delete this global view? This action cannot be undone and will affect all users."
 msgstr "确定要删除此全局视图吗？此操作无法撤销，将影响所有用户。"
@@ -3991,6 +4066,11 @@ msgstr "从组中删除客户失败"
 #: src/lib/components/shared/rich-text-editor/table-delete-menu.tsx
 msgid "Delete table"
 msgstr "删除表格"
+
+#: src/app/routes/_authenticated/_products/products.tsx
+#: src/app/routes/_authenticated/_products/products.tsx
+msgid "Available stock"
+msgstr "可用库存"
 
 #: src/app/routes/_authenticated/_orders/components/order-tax-summary.tsx
 msgid "Shipping tax"
@@ -4118,6 +4198,10 @@ msgstr "无客户"
 msgid "Failed to remove countries from zone"
 msgstr "从区域移除国家/地区失败"
 
+#: src/app/routes/_authenticated/_products/products_.$id.tsx
+msgid "Can be disabled independently from the product."
+msgstr "可独立于商品主体停用。"
+
 #: src/app/routes/_authenticated/_roles/components/permission-labels.ts
 msgid "Write"
 msgstr "管理"
@@ -4161,6 +4245,10 @@ msgstr "正在添加 {0} 项附加费"
 
 #~ msgid "Customer group"
 #~ msgstr "客户组"
+
+#: src/app/routes/_authenticated/_products/products_.$id.tsx
+msgid "Loading store currency and warehouse..."
+msgstr "正在加载门店币种与仓库..."
 
 #: src/lib/components/shared/rich-text-editor/link-dialog.tsx
 msgid "Link href"
@@ -4979,6 +5067,10 @@ msgstr "新建库存点"
 msgid "{successfulRefundCount} payment(s) refunded before failure. Check order history for details."
 msgstr "失败前已退还 {successfulRefundCount} 笔付款。请查看订单历史了解详情。"
 
+#: src/app/routes/_authenticated/_products/products_.$id.tsx
+msgid "Minimum stock"
+msgstr "库存下限"
+
 #: src/app/routes/_authenticated/_channels/channels.tsx
 msgid "Currently managing"
 msgstr "当前正在管理"
@@ -4992,7 +5084,6 @@ msgstr "选择项目"
 msgid "Store identity"
 msgstr "店铺标识"
 
-#: src/app/routes/_authenticated/_products/products_.$id.tsx
 #: src/app/routes/_authenticated/_products/products_.$id.tsx
 msgid "New product"
 msgstr "新商品"
@@ -5091,6 +5182,10 @@ msgstr "模板与商品双向关联"
 msgid "Change selected products"
 msgstr "更改已选商品"
 
+#: src/app/routes/_authenticated/_products/products.tsx
+msgid "{amount} and up"
+msgstr "{amount} 起"
+
 #. placeholder {0}: addedLines.length
 #: src/app/routes/_authenticated/_orders/components/order-modification-summary.tsx
 msgid "Adding {0} item(s)"
@@ -5131,6 +5226,10 @@ msgstr "草稿订单已删除"
 #: src/lib/components/data-table/human-readable-operator.tsx
 msgid "greater than"
 msgstr "大于"
+
+#: src/app/routes/_authenticated/_products/products.tsx
+msgid "Product status"
+msgstr "商品状态"
 
 #. js-lingui-explicit-id
 #: src/lib/framework/defaults.ts
@@ -5188,6 +5287,11 @@ msgstr "店铺令牌仅用于本地开发或兼容旧版接入。"
 msgid "Level {childLevel}"
 msgstr "第 {childLevel} 级"
 
+#: src/app/routes/_authenticated/_products/products.tsx
+#: src/app/routes/_authenticated/_products/products.tsx
+msgid "Selling price"
+msgstr "售价"
+
 #: src/app/routes/_authenticated/_assets/components/manage-tags-dialog.tsx
 msgid "Loading tags..."
 msgstr "正在加载标签..."
@@ -5196,6 +5300,7 @@ msgstr "正在加载标签..."
 msgid "Successfully created facet"
 msgstr "已成功创建筛选属性"
 
+#: src/app/routes/_authenticated/_products/products.tsx
 #: src/lib/components/data-table/filters/data-table-number-filter.tsx
 msgid "Maximum"
 msgstr "最大值"
@@ -5250,6 +5355,10 @@ msgstr "{0, plural, other {无法删除 {2} 个库存点}}"
 msgid "Facet"
 msgstr "筛选属性"
 
+#: src/app/routes/_authenticated/_products/products.tsx
+msgid "Invalid filter criteria"
+msgstr "筛选条件无效"
+
 #: src/lib/components/shared/assigned-channels.tsx
 msgid "Cannot remove from active channel"
 msgstr "无法从活动店铺中移除"
@@ -5300,7 +5409,6 @@ msgstr "履约状态已成功更新"
 #: src/app/routes/_authenticated/_option-groups/option-groups_.$id.tsx
 #: src/app/routes/_authenticated/_product-variants/product-variants_.$id.tsx
 #: src/app/routes/_authenticated/_products/products_.$id_.variants.tsx
-#: src/app/routes/_authenticated/_products/products_.$id.tsx
 #: src/app/routes/_authenticated/_products/products.tsx
 #: src/app/routes/_authenticated/_products/products.tsx
 msgid "Products"
@@ -5332,6 +5440,10 @@ msgstr "订单收入"
 #: src/app/routes/_authenticated/_products/components/add-option-group-dialog.tsx
 #~ msgid "Add option group"
 #~ msgstr "添加销售规格"
+
+#: src/app/routes/_authenticated/_products/products.tsx
+msgid "All"
+msgstr "全部"
 
 #. placeholder {0}: formatCurrency(refund.amountToRefundTotal, order.currencyCode)
 #: src/app/routes/_authenticated/_orders/components/refund-order-dialog.tsx
@@ -5647,6 +5759,10 @@ msgstr "设为全局"
 msgid "Set specification templates"
 msgstr "设置规格模板"
 
+#: src/app/routes/_authenticated/_products/products_.$id.tsx
+msgid "Selling unit"
+msgstr "销售单位"
+
 #: src/app/routes/_authenticated/_orders/components/use-transition-order-to-state.tsx
 msgid "Select next state"
 msgstr "选择下一个状态"
@@ -5869,6 +5985,10 @@ msgstr "该商品同时包含实物 SKU 和虚拟 SKU。你可以继续分别编
 #: src/lib/components/data-table/data-table-view-options.tsx
 msgid "Reset"
 msgstr "重置"
+
+#: src/app/routes/_authenticated/_products/products_.$id.tsx
+msgid "Unable to load product creation context. Product creation is temporarily unavailable."
+msgstr "无法加载商品创建资料，暂时无法创建商品。"
 
 #: src/lib/components/data-table/filters/data-table-enum-filter.tsx
 #: src/lib/components/data-table/human-readable-operator.tsx
@@ -6271,6 +6391,10 @@ msgstr "复制{entityName}"
 #: src/app/routes/_authenticated/_orders/orders_.$id_.modify.tsx
 msgid "Order lines"
 msgstr "订单行"
+
+#: src/app/routes/_authenticated/_products/products.tsx
+msgid "Brand"
+msgstr "品牌"
 
 #: src/lib/components/data-table/views-sheet.tsx
 msgid "Failed to rename global view"
@@ -6956,6 +7080,10 @@ msgstr "重建搜索索引"
 msgid "Running"
 msgstr "正在执行"
 
+#: src/app/routes/_authenticated/_products/products_.$id.tsx
+msgid "Specification"
+msgstr "规格说明"
+
 #: src/app/routes/_authenticated/_system/job-queue.tsx
 msgid "Every 60 seconds"
 msgstr "每 60 秒"
@@ -7040,6 +7168,14 @@ msgstr "设置订单地址失败：{0}"
 msgid "State"
 msgstr "州/省"
 
+#: src/app/routes/_authenticated/_products/products.tsx
+msgid "Product advanced filters"
+msgstr "商品高级筛选"
+
+#: src/app/routes/_authenticated/_products/products.tsx
+msgid "Edit product"
+msgstr "编辑商品"
+
 #: src/app/routes/_authenticated/_product-variants/product-variants_.$id.tsx
 #: src/app/routes/_authenticated/_product-variants/product-variants_.$id.tsx
 msgid "Do not track"
@@ -7077,6 +7213,7 @@ msgstr "另有 {remainingErrorCount} 条错误"
 #: src/app/routes/_authenticated/_payment-methods/payment-methods.tsx
 #: src/app/routes/_authenticated/_product-variants/product-variants_.$id.tsx
 #: src/app/routes/_authenticated/_products/products_.$id.tsx
+#: src/app/routes/_authenticated/_products/products.tsx
 #: src/app/routes/_authenticated/_promotions/promotions_.$id.tsx
 #: src/app/routes/_authenticated/_system/scheduled-tasks.tsx
 #: src/app/routes/_authenticated/_system/scheduled-tasks.tsx
@@ -7102,6 +7239,7 @@ msgstr "每页条数"
 msgid "Edit members"
 msgstr "编辑成员"
 
+#: src/app/routes/_authenticated/_products/products_.$id.tsx
 #: src/lib/components/shared/stock-level-label.tsx
 msgid "Stock on hand"
 msgstr "现有库存"
@@ -7408,6 +7546,10 @@ msgstr "转到上一页"
 msgid "Quantity: {0}"
 msgstr "数量：{0}"
 
+#: src/app/routes/_authenticated/_products/products.tsx
+msgid "Expiring within (days)"
+msgstr "临期范围（天）"
+
 #. placeholder {0}: viewToDuplicate.name
 #: src/lib/hooks/use-saved-views.ts
 msgid "{0} (Copy)"
@@ -7463,6 +7605,10 @@ msgstr "库存跟踪默认遵循全局设置。"
 msgid "Are you sure you want to remove {countryCount} countries/regions from this zone?"
 msgstr "确定要从此业务区域移除 {countryCount} 个国家/地区吗？"
 
+#: src/app/routes/_authenticated/_products/products.tsx
+msgid "Loading product..."
+msgstr "正在加载商品..."
+
 #: src/app/routes/_authenticated/_collections/collections.tsx
 #: src/app/routes/_authenticated/_collections/components/collection-quick-create-sheet.tsx
 #: src/app/routes/_authenticated/_collections/components/collection-quick-create-sheet.tsx
@@ -7492,6 +7638,11 @@ msgstr "原始尺寸"
 #: src/app/routes/_authenticated/_customer-groups/components/customer-group-members-bulk-actions.tsx
 msgid "Failed to remove customers from group"
 msgstr "从组中移除客户失败"
+
+#. placeholder {0}: creationContext.currencyCode
+#: src/app/routes/_authenticated/_products/products_.$id.tsx
+msgid "Selling price ({0})"
+msgstr "销售价（{0}）"
 
 #: src/app/routes/_authenticated/_products/products_.$id.tsx
 #~ msgid "This product is not currently included in a product group."
@@ -7690,6 +7841,10 @@ msgstr "创建子分类"
 msgid "Add Option"
 msgstr "添加规格"
 
+#: src/app/routes/_authenticated/_products/products_.$id.tsx
+msgid "The product and its first SKU are created together. If any step fails, nothing is saved."
+msgstr "商品与首个 SKU 将一并创建；任一步骤失败都不会保存任何数据。"
+
 #: src/app/routes/_authenticated/_products/components/add-option-group-dialog.tsx
 msgid "Save option group"
 msgstr "创建规格"
@@ -7722,6 +7877,7 @@ msgstr "成功更新管理员"
 msgid "Business trends"
 msgstr "经营趋势"
 
+#: src/app/routes/_authenticated/_products/products.tsx
 #: src/lib/components/data-table/data-table-facet-value-faceted-filter.tsx
 #: src/lib/components/data-table/data-table-faceted-filter.tsx
 #: src/lib/components/shared/asset/asset-gallery.tsx
@@ -7911,6 +8067,10 @@ msgstr "税率"
 msgid "Slug will be generated automatically..."
 msgstr "URL 标识将自动生成..."
 
+#: src/app/routes/_authenticated/_products/products_.$id.tsx
+msgid "Initial SKU, pricing and inventory"
+msgstr "初始 SKU、价格与库存"
+
 #: src/app/routes/_authenticated/_customers/components/customer-history/customer-history-container.tsx
 msgid "Customer not found"
 msgstr "未找到客户"
@@ -7926,6 +8086,10 @@ msgstr "商品 SKU：{sku}"
 #: src/app/routes/_authenticated/_products/components/assign-facet-values-dialog.tsx
 msgid "New facet values to add:"
 msgstr "要添加的新筛选属性值："
+
+#: src/app/routes/_authenticated/_products/products_.$id.tsx
+msgid "Select at least one product group"
+msgstr "请至少选择一个商品分类"
 
 #: src/app/routes/_authenticated/_orders/hooks/use-refund-order.ts
 #: src/app/routes/_authenticated/_orders/hooks/use-refund-order.ts
@@ -8046,6 +8210,10 @@ msgstr "原因"
 msgid "Are you sure you want to remove 1 country/region from this zone?"
 msgstr "确定要从此业务区域移除 1 个国家/地区吗？"
 
+#: src/app/routes/_authenticated/_products/components/add-product-variant-dialog.tsx
+msgid "Select one value for every product option"
+msgstr "请为每个商品规格选择一个值"
+
 #: src/app/routes/_authenticated/_customers/customers_.$id.tsx
 #: src/app/routes/_authenticated/_customers/customers.tsx
 msgid "Customer groups"
@@ -8118,9 +8286,17 @@ msgstr "选择该商品需要物流发货，还是通过邮箱交付。"
 msgid "Video"
 msgstr "视频"
 
+#: src/app/routes/_authenticated/_products/products.tsx
+msgid "Manage product information, specifications, prices, inventory and batches without leaving the product list"
+msgstr "无需离开商品列表即可管理商品信息、规格、价格、库存和批次"
+
 #: src/lib/components/data-table/human-readable-operator.tsx
 msgid "less than"
 msgstr "小于"
+
+#: src/app/routes/_authenticated/_products/products.tsx
+msgid "Available stock is at or below the reorder level"
+msgstr "可用库存小于或等于预警下限"
 
 #: src/app/routes/_authenticated/_products/components/product-option-select.tsx
 msgid "No option values found. Add a Simplified Chinese value first; English is generated when you save."
@@ -8242,6 +8418,10 @@ msgstr "常规"
 msgid "Digital product"
 msgstr "虚拟商品"
 
+#: src/app/routes/_authenticated/_products/products.tsx
+msgid "Margin (%)"
+msgstr "毛利率（%）"
+
 #: src/app/routes/_authenticated/_customers/customers_.$id.tsx
 #: src/app/routes/_authenticated/_customers/customers_.$id.tsx
 msgid "Add new address"
@@ -8259,6 +8439,10 @@ msgstr "删除线"
 #: src/app/routes/_authenticated/_products/components/product-collections-panel.tsx
 msgid "Product group not found"
 msgstr "未找到商品分类"
+
+#: src/app/routes/_authenticated/_products/products_.$id.tsx
+msgid "Margin (calculated)"
+msgstr "毛利率（系统计算）"
 
 #: src/app/routes/_authenticated/_zones/zones_.$id.tsx
 msgid "Successfully created zone"
@@ -8399,6 +8583,10 @@ msgstr "退款 ID"
 #: src/app/routes/_authenticated/_orders/orders_.draft.$id.tsx
 msgid "Order custom fields updated"
 msgstr "订单自定义字段已更新"
+
+#: src/app/routes/_authenticated/_products/products.tsx
+msgid "Name / SKU / barcode"
+msgstr "名称 / SKU / 条码"
 
 #: src/app/routes/_authenticated/_shipping-methods/shipping-methods_.$id.tsx
 msgid "Calculator"
@@ -8596,6 +8784,10 @@ msgstr "商品分类已更新"
 msgid "Rows per page"
 msgstr "每页行数"
 
+#: src/app/routes/_authenticated/_products/products.tsx
+msgid "Name, SKU, barcode, price, cost, margin, stock and shelf life are calculated for the current store."
+msgstr "名称、SKU、条码、价格、成本、毛利、库存和效期均按当前门店计算。"
+
 #: src/lib/components/shared/asset/asset-picker-dialog.tsx
 msgid "Browse and select one or more assets"
 msgstr "浏览并选择一个或多个素材"
@@ -8640,6 +8832,10 @@ msgstr "确定立即运行这个计划任务吗？它可能会更新或删除系
 msgid "Seller orders"
 msgstr "商家订单"
 
+#: src/app/routes/_authenticated/_products/products.tsx
+msgid "Purchase cost"
+msgstr "进货成本"
+
 #: src/app/routes/_authenticated/_products/products_.$id_.variants.tsx
 msgid "Failed to add option value"
 msgstr "添加选项值失败"
@@ -8652,6 +8848,10 @@ msgstr "向 {groupName} 添加选项值"
 #: src/app/routes/_authenticated/_orders/orders_.draft.$id.tsx
 msgid "Failed to unset shipping address for order: {0}"
 msgstr "清除订单收货地址失败：{0}"
+
+#: src/app/routes/_authenticated/_products/products_.$id.tsx
+msgid "SKU code"
+msgstr "SKU 编码"
 
 #: src/app/routes/_authenticated/_orders/components/add-surcharge-form.tsx
 #: src/app/routes/_authenticated/_orders/components/edit-order-table.tsx
@@ -8735,6 +8935,10 @@ msgstr "已选择"
 msgid "Successfully created tax rate"
 msgstr "已成功创建税率"
 
+#: src/app/routes/_authenticated/_products/products_.$id.tsx
+msgid "Purchasing unit"
+msgstr "采购单位"
+
 #: src/lib/components/shared/rich-text-editor/responsive-toolbar.tsx
 msgid "Heading 6"
 msgstr "标题 6"
@@ -8816,6 +9020,7 @@ msgstr "大于"
 #: src/app/routes/_authenticated/_facets/facets_.$facetId.values_.$id.tsx
 #: src/app/routes/_authenticated/_option-groups/option-groups_.$groupId.options_.$id.tsx
 #: src/app/routes/_authenticated/_product-variants/product-variants_.$id.tsx
+#: src/app/routes/_authenticated/_products/products_.$id.tsx
 #: src/app/routes/_authenticated/_sellers/sellers_.$id.tsx
 #: src/app/routes/_authenticated/_stock-locations/stock-locations_.$id.tsx
 #: src/app/routes/_authenticated/_tax-categories/tax-categories_.$id.tsx
@@ -8931,7 +9136,6 @@ msgid "Failed to add customer to group"
 msgstr "将客户添加到组失败"
 
 #: src/app/routes/_authenticated/_products/products_.$id_.variants.tsx
-#: src/app/routes/_authenticated/_products/products_.$id.tsx
 msgid "Manage variants"
 msgstr "管理商品 SKU"
 
@@ -8942,6 +9146,10 @@ msgstr "已应用全局视图\"{viewName}\""
 #: src/app/routes/_authenticated/_customers/components/customer-history/customer-history-utils.tsx
 msgid "Customer registered"
 msgstr "客户已注册"
+
+#: src/app/routes/_authenticated/_products/products_.$id.tsx
+msgid "Shelf life (days)"
+msgstr "保质期（天）"
 
 #: src/lib/components/shared/seller-selector.tsx
 msgid "Search sellers..."

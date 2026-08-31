@@ -1,6 +1,10 @@
 import { type Page, expect, test } from '@playwright/test';
 
 import { BaseDetailPage } from '../../page-objects/detail-page.base.js';
+import {
+    expectProductEditorOpen,
+    fillRequiredProductCatalogFields,
+} from '../../utils/product-test-helpers.js';
 
 // Regression: https://github.com/vendurehq/vendure/issues/4155
 // Fix PR: https://github.com/vendurehq/vendure/pull/4339
@@ -39,6 +43,7 @@ test.describe('Issue #4155: Nullable non-string custom field defaults', () => {
         await dp.fillInput('Product name', 'Issue 4155 Test Product');
         await dp.fillRichText('Description', 'Product used to test nullable non-string custom fields');
         await expect(dp.formItem('Slug').getByRole('textbox')).not.toHaveValue('', { timeout: 5_000 });
+        await fillRequiredProductCatalogFields(page, `issue-4155-${Date.now()}`);
 
         // Wait for form validation to settle — the Create button becomes enabled
         // once defaults are generated and Zod validation passes
@@ -47,6 +52,6 @@ test.describe('Issue #4155: Nullable non-string custom field defaults', () => {
         // This should succeed: nullable fields should default to null, not ''
         await dp.clickCreate();
         await dp.expectSuccessToast(/Successfully created product/);
-        await dp.expectNavigatedToExisting();
+        await expectProductEditorOpen(page);
     });
 });

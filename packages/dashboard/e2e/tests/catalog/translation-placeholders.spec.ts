@@ -2,6 +2,10 @@ import { type Page, expect, test } from '@playwright/test';
 
 import { BaseDetailPage } from '../../page-objects/detail-page.base.js';
 import { BaseListPage } from '../../page-objects/list-page.base.js';
+import {
+    expectProductEditorOpen,
+    fillRequiredProductCatalogFields,
+} from '../../utils/product-test-helpers.js';
 import { VendureAdminClient } from '../../utils/vendure-admin-client.js';
 
 // The merchant-facing editor is pinned to the active channel's default content
@@ -32,11 +36,12 @@ async function goToLaptopProduct(page: Page) {
     await lp.expectLoaded();
     await lp.search('Laptop');
     await lp.clickEntity('Laptop');
-    await expect(page).toHaveURL(/\/products\/[^/]+$/);
+    const productId = await expectProductEditorOpen(page);
     const dp = detailPage(page);
     await expect(dp.formItem('Product name').getByRole('textbox')).toHaveValue('Laptop', { timeout: 10_000 });
     await page.waitForLoadState('networkidle');
     await expect(page.getByRole('button', { name: 'Update', exact: true })).toBeDisabled({ timeout: 10_000 });
+    return productId;
 }
 
 /**
@@ -204,13 +209,17 @@ test.describe('Default-language product editing', () => {
         // Slug is auto-generated from the name (its input is disabled).
         await dp.fillInput('Product name', name);
         await dp.fillRichText('Description', 'Default-language-only product description');
+        await fillRequiredProductCatalogFields(page, `oss579-${Date.now()}`);
 
         const createRequest = page.waitForRequest(
-            req => req.method() === 'POST' && (req.postData() ?? '').includes('mutation CreateProduct('),
+            req =>
+                req.method() === 'POST' &&
+                /mutation (?:CreateCatalogProduct|CreateProduct)\(/u.test(req.postData() ?? ''),
             { timeout: 15_000 },
         );
         await dp.clickCreate();
-        const input = (await createRequest).postDataJSON()?.variables?.input;
+        const requestInput = (await createRequest).postDataJSON()?.variables?.input;
+        const input = requestInput?.product ?? requestInput;
 
         expect(input).toBeTruthy();
         expect(input.translations).toHaveLength(1);
@@ -219,10 +228,10 @@ test.describe('Default-language product editing', () => {
         expect(input.translations.some((t: any) => t.languageCode === 'de')).toBe(false);
 
         await dp.expectSuccessToast();
+        const createdId = await expectProductEditorOpen(page);
 
         // Clean up the product we just created so the suite stays re-runnable.
-        const createdId = new URL(page.url()).pathname.split('/').pop();
-        if (createdId && createdId !== 'new') {
+        if (createdId) {
             const client = new VendureAdminClient(page);
             await client.login();
             await client.gql(`mutation ($id: ID!) { deleteProduct(id: $id) { result } }`, { id: createdId });
@@ -238,8 +247,7 @@ test.describe('Default-language product editing', () => {
     test('updating a non-translation field submits only the existing translation, not a seeded empty one', async ({
         page,
     }) => {
-        await goToLaptopProduct(page);
-        const productId = new URL(page.url()).pathname.split('/').pop() as string;
+        const productId = await goToLaptopProduct(page);
 
         const dp = detailPage(page);
         // Toggle Enabled to make the form dirty *without* touching any translation field.

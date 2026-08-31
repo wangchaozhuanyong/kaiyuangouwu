@@ -39,10 +39,12 @@ const technicalLiterals = new Set([
     'Logo',
     'MYR',
     'MYR/USDT',
+    'P',
     'SHA-256：',
     'SKU',
     'SKU:',
     'Token：',
+    'T...',
     'URL',
     'Vendure',
     'ZH',
@@ -61,6 +63,7 @@ const technicalLiterals = new Set([
     'x',
     '· Channel',
     '· ID',
+    '· W',
 ]);
 const helpContentFile = path.join(
     workspaceRoot,

@@ -2,8 +2,12 @@ import { expect, test } from '@playwright/test';
 
 import { BaseDetailPage } from '../../page-objects/detail-page.base.js';
 import { BaseListPage } from '../../page-objects/list-page.base.js';
+import {
+    expectProductEditorOpen,
+    fillRequiredProductCatalogFields,
+} from '../../utils/product-test-helpers.js';
 
-test.describe('Breadcrumb should update after entity mutation', () => {
+test.describe('Product editor title should update after entity mutation', () => {
     test.describe.configure({ mode: 'serial' });
 
     const productName = 'Breadcrumb Original Name';
@@ -21,7 +25,7 @@ test.describe('Breadcrumb should update after entity mutation', () => {
         newTitle: 'New product',
     };
 
-    test('should update breadcrumb after renaming a product', async ({ page }) => {
+    test('should update the editor title after renaming a product', async ({ page }) => {
         test.setTimeout(30_000);
 
         const listPage = new BaseListPage(page, listConfig);
@@ -33,13 +37,13 @@ test.describe('Breadcrumb should update after entity mutation', () => {
         await detail.fillFields([{ label: 'Product name', value: productName }]);
         await detail.fillRichText('Description', 'Product used to test breadcrumb updates');
         await expect(detail.formItem('Slug').getByRole('textbox')).not.toHaveValue('', { timeout: 5_000 });
+        await fillRequiredProductCatalogFields(page, `breadcrumb-product-${Date.now()}`);
         await detail.clickCreate();
         await detail.expectSuccessToast(/created/i);
-        await detail.expectNavigatedToExisting();
+        await expectProductEditorOpen(page);
 
-        // Verify the breadcrumb shows the original name
-        const breadcrumbNav = page.locator('nav[aria-label="breadcrumb"]');
-        await expect(breadcrumbNav).toContainText(productName);
+        // The list remains the route context, while the product heading identifies the open editor.
+        await expect(page.getByRole('heading', { name: productName, exact: true })).toBeVisible();
 
         // Rename the product
         await detail.fillInput('Product name', updatedName);
@@ -47,9 +51,11 @@ test.describe('Breadcrumb should update after entity mutation', () => {
         await detail.clickUpdate();
         await detail.expectSuccessToast(/updated/i);
 
-        // The breadcrumb should now show the updated name (without navigating away)
-        await expect(breadcrumbNav).toContainText(updatedName, { timeout: 5_000 });
-        await expect(breadcrumbNav).not.toContainText(productName);
+        // The editor heading should now show the updated name without leaving the list.
+        await expect(page.getByRole('heading', { name: updatedName, exact: true })).toBeVisible({
+            timeout: 5_000,
+        });
+        await expect(page.getByRole('heading', { name: productName, exact: true })).toHaveCount(0);
 
         // Cleanup: delete the product via the list page
         await listPage.goto();

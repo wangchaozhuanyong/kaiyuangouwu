@@ -38,6 +38,10 @@ export interface CrudTestConfig {
     createPresentation?: 'page' | 'drawer';
     /** Whether editing opens a full page or an in-context drawer. Defaults to `page`. */
     editPresentation?: 'page' | 'drawer';
+    /** Whether a successful create closes its drawer. Defaults to true. */
+    closeDrawerAfterCreate?: boolean;
+    /** Whether a successful update closes its drawer. Defaults to true. */
+    closeDrawerAfterUpdate?: boolean;
     /** Runs after fillFields in the create flow (e.g. for slug debounce waits). */
     afterFillCreate?: (page: Page, detail: BaseDetailPage) => Promise<void>;
     /** Runs after fillFields in the update flow. Falls back to afterFillCreate if not provided. */
@@ -75,6 +79,8 @@ export function createCrudTestSuite(config: CrudTestConfig) {
         newPageTitle,
         createPresentation = 'page',
         editPresentation = 'page',
+        closeDrawerAfterCreate = true,
+        closeDrawerAfterUpdate = true,
     } = config;
 
     const searchTerm = config.searchTerm ?? (createFields.find(f => f.type !== 'switch')?.value as string);
@@ -187,7 +193,11 @@ export function createCrudTestSuite(config: CrudTestConfig) {
             await detail.clickCreate();
             await detail.expectSuccessToast(/created/i);
             if (createPresentation === 'drawer') {
-                await expect(page.getByRole('dialog')).toBeHidden();
+                if (closeDrawerAfterCreate) {
+                    await expect(page.getByRole('dialog').first()).toBeHidden();
+                } else {
+                    await expect(page.getByRole('dialog').first()).toBeVisible();
+                }
                 expect(new URL(page.url()).pathname).toBe(listPath);
             } else {
                 await detail.expectNavigatedToExisting();
@@ -253,7 +263,11 @@ export function createCrudTestSuite(config: CrudTestConfig) {
             await detail.clickUpdate();
             await detail.expectSuccessToast(/updated/i);
             if (editPresentation === 'drawer') {
-                await expect(page.getByRole('dialog')).toBeHidden();
+                if (closeDrawerAfterUpdate) {
+                    await expect(page.getByRole('dialog').first()).toBeHidden();
+                } else {
+                    await expect(page.getByRole('dialog').first()).toBeVisible();
+                }
             }
         });
 

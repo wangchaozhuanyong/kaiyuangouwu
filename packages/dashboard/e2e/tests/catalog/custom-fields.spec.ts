@@ -2,6 +2,10 @@ import { type Locator, type Page, expect, test } from '@playwright/test';
 
 import { BaseDetailPage } from '../../page-objects/detail-page.base.js';
 import { BaseListPage } from '../../page-objects/list-page.base.js';
+import {
+    expectProductEditorOpen,
+    fillRequiredProductCatalogFields,
+} from '../../utils/product-test-helpers.js';
 
 // Custom fields are configured in global-setup.ts on the Product entity.
 // This suite verifies rendering of all custom field types: scalar, list, struct,
@@ -32,7 +36,7 @@ async function goToFirstProduct(page: Page) {
     await lp.expectLoaded();
     await lp.search('Laptop');
     await lp.clickEntity('Laptop');
-    await expect(page).toHaveURL(/\/products\/[^/]+$/);
+    await expectProductEditorOpen(page);
     // Wait for entity data AND custom fields to fully load before interacting.
     // Custom fields load via separate async queries after the main product data.
     const dp = detailPage(page);
@@ -109,6 +113,7 @@ test.describe('Custom Fields', () => {
         await dp.fillInput('Product name', 'Nullable Feature Type Product');
         await dp.fillRichText('Description', 'Product used to test a nullable option custom field');
         await expect(dp.formItem('Slug').getByRole('textbox')).not.toHaveValue('', { timeout: 5_000 });
+        await fillRequiredProductCatalogFields(page, `nullable-feature-${Date.now()}`);
         await expect(dp.formItem('Feature Type').getByRole('combobox')).toHaveAttribute(
             'data-placeholder',
             '',
@@ -117,7 +122,7 @@ test.describe('Custom Fields', () => {
 
         await dp.clickCreate();
         await dp.expectSuccessToast(/Successfully created product/);
-        await dp.expectNavigatedToExisting();
+        await expectProductEditorOpen(page);
     });
 
     // ─── Tab grouping ────────────────────────────────────────────────────
