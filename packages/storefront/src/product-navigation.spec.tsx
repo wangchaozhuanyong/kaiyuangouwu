@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ProductCard } from './components/common/product-card';
-import { ProductRow } from './components/common/product-row';
+import { buildProductRowSmartInfo, ProductRow } from './components/common/product-row';
 import { MarketConfig, Product } from './types';
 
 const market: MarketConfig = {
@@ -44,6 +44,18 @@ const digitalProduct: Product = {
 };
 
 describe('product image navigation layers', () => {
+    it('derives compact one-line product information from fulfillment and warranty data', () => {
+        const info = buildProductRowSmartInfo(
+            { ...digitalProduct, description: 'ChatGPT Plus 正规渠道，质保一个月' },
+            'zh',
+        );
+
+        expect(info).toEqual({
+            primary: '数字商品 · 邮箱自动发货',
+            secondary: '质保一个月',
+        });
+    });
+
     it('does not cover manual digital product images with a delivery badge', () => {
         const manualServiceProduct: Product = {
             ...digitalProduct,

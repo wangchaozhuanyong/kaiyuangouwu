@@ -38,7 +38,7 @@ export function ProductCard({
 
     return (
         <article
-            className="group relative flex min-w-0 flex-col overflow-hidden rounded-[var(--radius-md)] border border-black/5 bg-[var(--paper)] pb-2.5 shadow-[var(--shadow-sm)] transition-[transform,box-shadow,border-color] duration-200 ease-out hover:-translate-y-0.5 hover:border-black/10 hover:shadow-[var(--shadow-md)]"
+            className="group relative isolate flex min-w-0 flex-col overflow-hidden rounded-[var(--radius-md)] border border-black/5 bg-[var(--paper)] pb-2.5 shadow-[var(--shadow-sm)] transition-[transform,box-shadow,border-color] duration-200 ease-out hover:-translate-y-0.5 hover:border-black/10 hover:shadow-[var(--shadow-md)]"
             onPointerEnter={() => prefetchProductAsset(product)}
             onPointerDown={() => prefetchProductAsset(product)}
             onFocus={() => prefetchProductAsset(product)}
