@@ -21,20 +21,34 @@ import {
     X,
     XCircle,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import type { CustomFieldValueMap } from '../../custom-fields/custom-field-types';
+
 import { sensitiveActionContext } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
+import {
+    addCustomFieldsToDocument,
+    customFieldInputFromValues,
+    customFieldValuesFromEntity,
+    validateCustomFieldValues,
+} from '../../custom-fields/custom-field-utils';
+import { useCustomFieldDefinitions } from '../../custom-fields/custom-fields-context';
+import { DynamicCustomFieldsForm } from '../../custom-fields/DynamicCustomFieldsForm';
+import { NextAdminActions, NextAdminPageBlocks } from '../../extensions/extension-hosts';
 import {
     ADD_ORDER_FULFILLMENT,
     ADD_SALES_ORDER_NOTE,
     CANCEL_SALES_ORDER,
     GET_SALES_ORDER,
     REFUND_SALES_ORDER,
+    SET_SALES_ORDER_CUSTOM_FIELDS,
     TRANSITION_SALES_FULFILLMENT,
 } from '../../graphql/sales.graphql';
+import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
+
 import {
     formatAddress,
     formatDateTime,
@@ -118,6 +132,7 @@ interface SalesOrderDetail {
     totalWithTax: number;
     currencyCode: string;
     couponCodes: string[];
+    customFields?: Record<string, unknown> | null;
     discounts: Array<{ description: string; amountWithTax: number }>;
     customer?: {
         id: string;
@@ -180,21 +195,39 @@ const refundCountsAgainstPayment = (refund: RefundItem) => !['Failed', 'Cancelle
 
 const historyLabel = (entry: HistoryItem) => {
     if (entry.type === 'ORDER_STATE_TRANSITION')
-        return `订单状态：${String(entry.data.from ?? '')} → ${String(entry.data.to ?? '')}`;
+        return `订单状态：${historyValue(entry.data.from)} → ${historyValue(entry.data.to)}`;
     if (entry.type === 'ORDER_PAYMENT_TRANSITION')
-        return `支付状态：${String(entry.data.from ?? '')} → ${String(entry.data.to ?? '')}`;
+        return `支付状态：${historyValue(entry.data.from)} → ${historyValue(entry.data.to)}`;
     if (entry.type === 'ORDER_FULFILLMENT_TRANSITION')
-        return `履约状态：${String(entry.data.from ?? '')} → ${String(entry.data.to ?? '')}`;
+        return `履约状态：${historyValue(entry.data.from)} → ${historyValue(entry.data.to)}`;
     if (entry.type === 'ORDER_REFUND_TRANSITION')
-        return `退款状态：${String(entry.data.from ?? '')} → ${String(entry.data.to ?? '')}`;
-    if (entry.type === 'ORDER_CANCELLATION') return `订单取消：${String(entry.data.reason ?? '未填写原因')}`;
+        return `退款状态：${historyValue(entry.data.from)} → ${historyValue(entry.data.to)}`;
+    if (entry.type === 'ORDER_CANCELLATION') {
+        return `订单取消：${historyValue(entry.data.reason, '未填写原因')}`;
+    }
     if (entry.type === 'ORDER_FULFILLMENT') return '创建履约记录';
     return entry.type;
+};
+
+const historyValue = (value: unknown, fallback = '') => {
+    if (typeof value === 'string') return value;
+    if (typeof value === 'number' || typeof value === 'bigint' || typeof value === 'boolean') {
+        return String(value);
+    }
+    return fallback;
 };
 
 export function OrderEditor() {
     const navigate = useNavigate();
     const { id } = useParams<{ id: string }>();
+    const { hasAnyPermission } = useAdminPermissions();
+    const canUpdateOrder = hasAnyPermission(['UpdateOrder']);
+    const orderCustomFieldDefinitions = useCustomFieldDefinitions('Order');
+    const orderDetailDocument = useMemo(
+        () => addCustomFieldsToDocument(GET_SALES_ORDER, 'Order', orderCustomFieldDefinitions, ['order']),
+        [orderCustomFieldDefinitions],
+    );
+    const [orderCustomFieldValues, setOrderCustomFieldValues] = useState<CustomFieldValueMap>({});
     const [notification, setNotification] = useState('');
     const [actionError, setActionError] = useState('');
     const [newNote, setNewNote] = useState('');
@@ -210,7 +243,7 @@ export function OrderEditor() {
     const [cancelReason, setCancelReason] = useState('');
     const [cancelCurrentPassword, setCancelCurrentPassword] = useState('');
 
-    const { data, loading, error, refetch } = useQuery<OrderQueryData>(GET_SALES_ORDER, {
+    const { data, loading, error, refetch } = useQuery<OrderQueryData>(orderDetailDocument, {
         variables: { id },
         skip: !id,
         fetchPolicy: 'cache-and-network',
@@ -231,8 +264,19 @@ export function OrderEditor() {
     const [cancelOrder, { loading: cancelling }] = useMutation<{ cancelOrder: ResultPayload }>(
         CANCEL_SALES_ORDER,
     );
+    const [setOrderCustomFields, { loading: savingCustomFields }] = useMutation<{
+        setOrderCustomFields: { id: string; updatedAt: string } | null;
+    }>(SET_SALES_ORDER_CUSTOM_FIELDS);
 
     const order = data?.order;
+    /* oxlint-disable react/set-state-in-effect */
+    useEffect(() => {
+        if (!order) return;
+        setOrderCustomFieldValues(
+            customFieldValuesFromEntity(orderCustomFieldDefinitions, order.customFields),
+        );
+    }, [order, orderCustomFieldDefinitions]);
+    /* oxlint-enable react/set-state-in-effect */
     const remainingPhysicalLines = order ? getRemainingPhysicalLines(order) : [];
     const manualHandlerAvailable =
         data?.fulfillmentHandlers.some(handler => handler.code === 'manual-fulfillment') ?? false;
@@ -262,6 +306,34 @@ export function OrderEditor() {
         await refetch();
         setActionError('');
         showNotice(message);
+    };
+
+    const handleSaveCustomFields = async () => {
+        if (!order) return;
+        const errors = validateCustomFieldValues(orderCustomFieldDefinitions, orderCustomFieldValues);
+        if (Object.keys(errors).length > 0) {
+            setActionError(Object.values(errors)[0] ?? '扩展字段校验失败');
+            return;
+        }
+        try {
+            const response = await setOrderCustomFields({
+                variables: {
+                    input: {
+                        id: order.id,
+                        customFields: customFieldInputFromValues(
+                            orderCustomFieldDefinitions,
+                            orderCustomFieldValues,
+                        ),
+                    },
+                },
+            });
+            if (!response.data?.setOrderCustomFields) {
+                throw new Error('后端未返回更新后的订单');
+            }
+            await refreshAfterMutation('订单扩展字段已保存');
+        } catch (mutationError) {
+            setActionError(toUserFacingError(mutationError, '订单扩展字段保存失败'));
+        }
     };
 
     const handleAddNote = async () => {
@@ -453,14 +525,14 @@ export function OrderEditor() {
                     <div className="mt-4 flex justify-center gap-2">
                         <button
                             type="button"
-                            onClick={() => navigate('/sales/orders')}
+                            onClick={() => void navigate('/sales/orders')}
                             className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-semibold"
                         >
                             返回列表
                         </button>
                         <button
                             type="button"
-                            onClick={() => refetch()}
+                            onClick={() => void refetch()}
                             className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white"
                         >
                             重试
@@ -479,7 +551,7 @@ export function OrderEditor() {
                     </h1>
                     <button
                         type="button"
-                        onClick={() => navigate('/sales/orders')}
+                        onClick={() => void navigate('/sales/orders')}
                         className="mt-4 rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold text-white"
                     >
                         返回订单列表
@@ -495,7 +567,7 @@ export function OrderEditor() {
                     <div className="flex min-w-0 items-center gap-3">
                         <button
                             type="button"
-                            onClick={() => navigate('/sales/orders')}
+                            onClick={() => void navigate('/sales/orders')}
                             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100"
                             aria-label="返回订单列表"
                         >
@@ -519,11 +591,19 @@ export function OrderEditor() {
                         </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
+                        <NextAdminActions
+                            pageId="order-detail"
+                            entity={order as unknown as Record<string, unknown>}
+                        />
                         <button
                             type="button"
                             onClick={openRefund}
                             disabled={paymentsWithBalances.length === 0 || busy}
-                            className="flex items-center gap-1.5 rounded-lg border border-rose-200 bg-white px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-40"
+                            className={[
+                                'flex items-center gap-1.5 rounded-lg border border-rose-200 bg-white',
+                                'px-3 py-2 text-xs font-semibold text-rose-700',
+                                'hover:bg-rose-50 disabled:opacity-40',
+                            ].join(' ')}
                         >
                             <RotateCcw className="h-3.5 w-3.5" />
                             执行退款
@@ -531,7 +611,10 @@ export function OrderEditor() {
                         <button
                             type="button"
                             onClick={() => window.print()}
-                            className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                            className={[
+                                'flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white',
+                                'px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50',
+                            ].join(' ')}
                         >
                             <Printer className="h-3.5 w-3.5" />
                             打印订单
@@ -546,7 +629,10 @@ export function OrderEditor() {
                                     setIsCancelOpen(true);
                                 }}
                                 disabled={busy}
-                                className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                                className={[
+                                    'flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white',
+                                    'px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50',
+                                ].join(' ')}
                             >
                                 <XCircle className="h-3.5 w-3.5" />
                                 取消订单
@@ -560,7 +646,10 @@ export function OrderEditor() {
                                     setIsFulfillOpen(true);
                                 }}
                                 disabled={!manualHandlerAvailable || busy}
-                                className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-40"
+                                className={[
+                                    'flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-2',
+                                    'text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-40',
+                                ].join(' ')}
                             >
                                 <Truck className="h-4 w-4" />
                                 创建实物发货
@@ -601,6 +690,42 @@ export function OrderEditor() {
                     {!manualHandlerAvailable && remainingPhysicalLines.length > 0 && (
                         <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
                             后端没有启用 manual-fulfillment 处理器，发货按钮已停用，未伪造本地发货状态。
+                        </div>
+                    )}
+
+                    <NextAdminPageBlocks
+                        pageId="order-detail"
+                        entity={order as unknown as Record<string, unknown>}
+                    />
+
+                    {orderCustomFieldDefinitions.length > 0 && (
+                        <div className="space-y-3">
+                            <DynamicCustomFieldsForm
+                                fields={orderCustomFieldDefinitions}
+                                values={orderCustomFieldValues}
+                                onChange={setOrderCustomFieldValues}
+                                disabled={!canUpdateOrder || savingCustomFields}
+                                title="订单扩展信息"
+                            />
+                            {canUpdateOrder && (
+                                <div className="flex justify-end">
+                                    <button
+                                        type="button"
+                                        onClick={() => void handleSaveCustomFields()}
+                                        disabled={savingCustomFields}
+                                        className={[
+                                            'flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2',
+                                            'text-xs font-semibold text-white',
+                                            'hover:bg-blue-700 disabled:opacity-50',
+                                        ].join(' ')}
+                                    >
+                                        {savingCustomFields && (
+                                            <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                                        )}
+                                        保存扩展信息
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     )}
 
@@ -726,10 +851,14 @@ export function OrderEditor() {
                                                     <button
                                                         type="button"
                                                         onClick={() =>
-                                                            handleFulfillmentDelivered(fulfillment)
+                                                            void handleFulfillmentDelivered(fulfillment)
                                                         }
                                                         disabled={transitioningFulfillment}
-                                                        className="rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+                                                        className={[
+                                                            'rounded-lg bg-emerald-50 px-3 py-1.5 text-xs',
+                                                            'font-semibold text-emerald-700 hover:bg-emerald-100',
+                                                            'disabled:opacity-50',
+                                                        ].join(' ')}
                                                     >
                                                         <CheckCircle2 className="mr-1 inline h-3.5 w-3.5" />
                                                         确认送达
@@ -778,7 +907,11 @@ export function OrderEditor() {
                                                         {payment.refunds.map(refund => (
                                                             <div
                                                                 key={refund.id}
-                                                                className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-rose-50 px-3 py-2 text-[11px] text-rose-700"
+                                                                className={[
+                                                                    'flex flex-wrap items-center justify-between gap-2',
+                                                                    'rounded-lg bg-rose-50 px-3 py-2',
+                                                                    'text-[11px] text-rose-700',
+                                                                ].join(' ')}
                                                             >
                                                                 <span>
                                                                     退款 #{refund.id} · {refund.state} ·{' '}
@@ -814,14 +947,17 @@ export function OrderEditor() {
                                         value={newNote}
                                         onChange={event => setNewNote(event.target.value)}
                                         onKeyDown={event => {
-                                            if (event.key === 'Enter') handleAddNote();
+                                            if (event.key === 'Enter') void handleAddNote();
                                         }}
                                         placeholder="输入仅管理员可见的跟进备注"
-                                        className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                                        className={[
+                                            'min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2',
+                                            'text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100',
+                                        ].join(' ')}
                                     />
                                     <button
                                         type="button"
-                                        onClick={handleAddNote}
+                                        onClick={() => void handleAddNote()}
                                         disabled={addingNote || !newNote.trim()}
                                         className="flex items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold text-white disabled:opacity-40"
                                     >
@@ -856,7 +992,7 @@ export function OrderEditor() {
                                                     <span>{formatDateTime(note.createdAt)}</span>
                                                 </div>
                                                 <p className="mt-1.5 leading-5 text-slate-800">
-                                                    {String(note.data.note ?? '')}
+                                                    {historyValue(note.data.note)}
                                                 </p>
                                             </div>
                                         ))
@@ -993,7 +1129,7 @@ export function OrderEditor() {
                     busy={addingFulfillment || transitioningFulfillment}
                     error={actionError}
                     onClose={() => setIsFulfillOpen(false)}
-                    onConfirm={handleFulfill}
+                    onConfirm={() => void handleFulfill()}
                     confirmLabel="确认发货"
                 >
                     <label className="block text-xs font-semibold text-slate-700">
@@ -1009,7 +1145,11 @@ export function OrderEditor() {
                         value={trackingCode}
                         onChange={event => setTrackingCode(event.target.value)}
                         placeholder="请从物流系统复制运单号"
-                        className="mt-1.5 w-full rounded-lg border border-slate-300 p-2.5 font-mono text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                        className={[
+                            'mt-1.5 w-full rounded-lg border border-slate-300 p-2.5',
+                            'font-mono text-sm outline-none focus:border-blue-500',
+                            'focus:ring-2 focus:ring-blue-100',
+                        ].join(' ')}
                     />
                     <div className="mt-4 rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
                         本次发货：{remainingPhysicalLines.reduce((sum, line) => sum + line.quantity, 0)}{' '}
@@ -1029,7 +1169,7 @@ export function OrderEditor() {
                         setIsRefundOpen(false);
                         setRefundCurrentPassword('');
                     }}
-                    onConfirm={handleRefund}
+                    onConfirm={() => void handleRefund()}
                     confirmLabel="提交退款"
                 >
                     <label className="block text-xs font-semibold text-slate-700">退款支付记录 *</label>
@@ -1056,7 +1196,11 @@ export function OrderEditor() {
                         value={refundAmount}
                         onChange={event => setRefundAmount(event.target.value)}
                         inputMode="decimal"
-                        className="mt-1.5 w-full rounded-lg border border-slate-300 p-2.5 font-mono text-sm font-semibold outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-100"
+                        className={[
+                            'mt-1.5 w-full rounded-lg border border-slate-300 p-2.5',
+                            'font-mono text-sm font-semibold outline-none focus:border-rose-500',
+                            'focus:ring-2 focus:ring-rose-100',
+                        ].join(' ')}
                     />
                     <label className="mt-4 block text-xs font-semibold text-slate-700">退款原因 *</label>
                     <textarea
@@ -1091,7 +1235,7 @@ export function OrderEditor() {
                         setIsCancelOpen(false);
                         setCancelCurrentPassword('');
                     }}
-                    onConfirm={handleCancel}
+                    onConfirm={() => void handleCancel()}
                     confirmLabel="确认取消"
                 >
                     <label className="block text-xs font-semibold text-slate-700">取消原因 *</label>

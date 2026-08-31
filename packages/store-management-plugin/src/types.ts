@@ -339,6 +339,42 @@ export interface UpdateStoreProfileInput {
     descriptionEn?: string | null;
     internalNote?: string | null;
     logoAssetId?: ID | null;
+    currentPassword?: string | null;
+}
+
+export interface DeprovisionStoreInput {
+    profileId: ID;
+    expectedUpdatedAt: Date;
+    confirmCode: string;
+    currentPassword: string;
+}
+
+export interface StoreDeprovisionImpact {
+    profileId: ID;
+    channelId: ID;
+    channelCode: string;
+    status: StoreProfileStatus;
+    isDefaultChannel: boolean;
+    isProvisioningTemplate: boolean;
+    isActiveChannel: boolean;
+    orderCount: number;
+    productCount: number;
+    customerCount: number;
+    administratorCount: number;
+    domainCount: number;
+    extensionRecordCount: number;
+    sellerWillBeDeleted: boolean;
+    roleWillBeDeleted: boolean;
+    blockers: string[];
+    canDeprovision: boolean;
+}
+
+export interface DeprovisionStoreResult {
+    channelId: ID;
+    channelCode: string;
+    deletedAdministratorCount: number;
+    deletedRole: boolean;
+    deletedSeller: boolean;
 }
 
 export interface UpdateMyStoreProfileInput {

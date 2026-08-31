@@ -354,6 +354,60 @@ export const PROVISION_STORE_MUTATION = gql`
     }
 `;
 
+export const STORE_DEPROVISION_IMPACT_QUERY = gql`
+    query NextAdminStoreDeprovisionImpact($profileId: ID!) {
+        storeDeprovisionImpact(profileId: $profileId) {
+            profileId
+            channelId
+            channelCode
+            status
+            isDefaultChannel
+            isProvisioningTemplate
+            isActiveChannel
+            orderCount
+            productCount
+            customerCount
+            administratorCount
+            domainCount
+            extensionRecordCount
+            sellerWillBeDeleted
+            roleWillBeDeleted
+            blockers
+            canDeprovision
+        }
+    }
+`;
+
+export const SUSPEND_STORE_MUTATION = gql`
+    mutation NextAdminSuspendStore(
+        $profileId: ID!
+        $expectedUpdatedAt: DateTime!
+        $currentPassword: String!
+    ) {
+        suspendStore(
+            profileId: $profileId
+            expectedUpdatedAt: $expectedUpdatedAt
+            currentPassword: $currentPassword
+        ) {
+            id
+            updatedAt
+            status
+        }
+    }
+`;
+
+export const DEPROVISION_STORE_MUTATION = gql`
+    mutation NextAdminDeprovisionStore($input: DeprovisionStoreInput!) {
+        deprovisionStore(input: $input) {
+            channelId
+            channelCode
+            deletedAdministratorCount
+            deletedRole
+            deletedSeller
+        }
+    }
+`;
+
 export const UPDATE_STORE_PROFILE_MUTATION = gql`
     ${STORE_PROFILE_FIELDS}
     mutation NextAdminUpdateStoreProfile($input: UpdateStoreProfileInput!) {
@@ -636,6 +690,26 @@ export interface StoreProfileRecord {
     };
 }
 
+export interface StoreDeprovisionImpactRecord {
+    profileId: string;
+    channelId: string;
+    channelCode: string;
+    status: 'DRAFT' | 'ACTIVE' | 'SUSPENDED';
+    isDefaultChannel: boolean;
+    isProvisioningTemplate: boolean;
+    isActiveChannel: boolean;
+    orderCount: number;
+    productCount: number;
+    customerCount: number;
+    administratorCount: number;
+    domainCount: number;
+    extensionRecordCount: number;
+    sellerWillBeDeleted: boolean;
+    roleWillBeDeleted: boolean;
+    blockers: string[];
+    canDeprovision: boolean;
+}
+
 export interface StoreManagementResult {
     activeAdministrator: {
         id: string;
@@ -687,6 +761,7 @@ export interface BusinessSettingsResult {
         pricesIncludeTax: boolean;
         trackInventory: boolean | null;
         outOfStockThreshold: number | null;
+        customFields?: Record<string, unknown> | null;
         defaultTaxZone: { id: string; name: string } | null;
         defaultShippingZone: { id: string; name: string } | null;
     };

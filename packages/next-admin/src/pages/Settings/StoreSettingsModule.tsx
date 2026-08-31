@@ -20,7 +20,17 @@ import {
     X,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { CustomFieldValueMap } from '../../custom-fields/custom-field-types';
+
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
+import {
+    addCustomFieldsToDocument,
+    customFieldInputFromValues,
+    customFieldValuesFromEntity,
+    validateCustomFieldValues,
+} from '../../custom-fields/custom-field-utils';
+import { useCustomFieldDefinitions } from '../../custom-fields/custom-fields-context';
+import { DynamicCustomFieldsForm } from '../../custom-fields/DynamicCustomFieldsForm';
 import {
     BUSINESS_SETTINGS_QUERY,
     CREATE_BUSINESS_TAX_CATEGORY_MUTATION,
@@ -29,16 +39,20 @@ import {
     CREATE_SELLER_MUTATION,
     CREATE_STORE_DOMAIN_MUTATION,
     DELETE_STORE_DOMAIN_MUTATION,
+    DEPROVISION_STORE_MUTATION,
     PROVISION_STORE_MUTATION,
     SET_PRIMARY_STORE_DOMAIN_MUTATION,
+    STORE_DEPROVISION_IMPACT_QUERY,
     STORE_DOMAINS_QUERY,
     STORE_MANAGEMENT_QUERY,
+    SUSPEND_STORE_MUTATION,
     UPDATE_BUSINESS_CHANNEL_MUTATION,
     UPDATE_BUSINESS_TAX_RATE_MUTATION,
     UPDATE_PAYMENT_METHOD_MUTATION,
     UPDATE_STORE_PROFILE_MUTATION,
     VERIFY_STORE_DOMAIN_MUTATION,
     type BusinessSettingsResult,
+    type StoreDeprovisionImpactRecord,
     type StoreDomainRecord,
     type StoreDomainsResult,
     type StoreManagementResult,
@@ -63,6 +77,7 @@ export function StoreSettingsModule() {
     const [tab, setTab] = useUrlTab<Tab>(STORE_SETTINGS_TABS, 'stores');
     const [selectedStoreId, setSelectedStoreId] = useState('');
     const [storeEditor, setStoreEditor] = useState<StoreProfileRecord | null>(null);
+    const [deprovisionProfile, setDeprovisionProfile] = useState<StoreProfileRecord | null>(null);
     const [provisionOpen, setProvisionOpen] = useState(false);
     const [sellerOpen, setSellerOpen] = useState(false);
     const [notice, setNotice] = useState('');
@@ -125,13 +140,14 @@ export function StoreSettingsModule() {
                 loadingAllStoreSettingsRef.current = false;
             });
     }, [fetchMoreStoreSettings, storeSettingsData, storeSettingsError, storeSettingsLoading]);
+    const managementData = query.data;
     const profiles = useMemo(
-        () => [...(query.data?.storeProfiles ?? [])].sort((a, b) => a.sortOrder - b.sortOrder),
-        [query.data?.storeProfiles],
+        () => [...(managementData?.storeProfiles ?? [])].sort((a, b) => a.sortOrder - b.sortOrder),
+        [managementData?.storeProfiles],
     );
     const selectedProfile = profiles.find(profile => profile.id === selectedStoreId) ?? profiles[0] ?? null;
     const isSuperAdmin =
-        query.data?.activeAdministrator?.user.roles.some(role => role.code === '__super_admin_role__') ??
+        managementData?.activeAdministrator?.user.roles.some(role => role.code === '__super_admin_role__') ??
         false;
 
     const completed = async (message: string) => {
@@ -253,7 +269,13 @@ export function StoreSettingsModule() {
                     <ErrorState message={query.error.message} onRetry={() => void query.refetch()} />
                 ) : (
                     <>
-                        {tab === 'STORES' && <StoresPanel profiles={profiles} onEdit={setStoreEditor} />}
+                        {tab === 'STORES' && (
+                            <StoresPanel
+                                profiles={profiles}
+                                onEdit={setStoreEditor}
+                                onDeprovision={setDeprovisionProfile}
+                            />
+                        )}
                         {tab === 'DOMAINS' && (
                             <DomainsPanel
                                 profile={selectedProfile}
@@ -261,10 +283,10 @@ export function StoreSettingsModule() {
                                 onError={setActionError}
                             />
                         )}
-                        {tab === 'SELLERS' && <SellersPanel sellers={query.data?.sellers.items ?? []} />}
-                        {tab === 'PAYMENT_SHIPPING' && (
+                        {tab === 'SELLERS' && <SellersPanel sellers={managementData?.sellers.items ?? []} />}
+                        {tab === 'PAYMENT_SHIPPING' && managementData && (
                             <PaymentShippingPanel
-                                data={query.data!}
+                                data={managementData}
                                 onChanged={completed}
                                 onError={setActionError}
                             />
@@ -287,6 +309,20 @@ export function StoreSettingsModule() {
                     profile={storeEditor}
                     onClose={() => setStoreEditor(null)}
                     onCompleted={completed}
+                    onError={setActionError}
+                />
+            )}
+            {deprovisionProfile && (
+                <StoreDeprovisionDialog
+                    profile={deprovisionProfile}
+                    onClose={() => {
+                        setDeprovisionProfile(null);
+                        void query.refetch();
+                    }}
+                    onCompleted={async message => {
+                        setDeprovisionProfile(null);
+                        await completed(message);
+                    }}
                     onError={setActionError}
                 />
             )}
@@ -316,9 +352,11 @@ export function StoreSettingsModule() {
 function StoresPanel({
     profiles,
     onEdit,
+    onDeprovision,
 }: {
     profiles: StoreProfileRecord[];
     onEdit: (profile: StoreProfileRecord) => void;
+    onDeprovision: (profile: StoreProfileRecord) => void;
 }) {
     if (!profiles.length)
         return (
@@ -390,6 +428,14 @@ function StoresPanel({
                                 更新于 {formatDateTime(profile.updatedAt)}
                             </span>
                             <div className="flex gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => onDeprovision(profile)}
+                                    className={`${secondaryButton} text-rose-600`}
+                                >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                    安全清退
+                                </button>
                                 {profile.storefrontUrl && (
                                     <a
                                         href={profile.storefrontUrl}
@@ -566,7 +612,12 @@ function DomainsPanel({
                                             {item.domain}
                                         </strong>
                                         <span
-                                            className={`rounded px-2 py-0.5 text-[9px] font-bold ${item.status === 'ACTIVE' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}
+                                            className={[
+                                                'rounded px-2 py-0.5 text-[9px] font-bold',
+                                                item.status === 'ACTIVE'
+                                                    ? 'bg-emerald-50 text-emerald-700'
+                                                    : 'bg-amber-50 text-amber-700',
+                                            ].join(' ')}
                                         >
                                             {item.status === 'ACTIVE' ? '已验证' : '待验证'}
                                         </span>
@@ -777,7 +828,15 @@ function BusinessBasicsPanel({
     onError: (message: string) => void;
 }) {
     const loadingAllBusinessSettingsRef = useRef(false);
-    const query = useQuery<BusinessSettingsResult>(BUSINESS_SETTINGS_QUERY, {
+    const channelCustomFieldDefinitions = useCustomFieldDefinitions('Channel');
+    const businessSettingsDocument = useMemo(
+        () =>
+            addCustomFieldsToDocument(BUSINESS_SETTINGS_QUERY, 'Channel', channelCustomFieldDefinitions, [
+                'activeChannel',
+            ]),
+        [channelCustomFieldDefinitions],
+    );
+    const query = useQuery<BusinessSettingsResult>(businessSettingsDocument, {
         variables: {
             zoneOptions: { skip: 0, take: 100, sort: { name: 'ASC' } },
             countryOptions: { skip: 0, take: 100, sort: { name: 'ASC' } },
@@ -873,6 +932,7 @@ function BusinessBasicsPanel({
             <ChannelBusinessSettings
                 channel={query.data.activeChannel}
                 zones={query.data.zones.items}
+                customFieldDefinitions={channelCustomFieldDefinitions}
                 onChanged={refresh}
                 onError={onError}
             />
@@ -898,11 +958,13 @@ function BusinessBasicsPanel({
 function ChannelBusinessSettings({
     channel,
     zones,
+    customFieldDefinitions,
     onChanged,
     onError,
 }: {
     channel: BusinessSettingsResult['activeChannel'];
     zones: BusinessSettingsResult['zones']['items'];
+    customFieldDefinitions: ReturnType<typeof useCustomFieldDefinitions>;
     onChanged: (message: string) => Promise<void>;
     onError: (message: string) => void;
 }) {
@@ -915,9 +977,17 @@ function ChannelBusinessSettings({
     const [pricesIncludeTax, setPricesIncludeTax] = useState(channel.pricesIncludeTax);
     const [trackInventory, setTrackInventory] = useState(channel.trackInventory ?? true);
     const [outOfStockThreshold, setOutOfStockThreshold] = useState(String(channel.outOfStockThreshold ?? 0));
+    const [customFieldValues, setCustomFieldValues] = useState<CustomFieldValueMap>(() =>
+        customFieldValuesFromEntity(customFieldDefinitions, channel.customFields),
+    );
     const [update, state] = useMutation<{
         updateChannel: { __typename: 'Channel' | 'LanguageNotAvailableError'; message?: string };
     }>(UPDATE_BUSINESS_CHANNEL_MUTATION);
+    /* oxlint-disable react/set-state-in-effect */
+    useEffect(() => {
+        setCustomFieldValues(customFieldValuesFromEntity(customFieldDefinitions, channel.customFields));
+    }, [channel.customFields, channel.id, customFieldDefinitions]);
+    /* oxlint-enable react/set-state-in-effect */
     const submit = async () => {
         const availableLanguageCodes = splitCodes(languages);
         const availableCurrencyCodes = splitCodes(currencies);
@@ -925,6 +995,10 @@ function ChannelBusinessSettings({
         if (!availableCurrencyCodes.includes(defaultCurrency)) return onError('默认币种必须包含在可用币种中');
         const threshold = Number(outOfStockThreshold);
         if (!Number.isInteger(threshold) || threshold < 0) return onError('缺货阈值必须为非负整数');
+        const customFieldErrors = validateCustomFieldValues(customFieldDefinitions, customFieldValues);
+        if (Object.keys(customFieldErrors).length > 0) {
+            return onError(Object.values(customFieldErrors)[0] ?? '店铺扩展字段校验失败');
+        }
         try {
             const response = await update({
                 variables: {
@@ -939,6 +1013,7 @@ function ChannelBusinessSettings({
                         pricesIncludeTax,
                         trackInventory,
                         outOfStockThreshold: threshold,
+                        customFields: customFieldInputFromValues(customFieldDefinitions, customFieldValues),
                     },
                 },
             });
@@ -1054,6 +1129,15 @@ function ChannelBusinessSettings({
                         默认跟踪库存
                     </label>
                 </div>
+            </div>
+            <div className="mt-4">
+                <DynamicCustomFieldsForm
+                    fields={customFieldDefinitions}
+                    values={customFieldValues}
+                    onChange={setCustomFieldValues}
+                    disabled={state.loading}
+                    title="当前店铺扩展参数"
+                />
             </div>
         </section>
     );
@@ -1324,6 +1408,7 @@ function StoreEditor({
     onCompleted: (message: string) => Promise<void>;
     onError: (message: string) => void;
 }) {
+    const requestConfirmation = useConfirmDialog();
     const [nameZh, setNameZh] = useState(profile.channel.customFields.storefrontNameZh);
     const [nameEn, setNameEn] = useState(profile.channel.customFields.storefrontNameEn);
     const [descriptionZh, setDescriptionZh] = useState(profile.descriptionZh);
@@ -1336,20 +1421,34 @@ function StoreEditor({
         if (!nameZh.trim()) return onError('请填写中文店铺名称');
         if (status === 'ACTIVE' && !profile.activationReadiness.ready)
             return onError('上线检查未通过，暂时不能启用店铺');
+        const statusChanged = status !== profile.status;
+        let currentPassword: string | undefined;
+        if (statusChanged) {
+            const confirmation = await requestConfirmation({
+                title: '确认变更店铺运行状态？',
+                description: `将“${storeName(profile)}”从${storeStatusLabel(profile.status)}改为${storeStatusLabel(status)}。此操作需要验证当前管理员密码。`,
+                confirmLabel: '验证并变更',
+                tone: 'warning',
+                requireCurrentPassword: true,
+            });
+            if (!confirmation) return;
+            currentPassword = confirmation.currentPassword;
+        }
         try {
+            const input = {
+                id: profile.id,
+                expectedUpdatedAt: profile.updatedAt,
+                storefrontNameZh: nameZh.trim(),
+                storefrontNameEn: nameEn.trim(),
+                descriptionZh: descriptionZh.trim(),
+                descriptionEn: descriptionEn.trim(),
+                internalNote: internalNote.trim() || null,
+                sortOrder,
+                ...(statusChanged ? { status, currentPassword } : {}),
+            };
             await save({
                 variables: {
-                    input: {
-                        id: profile.id,
-                        expectedUpdatedAt: profile.updatedAt,
-                        storefrontNameZh: nameZh.trim(),
-                        storefrontNameEn: nameEn.trim(),
-                        descriptionZh: descriptionZh.trim(),
-                        descriptionEn: descriptionEn.trim(),
-                        internalNote: internalNote.trim() || null,
-                        status,
-                        sortOrder,
-                    },
+                    input,
                 },
             });
             await onCompleted('店铺档案已保存');
@@ -1418,7 +1517,9 @@ function StoreEditor({
                         <option value="ACTIVE" disabled={!profile.activationReadiness.ready}>
                             正常营业
                         </option>
-                        <option value="SUSPENDED">暂停营业</option>
+                        <option value="SUSPENDED" disabled={profile.status !== 'SUSPENDED'}>
+                            暂停营业（请使用安全清退）
+                        </option>
                     </select>
                 </Field>
                 <Field label="显示顺序">
@@ -1437,6 +1538,263 @@ function StoreEditor({
                 saveLabel="保存店铺档案"
             />
         </Modal>
+    );
+}
+
+function StoreDeprovisionDialog({
+    profile,
+    onClose,
+    onCompleted,
+    onError,
+}: {
+    profile: StoreProfileRecord;
+    onClose: () => void;
+    onCompleted: (message: string) => Promise<void>;
+    onError: (message: string) => void;
+}) {
+    const requestConfirmation = useConfirmDialog();
+    const [currentPassword, setCurrentPassword] = useState('');
+    const [confirmCode, setConfirmCode] = useState('');
+    const [expectedUpdatedAt, setExpectedUpdatedAt] = useState(profile.updatedAt);
+    const [localNotice, setLocalNotice] = useState('');
+    const [localError, setLocalError] = useState('');
+    const impactQuery = useQuery<{ storeDeprovisionImpact: StoreDeprovisionImpactRecord }>(
+        STORE_DEPROVISION_IMPACT_QUERY,
+        {
+            variables: { profileId: profile.id },
+            fetchPolicy: 'network-only',
+        },
+    );
+    const [suspendStore, suspendState] = useMutation<{
+        suspendStore: { id: string; updatedAt: string; status: StoreProfileRecord['status'] };
+    }>(SUSPEND_STORE_MUTATION);
+    const [deprovisionStore, deprovisionState] = useMutation<{
+        deprovisionStore: {
+            channelId: string;
+            channelCode: string;
+            deletedAdministratorCount: number;
+            deletedRole: boolean;
+            deletedSeller: boolean;
+        };
+    }>(DEPROVISION_STORE_MUTATION);
+    const impact = impactQuery.data?.storeDeprovisionImpact;
+    const busy = suspendState.loading || deprovisionState.loading;
+
+    const suspend = async () => {
+        if (!currentPassword) {
+            setLocalError('请输入当前管理员密码');
+            return;
+        }
+        setLocalError('');
+        setLocalNotice('');
+        try {
+            const response = await suspendStore({
+                variables: {
+                    profileId: profile.id,
+                    expectedUpdatedAt,
+                    currentPassword,
+                },
+            });
+            const updatedAt = response.data?.suspendStore.updatedAt;
+            if (!updatedAt) throw new Error('暂停营业后未返回最新店铺版本');
+            setExpectedUpdatedAt(updatedAt);
+            setCurrentPassword('');
+            setLocalNotice('店铺已暂停营业。若该店铺没有业务数据，可继续输入店铺编码执行彻底清退。');
+            await impactQuery.refetch();
+        } catch (error) {
+            setLocalError(errorText(error));
+        }
+    };
+
+    const deprovision = async () => {
+        if (!impact?.canDeprovision) {
+            setLocalError('当前店铺仍有阻止清退的条件，请先按列表处理');
+            return;
+        }
+        if (!currentPassword) {
+            setLocalError('请输入当前管理员密码');
+            return;
+        }
+        if (confirmCode.trim() !== impact.channelCode) {
+            setLocalError(`请输入完整店铺编码“${impact.channelCode}”`);
+            return;
+        }
+        const confirmation = await requestConfirmation({
+            title: '最后确认：彻底清退空店铺？',
+            description:
+                '系统将删除该空店铺的 Channel、店铺档案、专属管理员与专属角色。该操作不可撤销，但后端仍会再次检查订单、商品、客户及扩展数据。',
+            confirmLabel: '确认彻底清退',
+            tone: 'danger',
+        });
+        if (!confirmation) return;
+        setLocalError('');
+        try {
+            const response = await deprovisionStore({
+                variables: {
+                    input: {
+                        profileId: profile.id,
+                        expectedUpdatedAt,
+                        currentPassword,
+                        confirmCode: confirmCode.trim(),
+                    },
+                },
+            });
+            const result = response.data?.deprovisionStore;
+            if (!result) throw new Error('清退操作未返回结果');
+            await onCompleted(
+                `空店铺 ${result.channelCode} 已清退；移除 ${result.deletedAdministratorCount} 个专属管理员${result.deletedRole ? '、专属角色' : ''}${result.deletedSeller ? '和独占商家主体' : ''}`,
+            );
+        } catch (error) {
+            const message = errorText(error);
+            setLocalError(message);
+            onError(message);
+            await impactQuery.refetch().catch(() => undefined);
+        }
+    };
+
+    return (
+        <Modal
+            title="店铺安全清退"
+            description={`${storeName(profile)} · ${profile.channel.code} · 先看影响、再暂停，只有没有业务数据的店铺才允许彻底删除`}
+            onClose={onClose}
+        >
+            {impactQuery.loading && !impact ? (
+                <div className="flex min-h-48 items-center justify-center gap-2 text-xs text-slate-500">
+                    <LoaderCircle className="h-4 w-4 animate-spin" />
+                    正在检查订单、商品、客户及扩展数据…
+                </div>
+            ) : impactQuery.error || !impact ? (
+                <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-xs text-rose-700">
+                    <p>{impactQuery.error?.message ?? '清退影响读取失败'}</p>
+                    <button
+                        type="button"
+                        onClick={() => void impactQuery.refetch()}
+                        className="mt-3 font-bold underline"
+                    >
+                        重新检查
+                    </button>
+                </div>
+            ) : (
+                <>
+                    {localNotice && (
+                        <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-xs leading-5 text-emerald-800">
+                            {localNotice}
+                        </div>
+                    )}
+                    {localError && (
+                        <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 p-4 text-xs leading-5 text-rose-700">
+                            {localError}
+                        </div>
+                    )}
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                        <ImpactStat label="订单" value={impact.orderCount} />
+                        <ImpactStat label="商品" value={impact.productCount} />
+                        <ImpactStat label="客户" value={impact.customerCount} />
+                        <ImpactStat label="扩展记录" value={impact.extensionRecordCount} />
+                        <ImpactStat label="管理员" value={impact.administratorCount} />
+                        <ImpactStat label="独立域名" value={impact.domainCount} />
+                        <ImpactStat label="专属角色" value={impact.roleWillBeDeleted ? '会移除' : '不移除'} />
+                        <ImpactStat label="商家主体" value={impact.sellerWillBeDeleted ? '会移除' : '保留'} />
+                    </div>
+                    <div
+                        className={`mt-4 rounded-xl border p-4 ${impact.canDeprovision ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}
+                    >
+                        <div className="flex items-center gap-2 text-xs font-bold text-slate-900">
+                            {impact.canDeprovision ? (
+                                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                            ) : (
+                                <AlertCircle className="h-4 w-4 text-amber-600" />
+                            )}
+                            {impact.canDeprovision
+                                ? '该店铺满足彻底清退条件'
+                                : '当前只能查看或暂停，不能彻底删除'}
+                        </div>
+                        {impact.blockers.length > 0 && (
+                            <ul className="mt-3 space-y-1 text-[11px] leading-5 text-amber-900">
+                                {impact.blockers.map(blocker => (
+                                    <li key={blocker}>• {blocker}</li>
+                                ))}
+                            </ul>
+                        )}
+                    </div>
+                    <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                        <Field label="当前管理员密码 *">
+                            <input
+                                type="password"
+                                autoComplete="current-password"
+                                value={currentPassword}
+                                onChange={event => setCurrentPassword(event.target.value)}
+                                className={inputClass}
+                            />
+                        </Field>
+                        <Field label={`彻底清退时输入店铺编码：${impact.channelCode}`}>
+                            <input
+                                value={confirmCode}
+                                onChange={event => setConfirmCode(event.target.value)}
+                                placeholder={impact.channelCode}
+                                disabled={!impact.canDeprovision}
+                                className={inputClass}
+                            />
+                        </Field>
+                    </div>
+                    <div className="mt-6 flex flex-col-reverse gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:justify-end">
+                        <button type="button" onClick={onClose} disabled={busy} className={secondaryButton}>
+                            关闭
+                        </button>
+                        {impact.status !== 'SUSPENDED' && (
+                            <button
+                                type="button"
+                                onClick={() => void suspend()}
+                                disabled={
+                                    busy ||
+                                    impact.isDefaultChannel ||
+                                    impact.isProvisioningTemplate ||
+                                    impact.isActiveChannel
+                                }
+                                className={[
+                                    'flex items-center justify-center gap-1.5 rounded-lg bg-amber-500',
+                                    'px-4 py-2 text-xs font-bold text-white hover:bg-amber-600',
+                                    'disabled:cursor-not-allowed disabled:opacity-50',
+                                ].join(' ')}
+                            >
+                                {suspendState.loading && (
+                                    <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+                                )}
+                                先暂停营业
+                            </button>
+                        )}
+                        <button
+                            type="button"
+                            onClick={() => void deprovision()}
+                            disabled={
+                                !impact.canDeprovision || busy || confirmCode.trim() !== impact.channelCode
+                            }
+                            className={[
+                                'flex items-center justify-center gap-1.5 rounded-lg bg-rose-600',
+                                'px-4 py-2 text-xs font-bold text-white hover:bg-rose-700',
+                                'disabled:cursor-not-allowed disabled:opacity-50',
+                            ].join(' ')}
+                        >
+                            {deprovisionState.loading ? (
+                                <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                                <Trash2 className="h-3.5 w-3.5" />
+                            )}
+                            彻底清退空店铺
+                        </button>
+                    </div>
+                </>
+            )}
+        </Modal>
+    );
+}
+
+function ImpactStat({ label, value }: { label: string; value: string | number }) {
+    return (
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <div className="text-[10px] text-slate-400">{label}</div>
+            <div className="mt-1 text-sm font-bold text-slate-900">{value}</div>
+        </div>
     );
 }
 
@@ -1519,9 +1877,10 @@ function ProvisionStoreDialog({
                         </code>
                         <button
                             type="button"
-                            onClick={async () => {
-                                await navigator.clipboard.writeText(result.temporaryPassword);
-                                setCopied(true);
+                            onClick={() => {
+                                void navigator.clipboard
+                                    .writeText(result.temporaryPassword)
+                                    .then(() => setCopied(true));
                             }}
                             className={secondaryButton}
                         >
@@ -1685,6 +2044,9 @@ function StoreInfo({ label, value, tone }: { label: string; value: string; tone?
         </div>
     );
 }
+function storeStatusLabel(status: StoreProfileRecord['status']) {
+    return status === 'ACTIVE' ? '正常营业' : status === 'SUSPENDED' ? '暂停营业' : '草稿';
+}
 function StatusBadge({ status, operational }: { status: string; operational: boolean }) {
     const classes =
         status === 'ACTIVE' && operational
@@ -1724,7 +2086,10 @@ function TabButton({
         <button
             type="button"
             onClick={onClick}
-            className={`flex shrink-0 items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-bold ${active ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
+            className={[
+                'flex shrink-0 items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-bold',
+                active ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50',
+            ].join(' ')}
         >
             {icon}
             {children}
@@ -1843,7 +2208,12 @@ function Message({
     const success = kind === 'success';
     return (
         <div
-            className={`flex items-center gap-2 rounded-xl border p-3 text-xs ${success ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-rose-200 bg-rose-50 text-rose-800'}`}
+            className={[
+                'flex items-center gap-2 rounded-xl border p-3 text-xs',
+                success
+                    ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                    : 'border-rose-200 bg-rose-50 text-rose-800',
+            ].join(' ')}
         >
             {success ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
             <span className="flex-1">{children}</span>
@@ -1869,10 +2239,19 @@ function splitCodes(value: string) {
 function mergeById<T extends { id: string }>(current: T[], next: T[]) {
     return [...new Map([...current, ...next].map(item => [item.id, item])).values()];
 }
-const inputClass =
-    'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-normal text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-50 disabled:text-slate-400';
-const primaryButton =
-    'flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50';
-const secondaryButton =
-    'flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50';
+const inputClass = [
+    'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs',
+    'font-normal text-slate-800 outline-none focus:border-blue-500 focus:ring-2',
+    'focus:ring-blue-100 disabled:bg-slate-50 disabled:text-slate-400',
+].join(' ');
+const primaryButton = [
+    'flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-blue-600',
+    'px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-blue-700',
+    'disabled:cursor-not-allowed disabled:opacity-50',
+].join(' ');
+const secondaryButton = [
+    'flex shrink-0 items-center justify-center gap-1.5 rounded-lg border',
+    'border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700',
+    'hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50',
+].join(' ');
 const theadClass = 'border-b border-slate-200 bg-slate-50 text-[10px] font-bold text-slate-500';
