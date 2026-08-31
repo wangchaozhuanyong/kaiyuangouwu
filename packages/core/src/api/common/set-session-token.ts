@@ -30,7 +30,10 @@ export function setSessionToken(options: {
             req.session.token = sessionToken;
         }
     }
-    if (usingBearer) {
+    // GraphQL can resolve top-level fields concurrently. If another field has
+    // already completed the response, attempting to clear an invalid bearer
+    // token here would throw ERR_HTTP_HEADERS_SENT and hide the real auth error.
+    if (usingBearer && !res.headersSent) {
         res.set(authOptions.authTokenHeaderKey, sessionToken);
     }
 }

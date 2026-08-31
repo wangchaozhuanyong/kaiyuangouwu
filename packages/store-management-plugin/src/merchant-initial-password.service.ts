@@ -64,10 +64,18 @@ const passwordProtectedAdminMutations = new Set([
     'refundOrder',
     'rotateApiKey',
     'settleRefund',
+    'adjustReferralBalance',
+    'processReferralWithdrawal',
     'updateRole',
 ]);
 
-const passwordProtectedEnabledMutations = new Set(['updateProducts', 'updateProductVariants']);
+const passwordProtectedEnabledMutations = new Set([
+    'updateProduct',
+    'updateProductVariant',
+    'updateProducts',
+    'updateProductVariants',
+]);
+const passwordProtectedPasswordChangeMutations = new Set(['updateActiveAdministrator']);
 
 const allowedRootFields = new Set([
     'Query.activeAdministrator',
@@ -186,10 +194,20 @@ export class MerchantInitialPasswordService {
         if (passwordProtectedAdminMutations.has(fieldName)) {
             return true;
         }
-        if (!passwordProtectedEnabledMutations.has(fieldName) || !Array.isArray(args?.input)) {
+        if (passwordProtectedPasswordChangeMutations.has(fieldName)) {
+            const input = args?.input;
+            return (
+                typeof input === 'object' &&
+                input !== null &&
+                Object.prototype.hasOwnProperty.call(input, 'password')
+            );
+        }
+        if (!passwordProtectedEnabledMutations.has(fieldName)) {
             return false;
         }
-        return args.input.some(
+        const rawInput = args?.input;
+        const inputs = Array.isArray(rawInput) ? rawInput : [rawInput];
+        return inputs.some(
             input =>
                 typeof input === 'object' &&
                 input !== null &&
