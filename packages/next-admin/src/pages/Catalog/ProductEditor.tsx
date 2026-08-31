@@ -46,6 +46,7 @@ import {
 } from '../../graphql/catalog.graphql';
 import { useUnsavedChangesWarning } from '../../hooks/use-unsaved-changes-warning';
 import { useUrlTab } from '../../hooks/use-url-tab';
+import { getChannelDisplayName } from '../../utils/channel-display';
 import {
     hasDirectProductAssignment,
     setDirectProductAssignment,
@@ -1155,7 +1156,7 @@ export function ProductEditor() {
     };
 
     return (
-        <div className="h-full flex flex-col bg-[#f8fafc]">
+        <div className="h-full flex flex-col bg-slate-50">
             {/* Top Header */}
             <div className="flex shrink-0 flex-col gap-4 border-b border-slate-200 bg-white px-5 py-4 shadow-2xs sm:flex-row sm:items-center sm:justify-between sm:px-8">
                 <div className="flex items-center gap-3">
@@ -1618,7 +1619,11 @@ export function ProductEditor() {
                                     <p className="mt-1 text-xs leading-5 text-slate-500">
                                         当前正在编辑{' '}
                                         <strong className="text-blue-700">
-                                            {catalogChannelsData?.activeChannel.code ?? '当前店铺'}
+                                            {catalogChannelsData
+                                                ? getChannelDisplayName(
+                                                      catalogChannelsData.activeChannel.code,
+                                                  )
+                                                : '当前店铺'}
                                         </strong>{' '}
                                         的 {activeCurrencyCode}{' '}
                                         售价。勾选其他店铺后，使用顶部“当前店铺”切换并分别维护售价。
@@ -1652,7 +1657,7 @@ export function ProductEditor() {
                                                 }
                                                 className="h-4 w-4 rounded border-slate-300 text-blue-600"
                                             />
-                                            <span>{channel.code}</span>
+                                            <span>{getChannelDisplayName(channel.code)}</span>
                                             <span className="font-mono text-[10px] text-slate-400">
                                                 {channel.defaultCurrencyCode}
                                             </span>

@@ -46,6 +46,7 @@ import {
 } from '../../graphql/management.graphql';
 import { useAccessibleDialog } from '../../hooks/use-accessible-dialog';
 import { useUrlTab } from '../../hooks/use-url-tab';
+import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatDateTime } from '../Sales/sales-utils';
 
@@ -234,7 +235,7 @@ export function StoreSettingsModule() {
                         >
                             {profiles.map(profile => (
                                 <option key={profile.id} value={profile.id}>
-                                    {storeName(profile)} · {profile.channel.code}
+                                    {storeName(profile)} · {getChannelDisplayName(profile.channel.code)}
                                 </option>
                             ))}
                         </select>
@@ -352,7 +353,7 @@ function StoresPanel({
                                     {storeName(profile)}
                                 </h2>
                                 <p className="mt-1 font-mono text-[10px] text-slate-400">
-                                    {profile.channel.code}
+                                    {getChannelDisplayName(profile.channel.code)}
                                 </p>
                             </div>
                         </div>
@@ -1705,7 +1706,7 @@ function storeName(profile: StoreProfileRecord) {
     return (
         profile.channel.customFields.storefrontNameZh ||
         profile.channel.customFields.storefrontNameEn ||
-        profile.channel.code
+        getChannelDisplayName(profile.channel.code)
     );
 }
 function TabButton({

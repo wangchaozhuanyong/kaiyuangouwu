@@ -20,6 +20,7 @@ import {
     type ContentTranslationStateRecord,
 } from '../../graphql/plugins.graphql';
 import { useAccessibleDialog } from '../../hooks/use-accessible-dialog';
+import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatDateTime } from '../Sales/sales-utils';
 
@@ -161,7 +162,11 @@ export function TranslationsModule() {
                                 />
                                 <Metric
                                     label="当前店铺"
-                                    value={query.data?.activeChannel.code ?? '—'}
+                                    value={
+                                        query.data
+                                            ? getChannelDisplayName(query.data.activeChannel.code)
+                                            : '—'
+                                    }
                                     detail={
                                         (query.data?.activeChannel.availableLanguageCodes ?? []).join(
                                             ' / ',

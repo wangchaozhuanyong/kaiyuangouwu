@@ -3,6 +3,7 @@ import { useMutation } from '@apollo/client/react';
 import { AlertCircle, CheckCircle2, KeyRound, Loader2, LogOut, ShieldCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { logoutAdministrator } from '../../apollo';
+import { ThemeToggleButton } from '../../components/ThemeToggleButton';
 import {
   COMPLETE_INITIAL_PASSWORD_CHANGE_MUTATION,
   type CompleteInitialPasswordChangeData,
@@ -71,7 +72,8 @@ export function InitialPasswordChangeModule({ onCompleted }: InitialPasswordChan
   };
 
   return (
-    <main className="min-h-screen bg-slate-100 px-4 py-8 sm:px-6 lg:flex lg:items-center lg:py-12">
+    <main className="relative min-h-screen bg-slate-100 px-4 py-8 sm:px-6 lg:flex lg:items-center lg:py-12">
+      <ThemeToggleButton className="absolute right-4 top-4 z-10 border border-slate-200 bg-white shadow-sm sm:right-6 sm:top-6" />
       <div className="mx-auto grid w-full max-w-4xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-900/5 lg:grid-cols-[0.9fr_1.1fr]">
         <section className="flex flex-col justify-between bg-slate-950 px-7 py-8 text-white sm:px-10 lg:min-h-[590px] lg:py-10">
           <div>

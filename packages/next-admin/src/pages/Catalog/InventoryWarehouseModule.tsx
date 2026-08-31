@@ -508,7 +508,7 @@ export function InventoryWarehouseModule() {
     ];
 
     return (
-        <div className="flex h-full flex-col bg-[#f8fafc]">
+        <div className="flex h-full flex-col bg-slate-50">
             <div className="flex shrink-0 flex-col gap-4 border-b border-slate-200 bg-white px-5 py-5 shadow-2xs sm:flex-row sm:items-center sm:justify-between sm:px-8">
                 <div>
                     <h1 className="text-xl font-bold text-slate-900">库存与多仓管理</h1>

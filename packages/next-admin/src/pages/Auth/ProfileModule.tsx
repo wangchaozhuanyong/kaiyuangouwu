@@ -20,6 +20,7 @@ import {
 } from '../../graphql/auth.graphql';
 import { sensitiveActionContext } from '../../apollo';
 import { formatDateTime } from '../Sales/sales-utils';
+import { getChannelDisplayName } from '../../utils/channel-display';
 import { isStrongAdministratorPassword, PASSWORD_REQUIREMENT } from '../../utils/password';
 import { toUserFacingError } from '../../utils/user-facing-error';
 
@@ -102,7 +103,13 @@ function ProfileContent({ profile, onUpdated }: {
 
   const fullName = [lastName, firstName].filter(Boolean).join('') || profile.user.identifier;
   const initials = `${lastName.charAt(0)}${firstName.charAt(0)}` || '管';
-  const channels = [...new Set(profile.user.roles.flatMap(role => role.channels.map(channel => channel.code)))];
+  const channels = [
+    ...new Set(
+      profile.user.roles.flatMap(role =>
+        role.channels.map(channel => getChannelDisplayName(channel.code)),
+      ),
+    ),
+  ];
 
   const showNotice = (message: string) => {
     setNotice(message);

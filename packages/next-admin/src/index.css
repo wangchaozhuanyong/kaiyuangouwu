@@ -1,13 +1,282 @@
 @import 'tailwindcss';
 
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+    color-scheme: light;
+    --admin-canvas: #f0f2f5;
+    --admin-page: #f8fafc;
+    --admin-surface: #ffffff;
+    --admin-surface-subtle: #f8fafc;
+    --admin-surface-muted: #f1f5f9;
+    --admin-border-subtle: #e2e8f0;
+    --admin-border-strong: #cbd5e1;
+    --admin-text: #0f172a;
+    --admin-text-secondary: #334155;
+    --admin-text-muted: #64748b;
+}
+
+:root.dark {
+    color-scheme: dark;
+    --admin-canvas: #080d18;
+    --admin-page: #0b1220;
+    --admin-surface: #111827;
+    --admin-surface-subtle: #151e2e;
+    --admin-surface-muted: #1e293b;
+    --admin-border-subtle: #263244;
+    --admin-border-strong: #3b4a60;
+    --admin-text: #f8fafc;
+    --admin-text-secondary: #cbd5e1;
+    --admin-text-muted: #94a3b8;
+}
+
 @layer base {
+    html,
+    body,
+    #root {
+        min-height: 100%;
+    }
+
     body {
-        background-color: #f0f2f5;
-        color: #1e293b;
+        background-color: var(--admin-canvas);
+        color: var(--admin-text-secondary);
+    }
+
+    ::selection {
+        background-color: rgb(37 99 235 / 25%);
+    }
+
+    :root.dark ::selection {
+        background-color: rgb(96 165 250 / 35%);
+    }
+
+    :root.dark select option {
+        background-color: var(--admin-surface);
+        color: var(--admin-text);
+    }
+
+    :root.dark {
+        scrollbar-color: #3b4a60 #0b1220;
     }
 }
 
 @layer utilities {
+    /*
+     * 旧业务页仍使用 Tailwind 的 slate/white 工具类。深色兼容层只在根节点
+     * .dark 下重映射这些视觉令牌，浅色模式继续使用原有 Tailwind 输出。
+     */
+    .dark :where(.bg-white) {
+        background-color: var(--admin-surface);
+    }
+
+    .dark :where(.bg-white\/90, .bg-white\/85) {
+        background-color: rgb(17 24 39 / 94%);
+    }
+
+    .dark :where(.bg-white\/75, .bg-white\/70) {
+        background-color: rgb(17 24 39 / 82%);
+    }
+
+    .dark :where(.bg-slate-50, .bg-\[\#f8fafc\]) {
+        background-color: var(--admin-page);
+    }
+
+    .dark :where(.bg-slate-50\/80, .bg-slate-50\/70, .bg-slate-50\/60, .bg-slate-50\/50) {
+        background-color: rgb(11 18 32 / 78%);
+    }
+
+    .dark :where(.bg-slate-100) {
+        background-color: var(--admin-surface-muted);
+    }
+
+    .dark :where(.bg-slate-200) {
+        background-color: #334155;
+    }
+
+    .dark :where(.bg-slate-300) {
+        background-color: #475569;
+    }
+
+    .dark :where(.text-slate-950, .text-slate-900) {
+        color: var(--admin-text);
+    }
+
+    .dark :where(.text-slate-800, .text-slate-700, .text-slate-600) {
+        color: var(--admin-text-secondary);
+    }
+
+    .dark :where(.text-slate-500, .text-slate-400) {
+        color: var(--admin-text-muted);
+    }
+
+    .dark :where(.border-slate-100, .border-slate-200) {
+        border-color: var(--admin-border-subtle);
+    }
+
+    .dark :where(.border-slate-300, .border-slate-400) {
+        border-color: var(--admin-border-strong);
+    }
+
+    .dark .divide-slate-50 > :not(:last-child),
+    .dark .divide-slate-100 > :not(:last-child) {
+        border-color: var(--admin-border-subtle);
+    }
+
+    .dark :where(.bg-blue-50, .bg-blue-50\/60, .bg-blue-50\/50, .bg-blue-50\/40, .bg-blue-50\/30) {
+        background-color: rgb(37 99 235 / 16%);
+    }
+
+    .dark :where(.bg-blue-100) {
+        background-color: rgb(37 99 235 / 28%);
+    }
+
+    .dark :where(.text-blue-950, .text-blue-900, .text-blue-800, .text-blue-700, .text-blue-600, .text-blue-500) {
+        color: #60a5fa;
+    }
+
+    .dark :where(.border-blue-100, .border-blue-200, .border-blue-300, .border-blue-400) {
+        border-color: rgb(96 165 250 / 42%);
+    }
+
+    .dark :where(.bg-rose-50, .bg-rose-100) {
+        background-color: rgb(225 29 72 / 16%);
+    }
+
+    .dark :where(.text-rose-900, .text-rose-800, .text-rose-700, .text-rose-600, .text-rose-500) {
+        color: #fb7185;
+    }
+
+    .dark :where(.border-rose-200, .border-rose-300) {
+        border-color: rgb(251 113 133 / 38%);
+    }
+
+    .dark :where(.bg-amber-50, .bg-amber-50\/70, .bg-amber-100) {
+        background-color: rgb(217 119 6 / 16%);
+    }
+
+    .dark :where(.text-amber-950, .text-amber-900, .text-amber-800, .text-amber-700, .text-amber-600, .text-amber-500) {
+        color: #fbbf24;
+    }
+
+    .dark :where(.border-amber-100, .border-amber-200) {
+        border-color: rgb(251 191 36 / 36%);
+    }
+
+    .dark :where(.bg-emerald-50, .bg-emerald-100) {
+        background-color: rgb(5 150 105 / 16%);
+    }
+
+    .dark :where(.text-emerald-900, .text-emerald-800, .text-emerald-700, .text-emerald-600) {
+        color: #34d399;
+    }
+
+    .dark :where(.border-emerald-200, .border-emerald-300) {
+        border-color: rgb(52 211 153 / 34%);
+    }
+
+    .dark :where(.bg-red-50) {
+        background-color: rgb(220 38 38 / 16%);
+    }
+
+    .dark :where(.text-red-700) {
+        color: #f87171;
+    }
+
+    .dark :where(.border-red-200) {
+        border-color: rgb(248 113 113 / 36%);
+    }
+
+    .dark :where(.bg-violet-50) {
+        background-color: rgb(124 58 237 / 16%);
+    }
+
+    .dark :where(.text-violet-700, .text-violet-600) {
+        color: #a78bfa;
+    }
+
+    .dark :where(.text-orange-600) {
+        color: #fb923c;
+    }
+
+    .dark :where(.ring-slate-100) {
+        --tw-ring-color: rgb(71 85 105 / 58%);
+    }
+
+    .dark :where(.ring-blue-50, .ring-blue-100, .ring-blue-200) {
+        --tw-ring-color: rgb(59 130 246 / 30%);
+    }
+
+    .dark :where(.ring-rose-100, .ring-rose-200) {
+        --tw-ring-color: rgb(244 63 94 / 28%);
+    }
+
+    .dark :where(.ring-amber-200) {
+        --tw-ring-color: rgb(245 158 11 / 28%);
+    }
+
+    .dark :where(.shadow-slate-900\/5) {
+        --tw-shadow-color: rgb(0 0 0 / 28%);
+    }
+
+    .dark :where(input, textarea)::placeholder {
+        color: #64748b;
+    }
+
+    .dark .hover\:bg-white:hover {
+        background-color: var(--admin-surface-subtle);
+    }
+
+    .dark .hover\:bg-white\/70:hover {
+        background-color: rgb(30 41 59 / 82%);
+    }
+
+    .dark :where(.hover\:bg-slate-50, .hover\:bg-slate-50\/80):hover {
+        background-color: var(--admin-surface-subtle);
+    }
+
+    .dark .hover\:bg-slate-100:hover {
+        background-color: #263449;
+    }
+
+    .dark :where(.hover\:bg-slate-200, .hover\:bg-slate-300):hover {
+        background-color: #3b4a60;
+    }
+
+    .dark :where(.hover\:text-slate-900, .hover\:text-slate-800, .hover\:text-slate-700, .hover\:text-slate-600):hover {
+        color: var(--admin-text);
+    }
+
+    .dark :where(.hover\:bg-blue-50, .hover\:bg-blue-50\/50, .hover\:bg-blue-50\/40, .hover\:bg-blue-50\/30):hover {
+        background-color: rgb(37 99 235 / 22%);
+    }
+
+    .dark .hover\:bg-blue-100:hover,
+    .dark .group:hover .group-hover\:bg-blue-100 {
+        background-color: rgb(37 99 235 / 32%);
+    }
+
+    .dark :where(.hover\:text-blue-800, .hover\:text-blue-700, .hover\:text-blue-600):hover,
+    .dark .group:hover :where(.group-hover\:text-blue-700, .group-hover\:text-blue-600, .group-hover\:text-blue-500) {
+        color: #93c5fd;
+    }
+
+    .dark :where(.hover\:bg-rose-50, .hover\:bg-rose-100):hover {
+        background-color: rgb(225 29 72 / 22%);
+    }
+
+    .dark .hover\:bg-emerald-50:hover,
+    .dark .hover\:bg-emerald-100:hover {
+        background-color: rgb(5 150 105 / 22%);
+    }
+
+    .dark :where(.disabled\:bg-slate-50, .disabled\:bg-slate-100):disabled {
+        background-color: #151e2e;
+    }
+
+    .dark .disabled\:text-slate-400:disabled {
+        color: #64748b;
+    }
+
     .scrollbar-hidden {
         -ms-overflow-style: none;
         scrollbar-width: none;

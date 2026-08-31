@@ -39,10 +39,17 @@ import {
   getOrderStateClass,
   getOrderStateLabel,
 } from '../Sales/sales-utils';
+import { getChannelDisplayName } from '../../utils/channel-display';
+import {
+  compareMetric,
+  getMetricRange,
+  getPreviousMetricRange,
+  type MetricComparison,
+  type MetricPeriod,
+} from '../../utils/dashboard-metrics';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { useAccessibleDialog } from '../../hooks/use-accessible-dialog';
 
-type MetricPeriod = 'TODAY' | '7D' | '30D';
 type DashboardWidgetId = 'METRICS' | 'SHIPMENTS' | 'AFTER_SALES' | 'CARD_ALERTS' | 'REVIEWS' | 'RECENT_ORDERS' | 'QUICK_ACTIONS' | 'SEARCH_INDEX';
 type DashboardPresetId = 'MANAGER' | 'CATALOG' | 'SERVICE';
 
@@ -90,18 +97,6 @@ const PERIODS: Array<{ id: MetricPeriod; label: string }> = [
   { id: '30D', label: '近 30 天' },
 ];
 
-const getMetricRange = (period: MetricPeriod, endTimestamp: number) => {
-  const end = new Date(endTimestamp);
-  const start = new Date(end);
-  if (period === 'TODAY') {
-    start.setHours(0, 0, 0, 0);
-  } else {
-    start.setDate(start.getDate() - (period === '7D' ? 6 : 29));
-    start.setHours(0, 0, 0, 0);
-  }
-  return { startDate: start.toISOString(), endDate: end.toISOString() };
-};
-
 const metricTotal = (data: DashboardMetricsData | undefined, type: 'OrderCount' | 'OrderTotal') => (
   data?.dashboardMetricSummary
     .find(summary => summary.type === type)
@@ -117,6 +112,7 @@ export function DashboardModule() {
   const { dialogRef: customizerDialogRef, titleId: customizerTitleId } = useAccessibleDialog(() => setIsCustomizing(false), isCustomizing);
   const [draggedWidget, setDraggedWidget] = useState<DashboardWidgetId | null>(null);
   const dateRange = useMemo(() => getMetricRange(period, rangeEnd), [period, rangeEnd]);
+  const previousDateRange = useMemo(() => getPreviousMetricRange(dateRange), [dateRange]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setRangeEnd(Date.now()), 60_000);
@@ -133,6 +129,17 @@ export function DashboardModule() {
         types: ['OrderCount', 'OrderTotal'],
         refresh: true,
         ...dateRange,
+      },
+    },
+    fetchPolicy: 'cache-and-network',
+    notifyOnNetworkStatusChange: true,
+  });
+  const previousMetrics = useQuery<DashboardMetricsData>(DASHBOARD_METRICS_QUERY, {
+    variables: {
+      input: {
+        types: ['OrderCount', 'OrderTotal'],
+        refresh: true,
+        ...previousDateRange,
       },
     },
     fetchPolicy: 'cache-and-network',
@@ -160,12 +167,17 @@ export function DashboardModule() {
   const orderTotal = metricTotal(metrics.data, 'OrderTotal');
   const orderCount = metricTotal(metrics.data, 'OrderCount');
   const averageOrderValue = orderCount > 0 ? orderTotal / orderCount : 0;
+  const previousOrderTotal = metricTotal(previousMetrics.data, 'OrderTotal');
+  const previousOrderCount = metricTotal(previousMetrics.data, 'OrderCount');
+  const previousAverageOrderValue = previousOrderCount > 0
+    ? previousOrderTotal / previousOrderCount
+    : 0;
   const autoCardCount = todo.data
     ? todo.data.autoCardTodoSummary.lowStockSkuCount
       + todo.data.autoCardTodoSummary.waitingStockDeliveryCount
       + todo.data.autoCardTodoSummary.manualReviewCount
     : 0;
-  const isRefreshing = metrics.loading || todo.loading || recentOrders.loading;
+  const isRefreshing = metrics.loading || previousMetrics.loading || todo.loading || recentOrders.loading;
 
   const refreshAll = () => {
     setRangeEnd(Date.now());
@@ -209,7 +221,7 @@ export function DashboardModule() {
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-xl font-bold text-slate-900">经营概览</h1>
               <span className="rounded-md bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-600">
-                当前店铺：{metrics.data?.activeChannel.code ?? '读取中'}
+                当前店铺：{metrics.data ? getChannelDisplayName(metrics.data.activeChannel.code) : '读取中'}
               </span>
             </div>
             <p className="mt-1 text-xs text-slate-500">订单、履约与售后数据每分钟自动更新</p>
@@ -297,9 +309,9 @@ export function DashboardModule() {
                     </div>
                     {metrics.error && !metrics.data ? <ErrorPanel message="经营指标加载失败" detail={metrics.error.message} onRetry={() => void metrics.refetch()} /> : (
                       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                        <MetricCard label="实付成交额" value={metrics.loading && !metrics.data ? '读取中…' : formatMoney(orderTotal, currencyCode)} detail={PERIODS.find(item => item.id === period)?.label ?? '当前周期'} icon={TrendingUp} tone="emerald" />
-                        <MetricCard label="支付订单数" value={metrics.loading && !metrics.data ? '读取中…' : `${new Intl.NumberFormat('zh-CN').format(orderCount)} 笔`} detail="已完成支付的有效订单" icon={ShoppingBag} tone="blue" />
-                        <MetricCard label="平均客单价" value={metrics.loading && !metrics.data ? '读取中…' : formatMoney(averageOrderValue, currencyCode)} detail={orderCount > 0 ? '成交额 ÷ 支付订单数' : '当前周期暂无支付订单'} icon={ReceiptText} tone="violet" />
+                        <MetricCard label="实付成交额" value={metrics.loading && !metrics.data ? '读取中…' : formatMoney(orderTotal, currencyCode)} detail={PERIODS.find(item => item.id === period)?.label ?? '当前周期'} comparison={previousMetrics.data ? compareMetric(orderTotal, previousOrderTotal) : undefined} icon={TrendingUp} tone="emerald" />
+                        <MetricCard label="支付订单数" value={metrics.loading && !metrics.data ? '读取中…' : `${new Intl.NumberFormat('zh-CN').format(orderCount)} 笔`} detail="已完成支付的有效订单" comparison={previousMetrics.data ? compareMetric(orderCount, previousOrderCount) : undefined} icon={ShoppingBag} tone="blue" />
+                        <MetricCard label="平均客单价" value={metrics.loading && !metrics.data ? '读取中…' : formatMoney(averageOrderValue, currencyCode)} detail={orderCount > 0 ? '成交额 ÷ 支付订单数' : '当前周期暂无支付订单'} comparison={previousMetrics.data ? compareMetric(averageOrderValue, previousAverageOrderValue) : undefined} icon={ReceiptText} tone="violet" />
                       </div>
                     )}
                   </section>
@@ -366,12 +378,13 @@ export function DashboardModule() {
   );
 }
 
-function MetricCard({ label, value, detail, icon: Icon, tone }: { label: string; value: string; detail: string; icon: LucideIcon; tone: 'emerald' | 'blue' | 'violet' }) {
+function MetricCard({ label, value, detail, comparison, icon: Icon, tone }: { label: string; value: string; detail: string; comparison?: MetricComparison; icon: LucideIcon; tone: 'emerald' | 'blue' | 'violet' }) {
   const tones = { emerald: 'bg-emerald-50 text-emerald-700', blue: 'bg-blue-50 text-blue-700', violet: 'bg-violet-50 text-violet-700' };
+  const comparisonTones = { positive: 'text-emerald-700', negative: 'text-rose-600', neutral: 'text-slate-500' };
   return (
     <article className="rounded-xl border border-slate-200 bg-white p-5 shadow-xs">
       <div className="flex items-start justify-between"><div><p className="text-xs font-medium text-slate-500">{label}</p><p className="mt-2 font-mono text-2xl font-bold tracking-tight text-slate-900">{value}</p></div><span className={`rounded-lg p-2 ${tones[tone]}`}><Icon className="h-4 w-4" /></span></div>
-      <p className="mt-3 text-[11px] text-slate-400">{detail}</p>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-1 text-[11px]"><span className="text-slate-400">{detail}</span>{comparison && <span className={`font-bold ${comparisonTones[comparison.tone]}`}>{comparison.label} <span className="font-normal text-slate-400">较上一周期</span></span>}</div>
     </article>
   );
 }
