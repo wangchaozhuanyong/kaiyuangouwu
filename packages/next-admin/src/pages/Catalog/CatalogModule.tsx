@@ -21,6 +21,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { sensitiveActionContext, switchActiveChannel } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
+import { NextAdminActions } from '../../extensions/extension-hosts';
 import {
     DELETE_PRODUCT,
     GET_CATALOG_CHANNELS,
@@ -279,6 +280,7 @@ export function CatalogModule() {
                 </div>
 
                 <div className="flex items-center gap-3">
+                    <NextAdminActions pageId="product-list" />
                     <button
                         type="button"
                         onClick={() => refetch()}

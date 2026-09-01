@@ -474,6 +474,25 @@ export class CatalogImportService {
         });
     }
 
+    async findRowPage(
+        ctx: RequestContext,
+        jobId: ID,
+        action?: CatalogImportAction | null,
+        skip = 0,
+        take = 100,
+    ) {
+        await this.findJob(ctx, jobId);
+        const safeSkip = Math.max(0, Number.isInteger(skip) ? skip : 0);
+        const safeTake = Math.min(500, Math.max(1, Number.isInteger(take) ? take : 100));
+        const [items, totalItems] = await this.connection.getRepository(ctx, CatalogImportRow).findAndCount({
+            where: { jobId, ...(action ? { action } : {}) },
+            order: { rowNumber: 'ASC' },
+            skip: safeSkip,
+            take: safeTake,
+        });
+        return { items, totalItems };
+    }
+
     async resolveRow(ctx: RequestContext, input: ResolveCatalogImportRowInput): Promise<CatalogImportRow> {
         const repository = this.connection.getRepository(ctx, CatalogImportRow);
         const row = await repository.findOne({ where: { id: input.rowId }, relations: ['job'] });
@@ -669,6 +688,7 @@ export class CatalogImportService {
             throw new UserInputError('只有已完成的任务可以回滚');
         }
         const rows = (await this.findRows(ctx, id)).filter(row => row.appliedAt).reverse();
+        await this.assertRollbackSafe(ctx, rows);
         for (const row of rows) {
             await this.connection.withTransaction(ctx, async txCtx => this.rollbackRow(txCtx, job, row));
         }
@@ -678,6 +698,59 @@ export class CatalogImportService {
         await this.connection.getRepository(ctx, CatalogImportJob).save(job);
         await this.searchService.reindex(ctx);
         return this.findJob(ctx, id);
+    }
+
+    private async assertRollbackSafe(ctx: RequestContext, rows: CatalogImportRow[]): Promise<void> {
+        const latestProductRows = new Map<string, CatalogImportRow>();
+        const latestVariantRows = new Map<string, CatalogImportRow>();
+        for (const row of rows) {
+            if (row.targetProductId && !latestProductRows.has(String(row.targetProductId))) {
+                latestProductRows.set(String(row.targetProductId), row);
+            }
+            if (row.targetVariantId && !latestVariantRows.has(String(row.targetVariantId))) {
+                latestVariantRows.set(String(row.targetVariantId), row);
+            }
+        }
+
+        const productIds = [...latestProductRows.keys()] as ID[];
+        const variantIds = [...latestVariantRows.keys()] as ID[];
+        const products = productIds.length
+            ? await this.connection.getRepository(ctx, Product).find({
+                  where: { id: In(productIds), deletedAt: IsNull() },
+              })
+            : [];
+        const variants = variantIds.length
+            ? await this.connection.getRepository(ctx, ProductVariant).find({
+                  where: { id: In(variantIds), deletedAt: IsNull() },
+              })
+            : [];
+        const productById = new Map(products.map(product => [String(product.id), product]));
+        const variantById = new Map(variants.map(variant => [String(variant.id), variant]));
+        const conflicts: number[] = [];
+
+        for (const [productId, row] of latestProductRows) {
+            const product = productById.get(productId);
+            const after = recordValue(row.appliedSnapshot?.afterSnapshot);
+            if (!product || !after || dateString(product.updatedAt) !== stringValue(after.productUpdatedAt)) {
+                conflicts.push(row.rowNumber);
+            }
+        }
+        for (const [variantId, row] of latestVariantRows) {
+            const variant = variantById.get(variantId);
+            const after = recordValue(row.appliedSnapshot?.afterSnapshot);
+            if (!variant || !after || dateString(variant.updatedAt) !== stringValue(after.variantUpdatedAt)) {
+                conflicts.push(row.rowNumber);
+            }
+        }
+
+        const uniqueConflicts = [...new Set(conflicts)].sort((left, right) => left - right);
+        if (uniqueConflicts.length > 0) {
+            const preview = uniqueConflicts.slice(0, 10).join('、');
+            const suffix = uniqueConflicts.length > 10 ? `等 ${uniqueConflicts.length} 行` : '';
+            throw new UserInputError(
+                `导入完成后商品或 SKU 已被修改，或该历史任务缺少安全快照；为避免覆盖后续数据，已停止回滚（第 ${preview}${suffix} 行）`,
+            );
+        }
     }
 
     private async planRow(
@@ -1364,6 +1437,15 @@ export class CatalogImportService {
         row.targetProductId = product.id;
         row.targetVariantId = variant.id;
         row.beforeSnapshot = before;
+        const refreshedVariant = await this.connection.getRepository(ctx, ProductVariant).findOne({
+            where: { id: variant.id, deletedAt: IsNull() },
+            relations: ['productVariantPrices'],
+        });
+        if (!refreshedVariant) throw new UserInputError('导入后无法读取 SKU 快照');
+        const afterSnapshot = await this.snapshotVariant(ctx, refreshedVariant, {
+            stockLocationId,
+            currencyCode: job.currencyCode,
+        });
         row.appliedSnapshot = {
             productId: String(product.id),
             variantId: String(variant.id),
@@ -1373,6 +1455,7 @@ export class CatalogImportService {
             lotId: lotId ? String(lotId) : null,
             supplierId: appliedSupplierId ? String(appliedSupplierId) : null,
             supplierCreated,
+            afterSnapshot,
         };
         row.appliedAt = new Date();
         row.message = row.action === 'CREATE' ? '新增成功' : '更新成功';
