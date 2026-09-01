@@ -528,7 +528,7 @@ export function DraftOrderEditor() {
                 }
             />
             <div className="flex-1 overflow-y-auto p-5 sm:p-6">
-                <div className="mx-auto max-w-6xl space-y-4">
+                <div className="mx-auto w-full max-w-none space-y-4">
                     <WorkflowMessages
                         notice={notice}
                         error={actionError}
@@ -1004,7 +1004,7 @@ export function ModifyOrderEditor() {
                 onBack={() => navigate(`/sales/orders/${order.id}`)}
             />
             <div className="flex-1 overflow-y-auto p-5 sm:p-6">
-                <div className="mx-auto grid max-w-6xl items-start gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
+                <div className="mx-auto grid w-full max-w-none items-start gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
                     <div className="space-y-4">
                         <WorkflowMessages error={actionError} onClose={() => setActionError('')} />
                         <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-2xs">

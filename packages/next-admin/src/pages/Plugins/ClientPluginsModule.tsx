@@ -199,7 +199,7 @@ export function ClientPluginsModule() {
     return (
         <div className="flex h-full flex-col bg-slate-50">
             <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-4 sm:px-8">
-                <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="mx-auto flex w-full max-w-none flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                         <h1 className="text-xl font-bold text-slate-900">客户端插件中心</h1>
                         <p className="mt-1 text-xs text-slate-500">
@@ -230,7 +230,7 @@ export function ClientPluginsModule() {
                     </div>
                 </div>
             </header>
-            <main className="mx-auto w-full max-w-[1400px] flex-1 space-y-5 overflow-y-auto p-5 sm:p-8">
+            <main className="mx-auto w-full max-w-none flex-1 space-y-5 overflow-y-auto p-5 sm:p-8">
                 {notice && (
                     <Message kind="success" onClose={() => setNotice('')}>
                         {notice}
@@ -252,9 +252,7 @@ export function ClientPluginsModule() {
                 <section className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-4 text-xs">
                     <span className="text-slate-500">当前店铺</span>
                     <strong className="rounded bg-slate-100 px-2 py-1 text-slate-800">
-                        {content.data
-                            ? getChannelDisplayName(content.data.activeChannel.code)
-                            : '—'}
+                        {content.data ? getChannelDisplayName(content.data.activeChannel.code) : '—'}
                     </strong>
                     <span className="rounded bg-slate-100 px-2 py-1 text-slate-600">
                         {catalog.length} 个已发布官方插件
