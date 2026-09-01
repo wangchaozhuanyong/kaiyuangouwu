@@ -86,6 +86,24 @@ describe('store management API extensions', () => {
         }
     });
 
+    it('exposes customer avatar access only through the Shop API', () => {
+        const query = shopApiExtensions.definitions.find(
+            definition => definition.kind === Kind.OBJECT_TYPE_EXTENSION && definition.name.value === 'Query',
+        );
+        const mutation = shopApiExtensions.definitions.find(
+            definition =>
+                definition.kind === Kind.OBJECT_TYPE_EXTENSION && definition.name.value === 'Mutation',
+        );
+
+        expect(query?.kind).toBe(Kind.OBJECT_TYPE_EXTENSION);
+        expect(mutation?.kind).toBe(Kind.OBJECT_TYPE_EXTENSION);
+        if (query?.kind !== Kind.OBJECT_TYPE_EXTENSION || mutation?.kind !== Kind.OBJECT_TYPE_EXTENSION) {
+            throw new Error('Shop API extension is missing');
+        }
+        expect(query.fields?.map(field => field.name.value)).toContain('myCustomerAvatar');
+        expect(mutation.fields?.map(field => field.name.value)).toContain('setCustomerAvatar');
+    });
+
     it('exposes scoped announcements and Channel USDT administration only through the Admin API', () => {
         const adminQuery = adminApiExtensions.definitions.find(
             definition => definition.kind === Kind.OBJECT_TYPE_EXTENSION && definition.name.value === 'Query',

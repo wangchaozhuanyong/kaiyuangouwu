@@ -158,6 +158,13 @@ export function AccountSecurityRoutePage() {
                     language={runtime.language}
                     storefrontName={runtime.storefrontName}
                     onBack={runtime.goBack}
+                    onAvatarChange={async (file: File) => {
+                        const avatar = await runtime.api.uploadCustomerAvatar(file);
+                        runtime.setCustomer((current: ActiveCustomer | null) =>
+                            current ? { ...current, avatar } : current,
+                        );
+                        runtime.notify(isZh ? '头像已更新' : 'Profile photo updated');
+                    }}
                     onLogout={() => {
                         void runtime.api.logout().then(() => {
                             runtime.clearPrivateQueryCache();

@@ -5,6 +5,7 @@ import {
     CircleAlert,
     Flame,
     LayoutGrid,
+    Minus,
     Package,
     ShieldCheck,
     ShoppingBag,
@@ -434,12 +435,16 @@ export function Sheet({
     onClose,
     children,
     className,
+    showHandle = false,
+    initialFocus = 'first',
 }: {
     title: string;
     language: StorefrontLanguage;
     onClose: () => void;
     children: ReactNode;
     className?: string;
+    showHandle?: boolean;
+    initialFocus?: 'first' | 'dialog';
 }) {
     const dialogRef = useRef<HTMLElement>(null);
     const previousFocusRef = useRef<HTMLElement | null>(null);
@@ -470,7 +475,7 @@ export function Sheet({
                 element => !element.hidden && element.getAttribute('aria-hidden') !== 'true',
             );
         const focusFrame = window.requestAnimationFrame(() => {
-            (getFocusableElements()[0] ?? dialog).focus();
+            (initialFocus === 'dialog' ? dialog : (getFocusableElements()[0] ?? dialog)).focus();
         });
         const handleKeyDown = (event: KeyboardEvent) => {
             if (event.key === 'Escape') {
@@ -508,7 +513,7 @@ export function Sheet({
             releaseBodyScrollLock();
             previousFocusRef.current?.focus();
         };
-    }, []);
+    }, [initialFocus]);
 
     const content = (
         <div className={`sheet-layer${className ? ` ${className}-layer` : ''}`} role="presentation">
@@ -526,6 +531,7 @@ export function Sheet({
                 aria-labelledby={titleId}
                 tabIndex={-1}
             >
+                {showHandle ? <Minus className="sheet-drag-handle" aria-hidden="true" /> : null}
                 <header>
                     <strong id={titleId}>{title}</strong>
                     <button type="button" onClick={onClose} aria-label={language === 'zh' ? '关闭' : 'Close'}>
