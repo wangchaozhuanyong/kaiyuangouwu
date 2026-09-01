@@ -59,7 +59,9 @@ export const orderPageStyles: PageStyleMap = {
         '[margin:0_12px] [overflow:hidden] [border-radius:10px] [background:var(--soft)] max-[370px]:[margin-right:10px] max-[370px]:[margin-left:10px] lg:[margin-right:18px] lg:[margin-left:18px]',
     'logistics-service-strip':
         '[display:flex] [align-items:center] [justify-content:space-between] [padding:8px_12px] [border-radius:10px] [background:rgba(255,_255,_255,_0.7)] [border:1px_dashed_#e2e8f0] [backdrop-filter:blur(8px)]',
-    'logistics-stats-grid': '[display:grid] [grid-template-columns:repeat(4,_1fr)] [gap:8px]',
+    'logistics-stat-card':
+        '[min-width:0] [min-height:44px] [padding:5px_2px] [border:0] [border-radius:8px] [background:transparent] [color:inherit] [display:flex] [align-items:center] [justify-content:center] [gap:5px] [text-align:left] [cursor:pointer] [transition:background-color_160ms_ease,_transform_160ms_ease] [&:hover]:[background:#f8fafc] [&:active]:[transform:scale(0.98)] [&:focus-visible]:[outline:2px_solid_color-mix(in_srgb,_var(--accent)_45%,_white)] [&:focus-visible]:[outline-offset:2px] [&.is-active]:[background:color-mix(in_srgb,_var(--accent)_7%,_white)] max-[370px]:[gap:3px]',
+    'logistics-stats-grid': '[display:grid] [grid-template-columns:repeat(4,_minmax(0,_1fr))] [gap:4px]',
     'logistics-status-icon':
         '[width:34px] [height:34px] [border-radius:9px] [background:var(--accent-soft)] [color:var(--accent)] [display:grid] [place-items:center] [&_svg]:[width:18px] [&_svg]:[height:18px] [.logistics-card.is-delivered_&]:[background:color-mix(in_srgb,_var(--success)_10%,_white)] [.logistics-card.is-delivered_&]:[color:var(--success)] [.logistics-card.is-cancelled_&]:[background:var(--soft)] [.logistics-card.is-cancelled_&]:[color:var(--muted)] max-[370px]:[width:32px] max-[370px]:[height:32px]',
     'logistics-timeline':
@@ -130,11 +132,10 @@ export const orderPageStyles: PageStyleMap = {
     'service-strip-item':
         '[display:flex] [align-items:center] [gap:4px] [font-size:11px] [font-weight:600] [color:#64748b] [&_svg]:[color:#0284c7]',
     'stat-card-count':
-        '[font-size:15px] [font-weight:800] [color:#0f172a] [font-family:var(--font-numeric)] [.logistics-stat-card.is-active_&]:[color:#d33c30]',
+        '[min-width:16px] [height:16px] [padding:0_4px] [position:absolute] [z-index:1] [top:-5px] [right:-6px] [border:2px_solid_white] [border-radius:999px] [background:#475569] [color:white] [font-size:9px] [font-weight:800] [line-height:12px] [text-align:center] [font-family:var(--font-numeric)] [font-variant-numeric:tabular-nums] [.logistics-stat-card.is-active_&]:[background:#d33c30] [.logistics-stat-card.is-active_&]:[color:white]',
     'stat-card-icon':
         '[width:28px] [height:28px] [border-radius:8px] [display:grid] [place-items:center] [flex-shrink:0] [&.icon-all]:[background:#f1f5f9] [&.icon-all]:[color:#475569] [&.icon-transit]:[background:#eff6ff] [&.icon-transit]:[color:#2563eb] [&.icon-preparing]:[background:#fff7ed] [&.icon-preparing]:[color:#ea580c] [&.icon-delivered]:[background:#ecfdf5] [&.icon-delivered]:[color:#059669]',
     'stat-card-label':
-        '[font-size:11px] [font-weight:700] [color:#64748b] [white-space:nowrap] [overflow:hidden] [text-overflow:ellipsis] [.logistics-stat-card.is-active_&]:[color:#0f172a] [.logistics-stat-card.is-active_&]:[font-weight:800]',
-    'stat-card-top':
-        '[width:100%] [display:flex] [align-items:center] [justify-content:space-between] [padding:0_2px]',
+        '[min-width:0] [font-size:11px] [font-weight:700] [line-height:1.2] [color:#64748b] [white-space:nowrap] [.logistics-stat-card.is-active_&]:[color:#0f172a] [.logistics-stat-card.is-active_&]:[font-weight:800] max-[370px]:[font-size:10px]',
+    'stat-card-top': '[width:28px] [height:28px] [position:relative] [flex:0_0_28px]',
 };

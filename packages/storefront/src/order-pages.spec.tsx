@@ -193,6 +193,17 @@ describe('OrdersPage route query', () => {
 });
 
 describe('LogisticsPage delivery overview', () => {
+    it('keeps the four delivery filters in one aligned icon-label row', () => {
+        expect(orderPageStyles['logistics-stats-grid']).toContain(
+            '[grid-template-columns:repeat(4,_minmax(0,_1fr))]',
+        );
+        expect(orderPageStyles['logistics-stat-card']).toContain('[display:flex]');
+        expect(orderPageStyles['logistics-stat-card']).toContain('[align-items:center]');
+        expect(orderPageStyles['stat-card-top']).toContain('[position:relative]');
+        expect(orderPageStyles['stat-card-count']).toContain('[position:absolute]');
+        expect(orderPageStyles['stat-card-label']).toContain('[white-space:nowrap]');
+    });
+
     it('renders product, carrier and tracking details from cached physical orders', () => {
         const markup = renderLogistics([
             {
