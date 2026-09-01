@@ -109,10 +109,7 @@ const storefrontFallbackUrl = configuredUrl('VENDURE_STOREFRONT_URL', 'http://12
 const storefrontPromotionGateEnabled =
     process.env.STOREFRONT_PROMOTION_GATE_ENABLED != null
         ? process.env.STOREFRONT_PROMOTION_GATE_ENABLED === 'true'
-        : IS_PRODUCTION;
-if (IS_PRODUCTION && !storefrontPromotionGateEnabled) {
-    throw new Error('STOREFRONT_PROMOTION_GATE_ENABLED must be true in production');
-}
+        : false;
 const storefrontEntrySecret = configuredValue(
     'STOREFRONT_ENTRY_SECRET',
     'development-storefront-entry-secret',

@@ -22,6 +22,8 @@ const sharedEnvironment = {
     STORE_DOMAIN_CNAME_TARGET: 'damatong.net',
     STORE_DOMAIN_ROUTING_MODE: 'require-domain',
     STORE_DOMAIN_BYPASS_HOSTS: '',
+    // The promotion page remains available at /promo, but the main storefront is always direct.
+    STOREFRONT_PROMOTION_GATE_ENABLED: 'false',
     // Vendure's telemetry fallback writes .vendure/.installation-id below cwd,
     // which would mutate the verified immutable runtime directory.
     VENDURE_DISABLE_TELEMETRY: 'true',

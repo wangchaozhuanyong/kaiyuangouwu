@@ -1,5 +1,6 @@
 User-agent: *
-Allow: /promo$
-Disallow: /promo/
-Disallow: /
+Allow: /
+Disallow: /promo/enter
+Disallow: /promo/access
+Disallow: /promo/account-entry
 Sitemap: https://damatong.net/sitemap.xml

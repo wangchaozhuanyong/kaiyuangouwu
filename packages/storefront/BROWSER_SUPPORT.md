@@ -15,9 +15,9 @@ Internet Explorer 11 and Trident-based compatibility modes cannot run the intera
 ## Legacy browser handling
 
 - The storefront and generated promotion pages declare `<meta name="renderer" content="webkit">` so 360 dual-engine browsers prefer Speed/WebKit mode.
-- A classic ES5 `nomodule` guard detects IE/Trident after promotion entry and redirects to `/unsupported-browser.html`.
+- A classic ES5 `nomodule` guard detects IE/Trident on the direct storefront and redirects to `/unsupported-browser.html`.
 - The static fallback page does not use React, JavaScript, CSS variables, Flexbox or Grid. It explains how to switch 360 to Speed mode and warns users not to enter account or payment information in IE11.
-- Nginx serves the guard and fallback page through exact unauthenticated static routes so the promotion gate cannot create a redirect loop.
+- Nginx serves the guard and fallback page through exact static routes beside the directly accessible storefront.
 
 This is graceful degradation, not full IE11 commerce support. Login, cart, checkout and payment continue to require a supported modern engine.
 

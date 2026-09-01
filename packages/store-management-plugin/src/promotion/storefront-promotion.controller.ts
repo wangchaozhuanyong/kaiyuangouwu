@@ -36,7 +36,8 @@ export class StorefrontPromotionController {
     ): Promise<void> {
         const request = await this.accessService.resolveRequest(req);
         if (!request || !ticket || !this.accessService.validateEntryTicket(ticket, request)) {
-            res.status(403).type('text/plain').send('入口已失效，请返回推广页重试');
+            res.setHeader('Cache-Control', 'no-store');
+            res.redirect(303, '/promo');
             return;
         }
         res.setHeader('Set-Cookie', this.accessService.createEntryCookie(request));
@@ -95,7 +96,12 @@ export class StorefrontPromotionController {
         }
         res.setHeader('Cache-Control', 'public, max-age=300');
         res.type('text/plain').send(
-            `User-agent: *\nAllow: /promo$\nDisallow: /promo/\nDisallow: /\nSitemap: https://${request.host}/sitemap.xml\n`,
+            `User-agent: *\n` +
+                `Allow: /\n` +
+                `Disallow: /promo/enter\n` +
+                `Disallow: /promo/access\n` +
+                `Disallow: /promo/account-entry\n` +
+                `Sitemap: https://${request.host}/sitemap.xml\n`,
         );
     }
 
@@ -110,7 +116,8 @@ export class StorefrontPromotionController {
         res.type('application/xml').send(
             `<?xml version="1.0" encoding="UTF-8"?>\n` +
                 `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
-                `  <url><loc>https://${request.host}/promo</loc><changefreq>daily</changefreq><priority>1.0</priority></url>\n` +
+                `  <url><loc>https://${request.host}/</loc><changefreq>daily</changefreq><priority>1.0</priority></url>\n` +
+                `  <url><loc>https://${request.host}/promo</loc><changefreq>daily</changefreq><priority>0.7</priority></url>\n` +
                 `</urlset>\n`,
         );
     }

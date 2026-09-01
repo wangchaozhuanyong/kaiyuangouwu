@@ -210,6 +210,9 @@ sudo -n "$(command -v node)" \
     "${repository}/deploy/initialize-production-usdt-secrets.mjs" "${environment_file}"
 source "${environment_file}"
 set +a
+# The main domain is a direct storefront. Keep legacy encrypted env files from
+# re-enabling the retired promotion-cookie gate during readiness or migrations.
+export STOREFRONT_PROMOTION_GATE_ENABLED=false
 
 NODE_ENV=production READINESS_PROCESS_ROLE=migration RUN_MIGRATIONS=true RUN_JOB_QUEUE=0 \
     node "${repository}/packages/dev-server/scripts/production-env-readiness.mjs"
