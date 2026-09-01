@@ -4,6 +4,35 @@ import { createHash } from 'node:crypto';
 export const PROMOTION_VISUAL_SCRIPT = String.raw`(() => {
     'use strict';
     const page=document.querySelector('[data-promo-motion]');
+    const entryForms=Array.from(document.querySelectorAll('form[data-store-entry]'));
+    const ticketExpiresSoon=token=>{
+        if(!token)return true;
+        try {
+            const encoded=token.split('.')[0].replace(/-/g,'+').replace(/_/g,'/'),padded=encoded+'='.repeat((4-encoded.length%4)%4),payload=JSON.parse(atob(padded));
+            return !Number.isFinite(payload.exp)||payload.exp<=Date.now()+30000;
+        } catch(_error) { return true; }
+    };
+    const refreshEntryTicket=form=>{
+        form.setAttribute('data-entry-refreshing','true');
+        const button=form.querySelector('button[type="submit"],input[type="submit"]');
+        if(button){button.disabled=true;button.setAttribute('aria-busy','true');}
+        fetch('/promo',{cache:'no-store',credentials:'same-origin',headers:{Accept:'text/html'}})
+            .then(response=>{if(!response.ok)throw new Error('entry-refresh-failed');return response.text();})
+            .then(html=>{
+                const documentCopy=new DOMParser().parseFromString(html,'text/html'),freshTicket=documentCopy.querySelector('input[name="ticket"]');
+                if(!freshTicket||ticketExpiresSoon(freshTicket.value))throw new Error('entry-refresh-invalid');
+                document.querySelectorAll('input[name="ticket"]').forEach(input=>{input.value=freshTicket.value;});
+                HTMLFormElement.prototype.submit.call(form);
+            })
+            .catch(()=>location.assign('/promo'));
+    };
+    entryForms.forEach(form=>form.addEventListener('submit',event=>{
+        const ticket=form.querySelector('input[name="ticket"]');
+        if(!ticketExpiresSoon(ticket&&ticket.value))return;
+        event.preventDefault();
+        if(form.getAttribute('data-entry-refreshing')==='true')return;
+        refreshEntryTicket(form);
+    }));
     if(!page)return;
     const root=document.documentElement,reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
     const header=document.querySelector('[data-promo-header]'),hero=document.querySelector('[data-promo-hero]'),finalArea=document.querySelector('[data-promo-final]'),footer=document.querySelector('[data-promo-footer]'),mobileEntry=document.querySelector('[data-promo-mobile-entry]');

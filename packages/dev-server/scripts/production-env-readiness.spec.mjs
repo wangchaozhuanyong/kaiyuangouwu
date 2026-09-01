@@ -28,7 +28,7 @@ function readyEnvironment(overrides = {}) {
         ORDER_CONFIRMATION_TOKEN_SECRET:
             'order-confirmation-secret-that-is-longer-than-thirty-two-characters',
         ORDER_CONFIRMATION_EMAIL_TOKEN_TTL_SECONDS: '604800',
-        STOREFRONT_PROMOTION_GATE_ENABLED: 'true',
+        STOREFRONT_PROMOTION_GATE_ENABLED: 'false',
         STOREFRONT_ENTRY_SECRET: 'promotion-entry-secret-that-is-longer-than-thirty-two-characters',
         USDT_PAYMENT_PROOF_SECRET: 'usdt-proof-secret-that-is-longer-than-thirty-two-characters',
         USDT_WALLET_ENCRYPTION_KEY: 'usdt-wallet-key-that-is-longer-than-thirty-two-characters',
@@ -126,7 +126,7 @@ void test('blocks local services, placeholders, unsafe routing and default crede
             STORE_DOMAIN_CNAME_TARGET: 'stores.example.com',
             STORE_DOMAIN_ROUTING_MODE: 'prefer-domain',
             STORE_DOMAIN_BYPASS_HOSTS: 'localhost',
-            STOREFRONT_PROMOTION_GATE_ENABLED: 'false',
+            STOREFRONT_PROMOTION_GATE_ENABLED: 'true',
             STOREFRONT_ENTRY_SECRET: 'replace-with-a-secret',
             USDT_WALLET_ENCRYPTION_KEY: 'replace-with-a-secret',
             IS_INSTRUMENTED: 'false',
@@ -151,7 +151,7 @@ void test('blocks local services, placeholders, unsafe routing and default crede
     assert.ok(blockers.has('image-generation-storage'));
     assert.ok(blockers.has('smtp-transport'));
     assert.ok(blockers.has('domain-routing'));
-    assert.ok(blockers.has('storefront-promotion-gate'));
+    assert.ok(blockers.has('storefront-entry-mode'));
     assert.ok(blockers.has('usdt-wallet-security'));
     assert.ok(blockers.has('observability-export'));
 });

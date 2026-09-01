@@ -354,7 +354,7 @@ node deploy/verify-production-release.mjs \
   --release-id "$(cat /var/www/kaiyuangouwu-releases/current-sha)"
 ```
 
-验收脚本会走完整推广入口：确认未携带 Cookie 的 Shop API 返回 `STOREFRONT_ENTRY_REQUIRED`，从 `/promo` 获取签名票据并换取入口 Cookie，再验证 Shop API、带哈希的实际前台 JS/CSS 资源、Dashboard 和公网 Admin API 拒绝策略。Dashboard 验证会以发布 SHA 追加缓存穿透参数，并递归检查入口 HTML 引用及 JS 中声明的所有懒加载 JS/CSS；任一资源 404、状态码或 MIME 类型异常均视为发布失败并回滚。`/assets/` 目录本身不是有效静态资源验收地址。
+验收脚本会确认主域名首页和 Shop API 无推广 Cookie 也能直接访问，同时单独验证 `/promo` 推广页与签名进入按钮仍然有效。然后继续检查带哈希的实际前台 JS/CSS 资源、Dashboard 和公网 Admin API 拒绝策略。Dashboard 验证会以发布 SHA 追加缓存穿透参数，并递归检查入口 HTML 引用及 JS 中声明的所有懒加载 JS/CSS；任一资源 404、状态码或 MIME 类型异常均视为发布失败并回滚。`/assets/` 目录本身不是有效静态资源验收地址。
 
 实时更新端点必须返回 `text/event-stream`，并在两秒内输出 `ready` 事件：
 

@@ -95,6 +95,25 @@ describe('StorefrontPromotionController', () => {
         expect(unsafeResponse.redirect).toHaveBeenCalledWith(303, '/');
     });
 
+    it('returns invalid promotion entries to a fresh promotion page without a text download', async () => {
+        const request = { host: 'shop.example.com' };
+        const accessService = {
+            resolveRequest: vi.fn(() => Promise.resolve(request)),
+            validateEntryTicket: vi.fn(() => false),
+            createEntryCookie: vi.fn(() => 'entry=cookie'),
+        };
+        const controller = new StorefrontPromotionController(accessService as never, {} as never);
+        const response = responseMock();
+
+        await controller.enter({} as Request, response as unknown as Response, 'expired-ticket');
+
+        expect(response.setHeader).toHaveBeenCalledWith('Cache-Control', 'no-store');
+        expect(response.redirect).toHaveBeenCalledWith(303, '/promo');
+        expect(response.type).not.toHaveBeenCalled();
+        expect(response.send).not.toHaveBeenCalled();
+        expect(response.setHeader).not.toHaveBeenCalledWith('Set-Cookie', expect.anything());
+    });
+
     it('redirects policy and support entries through the same signed gate', async () => {
         const request = { host: 'shop.example.com' };
         const accessService = {
@@ -144,7 +163,7 @@ describe('StorefrontPromotionController', () => {
         );
     });
 
-    it('publishes a crawlable promotion sitemap without exposing the gated storefront', async () => {
+    it('publishes crawl rules and a sitemap for the direct storefront and optional promotion page', async () => {
         const request = { host: 'shop.example.com' };
         const accessService = {
             resolveRequest: vi.fn(() => Promise.resolve(request)),
@@ -156,10 +175,15 @@ describe('StorefrontPromotionController', () => {
         await controller.robots({} as Request, robotsResponse as unknown as Response);
         await controller.sitemap({} as Request, sitemapResponse as unknown as Response);
 
+        expect(robotsResponse.send).toHaveBeenCalledWith(expect.stringContaining('Allow: /\n'));
+        expect(robotsResponse.send).toHaveBeenCalledWith(expect.stringContaining('Disallow: /promo/enter'));
         expect(robotsResponse.send).toHaveBeenCalledWith(
             expect.stringContaining('Sitemap: https://shop.example.com/sitemap.xml'),
         );
         expect(sitemapResponse.type).toHaveBeenCalledWith('application/xml');
+        expect(sitemapResponse.send).toHaveBeenCalledWith(
+            expect.stringContaining('<loc>https://shop.example.com/</loc>'),
+        );
         expect(sitemapResponse.send).toHaveBeenCalledWith(
             expect.stringContaining('<loc>https://shop.example.com/promo</loc>'),
         );

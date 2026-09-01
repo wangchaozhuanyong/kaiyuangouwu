@@ -28,6 +28,13 @@ void test('production Nginx routes protected downloads and hardens both APIs', a
         4,
     );
     assert.match(config, /root \/var\/www\/kaiyuangouwu-current\/packages\/storefront\/dist;/u);
+    const storefrontServer = config.slice(
+        config.indexOf('server_name damatong.net;'),
+        config.indexOf('server_name console.damatong.net;'),
+    );
+    assert.doesNotMatch(storefrontServer, /auth_request|_storefront_promotion_gate/u);
+    assert.doesNotMatch(storefrontServer, /@storefront_promotion_entry/u);
+    assert.match(storefrontServer, /location \/ \{[\s\S]*?try_files \$uri \$uri\/ \/index\.html;/u);
     const realtimeLocations = [
         ...config.matchAll(/location = \/storefront-realtime\/events \{(?<body>[\s\S]*?)\n    \}/gu),
     ];
@@ -59,7 +66,7 @@ void test('production console proxies the dashboard health check to Vendure', as
     assert.match(healthLocation.groups.body, /include proxy_params;/u);
 });
 
-void test('legacy browser fallback files bypass the promotion gate without weakening other routes', async () => {
+void test('legacy browser fallback files remain exact static routes beside the direct storefront', async () => {
     const config = await readFile(path.join(repositoryRoot, 'deploy/nginx/damatong.conf'), 'utf8');
     const fallbackLocations = ['/legacy-browser-guard.js', '/unsupported-browser.html'].map(route =>
         config.match(
@@ -97,6 +104,7 @@ void test('production PM2 config starts compiled runtime entries without the dev
     assert.match(config, /STORE_DOMAIN_CNAME_TARGET:\s*'damatong\.net'/u);
     assert.match(config, /STORE_DOMAIN_ROUTING_MODE:\s*'require-domain'/u);
     assert.match(config, /STORE_DOMAIN_BYPASS_HOSTS:\s*''/u);
+    assert.match(config, /STOREFRONT_PROMOTION_GATE_ENABLED:\s*'false'/u);
     assert.doesNotMatch(config, /cli\.js/u);
 });
 
@@ -154,11 +162,12 @@ void test('production runbook elevates only the root-owned atomic runtime switch
     assert.match(runbook, /sync-storefront-media\.mjs --apply --allow-remote/u);
 });
 
-void test('production runbook uses the promotion-aware release verifier', async () => {
+void test('production runbook verifies a direct storefront with an optional promotion page', async () => {
     const runbook = await readFile(path.join(repositoryRoot, 'deploy/DEPLOYMENT_RUNBOOK.md'), 'utf8');
 
     assert.match(runbook, /node deploy\/verify-production-release\.mjs/u);
-    assert.match(runbook, /STOREFRONT_ENTRY_REQUIRED/u);
+    assert.match(runbook, /主域名首页和 Shop API 无推广 Cookie 也能直接访问/u);
+    assert.doesNotMatch(runbook, /STOREFRONT_ENTRY_REQUIRED/u);
     assert.doesNotMatch(runbook, /curl -I https:\/\/damatong\.net\/assets\//u);
 });
 
@@ -184,6 +193,7 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.match(script, /offsite=yes/u);
     assert.match(script, /DEPLOY_BACKUP_OK/u);
     assert.match(script, /initialize-production-usdt-secrets\.mjs/u);
+    assert.match(script, /export STOREFRONT_PROMOTION_GATE_ENABLED=false/u);
     assert.ok(
         script.indexOf('initialize-production-usdt-secrets.mjs') <
             script.indexOf('source "${environment_file}"'),

@@ -1,3 +1,4 @@
+import { load } from 'cheerio';
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 
@@ -49,6 +50,27 @@ describe('StorefrontPromotionHtmlService', () => {
         expect(html).toContain('action="/promo/enter"');
         expect(html).toContain('name="ticket" value="signed-ticket"');
         expect(html.match(/data-store-entry/g)).toHaveLength(1);
+    });
+
+    it('replaces stale or duplicate entry ticket fields with the current signed ticket', () => {
+        const html = service.render({
+            contentType: 'HTML',
+            source: `<!doctype html><html><body>
+                <form data-store-entry>
+                    <input type="hidden" name="ticket" value="stale-ticket">
+                    <input type="text" name="ticket" value="duplicate-ticket">
+                    <button type="submit">进入</button>
+                </form>
+            </body></html>`,
+            entryTicket: 'current-signed-ticket',
+            bindings,
+        });
+
+        const $ = load(html);
+        const tickets = $('form[data-store-entry] input[name="ticket"]');
+        expect(tickets).toHaveLength(1);
+        expect(tickets.attr('type')).toBe('hidden');
+        expect(tickets.attr('value')).toBe('current-signed-ticket');
     });
 
     it('does not execute HTML embedded in Markdown', () => {
@@ -252,6 +274,9 @@ describe('StorefrontPromotionHtmlService', () => {
         expect(PROMOTION_VISUAL_SCRIPT).not.toContain('canvas');
         expect(PROMOTION_VISUAL_SCRIPT).not.toContain("addEventListener('scroll'");
         expect(PROMOTION_VISUAL_SCRIPT).toContain('const slideInterval=3000');
+        expect(PROMOTION_VISUAL_SCRIPT).toContain("form.addEventListener('submit'");
+        expect(PROMOTION_VISUAL_SCRIPT).toContain("fetch('/promo',{cache:'no-store'");
+        expect(PROMOTION_VISUAL_SCRIPT).toContain('HTMLFormElement.prototype.submit.call(form)');
         expect(PROMOTION_VISUAL_SCRIPT).toContain('carouselTimer=setTimeout');
         expect(PROMOTION_VISUAL_SCRIPT).not.toContain('updateProgress');
         expect(PROMOTION_VISUAL_SCRIPT).not.toContain('updateToggle');
