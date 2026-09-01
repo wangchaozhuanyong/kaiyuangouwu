@@ -19,7 +19,13 @@ import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurfac
 import { GET_AFTER_SALES_REQUESTS, TRANSITION_AFTER_SALES_REQUEST } from '../../graphql/sales.graphql';
 import { useUrlTab } from '../../hooks/use-url-tab';
 import { toUserFacingError } from '../../utils/user-facing-error';
-import { formatDateTime, formatMoney, majorInputToMoney, moneyToMajorInput } from './sales-utils';
+import {
+    formatDateTime,
+    formatMoney,
+    getOrderStateLabel,
+    majorInputToMoney,
+    moneyToMajorInput,
+} from './sales-utils';
 
 type AfterSalesTab = 'ALL' | 'PENDING' | 'APPROVED' | 'COMPLETED' | 'REJECTED';
 const AFTER_SALES_TABS = {
@@ -358,7 +364,7 @@ export function AfterSalesModule() {
                         {loading && !data ? (
                             <div className="space-y-3 p-6">
                                 {[1, 2, 3, 4, 5].map(item => (
-                                    <div key={item} className="h-16 animate-pulse rounded-lg bg-slate-100" />
+                                    <div key={item} className="h-12 animate-pulse rounded-lg bg-slate-100" />
                                 ))}
                             </div>
                         ) : !error && visibleRequests.length === 0 ? (
@@ -374,76 +380,125 @@ export function AfterSalesModule() {
                         ) : (
                             visibleRequests.length > 0 && (
                                 <div className="overflow-x-auto">
-                                    <table className="w-full min-w-[980px] text-left text-xs">
+                                    <table className="w-full min-w-[1540px] border-collapse text-left text-xs">
                                         <thead>
-                                            <tr className="border-b border-slate-200 bg-slate-50 text-slate-500">
-                                                <th className="p-4">工单 / 订单</th>
-                                                <th className="p-4">买家</th>
-                                                <th className="p-4">售后类型与原因</th>
-                                                <th className="p-4">申请金额</th>
-                                                <th className="p-4">状态</th>
-                                                <th className="p-4">申请时间</th>
-                                                <th className="p-4 text-right">操作</th>
+                                            <tr className="border-b border-slate-200 bg-slate-50 text-[11px] font-bold text-slate-500">
+                                                <th
+                                                    scope="col"
+                                                    className="sticky left-0 z-20 w-44 whitespace-nowrap bg-slate-50 px-3 py-3"
+                                                >
+                                                    工单号
+                                                </th>
+                                                <th scope="col" className="w-44 whitespace-nowrap px-3 py-3">
+                                                    订单号
+                                                </th>
+                                                <th scope="col" className="w-36 whitespace-nowrap px-3 py-3">
+                                                    买家
+                                                </th>
+                                                <th scope="col" className="w-56 whitespace-nowrap px-3 py-3">
+                                                    邮箱
+                                                </th>
+                                                <th scope="col" className="w-28 whitespace-nowrap px-3 py-3">
+                                                    售后类型
+                                                </th>
+                                                <th scope="col" className="w-52 whitespace-nowrap px-3 py-3">
+                                                    原因
+                                                </th>
+                                                <th scope="col" className="w-32 whitespace-nowrap px-3 py-3">
+                                                    申请金额
+                                                </th>
+                                                <th scope="col" className="w-44 whitespace-nowrap px-3 py-3">
+                                                    状态
+                                                </th>
+                                                <th scope="col" className="w-40 whitespace-nowrap px-3 py-3">
+                                                    申请时间
+                                                </th>
+                                                <th
+                                                    scope="col"
+                                                    className="sticky right-0 z-20 w-28 whitespace-nowrap border-l border-slate-200 bg-slate-50 px-3 py-3 text-right"
+                                                >
+                                                    操作
+                                                </th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-100">
                                             {visibleRequests.map(request => (
-                                                <tr key={request.id} className="hover:bg-slate-50/80">
-                                                    <td className="p-4">
+                                                <tr
+                                                    key={request.id}
+                                                    className="group h-[52px] hover:bg-slate-50/80"
+                                                >
+                                                    <td className="sticky left-0 z-10 h-[52px] max-w-44 bg-white px-3 py-0 group-hover:bg-slate-50">
                                                         <button
                                                             type="button"
                                                             onClick={() => openRequest(request)}
-                                                            className="font-mono text-sm font-semibold text-slate-950 hover:text-blue-700"
+                                                            className="block max-w-40 truncate whitespace-nowrap font-mono text-xs font-bold text-slate-950 hover:text-blue-700"
+                                                            title={request.code}
                                                         >
                                                             {request.code}
                                                         </button>
+                                                    </td>
+                                                    <td className="h-[52px] max-w-44 px-3 py-0">
                                                         <button
                                                             type="button"
                                                             onClick={() =>
                                                                 navigate(`/sales/orders/${request.order.id}`)
                                                             }
-                                                            className="mt-1 block font-mono text-[10px] text-blue-600 hover:underline"
+                                                            className="block max-w-40 truncate whitespace-nowrap font-mono text-[10px] text-blue-600 hover:underline"
+                                                            title={request.order.code}
                                                         >
-                                                            订单 {request.order.code}
+                                                            {request.order.code}
                                                         </button>
                                                     </td>
-                                                    <td className="p-4">
-                                                        <div className="font-semibold text-slate-900">
+                                                    <td className="h-[52px] max-w-36 px-3 py-0">
+                                                        <span
+                                                            className="block truncate font-semibold text-slate-900"
+                                                            title={request.customerName}
+                                                        >
                                                             {request.customerName}
-                                                        </div>
-                                                        <div className="mt-0.5 text-[11px] text-slate-500">
+                                                        </span>
+                                                    </td>
+                                                    <td className="h-[52px] max-w-56 px-3 py-0">
+                                                        <span
+                                                            className="block truncate text-slate-500"
+                                                            title={request.customerEmail}
+                                                        >
                                                             {request.customerEmail}
-                                                        </div>
+                                                        </span>
                                                     </td>
-                                                    <td className="p-4">
-                                                        <div className="font-semibold text-slate-800">
-                                                            {typeLabels[request.type]}
-                                                        </div>
-                                                        <div className="mt-1 text-[11px] text-slate-500">
+                                                    <td className="h-[52px] whitespace-nowrap px-3 py-0 font-semibold text-slate-800">
+                                                        {typeLabels[request.type]}
+                                                    </td>
+                                                    <td className="h-[52px] max-w-52 px-3 py-0">
+                                                        <span
+                                                            className="block truncate text-slate-500"
+                                                            title={
+                                                                reasonLabels[request.reason] ?? request.reason
+                                                            }
+                                                        >
                                                             {reasonLabels[request.reason] ?? request.reason}
-                                                        </div>
+                                                        </span>
                                                     </td>
-                                                    <td className="p-4 font-mono text-sm font-semibold tabular-nums text-slate-950">
+                                                    <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-xs font-bold tabular-nums text-slate-950">
                                                         {formatMoney(
                                                             request.requestedAmount,
                                                             request.currencyCode,
                                                         )}
                                                     </td>
-                                                    <td className="p-4">
+                                                    <td className="h-[52px] whitespace-nowrap px-3 py-0">
                                                         <span
-                                                            className={`inline-flex rounded-md border px-2 py-1 text-[11px] font-semibold ${stateClasses[request.state]}`}
+                                                            className={`inline-flex whitespace-nowrap rounded-md border px-2 py-1 text-[10px] font-semibold ${stateClasses[request.state]}`}
                                                         >
                                                             {stateLabels[request.state]}
                                                         </span>
                                                     </td>
-                                                    <td className="p-4 text-slate-500">
+                                                    <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500">
                                                         {formatDateTime(request.createdAt)}
                                                     </td>
-                                                    <td className="p-4 text-right">
+                                                    <td className="sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 bg-white px-3 py-0 text-right group-hover:bg-slate-50">
                                                         <button
                                                             type="button"
                                                             onClick={() => openRequest(request)}
-                                                            className="rounded-lg bg-blue-50 px-3 py-1.5 font-semibold text-blue-700 hover:bg-blue-100"
+                                                            className="whitespace-nowrap rounded-lg bg-blue-50 px-3 py-1.5 text-[10px] font-semibold text-blue-700 hover:bg-blue-100"
                                                         >
                                                             审核详情
                                                         </button>
@@ -538,7 +593,7 @@ export function AfterSalesModule() {
                                         {selectedRequest.order.code}
                                     </button>
                                     <div className="mt-1 text-[11px] text-slate-500">
-                                        订单状态 {selectedRequest.order.state}
+                                        订单状态 {getOrderStateLabel(selectedRequest.order.state)}
                                     </div>
                                 </div>
                                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">

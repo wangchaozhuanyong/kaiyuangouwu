@@ -87,6 +87,8 @@ import { AddProductPackaging1787911200000 } from './1787911200000-add-product-pa
 import { AddCommerceModeAndManualDelivery1787914800000 } from './1787914800000-add-commerce-mode-and-manual-delivery';
 import { AlignSqliteSchema1788182779979 } from './1788182779979-align-sqlite-schema';
 import { AlignMysqlCommerceSchema1788271200000 } from './1788271200000-align-mysql-commerce-schema';
+import { RepairReferralPosterTemplateCopy1788274800000 } from './1788274800000-repair-referral-poster-template-copy';
+import { AlignSqliteRuntimeSchema1788278400000 } from './1788278400000-align-sqlite-runtime-schema';
 
 export const devServerMigrations = [
     CommerceFulfillment1786514145999,
@@ -178,4 +180,6 @@ export const devServerMigrations = [
     AddCommerceModeAndManualDelivery1787914800000,
     AlignSqliteSchema1788182779979,
     AlignMysqlCommerceSchema1788271200000,
+    RepairReferralPosterTemplateCopy1788274800000,
+    AlignSqliteRuntimeSchema1788278400000,
 ];

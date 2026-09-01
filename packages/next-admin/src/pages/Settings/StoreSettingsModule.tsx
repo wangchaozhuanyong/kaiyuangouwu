@@ -864,24 +864,52 @@ function SellersPanel({
         <>
             <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
                 <div className="overflow-x-auto">
-                    <table className="w-full min-w-[650px] text-left text-xs">
+                    <table className="w-full min-w-[760px] border-collapse text-left text-xs">
                         <thead>
                             <tr className={theadClass}>
-                                <th className="p-4">商家主体</th>
-                                <th className="p-4">ID</th>
-                                <th className="p-4">创建时间</th>
-                                <th className="p-4">更新时间</th>
-                                <th className="p-4 text-right">操作</th>
+                                <th
+                                    scope="col"
+                                    className="sticky left-0 z-20 w-52 whitespace-nowrap bg-slate-50 px-3 py-3"
+                                >
+                                    商家主体
+                                </th>
+                                <th scope="col" className="w-56 whitespace-nowrap px-3 py-3">
+                                    ID
+                                </th>
+                                <th scope="col" className="w-40 whitespace-nowrap px-3 py-3">
+                                    创建时间
+                                </th>
+                                <th scope="col" className="w-40 whitespace-nowrap px-3 py-3">
+                                    更新时间
+                                </th>
+                                <th
+                                    scope="col"
+                                    className="sticky right-0 z-20 w-24 whitespace-nowrap border-l border-slate-200 bg-slate-50 px-3 py-3 text-right"
+                                >
+                                    操作
+                                </th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                             {sellers.map(seller => (
-                                <tr key={seller.id}>
-                                    <td className="p-4 font-bold text-slate-900">{seller.name}</td>
-                                    <td className="p-4 font-mono text-[10px] text-slate-400">{seller.id}</td>
-                                    <td className="p-4 text-slate-500">{formatDateTime(seller.createdAt)}</td>
-                                    <td className="p-4 text-slate-500">{formatDateTime(seller.updatedAt)}</td>
-                                    <td className="p-4">
+                                <tr key={seller.id} className="group h-[52px] hover:bg-slate-50/80">
+                                    <td className="sticky left-0 z-10 h-[52px] max-w-52 bg-white px-3 py-0 font-bold text-slate-900 group-hover:bg-slate-50">
+                                        <span className="block truncate" title={seller.name}>
+                                            {seller.name}
+                                        </span>
+                                    </td>
+                                    <td className="h-[52px] max-w-56 px-3 py-0 font-mono text-[10px] text-slate-400">
+                                        <span className="block truncate" title={seller.id}>
+                                            {seller.id}
+                                        </span>
+                                    </td>
+                                    <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500">
+                                        {formatDateTime(seller.createdAt)}
+                                    </td>
+                                    <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500">
+                                        {formatDateTime(seller.updatedAt)}
+                                    </td>
+                                    <td className="sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 bg-white px-3 py-0 group-hover:bg-slate-50">
                                         <div className="flex justify-end gap-1">
                                             <button
                                                 type="button"

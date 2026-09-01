@@ -288,56 +288,102 @@ function MembersTable({
     return (
         <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
             <div className="overflow-x-auto">
-                <table className="w-full min-w-[900px] text-left text-xs">
+                <table className="w-full min-w-[1500px] border-collapse text-left text-xs">
                     <thead>
                         <tr className={theadClass}>
-                            <th className="p-4">员工</th>
-                            <th className="p-4">登录账号</th>
-                            <th className="p-4">角色</th>
-                            <th className="p-4">最近登录</th>
-                            <th className="p-4">创建时间</th>
-                            <th className="p-4 text-right">操作</th>
+                            <th
+                                scope="col"
+                                className="sticky left-0 z-20 w-40 whitespace-nowrap bg-slate-50 px-3 py-3"
+                            >
+                                姓名
+                            </th>
+                            <th scope="col" className="w-24 whitespace-nowrap px-3 py-3">
+                                当前账号
+                            </th>
+                            <th scope="col" className="w-56 whitespace-nowrap px-3 py-3">
+                                邮箱
+                            </th>
+                            <th scope="col" className="w-48 whitespace-nowrap px-3 py-3">
+                                登录标识
+                            </th>
+                            <th scope="col" className="w-56 whitespace-nowrap px-3 py-3">
+                                角色
+                            </th>
+                            <th scope="col" className="w-40 whitespace-nowrap px-3 py-3">
+                                最近登录
+                            </th>
+                            <th scope="col" className="w-40 whitespace-nowrap px-3 py-3">
+                                创建时间
+                            </th>
+                            <th
+                                scope="col"
+                                className="sticky right-0 z-20 w-24 whitespace-nowrap border-l border-slate-200 bg-slate-50 px-3 py-3 text-right"
+                            >
+                                操作
+                            </th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                         {members.map(member => (
-                            <tr key={member.id} className="hover:bg-slate-50">
-                                <td className="p-4">
-                                    <div className="font-bold text-slate-900">
+                            <tr key={member.id} className="group h-[52px] hover:bg-slate-50">
+                                <td className="sticky left-0 z-10 h-[52px] max-w-40 bg-white px-3 py-0 font-bold text-slate-900 group-hover:bg-slate-50">
+                                    <span
+                                        className="block truncate"
+                                        title={`${member.firstName}${member.lastName}`}
+                                    >
                                         {member.firstName}
                                         {member.lastName}
-                                    </div>
-                                    {member.id === activeId && (
-                                        <span className="mt-1 inline-block rounded bg-blue-50 px-1.5 py-0.5 text-[9px] font-bold text-blue-700">
-                                            当前账号
-                                        </span>
-                                    )}
+                                    </span>
                                 </td>
-                                <td className="p-4">
-                                    <div>{member.emailAddress}</div>
-                                    <div className="mt-1 font-mono text-[9px] text-slate-400">
+                                <td className="h-[52px] whitespace-nowrap px-3 py-0 text-[10px] font-bold">
+                                    <span
+                                        className={
+                                            member.id === activeId ? 'text-blue-700' : 'text-slate-400'
+                                        }
+                                    >
+                                        {member.id === activeId ? '是' : '否'}
+                                    </span>
+                                </td>
+                                <td className="h-[52px] max-w-56 px-3 py-0">
+                                    <span className="block truncate" title={member.emailAddress}>
+                                        {member.emailAddress}
+                                    </span>
+                                </td>
+                                <td className="h-[52px] max-w-48 px-3 py-0 font-mono text-[10px] text-slate-500">
+                                    <span className="block truncate" title={member.user.identifier}>
                                         {member.user.identifier}
-                                    </div>
+                                    </span>
                                 </td>
-                                <td className="p-4">
-                                    <div className="flex max-w-md flex-wrap gap-1">
-                                        {member.user.roles.map(role => (
-                                            <span
-                                                key={role.id}
-                                                className="rounded bg-slate-100 px-2 py-1 text-[10px] text-slate-600"
-                                            >
-                                                {role.description || role.code}
+                                <td className="h-[52px] max-w-56 px-3 py-0">
+                                    <div className="flex max-w-52 items-center gap-1 whitespace-nowrap">
+                                        <span
+                                            className="min-w-0 truncate rounded bg-slate-100 px-2 py-1 text-[10px] text-slate-600"
+                                            title={
+                                                member.user.roles[0]?.description ||
+                                                member.user.roles[0]?.code ||
+                                                '未分配角色'
+                                            }
+                                        >
+                                            {member.user.roles[0]?.description ||
+                                                member.user.roles[0]?.code ||
+                                                '未分配角色'}
+                                        </span>
+                                        {member.user.roles.length > 1 && (
+                                            <span className="shrink-0 text-[10px] text-slate-500">
+                                                +{member.user.roles.length - 1}
                                             </span>
-                                        ))}
+                                        )}
                                     </div>
                                 </td>
-                                <td className="p-4 text-slate-500">
+                                <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500">
                                     {member.user.lastLogin
                                         ? formatDateTime(member.user.lastLogin)
                                         : '从未登录'}
                                 </td>
-                                <td className="p-4 text-slate-400">{formatDateTime(member.createdAt)}</td>
-                                <td className="p-4">
+                                <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-400">
+                                    {formatDateTime(member.createdAt)}
+                                </td>
+                                <td className="sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 bg-white px-3 py-0 group-hover:bg-slate-50">
                                     <div className="flex justify-end gap-1">
                                         <button
                                             type="button"
@@ -360,7 +406,7 @@ function MembersTable({
                                 </td>
                             </tr>
                         ))}
-                        {!members.length && <EmptyRow colSpan={6} text="没有符合条件的员工账号" />}
+                        {!members.length && <EmptyRow colSpan={8} text="没有符合条件的员工账号" />}
                     </tbody>
                 </table>
             </div>
@@ -414,48 +460,84 @@ function RolesTable({
     return (
         <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
             <div className="overflow-x-auto">
-                <table className="w-full min-w-[850px] text-left text-xs">
+                <table className="w-full min-w-[1120px] border-collapse text-left text-xs">
                     <thead>
                         <tr className={theadClass}>
-                            <th className="p-4">角色</th>
-                            <th className="p-4">代码</th>
-                            <th className="p-4">渠道范围</th>
-                            <th className="p-4">权限</th>
-                            <th className="p-4">关联员工</th>
-                            <th className="p-4 text-right">操作</th>
+                            <th
+                                scope="col"
+                                className="sticky left-0 z-20 w-52 whitespace-nowrap bg-slate-50 px-3 py-3"
+                            >
+                                角色名称
+                            </th>
+                            <th scope="col" className="w-24 whitespace-nowrap px-3 py-3">
+                                类型
+                            </th>
+                            <th scope="col" className="w-44 whitespace-nowrap px-3 py-3">
+                                代码
+                            </th>
+                            <th scope="col" className="w-56 whitespace-nowrap px-3 py-3">
+                                渠道范围
+                            </th>
+                            <th scope="col" className="w-24 whitespace-nowrap px-3 py-3">
+                                权限
+                            </th>
+                            <th scope="col" className="w-24 whitespace-nowrap px-3 py-3">
+                                关联员工
+                            </th>
+                            <th
+                                scope="col"
+                                className="sticky right-0 z-20 w-44 whitespace-nowrap border-l border-slate-200 bg-slate-50 px-3 py-3 text-right"
+                            >
+                                操作
+                            </th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                         {roles.map(role => {
                             const system = isSystemRole(role);
                             return (
-                                <tr key={role.id} className="hover:bg-slate-50">
-                                    <td className="p-4">
-                                        <div className="flex items-center gap-2 font-bold text-slate-900">
+                                <tr key={role.id} className="group h-[52px] hover:bg-slate-50">
+                                    <td className="sticky left-0 z-10 h-[52px] max-w-52 bg-white px-3 py-0 group-hover:bg-slate-50">
+                                        <div className="flex items-center gap-2 truncate font-bold text-slate-900">
                                             <Shield
                                                 className={`h-4 w-4 ${system ? 'text-emerald-600' : 'text-blue-600'}`}
                                             />
                                             {role.description || role.code}
                                         </div>
-                                        {system && (
-                                            <span className="mt-1 inline-block rounded bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold text-emerald-700">
-                                                系统保留
-                                            </span>
-                                        )}
                                     </td>
-                                    <td className="p-4 font-mono text-[10px] text-slate-500">{role.code}</td>
-                                    <td className="p-4 text-slate-600">
-                                        {system
-                                            ? '全部渠道'
-                                            : role.channels.length
-                                              ? role.channels.map(channel => channel.code).join('、')
-                                              : '未限定渠道'}
+                                    <td className="h-[52px] whitespace-nowrap px-3 py-0 text-[10px] font-bold text-slate-600">
+                                        {system ? '系统保留' : '自定义'}
                                     </td>
-                                    <td className="p-4 font-mono font-bold text-blue-700">
+                                    <td className="h-[52px] max-w-44 px-3 py-0 font-mono text-[10px] text-slate-500">
+                                        <span className="block truncate" title={role.code}>
+                                            {role.code}
+                                        </span>
+                                    </td>
+                                    <td className="h-[52px] max-w-56 px-3 py-0 text-slate-600">
+                                        <span
+                                            className="block truncate"
+                                            title={
+                                                system
+                                                    ? '全部渠道'
+                                                    : role.channels.length
+                                                      ? role.channels.map(channel => channel.code).join('、')
+                                                      : '未限定渠道'
+                                            }
+                                        >
+                                            {system
+                                                ? '全部渠道'
+                                                : role.channels.length
+                                                  ? role.channels.map(channel => channel.code).join('、')
+                                                  : '未限定渠道'}
+                                        </span>
+                                    </td>
+                                    <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono font-bold text-blue-700">
                                         {role.permissions.length} 项
                                     </td>
-                                    <td className="p-4">{memberCount(role.id)} 人</td>
-                                    <td className="p-4">
+                                    <td className="h-[52px] whitespace-nowrap px-3 py-0">
+                                        {memberCount(role.id)} 人
+                                    </td>
+                                    <td className="sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 bg-white px-3 py-0 group-hover:bg-slate-50">
                                         <div className="flex justify-end gap-1">
                                             <button
                                                 type="button"
@@ -480,7 +562,7 @@ function RolesTable({
                                 </tr>
                             );
                         })}
-                        {!roles.length && <EmptyRow colSpan={6} text="没有符合条件的角色" />}
+                        {!roles.length && <EmptyRow colSpan={7} text="没有符合条件的角色" />}
                     </tbody>
                 </table>
             </div>

@@ -519,15 +519,43 @@ export function DashboardModule() {
                                             </div>
                                         ) : (
                                             <div className="overflow-x-auto">
-                                                <table className="w-full min-w-[720px] text-left text-xs">
+                                                <table className="w-full min-w-[760px] border-collapse text-left text-xs">
                                                     <thead className="bg-slate-50 text-[11px] text-slate-500">
                                                         <tr>
-                                                            <th className="px-5 py-3 font-medium">订单号</th>
-                                                            <th className="px-4 py-3 font-medium">买家</th>
-                                                            <th className="px-4 py-3 font-medium">商品</th>
-                                                            <th className="px-4 py-3 font-medium">金额</th>
-                                                            <th className="px-4 py-3 font-medium">状态</th>
-                                                            <th className="px-4 py-3 font-medium">
+                                                            <th
+                                                                scope="col"
+                                                                className="sticky left-0 z-10 whitespace-nowrap bg-slate-50 px-4 py-3 font-medium"
+                                                            >
+                                                                订单号
+                                                            </th>
+                                                            <th
+                                                                scope="col"
+                                                                className="whitespace-nowrap px-4 py-3 font-medium"
+                                                            >
+                                                                买家
+                                                            </th>
+                                                            <th
+                                                                scope="col"
+                                                                className="whitespace-nowrap px-4 py-3 font-medium"
+                                                            >
+                                                                购买数量
+                                                            </th>
+                                                            <th
+                                                                scope="col"
+                                                                className="whitespace-nowrap px-4 py-3 font-medium"
+                                                            >
+                                                                金额
+                                                            </th>
+                                                            <th
+                                                                scope="col"
+                                                                className="whitespace-nowrap px-4 py-3 font-medium"
+                                                            >
+                                                                状态
+                                                            </th>
+                                                            <th
+                                                                scope="col"
+                                                                className="whitespace-nowrap px-4 py-3 font-medium"
+                                                            >
                                                                 下单时间
                                                             </th>
                                                         </tr>
@@ -536,9 +564,9 @@ export function DashboardModule() {
                                                         {recentOrders.data?.orders.items.map(order => (
                                                             <tr
                                                                 key={order.id}
-                                                                className="hover:bg-blue-50/40"
+                                                                className="group h-[52px] hover:bg-blue-50/40"
                                                             >
-                                                                <td className="px-5 py-3.5">
+                                                                <td className="sticky left-0 z-[1] h-[52px] bg-white px-4 py-0 group-hover:bg-blue-50">
                                                                     <button
                                                                         type="button"
                                                                         onClick={() =>
@@ -551,26 +579,33 @@ export function DashboardModule() {
                                                                         {order.code}
                                                                     </button>
                                                                 </td>
-                                                                <td className="max-w-44 truncate px-4 py-3.5 text-slate-700">
-                                                                    {getCustomerName(order.customer)}
+                                                                <td className="h-[52px] max-w-44 px-4 py-0 text-slate-700">
+                                                                    <span
+                                                                        className="block truncate"
+                                                                        title={getCustomerName(
+                                                                            order.customer,
+                                                                        )}
+                                                                    >
+                                                                        {getCustomerName(order.customer)}
+                                                                    </span>
                                                                 </td>
-                                                                <td className="px-4 py-3.5 text-slate-600">
+                                                                <td className="h-[52px] whitespace-nowrap px-4 py-0 text-slate-600">
                                                                     {order.totalQuantity} 件
                                                                 </td>
-                                                                <td className="px-4 py-3.5 font-mono font-bold text-slate-900">
+                                                                <td className="h-[52px] whitespace-nowrap px-4 py-0 font-mono font-bold text-slate-900">
                                                                     {formatMoney(
                                                                         order.totalWithTax,
                                                                         order.currencyCode,
                                                                     )}
                                                                 </td>
-                                                                <td className="px-4 py-3.5">
+                                                                <td className="h-[52px] whitespace-nowrap px-4 py-0">
                                                                     <span
                                                                         className={`rounded-md border px-2 py-1 text-[11px] font-bold ${getOrderStateClass(order.state)}`}
                                                                     >
                                                                         {getOrderStateLabel(order.state)}
                                                                     </span>
                                                                 </td>
-                                                                <td className="whitespace-nowrap px-4 py-3.5 text-slate-500">
+                                                                <td className="h-[52px] whitespace-nowrap px-4 py-0 font-mono text-[10px] text-slate-500">
                                                                     {formatDateTime(
                                                                         order.orderPlacedAt ??
                                                                             order.createdAt,

@@ -74,6 +74,51 @@ describe('next-admin dynamic custom fields', () => {
         expect(
             isDashboardVisibleCustomField({ name: 'x', type: 'string', list: false, internal: true }),
         ).toBe(false);
+        expect(
+            isDashboardVisibleCustomField({
+                name: undefined as unknown as string,
+                type: 'string',
+                list: false,
+            }),
+        ).toBe(false);
+    });
+
+    it('ignores incomplete cached field names and falls relation selections back to id', () => {
+        const incompleteFields: CustomFieldDefinition[] = [
+            {
+                name: 'owner',
+                type: 'relation',
+                list: false,
+                scalarFields: [undefined as unknown as string, ''],
+            },
+            {
+                name: 'metadata',
+                type: 'struct',
+                list: false,
+                fields: [
+                    { name: undefined as unknown as string, type: 'string', list: false },
+                    { name: 'source', type: 'string', list: false },
+                ],
+            },
+        ];
+        const transformed = print(
+            addCustomFieldsToDocument(
+                gql`
+                    query Order($id: ID!) {
+                        order(id: $id) {
+                            id
+                        }
+                    }
+                `,
+                'Order',
+                incompleteFields,
+                ['order'],
+            ),
+        );
+
+        expect(transformed).toMatch(/owner \{\s+id/u);
+        expect(transformed).toMatch(/metadata \{\s+source/u);
+        expect(transformed).not.toContain('undefined');
     });
 
     it('reads and writes localized values through translation custom fields', () => {

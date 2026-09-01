@@ -41,7 +41,7 @@ import {
 } from '../../graphql/fulfillment.graphql';
 import { useUrlTab } from '../../hooks/use-url-tab';
 import { toUserFacingError } from '../../utils/user-facing-error';
-import { formatDateTime } from './sales-utils';
+import { formatDateTime, getOrderStateLabel } from './sales-utils';
 
 type Tab = 'POOL' | 'DELIVERIES';
 const CARD_POOL_TABS = { pool: 'POOL', deliveries: 'DELIVERIES' } as const;
@@ -440,88 +440,126 @@ function PoolTable({
     return (
         <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
             <div className="overflow-x-auto">
-                <table className="w-full min-w-[1000px] text-left text-xs">
+                <table className="w-full min-w-[1320px] border-collapse text-left text-xs">
                     <thead>
                         <tr className={theadClass}>
-                            <th className="p-4">序号</th>
-                            <th className="p-4">卡密字段（脱敏）</th>
-                            <th className="p-4">状态</th>
-                            <th className="p-4">入库时间</th>
-                            <th className="p-4">分配时间</th>
-                            <th className="p-4">关联交付</th>
-                            <th className="p-4">停用原因</th>
-                            <th className="p-4 text-right">操作</th>
+                            <th
+                                scope="col"
+                                className="sticky left-0 z-20 w-24 whitespace-nowrap bg-slate-50 px-3 py-3"
+                            >
+                                序号
+                            </th>
+                            <th scope="col" className="w-72 whitespace-nowrap px-3 py-3">
+                                卡密摘要（脱敏）
+                            </th>
+                            <th scope="col" className="w-28 whitespace-nowrap px-3 py-3">
+                                状态
+                            </th>
+                            <th scope="col" className="w-40 whitespace-nowrap px-3 py-3">
+                                入库时间
+                            </th>
+                            <th scope="col" className="w-40 whitespace-nowrap px-3 py-3">
+                                分配时间
+                            </th>
+                            <th scope="col" className="w-52 whitespace-nowrap px-3 py-3">
+                                关联交付
+                            </th>
+                            <th scope="col" className="w-56 whitespace-nowrap px-3 py-3">
+                                停用原因
+                            </th>
+                            <th
+                                scope="col"
+                                className="sticky right-0 z-20 w-28 whitespace-nowrap border-l border-slate-200 bg-slate-50 px-3 py-3 text-right"
+                            >
+                                操作
+                            </th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                        {filtered.map(item => (
-                            <tr key={item.id} className="hover:bg-slate-50">
-                                <td className="p-4 font-mono font-bold text-slate-700">#{item.sequence}</td>
-                                <td className="p-4">
-                                    <div className="space-y-1">
-                                        {item.maskedFields.map(field => (
-                                            <div key={field.key}>
-                                                <span className="text-[9px] text-slate-400">
-                                                    {field.label}：
+                        {filtered.map(item => {
+                            const firstField = item.maskedFields[0];
+                            const fieldSummary = firstField
+                                ? `${firstField.label}：${firstField.value}`
+                                : '无字段';
+                            return (
+                                <tr key={item.id} className="group h-[52px] hover:bg-slate-50">
+                                    <td className="sticky left-0 z-10 h-[52px] whitespace-nowrap bg-white px-3 py-0 font-mono font-bold text-slate-700 group-hover:bg-slate-50">
+                                        #{item.sequence}
+                                    </td>
+                                    <td className="h-[52px] max-w-72 px-3 py-0">
+                                        <div className="flex max-w-68 items-center gap-1 whitespace-nowrap">
+                                            <code
+                                                className="min-w-0 truncate font-mono text-[10px] text-slate-700"
+                                                title={fieldSummary}
+                                            >
+                                                {fieldSummary}
+                                            </code>
+                                            {item.maskedFields.length > 1 && (
+                                                <span className="shrink-0 text-[9px] font-bold text-blue-700">
+                                                    +{item.maskedFields.length - 1}字段
                                                 </span>
-                                                <code className="font-mono text-[10px] text-slate-700">
-                                                    {field.value}
-                                                </code>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </td>
-                                <td className="p-4">
-                                    <PoolStateBadge state={item.state} />
-                                </td>
-                                <td className="p-4 text-[10px] text-slate-500">
-                                    {formatDateTime(item.createdAt)}
-                                </td>
-                                <td className="p-4 text-[10px] text-slate-500">
-                                    {item.assignedAt ? formatDateTime(item.assignedAt) : '—'}
-                                </td>
-                                <td className="p-4 font-mono text-[10px] text-slate-500">
-                                    {item.deliveryId ?? '—'}
-                                </td>
-                                <td className="max-w-48 p-4 text-[10px] text-rose-600">
-                                    {item.disabledReason ?? '—'}
-                                </td>
-                                <td className="p-4">
-                                    <div className="flex justify-end gap-1">
-                                        <button
-                                            type="button"
-                                            onClick={() => void revealItem(item)}
-                                            disabled={revealState.loading}
-                                            className={iconButton}
-                                            aria-label="查看明文"
+                                            )}
+                                        </div>
+                                    </td>
+                                    <td className="h-[52px] whitespace-nowrap px-3 py-0">
+                                        <PoolStateBadge state={item.state} />
+                                    </td>
+                                    <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500">
+                                        {formatDateTime(item.createdAt)}
+                                    </td>
+                                    <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500">
+                                        {item.assignedAt ? formatDateTime(item.assignedAt) : '—'}
+                                    </td>
+                                    <td className="h-[52px] max-w-52 px-3 py-0 font-mono text-[10px] text-slate-500">
+                                        <span className="block truncate" title={item.deliveryId ?? undefined}>
+                                            {item.deliveryId ?? '—'}
+                                        </span>
+                                    </td>
+                                    <td className="h-[52px] max-w-56 px-3 py-0 text-[10px] text-rose-600">
+                                        <span
+                                            className="block truncate"
+                                            title={item.disabledReason ?? undefined}
                                         >
-                                            <Eye className="h-4 w-4" />
-                                        </button>
-                                        {item.state === 'AVAILABLE' && (
+                                            {item.disabledReason ?? '—'}
+                                        </span>
+                                    </td>
+                                    <td className="sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 bg-white px-3 py-0 group-hover:bg-slate-50">
+                                        <div className="flex justify-end gap-1">
                                             <button
                                                 type="button"
-                                                onClick={() => setDisableItem(item)}
-                                                className={`${iconButton} text-rose-600`}
-                                                aria-label="停用"
+                                                onClick={() => void revealItem(item)}
+                                                disabled={revealState.loading}
+                                                className={iconButton}
+                                                aria-label="查看明文"
                                             >
-                                                <ShieldOff className="h-4 w-4" />
+                                                <Eye className="h-4 w-4" />
                                             </button>
-                                        )}
-                                        {item.state === 'DISABLED' && (
-                                            <button
-                                                type="button"
-                                                onClick={() => void enable(item)}
-                                                disabled={enabledState.loading}
-                                                className={`${iconButton} text-emerald-600`}
-                                                aria-label="恢复可用"
-                                            >
-                                                <RotateCcw className="h-4 w-4" />
-                                            </button>
-                                        )}
-                                    </div>
-                                </td>
-                            </tr>
-                        ))}
+                                            {item.state === 'AVAILABLE' && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setDisableItem(item)}
+                                                    className={`${iconButton} text-rose-600`}
+                                                    aria-label="停用"
+                                                >
+                                                    <ShieldOff className="h-4 w-4" />
+                                                </button>
+                                            )}
+                                            {item.state === 'DISABLED' && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => void enable(item)}
+                                                    disabled={enabledState.loading}
+                                                    className={`${iconButton} text-emerald-600`}
+                                                    aria-label="恢复可用"
+                                                >
+                                                    <RotateCcw className="h-4 w-4" />
+                                                </button>
+                                            )}
+                                        </div>
+                                    </td>
+                                </tr>
+                            );
+                        })}
                         {!filtered.length && <EmptyRow colSpan={8} text="当前条件下没有卡密库存" />}
                     </tbody>
                 </table>
@@ -573,49 +611,100 @@ function DeliveriesTable({
     return (
         <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
             <div className="overflow-x-auto">
-                <table className="w-full min-w-[1050px] text-left text-xs">
+                <table className="w-full min-w-[1680px] border-collapse text-left text-xs">
                     <thead>
                         <tr className={theadClass}>
-                            <th className="p-4">订单</th>
-                            <th className="p-4">商品 / SKU</th>
-                            <th className="p-4">收件邮箱</th>
-                            <th className="p-4">数量</th>
-                            <th className="p-4">交付状态</th>
-                            <th className="p-4">尝试次数</th>
-                            <th className="p-4">发送时间</th>
-                            <th className="p-4">错误</th>
-                            <th className="p-4 text-right">操作</th>
+                            <th
+                                scope="col"
+                                className="sticky left-0 z-20 w-44 whitespace-nowrap bg-slate-50 px-3 py-3"
+                            >
+                                订单号
+                            </th>
+                            <th scope="col" className="w-32 whitespace-nowrap px-3 py-3">
+                                订单状态
+                            </th>
+                            <th scope="col" className="w-60 whitespace-nowrap px-3 py-3">
+                                商品名称
+                            </th>
+                            <th scope="col" className="w-44 whitespace-nowrap px-3 py-3">
+                                SKU
+                            </th>
+                            <th scope="col" className="w-56 whitespace-nowrap px-3 py-3">
+                                收件邮箱
+                            </th>
+                            <th scope="col" className="w-20 whitespace-nowrap px-3 py-3">
+                                数量
+                            </th>
+                            <th scope="col" className="w-28 whitespace-nowrap px-3 py-3">
+                                交付状态
+                            </th>
+                            <th scope="col" className="w-24 whitespace-nowrap px-3 py-3">
+                                尝试次数
+                            </th>
+                            <th scope="col" className="w-40 whitespace-nowrap px-3 py-3">
+                                发送时间
+                            </th>
+                            <th scope="col" className="w-64 whitespace-nowrap px-3 py-3">
+                                错误
+                            </th>
+                            <th
+                                scope="col"
+                                className="sticky right-0 z-20 w-32 whitespace-nowrap border-l border-slate-200 bg-slate-50 px-3 py-3 text-right"
+                            >
+                                操作
+                            </th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                         {items.map(item => (
-                            <tr key={item.id} className="hover:bg-slate-50">
-                                <td className="p-4">
-                                    <div className="font-mono font-bold text-blue-700">{item.order.code}</div>
-                                    <div className="mt-1 text-[9px] text-slate-400">{item.order.state}</div>
+                            <tr key={item.id} className="group h-[52px] hover:bg-slate-50">
+                                <td className="sticky left-0 z-10 h-[52px] max-w-44 bg-white px-3 py-0 font-mono font-bold text-blue-700 group-hover:bg-slate-50">
+                                    <span className="block truncate" title={item.order.code}>
+                                        {item.order.code}
+                                    </span>
                                 </td>
-                                <td className="p-4">
-                                    <strong className="text-slate-800">{item.productName}</strong>
-                                    <div className="mt-1 font-mono text-[9px] text-slate-400">{item.sku}</div>
+                                <td className="h-[52px] whitespace-nowrap px-3 py-0 text-[10px] text-slate-500">
+                                    {getOrderStateLabel(item.order.state)}
                                 </td>
-                                <td className="p-4 text-slate-600">{item.recipientEmail}</td>
-                                <td className="p-4 font-mono font-bold">{item.quantity}</td>
-                                <td className="p-4">
+                                <td className="h-[52px] max-w-60 px-3 py-0">
+                                    <strong
+                                        className="block truncate text-slate-800"
+                                        title={item.productName}
+                                    >
+                                        {item.productName}
+                                    </strong>
+                                </td>
+                                <td className="h-[52px] max-w-44 px-3 py-0 font-mono text-[10px] text-slate-500">
+                                    <span className="block truncate" title={item.sku}>
+                                        {item.sku}
+                                    </span>
+                                </td>
+                                <td className="h-[52px] max-w-56 px-3 py-0 text-slate-600">
+                                    <span className="block truncate" title={item.recipientEmail}>
+                                        {item.recipientEmail}
+                                    </span>
+                                </td>
+                                <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono font-bold">
+                                    {item.quantity}
+                                </td>
+                                <td className="h-[52px] whitespace-nowrap px-3 py-0">
                                     <DeliveryStateBadge state={item.state} />
                                 </td>
-                                <td className="p-4 font-mono text-slate-500">{item.attemptCount}</td>
-                                <td className="p-4 text-[10px] text-slate-500">
+                                <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-slate-500">
+                                    {item.attemptCount}
+                                </td>
+                                <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500">
                                     {item.sentAt ? formatDateTime(item.sentAt) : '—'}
                                 </td>
-                                <td className="max-w-56 p-4">
+                                <td className="h-[52px] max-w-64 px-3 py-0">
                                     <span
-                                        className="line-clamp-2 text-[10px] text-rose-600"
+                                        className="block truncate text-[10px] text-rose-600"
                                         title={item.lastError ?? ''}
                                     >
                                         {item.lastError ?? '—'}
                                     </span>
                                 </td>
-                                <td className="p-4 text-right">
+                                <td className="sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 bg-white px-3 py-0 text-right group-hover:bg-slate-50">
                                     <button
                                         type="button"
                                         onClick={() => void resend(item)}

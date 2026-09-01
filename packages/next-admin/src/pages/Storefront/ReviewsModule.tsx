@@ -7,12 +7,9 @@ import {
     ChevronRight,
     Languages,
     MessageSquare,
-    Package,
     RefreshCw,
     Search,
-    ShieldCheck,
     Star,
-    User,
     X,
     XCircle,
 } from 'lucide-react';
@@ -268,7 +265,7 @@ export function ReviewsModule() {
                         {loading && !data ? (
                             <div className="space-y-3 p-6">
                                 {[1, 2, 3, 4, 5].map(item => (
-                                    <div key={item} className="h-16 animate-pulse rounded-lg bg-slate-100" />
+                                    <div key={item} className="h-12 animate-pulse rounded-lg bg-slate-100" />
                                 ))}
                             </div>
                         ) : !error && reviews.length === 0 ? (
@@ -282,90 +279,142 @@ export function ReviewsModule() {
                         ) : (
                             reviews.length > 0 && (
                                 <div className="overflow-x-auto">
-                                    <table className="w-full min-w-[1020px] text-left text-xs">
+                                    <table className="w-full min-w-[2020px] border-collapse text-left text-xs">
                                         <thead>
                                             <tr className="border-b border-slate-200 bg-slate-50 text-slate-500">
-                                                <th className="p-4">买家</th>
-                                                <th className="p-4">商品 / SKU</th>
-                                                <th className="p-4">评分</th>
-                                                <th className="p-4">评价与商家回复</th>
-                                                <th className="p-4">状态 / 时间</th>
-                                                <th className="p-4 text-right">操作</th>
+                                                <th
+                                                    scope="col"
+                                                    className="sticky left-0 z-20 w-44 whitespace-nowrap bg-slate-50 px-3 py-3"
+                                                >
+                                                    买家
+                                                </th>
+                                                <th scope="col" className="w-24 whitespace-nowrap px-3 py-3">
+                                                    购买验证
+                                                </th>
+                                                <th scope="col" className="w-60 whitespace-nowrap px-3 py-3">
+                                                    商品名称
+                                                </th>
+                                                <th scope="col" className="w-44 whitespace-nowrap px-3 py-3">
+                                                    SKU
+                                                </th>
+                                                <th scope="col" className="w-32 whitespace-nowrap px-3 py-3">
+                                                    评分
+                                                </th>
+                                                <th scope="col" className="w-52 whitespace-nowrap px-3 py-3">
+                                                    评价标题
+                                                </th>
+                                                <th scope="col" className="w-80 whitespace-nowrap px-3 py-3">
+                                                    评价内容
+                                                </th>
+                                                <th scope="col" className="w-72 whitespace-nowrap px-3 py-3">
+                                                    商家回复
+                                                </th>
+                                                <th scope="col" className="w-28 whitespace-nowrap px-3 py-3">
+                                                    状态
+                                                </th>
+                                                <th scope="col" className="w-40 whitespace-nowrap px-3 py-3">
+                                                    提交时间
+                                                </th>
+                                                <th scope="col" className="w-40 whitespace-nowrap px-3 py-3">
+                                                    处理时间
+                                                </th>
+                                                <th
+                                                    scope="col"
+                                                    className="sticky right-0 z-20 w-28 whitespace-nowrap border-l border-slate-200 bg-slate-50 px-3 py-3 text-right"
+                                                >
+                                                    操作
+                                                </th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-100">
                                             {reviews.map(review => (
-                                                <tr key={review.id} className="hover:bg-slate-50/80">
-                                                    <td className="p-4 align-top">
-                                                        <div className="flex items-center gap-2">
-                                                            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
-                                                                <User className="h-4 w-4" />
-                                                            </div>
-                                                            <div>
-                                                                <div className="font-semibold text-slate-900">
-                                                                    {review.customerName}
-                                                                </div>
-                                                                {review.verifiedPurchase && (
-                                                                    <div className="mt-1 flex items-center gap-1 text-[10px] text-emerald-700">
-                                                                        <ShieldCheck className="h-3 w-3" />
-                                                                        真实购买
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        </div>
+                                                <tr
+                                                    key={review.id}
+                                                    className="group h-[52px] hover:bg-slate-50/80"
+                                                >
+                                                    <td className="sticky left-0 z-10 h-[52px] max-w-44 bg-white px-3 py-0 group-hover:bg-slate-50">
+                                                        <span
+                                                            className="block truncate font-semibold text-slate-900"
+                                                            title={review.customerName}
+                                                        >
+                                                            {review.customerName}
+                                                        </span>
                                                     </td>
-                                                    <td className="max-w-xs p-4 align-top">
-                                                        <div className="flex gap-2">
-                                                            <Package className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" />
-                                                            <div>
-                                                                <div className="font-semibold text-slate-800">
-                                                                    {review.productName}
-                                                                </div>
-                                                                <div className="mt-0.5 font-mono text-[10px] text-slate-400">
-                                                                    {review.sku}
-                                                                </div>
-                                                            </div>
-                                                        </div>
+                                                    <td className="h-[52px] whitespace-nowrap px-3 py-0 text-[10px] font-semibold">
+                                                        <span
+                                                            className={
+                                                                review.verifiedPurchase
+                                                                    ? 'text-emerald-700'
+                                                                    : 'text-slate-400'
+                                                            }
+                                                        >
+                                                            {review.verifiedPurchase ? '真实购买' : '未验证'}
+                                                        </span>
                                                     </td>
-                                                    <td className="p-4 align-top">
+                                                    <td className="h-[52px] max-w-60 px-3 py-0">
+                                                        <span
+                                                            className="block truncate font-semibold text-slate-800"
+                                                            title={review.productName}
+                                                        >
+                                                            {review.productName}
+                                                        </span>
+                                                    </td>
+                                                    <td className="h-[52px] max-w-44 px-3 py-0 font-mono text-[10px] text-slate-500">
+                                                        <span className="block truncate" title={review.sku}>
+                                                            {review.sku}
+                                                        </span>
+                                                    </td>
+                                                    <td className="h-[52px] whitespace-nowrap px-3 py-0">
                                                         <Rating value={review.rating} />
                                                     </td>
-                                                    <td className="max-w-md p-4 align-top">
-                                                        <div className="font-semibold text-slate-900">
-                                                            {review.title}
-                                                        </div>
-                                                        <p className="mt-1 line-clamp-3 leading-5 text-slate-600">
-                                                            {review.body}
-                                                        </p>
-                                                        {review.merchantResponse && (
-                                                            <div className="mt-2 rounded-lg border border-blue-100 bg-blue-50/60 p-2.5 text-[11px] leading-5 text-slate-700">
-                                                                <strong className="text-blue-700">
-                                                                    商家回复：
-                                                                </strong>
-                                                                {review.merchantResponse}
-                                                            </div>
-                                                        )}
-                                                    </td>
-                                                    <td className="p-4 align-top">
+                                                    <td className="h-[52px] max-w-52 px-3 py-0">
                                                         <span
-                                                            className={`inline-flex rounded-md border px-2 py-1 text-[11px] font-semibold ${stateClasses[review.state]}`}
+                                                            className="block truncate font-semibold text-slate-900"
+                                                            title={review.title}
+                                                        >
+                                                            {review.title}
+                                                        </span>
+                                                    </td>
+                                                    <td className="h-[52px] max-w-80 px-3 py-0">
+                                                        <span
+                                                            tabIndex={0}
+                                                            className="block truncate text-slate-600 outline-none focus:text-blue-700"
+                                                            title={review.body}
+                                                            aria-label={review.body}
+                                                        >
+                                                            {review.body}
+                                                        </span>
+                                                    </td>
+                                                    <td className="h-[52px] max-w-72 px-3 py-0">
+                                                        <span
+                                                            tabIndex={0}
+                                                            className="block truncate text-slate-600 outline-none focus:text-blue-700"
+                                                            title={review.merchantResponse ?? undefined}
+                                                            aria-label={review.merchantResponse ?? '暂无回复'}
+                                                        >
+                                                            {review.merchantResponse || '-'}
+                                                        </span>
+                                                    </td>
+                                                    <td className="h-[52px] whitespace-nowrap px-3 py-0">
+                                                        <span
+                                                            className={`inline-flex whitespace-nowrap rounded-md border px-2 py-1 text-[10px] font-semibold ${stateClasses[review.state]}`}
                                                         >
                                                             {stateLabels[review.state]}
                                                         </span>
-                                                        <div className="mt-2 text-[10px] text-slate-400">
-                                                            提交 {formatDateTime(review.createdAt)}
-                                                        </div>
-                                                        {review.moderatedAt && (
-                                                            <div className="mt-0.5 text-[10px] text-slate-400">
-                                                                处理 {formatDateTime(review.moderatedAt)}
-                                                            </div>
-                                                        )}
                                                     </td>
-                                                    <td className="p-4 text-right align-top">
+                                                    <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500">
+                                                        {formatDateTime(review.createdAt)}
+                                                    </td>
+                                                    <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500">
+                                                        {review.moderatedAt
+                                                            ? formatDateTime(review.moderatedAt)
+                                                            : '-'}
+                                                    </td>
+                                                    <td className="sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 bg-white px-3 py-0 text-right group-hover:bg-slate-50">
                                                         <button
                                                             type="button"
                                                             onClick={() => openReview(review)}
-                                                            className={`rounded-lg px-3 py-1.5 font-semibold transition ${review.state === 'PENDING' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'}`}
+                                                            className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-[10px] font-semibold transition ${review.state === 'PENDING' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'}`}
                                                         >
                                                             {review.state === 'PENDING'
                                                                 ? '审核回复'

@@ -233,18 +233,48 @@ export function TranslationsModule() {
                                     </div>
                                 </div>
                                 <div className="overflow-x-auto">
-                                    <table className="w-full min-w-[1150px] text-left text-xs">
+                                    <table className="w-full min-w-[1660px] border-collapse text-left text-xs">
                                         <thead>
                                             <tr className="border-b border-slate-200 bg-slate-50 text-[10px] text-slate-500">
-                                                <th className="p-3">内容类型 / ID</th>
-                                                <th className="p-3">字段</th>
-                                                <th className="p-3">语言</th>
-                                                <th className="p-3">状态</th>
-                                                <th className="p-3">来源</th>
-                                                <th className="p-3">人工锁定</th>
-                                                <th className="p-3">错误</th>
-                                                <th className="p-3">更新时间</th>
-                                                <th className="p-3">操作</th>
+                                                <th
+                                                    scope="col"
+                                                    className="sticky left-0 z-20 w-40 whitespace-nowrap bg-slate-50 px-3 py-3"
+                                                >
+                                                    内容类型
+                                                </th>
+                                                <th scope="col" className="w-56 whitespace-nowrap px-3 py-3">
+                                                    内容 ID
+                                                </th>
+                                                <th scope="col" className="w-48 whitespace-nowrap px-3 py-3">
+                                                    字段
+                                                </th>
+                                                <th scope="col" className="w-24 whitespace-nowrap px-3 py-3">
+                                                    源语言
+                                                </th>
+                                                <th scope="col" className="w-24 whitespace-nowrap px-3 py-3">
+                                                    目标语言
+                                                </th>
+                                                <th scope="col" className="w-28 whitespace-nowrap px-3 py-3">
+                                                    状态
+                                                </th>
+                                                <th scope="col" className="w-28 whitespace-nowrap px-3 py-3">
+                                                    来源
+                                                </th>
+                                                <th scope="col" className="w-24 whitespace-nowrap px-3 py-3">
+                                                    人工锁定
+                                                </th>
+                                                <th scope="col" className="w-72 whitespace-nowrap px-3 py-3">
+                                                    错误
+                                                </th>
+                                                <th scope="col" className="w-40 whitespace-nowrap px-3 py-3">
+                                                    更新时间
+                                                </th>
+                                                <th
+                                                    scope="col"
+                                                    className="sticky right-0 z-20 w-28 whitespace-nowrap border-l border-slate-200 bg-slate-50 px-3 py-3"
+                                                >
+                                                    操作
+                                                </th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-100">
@@ -254,7 +284,7 @@ export function TranslationsModule() {
                                             {!states.length && (
                                                 <tr>
                                                     <td
-                                                        colSpan={9}
+                                                        colSpan={11}
                                                         className="p-12 text-center text-xs text-slate-400"
                                                     >
                                                         当前条件下没有审计记录
@@ -304,42 +334,54 @@ export function TranslationsModule() {
 
 function AuditRow({ item }: { item: ContentTranslationStateRecord }) {
     return (
-        <tr className="hover:bg-slate-50">
-            <td className="p-3">
-                <div className="font-bold text-slate-800">{entityLabel(item.entityType)}</div>
-                <div
-                    className="mt-1 max-w-48 truncate font-mono text-[9px] text-slate-400"
-                    title={item.entityId}
-                >
+        <tr className="group h-[52px] hover:bg-slate-50">
+            <td className="sticky left-0 z-10 h-[52px] max-w-40 bg-white px-3 py-0 font-bold text-slate-800 group-hover:bg-slate-50">
+                <span className="block truncate" title={entityLabel(item.entityType)}>
+                    {entityLabel(item.entityType)}
+                </span>
+            </td>
+            <td className="h-[52px] max-w-56 px-3 py-0">
+                <span className="block truncate font-mono text-[9px] text-slate-400" title={item.entityId}>
                     {item.entityId}
-                </div>
+                </span>
             </td>
-            <td className="p-3 font-mono text-[10px] text-slate-600">{item.fieldPath}</td>
-            <td className="p-3 font-mono text-[10px] text-slate-500">
-                {item.sourceLanguageCode} → {item.targetLanguageCode}
+            <td className="h-[52px] max-w-48 px-3 py-0 font-mono text-[10px] text-slate-600">
+                <span className="block truncate" title={item.fieldPath}>
+                    {item.fieldPath}
+                </span>
             </td>
-            <td className="p-3">
+            <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500">
+                {item.sourceLanguageCode}
+            </td>
+            <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500">
+                {item.targetLanguageCode}
+            </td>
+            <td className="h-[52px] whitespace-nowrap px-3 py-0">
                 <StatusBadge status={item.status} />
             </td>
-            <td className="p-3 text-[10px] text-slate-500">{originLabel(item.origin)}</td>
-            <td className="p-3">
+            <td className="h-[52px] whitespace-nowrap px-3 py-0 text-[10px] text-slate-500">
+                {originLabel(item.origin)}
+            </td>
+            <td className="h-[52px] whitespace-nowrap px-3 py-0">
                 {item.locked ? (
                     <span className="font-bold text-amber-700">已锁定</span>
                 ) : (
                     <span className="text-slate-400">未锁定</span>
                 )}
             </td>
-            <td className="max-w-64 p-3">
+            <td className="h-[52px] max-w-72 px-3 py-0">
                 {item.error ? (
-                    <span className="line-clamp-2 text-[10px] text-rose-600" title={item.error}>
+                    <span className="block truncate text-[10px] text-rose-600" title={item.error}>
                         {item.error}
                     </span>
                 ) : (
                     <span className="text-[10px] text-slate-400">无</span>
                 )}
             </td>
-            <td className="p-3 font-mono text-[10px] text-slate-400">{formatDateTime(item.updatedAt)}</td>
-            <td className="p-3">
+            <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-400">
+                {formatDateTime(item.updatedAt)}
+            </td>
+            <td className="sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 bg-white px-3 py-0 group-hover:bg-slate-50">
                 {item.entityType === 'SystemAnnouncement' ? (
                     <Link
                         to={`/storefront/content?tab=announcements&announcementId=${encodeURIComponent(item.entityId)}`}

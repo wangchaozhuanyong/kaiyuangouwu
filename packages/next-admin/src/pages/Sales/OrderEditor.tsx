@@ -54,9 +54,12 @@ import {
     formatDateTime,
     formatMoney,
     getCustomerName,
+    getFulfillmentStateLabel,
     getMutationError,
     getOrderStateClass,
     getOrderStateLabel,
+    getPaymentStateLabel,
+    getRefundStateLabel,
     getRemainingPhysicalLines,
     majorInputToMoney,
     moneyToMajorInput,
@@ -463,7 +466,9 @@ export function OrderEditor() {
             }
             setIsRefundOpen(false);
             setRefundCurrentPassword('');
-            await refreshAfterMutation(`退款记录已创建，后端状态：${result.state ?? '未知'}`);
+            await refreshAfterMutation(
+                `退款记录已创建，当前状态：${getRefundStateLabel(result.state ?? '')}`,
+            );
         } catch (mutationError) {
             setActionError(toUserFacingError(mutationError, '退款请求失败，请稍后重试'));
         }
@@ -759,58 +764,86 @@ export function OrderEditor() {
                                     </span>
                                 </header>
                                 <div className="mobile-scrollbar-hidden overflow-x-auto">
-                                    <table className="w-full min-w-[680px] text-left text-xs">
+                                    <table className="w-full min-w-[1040px] border-collapse text-left text-xs">
                                         <thead>
                                             <tr className="border-b border-slate-100 text-slate-400">
-                                                <th className="p-4">商品</th>
-                                                <th className="p-4">含税单价</th>
-                                                <th className="p-4 text-center">数量</th>
-                                                <th className="p-4 text-right">小计</th>
+                                                <th scope="col" className="w-14 whitespace-nowrap px-3 py-3">
+                                                    主图
+                                                </th>
+                                                <th scope="col" className="w-64 whitespace-nowrap px-3 py-3">
+                                                    商品名称
+                                                </th>
+                                                <th scope="col" className="w-44 whitespace-nowrap px-3 py-3">
+                                                    SKU
+                                                </th>
+                                                <th scope="col" className="w-28 whitespace-nowrap px-3 py-3">
+                                                    商品类型
+                                                </th>
+                                                <th scope="col" className="w-32 whitespace-nowrap px-3 py-3">
+                                                    含税单价
+                                                </th>
+                                                <th
+                                                    scope="col"
+                                                    className="w-20 whitespace-nowrap px-3 py-3 text-center"
+                                                >
+                                                    数量
+                                                </th>
+                                                <th
+                                                    scope="col"
+                                                    className="w-32 whitespace-nowrap px-3 py-3 text-right"
+                                                >
+                                                    小计
+                                                </th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-100">
                                             {order.lines.map(line => (
-                                                <tr key={line.id}>
-                                                    <td className="p-4">
-                                                        <div className="flex items-center gap-3">
-                                                            <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-slate-100">
-                                                                {line.featuredAsset?.preview ? (
-                                                                    <img
-                                                                        src={line.featuredAsset.preview}
-                                                                        alt={line.productVariant.name}
-                                                                        className="h-full w-full object-cover"
-                                                                    />
-                                                                ) : (
-                                                                    <ImageIcon className="h-4 w-4 text-slate-300" />
-                                                                )}
-                                                            </div>
-                                                            <div>
-                                                                <div className="font-semibold text-slate-900">
-                                                                    {line.productVariant.name}
-                                                                </div>
-                                                                <div className="mt-0.5 font-mono text-[10px] text-slate-400">
-                                                                    {line.productVariant.sku}
-                                                                </div>
-                                                                <div className="mt-1 text-[10px] text-slate-500">
-                                                                    {line.customFields
-                                                                        ?.fulfillmentTypeSnapshot ===
-                                                                    'digital'
-                                                                        ? '虚拟交付'
-                                                                        : '实物配送'}
-                                                                </div>
-                                                            </div>
+                                                <tr key={line.id} className="h-[52px] hover:bg-slate-50/80">
+                                                    <td className="h-[52px] px-3 py-0">
+                                                        <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-slate-100">
+                                                            {line.featuredAsset?.preview ? (
+                                                                <img
+                                                                    src={line.featuredAsset.preview}
+                                                                    alt={line.productVariant.name}
+                                                                    className="h-full w-full object-cover"
+                                                                />
+                                                            ) : (
+                                                                <ImageIcon className="h-4 w-4 text-slate-300" />
+                                                            )}
                                                         </div>
                                                     </td>
-                                                    <td className="p-4 font-mono tabular-nums">
+                                                    <td className="h-[52px] max-w-64 px-3 py-0">
+                                                        <span
+                                                            className="block truncate font-semibold text-slate-900"
+                                                            title={line.productVariant.name}
+                                                        >
+                                                            {line.productVariant.name}
+                                                        </span>
+                                                    </td>
+                                                    <td className="h-[52px] max-w-44 px-3 py-0 font-mono text-[10px] text-slate-500">
+                                                        <span
+                                                            className="block truncate"
+                                                            title={line.productVariant.sku}
+                                                        >
+                                                            {line.productVariant.sku}
+                                                        </span>
+                                                    </td>
+                                                    <td className="h-[52px] whitespace-nowrap px-3 py-0 text-[10px] text-slate-500">
+                                                        {line.customFields?.fulfillmentTypeSnapshot ===
+                                                        'digital'
+                                                            ? '虚拟交付'
+                                                            : '实物配送'}
+                                                    </td>
+                                                    <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono tabular-nums">
                                                         {formatMoney(
                                                             line.proratedUnitPriceWithTax,
                                                             order.currencyCode,
                                                         )}
                                                     </td>
-                                                    <td className="p-4 text-center font-mono font-semibold">
+                                                    <td className="h-[52px] whitespace-nowrap px-3 py-0 text-center font-mono font-semibold">
                                                         {line.quantity}
                                                     </td>
-                                                    <td className="p-4 text-right font-mono font-semibold tabular-nums">
+                                                    <td className="h-[52px] whitespace-nowrap px-3 py-0 text-right font-mono font-semibold tabular-nums">
                                                         {formatMoney(
                                                             line.discountedLinePriceWithTax,
                                                             order.currencyCode,
@@ -856,7 +889,7 @@ export function OrderEditor() {
                                                             #{fulfillment.id}
                                                         </span>
                                                         <span className="rounded bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700">
-                                                            {fulfillment.state}
+                                                            {getFulfillmentStateLabel(fulfillment.state)}
                                                         </span>
                                                     </div>
                                                     <div className="mt-1 text-[11px] text-slate-500">
@@ -906,7 +939,7 @@ export function OrderEditor() {
                                                             {payment.method}
                                                         </span>
                                                         <span className="ml-2 rounded bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600">
-                                                            {payment.state}
+                                                            {getPaymentStateLabel(payment.state)}
                                                         </span>
                                                     </div>
                                                     <span className="font-mono text-sm font-semibold tabular-nums">
@@ -924,7 +957,8 @@ export function OrderEditor() {
                                                                 className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-rose-50 px-3 py-2 text-[11px] text-rose-700"
                                                             >
                                                                 <span>
-                                                                    退款 #{refund.id} · {refund.state} ·{' '}
+                                                                    退款 #{refund.id} ·{' '}
+                                                                    {getRefundStateLabel(refund.state)} ·{' '}
                                                                     {refund.reason || '未填写原因'}
                                                                 </span>
                                                                 <strong className="font-mono">

@@ -43,6 +43,11 @@ const ORDER_LIST_FIELDS = gql`
                 id
                 name
                 sku
+                options {
+                    id
+                    name
+                    code
+                }
                 customFields {
                     fulfillmentType
                     digitalDeliveryMode

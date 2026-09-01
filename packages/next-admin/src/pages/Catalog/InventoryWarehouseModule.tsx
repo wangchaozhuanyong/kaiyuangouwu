@@ -670,10 +670,13 @@ export function InventoryWarehouseModule() {
                             <div className="p-16 text-center text-xs text-slate-400">当前条件下没有 SKU</div>
                         ) : (
                             <div className="overflow-x-auto">
-                                <table className="w-full min-w-[900px] text-left text-xs">
+                                <table className="w-full min-w-[1380px] border-collapse text-left text-xs">
                                     <thead className="border-b border-slate-200 bg-slate-50 text-slate-500">
                                         <tr>
-                                            <th className="w-12 p-4">
+                                            <th
+                                                scope="col"
+                                                className="sticky left-0 z-20 w-12 bg-slate-50 px-3 py-3"
+                                            >
                                                 <input
                                                     type="checkbox"
                                                     checked={
@@ -692,12 +695,36 @@ export function InventoryWarehouseModule() {
                                                     aria-label="选择当前页全部 SKU"
                                                 />
                                             </th>
-                                            <th className="p-4">商品 / 规格</th>
-                                            <th className="p-4">SKU</th>
-                                            <th className="p-4">当前店铺价格</th>
-                                            <th className="p-4">在手 / 锁定</th>
-                                            <th className="p-4">状态</th>
-                                            <th className="p-4 text-right">操作</th>
+                                            <th
+                                                scope="col"
+                                                className="sticky left-12 z-20 w-56 whitespace-nowrap bg-slate-50 px-3 py-3"
+                                            >
+                                                商品名称
+                                            </th>
+                                            <th scope="col" className="w-56 whitespace-nowrap px-3 py-3">
+                                                规格名称
+                                            </th>
+                                            <th scope="col" className="w-44 whitespace-nowrap px-3 py-3">
+                                                SKU
+                                            </th>
+                                            <th scope="col" className="w-36 whitespace-nowrap px-3 py-3">
+                                                当前店铺价格
+                                            </th>
+                                            <th scope="col" className="w-24 whitespace-nowrap px-3 py-3">
+                                                在手
+                                            </th>
+                                            <th scope="col" className="w-24 whitespace-nowrap px-3 py-3">
+                                                锁定
+                                            </th>
+                                            <th scope="col" className="w-24 whitespace-nowrap px-3 py-3">
+                                                状态
+                                            </th>
+                                            <th
+                                                scope="col"
+                                                className="sticky right-0 z-20 w-28 whitespace-nowrap border-l border-slate-200 bg-slate-50 px-3 py-3 text-right"
+                                            >
+                                                操作
+                                            </th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-100">
@@ -711,8 +738,11 @@ export function InventoryWarehouseModule() {
                                                 0,
                                             );
                                             return (
-                                                <tr key={variant.id} className="hover:bg-slate-50">
-                                                    <td className="p-4">
+                                                <tr
+                                                    key={variant.id}
+                                                    className="group h-[52px] hover:bg-slate-50"
+                                                >
+                                                    <td className="sticky left-0 z-10 h-[52px] bg-white px-3 py-0 group-hover:bg-slate-50">
                                                         <input
                                                             type="checkbox"
                                                             checked={selectedVariantIds.includes(variant.id)}
@@ -733,27 +763,37 @@ export function InventoryWarehouseModule() {
                                                             aria-label={`选择 SKU ${variant.sku}`}
                                                         />
                                                     </td>
-                                                    <td className="p-4">
-                                                        <div className="font-bold text-slate-900">
+                                                    <td className="sticky left-12 z-10 h-[52px] max-w-56 bg-white px-3 py-0 group-hover:bg-slate-50">
+                                                        <span
+                                                            className="block truncate font-bold text-slate-900"
+                                                            title={variant.product.name}
+                                                        >
                                                             {variant.product.name}
-                                                        </div>
-                                                        <div className="mt-0.5 text-[11px] text-slate-500">
+                                                        </span>
+                                                    </td>
+                                                    <td className="h-[52px] max-w-56 px-3 py-0">
+                                                        <span
+                                                            className="block truncate text-slate-500"
+                                                            title={variant.name}
+                                                        >
                                                             {variant.name}
-                                                        </div>
+                                                        </span>
                                                     </td>
-                                                    <td className="p-4 font-mono font-bold text-slate-700">
-                                                        {variant.sku}
+                                                    <td className="h-[52px] max-w-44 px-3 py-0 font-mono font-bold text-slate-700">
+                                                        <span className="block truncate" title={variant.sku}>
+                                                            {variant.sku}
+                                                        </span>
                                                     </td>
-                                                    <td className="p-4 font-mono font-bold text-slate-900">
+                                                    <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono font-bold text-slate-900">
                                                         {formatMoney(variant.price, variant.currencyCode)}
                                                     </td>
-                                                    <td className="p-4 font-mono">
-                                                        <span className="font-bold text-slate-900">
-                                                            {onHand}
-                                                        </span>
-                                                        <span className="text-slate-400"> / {allocated}</span>
+                                                    <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono font-bold text-slate-900">
+                                                        {onHand}
                                                     </td>
-                                                    <td className="p-4">
+                                                    <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-amber-600">
+                                                        {allocated}
+                                                    </td>
+                                                    <td className="h-[52px] whitespace-nowrap px-3 py-0">
                                                         {variant.enabled ? (
                                                             <span className="rounded bg-emerald-100 px-2 py-0.5 font-bold text-emerald-800">
                                                                 销售中
@@ -764,7 +804,7 @@ export function InventoryWarehouseModule() {
                                                             </span>
                                                         )}
                                                     </td>
-                                                    <td className="p-4 text-right">
+                                                    <td className="sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 bg-white px-3 py-0 text-right group-hover:bg-slate-50">
                                                         <button
                                                             type="button"
                                                             onClick={() =>
@@ -772,7 +812,7 @@ export function InventoryWarehouseModule() {
                                                                     `/catalog/products/${variant.product.id}?tab=variants`,
                                                                 )
                                                             }
-                                                            className="rounded bg-blue-50 px-3 py-1.5 font-bold text-blue-700 hover:bg-blue-100"
+                                                            className="whitespace-nowrap rounded bg-blue-50 px-3 py-1.5 text-[10px] font-bold text-blue-700 hover:bg-blue-100"
                                                         >
                                                             编辑商品
                                                         </button>
@@ -822,47 +862,92 @@ export function InventoryWarehouseModule() {
                             </div>
                         ) : (
                             <div className="overflow-x-auto">
-                                <table className="w-full border-collapse text-left text-xs">
+                                <table className="w-full min-w-[1540px] border-collapse text-left text-xs">
                                     <thead>
                                         <tr className="whitespace-nowrap border-b border-slate-200 bg-slate-50 font-bold text-slate-500">
-                                            <th className="p-4">商品 / SKU</th>
-                                            <th className="p-4">库存点</th>
-                                            <th className="p-4">在手</th>
-                                            <th className="p-4">已锁定</th>
-                                            <th className="p-4">可售</th>
-                                            <th className="p-4">缺货阈值</th>
-                                            <th className="p-4">状态</th>
-                                            <th className="p-4 text-right">操作</th>
+                                            <th
+                                                scope="col"
+                                                className="sticky left-0 z-20 w-56 whitespace-nowrap bg-slate-50 px-3 py-3"
+                                            >
+                                                商品名称
+                                            </th>
+                                            <th scope="col" className="w-56 whitespace-nowrap px-3 py-3">
+                                                规格名称
+                                            </th>
+                                            <th scope="col" className="w-44 whitespace-nowrap px-3 py-3">
+                                                SKU
+                                            </th>
+                                            <th scope="col" className="w-44 whitespace-nowrap px-3 py-3">
+                                                库存点
+                                            </th>
+                                            <th scope="col" className="w-20 whitespace-nowrap px-3 py-3">
+                                                在手
+                                            </th>
+                                            <th scope="col" className="w-20 whitespace-nowrap px-3 py-3">
+                                                已锁定
+                                            </th>
+                                            <th scope="col" className="w-20 whitespace-nowrap px-3 py-3">
+                                                可售
+                                            </th>
+                                            <th scope="col" className="w-24 whitespace-nowrap px-3 py-3">
+                                                缺货阈值
+                                            </th>
+                                            <th scope="col" className="w-24 whitespace-nowrap px-3 py-3">
+                                                状态
+                                            </th>
+                                            <th
+                                                scope="col"
+                                                className="sticky right-0 z-20 w-28 whitespace-nowrap border-l border-slate-200 bg-slate-50 px-3 py-3 text-right"
+                                            >
+                                                操作
+                                            </th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-100 text-slate-700">
                                         {filteredStockList.map(stock => (
-                                            <tr key={stock.id} className="hover:bg-slate-50/80">
-                                                <td className="p-4">
-                                                    <div className="font-bold text-slate-900">
+                                            <tr
+                                                key={stock.id}
+                                                className="group h-[52px] hover:bg-slate-50/80"
+                                            >
+                                                <td className="sticky left-0 z-10 h-[52px] max-w-56 bg-white px-3 py-0 group-hover:bg-slate-50">
+                                                    <span
+                                                        className="block truncate font-bold text-slate-900"
+                                                        title={stock.productName}
+                                                    >
                                                         {stock.productName}
-                                                    </div>
-                                                    <div className="mt-0.5 text-[11px] text-slate-500">
-                                                        {stock.variantName}
-                                                    </div>
-                                                    <div className="font-mono text-[10px] text-slate-400">
-                                                        {stock.sku}
-                                                    </div>
+                                                    </span>
                                                 </td>
-                                                <td className="p-4 font-medium">{stock.warehouse}</td>
-                                                <td className="p-4 font-mono text-sm font-bold text-slate-900">
+                                                <td className="h-[52px] max-w-56 px-3 py-0">
+                                                    <span
+                                                        className="block truncate text-slate-500"
+                                                        title={stock.variantName}
+                                                    >
+                                                        {stock.variantName}
+                                                    </span>
+                                                </td>
+                                                <td className="h-[52px] max-w-44 px-3 py-0 font-mono text-[10px] text-slate-600">
+                                                    <span className="block truncate" title={stock.sku}>
+                                                        {stock.sku}
+                                                    </span>
+                                                </td>
+                                                <td className="h-[52px] max-w-44 px-3 py-0 font-medium">
+                                                    <span className="block truncate" title={stock.warehouse}>
+                                                        {stock.warehouse}
+                                                    </span>
+                                                </td>
+                                                <td className="h-[52px] px-3 py-0 font-mono text-xs font-bold text-slate-900">
                                                     {stock.stockOnHand}
                                                 </td>
-                                                <td className="p-4 font-mono text-amber-600">
+                                                <td className="h-[52px] px-3 py-0 font-mono text-amber-600">
                                                     {stock.stockAllocated}
                                                 </td>
-                                                <td className="p-4 font-mono text-sm font-bold text-emerald-600">
+                                                <td className="h-[52px] px-3 py-0 font-mono text-xs font-bold text-emerald-600">
                                                     {stock.stockAvailable}
                                                 </td>
-                                                <td className="p-4 font-mono text-slate-500">
+                                                <td className="h-[52px] px-3 py-0 font-mono text-slate-500">
                                                     {stock.safetyThreshold}
                                                 </td>
-                                                <td className="p-4">
+                                                <td className="h-[52px] whitespace-nowrap px-3 py-0">
                                                     {stock.status === 'NORMAL' ? (
                                                         <span className="rounded bg-emerald-100 px-2 py-0.5 font-bold text-emerald-800">
                                                             充足
@@ -877,7 +962,7 @@ export function InventoryWarehouseModule() {
                                                         </span>
                                                     )}
                                                 </td>
-                                                <td className="p-4 text-right">
+                                                <td className="sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 bg-white px-3 py-0 text-right group-hover:bg-slate-50">
                                                     <button
                                                         type="button"
                                                         onClick={() => {
@@ -885,7 +970,7 @@ export function InventoryWarehouseModule() {
                                                             setAdjustAmount('');
                                                             setActionError('');
                                                         }}
-                                                        className="rounded bg-blue-50 px-2.5 py-1 font-bold text-blue-700 hover:bg-blue-100"
+                                                        className="whitespace-nowrap rounded bg-blue-50 px-2.5 py-1 text-[10px] font-bold text-blue-700 hover:bg-blue-100"
                                                     >
                                                         盘点调整
                                                     </button>
@@ -916,19 +1001,33 @@ export function InventoryWarehouseModule() {
                             </div>
                         ) : (
                             <div className="overflow-x-auto">
-                                <table className="w-full border-collapse text-left text-xs">
+                                <table className="w-full min-w-[920px] border-collapse text-left text-xs">
                                     <thead>
                                         <tr className="border-b border-slate-200 bg-slate-50 font-bold text-slate-500">
-                                            <th className="p-4">类型</th>
-                                            <th className="p-4">数量</th>
-                                            <th className="p-4">商品 / SKU</th>
-                                            <th className="p-4">时间</th>
+                                            <th scope="col" className="w-32 whitespace-nowrap px-3 py-3">
+                                                类型
+                                            </th>
+                                            <th scope="col" className="w-24 whitespace-nowrap px-3 py-3">
+                                                数量
+                                            </th>
+                                            <th scope="col" className="w-64 whitespace-nowrap px-3 py-3">
+                                                商品名称
+                                            </th>
+                                            <th scope="col" className="w-48 whitespace-nowrap px-3 py-3">
+                                                SKU
+                                            </th>
+                                            <th scope="col" className="w-40 whitespace-nowrap px-3 py-3">
+                                                时间
+                                            </th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-100">
                                         {movementLogs.map(log => (
-                                            <tr key={log.variantId + ':' + log.id}>
-                                                <td className="p-4">
+                                            <tr
+                                                key={log.variantId + ':' + log.id}
+                                                className="h-[52px] hover:bg-slate-50/80"
+                                            >
+                                                <td className="h-[52px] whitespace-nowrap px-3 py-0">
                                                     <span className="flex w-max items-center gap-1 rounded bg-slate-100 px-2 py-0.5 font-bold text-slate-700">
                                                         {log.quantity >= 0 ? (
                                                             <ArrowDownRight className="h-3.5 w-3.5" />
@@ -940,7 +1039,7 @@ export function InventoryWarehouseModule() {
                                                 </td>
                                                 <td
                                                     className={
-                                                        'p-4 font-mono text-sm font-bold ' +
+                                                        'h-[52px] whitespace-nowrap px-3 py-0 font-mono text-xs font-bold ' +
                                                         (log.quantity >= 0
                                                             ? 'text-emerald-600'
                                                             : 'text-rose-600')
@@ -948,15 +1047,20 @@ export function InventoryWarehouseModule() {
                                                 >
                                                     {log.quantity > 0 ? '+' + log.quantity : log.quantity}
                                                 </td>
-                                                <td className="p-4">
-                                                    <div className="font-bold text-slate-900">
+                                                <td className="h-[52px] max-w-64 px-3 py-0">
+                                                    <span
+                                                        className="block truncate font-bold text-slate-900"
+                                                        title={log.productName}
+                                                    >
                                                         {log.productName}
-                                                    </div>
-                                                    <div className="font-mono text-[11px] text-slate-400">
-                                                        {log.sku}
-                                                    </div>
+                                                    </span>
                                                 </td>
-                                                <td className="p-4 font-mono text-slate-500">
+                                                <td className="h-[52px] max-w-48 px-3 py-0 font-mono text-[10px] text-slate-500">
+                                                    <span className="block truncate" title={log.sku}>
+                                                        {log.sku}
+                                                    </span>
+                                                </td>
+                                                <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500">
                                                     {formatDateTime(log.createdAt)}
                                                 </td>
                                             </tr>

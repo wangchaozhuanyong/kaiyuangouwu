@@ -492,67 +492,90 @@ function JobsPanel({
                     </div>
                 </div>
                 <div className="overflow-x-auto">
-                    <table className="w-full min-w-[1050px] text-left text-xs">
+                    <table className="w-full min-w-[1680px] border-collapse text-left text-xs">
                         <thead>
                             <tr className={theadClass}>
-                                <th className="p-3">任务 / 队列</th>
-                                <th className="p-3">状态</th>
-                                <th className="p-3">进度</th>
-                                <th className="p-3">尝试次数</th>
-                                <th className="p-3">创建时间</th>
-                                <th className="p-3">耗时</th>
-                                <th className="p-3">错误</th>
-                                <th className="p-3 text-right">操作</th>
+                                <th
+                                    scope="col"
+                                    className="sticky left-0 z-20 w-56 whitespace-nowrap bg-slate-50 px-3 py-3"
+                                >
+                                    任务 ID
+                                </th>
+                                <th scope="col" className="w-48 whitespace-nowrap px-3 py-3">
+                                    队列
+                                </th>
+                                <th scope="col" className="w-28 whitespace-nowrap px-3 py-3">
+                                    状态
+                                </th>
+                                <th scope="col" className="w-20 whitespace-nowrap px-3 py-3">
+                                    进度
+                                </th>
+                                <th scope="col" className="w-20 whitespace-nowrap px-3 py-3">
+                                    尝试次数
+                                </th>
+                                <th scope="col" className="w-20 whitespace-nowrap px-3 py-3">
+                                    最大次数
+                                </th>
+                                <th scope="col" className="w-40 whitespace-nowrap px-3 py-3">
+                                    创建时间
+                                </th>
+                                <th scope="col" className="w-24 whitespace-nowrap px-3 py-3">
+                                    耗时
+                                </th>
+                                <th scope="col" className="w-72 whitespace-nowrap px-3 py-3">
+                                    错误
+                                </th>
+                                <th
+                                    scope="col"
+                                    className="sticky right-0 z-20 w-28 whitespace-nowrap border-l border-slate-200 bg-slate-50 px-3 py-3 text-right"
+                                >
+                                    操作
+                                </th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                             {filtered.map(job => (
-                                <tr key={job.id} className="hover:bg-slate-50">
-                                    <td className="p-3">
-                                        <div
-                                            className="max-w-48 truncate font-mono text-[10px] font-bold text-slate-700"
+                                <tr key={job.id} className="group h-[52px] hover:bg-slate-50">
+                                    <td className="sticky left-0 z-10 h-[52px] max-w-56 bg-white px-3 py-0 group-hover:bg-slate-50">
+                                        <span
+                                            className="block truncate font-mono text-[10px] font-bold text-slate-700"
                                             title={job.id}
                                         >
                                             {job.id}
-                                        </div>
-                                        <div className="mt-1 text-[9px] text-slate-400">{job.queueName}</div>
+                                        </span>
                                     </td>
-                                    <td className="p-3">
+                                    <td className="h-[52px] max-w-48 px-3 py-0 text-[10px] text-slate-500">
+                                        <span className="block truncate" title={job.queueName}>
+                                            {job.queueName}
+                                        </span>
+                                    </td>
+                                    <td className="h-[52px] whitespace-nowrap px-3 py-0">
                                         <JobStateBadge state={job.state} />
                                     </td>
-                                    <td className="p-3">
-                                        <div className="w-28">
-                                            <div className="mb-1 text-right font-mono text-[9px] text-slate-400">
-                                                {Math.round(job.progress)}%
-                                            </div>
-                                            <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
-                                                <div
-                                                    className="h-full bg-blue-500"
-                                                    style={{
-                                                        width: `${Math.min(100, Math.max(0, job.progress))}%`,
-                                                    }}
-                                                />
-                                            </div>
-                                        </div>
+                                    <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono font-bold text-slate-700">
+                                        {Math.round(job.progress)}%
                                     </td>
-                                    <td className="p-3 font-mono text-[10px] text-slate-500">
-                                        {job.attempts} / {job.retries + 1}
+                                    <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500">
+                                        {job.attempts}
                                     </td>
-                                    <td className="p-3 text-[10px] text-slate-500">
+                                    <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500">
+                                        {job.retries + 1}
+                                    </td>
+                                    <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500">
                                         {formatDateTime(job.createdAt)}
                                     </td>
-                                    <td className="p-3 font-mono text-[10px] text-slate-500">
+                                    <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500">
                                         {formatDuration(job.duration)}
                                     </td>
-                                    <td className="max-w-64 p-3">
+                                    <td className="h-[52px] max-w-72 px-3 py-0">
                                         <span
-                                            className="line-clamp-2 text-[10px] text-rose-600"
+                                            className="block truncate text-[10px] text-rose-600"
                                             title={job.error ?? ''}
                                         >
                                             {job.error ?? '—'}
                                         </span>
                                     </td>
-                                    <td className="p-3 text-right">
+                                    <td className="sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 bg-white px-3 py-0 text-right group-hover:bg-slate-50">
                                         {!job.isSettled && (
                                             <button
                                                 type="button"
@@ -567,7 +590,7 @@ function JobsPanel({
                                     </td>
                                 </tr>
                             ))}
-                            {!filtered.length && <EmptyRow colSpan={8} text="当前条件下没有任务记录" />}
+                            {!filtered.length && <EmptyRow colSpan={10} text="当前条件下没有任务记录" />}
                         </tbody>
                     </table>
                 </div>
@@ -624,55 +647,92 @@ function SchedulesPanel({
                 <p className="mt-1 text-xs text-slate-400">启停和立即执行均直接调用服务端调度器</p>
             </div>
             <div className="overflow-x-auto">
-                <table className="w-full min-w-[1000px] text-left text-xs">
+                <table className="w-full min-w-[1720px] border-collapse text-left text-xs">
                     <thead>
                         <tr className={theadClass}>
-                            <th className="p-4">任务</th>
-                            <th className="p-4">调度规则</th>
-                            <th className="p-4">状态</th>
-                            <th className="p-4">上次执行</th>
-                            <th className="p-4">下次执行</th>
-                            <th className="p-4">最近结果</th>
-                            <th className="p-4 text-right">操作</th>
+                            <th
+                                scope="col"
+                                className="sticky left-0 z-20 w-56 whitespace-nowrap bg-slate-50 px-3 py-3"
+                            >
+                                任务名称
+                            </th>
+                            <th scope="col" className="w-56 whitespace-nowrap px-3 py-3">
+                                任务 ID
+                            </th>
+                            <th scope="col" className="w-48 whitespace-nowrap px-3 py-3">
+                                调度说明
+                            </th>
+                            <th scope="col" className="w-44 whitespace-nowrap px-3 py-3">
+                                Cron
+                            </th>
+                            <th scope="col" className="w-28 whitespace-nowrap px-3 py-3">
+                                状态
+                            </th>
+                            <th scope="col" className="w-40 whitespace-nowrap px-3 py-3">
+                                上次执行
+                            </th>
+                            <th scope="col" className="w-40 whitespace-nowrap px-3 py-3">
+                                下次执行
+                            </th>
+                            <th scope="col" className="w-72 whitespace-nowrap px-3 py-3">
+                                最近结果
+                            </th>
+                            <th
+                                scope="col"
+                                className="sticky right-0 z-20 w-52 whitespace-nowrap border-l border-slate-200 bg-slate-50 px-3 py-3 text-right"
+                            >
+                                操作
+                            </th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                         {tasks.map(task => (
-                            <tr key={task.id} className="hover:bg-slate-50">
-                                <td className="p-4">
-                                    <div className="font-bold text-slate-800">
+                            <tr key={task.id} className="group h-[52px] hover:bg-slate-50">
+                                <td className="sticky left-0 z-10 h-[52px] max-w-56 bg-white px-3 py-0 group-hover:bg-slate-50">
+                                    <span
+                                        className="block truncate font-bold text-slate-800"
+                                        title={task.description || task.id}
+                                    >
                                         {task.description || task.id}
-                                    </div>
-                                    <div className="mt-1 font-mono text-[9px] text-slate-400">{task.id}</div>
+                                    </span>
                                 </td>
-                                <td className="p-4">
-                                    <div>{task.scheduleDescription}</div>
-                                    <div className="mt-1 font-mono text-[9px] text-slate-400">
+                                <td className="h-[52px] max-w-56 px-3 py-0 font-mono text-[9px] text-slate-500">
+                                    <span className="block truncate" title={task.id}>
+                                        {task.id}
+                                    </span>
+                                </td>
+                                <td className="h-[52px] max-w-48 px-3 py-0">
+                                    <span className="block truncate" title={task.scheduleDescription}>
+                                        {task.scheduleDescription}
+                                    </span>
+                                </td>
+                                <td className="h-[52px] max-w-44 px-3 py-0 font-mono text-[9px] text-slate-500">
+                                    <span className="block truncate" title={task.schedule}>
                                         {task.schedule}
-                                    </div>
+                                    </span>
                                 </td>
-                                <td className="p-4">
+                                <td className="h-[52px] whitespace-nowrap px-3 py-0">
                                     <span
                                         className={`rounded px-2 py-1 text-[9px] font-bold ${task.isRunning ? 'bg-blue-50 text-blue-700' : task.enabled ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}
                                     >
                                         {task.isRunning ? '执行中' : task.enabled ? '已启用' : '已停用'}
                                     </span>
                                 </td>
-                                <td className="p-4 text-slate-500">
+                                <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500">
                                     {task.lastExecutedAt ? formatDateTime(task.lastExecutedAt) : '从未执行'}
                                 </td>
-                                <td className="p-4 text-slate-500">
+                                <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500">
                                     {task.nextExecutionAt ? formatDateTime(task.nextExecutionAt) : '无计划'}
                                 </td>
-                                <td className="max-w-52 p-4">
+                                <td className="h-[52px] max-w-72 px-3 py-0">
                                     <code
-                                        className="line-clamp-2 text-[9px] text-slate-500"
+                                        className="block truncate text-[9px] text-slate-500"
                                         title={formatJson(task.lastResult)}
                                     >
                                         {task.lastResult == null ? '—' : formatJson(task.lastResult)}
                                     </code>
                                 </td>
-                                <td className="p-4">
+                                <td className="sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 bg-white px-3 py-0 group-hover:bg-slate-50">
                                     <div className="flex justify-end gap-2">
                                         <button
                                             type="button"
@@ -697,7 +757,7 @@ function SchedulesPanel({
                                 </td>
                             </tr>
                         ))}
-                        {!tasks.length && <EmptyRow colSpan={7} text="服务端没有注册定时任务" />}
+                        {!tasks.length && <EmptyRow colSpan={9} text="服务端没有注册定时任务" />}
                     </tbody>
                 </table>
             </div>

@@ -2,6 +2,8 @@ import { useMutation, useQuery } from '@apollo/client/react';
 import {
     AlertCircle,
     CheckCircle2,
+    ChevronDown,
+    ChevronRight,
     Edit3,
     FolderTree,
     Plus,
@@ -143,6 +145,7 @@ export function CategoriesModule() {
     const [formParentId, setFormParentId] = useState('');
     const [formIsPrivate, setFormIsPrivate] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [expandedCollectionIds, setExpandedCollectionIds] = useState<Set<string> | null>(null);
 
     const { data, loading, error, refetch, fetchMore } = useQuery<CatalogTaxonomyData>(GET_CATALOG_TAXONOMY, {
         variables: {
@@ -248,6 +251,32 @@ export function CategoriesModule() {
         sortNodes(roots);
         return roots;
     }, [collections]);
+
+    const visibleExpandedCollectionIds =
+        expandedCollectionIds ?? new Set(collectionTree.map(collection => collection.id));
+    const allTopLevelCollectionsExpanded =
+        collectionTree.length > 0 &&
+        collectionTree.every(collection => visibleExpandedCollectionIds.has(collection.id));
+    const allTopLevelCollectionsCollapsed = collectionTree.every(
+        collection => !visibleExpandedCollectionIds.has(collection.id),
+    );
+
+    const toggleCollection = (collectionId: string) => {
+        setExpandedCollectionIds(current => {
+            const next = new Set(current ?? collectionTree.map(collection => collection.id));
+            if (next.has(collectionId)) next.delete(collectionId);
+            else next.add(collectionId);
+            return next;
+        });
+    };
+
+    const expandAllCollections = () => {
+        setExpandedCollectionIds(new Set(collectionTree.map(collection => collection.id)));
+    };
+
+    const collapseAllCollections = () => {
+        setExpandedCollectionIds(new Set());
+    };
 
     const showNotice = (message: string) => {
         setNotification(message);
@@ -529,54 +558,87 @@ export function CategoriesModule() {
         }
     };
 
-    const renderCollection = (node: CollectionTreeNode, depth = 0) => (
-        <div key={node.id} className="space-y-2">
-            <div
-                className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-3.5"
-                style={{ marginLeft: depth * 28 }}
-            >
-                <div className="flex min-w-0 items-center gap-3">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
-                        <FolderTree className="h-4 w-4" />
-                    </div>
-                    <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                            <span className="truncate text-sm font-bold text-slate-900">{node.name}</span>
-                            {node.isPrivate && (
-                                <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-500">
-                                    内部分类
-                                </span>
-                            )}
+    const renderCollection = (node: CollectionTreeNode, depth = 0) => {
+        const isTopLevel = depth === 0;
+        const hasChildren = node.children.length > 0;
+        const isExpanded = !isTopLevel || visibleExpandedCollectionIds.has(node.id);
+
+        return (
+            <div key={node.id} className="space-y-2">
+                <div
+                    className={`flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white ${isTopLevel ? 'p-4 shadow-2xs' : 'p-3.5'}`}
+                    style={{ marginLeft: Math.min(depth, 3) * 20 }}
+                >
+                    <div className="flex min-w-0 items-center gap-3">
+                        {isTopLevel && hasChildren ? (
+                            <button
+                                type="button"
+                                onClick={() => toggleCollection(node.id)}
+                                aria-expanded={isExpanded}
+                                aria-controls={`collection-children-${node.id}`}
+                                aria-label={`${isExpanded ? '收起' : '展开'}一级分类 ${node.name}`}
+                                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-blue-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+                            >
+                                {isExpanded ? (
+                                    <ChevronDown className="h-4 w-4" />
+                                ) : (
+                                    <ChevronRight className="h-4 w-4" />
+                                )}
+                            </button>
+                        ) : isTopLevel ? (
+                            <span className="h-8 w-8 shrink-0" aria-hidden="true" />
+                        ) : null}
+                        <div
+                            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${isTopLevel ? 'bg-blue-50 text-blue-600' : 'bg-slate-100 text-slate-500'}`}
+                        >
+                            <FolderTree className="h-4 w-4" />
                         </div>
-                        <div className="truncate font-mono text-[11px] text-slate-400">/{node.slug}</div>
+                        <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                                <span className="truncate text-sm font-bold text-slate-900">{node.name}</span>
+                                {node.isPrivate && (
+                                    <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-500">
+                                        内部分类
+                                    </span>
+                                )}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-slate-400">
+                                <span className="truncate font-mono">/{node.slug}</span>
+                                {isTopLevel && hasChildren && <span>{node.children.length} 个子分类</span>}
+                            </div>
+                        </div>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1 sm:gap-3">
+                        <span className="hidden text-xs text-slate-500 sm:inline">
+                            <strong className="font-mono text-slate-800">{node.productVariantCount}</strong>{' '}
+                            个 SKU
+                        </span>
+                        <button
+                            type="button"
+                            onClick={() => openEditor(node)}
+                            className="p-1.5 text-slate-400 hover:text-blue-600"
+                            aria-label={`编辑分类 ${node.name}`}
+                        >
+                            <Edit3 className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => handleDelete(node)}
+                            className="p-1.5 text-slate-400 hover:text-rose-600"
+                            aria-label={`删除分类 ${node.name}`}
+                        >
+                            <Trash2 className="h-3.5 w-3.5" />
+                        </button>
                     </div>
                 </div>
-                <div className="flex shrink-0 items-center gap-3">
-                    <span className="text-xs text-slate-500">
-                        <strong className="font-mono text-slate-800">{node.productVariantCount}</strong> 个
-                        SKU
-                    </span>
-                    <button
-                        type="button"
-                        onClick={() => openEditor(node)}
-                        className="p-1.5 text-slate-400 hover:text-blue-600"
-                        aria-label={`编辑分类 ${node.name}`}
-                    >
-                        <Edit3 className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => handleDelete(node)}
-                        className="p-1.5 text-slate-400 hover:text-rose-600"
-                        aria-label={`删除分类 ${node.name}`}
-                    >
-                        <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                </div>
+                {hasChildren && isExpanded && (
+                    <div id={`collection-children-${node.id}`} className="space-y-2">
+                        {node.children.map(child => renderCollection(child, depth + 1))}
+                    </div>
+                )}
             </div>
-            {node.children.map(child => renderCollection(child, depth + 1))}
-        </div>
-    );
+        );
+    };
 
     const tabCount =
         activeTab === 'CATEGORIES'
@@ -682,8 +744,36 @@ export function CategoriesModule() {
                         当前渠道尚未配置此类数据，点击右上角开始创建。
                     </div>
                 ) : activeTab === 'CATEGORIES' ? (
-                    <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/50 p-5">
-                        {collectionTree.map(node => renderCollection(node))}
+                    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xs">
+                        <div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+                            <div>
+                                <div className="text-xs font-bold text-slate-800">一级分类</div>
+                                <div className="mt-0.5 text-[11px] text-slate-400">
+                                    共 {collectionTree.length} 个，展开后查看下级分类
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={expandAllCollections}
+                                    disabled={allTopLevelCollectionsExpanded}
+                                    className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-bold text-slate-600 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-default disabled:opacity-40"
+                                >
+                                    全部展开
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={collapseAllCollections}
+                                    disabled={allTopLevelCollectionsCollapsed}
+                                    className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-bold text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900 disabled:cursor-default disabled:opacity-40"
+                                >
+                                    全部收起
+                                </button>
+                            </div>
+                        </div>
+                        <div className="space-y-3 bg-slate-50/50 p-3 sm:p-5">
+                            {collectionTree.map(node => renderCollection(node))}
+                        </div>
                     </div>
                 ) : activeTab === 'OPTION_TEMPLATES' ? (
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
