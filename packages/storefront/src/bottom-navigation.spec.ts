@@ -91,6 +91,7 @@ describe('bottom navigation configuration', () => {
             'utf8',
         );
 
+        expect(source).toContain('h-[calc(var(--bottom-navigation-height)+env(safe-area-inset-bottom,0px))]');
         expect(source).toContain('lg:top-0 lg:bottom-auto');
         expect(source).toContain('lg:shadow-none lg:backdrop-blur-none');
         expect(source).not.toContain('sm:top-0');
