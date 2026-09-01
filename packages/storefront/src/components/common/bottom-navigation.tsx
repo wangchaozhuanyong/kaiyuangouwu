@@ -170,7 +170,7 @@ export function BottomNavigation({
 
     return (
         <nav
-            className="fixed bottom-0 left-1/2 z-20 grid w-full max-w-[430px] -translate-x-1/2 border-t border-black/5 bg-white/95 px-2 pb-[calc(8px+env(safe-area-inset-bottom,0px))] pt-1.5 shadow-[0_-2px_14px_rgba(15,23,42,0.04)] backdrop-blur-md lg:top-0 lg:bottom-auto lg:h-[72px] lg:max-w-[420px] lg:border-t-0 lg:bg-transparent lg:shadow-none lg:backdrop-blur-none"
+            className="fixed bottom-0 left-1/2 z-20 grid h-[calc(var(--bottom-navigation-height)+env(safe-area-inset-bottom,0px))] w-full max-w-[430px] -translate-x-1/2 border-t border-black/5 bg-white/95 px-2 pb-[calc(8px+env(safe-area-inset-bottom,0px))] pt-1.5 shadow-[0_-2px_14px_rgba(15,23,42,0.04)] backdrop-blur-md lg:top-0 lg:bottom-auto lg:h-[72px] lg:max-w-[420px] lg:border-t-0 lg:bg-transparent lg:shadow-none lg:backdrop-blur-none"
             style={{ gridTemplateColumns: 'repeat(' + items.length + ', minmax(0, 1fr))' }}
             aria-label={isZh ? '主导航' : 'Main navigation'}
         >
