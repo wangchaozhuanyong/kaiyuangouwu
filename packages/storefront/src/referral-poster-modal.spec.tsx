@@ -2,7 +2,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { ReferralPosterModal, referralPosterStyles } from './referral-poster-modal';
+import { posterForegroundColor, ReferralPosterModal, referralPosterStyles } from './referral-poster-modal';
 
 const expectedTemplateIds = [
     'BRAND_MINIMAL',
@@ -19,6 +19,17 @@ describe('referral poster templates', () => {
         expect(referralPosterStyles.map(style => style.id)).toEqual(expectedTemplateIds);
         expect(new Set(referralPosterStyles.map(style => style.background))).toHaveLength(5);
         expect(new Set(referralPosterStyles.map(style => style.nameZh))).toHaveLength(5);
+        expect(new Set(referralPosterStyles.map(style => style.pattern))).toHaveLength(5);
+        expect(
+            new Set(
+                referralPosterStyles.map(style =>
+                    JSON.stringify([style.colors, style.foreground, style.accent, style.pattern]),
+                ),
+            ),
+        ).toHaveLength(5);
+        expect(referralPosterStyles.find(style => style.id === 'PREMIUM_DARK')?.colors[0]).toBe('#020b1d');
+        expect(posterForegroundColor('#f3f8ff', 'deep-sea')).toBe('#f3f8ff');
+        expect(posterForegroundColor('#f3f8ff', 'minimal')).toBe('#0E2A63');
     });
 
     it('renders all enabled templates and identifies the invite code as optional sharing data', () => {
