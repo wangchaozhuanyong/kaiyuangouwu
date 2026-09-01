@@ -36,6 +36,7 @@ import { useUrlTab } from '../../hooks/use-url-tab';
 import { getStatusLabel } from '../../utils/status-labels';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatDateTime, formatMoney, majorInputToMoney, moneyToMajorInput } from '../Sales/sales-utils';
+import { buildImageGenerationConfigInput, buildImageModelInput } from './ai-image-settings-input';
 
 type StudioTab = 'CONFIG' | 'JOBS' | 'SKILLS';
 const AI_STUDIO_TABS = { config: 'CONFIG', jobs: 'JOBS', skills: 'SKILLS' } as const;
@@ -280,14 +281,14 @@ function ConfigPanel({
         try {
             await saveConfig({
                 variables: {
-                    input: {
+                    input: buildImageGenerationConfigInput(value, {
                         enabled,
                         promptOptimizationEnabled: optimization,
                         defaultModelCode,
                         termsVersion: termsVersion.trim(),
                         termsZh: termsZh.trim(),
                         termsEn: termsEn.trim(),
-                    },
+                    }),
                 },
             });
             await onSaved('AI 图片工坊运营配置已保存');
@@ -473,8 +474,7 @@ function ModelEditor({
         try {
             await saveModel({
                 variables: {
-                    input: {
-                        code: value.code,
+                    input: buildImageModelInput(value, {
                         enabled,
                         displayNameZh: nameZh.trim(),
                         displayNameEn: nameEn.trim(),
@@ -485,8 +485,7 @@ function ModelEditor({
                         unitPrice: priceMoney,
                         currencyCode: currency,
                         position: Number.parseInt(position, 10) || 0,
-                        isDefault: value.isDefault,
-                    },
+                    }),
                 },
             });
             setTestResult(null);
@@ -1375,6 +1374,7 @@ const protocolOptions: ImageProviderProtocol[] = [
     'OPENAI_COMPATIBLE_CHAT',
     'GEMINI_INTERACTIONS',
     'GEMINI_NATIVE',
+    'GEMINI_NATIVE_STREAM',
 ];
 const inputClass =
     'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-normal text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100';
