@@ -19,6 +19,8 @@ import { Like } from 'typeorm';
 
 import { adminApiExtensions, shopApiExtensions } from './api-extensions';
 import { STOREFRONT_PROMOTION_OPTIONS, storeProfilePermission } from './constants';
+import { CustomerAvatarShopResolver } from './customer-avatar.resolver';
+import { CustomerAvatarService } from './customer-avatar.service';
 import { CouponLedgerEntry } from './entities/coupon-ledger-entry.entity';
 import { CouponOrderAllocation } from './entities/coupon-order-allocation.entity';
 import { CustomerCoupon } from './entities/customer-coupon.entity';
@@ -185,6 +187,7 @@ import {
         ReferralWalletSpendService,
         SystemAnnouncementService,
         StorefrontRealtimeService,
+        CustomerAvatarService,
         {
             provide: STOREFRONT_PROMOTION_OPTIONS,
             useFactory: () => StoreManagementPlugin.promotionOptions,
@@ -269,6 +272,7 @@ import {
         schema: shopApiExtensions,
         resolvers: [
             StorefrontBrandingShopResolver,
+            CustomerAvatarShopResolver,
             StoreCurrencySettingsShopResolver,
             StorePromotionCampaignShopResolver,
             SystemAnnouncementShopResolver,

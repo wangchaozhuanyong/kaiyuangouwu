@@ -551,6 +551,8 @@ export interface ActiveCustomer {
     lastName: string;
     emailAddress: string;
     phoneNumber: string | null;
+    /** Customer-selected profile image; absent in legacy cached/test data. */
+    avatar?: Asset | null;
     addresses: CustomerAddress[] | null;
     orders: { items: OrderSummary[]; totalItems: number };
 }

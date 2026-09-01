@@ -2,6 +2,7 @@ import {
     Check,
     ChevronLeft,
     Heart,
+    Megaphone,
     Minus,
     Package,
     Pin,
@@ -439,6 +440,7 @@ export function CouponSheet({
     loading,
     onApply,
     onRemove,
+    onBrowseCoupons,
     onClose,
 }: {
     coupons: StoreCustomerCoupon[];
@@ -447,6 +449,7 @@ export function CouponSheet({
     loading: boolean;
     onApply: (customerCouponId: string) => Promise<string | null>;
     onRemove: (customerCouponId: string) => Promise<string | null>;
+    onBrowseCoupons: () => void;
     onClose: () => void;
 }) {
     const isZh = language === 'zh';
@@ -462,7 +465,14 @@ export function CouponSheet({
     };
     const selectableCoupons = coupons.filter(coupon => coupon.usable || coupon.lockedOrderId === orderId);
     return (
-        <Sheet title={isZh ? '选择优惠券' : 'Choose a coupon'} language={language} onClose={onClose}>
+        <Sheet
+            title={isZh ? '选择优惠券' : 'Choose a coupon'}
+            language={language}
+            onClose={onClose}
+            className="coupon-selector-sheet"
+            showHandle
+            initialFocus="dialog"
+        >
             <div className="coupon-sheet-content">
                 {selectableCoupons.length ? (
                     <section className="applied-coupons">
@@ -487,7 +497,45 @@ export function CouponSheet({
                         })}
                     </section>
                 ) : (
-                    <p>{isZh ? '暂无可用优惠券，请先到领券中心领取' : 'No coupons available yet.'}</p>
+                    <section
+                        className="coupon-empty-state"
+                        aria-label={isZh ? '当前无可用优惠券' : 'No coupons currently available'}
+                    >
+                        <div className="coupon-empty-summary">
+                            <span className="coupon-empty-icon" aria-hidden="true">
+                                <TicketPercent />
+                            </span>
+                            <div>
+                                <strong>{isZh ? '还没有可用优惠券' : 'No coupons available yet'}</strong>
+                                <p>
+                                    {isZh
+                                        ? '去领券中心看看，领取后即可在结算时选择使用'
+                                        : 'Visit the coupon center and claim one to use at checkout.'}
+                                </p>
+                            </div>
+                        </div>
+                        <p className="coupon-empty-guidance">
+                            <Megaphone aria-hidden="true" />
+                            <span>
+                                {isZh
+                                    ? '领券后返回结算页，系统会自动刷新'
+                                    : 'Your coupons refresh automatically when you return.'}
+                            </span>
+                        </p>
+                        <div className="coupon-empty-actions">
+                            <button
+                                type="button"
+                                className="coupon-empty-primary"
+                                onClick={onBrowseCoupons}
+                                disabled={loading}
+                            >
+                                {isZh ? '去领券中心' : 'Browse coupons'}
+                            </button>
+                            <button type="button" className="coupon-empty-secondary" onClick={onClose}>
+                                {isZh ? '本次不用优惠券' : 'Continue without a coupon'}
+                            </button>
+                        </div>
+                    </section>
                 )}
                 {error && <small className="form-error">{error}</small>}
             </div>
