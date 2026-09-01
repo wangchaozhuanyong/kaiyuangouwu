@@ -301,7 +301,7 @@ export function CatalogModule() {
             </div>
 
             {/* Main Content */}
-            <div className="mx-auto w-full max-w-7xl flex-1 space-y-5 overflow-y-auto p-5 sm:p-8">
+            <div className="w-full max-w-none flex-1 space-y-5 overflow-y-auto p-5 sm:p-8">
                 <div className="flex flex-col gap-1 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs text-blue-900 sm:flex-row sm:items-center sm:justify-between">
                     <span>
                         当前数据范围：<strong>{activeChannelLabel}</strong>
