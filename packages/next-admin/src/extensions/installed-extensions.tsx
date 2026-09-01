@@ -8,6 +8,8 @@ import { routeModuleLoaders } from '../route-modules';
 
 import { defineNextAdminExtension } from './extension-api';
 
+export const STORE_CURRENCY_COMPATIBILITY_TARGET = '/settings/store-profile?tab=payment-shipping';
+
 const AiImageSettingsModule = lazy(() =>
     routeModuleLoaders.aiImageSettings().then(module => ({
         default: module.AiImageSettingsModule,
@@ -266,7 +268,7 @@ defineNextAdminExtension({
             id: 'store-management-currency-compatibility',
             path: '/settings/store-currency',
             title: '店铺币种设置',
-            component: redirectTo('/settings/store-profile?tab=business'),
+            component: redirectTo(STORE_CURRENCY_COMPATIBILITY_TARGET),
             permissions: ['ReadSettings'],
             commandPalette: false,
         },

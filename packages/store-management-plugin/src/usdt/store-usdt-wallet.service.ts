@@ -35,6 +35,7 @@ export interface StoreUsdtWalletView {
     activeReceivingAddressFingerprint: string | null;
     pendingReceivingAddress: string | null;
     pendingReceivingAddressFingerprint: string | null;
+    canReview: boolean;
     submittedAt: Date | null;
     reviewedAt: Date | null;
     rejectionReason: string | null;
@@ -101,7 +102,7 @@ export class StoreUsdtWalletService {
         const repository = this.connection.getRepository(ctx, StoreUsdtWallet);
         const wallet = await repository.findOne({ where: { channelId }, relations: { channel: true } });
         const channel = wallet?.channel ?? (await this.connection.getEntityOrThrow(ctx, Channel, channelId));
-        return this.toView(wallet, channel);
+        return this.toView(wallet, channel, ctx.activeUserId);
     }
 
     async list(ctx: RequestContext): Promise<StoreUsdtWalletView[]> {
@@ -110,7 +111,9 @@ export class StoreUsdtWalletService {
             relations: { channel: true },
         });
         const byChannelId = new Map(wallets.map(wallet => [String(wallet.channelId), wallet]));
-        return channels.map(channel => this.toView(byChannelId.get(String(channel.id)) ?? null, channel));
+        return channels.map(channel =>
+            this.toView(byChannelId.get(String(channel.id)) ?? null, channel, ctx.activeUserId),
+        );
     }
 
     async submit(ctx: RequestContext, receivingAddressInput: string): Promise<StoreUsdtWalletView> {
@@ -135,7 +138,7 @@ export class StoreUsdtWalletService {
             throw new UserInputError('该地址已经是当前启用的 USDT 收款地址');
         }
         if (wallet.reviewStatus === 'PENDING' && wallet.pendingReceivingAddressFingerprint === fingerprint) {
-            return this.toView(wallet, channel);
+            return this.toView(wallet, channel, ctx.activeUserId);
         }
         wallet.pendingReceivingAddressEncrypted = this.encryption.encryptReceivingAddress(receivingAddress);
         wallet.pendingReceivingAddressFingerprint = fingerprint;
@@ -147,7 +150,7 @@ export class StoreUsdtWalletService {
         wallet.rejectionReason = null;
         const saved = await repository.save(wallet);
         await this.recordAudit(ctx, saved.channelId, 'SUBMITTED', fingerprint, null);
-        return this.toView(saved, channel);
+        return this.toView(saved, channel, ctx.activeUserId);
     }
 
     async review(ctx: RequestContext, input: ReviewStoreUsdtWalletInput): Promise<StoreUsdtWalletView> {
@@ -155,6 +158,15 @@ export class StoreUsdtWalletService {
         const wallet = await this.findWalletForUpdate(ctx, input.channelId);
         if (!wallet?.pendingReceivingAddressEncrypted || !wallet.pendingReceivingAddressFingerprint) {
             throw new UserInputError('该网店没有待审核的 USDT 收款地址');
+        }
+        if (ctx.activeUserId == null) {
+            throw new UserInputError('无法识别当前审核管理员，请重新登录后再试');
+        }
+        if (
+            wallet.submittedByUserId != null &&
+            String(ctx.activeUserId) === String(wallet.submittedByUserId)
+        ) {
+            throw new UserInputError('提交人不能审核自己提交的 USDT 收款地址，请使用另一名 SuperAdmin 复核');
         }
         const reviewedFingerprint = wallet.pendingReceivingAddressFingerprint;
         if (input.approved) {
@@ -193,7 +205,7 @@ export class StoreUsdtWalletService {
         if (input.approved) await this.assignPaymentMethodToChannel(ctx, wallet.channelId);
         const channel =
             wallet.channel ?? (await this.connection.getEntityOrThrow(ctx, Channel, wallet.channelId));
-        return this.toView(saved, channel);
+        return this.toView(saved, channel, ctx.activeUserId);
     }
 
     async seedLegacyWallet(
@@ -311,7 +323,11 @@ export class StoreUsdtWalletService {
         });
     }
 
-    private toView(wallet: StoreUsdtWallet | null, channel: Channel): StoreUsdtWalletView {
+    private toView(
+        wallet: StoreUsdtWallet | null,
+        channel: Channel,
+        activeUserId: ID | null | undefined,
+    ): StoreUsdtWalletView {
         const activeAddress = wallet?.activeReceivingAddressEncrypted
             ? this.encryption.decryptReceivingAddress(wallet.activeReceivingAddressEncrypted)
             : null;
@@ -328,6 +344,11 @@ export class StoreUsdtWalletService {
             activeReceivingAddressFingerprint: wallet?.activeReceivingAddressFingerprint ?? null,
             pendingReceivingAddress: pendingAddress,
             pendingReceivingAddressFingerprint: wallet?.pendingReceivingAddressFingerprint ?? null,
+            canReview:
+                Boolean(wallet?.pendingReceivingAddressFingerprint) &&
+                activeUserId != null &&
+                (wallet?.submittedByUserId == null ||
+                    String(activeUserId) !== String(wallet.submittedByUserId)),
             submittedAt: wallet?.submittedAt ?? null,
             reviewedAt: wallet?.reviewedAt ?? null,
             rejectionReason: wallet?.rejectionReason ?? null,

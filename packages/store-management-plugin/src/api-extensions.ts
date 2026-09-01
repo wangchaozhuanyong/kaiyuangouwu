@@ -141,6 +141,7 @@ const commonTypes = gql`
         activeReceivingAddressFingerprint: String
         pendingReceivingAddress: String
         pendingReceivingAddressFingerprint: String
+        canReview: Boolean!
         submittedAt: DateTime
         reviewedAt: DateTime
         rejectionReason: String
