@@ -686,7 +686,7 @@ export function OrderEditor() {
             </header>
 
             <div className="flex-1 overflow-y-auto p-5 sm:p-6">
-                <div className="mx-auto max-w-7xl space-y-4">
+                <div className="mx-auto w-full max-w-none space-y-4">
                     {notification && (
                         <div
                             role="status"

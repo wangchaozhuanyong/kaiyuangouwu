@@ -307,7 +307,6 @@ export function ProductEditor() {
     );
 
     const [activeTab, setActiveTab] = useUrlTab<ProductEditorTab>(PRODUCT_EDITOR_TABS, 'basic');
-    const contentWidthClass = activeTab === 'VARIANTS' ? 'max-w-none' : 'max-w-5xl';
 
     // SPU 基础字段 (严格无演示默认数据)
     const [productName, setProductName] = useState('');
@@ -1532,9 +1531,7 @@ export function ProductEditor() {
             </div>
 
             {/* Main Form Body */}
-            <div
-                className={`mx-auto w-full ${contentWidthClass} flex-1 space-y-6 overflow-y-auto p-5 sm:p-8`}
-            >
+            <div className="mx-auto w-full max-w-none flex-1 space-y-6 overflow-y-auto p-5 sm:p-8">
                 {/* 成功通知 */}
                 {notification && (
                     <div

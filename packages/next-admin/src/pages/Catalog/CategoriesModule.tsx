@@ -707,7 +707,7 @@ export function CategoriesModule() {
                 ))}
             </div>
 
-            <div className="mx-auto w-full max-w-6xl flex-1 space-y-5 overflow-y-auto p-5 sm:p-8">
+            <div className="mx-auto w-full max-w-none flex-1 space-y-5 overflow-y-auto p-5 sm:p-8">
                 {notification && (
                     <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3.5 text-xs font-medium text-emerald-800">
                         <CheckCircle2 className="h-4 w-4" />
