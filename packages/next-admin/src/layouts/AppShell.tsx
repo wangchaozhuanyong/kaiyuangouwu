@@ -164,6 +164,7 @@ export function AppShell() {
         refetch: refetchAppShell,
     } = appShellQuery;
     const activeAdministrator = channelData?.activeAdministrator;
+    const storeLogoUrl = channelData?.myStoreProfile.logoAsset?.preview;
     const commerceMode = channelData?.myStoreCommerceMode.mode ?? 'HYBRID';
     const showsPhysicalCatalog = commerceMode !== 'DIGITAL_ONLY';
     const showsDigitalCatalog = commerceMode !== 'PHYSICAL_ONLY';
@@ -659,8 +660,19 @@ export function AppShell() {
             >
                 <div className="h-14 border-b border-white/10 flex items-center justify-center shrink-0">
                     <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center font-bold text-white shadow-lg shadow-blue-900/20">
-                            V
+                        <div className="relative flex h-8 w-8 items-center justify-center overflow-hidden rounded-lg bg-blue-600 font-bold text-white shadow-lg shadow-blue-900/20">
+                            <span aria-hidden="true">V</span>
+                            {storeLogoUrl && (
+                                <img
+                                    key={storeLogoUrl}
+                                    src={storeLogoUrl}
+                                    alt=""
+                                    className="absolute inset-0 h-full w-full bg-white object-contain"
+                                    onError={event => {
+                                        event.currentTarget.hidden = true;
+                                    }}
+                                />
+                            )}
                         </div>
                         {isSidebarOpen && (
                             <span className="font-bold text-white text-base tracking-wide">

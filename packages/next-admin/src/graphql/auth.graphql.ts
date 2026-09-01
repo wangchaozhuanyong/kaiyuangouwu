@@ -68,6 +68,13 @@ export const APP_SHELL_BOOTSTRAP_QUERY = gql`
         myStoreCommerceMode {
             mode
         }
+        myStoreProfile {
+            id
+            logoAsset {
+                id
+                preview
+            }
+        }
         me {
             id
             identifier
@@ -209,5 +216,9 @@ export type AppShellBootstrapData = ActiveAdministratorProfileData &
         me: CurrentAdministratorUser | null;
         myStoreCommerceMode: {
             mode: 'DIGITAL_ONLY' | 'PHYSICAL_ONLY' | 'HYBRID';
+        };
+        myStoreProfile: {
+            id: string;
+            logoAsset: { id: string; preview: string } | null;
         };
     };
