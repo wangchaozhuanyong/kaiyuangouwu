@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ID } from '@vendure/common/lib/shared-types';
-import { ContentTranslationService } from '@vendure/content-translation-plugin';
+import { ContentTranslationService, isUsableEnglishTranslation } from '@vendure/content-translation-plugin';
 import {
     Customer,
     CustomerService,
@@ -474,7 +474,9 @@ export class AfterSalesService {
         const isChinese = String(ctx.languageCode).toLowerCase().startsWith('zh');
         request.resolution = isChinese
             ? request.resolutionZh || request.resolutionEn || request.resolution
-            : request.resolutionEn || null;
+            : isUsableEnglishTranslation(request.resolutionEn)
+              ? request.resolutionEn
+              : null;
         return request;
     }
 

@@ -2,6 +2,7 @@ import { Injectable, Optional } from '@nestjs/common';
 import { ID } from '@vendure/common/lib/shared-types';
 import {
     ContentTranslationService,
+    isUsableEnglishTranslation,
     PreparedLocalizedContentField,
 } from '@vendure/content-translation-plugin';
 import { Channel, EventBus, RequestContext, TransactionalConnection, UserInputError } from '@vendure/core';
@@ -284,11 +285,14 @@ function isSafeAnnouncementLink(value: string): boolean {
 }
 
 function localizedText(zh: string, en: string, isZh: boolean): string {
-    return (isZh ? zh || en : en || zh).trim();
+    return (isZh ? zh || en : en).trim();
 }
 
 function hasCompleteAnnouncementTranslation(announcement: SystemAnnouncement): boolean {
-    return [announcement.titleZh, announcement.titleEn, announcement.contentZh, announcement.contentEn].every(
-        value => value.trim().length > 0,
+    return (
+        announcement.titleZh.trim().length > 0 &&
+        announcement.contentZh.trim().length > 0 &&
+        isUsableEnglishTranslation(announcement.titleEn) &&
+        isUsableEnglishTranslation(announcement.contentEn)
     );
 }

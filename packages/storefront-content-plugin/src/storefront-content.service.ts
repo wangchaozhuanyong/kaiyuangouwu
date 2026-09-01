@@ -1,7 +1,7 @@
 import { Injectable, Optional } from '@nestjs/common';
 import { LanguageCode } from '@vendure/common/lib/generated-types';
 import { ID } from '@vendure/common/lib/shared-types';
-import { ContentTranslationService } from '@vendure/content-translation-plugin';
+import { ContentTranslationService, isUsableEnglishTranslation } from '@vendure/content-translation-plugin';
 import {
     Asset,
     EntityNotFoundError,
@@ -676,9 +676,9 @@ export class StorefrontContentService {
             translation => translation.languageCode === LanguageCode.zh_Hans,
         );
         const target = block.translations?.find(translation => translation.languageCode === LanguageCode.en);
-        if (!source?.title.trim() || !target?.title.trim()) return false;
+        if (!source?.title.trim() || !isUsableEnglishTranslation(target?.title)) return false;
         const blockFields = ['subtitle', 'body', 'ctaLabel'] as const;
-        if (blockFields.some(field => Boolean(source[field].trim()) !== Boolean(target[field].trim()))) {
+        if (blockFields.some(field => !hasPublishableTranslationPair(source[field], target[field]))) {
             return false;
         }
         return (block.items ?? [])
@@ -692,8 +692,11 @@ export class StorefrontContentService {
                 );
                 return (
                     Boolean(itemSource?.label.trim()) &&
-                    Boolean(itemTarget?.label.trim()) &&
-                    Boolean(itemSource?.description.trim()) === Boolean(itemTarget?.description.trim())
+                    isUsableEnglishTranslation(itemTarget?.label) &&
+                    hasPublishableTranslationPair(
+                        itemSource?.description ?? '',
+                        itemTarget?.description ?? '',
+                    )
                 );
             });
     }
@@ -1144,6 +1147,10 @@ export class StorefrontContentService {
     private optionalText(value: string | null | undefined): string | null {
         return value?.trim() || null;
     }
+}
+
+function hasPublishableTranslationPair(source: string, target: string): boolean {
+    return source.trim().length > 0 ? isUsableEnglishTranslation(target) : target.trim().length === 0;
 }
 
 function isLockNotSupportedError(error: unknown): boolean {

@@ -1,5 +1,9 @@
 export { ContentTranslationPlugin } from './content-translation.plugin.js';
-export { ContentTranslationService } from './content-translation.service.js';
+export {
+    ContentTranslationService,
+    containsHanContent,
+    isUsableEnglishTranslation,
+} from './content-translation.service.js';
 export { customerFacingContentRegistry } from './customer-facing-content-registry.js';
 export { ContentTranslationState } from './entities/content-translation-state.entity.js';
 export { NativeContentTranslationService } from './native-content-translation.service.js';

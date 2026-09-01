@@ -1,6 +1,6 @@
 import { Injectable, Optional } from '@nestjs/common';
 import { ID } from '@vendure/common/lib/shared-types';
-import { ContentTranslationService } from '@vendure/content-translation-plugin';
+import { ContentTranslationService, isUsableEnglishTranslation } from '@vendure/content-translation-plugin';
 import {
     Customer,
     CustomerService,
@@ -380,7 +380,9 @@ export class StorefrontReviewService {
         const isChinese = String(ctx.languageCode).toLowerCase().startsWith('zh');
         review.merchantResponse = isChinese
             ? review.merchantResponseZh || review.merchantResponseEn || review.merchantResponse
-            : review.merchantResponseEn || null;
+            : isUsableEnglishTranslation(review.merchantResponseEn)
+              ? review.merchantResponseEn
+              : null;
         return review;
     }
 

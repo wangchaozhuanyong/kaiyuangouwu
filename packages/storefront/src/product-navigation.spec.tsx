@@ -74,6 +74,7 @@ describe('product image navigation layers', () => {
                 product={manualServiceProduct}
                 market={market}
                 locale={market.locale}
+                language="zh"
                 onOpen={vi.fn()}
             />,
         );
@@ -88,6 +89,7 @@ describe('product image navigation layers', () => {
                 product={digitalProduct}
                 market={market}
                 locale={market.locale}
+                language="zh"
                 onOpen={vi.fn()}
                 onFavorite={vi.fn()}
             />,
@@ -147,7 +149,13 @@ describe('product image navigation layers', () => {
             variants: [{ ...digitalProduct.variants[0], autoCardAvailableStock: 0 }],
         };
         const markup = renderToStaticMarkup(
-            <ProductCard product={soldOutProduct} market={market} locale={market.locale} onOpen={vi.fn()} />,
+            <ProductCard
+                product={soldOutProduct}
+                market={market}
+                locale={market.locale}
+                language="zh"
+                onOpen={vi.fn()}
+            />,
         );
 
         expect(markup).toContain('已售罄');
@@ -163,6 +171,7 @@ describe('product image navigation layers', () => {
                 product={productWithoutDescription}
                 market={market}
                 locale={market.locale}
+                language="zh"
                 onOpen={vi.fn()}
             />,
         );
@@ -178,5 +187,24 @@ describe('product image navigation layers', () => {
 
         expect(cardMarkup).not.toContain('CHATGPT-PLUS');
         expect(rowMarkup).not.toContain('CHATGPT-PLUS');
+    });
+
+    it('uses the active content language instead of the currency locale for stock labels', () => {
+        const soldOutProduct: Product = {
+            ...digitalProduct,
+            variants: [{ ...digitalProduct.variants[0], autoCardAvailableStock: 0 }],
+        };
+        const markup = renderToStaticMarkup(
+            <ProductCard
+                product={soldOutProduct}
+                market={market}
+                locale="zh-CN"
+                language="en"
+                onOpen={vi.fn()}
+            />,
+        );
+
+        expect(markup).toContain('Sold out');
+        expect(markup).not.toContain('已售罄');
     });
 });

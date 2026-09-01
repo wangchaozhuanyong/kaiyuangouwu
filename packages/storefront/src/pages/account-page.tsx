@@ -514,6 +514,7 @@ export function AccountPage() {
                 products={products.slice(0, 4)}
                 market={market}
                 locale={locale}
+                language={language}
                 onProduct={product => navigateTo({ name: 'product', id: product.id })}
             />
             <LegalFooter

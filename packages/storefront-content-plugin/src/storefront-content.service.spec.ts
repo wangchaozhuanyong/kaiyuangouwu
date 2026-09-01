@@ -326,6 +326,34 @@ describe('StorefrontContentService publication guard', () => {
         expect((service as any).hasCompletePublishedTranslations(block)).toBe(false);
         block.translations[1].title = 'Home';
         expect((service as any).hasCompletePublishedTranslations(block)).toBe(true);
+
+        block.translations[1].title = '首页活动';
+        expect((service as any).hasCompletePublishedTranslations(block)).toBe(false);
+    });
+
+    it('does not publish Chinese text stored in optional English fields', () => {
+        const service = new StorefrontContentService({} as never, {} as never, {} as never, {} as never);
+        const block = new StorefrontContentBlock({
+            translations: [
+                {
+                    languageCode: LanguageCode.zh_Hans,
+                    title: '首页',
+                    subtitle: '限时活动',
+                    body: '',
+                    ctaLabel: '',
+                },
+                {
+                    languageCode: LanguageCode.en,
+                    title: 'Home',
+                    subtitle: '限时活动',
+                    body: '',
+                    ctaLabel: '',
+                },
+            ],
+            items: [],
+        });
+
+        expect((service as any).hasCompletePublishedTranslations(block)).toBe(false);
     });
 
     it('publishes hero blocks only when they resolve to a storefront image URL', () => {

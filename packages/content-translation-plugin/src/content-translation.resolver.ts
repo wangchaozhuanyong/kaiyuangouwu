@@ -15,7 +15,7 @@ export class ContentTranslationAdminResolver {
     @Query()
     @Allow(Permission.SuperAdmin)
     contentTranslationAudit(@Ctx() ctx: RequestContext, @Args() args: { channelId?: string | null }) {
-        return this.service.audit(ctx, args.channelId);
+        return this.service.audit(ctx, args.channelId === undefined ? ctx.channelId : args.channelId);
     }
 
     @Query()

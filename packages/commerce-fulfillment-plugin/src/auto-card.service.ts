@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ID } from '@vendure/common/lib/shared-types';
-import { ContentTranslationService } from '@vendure/content-translation-plugin';
+import { ContentTranslationService, isUsableEnglishTranslation } from '@vendure/content-translation-plugin';
 import {
     EventBus,
     isGraphQlErrorResult,
@@ -909,12 +909,7 @@ export class AutoCardService {
                 ''
             );
         }
-        return (
-            config.instructionsEn?.trim() ||
-            config.instructionsZh?.trim() ||
-            config.instructions?.trim() ||
-            ''
-        );
+        return isUsableEnglishTranslation(config.instructionsEn) ? config.instructionsEn.trim() : '';
     }
 
     private async configOrThrow(ctx: RequestContext, productVariantId: ID): Promise<AutoCardConfig> {

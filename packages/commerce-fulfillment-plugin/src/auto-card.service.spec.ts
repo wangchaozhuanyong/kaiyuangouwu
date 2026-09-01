@@ -217,4 +217,19 @@ describe('AutoCardService allocation invariants', () => {
         expect(test.eventBus.publish).toHaveBeenCalledTimes(1);
         expect(test.events.map(event => event.type)).toEqual(['MANUAL_RETRY', 'EMAIL_QUEUED']);
     });
+
+    it('does not expose Chinese delivery instructions to an English client', () => {
+        const test = createHarness({});
+        const config = {
+            instructions: '旧中文说明',
+            instructionsZh: '中文说明',
+            instructionsEn: '仍然是中文说明',
+        };
+
+        expect((test.service as any).localizedInstructions(config, 'en')).toBe('');
+        config.instructionsEn = 'Your credentials will be delivered by email.';
+        expect((test.service as any).localizedInstructions(config, 'en')).toBe(
+            'Your credentials will be delivered by email.',
+        );
+    });
 });

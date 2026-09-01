@@ -2005,6 +2005,7 @@ function StoreEditor({
     const [nameEn, setNameEn] = useState(profile.channel.customFields.storefrontNameEn);
     const [descriptionZh, setDescriptionZh] = useState(profile.descriptionZh);
     const [descriptionEn, setDescriptionEn] = useState(profile.descriptionEn);
+    const [reviewEnglish, setReviewEnglish] = useState(false);
     const [internalNote, setInternalNote] = useState(profile.internalNote ?? '');
     const [status, setStatus] = useState(profile.status);
     const [sortOrder, setSortOrder] = useState(profile.sortOrder);
@@ -2062,15 +2063,6 @@ function StoreEditor({
                         className={inputClass}
                     />
                 </Field>
-                <Field label="英文店铺名称">
-                    <input
-                        value={nameEn}
-                        onChange={event => setNameEn(event.target.value)}
-                        className={inputClass}
-                    />
-                </Field>
-            </div>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
                 <Field label="中文简介">
                     <textarea
                         rows={4}
@@ -2079,14 +2071,39 @@ function StoreEditor({
                         className={inputClass}
                     />
                 </Field>
-                <Field label="英文简介">
-                    <textarea
-                        rows={4}
-                        value={descriptionEn}
-                        onChange={event => setDescriptionEn(event.target.value)}
-                        className={inputClass}
-                    />
-                </Field>
+            </div>
+            <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <button
+                    type="button"
+                    onClick={() => setReviewEnglish(current => !current)}
+                    aria-expanded={reviewEnglish}
+                    className="flex items-center gap-1.5 text-xs font-bold text-blue-700"
+                >
+                    <Languages className="h-3.5 w-3.5" />
+                    {reviewEnglish ? '收起英文校对' : '展开英文校对（可选）'}
+                </button>
+                <p className="mt-1 text-[10px] leading-4 text-slate-500">
+                    中文是源内容；不填写英文时保存会自动生成。手工英文仅作当前覆盖，中文改动后请重新校对。
+                </p>
+                {reviewEnglish && (
+                    <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                        <Field label="英文店铺名称（人工覆盖）">
+                            <input
+                                value={nameEn}
+                                onChange={event => setNameEn(event.target.value)}
+                                className={inputClass}
+                            />
+                        </Field>
+                        <Field label="英文简介（人工覆盖）">
+                            <textarea
+                                rows={4}
+                                value={descriptionEn}
+                                onChange={event => setDescriptionEn(event.target.value)}
+                                className={inputClass}
+                            />
+                        </Field>
+                    </div>
+                )}
             </div>
             <div className="mt-4">
                 <Field label="内部备注（客户不可见）">
@@ -2405,6 +2422,7 @@ function ProvisionStoreDialog({
     });
     const [result, setResult] = useState<{ channelCode: string; temporaryPassword: string } | null>(null);
     const [copied, setCopied] = useState(false);
+    const [reviewEnglish, setReviewEnglish] = useState(false);
     const [provision, state] = useMutation<{
         provisionStore: { channelCode: string; temporaryPassword: string };
     }>(PROVISION_STORE_MUTATION);
@@ -2509,13 +2527,31 @@ function ProvisionStoreDialog({
                         className={inputClass}
                     />
                 </Field>
-                <Field label="英文网站名称">
-                    <input
-                        value={draft.storefrontNameEn}
-                        onChange={event => set('storefrontNameEn', event.target.value)}
-                        className={inputClass}
-                    />
-                </Field>
+            </div>
+            <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <button
+                    type="button"
+                    onClick={() => setReviewEnglish(current => !current)}
+                    aria-expanded={reviewEnglish}
+                    className="flex items-center gap-1.5 text-xs font-bold text-blue-700"
+                >
+                    <Languages className="h-3.5 w-3.5" />
+                    {reviewEnglish ? '收起英文校对' : '展开英文校对（可选）'}
+                </button>
+                <p className="mt-1 text-[10px] leading-4 text-slate-500">
+                    默认根据中文网站名称自动生成英文；品牌名称需要固定写法时再手工覆盖。
+                </p>
+                {reviewEnglish && (
+                    <div className="mt-3">
+                        <Field label="英文网站名称（人工覆盖）">
+                            <input
+                                value={draft.storefrontNameEn}
+                                onChange={event => set('storefrontNameEn', event.target.value)}
+                                className={inputClass}
+                            />
+                        </Field>
+                    </div>
+                )}
             </div>
             <div className="mt-4">
                 <Field label="开店配置模板 *">

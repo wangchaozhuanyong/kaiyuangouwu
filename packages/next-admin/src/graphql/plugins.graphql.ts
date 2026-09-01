@@ -193,7 +193,7 @@ export const REFUND_IMAGE_OUTPUT_MUTATION = gql`
 `;
 
 export const CONTENT_TRANSLATION_AUDIT_QUERY = gql`
-  query NextAdminContentTranslationAudit($channelId: ID) {
+  query NextAdminContentTranslationAudit {
     activeChannel {
       id
       code
@@ -201,7 +201,7 @@ export const CONTENT_TRANSLATION_AUDIT_QUERY = gql`
       availableLanguageCodes
     }
     contentTranslationStaleCount
-    contentTranslationAudit(channelId: $channelId) {
+    contentTranslationAudit {
       configured
       provider
       total
@@ -233,9 +233,11 @@ export const BACKFILL_CONTENT_TRANSLATIONS_MUTATION = gql`
       total
       scanned
       processed
+      skipped
       failed
       nextOffset
       hasMore
+      skippedRecords
       errors
     }
   }

@@ -483,6 +483,7 @@ export function ProductDetailPage() {
                 products={similarProducts}
                 market={market}
                 locale={locale}
+                language={language}
                 onProduct={item => navigateTo({ name: 'product', id: item.id })}
             />
             <div className="detail-action-bar">

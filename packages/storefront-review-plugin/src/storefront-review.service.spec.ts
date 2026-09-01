@@ -211,7 +211,7 @@ describe('StorefrontReviewService', () => {
         const review = {
             merchantResponse: '旧中文回复',
             merchantResponseZh: '旧中文回复',
-            merchantResponseEn: null,
+            merchantResponseEn: '仍然是中文回复',
         };
 
         expect(

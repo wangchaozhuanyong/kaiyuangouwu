@@ -371,7 +371,7 @@ describe('AfterSalesService', () => {
             events: [],
             resolution: '旧中文处理说明',
             resolutionZh: '旧中文处理说明',
-            resolutionEn: null,
+            resolutionEn: '仍然是中文处理说明',
         };
 
         expect(

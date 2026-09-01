@@ -9,6 +9,7 @@ import { BottomNavigation, shouldShowBottomNavigation } from './components/commo
 import { normalizeHeroAutoplayIntervalSeconds } from './hero-carousel';
 import { buildBestSellerProducts, buildRecommendationProducts } from './home-merchandising';
 import {
+    documentLanguageFor,
     enabledMarkets,
     languageCodeFor,
     localeFor,
@@ -871,8 +872,9 @@ export function App() {
     }, [collectionsQuery, configQuery, productsQuery]);
 
     useEffect(() => {
-        document.documentElement.lang = locale;
-    }, [locale]);
+        document.documentElement.lang = documentLanguageFor(language);
+        document.documentElement.setAttribute('translate', 'yes');
+    }, [language]);
 
     useEffect(() => {
         if (activeCollectionId === 'all' && collections.length) {

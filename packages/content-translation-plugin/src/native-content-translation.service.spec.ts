@@ -666,6 +666,29 @@ describe('native content translation event routing', () => {
         );
     });
 
+    it('reports records that cannot be translated because the Chinese source is missing', async () => {
+        const repository = {
+            count: vi.fn(async () => 1),
+            find: vi.fn(async () => [new Product({ id: 'product-without-source', translations: [] })]),
+        };
+        const service = new NativeContentTranslationService(
+            { publish: vi.fn(async () => undefined) } as any,
+            { getRepository: vi.fn(() => repository) } as any,
+            {} as any,
+        );
+        const translateEntity = vi.spyOn(service, 'translateEntity');
+
+        await expect(service.backfill({} as any, 'Product', 100, 0)).resolves.toMatchObject({
+            total: 1,
+            scanned: 1,
+            processed: 0,
+            skipped: 1,
+            failed: 0,
+            skippedRecords: ['Product#product-without-source: Simplified Chinese content is missing'],
+        });
+        expect(translateEntity).not.toHaveBeenCalled();
+    });
+
     it('runs every historical backfill page during automatic repair', async () => {
         const ctx = { channelId: 'channel-1' } as any;
         const requestContextService = { create: vi.fn(async () => ctx) };
@@ -682,18 +705,22 @@ describe('native content translation event routing', () => {
                 total: 150,
                 scanned: 100,
                 processed: 99,
+                skipped: 0,
                 failed: 1,
                 nextOffset: 100,
                 hasMore: true,
+                skippedRecords: [],
                 errors: ['Product#1: temporary failure'],
             })
             .mockResolvedValueOnce({
                 total: 150,
                 scanned: 50,
                 processed: 50,
+                skipped: 0,
                 failed: 0,
                 nextOffset: 150,
                 hasMore: false,
+                skippedRecords: [],
                 errors: [],
             });
 

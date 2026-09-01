@@ -136,6 +136,10 @@ export function localeFor(language: StorefrontLanguage, market: MarketConfig): s
     return market.locale || localeForCountry(market.countryCode);
 }
 
+export function documentLanguageFor(language: StorefrontLanguage): 'zh-CN' | 'en' {
+    return language === 'zh' ? 'zh-CN' : 'en';
+}
+
 function localeForCountry(countryCode: string): string {
     return /^[A-Z]{2}$/.test(countryCode) ? `en-${countryCode}` : 'en-US';
 }

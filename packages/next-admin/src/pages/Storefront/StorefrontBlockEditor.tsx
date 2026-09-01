@@ -688,6 +688,15 @@ function ItemEditor({
         });
     const navigation = blockType === 'NAVIGATION';
     const support = blockType === 'SUPPORT';
+    const coreCategories = blockType === 'CORE_CATEGORIES';
+    const updateLocalizedSetting = (field: 'badgeLabel' | 'ctaLabel', value: string) =>
+        onChange({
+            ...item,
+            settings: {
+                ...(item.settings ?? {}),
+                [localizedItemSettingKey(field, language)]: value,
+            },
+        });
     return (
         <article className="rounded-xl border border-slate-200 bg-slate-50 p-4">
             <div className="flex items-center justify-between gap-3">
@@ -736,6 +745,30 @@ function ItemEditor({
                         className={inputClass}
                     />
                 </Field>
+                {coreCategories && (
+                    <>
+                        <Field label={`${language === 'zh_Hans' ? '中文' : '英文'}角标文案`}>
+                            <input
+                                value={stringSetting(
+                                    item.settings?.[localizedItemSettingKey('badgeLabel', language)],
+                                    '',
+                                )}
+                                onChange={event => updateLocalizedSetting('badgeLabel', event.target.value)}
+                                className={inputClass}
+                            />
+                        </Field>
+                        <Field label={`${language === 'zh_Hans' ? '中文' : '英文'}卡片按钮文案`}>
+                            <input
+                                value={stringSetting(
+                                    item.settings?.[localizedItemSettingKey('ctaLabel', language)],
+                                    '',
+                                )}
+                                onChange={event => updateLocalizedSetting('ctaLabel', event.target.value)}
+                                className={inputClass}
+                            />
+                        </Field>
+                    </>
+                )}
                 {support && (
                     <Field label="客服渠道">
                         <select
@@ -1311,6 +1344,9 @@ function numberSetting(value: unknown, fallback: number): number {
 }
 function stringSetting(value: unknown, fallback: string): string {
     return typeof value === 'string' ? value : fallback;
+}
+function localizedItemSettingKey(field: 'badgeLabel' | 'ctaLabel', language: StorefrontLanguageCode): string {
+    return `${field}${language === 'zh_Hans' ? 'Zh' : 'En'}`;
 }
 function clamp(value: number, min: number, max: number) {
     return Math.min(max, Math.max(min, Number.isFinite(value) ? value : min));

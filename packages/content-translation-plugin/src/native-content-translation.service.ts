@@ -60,9 +60,11 @@ export interface NativeContentBackfillResult {
     total: number;
     scanned: number;
     processed: number;
+    skipped: number;
     failed: number;
     nextOffset: number;
     hasMore: boolean;
+    skippedRecords: string[];
     errors: string[];
 }
 
@@ -183,7 +185,11 @@ export class NativeContentTranslationService implements OnApplicationBootstrap {
             aggregate.total = page.total;
             aggregate.scanned += page.scanned;
             aggregate.processed += page.processed;
+            aggregate.skipped += page.skipped;
             aggregate.failed += page.failed;
+            aggregate.skippedRecords.push(
+                ...page.skippedRecords.slice(0, Math.max(0, 50 - aggregate.skippedRecords.length)),
+            );
             aggregate.errors.push(...page.errors.slice(0, Math.max(0, 50 - aggregate.errors.length)));
             aggregate.nextOffset = page.nextOffset;
             aggregate.hasMore = page.hasMore;
@@ -192,10 +198,10 @@ export class NativeContentTranslationService implements OnApplicationBootstrap {
         } while (aggregate.hasMore);
         const summary =
             `Automatic customer-content translation repair scanned ${aggregate.scanned} records, ` +
-            `processed ${aggregate.processed}, failed ${aggregate.failed}`;
-        if (aggregate.failed) {
+            `processed ${aggregate.processed}, skipped ${aggregate.skipped}, failed ${aggregate.failed}`;
+        if (aggregate.failed || aggregate.skipped) {
             Logger.warn(
-                `${summary}. ${aggregate.errors.slice(0, 5).join('; ')}`,
+                `${summary}. ${[...aggregate.skippedRecords, ...aggregate.errors].slice(0, 5).join('; ')}`,
                 contentTranslationLoggerCtx,
             );
         } else {
@@ -307,9 +313,11 @@ export class NativeContentTranslationService implements OnApplicationBootstrap {
             total,
             scanned: 0,
             processed: 0,
+            skipped: 0,
             failed: 0,
             nextOffset: Math.min(offset, total),
             hasMore: offset < total,
+            skippedRecords: [],
             errors: [],
         };
         let remaining = limit;
@@ -338,7 +346,15 @@ export class NativeContentTranslationService implements OnApplicationBootstrap {
                 const source = entity.translations?.find(
                     translation => translation.languageCode === 'zh_Hans',
                 );
-                if (!source) continue;
+                if (!source) {
+                    result.skipped++;
+                    if (result.skippedRecords.length < 50) {
+                        result.skippedRecords.push(
+                            `${entity.constructor.name}#${entity.id}: Simplified Chinese content is missing`,
+                        );
+                    }
+                    continue;
+                }
                 try {
                     await this.translateEntity(ctx, entity, { translations: [source] });
                     await this.refreshProductSearchIndex(ctx, entity);
@@ -573,9 +589,11 @@ function emptyBackfillResult(): NativeContentBackfillResult {
         total: 0,
         scanned: 0,
         processed: 0,
+        skipped: 0,
         failed: 0,
         nextOffset: 0,
         hasMore: false,
+        skippedRecords: [],
         errors: [],
     };
 }

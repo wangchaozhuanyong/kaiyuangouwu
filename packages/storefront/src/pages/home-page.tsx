@@ -1231,6 +1231,7 @@ export function HomePage() {
                                     products={bestSellerProducts}
                                     market={market}
                                     locale={locale}
+                                    language={language}
                                     onProduct={product => navigateTo({ name: 'product', id: product.id })}
                                 />
                             </div>
@@ -1255,6 +1256,7 @@ export function HomePage() {
                                     products={recommendationProducts}
                                     market={market}
                                     locale={locale}
+                                    language={language}
                                     onProduct={product => navigateTo({ name: 'product', id: product.id })}
                                 />
                             </div>
@@ -1438,6 +1440,7 @@ function RecommendationPage({
                     products={products}
                     market={market}
                     locale={locale}
+                    language={language}
                     onProduct={onProduct}
                 />
             ) : (
@@ -1755,6 +1758,7 @@ function CategoryPromotionSection({
                                 product={product}
                                 market={market}
                                 locale={locale}
+                                language={language}
                                 onOpen={() => onContentTarget('PRODUCT', product.id)}
                             />
                         ))}
