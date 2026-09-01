@@ -174,7 +174,7 @@ export function StorefrontContentModule() {
     return (
         <div className="flex h-full flex-col bg-slate-50">
             <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-4 sm:px-8">
-                <div className="mx-auto flex w-full max-w-[1500px] flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                         <h1 className="text-xl font-bold text-slate-900">店铺内容与页面</h1>
                         <p className="mt-1 text-xs text-slate-500">
@@ -200,7 +200,7 @@ export function StorefrontContentModule() {
                 </div>
             </header>
             <nav className="shrink-0 border-b border-slate-200 bg-white px-5 sm:px-8">
-                <div className="mx-auto flex max-w-[1500px] gap-6 overflow-x-auto text-xs font-bold">
+                <div className="mx-auto flex w-full max-w-[1600px] gap-6 overflow-x-auto text-xs font-bold">
                     <TabButton
                         active={tab === 'PAGES'}
                         onClick={() => setTab('PAGES')}
@@ -222,7 +222,7 @@ export function StorefrontContentModule() {
                 </div>
             </nav>
 
-            <main className="mx-auto w-full max-w-[1500px] flex-1 space-y-4 overflow-y-auto p-5 sm:p-8">
+            <main className="mx-auto w-full max-w-[1600px] flex-1 space-y-4 overflow-y-auto p-5 sm:p-8">
                 {notice && (
                     <Message kind="success" onClose={() => setNotice('')}>
                         {notice}
