@@ -4,7 +4,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { HomeDualCategoryShowcase } from './App';
 import { StorefrontContentBlock } from './types';
 
-function blockFixture(settings: Record<string, unknown> | null = { dualCardTemplate: 'forest-amber' }) {
+function blockFixture(
+    settings: Record<string, unknown> | null = { dualCardTemplate: 'forest-amber' },
+): StorefrontContentBlock {
     return {
         id: 'core-categories-1',
         code: 'homepage-core-categories',
@@ -47,7 +49,7 @@ function blockFixture(settings: Record<string, unknown> | null = { dualCardTempl
                 description: '后台设置的数字说明',
             },
         ],
-    } satisfies StorefrontContentBlock;
+    };
 }
 
 describe('HomeDualCategoryShowcase', () => {
@@ -91,6 +93,42 @@ describe('HomeDualCategoryShowcase', () => {
         expect(markup).toContain('lucide-waypoints');
         expect(markup).toContain('lucide-headphones');
         expect(markup.match(/showcase-card-icon/g)).toHaveLength(2);
+    });
+
+    it('never falls back to Chinese-only card settings in English mode', () => {
+        const block = blockFixture();
+        block.title = 'Core categories';
+        block.items = block.items.map((item, index) => ({
+            ...item,
+            label: index === 0 ? 'AI gateway' : 'Customer support',
+            description: index === 0 ? 'Connect AI models' : 'Get help with your order',
+        }));
+
+        const markup = renderToStaticMarkup(
+            <HomeDualCategoryShowcase language="en" block={block} onContentTarget={vi.fn()} />,
+        );
+
+        expect(markup).toContain('Core category');
+        expect(markup).toContain('View category');
+        expect(markup).not.toContain('桌面数码');
+        expect(markup).not.toContain('探索硬件');
+    });
+
+    it('uses reviewed English card settings when they are present', () => {
+        const block = blockFixture();
+        block.title = 'Core categories';
+        block.items[0].settings = {
+            ...block.items[0].settings,
+            badgeLabelEn: 'AI gateway',
+            ctaLabelEn: 'Open gateway',
+        };
+
+        const markup = renderToStaticMarkup(
+            <HomeDualCategoryShowcase language="en" block={block} onContentTarget={vi.fn()} />,
+        );
+
+        expect(markup).toContain('AI gateway');
+        expect(markup).toContain('Open gateway');
     });
 
     it('renders nothing for an empty managed block', () => {

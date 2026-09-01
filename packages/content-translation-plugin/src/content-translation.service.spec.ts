@@ -1,11 +1,25 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { contentTranslationInternals, ContentTranslationService } from './content-translation.service.js';
+import {
+    contentTranslationInternals,
+    ContentTranslationService,
+    isUsableEnglishTranslation,
+} from './content-translation.service.js';
 
 describe('content translation hashing', () => {
     it('is deterministic and detects source changes', () => {
         expect(contentTranslationInternals.hash('商品')).toBe(contentTranslationInternals.hash('商品'));
         expect(contentTranslationInternals.hash('商品')).not.toBe(contentTranslationInternals.hash('新商品'));
+    });
+});
+
+describe('English publication policy', () => {
+    it('accepts non-empty English and rejects missing or Chinese content', () => {
+        expect(isUsableEnglishTranslation('Official channel service')).toBe(true);
+        expect(isUsableEnglishTranslation('ChatGPT Plus 为官方渠道服务')).toBe(false);
+        expect(isUsableEnglishTranslation('<p>商品详情</p>')).toBe(false);
+        expect(isUsableEnglishTranslation('')).toBe(false);
+        expect(isUsableEnglishTranslation(null)).toBe(false);
     });
 });
 
@@ -248,10 +262,29 @@ describe('ContentTranslationService localized fields', () => {
 
         await expect(service.countStale({ channelId: 'channel-1' } as any)).resolves.toBe(3);
         expect(repository.count).toHaveBeenCalledWith({
-            where: {
-                channelId: 'channel-1',
-                status: 'STALE',
-            },
+            where: [
+                { channelId: 'channel-1', status: 'STALE' },
+                { channelId: expect.anything(), status: 'STALE' },
+            ],
         });
+    });
+
+    it('audits the active channel together with global translation records', async () => {
+        const repository = { find: vi.fn(async () => []) };
+        const service = new ContentTranslationService({ getRepository: vi.fn(() => repository) } as any, {
+            provider: { name: 'test', isConfigured: () => true, translate: vi.fn() },
+            glossary: {},
+            sourceLanguageCode: 'zh_Hans',
+            targetLanguageCode: 'en',
+        });
+
+        await service.audit({} as any, 'channel-1');
+
+        expect(repository.find).toHaveBeenCalledTimes(2);
+        expect(repository.find).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: [{ channelId: 'channel-1' }, { channelId: expect.anything() }],
+            }),
+        );
     });
 });

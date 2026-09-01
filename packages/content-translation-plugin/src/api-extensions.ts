@@ -55,9 +55,11 @@ export const adminApiExtensions = gql`
         total: Int!
         scanned: Int!
         processed: Int!
+        skipped: Int!
         failed: Int!
         nextOffset: Int!
         hasMore: Boolean!
+        skippedRecords: [String!]!
         errors: [String!]!
     }
 

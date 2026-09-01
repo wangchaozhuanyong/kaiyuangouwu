@@ -330,6 +330,7 @@ export function RecommendationPage({
                     products={products}
                     market={market}
                     locale={locale}
+                    language={language}
                     onProduct={onProduct}
                 />
             ) : (
@@ -467,12 +468,19 @@ export function localizedDualCardItemSetting(
     fallback: string,
 ): string {
     const preferredKey = `${field}${language === 'zh' ? 'Zh' : 'En'}`;
-    const sourceKey = `${field}Zh`;
     const preferred = settings?.[preferredKey];
-    const source = settings?.[sourceKey];
-    if (typeof preferred === 'string' && preferred.trim()) return preferred.trim();
-    if (typeof source === 'string' && source.trim()) return source.trim();
+    if (
+        typeof preferred === 'string' &&
+        preferred.trim() &&
+        (language === 'zh' || !containsHanContent(preferred))
+    ) {
+        return preferred.trim();
+    }
     return fallback;
+}
+
+function containsHanContent(value: string): boolean {
+    return /\p{Script=Han}/u.test(value);
 }
 
 export function HomeTrustGuaranteeStrip({ language }: { language: StorefrontLanguage }) {

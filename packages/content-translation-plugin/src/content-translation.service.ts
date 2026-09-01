@@ -221,10 +221,10 @@ export class ContentTranslationService {
 
     async countStale(ctx: RequestContext): Promise<number> {
         return this.connection.getRepository(ctx, ContentTranslationState).count({
-            where: {
-                channelId: String(ctx.channelId),
-                status: 'STALE',
-            },
+            where: [
+                { channelId: String(ctx.channelId), status: 'STALE' },
+                { channelId: IsNull(), status: 'STALE' },
+            ],
         });
     }
 
@@ -233,7 +233,9 @@ export class ContentTranslationService {
         const where =
             channelId === undefined
                 ? undefined
-                : { channelId: channelId === null ? IsNull() : String(channelId) };
+                : channelId === null
+                  ? { channelId: IsNull() }
+                  : [{ channelId: String(channelId) }, { channelId: IsNull() }];
         const [states, allStatuses] = await Promise.all([
             repository.find({
                 ...(where ? { where } : {}),
@@ -275,8 +277,12 @@ function hash(value: string): string {
     return createHash('sha256').update(value).digest('hex');
 }
 
-function containsHanContent(value: string): boolean {
+export function containsHanContent(value: string): boolean {
     return /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/u.test(value);
+}
+
+export function isUsableEnglishTranslation(value: unknown): value is string {
+    return typeof value === 'string' && value.trim().length > 0 && !containsHanContent(value);
 }
 
 export const contentTranslationInternals = { hash, containsHanContent };

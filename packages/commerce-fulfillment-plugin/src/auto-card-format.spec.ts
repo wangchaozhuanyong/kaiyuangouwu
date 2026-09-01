@@ -66,4 +66,11 @@ describe('auto card format', () => {
         expect(autoCardFieldLabel(field, true)).toBe('邮箱密码');
         expect(autoCardFieldLabel(field, false)).toBe('Email password');
     });
+
+    it('does not expose legacy Chinese field labels on the English storefront', () => {
+        const legacyField = { key: 'account', label: '账号', labelEn: '账号', secret: false };
+
+        expect(validateAutoCardFields([legacyField])[0].labelEn).toBe('Account');
+        expect(autoCardFieldLabel(legacyField, false)).toBe('Account');
+    });
 });

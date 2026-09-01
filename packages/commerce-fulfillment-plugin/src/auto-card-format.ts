@@ -1,3 +1,5 @@
+import { isUsableEnglishTranslation } from '@vendure/content-translation-plugin';
+
 import {
     AUTO_CARD_MAX_DELIMITER_LENGTH,
     AUTO_CARD_MAX_FIELDS,
@@ -51,7 +53,9 @@ export function validateAutoCardFields(fields: AutoCardFieldDefinition[]): AutoC
     return fields.map(field => {
         const key = field.key?.trim();
         const label = field.label?.trim();
-        const labelEn = field.labelEn?.trim() || defaultEnglishAutoCardFieldLabel(key, label);
+        const labelEn = isUsableEnglishTranslation(field.labelEn)
+            ? field.labelEn.trim()
+            : defaultEnglishAutoCardFieldLabel(key, label);
         if (!FIELD_KEY_PATTERN.test(key)) {
             throw new Error(`字段键“${key || '空'}”格式无效`);
         }
@@ -72,7 +76,10 @@ export function validateAutoCardFields(fields: AutoCardFieldDefinition[]): AutoC
 }
 
 export function autoCardFieldLabel(field: AutoCardFieldDefinition, isChinese: boolean): string {
-    return isChinese ? field.label : field.labelEn;
+    if (isChinese) return field.label;
+    return isUsableEnglishTranslation(field.labelEn)
+        ? field.labelEn
+        : defaultEnglishAutoCardFieldLabel(field.key, field.label);
 }
 
 function defaultEnglishAutoCardFieldLabel(key: string, label: string): string {

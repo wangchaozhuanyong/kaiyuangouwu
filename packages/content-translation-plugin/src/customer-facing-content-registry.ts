@@ -1,5 +1,7 @@
 export type RegisteredContentStorage = 'VENDURE_TRANSLATIONS' | 'CUSTOM_TRANSLATIONS' | 'LOCALIZED_COLUMNS';
 export type RegisteredFieldFormat = 'TEXT' | 'HTML' | 'SLUG';
+export type RegisteredContentAuthoringPolicy =
+    'CHINESE_SOURCE_AUTO_TRANSLATED' | 'BILINGUAL_HUMAN_REVIEW_REQUIRED';
 
 export interface RegisteredContentField {
     path: string;
@@ -10,6 +12,7 @@ export interface RegisteredContentField {
 export interface RegisteredContentDefinition {
     storage: RegisteredContentStorage;
     fields: RegisteredContentField[];
+    authoringPolicy?: RegisteredContentAuthoringPolicy;
 }
 
 const text = (path: string, requiredForPublish = true): RegisteredContentField => ({
@@ -83,6 +86,43 @@ export const customerFacingContentRegistry = {
     AfterSalesResolution: {
         storage: 'LOCALIZED_COLUMNS',
         fields: [text('resolution')],
+    },
+    ReferralPosterTemplate: {
+        storage: 'LOCALIZED_COLUMNS',
+        authoringPolicy: 'BILINGUAL_HUMAN_REVIEW_REQUIRED',
+        fields: [
+            text('title'),
+            text('headline'),
+            text('rewardText'),
+            text('siteIntro', false),
+            text('serviceText', false),
+            text('featureOneTitle', false),
+            text('featureOneText', false),
+            text('featureTwoTitle', false),
+            text('featureTwoText', false),
+            text('featureThreeTitle', false),
+            text('featureThreeText', false),
+            text('qrEyebrow', false),
+            text('qrTitle', false),
+            text('qrDescription', false),
+            text('sceneOne', false),
+            text('sceneTwo', false),
+            text('sceneThree', false),
+            text('sceneFour', false),
+            text('ctaText', false),
+            text('footerTitle', false),
+            text('footerText', false),
+        ],
+    },
+    ImageGenerationConfig: {
+        storage: 'LOCALIZED_COLUMNS',
+        authoringPolicy: 'BILINGUAL_HUMAN_REVIEW_REQUIRED',
+        fields: [text('terms')],
+    },
+    ImageModelConfig: {
+        storage: 'LOCALIZED_COLUMNS',
+        authoringPolicy: 'BILINGUAL_HUMAN_REVIEW_REQUIRED',
+        fields: [text('displayName'), text('description')],
     },
 } as const satisfies Record<string, RegisteredContentDefinition>;
 

@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react';
 
 import { ProductCard } from '../components/common/product-card';
-import { MarketConfig, Product } from '../types';
+import { MarketConfig, Product, StorefrontLanguage } from '../types';
 
 import { SectionHeader } from './page-shell';
 
@@ -16,6 +16,7 @@ export function ProductSection({
     products,
     market,
     locale,
+    language,
     favoriteProductIds,
     onProduct,
     onFavorite,
@@ -30,6 +31,7 @@ export function ProductSection({
     products: Product[];
     market: MarketConfig;
     locale: string;
+    language: StorefrontLanguage;
     favoriteProductIds?: string[];
     onProduct: (product: Product) => void;
     onFavorite?: (product: Product) => void;
@@ -54,6 +56,7 @@ export function ProductSection({
                         product={product}
                         market={market}
                         locale={locale}
+                        language={language}
                         favorite={favoriteProductIds?.includes(product.id)}
                         onOpen={() => onProduct(product)}
                         onFavorite={onFavorite ? () => onFavorite(product) : undefined}

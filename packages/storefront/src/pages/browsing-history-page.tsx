@@ -1,6 +1,6 @@
+import type { RouteState } from '../storefront-router';
 import { useNavigate, useRouter } from '@tanstack/react-router';
 import { Clock3, Trash2, WifiOff } from 'lucide-react';
-import type { RouteState } from '../storefront-router';
 
 import { ShopApi } from '../api';
 import { offlineLoadError } from '../loading-state';
@@ -77,6 +77,7 @@ export function BrowsingHistoryPage() {
                     products={historyProducts}
                     market={market}
                     locale={locale}
+                    language={language}
                     onProduct={product => navigateTo({ name: 'product', id: product.id })}
                 />
             ) : (

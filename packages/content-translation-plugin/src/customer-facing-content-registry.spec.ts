@@ -23,6 +23,9 @@ const requiredContentTypes = [
     'AutoCardConfig',
     'StorefrontReviewMerchantResponse',
     'AfterSalesResolution',
+    'ReferralPosterTemplate',
+    'ImageGenerationConfig',
+    'ImageModelConfig',
 ];
 
 describe('customerFacingContentRegistry', () => {
@@ -36,5 +39,20 @@ describe('customerFacingContentRegistry', () => {
             expect(paths.every(Boolean)).toBe(true);
             expect(new Set(paths).size).toBe(paths.length);
         }
+    });
+
+    it('marks the content that must keep explicit bilingual human review', () => {
+        const reviewedTypes = Object.entries(customerFacingContentRegistry)
+            .filter(
+                ([, definition]) =>
+                    'authoringPolicy' in definition &&
+                    definition.authoringPolicy === 'BILINGUAL_HUMAN_REVIEW_REQUIRED',
+            )
+            .map(([type]) => type)
+            .sort();
+
+        expect(reviewedTypes).toEqual(
+            ['ImageGenerationConfig', 'ImageModelConfig', 'ReferralPosterTemplate'].sort(),
+        );
     });
 });

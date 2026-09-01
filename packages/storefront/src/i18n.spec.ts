@@ -4,6 +4,7 @@ import {
     compactUiCopy,
     defaultStorefrontLanguageFor,
     detectSystemLanguage,
+    documentLanguageFor,
     languageCodeFor,
     languageFromPrimaryTag,
     localeFor,
@@ -47,6 +48,11 @@ describe('compact storefront copy', () => {
 
 describe('storefront market configuration', () => {
     afterEach(() => vi.unstubAllGlobals());
+
+    it('uses browser-recognizable document language tags', () => {
+        expect(documentLanguageFor('zh')).toBe('zh-CN');
+        expect(documentLanguageFor('en')).toBe('en');
+    });
 
     it('uses runtime Channel configuration for an arbitrary store', () => {
         expect(

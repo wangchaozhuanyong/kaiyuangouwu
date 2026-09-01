@@ -34,14 +34,17 @@ describe('StorefrontBrandingShopResolver', () => {
     it('does not leak untranslated Chinese content into an English response', async () => {
         const resolver = createResolver({
             descriptionZh: '唯一公开简介',
-            descriptionEn: '',
+            descriptionEn: '仍然是中文简介',
             internalNote: '不得公开',
             logoAsset: null,
         });
         const result = await resolver.storefrontBranding({
             channelId: 'channel-1',
             languageCode: 'en',
-            channel: { code: 'store', customFields: { storefrontNameZh: '商城', storefrontNameEn: '' } },
+            channel: {
+                code: 'store',
+                customFields: { storefrontNameZh: '商城', storefrontNameEn: '仍然是中文名称' },
+            },
         } as any);
 
         expect(result).toMatchObject({ name: 'store', description: '' });

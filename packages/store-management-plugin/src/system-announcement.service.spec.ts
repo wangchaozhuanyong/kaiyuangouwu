@@ -59,6 +59,26 @@ describe('SystemAnnouncementService', () => {
         );
     });
 
+    it('does not publish Chinese text stored in the English announcement fields', async () => {
+        const repository = repositoryHarness([
+            {
+                id: '1',
+                titleZh: '中文标题',
+                titleEn: '中文标题',
+                contentZh: '中文内容',
+                contentEn: '中文内容',
+                linkUrl: null,
+                startsAt: null,
+                endsAt: null,
+            },
+        ]);
+        const service = serviceWith(repository);
+
+        await expect(
+            service.findActive({ languageCode: 'en', channelId: 'channel-1' } as any),
+        ).resolves.toEqual([]);
+    });
+
     it('rejects unsafe announcement links', async () => {
         const service = serviceWith(repositoryHarness());
         await expect(

@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { isUsableEnglishTranslation } from '@vendure/content-translation-plugin';
 import { Asset, ConfigService, RequestContext, TransactionalConnection, UserInputError } from '@vendure/core';
 import { StoreDomain } from '@vendure/store-domain-plugin';
 import { StorefrontContentBlock } from '@vendure/storefront-content-plugin';
@@ -183,13 +184,13 @@ export class StorefrontPromotionService {
         const fields = ctx.channel.customFields as StorefrontChannelFields;
         const isEnglish = String(ctx.languageCode).toLowerCase().startsWith('en');
         const name = isEnglish
-            ? fields.storefrontNameEn?.trim() || DEFAULT_PROMOTION_BRAND.en
+            ? firstUsableEnglish(fields.storefrontNameEn) || DEFAULT_PROMOTION_BRAND.en
             : fields.storefrontNameZh?.trim() ||
               fields.storefrontNameEn?.trim() ||
               DEFAULT_PROMOTION_BRAND.zh;
         const description = this.truncate(
             isEnglish
-                ? profile?.descriptionEn?.trim() || ''
+                ? firstUsableEnglish(profile?.descriptionEn)
                 : profile?.descriptionZh?.trim() || profile?.descriptionEn?.trim() || '',
             220,
         );
@@ -209,14 +210,15 @@ export class StorefrontPromotionService {
             : heroImageUrl;
         const shareTitle = referralShare
             ? isEnglish
-                ? referralShare.template.headlineEn.trim() || referralShare.template.headlineZh.trim()
+                ? firstUsableEnglish(referralShare.template.headlineEn) || name
                 : referralShare.template.headlineZh.trim() || referralShare.template.headlineEn.trim()
             : name;
         const rawShareDescription = referralShare
             ? isEnglish
-                ? referralShare.template.siteIntroEn.trim() ||
-                  referralShare.template.rewardTextEn.trim() ||
-                  referralShare.template.siteIntroZh.trim()
+                ? firstUsableEnglish(
+                      referralShare.template.siteIntroEn,
+                      referralShare.template.rewardTextEn,
+                  ) || description
                 : referralShare.template.siteIntroZh.trim() ||
                   referralShare.template.rewardTextZh.trim() ||
                   referralShare.template.siteIntroEn.trim()
@@ -351,4 +353,8 @@ export class StorefrontPromotionService {
         const characters = Array.from(value);
         return characters.length > maxLength ? `${characters.slice(0, maxLength - 1).join('')}…` : value;
     }
+}
+
+function firstUsableEnglish(...values: Array<string | null | undefined>): string {
+    return values.find(isUsableEnglishTranslation)?.trim() ?? '';
 }

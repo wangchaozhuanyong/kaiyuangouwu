@@ -1,4 +1,5 @@
 import { Query, Resolver } from '@nestjs/graphql';
+import { isUsableEnglishTranslation } from '@vendure/content-translation-plugin';
 import type { Asset } from '@vendure/core';
 import {
     Allow,
@@ -36,10 +37,14 @@ export class StorefrontBrandingShopResolver {
         const isChinese = String(ctx.languageCode).toLowerCase().startsWith('zh');
         const name = isChinese
             ? customFields.storefrontNameZh || customFields.storefrontNameEn || ctx.channel.code
-            : customFields.storefrontNameEn || ctx.channel.code;
+            : isUsableEnglishTranslation(customFields.storefrontNameEn)
+              ? customFields.storefrontNameEn
+              : ctx.channel.code;
         const description = isChinese
             ? profile?.descriptionZh || profile?.descriptionEn || ''
-            : profile?.descriptionEn || '';
+            : isUsableEnglishTranslation(profile?.descriptionEn)
+              ? profile.descriptionEn
+              : '';
 
         let logoUrl = null;
         if (profile?.logoAsset) {

@@ -50,6 +50,8 @@ const entityOptions = [
     ['AfterSalesResolution', '售后处理结果'],
 ] as const;
 
+const backfillEntityOptions = [['ALL', '全部 Vendure 原生内容'], ...entityOptions.slice(1, 13)] as const;
+
 export function TranslationsModule() {
     const [search, setSearch] = useState('');
     const [status, setStatus] = useState('ALL');
@@ -59,7 +61,6 @@ export function TranslationsModule() {
     const [notice, setNotice] = useState('');
     const [actionError, setActionError] = useState('');
     const query = useQuery<ContentTranslationAuditResult>(CONTENT_TRANSLATION_AUDIT_QUERY, {
-        variables: { channelId: null },
         fetchPolicy: 'cache-and-network',
     });
     const audit = query.data?.contentTranslationAudit;
@@ -150,7 +151,7 @@ export function TranslationsModule() {
                                 <Metric
                                     label="审计字段"
                                     value={`${audit.total} 项`}
-                                    detail="字段状态记录，不代表错误"
+                                    detail={`当前店铺及全局内容 · ${audit.counts.length} 种状态`}
                                 />
                                 <Metric
                                     label="待人工复核"
@@ -371,9 +372,11 @@ function BackfillDialog({
         total: number;
         scanned: number;
         processed: number;
+        skipped: number;
         failed: number;
         nextOffset: number;
         hasMore: boolean;
+        skippedRecords: string[];
         errors: string[];
     } | null>(null);
     const [backfill, state] = useMutation<{
@@ -381,9 +384,11 @@ function BackfillDialog({
             total: number;
             scanned: number;
             processed: number;
+            skipped: number;
             failed: number;
             nextOffset: number;
             hasMore: boolean;
+            skippedRecords: string[];
             errors: string[];
         };
     }>(BACKFILL_CONTENT_TRANSLATIONS_MUTATION);
@@ -398,7 +403,9 @@ function BackfillDialog({
             setResult(next);
             setOffset(next.nextOffset);
             if (!next.hasMore)
-                await onCompleted(`历史翻译补齐完成：处理 ${next.processed} 项，失败 ${next.failed} 项`);
+                await onCompleted(
+                    `历史翻译补齐完成：处理 ${next.processed} 项，跳过 ${next.skipped} 项，失败 ${next.failed} 项`,
+                );
         } catch (error) {
             onError(errorText(error));
         }
@@ -420,7 +427,7 @@ function BackfillDialog({
                     disabled={state.loading || offset > 0}
                     className={inputClass}
                 >
-                    {entityOptions.map(([value, label]) => (
+                    {backfillEntityOptions.map(([value, label]) => (
                         <option key={value} value={value}>
                             {label}
                         </option>
@@ -434,12 +441,20 @@ function BackfillDialog({
             )}
             {result && (
                 <div className="mt-4 rounded-xl bg-slate-50 p-4 text-xs">
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
                         <ResultMetric label="总量" value={result.total} />
                         <ResultMetric label="本批扫描" value={result.scanned} />
                         <ResultMetric label="已处理" value={result.processed} />
+                        <ResultMetric label="缺少中文源" value={result.skipped} />
                         <ResultMetric label="失败" value={result.failed} />
                     </div>
+                    {result.skippedRecords.length > 0 && (
+                        <div className="mt-3 max-h-32 overflow-y-auto rounded bg-amber-50 p-2 text-[10px] text-amber-800">
+                            {result.skippedRecords.map((warning, index) => (
+                                <div key={index}>{warning}</div>
+                            ))}
+                        </div>
+                    )}
                     {result.errors.length > 0 && (
                         <div className="mt-3 max-h-32 overflow-y-auto rounded bg-rose-50 p-2 text-[10px] text-rose-700">
                             {result.errors.map((error, index) => (

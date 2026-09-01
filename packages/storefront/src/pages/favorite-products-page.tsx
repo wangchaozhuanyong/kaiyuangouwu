@@ -1,6 +1,6 @@
+import type { RouteState } from '../storefront-router';
 import { useNavigate, useRouter } from '@tanstack/react-router';
 import { Heart, Trash2, WifiOff } from 'lucide-react';
-import type { RouteState } from '../storefront-router';
 
 import { ShopApi } from '../api';
 import { offlineLoadError } from '../loading-state';
@@ -82,6 +82,7 @@ export function FavoriteProductsPage() {
                     products={availableProducts}
                     market={market}
                     locale={locale}
+                    language={language}
                     favoriteProductIds={productIds}
                     onProduct={product => navigateTo({ name: 'product', id: product.id })}
                     onFavorite={product => onRemove(product.id)}

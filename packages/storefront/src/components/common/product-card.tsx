@@ -10,7 +10,7 @@ import {
     ProductImage,
     trimText,
 } from '../../storefront-ui/product-display';
-import { MarketConfig, Product } from '../../types';
+import { MarketConfig, Product, StorefrontLanguage } from '../../types';
 
 function cn(...classes: Array<string | false | null | undefined>) {
     return twMerge(clsx(classes));
@@ -20,6 +20,7 @@ export function ProductCard({
     product,
     market,
     locale,
+    language,
     favorite,
     onOpen,
     onFavorite,
@@ -27,11 +28,12 @@ export function ProductCard({
     product: Product;
     market: MarketConfig;
     locale: string;
+    language: StorefrontLanguage;
     favorite?: boolean;
     onOpen: () => void;
     onFavorite?: () => void;
 }) {
-    const isZh = locale.startsWith('zh');
+    const isZh = language === 'zh';
     const variant = product.variants[0];
     const availability = productAvailability(variant);
     const stockLabel = productAvailabilityLabel(availability, isZh ? 'zh' : 'en');

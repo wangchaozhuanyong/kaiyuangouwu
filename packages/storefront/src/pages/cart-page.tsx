@@ -1,7 +1,7 @@
+import type { RouteState } from '../storefront-router';
 import { useNavigate } from '@tanstack/react-router';
 import { Check, ChevronRight, Minus, Package, ShoppingBag, TicketPercent } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { RouteState } from '../storefront-router';
 
 import { routeHref, routeNavigateOptions } from '../storefront-router';
 import { CartGroup, CouponSheet } from '../storefront-ui/cart-ui';
@@ -411,6 +411,7 @@ export function CartPage() {
                                 .slice(0, 4)}
                             market={market}
                             locale={locale}
+                            language={language}
                             onProduct={product => navigateTo({ name: 'product', id: product.id })}
                         />
                     )}

@@ -252,6 +252,7 @@ export function SearchPage() {
                             products={products.slice(0, 2)}
                             market={market}
                             locale={locale}
+                            language={language}
                             onProduct={product => navigateTo({ name: 'product', id: product.id })}
                         />
                     )}
@@ -352,6 +353,7 @@ export function SearchPage() {
                             products={relatedProducts}
                             market={market}
                             locale={locale}
+                            language={language}
                             onProduct={product => navigateTo({ name: 'product', id: product.id })}
                         />
                     )}

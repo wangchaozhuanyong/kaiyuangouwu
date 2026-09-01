@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { isUsableEnglishTranslation } from '@vendure/content-translation-plugin';
 import {
     Channel,
     ConfigService,
@@ -24,11 +25,7 @@ const SHIPPING_CALCULATOR_CODE = 'physical-subtotal-shipping-calculator';
 const SHIPPING_CHECKER_CODE = 'supported-destination-eligibility-checker';
 
 export function isUsableEnglishContent(value: unknown): boolean {
-    return (
-        typeof value === 'string' &&
-        value.trim().length > 0 &&
-        !/[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/u.test(value)
-    );
+    return isUsableEnglishTranslation(value);
 }
 
 export function isProductionPaymentMethod(
