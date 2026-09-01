@@ -53,12 +53,12 @@ describe('native content translation event routing', () => {
                         languageCode = parameters.languageCode;
                         return builder;
                     }),
-                    getOne: vi.fn(async () => (languageCode === 'zh_Hans' ? source : null)),
+                    getOne: vi.fn(() => Promise.resolve(languageCode === 'zh_Hans' ? source : null)),
                 };
                 return builder;
             }),
             create: vi.fn((value: any) => value),
-            save: vi.fn(async (value: any) => value),
+            save: vi.fn((value: any) => Promise.resolve(value)),
         };
         const connection = {
             rawConnection: {
@@ -74,7 +74,7 @@ describe('native content translation event routing', () => {
             getRepository: vi.fn(() => repository),
         };
         const translations = {
-            findStates: vi.fn(async () => []),
+            findStates: vi.fn().mockResolvedValue([]),
             isConfigured: vi.fn(() => false),
             translate: vi.fn(),
         };
@@ -118,12 +118,12 @@ describe('native content translation event routing', () => {
                         languageCode = parameters.languageCode;
                         return builder;
                     }),
-                    getOne: vi.fn(async () => (languageCode === 'zh_Hans' ? source : target)),
+                    getOne: vi.fn(() => Promise.resolve(languageCode === 'zh_Hans' ? source : target)),
                 };
                 return builder;
             }),
             create: vi.fn((value: any) => value),
-            save: vi.fn(async (value: any) => value),
+            save: vi.fn((value: any) => Promise.resolve(value)),
         };
         const connection = {
             rawConnection: {
@@ -139,17 +139,19 @@ describe('native content translation event routing', () => {
             getRepository: vi.fn(() => repository),
         };
         const translations = {
-            findStates: vi.fn(async () => []),
+            findStates: vi.fn().mockResolvedValue([]),
             isConfigured: vi.fn(() => true),
             providerName: vi.fn(() => 'test'),
-            translate: vi.fn(async ({ segments }: any) => ({
-                provider: 'test',
-                translations: segments.map((segment: any) => ({
-                    key: segment.key,
-                    text: segment.key === 'description' ? '<p>Product details</p>' : 'Test product',
-                })),
-            })),
-            recordState: vi.fn(async () => undefined),
+            translate: vi.fn(({ segments }: any) =>
+                Promise.resolve({
+                    provider: 'test',
+                    translations: segments.map((segment: any) => ({
+                        key: segment.key,
+                        text: segment.key === 'description' ? '<p>Product details</p>' : 'Test product',
+                    })),
+                }),
+            ),
+            recordState: vi.fn().mockResolvedValue(undefined),
         };
         const service = new NativeContentTranslationService(
             {} as any,
@@ -195,12 +197,12 @@ describe('native content translation event routing', () => {
                         languageCode = parameters.languageCode;
                         return builder;
                     }),
-                    getOne: vi.fn(async () => (languageCode === 'zh_Hans' ? source : target)),
+                    getOne: vi.fn(() => Promise.resolve(languageCode === 'zh_Hans' ? source : target)),
                 };
                 return builder;
             }),
             create: vi.fn((value: any) => value),
-            save: vi.fn(async (value: any) => value),
+            save: vi.fn((value: any) => Promise.resolve(value)),
         };
         const connection = {
             rawConnection: {
@@ -216,17 +218,19 @@ describe('native content translation event routing', () => {
             getRepository: vi.fn(() => repository),
         };
         const translations = {
-            findStates: vi.fn(async () => []),
+            findStates: vi.fn().mockResolvedValue([]),
             isConfigured: vi.fn(() => true),
             providerName: vi.fn(() => 'test'),
-            translate: vi.fn(async ({ segments }: any) => ({
-                provider: 'test',
-                translations: segments.map((segment: any) => ({
-                    key: segment.key,
-                    text: segment.key === 'description' ? '<p>Legacy details</p>' : 'Legacy product',
-                })),
-            })),
-            recordState: vi.fn(async () => undefined),
+            translate: vi.fn(({ segments }: any) =>
+                Promise.resolve({
+                    provider: 'test',
+                    translations: segments.map((segment: any) => ({
+                        key: segment.key,
+                        text: segment.key === 'description' ? '<p>Legacy details</p>' : 'Legacy product',
+                    })),
+                }),
+            ),
+            recordState: vi.fn().mockResolvedValue(undefined),
         };
         const service = new NativeContentTranslationService(
             {} as any,
@@ -281,11 +285,11 @@ describe('native content translation event routing', () => {
                         languageCode = parameters.languageCode;
                         return builder;
                     }),
-                    getOne: vi.fn(async () => (languageCode === 'zh_Hans' ? source : target)),
+                    getOne: vi.fn(() => Promise.resolve(languageCode === 'zh_Hans' ? source : target)),
                 };
                 return builder;
             }),
-            save: vi.fn(async (value: any) => value),
+            save: vi.fn((value: any) => Promise.resolve(value)),
         };
         const connection = {
             rawConnection: {
@@ -301,20 +305,22 @@ describe('native content translation event routing', () => {
             getRepository: vi.fn(() => repository),
         };
         const translations = {
-            findStates: vi.fn(async () => []),
+            findStates: vi.fn().mockResolvedValue([]),
             isConfigured: vi.fn(() => true),
             providerName: vi.fn(() => 'test'),
-            translate: vi.fn(async ({ segments }: any) => ({
-                provider: 'test',
-                translations: segments.map((segment: any) => ({
-                    key: segment.key,
-                    text:
-                        segment.key === 'description'
-                            ? '<p>Official ChatGPT Plus channel service</p>'
-                            : 'Codex Plus',
-                })),
-            })),
-            recordState: vi.fn(async () => undefined),
+            translate: vi.fn(({ segments }: any) =>
+                Promise.resolve({
+                    provider: 'test',
+                    translations: segments.map((segment: any) => ({
+                        key: segment.key,
+                        text:
+                            segment.key === 'description'
+                                ? '<p>Official ChatGPT Plus channel service</p>'
+                                : 'Codex Plus',
+                    })),
+                }),
+            ),
+            recordState: vi.fn().mockResolvedValue(undefined),
         };
         const service = new NativeContentTranslationService(
             {} as any,
@@ -357,11 +363,11 @@ describe('native content translation event routing', () => {
                         languageCode = parameters.languageCode;
                         return builder;
                     }),
-                    getOne: vi.fn(async () => (languageCode === 'zh_Hans' ? source : target)),
+                    getOne: vi.fn(() => Promise.resolve(languageCode === 'zh_Hans' ? source : target)),
                 };
                 return builder;
             }),
-            save: vi.fn(async (value: any) => value),
+            save: vi.fn((value: any) => Promise.resolve(value)),
         };
         const connection = {
             rawConnection: {
@@ -377,7 +383,7 @@ describe('native content translation event routing', () => {
             getRepository: vi.fn(() => repository),
         };
         const translations = {
-            findStates: vi.fn(async () => [
+            findStates: vi.fn().mockResolvedValue([
                 {
                     fieldPath: 'name',
                     sourceHash: contentTranslationInternals.hash(source.name),
@@ -389,7 +395,7 @@ describe('native content translation event routing', () => {
             isConfigured: vi.fn(() => true),
             providerName: vi.fn(() => 'test'),
             translate: vi.fn(),
-            recordState: vi.fn(async () => undefined),
+            recordState: vi.fn().mockResolvedValue(undefined),
         };
         const service = new NativeContentTranslationService(
             {} as any,
@@ -430,11 +436,11 @@ describe('native content translation event routing', () => {
                         languageCode = parameters.languageCode;
                         return builder;
                     }),
-                    getOne: vi.fn(async () => (languageCode === 'zh_Hans' ? source : target)),
+                    getOne: vi.fn(() => Promise.resolve(languageCode === 'zh_Hans' ? source : target)),
                 };
                 return builder;
             }),
-            save: vi.fn(async (value: any) => value),
+            save: vi.fn((value: any) => Promise.resolve(value)),
         };
         const connection = {
             rawConnection: {
@@ -473,7 +479,7 @@ describe('native content translation event routing', () => {
             isConfigured: vi.fn(() => true),
             providerName: vi.fn(() => 'test'),
             translate: vi.fn(),
-            recordState: vi.fn(async () => undefined),
+            recordState: vi.fn().mockResolvedValue(undefined),
         };
         const service = new NativeContentTranslationService(
             {} as any,
@@ -536,7 +542,7 @@ describe('native content translation event routing', () => {
                         languageCode = parameters.languageCode;
                         return builder;
                     }),
-                    getOne: vi.fn(async () => (languageCode === 'zh_Hans' ? source : target)),
+                    getOne: vi.fn(() => Promise.resolve(languageCode === 'zh_Hans' ? source : target)),
                 };
                 return builder;
             }),
@@ -554,7 +560,7 @@ describe('native content translation event routing', () => {
             },
             getRepository: vi.fn(() => repository),
         };
-        const translations = { recordState: vi.fn(async () => undefined) };
+        const translations = { recordState: vi.fn().mockResolvedValue(undefined) };
         const service = new NativeContentTranslationService(
             {} as any,
             connection as any,
@@ -593,7 +599,7 @@ describe('native content translation event routing', () => {
                         languageCode = parameters.languageCode;
                         return builder;
                     }),
-                    getOne: vi.fn(async () => (languageCode === 'zh_Hans' ? source : target)),
+                    getOne: vi.fn(() => Promise.resolve(languageCode === 'zh_Hans' ? source : target)),
                 };
                 return builder;
             }),
@@ -611,7 +617,7 @@ describe('native content translation event routing', () => {
             },
             getRepository: vi.fn(() => repository),
         };
-        const translations = { recordState: vi.fn(async () => undefined) };
+        const translations = { recordState: vi.fn().mockResolvedValue(undefined) };
         const service = new NativeContentTranslationService(
             {} as any,
             connection as any,
@@ -643,11 +649,11 @@ describe('native content translation event routing', () => {
                 }),
         );
         const repository = {
-            count: vi.fn(async () => 3),
-            find: vi.fn(async () => entities),
+            count: vi.fn().mockResolvedValue(3),
+            find: vi.fn().mockResolvedValue(entities),
         };
         const service = new NativeContentTranslationService(
-            { publish: vi.fn(async () => undefined) } as any,
+            { publish: vi.fn().mockResolvedValue(undefined) } as any,
             { getRepository: vi.fn(() => repository) } as any,
             {} as any,
         );
@@ -668,11 +674,13 @@ describe('native content translation event routing', () => {
 
     it('reports records that cannot be translated because the Chinese source is missing', async () => {
         const repository = {
-            count: vi.fn(async () => 1),
-            find: vi.fn(async () => [new Product({ id: 'product-without-source', translations: [] })]),
+            count: vi.fn().mockResolvedValue(1),
+            find: vi
+                .fn()
+                .mockResolvedValue([new Product({ id: 'product-without-source', translations: [] })]),
         };
         const service = new NativeContentTranslationService(
-            { publish: vi.fn(async () => undefined) } as any,
+            { publish: vi.fn().mockResolvedValue(undefined) } as any,
             { getRepository: vi.fn(() => repository) } as any,
             {} as any,
         );
@@ -691,8 +699,8 @@ describe('native content translation event routing', () => {
 
     it('excludes the internal root collection from customer-content backfill', async () => {
         const repository = {
-            count: vi.fn(async () => 1),
-            find: vi.fn(async () => [
+            count: vi.fn().mockResolvedValue(1),
+            find: vi.fn().mockResolvedValue([
                 new Collection({
                     id: 'visible-collection',
                     isRoot: false,
@@ -708,7 +716,7 @@ describe('native content translation event routing', () => {
             ]),
         };
         const service = new NativeContentTranslationService(
-            { publish: vi.fn(async () => undefined) } as any,
+            { publish: vi.fn().mockResolvedValue(undefined) } as any,
             { getRepository: vi.fn(() => repository) } as any,
             {} as any,
         );
@@ -727,7 +735,7 @@ describe('native content translation event routing', () => {
 
     it('runs every historical backfill page during automatic repair', async () => {
         const ctx = { channelId: 'channel-1' } as any;
-        const requestContextService = { create: vi.fn(async () => ctx) };
+        const requestContextService = { create: vi.fn().mockResolvedValue(ctx) };
         const service = new NativeContentTranslationService(
             {} as any,
             {} as any,
