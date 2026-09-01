@@ -307,7 +307,13 @@ export class NativeContentTranslationService implements OnApplicationBootstrap {
             entityClass,
             repository: this.connection.getRepository(ctx, entityClass),
         }));
-        const totals = await Promise.all(repositories.map(item => item.repository.count()));
+        const totals = await Promise.all(
+            repositories.map(item =>
+                item.repository.count({
+                    where: item.entityClass === Collection ? { isRoot: false } : undefined,
+                }),
+            ),
+        );
         const total = totals.reduce((sum, count) => sum + count, 0);
         const result: NativeContentBackfillResult = {
             total,
@@ -331,6 +337,7 @@ export class NativeContentTranslationService implements OnApplicationBootstrap {
                 continue;
             }
             const entities = (await repository.find({
+                where: entityClass === Collection ? { isRoot: false } : undefined,
                 relations:
                     entityClass === Product || entityClass === ProductVariant
                         ? ['translations', 'channels']
