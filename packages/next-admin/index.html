@@ -7,31 +7,7 @@
     <meta name="theme-color" content="#020617" />
     <meta name="description" content="Vendure 商家管理后台" />
     <title>Vendure 商家后台</title>
-    <script>
-      (() => {
-        const root = document.documentElement;
-        let preference = 'system';
-        try {
-          const storedPreference = localStorage.getItem('vendure-admin-theme');
-          if (storedPreference === 'light' || storedPreference === 'dark' || storedPreference === 'system') {
-            preference = storedPreference;
-          }
-        } catch {
-          // 本地存储不可用时继续跟随系统外观。
-        }
-        const theme = preference === 'system'
-          ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
-          : preference;
-        root.classList.toggle('dark', theme === 'dark');
-        root.dataset.theme = theme;
-        root.dataset.themePreference = preference;
-        root.style.colorScheme = theme;
-        document.querySelector('meta[name="theme-color"]')?.setAttribute(
-          'content',
-          theme === 'dark' ? '#080d18' : '#f8fafc',
-        );
-      })();
-    </script>
+    <script type="module" src="/src/theme/theme-bootstrap.ts"></script>
   </head>
   <body>
     <div id="root"></div>

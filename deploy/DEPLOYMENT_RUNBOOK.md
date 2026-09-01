@@ -58,6 +58,7 @@ verification_result:
 - 发布保留策略：`current-sha` 成功更新后，由 `vendure-production-release-retention.path`
   自动保留当前运行产物和最近两个更早的回滚产物；其余严格匹配发布命名规则的旧目录与 `.tar.gz`
   归档才允许删除，校验文件、部署记录、数据库备份和应用日志不参与清理。
+- Dashboard 发布换版后不混合新旧两个不可变产物的静态资源。长时间打开的标签页如果请求到已失效的 Vite 懒加载分包，由 Dashboard 捕获 `vite:preloadError` 并在会话级冷却窗口内只自动刷新一次；顶层错误边界作为失败兜底，禁止用复制旧 `assets` 的方式恢复。
 - Vendure 上游：`127.0.0.1:3002`
 - PM2 进程：`vendure-api`、`vendure-worker`
 - PM2 生产环境固定设置 `VENDURE_DISABLE_TELEMETRY=true`，防止 Vendure 的文件系统兜底在不可变运行目录内写入 `.vendure/.installation-id`
