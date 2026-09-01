@@ -404,9 +404,13 @@ function loadChannelWalletRows(environment) {
         },
     );
     if (result.status !== 0) throw new Error('production Channel wallet query failed');
-    if (!result.stdout.trim()) throw new Error('production Channel wallet query returned no Channels');
-    return result.stdout
-        .trimEnd()
+    return parseChannelWalletRows(result.stdout);
+}
+
+export function parseChannelWalletRows(output) {
+    if (!output.trim()) throw new Error('production Channel wallet query returned no Channels');
+    return output
+        .replace(/\r?\n$/u, '')
         .split(/\r?\n/u)
         .map(line => {
             const fields = line.split('\t');

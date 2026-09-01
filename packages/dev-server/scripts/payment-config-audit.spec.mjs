@@ -9,6 +9,7 @@ import {
     auditChannelWalletRows,
     fingerprintReceivingAddress,
     isValidTronMainnetAddress,
+    parseChannelWalletRows,
     selectConsistentRuntimeEnvironment,
 } from '../../../deploy/audit-production-payment-config.mjs';
 
@@ -134,6 +135,22 @@ void test('payment audit requires API and worker to use the same runtime databas
     assert.throws(
         () => selectConsistentRuntimeEnvironment(mismatched),
         /API and worker runtime settings differ: DB_HOST/u,
+    );
+});
+
+void test('payment audit preserves trailing empty MySQL columns', () => {
+    const expected = [
+        ['ACTIVE', 'encrypted', 'fingerprint', '', ''],
+        ['UNCONFIGURED', '', '', '', ''],
+    ];
+
+    assert.deepEqual(
+        parseChannelWalletRows('ACTIVE\tencrypted\tfingerprint\t\t\nUNCONFIGURED\t\t\t\t\n'),
+        expected,
+    );
+    assert.deepEqual(
+        parseChannelWalletRows('ACTIVE\tencrypted\tfingerprint\t\t\r\nUNCONFIGURED\t\t\t\t\r\n'),
+        expected,
     );
 });
 
