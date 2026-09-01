@@ -94,6 +94,19 @@ export class SystemAnnouncementService {
         return { result: 'DELETED' };
     }
 
+    async translationLocks(ctx: RequestContext, id: ID) {
+        const states = await this.translations.findStates(ctx, {
+            channelId: null,
+            entityType: SystemAnnouncement.name,
+            entityId: id,
+        });
+        const byField = new Map(states.map(state => [state.fieldPath, state]));
+        return {
+            titleEnLocked: byField.get('title')?.locked ?? false,
+            contentEnLocked: byField.get('content')?.locked ?? false,
+        };
+    }
+
     private async publishChanged(
         ctx: RequestContext,
         announcement: SystemAnnouncement,
@@ -121,21 +134,47 @@ export class SystemAnnouncementService {
     ) {
         const titleZh = requiredText(input.titleZh, '中文标题', 120);
         const contentZh = requiredText(input.contentZh, '中文内容', 2_000);
+        const titleEn = optionalText(input.titleEn, 120);
+        const contentEn = optionalText(input.contentEn, 2_000);
+        const existingStates = existing
+            ? await this.translations.findStates(ctx, {
+                  channelId: null,
+                  entityType: SystemAnnouncement.name,
+                  entityId: existing.id,
+              })
+            : [];
+        const stateByField = new Map(existingStates.map(state => [state.fieldPath, state]));
+        const titleState = stateByField.get('title');
+        const contentState = stateByField.get('content');
         const prepared = await this.translations.prepareLocalizedFields([
             {
                 path: 'title',
                 sourceText: titleZh,
-                targetText: optionalText(input.titleEn, 120),
+                targetText: titleEn,
                 existingSourceText: existing?.titleZh,
                 existingTargetText: existing?.titleEn,
+                manualLock: requestedManualLock(
+                    input.titleEnLocked,
+                    titleEn,
+                    existing?.titleEn,
+                    titleState?.locked,
+                ),
+                existingLocked: titleState?.locked,
                 required: true,
             },
             {
                 path: 'content',
                 sourceText: contentZh,
-                targetText: optionalText(input.contentEn, 2_000),
+                targetText: contentEn,
                 existingSourceText: existing?.contentZh,
                 existingTargetText: existing?.contentEn,
+                manualLock: requestedManualLock(
+                    input.contentEnLocked,
+                    contentEn,
+                    existing?.contentEn,
+                    contentState?.locked,
+                ),
+                existingLocked: contentState?.locked,
                 required: true,
             },
         ]);
@@ -217,6 +256,20 @@ function optionalText(value: string | null | undefined, maxLength: number): stri
     const normalized = value?.trim() ?? '';
     if (normalized.length > maxLength) throw new UserInputError(`内容不能超过 ${maxLength} 个字符`);
     return normalized;
+}
+
+function requestedManualLock(
+    explicit: boolean | null | undefined,
+    targetText: string,
+    existingTargetText: string | null | undefined,
+    existingLocked: boolean | undefined,
+): boolean | undefined {
+    if (explicit != null) return explicit;
+    const normalizedExistingTarget = existingTargetText?.trim() ?? '';
+    if (targetText && targetText !== normalizedExistingTarget) return true;
+    if (existingLocked != null) return existingLocked;
+    if (existingTargetText == null) return Boolean(targetText);
+    return undefined;
 }
 
 function validOptionalDate(value: Date | null | undefined, label: string): Date | null {

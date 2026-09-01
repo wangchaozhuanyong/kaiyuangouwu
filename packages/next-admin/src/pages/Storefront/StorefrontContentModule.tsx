@@ -17,6 +17,7 @@ import {
     X,
 } from 'lucide-react';
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import {
     CREATE_STOREFRONT_BLOCK_MUTATION,
@@ -55,6 +56,7 @@ const CONTENT_TABS = { pages: 'PAGES', announcements: 'ANNOUNCEMENTS', landing: 
 
 export function StorefrontContentModule() {
     const [tab, setTab] = useUrlTab<ContentTab>(CONTENT_TABS, 'pages');
+    const [searchParams, setSearchParams] = useSearchParams();
     const [editingBlock, setEditingBlock] = useState<StorefrontContentBlock | null>(null);
     const [editingAnnouncement, setEditingAnnouncement] = useState<SystemAnnouncementRecord | 'NEW' | null>(
         null,
@@ -79,6 +81,23 @@ export function StorefrontContentModule() {
             fetchPolicy: 'cache-and-network',
         },
     );
+    const requestedAnnouncementId = searchParams.get('announcementId');
+    const requestedAnnouncement = announcements.data?.systemAnnouncements.find(
+        item => item.id === requestedAnnouncementId,
+    );
+    const activeAnnouncementEditor = editingAnnouncement ?? requestedAnnouncement ?? null;
+    const closeAnnouncementEditor = () => {
+        setEditingAnnouncement(null);
+        if (!requestedAnnouncementId) return;
+        setSearchParams(
+            current => {
+                const next = new URLSearchParams(current);
+                next.delete('announcementId');
+                return next;
+            },
+            { replace: true },
+        );
+    };
     const [createBlock, createBlockState] = useMutation(CREATE_STOREFRONT_BLOCK_MUTATION);
     const [updateBlock, updateBlockState] = useMutation(UPDATE_STOREFRONT_BLOCK_MUTATION);
     const [deleteAnnouncement, deleteAnnouncementState] = useMutation<{
@@ -283,13 +302,13 @@ export function StorefrontContentModule() {
                     onSave={saveBlock}
                 />
             )}
-            {editingAnnouncement && (
+            {activeAnnouncementEditor && (
                 <AnnouncementEditor
-                    key={editingAnnouncement === 'NEW' ? 'new' : editingAnnouncement.id}
-                    value={editingAnnouncement === 'NEW' ? null : editingAnnouncement}
-                    onClose={() => setEditingAnnouncement(null)}
+                    key={activeAnnouncementEditor === 'NEW' ? 'new' : activeAnnouncementEditor.id}
+                    value={activeAnnouncementEditor === 'NEW' ? null : activeAnnouncementEditor}
+                    onClose={closeAnnouncementEditor}
                     onSaved={async message => {
-                        setEditingAnnouncement(null);
+                        closeAnnouncementEditor();
                         showNotice(message);
                         await announcements.refetch();
                     }}
@@ -499,8 +518,10 @@ interface AnnouncementDraft {
     priority: string;
     titleZh: string;
     titleEn: string;
+    titleEnLocked: boolean;
     contentZh: string;
     contentEn: string;
+    contentEnLocked: boolean;
     linkUrl: string;
     startsAt: string;
     endsAt: string;
@@ -522,23 +543,17 @@ function AnnouncementEditor({
         priority: String(value?.priority ?? 0),
         titleZh: value?.titleZh ?? '',
         titleEn: value?.titleEn ?? '',
+        titleEnLocked: value?.titleEnLocked ?? false,
         contentZh: value?.contentZh ?? '',
         contentEn: value?.contentEn ?? '',
+        contentEnLocked: value?.contentEnLocked ?? false,
         linkUrl: value?.linkUrl ?? '',
         startsAt: toLocalDateTime(value?.startsAt ?? null),
         endsAt: toLocalDateTime(value?.endsAt ?? null),
     }));
     const [create, createState] = useMutation(CREATE_SYSTEM_ANNOUNCEMENT_MUTATION);
     const [update, updateState] = useMutation(UPDATE_SYSTEM_ANNOUNCEMENT_MUTATION);
-    const validation = !draft.titleZh.trim()
-        ? '请填写中文标题'
-        : !draft.contentZh.trim()
-          ? '请填写中文正文'
-          : draft.linkUrl.trim() && !validHttpUrl(draft.linkUrl)
-            ? '跳转地址必须是有效的 HTTP(S) 网址'
-            : draft.startsAt && draft.endsAt && new Date(draft.startsAt) >= new Date(draft.endsAt)
-              ? '下线时间必须晚于上线时间'
-              : null;
+    const validation = announcementDraftError(draft);
     const submit = async () => {
         if (validation) return;
         const input = {
@@ -546,8 +561,10 @@ function AnnouncementEditor({
             priority: Number.parseInt(draft.priority, 10) || 0,
             titleZh: draft.titleZh.trim(),
             titleEn: draft.titleEn.trim(),
+            titleEnLocked: draft.titleEnLocked,
             contentZh: draft.contentZh.trim(),
             contentEn: draft.contentEn.trim(),
+            contentEnLocked: draft.contentEnLocked,
             linkUrl: draft.linkUrl.trim() || null,
             startsAt: fromLocalDateTime(draft.startsAt),
             endsAt: fromLocalDateTime(draft.endsAt),
@@ -564,7 +581,7 @@ function AnnouncementEditor({
     return (
         <Modal
             title={value ? '编辑系统公告' : '新建系统公告'}
-            description="中文为必填源内容，英文可同时维护"
+            description="中文是源内容；英文默认自动翻译，需要人工定稿时再锁定"
             onClose={onClose}
         >
             <div className="grid gap-4 sm:grid-cols-2">
@@ -575,13 +592,35 @@ function AnnouncementEditor({
                         className={inputClass}
                     />
                 </Field>
-                <Field label="English title">
+                <div className="space-y-1.5">
+                    <div className="flex items-center justify-between gap-3">
+                        <label htmlFor="announcement-title-en" className="text-xs font-bold text-slate-700">
+                            英文标题
+                        </label>
+                        <label className="flex items-center gap-1.5 text-[11px] font-bold text-amber-700">
+                            <input
+                                type="checkbox"
+                                checked={draft.titleEnLocked}
+                                onChange={event =>
+                                    setDraft({ ...draft, titleEnLocked: event.target.checked })
+                                }
+                            />
+                            人工锁定
+                        </label>
+                    </div>
                     <input
+                        id="announcement-title-en"
                         value={draft.titleEn}
                         onChange={event => setDraft({ ...draft, titleEn: event.target.value })}
-                        className={inputClass}
+                        disabled={!draft.titleEnLocked}
+                        className={`${inputClass} disabled:bg-slate-50 disabled:text-slate-500`}
                     />
-                </Field>
+                    <p className="text-[10px] leading-4 text-slate-400">
+                        {draft.titleEnLocked
+                            ? '保存后不会被自动翻译覆盖；中文变更后会标记为待复核。'
+                            : '由系统自动维护；取消锁定并保存后会重新翻译。'}
+                    </p>
+                </div>
                 <div className="sm:col-span-2">
                     <Field label="中文正文 *">
                         <textarea
@@ -593,14 +632,39 @@ function AnnouncementEditor({
                     </Field>
                 </div>
                 <div className="sm:col-span-2">
-                    <Field label="English content">
+                    <div className="space-y-1.5">
+                        <div className="flex items-center justify-between gap-3">
+                            <label
+                                htmlFor="announcement-content-en"
+                                className="text-xs font-bold text-slate-700"
+                            >
+                                英文正文
+                            </label>
+                            <label className="flex items-center gap-1.5 text-[11px] font-bold text-amber-700">
+                                <input
+                                    type="checkbox"
+                                    checked={draft.contentEnLocked}
+                                    onChange={event =>
+                                        setDraft({ ...draft, contentEnLocked: event.target.checked })
+                                    }
+                                />
+                                人工锁定
+                            </label>
+                        </div>
                         <textarea
+                            id="announcement-content-en"
                             rows={4}
                             value={draft.contentEn}
                             onChange={event => setDraft({ ...draft, contentEn: event.target.value })}
-                            className={inputClass}
+                            disabled={!draft.contentEnLocked}
+                            className={`${inputClass} disabled:bg-slate-50 disabled:text-slate-500`}
                         />
-                    </Field>
+                        <p className="text-[10px] leading-4 text-slate-400">
+                            {draft.contentEnLocked
+                                ? '保存后不会被自动翻译覆盖；中文变更后会标记为待复核。'
+                                : '由系统自动维护；取消锁定并保存后会重新翻译。'}
+                        </p>
+                    </div>
                 </div>
                 <Field label="优先级">
                     <input
@@ -1085,6 +1149,28 @@ function validHttpUrl(value: string) {
     } catch {
         return false;
     }
+}
+function containsHan(value: string) {
+    return /[\u3400-\u9fff\uf900-\ufaff]/u.test(value);
+}
+function announcementDraftError(draft: AnnouncementDraft): string | null {
+    if (!draft.titleZh.trim()) return '请填写中文标题';
+    if (!draft.contentZh.trim()) return '请填写中文正文';
+    if (draft.titleEnLocked && !draft.titleEn.trim()) {
+        return '人工锁定英文标题前，请先填写英文标题';
+    }
+    if (draft.titleEnLocked && containsHan(draft.titleEn)) return '人工锁定的英文标题不能包含中文';
+    if (draft.contentEnLocked && !draft.contentEn.trim()) {
+        return '人工锁定英文正文前，请先填写英文正文';
+    }
+    if (draft.contentEnLocked && containsHan(draft.contentEn)) return '人工锁定的英文正文不能包含中文';
+    if (draft.linkUrl.trim() && !validHttpUrl(draft.linkUrl)) {
+        return '跳转地址必须是有效的 HTTP(S) 网址';
+    }
+    if (draft.startsAt && draft.endsAt && new Date(draft.startsAt) >= new Date(draft.endsAt)) {
+        return '下线时间必须晚于上线时间';
+    }
+    return null;
 }
 const inputClass =
     'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-normal text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100';

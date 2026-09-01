@@ -42,6 +42,7 @@ import {
     type SystemOperationsResult,
 } from '../../graphql/management.graphql';
 import { useUrlTab } from '../../hooks/use-url-tab';
+import { getStatusLabel } from '../../utils/status-labels';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatDateTime } from '../Sales/sales-utils';
 
@@ -1187,7 +1188,7 @@ function jobStateLabel(state: string) {
         FAILED: '失败',
         CANCELLED: '已取消',
     };
-    return labels[state] ?? state;
+    return labels[state] ?? getStatusLabel(state);
 }
 function scopeLabel(scope: string) {
     const labels: Record<string, string> = {

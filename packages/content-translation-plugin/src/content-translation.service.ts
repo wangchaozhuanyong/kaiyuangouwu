@@ -43,7 +43,44 @@ export class ContentTranslationService {
             }
             const normalizedTarget = field.targetText?.trim() ?? '';
             const normalizedExistingTarget = field.existingTargetText?.trim() ?? '';
+            const sourceUnchanged =
+                field.existingSourceText != null && field.existingSourceText.trim() === sourceText;
+            const targetUnchanged =
+                field.existingTargetText != null && normalizedTarget === normalizedExistingTarget;
+            if (field.manualLock === true) {
+                if (!normalizedTarget || containsHanContent(normalizedTarget)) {
+                    throw new UserInputError(`字段“${field.path}”启用人工锁定时，必须填写不含中文的英文内容`);
+                }
+                prepared.set(field.path, {
+                    path: field.path,
+                    sourceText,
+                    translatedText: normalizedTarget,
+                    status: !sourceUnchanged && targetUnchanged ? 'STALE' : 'MANUAL_LOCKED',
+                    origin: 'MANUAL',
+                    locked: true,
+                });
+                continue;
+            }
+            if (
+                field.manualLock === false &&
+                field.existingLocked === false &&
+                sourceUnchanged &&
+                targetUnchanged &&
+                normalizedExistingTarget &&
+                !containsHanContent(normalizedExistingTarget)
+            ) {
+                prepared.set(field.path, {
+                    path: field.path,
+                    sourceText,
+                    translatedText: normalizedExistingTarget,
+                    status: 'AUTO_TRANSLATED',
+                    origin: 'AUTO',
+                    locked: false,
+                });
+                continue;
+            }
             const hasManualTarget =
+                field.manualLock == null &&
                 normalizedTarget.length > 0 &&
                 !containsHanContent(normalizedTarget) &&
                 (field.existingTargetText == null || normalizedTarget !== normalizedExistingTarget);
@@ -58,9 +95,8 @@ export class ContentTranslationService {
                 });
                 continue;
             }
-            const sourceUnchanged =
-                field.existingSourceText != null && field.existingSourceText.trim() === sourceText;
             if (
+                field.manualLock == null &&
                 sourceUnchanged &&
                 field.existingTargetText?.trim() &&
                 !containsHanContent(field.existingTargetText)

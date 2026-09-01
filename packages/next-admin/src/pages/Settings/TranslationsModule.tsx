@@ -12,6 +12,7 @@ import {
     X,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
     BACKFILL_CONTENT_TRANSLATIONS_MUTATION,
     CONTENT_TRANSLATION_AUDIT_QUERY,
@@ -21,6 +22,7 @@ import {
 } from '../../graphql/plugins.graphql';
 import { useAccessibleDialog } from '../../hooks/use-accessible-dialog';
 import { getChannelDisplayName } from '../../utils/channel-display';
+import { getTranslationStatusLabel } from '../../utils/status-labels';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatDateTime } from '../Sales/sales-utils';
 
@@ -146,9 +148,9 @@ export function TranslationsModule() {
                                     tone={audit.configured ? 'green' : 'amber'}
                                 />
                                 <Metric
-                                    label="审计记录"
+                                    label="审计字段"
                                     value={`${audit.total} 项`}
-                                    detail={`${audit.counts.length} 种状态`}
+                                    detail="字段状态记录，不代表错误"
                                 />
                                 <Metric
                                     label="待人工复核"
@@ -186,7 +188,7 @@ export function TranslationsModule() {
                                     <div>
                                         <h2 className="text-sm font-bold text-slate-900">字段翻译审计</h2>
                                         <p className="mt-1 text-[11px] text-slate-400">
-                                            记录每个客户可见字段的来源、锁定与错误状态
+                                            每个客户可见字段都会保留一条审计记录；正常的自动翻译也会显示
                                         </p>
                                     </div>
                                     <div className="flex flex-wrap gap-2">
@@ -221,14 +223,16 @@ export function TranslationsModule() {
                                         >
                                             {statusOptions.map(value => (
                                                 <option key={value} value={value}>
-                                                    {value === 'ALL' ? '全部状态' : statusLabel(value)}
+                                                    {value === 'ALL'
+                                                        ? '全部状态'
+                                                        : getTranslationStatusLabel(value)}
                                                 </option>
                                             ))}
                                         </select>
                                     </div>
                                 </div>
                                 <div className="overflow-x-auto">
-                                    <table className="w-full min-w-[1050px] text-left text-xs">
+                                    <table className="w-full min-w-[1150px] text-left text-xs">
                                         <thead>
                                             <tr className="border-b border-slate-200 bg-slate-50 text-[10px] text-slate-500">
                                                 <th className="p-3">内容类型 / ID</th>
@@ -239,6 +243,7 @@ export function TranslationsModule() {
                                                 <th className="p-3">人工锁定</th>
                                                 <th className="p-3">错误</th>
                                                 <th className="p-3">更新时间</th>
+                                                <th className="p-3">操作</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-100">
@@ -248,7 +253,7 @@ export function TranslationsModule() {
                                             {!states.length && (
                                                 <tr>
                                                     <td
-                                                        colSpan={8}
+                                                        colSpan={9}
                                                         className="p-12 text-center text-xs text-slate-400"
                                                     >
                                                         当前条件下没有审计记录
@@ -324,11 +329,27 @@ function AuditRow({ item }: { item: ContentTranslationStateRecord }) {
                 )}
             </td>
             <td className="max-w-64 p-3">
-                <span className="line-clamp-2 text-[10px] text-rose-600" title={item.error ?? ''}>
-                    {item.error ?? '—'}
-                </span>
+                {item.error ? (
+                    <span className="line-clamp-2 text-[10px] text-rose-600" title={item.error}>
+                        {item.error}
+                    </span>
+                ) : (
+                    <span className="text-[10px] text-slate-400">无</span>
+                )}
             </td>
             <td className="p-3 font-mono text-[10px] text-slate-400">{formatDateTime(item.updatedAt)}</td>
+            <td className="p-3">
+                {item.entityType === 'SystemAnnouncement' ? (
+                    <Link
+                        to={`/storefront/content?tab=announcements&announcementId=${encodeURIComponent(item.entityId)}`}
+                        className="whitespace-nowrap text-[10px] font-bold text-blue-600 hover:text-blue-700"
+                    >
+                        编辑并锁定
+                    </Link>
+                ) : (
+                    <span className="text-slate-300">—</span>
+                )}
+            </td>
         </tr>
     );
 }
@@ -555,30 +576,27 @@ function TranslationTestDialog({
 }
 
 function StatusBadge({ status }: { status: string }) {
-    const classes = ['SYNCED', 'TRANSLATED', 'CURRENT'].includes(status)
+    const classes = [
+        'SYNCED',
+        'TRANSLATED',
+        'CURRENT',
+        'AUTO_TRANSLATED',
+        'REVIEWED',
+        'MANUAL_LOCKED',
+    ].includes(status)
         ? 'bg-emerald-50 text-emerald-700'
-        : ['FAILED', 'ERROR'].includes(status)
+        : ['FAILED', 'ERROR', 'MISSING'].includes(status)
           ? 'bg-rose-50 text-rose-700'
-          : ['STALE', 'REVIEW_REQUIRED', 'PENDING'].includes(status)
-            ? 'bg-amber-50 text-amber-700'
-            : 'bg-slate-100 text-slate-600';
+          : status === 'TRANSLATING'
+            ? 'bg-blue-50 text-blue-700'
+            : ['STALE', 'REVIEW_REQUIRED', 'PENDING'].includes(status)
+              ? 'bg-amber-50 text-amber-700'
+              : 'bg-slate-100 text-slate-600';
     return (
-        <span className={`rounded px-2 py-0.5 text-[9px] font-bold ${classes}`}>{statusLabel(status)}</span>
+        <span className={`rounded px-2 py-0.5 text-[9px] font-bold ${classes}`}>
+            {getTranslationStatusLabel(status)}
+        </span>
     );
-}
-function statusLabel(status: string) {
-    const labels: Record<string, string> = {
-        SYNCED: '已同步',
-        TRANSLATED: '已翻译',
-        CURRENT: '已是最新',
-        STALE: '待复核',
-        REVIEW_REQUIRED: '待人工复核',
-        PENDING: '待处理',
-        FAILED: '失败',
-        ERROR: '错误',
-        LOCKED: '人工锁定',
-    };
-    return labels[status] ?? status;
 }
 function originLabel(origin: string) {
     const labels: Record<string, string> = {

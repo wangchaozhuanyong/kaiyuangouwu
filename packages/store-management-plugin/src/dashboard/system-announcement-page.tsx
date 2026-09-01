@@ -46,8 +46,10 @@ interface AnnouncementDraft {
     priority: string;
     titleZh: string;
     titleEn: string;
+    titleEnLocked: boolean;
     contentZh: string;
     contentEn: string;
+    contentEnLocked: boolean;
     targetMode: 'ALL' | 'SINGLE' | 'MULTIPLE';
     channelIds: string[];
     linkUrl: string;
@@ -223,7 +225,7 @@ function AnnouncementEditor({
     const [editEnglish, setEditEnglish] = useState(false);
     useEffect(() => {
         setLocalDraft(draft);
-        setEditEnglish(false);
+        setEditEnglish(Boolean(draft?.titleEnLocked || draft?.contentEnLocked));
     }, [draft]);
     const mutation = useMutation({
         mutationFn: (value: AnnouncementDraft) =>
@@ -296,12 +298,30 @@ function AnnouncementEditor({
                                     />
                                 </Field>
                                 {editEnglish ? (
-                                    <Field label="英文标题（人工覆盖）">
+                                    <Field label="英文标题">
+                                        <div className="flex items-center justify-between rounded-md border bg-muted/20 px-3 py-2">
+                                            <div>
+                                                <p className="text-xs font-medium">人工锁定</p>
+                                                <p className="text-[11px] text-muted-foreground">
+                                                    锁定后自动翻译不会覆盖该字段
+                                                </p>
+                                            </div>
+                                            <Switch
+                                                checked={localDraft.titleEnLocked}
+                                                onCheckedChange={locked => update('titleEnLocked', locked)}
+                                            />
+                                        </div>
                                         <Input
                                             value={localDraft.titleEn}
                                             maxLength={120}
+                                            disabled={!localDraft.titleEnLocked}
                                             onChange={event => update('titleEn', event.target.value)}
                                         />
+                                        <p className="text-xs text-muted-foreground">
+                                            {localDraft.titleEnLocked
+                                                ? '中文修改后会保留该英文，并标记为待复核。'
+                                                : '取消锁定并保存后，系统会重新自动翻译。'}
+                                        </p>
                                     </Field>
                                 ) : null}
                                 <Field label="公告内容" className="sm:col-span-2">
@@ -313,13 +333,31 @@ function AnnouncementEditor({
                                     />
                                 </Field>
                                 {editEnglish ? (
-                                    <Field label="英文内容（人工覆盖）" className="sm:col-span-2">
+                                    <Field label="英文内容" className="sm:col-span-2">
+                                        <div className="flex items-center justify-between rounded-md border bg-muted/20 px-3 py-2">
+                                            <div>
+                                                <p className="text-xs font-medium">人工锁定</p>
+                                                <p className="text-[11px] text-muted-foreground">
+                                                    锁定后自动翻译不会覆盖该字段
+                                                </p>
+                                            </div>
+                                            <Switch
+                                                checked={localDraft.contentEnLocked}
+                                                onCheckedChange={locked => update('contentEnLocked', locked)}
+                                            />
+                                        </div>
                                         <Textarea
                                             rows={3}
                                             value={localDraft.contentEn}
                                             maxLength={2000}
+                                            disabled={!localDraft.contentEnLocked}
                                             onChange={event => update('contentEn', event.target.value)}
                                         />
+                                        <p className="text-xs text-muted-foreground">
+                                            {localDraft.contentEnLocked
+                                                ? '中文修改后会保留该英文，并标记为待复核。'
+                                                : '取消锁定并保存后，系统会重新自动翻译。'}
+                                        </p>
                                     </Field>
                                 ) : null}
                                 <Field
@@ -461,8 +499,10 @@ function newAnnouncementDraft(): AnnouncementDraft {
         priority: '0',
         titleZh: '',
         titleEn: '',
+        titleEnLocked: false,
         contentZh: '',
         contentEn: '',
+        contentEnLocked: false,
         targetMode: 'ALL',
         channelIds: [],
         linkUrl: '',
@@ -478,8 +518,10 @@ function draftFromAnnouncement(value: SystemAnnouncementRecord): AnnouncementDra
         priority: String(value.priority),
         titleZh: value.titleZh,
         titleEn: value.titleEn,
+        titleEnLocked: value.titleEnLocked,
         contentZh: value.contentZh,
         contentEn: value.contentEn,
+        contentEnLocked: value.contentEnLocked,
         targetMode: value.targetMode,
         channelIds: value.channels.map(channel => channel.id),
         linkUrl: value.linkUrl ?? '',
@@ -495,8 +537,10 @@ function announcementInput(value: AnnouncementDraft, includeId: boolean) {
         priority: Number(value.priority),
         titleZh: value.titleZh,
         titleEn: value.titleEn,
+        titleEnLocked: value.titleEnLocked,
         contentZh: value.contentZh,
         contentEn: value.contentEn,
+        contentEnLocked: value.contentEnLocked,
         linkUrl: value.linkUrl || null,
         startsAt: isoDate(value.startsAt),
         endsAt: isoDate(value.endsAt),
@@ -508,6 +552,10 @@ function announcementInput(value: AnnouncementDraft, includeId: boolean) {
 function announcementDraftError(value: AnnouncementDraft): string | null {
     if (!value.titleZh.trim()) return '请填写中文标题';
     if (!value.contentZh.trim()) return '请填写中文内容';
+    if (value.titleEnLocked && !value.titleEn.trim()) return '人工锁定英文标题前，请先填写英文标题';
+    if (value.titleEnLocked && containsHan(value.titleEn)) return '人工锁定的英文标题不能包含中文';
+    if (value.contentEnLocked && !value.contentEn.trim()) return '人工锁定英文内容前，请先填写英文内容';
+    if (value.contentEnLocked && containsHan(value.contentEn)) return '人工锁定的英文内容不能包含中文';
     if (value.targetMode === 'SINGLE' && value.channelIds.length !== 1) return '请选择 1 个网店';
     if (value.targetMode === 'MULTIPLE' && value.channelIds.length < 2) return '请至少选择 2 个网店';
     const priority = Number(value.priority);
@@ -531,6 +579,10 @@ function formatDateRange(startsAt: string | null, endsAt: string | null): string
 }
 function errorMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
+}
+
+function containsHan(value: string): boolean {
+    return /[\u3400-\u9fff\uf900-\ufaff]/u.test(value);
 }
 
 function announcementScopeLabel(value: SystemAnnouncementRecord): string {

@@ -16,8 +16,10 @@ export interface CreateSystemAnnouncementInput {
     priority?: number | null;
     titleZh: string;
     titleEn?: string | null;
+    titleEnLocked?: boolean | null;
     contentZh: string;
     contentEn?: string | null;
+    contentEnLocked?: boolean | null;
     linkUrl?: string | null;
     startsAt?: Date | null;
     endsAt?: Date | null;

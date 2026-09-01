@@ -84,21 +84,82 @@ describe('SystemAnnouncementService', () => {
             }),
         ).rejects.toThrow('至少选择 2 个网店');
     });
+
+    it('returns the persisted manual-lock state for each English field', async () => {
+        const service = serviceWith(repositoryHarness(), undefined, [
+            { fieldPath: 'content', locked: false },
+            { fieldPath: 'title', locked: true },
+        ]);
+
+        await expect(
+            service.translationLocks({ languageCode: 'zh_Hans' } as any, 'announcement-1'),
+        ).resolves.toEqual({
+            titleEnLocked: true,
+            contentEnLocked: false,
+        });
+    });
+
+    it('regenerates automatic English after an existing manual lock is removed', async () => {
+        const repository = repositoryHarness();
+        repository.findOne.mockResolvedValue({
+            id: 'announcement-1',
+            titleZh: '系统维护',
+            titleEn: 'Reviewed maintenance',
+            contentZh: '周日凌晨维护',
+            contentEn: 'Reviewed body',
+            targetMode: 'ALL',
+            channels: [],
+            enabled: true,
+            priority: 0,
+            linkUrl: null,
+            startsAt: null,
+            endsAt: null,
+        });
+        const service = serviceWith(repository, undefined, [
+            { fieldPath: 'title', locked: true },
+            { fieldPath: 'content', locked: true },
+        ]);
+
+        await service.update({ languageCode: 'zh_Hans' } as any, {
+            id: 'announcement-1',
+            titleZh: '系统维护',
+            titleEn: 'Reviewed maintenance',
+            titleEnLocked: false,
+            contentZh: '周日凌晨维护',
+            contentEn: 'Reviewed body',
+            contentEnLocked: false,
+        });
+
+        expect(repository.save).toHaveBeenCalledWith(
+            expect.objectContaining({
+                titleEn: 'translated-title',
+                contentEn: 'translated-content',
+            }),
+        );
+    });
 });
 
-function serviceWith(repository: ReturnType<typeof repositoryHarness>, channelRepository: any = repository) {
+function serviceWith(
+    repository: ReturnType<typeof repositoryHarness>,
+    channelRepository: any = repository,
+    translationStates: Array<{ fieldPath: string; locked: boolean }> = [],
+) {
     const translations = {
         prepareLocalizedFields: vi.fn(async fields =>
-            fields.map((field: any) => ({
-                path: field.path,
-                sourceText: field.sourceText,
-                translatedText: field.targetText?.trim() || `translated-${field.path}`,
-                status: field.targetText?.trim() ? 'MANUAL_LOCKED' : 'AUTO_TRANSLATED',
-                origin: field.targetText?.trim() ? 'MANUAL' : 'AUTO',
-                locked: Boolean(field.targetText?.trim()),
-            })),
+            fields.map((field: any) => {
+                const locked = field.manualLock ?? Boolean(field.targetText?.trim());
+                return {
+                    path: field.path,
+                    sourceText: field.sourceText,
+                    translatedText: locked ? field.targetText?.trim() : `translated-${field.path}`,
+                    status: locked ? 'MANUAL_LOCKED' : 'AUTO_TRANSLATED',
+                    origin: locked ? 'MANUAL' : 'AUTO',
+                    locked,
+                };
+            }),
         ),
         recordPreparedFields: vi.fn(async () => undefined),
+        findStates: vi.fn(async () => translationStates),
     };
     return new SystemAnnouncementService(
         {
@@ -137,7 +198,7 @@ function repositoryHarness(activeAnnouncements: any[] = []) {
         create: vi.fn(value => value),
         save: vi.fn(async value => value),
         find: vi.fn(async () => activeAnnouncements),
-        findOne: vi.fn(async () => null),
+        findOne: vi.fn(async (): Promise<any> => null),
         remove: vi.fn(),
     };
 }

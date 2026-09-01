@@ -66,6 +66,8 @@ export interface LocalizedContentFieldInput {
     targetText?: string | null;
     existingSourceText?: string | null;
     existingTargetText?: string | null;
+    manualLock?: boolean | null;
+    existingLocked?: boolean | null;
     format?: ContentTranslationFormat;
     required?: boolean;
 }

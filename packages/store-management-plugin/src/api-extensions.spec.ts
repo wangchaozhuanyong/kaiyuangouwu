@@ -139,13 +139,13 @@ describe('store management API extensions', () => {
             ]),
         );
         expect(announcement.fields?.map(field => field.name.value)).toEqual(
-            expect.arrayContaining(['targetMode', 'channels']),
+            expect.arrayContaining(['targetMode', 'channels', 'titleEnLocked', 'contentEnLocked']),
         );
         expect(announcement.fields?.map(field => field.name.value)).toHaveLength(
             new Set(announcement.fields?.map(field => field.name.value)).size,
         );
         expect(updateAnnouncementInput.fields?.map(field => field.name.value)).toEqual(
-            expect.arrayContaining(['targetMode', 'channelIds']),
+            expect.arrayContaining(['targetMode', 'channelIds', 'titleEnLocked', 'contentEnLocked']),
         );
         expect(shopQuery.fields?.map(field => field.name.value)).not.toContain('storeUsdtWallets');
     });
