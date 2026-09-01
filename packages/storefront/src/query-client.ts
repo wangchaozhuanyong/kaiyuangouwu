@@ -6,8 +6,9 @@ export const PUBLIC_QUERY_STALE_TIME = 60_000;
 export const ROUTE_QUERY_STALE_TIME = 60_000;
 export const PUBLIC_QUERY_GC_TIME = 30 * 60_000;
 export const PUBLIC_QUERY_CACHE_MAX_AGE = 5 * 60_000;
-export const PUBLIC_QUERY_CACHE_KEY = 'vendure-storefront-public-query-cache:v2';
-const PUBLIC_QUERY_CACHE_VERSION = 2;
+export const PUBLIC_QUERY_CACHE_KEY = 'vendure-storefront-public-query-cache:v3';
+export const LEGACY_PUBLIC_QUERY_CACHE_KEYS = ['vendure-storefront-public-query-cache:v2'] as const;
+const PUBLIC_QUERY_CACHE_VERSION = 3;
 
 export function storefrontQueryRetry(failureCount: number, error: unknown): boolean {
     return !(error instanceof ShopApiTimeoutError) && failureCount < 1;
@@ -71,6 +72,7 @@ export function restorePublicQueryCache(
     now = Date.now(),
 ): boolean {
     try {
+        for (const legacyKey of LEGACY_PUBLIC_QUERY_CACHE_KEYS) storage.removeItem(legacyKey);
         const value = storage.getItem(PUBLIC_QUERY_CACHE_KEY);
         if (!value) return false;
         const payload = JSON.parse(value) as PersistedPublicQueryCache;
@@ -139,6 +141,17 @@ export const storefrontQueryKeys = {
         [...storefrontQueryKeys.privateScope(marketCode, languageCode), 'cart'] as const,
     customer: (marketCode: string, languageCode: string) =>
         [...storefrontQueryKeys.privateScope(marketCode, languageCode), 'customer'] as const,
+    couponCampaigns: (marketCode: string, languageCode: string, customerId: string | null) =>
+        customerId
+            ? ([
+                  ...storefrontQueryKeys.customerScope(marketCode, languageCode, customerId),
+                  'coupon-campaigns',
+              ] as const)
+            : ([
+                  ...storefrontQueryKeys.privateScope(marketCode, languageCode),
+                  'coupon-campaigns',
+                  'anonymous',
+              ] as const),
     customerCoupons: (marketCode: string, languageCode: string, customerId: string) =>
         [...storefrontQueryKeys.customerScope(marketCode, languageCode, customerId), 'coupons'] as const,
     customerCouponUsageRecords: (marketCode: string, languageCode: string, customerId: string) =>

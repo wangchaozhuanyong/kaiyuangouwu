@@ -113,5 +113,38 @@ describe('storefront realtime query targeting', () => {
                 scope,
             ),
         ).toBe(false);
+        expect(
+            storefrontRealtimeQueryMatches(
+                { queryKey: storefrontQueryKeys.couponCampaigns('store-a', 'zh_Hans', 'customer-1') },
+                changed,
+                scope,
+            ),
+        ).toBe(true);
+        expect(
+            storefrontRealtimeQueryMatches(
+                { queryKey: storefrontQueryKeys.couponCampaigns('store-a', 'zh_Hans', 'customer-2') },
+                changed,
+                scope,
+            ),
+        ).toBe(false);
+    });
+
+    it('refreshes the active identity coupon campaign query for content changes', () => {
+        const changed = event({ topics: ['content'] });
+
+        expect(
+            storefrontRealtimeQueryMatches(
+                { queryKey: storefrontQueryKeys.couponCampaigns('store-a', 'zh_Hans', 'customer-1') },
+                changed,
+                scope,
+            ),
+        ).toBe(true);
+        expect(
+            storefrontRealtimeQueryMatches(
+                { queryKey: storefrontQueryKeys.couponCampaigns('store-a', 'zh_Hans', null) },
+                changed,
+                { ...scope, customerId: undefined },
+            ),
+        ).toBe(true);
     });
 });

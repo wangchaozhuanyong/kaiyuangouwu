@@ -92,7 +92,7 @@ export const MARKETING_CATALOG_LOOKUP_QUERY = gql`
 `;
 
 export const COUPON_LEDGER_QUERY = gql`
-    query AdminCouponLedger($options: StoreCouponLedgerEntryListOptions) {
+    query AdminCouponLedger($options: StoreCouponLedgerListOptions) {
         storeCouponLedger(options: $options) {
             totalItems
             items {

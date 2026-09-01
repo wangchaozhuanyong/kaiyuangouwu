@@ -71,7 +71,6 @@ function isStorefrontQuery(document: string): boolean {
 
 interface StorefrontContentQueryResult {
     storefrontContent: StorefrontContentBlock[];
-    activeStorefrontCoupons?: StorefrontCouponCampaign[];
     activeStorefrontFlashSales?: StorefrontFlashSale[];
     activeSystemAnnouncements?: StorefrontSystemAnnouncement[];
     storefrontContentSettings?: {
@@ -631,23 +630,6 @@ export class ShopApi {
                     heroAutoplayIntervalSeconds
                     configuredBlockTypes
                 }
-                activeStorefrontCoupons {
-                    id
-                    name
-                    kind
-                    startsAt
-                    endsAt
-                    claimStartsAt
-                    claimEndsAt
-                    validityDays
-                    minimumSpend
-                    currencyCode
-                    discountAmount
-                    discountRate
-                    remainingIssueCount
-                    claimed
-                    claimable
-                }
                 activeStorefrontFlashSales {
                     id
                     startsAt
@@ -754,7 +736,6 @@ export class ShopApi {
         }
         return {
             blocks: result.storefrontContent,
-            coupons: result.activeStorefrontCoupons ?? [],
             flashSales: result.activeStorefrontFlashSales ?? [],
             systemAnnouncements: result.activeSystemAnnouncements ?? [],
             settings: {
@@ -763,6 +744,40 @@ export class ShopApi {
                 configuredBlockTypes: result.storefrontContentSettings?.configuredBlockTypes ?? [],
             },
         };
+    }
+
+    async activeCouponCampaigns(signal?: AbortSignal): Promise<StorefrontCouponCampaign[]> {
+        try {
+            const result = await this.request<{ activeStorefrontCoupons: StorefrontCouponCampaign[] }>(
+                `
+                query ActiveStorefrontCoupons {
+                    activeStorefrontCoupons {
+                        id
+                        name
+                        kind
+                        startsAt
+                        endsAt
+                        claimStartsAt
+                        claimEndsAt
+                        validityDays
+                        minimumSpend
+                        currencyCode
+                        discountAmount
+                        discountRate
+                        remainingIssueCount
+                        claimed
+                        claimable
+                    }
+                }
+            `,
+                undefined,
+                signal,
+            );
+            return result.activeStorefrontCoupons;
+        } catch (error) {
+            if (isStorefrontContentSchemaCompatibilityError(error)) return [];
+            throw error;
+        }
     }
 
     async products(take = 16, signal?: AbortSignal): Promise<Product[]> {

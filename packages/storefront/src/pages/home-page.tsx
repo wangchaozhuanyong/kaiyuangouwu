@@ -35,6 +35,7 @@ import {
 } from 'react';
 
 import { ProductCard } from '../components/common/product-card';
+import { couponCampaignsForTab } from '../coupon-center-state';
 import { heroIndexAfterManualMove, isCompletedHeroSwipe } from '../hero-carousel';
 import {
     builtInHeroFallbackImage,
@@ -57,6 +58,7 @@ import {
 } from '../storefront-ui/content-ui';
 import {
     EmptyState,
+    InlineError,
     LegalFooter,
     NoticeButton,
     SectionHeader,
@@ -99,7 +101,10 @@ interface HomepageCouponHubProps {
     coupons: StorefrontCouponCard[];
     language: StorefrontLanguage;
     loading: boolean;
+    queryLoading: boolean;
+    queryError: string;
     onClaim: (campaignId: string) => Promise<string | null>;
+    onRetry: () => void;
     onToast?: (message: string) => void;
 }
 
@@ -299,7 +304,17 @@ export function CurrencySelectionSheet({
     );
 }
 
-function HomepageCouponHub({ block, coupons, language, loading, onClaim, onToast }: HomepageCouponHubProps) {
+function HomepageCouponHub({
+    block,
+    coupons,
+    language,
+    loading,
+    queryLoading,
+    queryError,
+    onClaim,
+    onRetry,
+    onToast,
+}: HomepageCouponHubProps) {
     const navigate = useNavigate();
     const isZh = language === 'zh';
     const [claimingId, setClaimingId] = useState<string | null>(null);
@@ -332,70 +347,81 @@ function HomepageCouponHub({ block, coupons, language, loading, onClaim, onToast
                 </button>
             </div>
 
-            <div className="coupon-hub-scroll" role="list">
-                {coupons.map(coupon => {
-                    const canClaim = coupon.claimable && !coupon.claimed;
+            {queryError ? (
+                <div className="coupon-hub-query-state">
+                    <InlineError message={queryError} action={isZh ? '重试' : 'Retry'} onAction={onRetry} />
+                </div>
+            ) : null}
+            {queryLoading && coupons.length === 0 ? (
+                <div className="coupon-hub-query-state">
+                    <PageSkeleton label={isZh ? '正在加载优惠活动' : 'Loading coupon offers'} />
+                </div>
+            ) : (
+                <div className="coupon-hub-scroll" role="list">
+                    {coupons.map(coupon => {
+                        const canClaim = coupon.claimable && !coupon.claimed;
 
-                    return (
-                        <div
-                            key={coupon.id}
-                            className={`coupon-ticket-card coupon-ticket-${coupon.theme} ${!canClaim ? 'is-claimed' : ''}`}
-                            role="listitem"
-                        >
-                            <div className="coupon-ticket-main">
-                                <div className="coupon-ticket-top">
-                                    <span className="coupon-ticket-tag">{coupon.tag}</span>
-                                </div>
-                                <div
-                                    className={`coupon-ticket-value${
-                                        coupon.unitBefore ? ' is-unit-before' : ''
-                                    }`}
-                                >
-                                    <Badge className="coupon-ticket-seal" aria-hidden="true" />
-                                    {coupon.unitBefore ? (
-                                        <>
-                                            <small className="coupon-unit">{coupon.unit}</small>
-                                            <strong className="coupon-num">{coupon.value}</strong>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <strong className="coupon-num">{coupon.value}</strong>
-                                            {coupon.unit && (
+                        return (
+                            <div
+                                key={coupon.id}
+                                className={`coupon-ticket-card coupon-ticket-${coupon.theme} ${!canClaim ? 'is-claimed' : ''}`}
+                                role="listitem"
+                            >
+                                <div className="coupon-ticket-main">
+                                    <div className="coupon-ticket-top">
+                                        <span className="coupon-ticket-tag">{coupon.tag}</span>
+                                    </div>
+                                    <div
+                                        className={`coupon-ticket-value${
+                                            coupon.unitBefore ? ' is-unit-before' : ''
+                                        }`}
+                                    >
+                                        <Badge className="coupon-ticket-seal" aria-hidden="true" />
+                                        {coupon.unitBefore ? (
+                                            <>
                                                 <small className="coupon-unit">{coupon.unit}</small>
-                                            )}
-                                        </>
-                                    )}
+                                                <strong className="coupon-num">{coupon.value}</strong>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <strong className="coupon-num">{coupon.value}</strong>
+                                                {coupon.unit && (
+                                                    <small className="coupon-unit">{coupon.unit}</small>
+                                                )}
+                                            </>
+                                        )}
+                                    </div>
+                                    <p className="coupon-ticket-desc">{coupon.description}</p>
                                 </div>
-                                <p className="coupon-ticket-desc">{coupon.description}</p>
-                            </div>
 
-                            <div className="coupon-ticket-action">
-                                <button
-                                    type="button"
-                                    className={`coupon-claim-btn ${!canClaim ? 'is-claimed' : ''}`}
-                                    onClick={() => void handleClaim(coupon)}
-                                    disabled={!canClaim || loading || claimingId !== null}
-                                    aria-label={
-                                        !canClaim
-                                            ? isZh
-                                                ? `已领取 ${coupon.title}`
-                                                : `Claimed ${coupon.title}`
-                                            : isZh
-                                              ? `领取 ${coupon.title}`
-                                              : `Claim ${coupon.title}`
-                                    }
-                                >
-                                    {!canClaim ? (
-                                        <Check size={16} strokeWidth={2.6} aria-hidden="true" />
-                                    ) : (
-                                        <ChevronRight size={17} strokeWidth={2.4} aria-hidden="true" />
-                                    )}
-                                </button>
+                                <div className="coupon-ticket-action">
+                                    <button
+                                        type="button"
+                                        className={`coupon-claim-btn ${!canClaim ? 'is-claimed' : ''}`}
+                                        onClick={() => void handleClaim(coupon)}
+                                        disabled={!canClaim || loading || claimingId !== null}
+                                        aria-label={
+                                            !canClaim
+                                                ? isZh
+                                                    ? `已领取 ${coupon.title}`
+                                                    : `Claimed ${coupon.title}`
+                                                : isZh
+                                                  ? `领取 ${coupon.title}`
+                                                  : `Claim ${coupon.title}`
+                                        }
+                                    >
+                                        {!canClaim ? (
+                                            <Check size={16} strokeWidth={2.6} aria-hidden="true" />
+                                        ) : (
+                                            <ChevronRight size={17} strokeWidth={2.4} aria-hidden="true" />
+                                        )}
+                                    </button>
+                                </div>
                             </div>
-                        </div>
-                    );
-                })}
-            </div>
+                        );
+                    })}
+                </div>
+            )}
         </section>
     );
 }
@@ -408,7 +434,8 @@ interface HomePageProps {
     heroAutoplayIntervalSeconds: number;
     configuredBlockTypes: Array<StorefrontContentBlock['type']>;
     coupons: StorefrontCouponCampaign[];
-    claimedCampaignIds: string[];
+    couponCampaignsLoading: boolean;
+    couponCampaignsError: string;
     flashSales: StorefrontFlashSale[];
     systemAnnouncements: StorefrontSystemAnnouncement[];
     bestSellerProducts: Product[];
@@ -433,6 +460,7 @@ interface HomePageProps {
     onNotifications: () => void;
     onToast?: (message: string) => void;
     onClaimCoupon: (campaignId: string) => Promise<string | null>;
+    onCouponCampaignsRetry: () => void;
     onContentTarget: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
     onContentRetry: () => void;
     onRetry: () => void;
@@ -449,7 +477,8 @@ export function HomePage() {
         heroAutoplayIntervalSeconds,
         configuredBlockTypes,
         coupons,
-        claimedCampaignIds,
+        couponCampaignsLoading,
+        couponCampaignsError,
         flashSales,
         systemAnnouncements,
         bestSellerProducts,
@@ -474,6 +503,7 @@ export function HomePage() {
         onNotifications,
         onToast,
         onClaimCoupon,
+        onCouponCampaignsRetry,
         onContentTarget,
         onContentRetry,
         onRetry,
@@ -560,12 +590,8 @@ export function HomePage() {
             ? defaultNoticeItem
             : noticeItems.find(item => item.id === openNoticeId);
     const showFooter = Boolean(legalBlock) || !configuredBlockTypes.includes('LEGAL');
-    const claimedCampaignIdSet = new Set(claimedCampaignIds);
-    const customerAwareCoupons = coupons.map(coupon =>
-        claimedCampaignIdSet.has(coupon.id) ? { ...coupon, claimed: true, claimable: false } : coupon,
-    );
     const campaignCouponCards = couponCardsFromCampaigns(
-        customerAwareCoupons,
+        couponCampaignsForTab(coupons, 'ACTIVITIES'),
         language,
         market.currencyCode,
         displayCurrencyCode,
@@ -1137,21 +1163,25 @@ export function HomePage() {
                             ) : null}
                         </div>
 
-                        {hasHomepageModule('COUPONS') && couponCards.length > 0 && (
-                            <div
-                                className={homepageSectionShellClassName}
-                                style={{ order: homepageModuleOrder('COUPONS') }}
-                            >
-                                <HomepageCouponHub
-                                    block={couponBlock}
-                                    coupons={couponCards}
-                                    language={language}
-                                    loading={couponLoading}
-                                    onClaim={onClaimCoupon}
-                                    onToast={onToast}
-                                />
-                            </div>
-                        )}
+                        {hasHomepageModule('COUPONS') &&
+                            (couponCards.length > 0 || couponCampaignsLoading || couponCampaignsError) && (
+                                <div
+                                    className={homepageSectionShellClassName}
+                                    style={{ order: homepageModuleOrder('COUPONS') }}
+                                >
+                                    <HomepageCouponHub
+                                        block={couponBlock}
+                                        coupons={couponCards}
+                                        language={language}
+                                        loading={couponLoading}
+                                        queryLoading={couponCampaignsLoading}
+                                        queryError={couponCampaignsError}
+                                        onClaim={onClaimCoupon}
+                                        onRetry={onCouponCampaignsRetry}
+                                        onToast={onToast}
+                                    />
+                                </div>
+                            )}
 
                         {coreCategoriesBlock ? (
                             <div

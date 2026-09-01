@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { buildHomeNoticeItems, CurrencySelectionSheet, HomePage, NoticeDetailSheet } from './pages/home-page';
 import { StorefrontContext } from './StorefrontContext';
-import { MarketConfig, Product, StorefrontContentBlock } from './types';
+import { MarketConfig, Product, StorefrontContentBlock, StorefrontCouponCampaign } from './types';
 
 vi.mock('@tanstack/react-router', async importOriginal => ({
     ...(await importOriginal<typeof import('@tanstack/react-router')>()),
@@ -121,6 +121,34 @@ const trustBarBlock: StorefrontContentBlock = {
     items: [],
 };
 
+const couponBlock: StorefrontContentBlock = {
+    ...heroBlock,
+    id: 'coupon-block-1',
+    code: 'homepage-coupons',
+    type: 'COUPONS',
+    imageUrl: null,
+    title: '专享特惠专区',
+    items: [],
+};
+
+const couponCampaign: StorefrontCouponCampaign = {
+    id: 'campaign-1',
+    name: '满100减10',
+    kind: 'ORDER_FIXED',
+    startsAt: null,
+    endsAt: null,
+    claimStartsAt: null,
+    claimEndsAt: null,
+    validityDays: 30,
+    minimumSpend: 10_000,
+    currencyCode: 'MYR',
+    discountAmount: 1_000,
+    discountRate: null,
+    remainingIssueCount: 10,
+    claimed: false,
+    claimable: true,
+};
+
 const baseProps = {
     products: [product],
     collections: [],
@@ -140,6 +168,8 @@ const baseProps = {
         'LEGAL',
     ],
     coupons: [],
+    couponCampaignsLoading: false,
+    couponCampaignsError: '',
     flashSales: [],
     systemAnnouncements: [],
     bestSellerProducts: [],
@@ -154,13 +184,13 @@ const baseProps = {
     storefrontDescription: '',
     logoUrl: null,
     addingVariantId: null,
-    claimedCampaignIds: [],
     couponLoading: false,
     onCategorySelect: vi.fn(),
     onAdd: vi.fn(),
     onToggleLanguage: vi.fn(),
     onNotifications: vi.fn(),
     onClaimCoupon: vi.fn().mockResolvedValue(null),
+    onCouponCampaignsRetry: vi.fn(),
     onContentTarget: vi.fn(),
     onContentRetry: vi.fn(),
     onRetry: vi.fn(),
@@ -288,6 +318,46 @@ describe('HomePage localized trust bar layout', () => {
         expect(stylesheet).toMatch(
             /\.home-trust-bar\.has-long-copy \.home-trust-item\s*\{[^}]*white-space:\s*normal;/,
         );
+    });
+});
+
+describe('HomePage account-aware coupon campaigns', () => {
+    it('hides a sold-out campaign that the current account did not claim', () => {
+        const markup = renderHome({
+            contentBlocks: [couponBlock],
+            coupons: [{ ...couponCampaign, remainingIssueCount: 0, claimable: false }],
+        });
+
+        expect(markup).not.toContain('满100减10');
+        expect(markup).not.toContain('coupon-hub-section');
+    });
+
+    it('keeps an owned sold-out campaign visible for the current account', () => {
+        const markup = renderHome({
+            contentBlocks: [couponBlock],
+            coupons: [
+                {
+                    ...couponCampaign,
+                    remainingIssueCount: 0,
+                    claimed: true,
+                    claimable: false,
+                },
+            ],
+        });
+
+        expect(markup).toContain('满100减10');
+        expect(markup).toContain('coupon-hub-section');
+    });
+
+    it('shows retry instead of silently treating a campaign query failure as no offers', () => {
+        const markup = renderHome({
+            contentBlocks: [couponBlock],
+            couponCampaignsError: '优惠活动读取失败',
+        });
+
+        expect(markup).toContain('优惠活动读取失败');
+        expect(markup).toContain('重试');
+        expect(markup).toContain('coupon-hub-section');
     });
 });
 

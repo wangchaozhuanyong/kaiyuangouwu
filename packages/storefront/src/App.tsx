@@ -6,6 +6,7 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import { ShopApi, ShopApiError } from './api';
 import { categoryTargetSelection } from './category-navigation';
 import { BottomNavigation, shouldShowBottomNavigation } from './components/common/bottom-navigation';
+import { claimAndVerifyCoupon } from './coupon-claim-verification';
 import { normalizeHeroAutoplayIntervalSeconds } from './hero-carousel';
 import { buildBestSellerProducts, buildRecommendationProducts } from './home-merchandising';
 import {
@@ -418,13 +419,26 @@ export function App() {
         queryFn: ({ signal }) => api.activeCustomer(signal),
         staleTime: 0,
     });
+    const customer = customerQuery.data ?? null;
+    const couponCampaignsQueryKey = storefrontQueryKeys.couponCampaigns(
+        storefrontQueryKeys.market(market),
+        vendureLanguageCode,
+        customer?.id ?? null,
+    );
+    const couponCampaignsQuery = useQuery({
+        queryKey: couponCampaignsQueryKey,
+        queryFn: ({ signal }) => api.activeCouponCampaigns(signal),
+        enabled: customerQuery.data !== undefined,
+        staleTime: 0,
+        refetchInterval: customerQuery.data !== undefined ? 60_000 : false,
+    });
 
     const rawProducts = productsQuery.data ?? [];
     const products = rawProducts;
     const collections = collectionsQuery.data ?? [];
     const contentBlocks = contentQuery.data?.blocks ?? [];
     const navigationBlock = contentBlocks.find(block => block.type === 'NAVIGATION');
-    const activeCoupons = contentQuery.data?.coupons ?? [];
+    const activeCoupons = couponCampaignsQuery.data ?? [];
     const activeFlashSales = contentQuery.data?.flashSales ?? [];
     const systemAnnouncements = contentQuery.data?.systemAnnouncements ?? [];
     const managedContentProductIds = Array.from(
@@ -450,7 +464,6 @@ export function App() {
     );
     const configuredBlockTypes = contentQuery.data?.settings?.configuredBlockTypes ?? [];
     const cart = cartQuery.data ?? null;
-    const customer = customerQuery.data ?? null;
 
     useEffect(() => {
         const controller = new AbortController();
@@ -492,7 +505,24 @@ export function App() {
         refetchInterval: customer ? 60_000 : false,
     });
     const couponUsageRecords = customerCouponUsageRecordsQuery.data ?? [];
-    const claimedCampaignIds = Array.from(new Set(myCoupons.map(coupon => coupon.campaignId)));
+    const customerCouponsError = !customer
+        ? ''
+        : customerCouponsQuery.isPaused && customerCouponsQuery.data === undefined
+          ? offlineLoadError(language)
+          : customerCouponsQuery.error instanceof Error
+            ? customerCouponsQuery.error.message
+            : customerCouponsQuery.error
+              ? text.loadError
+              : '';
+    const customerCouponUsageRecordsError = !customer
+        ? ''
+        : customerCouponUsageRecordsQuery.isPaused && customerCouponUsageRecordsQuery.data === undefined
+          ? offlineLoadError(language)
+          : customerCouponUsageRecordsQuery.error instanceof Error
+            ? customerCouponUsageRecordsQuery.error.message
+            : customerCouponUsageRecordsQuery.error
+              ? text.loadError
+              : '';
     const bestSellersBlock = contentBlocks.find(block => block.type === 'BEST_SELLERS');
     const recommendationsBlock = contentBlocks.find(block => block.type === 'RECOMMENDATIONS');
     const pinnedBestSellerIds = contentStringArraySetting(bestSellersBlock?.settings?.pinnedProductIds);
@@ -635,6 +665,20 @@ export function App() {
             : customerQuery.error instanceof Error
               ? customerQuery.error.message
               : text.loadError;
+    const couponCampaignsLoading =
+        customerQuery.data === undefined
+            ? !customerQuery.isError
+            : couponCampaignsQuery.isPending && couponCampaignsQuery.data === undefined;
+    const couponCampaignsError =
+        customerQuery.data === undefined && customerQuery.isError
+            ? customerLoadError
+            : couponCampaignsQuery.isPaused && couponCampaignsQuery.data === undefined
+              ? offlineLoadError(language)
+              : couponCampaignsQuery.error instanceof Error
+                ? couponCampaignsQuery.error.message
+                : couponCampaignsQuery.error
+                  ? text.loadError
+                  : '';
     const cartQueryError =
         cartLoadState === 'paused'
             ? offlineLoadError(language)
@@ -1110,17 +1154,38 @@ export function App() {
             setCartLoading(true);
             setCartError(null);
             try {
-                const claimedCoupon = await api.claimCoupon(campaignId);
-                queryClient.setQueryData<StoreCustomerCoupon[]>(customerCouponQueryKey, current => [
-                    claimedCoupon,
-                    ...(current ?? []).filter(coupon => coupon.id !== claimedCoupon.id),
+                const result = await claimAndVerifyCoupon(api, campaignId);
+                if (result.status !== 'lookup-failed') {
+                    queryClient.setQueryData<StoreCustomerCoupon[]>(customerCouponQueryKey, result.coupons);
+                } else {
+                    void queryClient.invalidateQueries({ queryKey: customerCouponQueryKey });
+                }
+                await Promise.all([
+                    queryClient.invalidateQueries({ queryKey: couponCampaignsQueryKey }),
+                    queryClient.invalidateQueries({
+                        queryKey: storefrontQueryKeys.customerCouponUsageRecords(
+                            storefrontQueryKeys.market(market),
+                            vendureLanguageCode,
+                            customer.id,
+                        ),
+                    }),
                 ]);
-                await queryClient.invalidateQueries({
-                    queryKey: storefrontQueryKeys.content(
-                        storefrontQueryKeys.market(market),
-                        vendureLanguageCode,
-                    ),
-                });
+                if (result.status === 'lookup-failed') {
+                    return isZh
+                        ? '领取请求已完成，但当前账号权益核验失败。请刷新后查看，若仍未显示请联系客服。'
+                        : [
+                              'The claim request completed, but account ownership could not be verified.',
+                              'Refresh and contact support if it is still missing.',
+                          ].join(' ');
+                }
+                if (result.status === 'missing') {
+                    return isZh
+                        ? '领取请求已完成，但未在当前账号查到该优惠券。请勿重复领取，刷新后仍未显示请联系客服。'
+                        : [
+                              'The claim request completed, but the coupon was not found on this account.',
+                              'Do not claim again; refresh and contact support if it is still missing.',
+                          ].join(' ');
+                }
                 notify(isZh ? '优惠券领取成功' : 'Coupon claimed');
                 return null;
             } catch (requestError) {
@@ -1133,6 +1198,7 @@ export function App() {
             api,
             customer,
             customerCouponQueryKey,
+            couponCampaignsQueryKey,
             isZh,
             market.code,
             navigate,
@@ -1553,6 +1619,9 @@ export function App() {
         heroAutoplayIntervalSeconds,
         configuredBlockTypes,
         activeCoupons,
+        couponCampaignsQuery,
+        couponCampaignsLoading,
+        couponCampaignsError,
         activeFlashSales,
         activeFlashSaleItems,
         systemAnnouncements,
@@ -1576,7 +1645,6 @@ export function App() {
         currencySelectorEnabled,
         displayCurrencyCode,
         addingVariantId,
-        claimedCampaignIds,
         cart,
         cartLoading,
         cartError: cartError ?? cartQueryError,
@@ -1588,7 +1656,11 @@ export function App() {
         customerLoadError,
         customerQuery,
         myCoupons,
+        customerCouponsQuery,
+        customerCouponsError,
         couponUsageRecords,
+        customerCouponUsageRecordsQuery,
+        customerCouponUsageRecordsError,
         currentCheckoutOrder,
         completedOrder,
         activeCollectionId,

@@ -171,6 +171,19 @@ export function CouponsRoutePage() {
                     displayCurrencyCode: runtime.displayCurrencyCode,
                     language: runtime.language,
                     loading: runtime.cartLoading,
+                    campaignsLoading: runtime.couponCampaignsLoading,
+                    campaignsError: runtime.couponCampaignsError,
+                    myCouponsLoading:
+                        runtime.customerCouponsQuery.isPending &&
+                        runtime.customerCouponsQuery.data === undefined,
+                    myCouponsError: runtime.customerCouponsError,
+                    usageRecordsLoading:
+                        runtime.customerCouponUsageRecordsQuery.isPending &&
+                        runtime.customerCouponUsageRecordsQuery.data === undefined,
+                    usageRecordsError: runtime.customerCouponUsageRecordsError,
+                    onRetryCampaigns: () => void runtime.couponCampaignsQuery.refetch(),
+                    onRetryMyCoupons: () => void runtime.customerCouponsQuery.refetch(),
+                    onRetryUsageRecords: () => void runtime.customerCouponUsageRecordsQuery.refetch(),
                     onClaim: runtime.claimCoupon,
                 }}
             >
