@@ -21,12 +21,14 @@ describe('classifyImageGenerationFailure', () => {
             ),
         ).toMatchObject({
             code: 'LOCAL_IMAGE_PROCESSING',
-            affectsProviderHealth: false,
+            affectsCredentialHealth: false,
+            affectsModelHealth: false,
             publicMessage: expect.not.stringContaining('Maximum call stack'),
         });
         expect(classifyImageGenerationFailure(new Error('disk full'), 'RESPONSE_RECEIVED')).toMatchObject({
             code: 'STORAGE',
-            affectsProviderHealth: false,
+            affectsCredentialHealth: false,
+            affectsModelHealth: false,
         });
     });
 
@@ -69,10 +71,24 @@ describe('classifyImageGenerationFailure', () => {
         ).toMatchObject({ code: 'IMAGE_TOO_LARGE' });
     });
 
+    it('penalizes a model but not its credential when native resolution is not delivered', () => {
+        expect(
+            classifyImageGenerationFailure(
+                new Error('中转站未返回原生 4K 图片（实际 1024×1024）'),
+                'RESPONSE_RECEIVED',
+            ),
+        ).toMatchObject({
+            code: 'IMAGE_RESOLUTION_MISMATCH',
+            affectsCredentialHealth: false,
+            affectsModelHealth: true,
+        });
+    });
+
     it('classifies an exhausted credential pool without penalizing a Key', () => {
         expect(classifyImageGenerationFailure(new Error('没有可路由的健康 Key'), 'CLAIMED')).toMatchObject({
             code: 'CREDENTIAL_UNAVAILABLE',
-            affectsProviderHealth: false,
+            affectsCredentialHealth: false,
+            affectsModelHealth: false,
             retryable: false,
         });
     });

@@ -6,6 +6,7 @@ readonly repository="/var/www/kaiyuangouwu"
 readonly current_pointer="/var/www/kaiyuangouwu-current"
 readonly current_marker="/var/www/kaiyuangouwu-releases/current-sha"
 readonly memory_guard="${repository}/deploy/production-memory-guard.cjs"
+readonly environment_file="${repository}/packages/dev-server/.env"
 
 fail() {
     printf 'Production health monitor failed: %s\n' "$1" >&2
@@ -13,6 +14,7 @@ fail() {
 }
 
 [[ -f "${memory_guard}" ]] || fail 'memory guard is missing'
+[[ -r "${environment_file}" ]] || fail 'production environment file is not readable'
 [[ -L "${current_pointer}" ]] || fail 'current runtime pointer is missing'
 [[ -f "${current_marker}" ]] || fail 'current runtime marker is missing'
 
@@ -60,6 +62,77 @@ for (const alert of snapshot.alerts || []) {
     process.stderr.write('AI_IMAGE_' + alert.severity + ' ' + alert.code + ' ' + alert.message + '\n');
 }
 "
+
+set -a
+# shellcheck disable=SC1090
+source "${environment_file}"
+set +a
+for required_name in DB_HOST DB_PORT DB_USERNAME DB_PASSWORD DB_NAME; do
+    [[ -n "${!required_name:-}" ]] || fail "required database setting is missing: ${required_name}"
+done
+
+readonly resolution_diagnostics_sql="
+SELECT
+    modelCodeSnapshot,
+    providerScopeSnapshot,
+    REPLACE(COALESCE(REGEXP_SUBSTR(errorMessage, '原生 [124]K'), '原生 unknown'), '原生 ', '') AS requestedResolution,
+    REPLACE(REPLACE(COALESCE(REGEXP_SUBSTR(errorMessage, '实际 [0-9]{1,5}×[0-9]{1,5}'), '实际 unknown'), '实际 ', ''), '×', 'x') AS actualDimensions,
+    COUNT(*)
+FROM image_generation_cost_event
+WHERE createdAt >= UTC_TIMESTAMP() - INTERVAL 24 HOUR
+  AND failureCode = 'IMAGE_RESOLUTION_MISMATCH'
+GROUP BY modelCodeSnapshot, providerScopeSnapshot, requestedResolution, actualDimensions
+ORDER BY COUNT(*) DESC, modelCodeSnapshot, providerScopeSnapshot, requestedResolution, actualDimensions
+LIMIT 20"
+resolution_rows="$(
+    MYSQL_PWD="${DB_PASSWORD}" mysql \
+        --host="${DB_HOST}" \
+        --port="${DB_PORT}" \
+        --user="${DB_USERNAME}" \
+        --batch \
+        --skip-column-names \
+        --execute="${resolution_diagnostics_sql}" \
+        "${DB_NAME}"
+)" || fail 'resolution diagnostic query failed'
+while IFS=$'\t' read -r model provider requested actual count; do
+    [[ -n "${model}" ]] || continue
+    [[ "${model}" =~ ^[A-Za-z0-9_-]{1,48}$ ]] || fail 'unsafe model code in resolution diagnostics'
+    [[ "${provider}" =~ ^[A-Z]{2,24}$ ]] || fail 'unsafe provider scope in resolution diagnostics'
+    [[ "${requested}" =~ ^([124]K|unknown)$ ]] || fail 'unsafe requested resolution diagnostic'
+    [[ "${actual}" =~ ^([0-9]{1,5}x[0-9]{1,5}|unknown)$ ]] || fail 'unsafe actual resolution diagnostic'
+    [[ "${count}" =~ ^[0-9]+$ ]] || fail 'unsafe resolution diagnostic count'
+    printf 'AI_IMAGE_RESOLUTION_MISMATCH model=%s provider=%s requested=%s actual=%s count=%s\n' \
+        "${model}" "${provider}" "${requested}" "${actual}" "${count}"
+done <<<"${resolution_rows}"
+
+readonly missing_cost_diagnostics_sql="
+SELECT modelCodeSnapshot, providerScopeSnapshot, outcome, COUNT(*)
+FROM image_generation_cost_event
+WHERE createdAt >= UTC_TIMESTAMP() - INTERVAL 24 HOUR
+  AND actualCostMicrounits IS NULL
+GROUP BY modelCodeSnapshot, providerScopeSnapshot, outcome
+ORDER BY COUNT(*) DESC, modelCodeSnapshot, providerScopeSnapshot, outcome
+LIMIT 20"
+missing_cost_rows="$(
+    MYSQL_PWD="${DB_PASSWORD}" mysql \
+        --host="${DB_HOST}" \
+        --port="${DB_PORT}" \
+        --user="${DB_USERNAME}" \
+        --batch \
+        --skip-column-names \
+        --execute="${missing_cost_diagnostics_sql}" \
+        "${DB_NAME}"
+)" || fail 'missing-cost diagnostic query failed'
+while IFS=$'\t' read -r model provider outcome count; do
+    [[ -n "${model}" ]] || continue
+    [[ "${model}" =~ ^[A-Za-z0-9_-]{1,48}$ ]] || fail 'unsafe model code in missing-cost diagnostics'
+    [[ "${provider}" =~ ^[A-Z]{2,24}$ ]] || fail 'unsafe provider scope in missing-cost diagnostics'
+    [[ "${outcome}" =~ ^[A-Z_]{2,24}$ ]] || fail 'unsafe outcome in missing-cost diagnostics'
+    [[ "${count}" =~ ^[0-9]+$ ]] || fail 'unsafe missing-cost diagnostic count'
+    printf 'AI_IMAGE_MISSING_COST model=%s provider=%s outcome=%s count=%s\n' \
+        "${model}" "${provider}" "${outcome}" "${count}"
+done <<<"${missing_cost_rows}"
+
 curl --fail --silent --show-error --max-time 15 https://damatong.net/health >/dev/null
 node "${repository}/deploy/verify-dashboard-assets.mjs" \
     --dashboard-url https://console.damatong.net/dashboard/
