@@ -4,6 +4,12 @@ on:
     schedule:
         - cron: '17,47 * * * *'
     workflow_dispatch:
+        inputs:
+            audit_payment_config:
+                description: Run the masked production payment configuration audit
+                required: false
+                default: false
+                type: boolean
 
 permissions:
     contents: read
@@ -32,6 +38,91 @@ jobs:
                   role-session-name: vendure-health-monitor-${{ github.run_id }}
                   aws-region: ${{ env.AWS_REGION }}
                   allowed-account-ids: ${{ env.AWS_ACCOUNT_ID }}
+
+            - name: Check out the audited revision
+              if: ${{ github.event_name == 'workflow_dispatch' && inputs.audit_payment_config }}
+              uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+
+            - name: Audit masked production payment configuration
+              if: ${{ github.event_name == 'workflow_dispatch' && inputs.audit_payment_config }}
+              shell: bash
+              run: |
+                  set -Eeuo pipefail
+
+                  parameter_names="$RUNNER_TEMP/payment-parameter-names.txt"
+                  secret_names="$RUNNER_TEMP/payment-secret-names.txt"
+                  if aws ssm describe-parameters \
+                    --region "$AWS_REGION" \
+                    --query 'Parameters[].Name' \
+                    --output text > "$parameter_names" 2>/dev/null; then
+                      tr '\t' '\n' < "$parameter_names" \
+                        | grep -Ei '((vendure|kaiyuangouwu|damatong).*(usdt|wallet|payment)|(usdt|wallet|payment).*(vendure|kaiyuangouwu|damatong))' \
+                        | sed 's/^/AWS_PARAMETER_NAME /' || true
+                  else
+                      echo 'AWS_PARAMETER_INVENTORY access=denied_or_unavailable'
+                  fi
+
+                  if aws secretsmanager list-secrets \
+                    --region "$AWS_REGION" \
+                    --query 'SecretList[].Name' \
+                    --output text > "$secret_names" 2>/dev/null; then
+                      tr '\t' '\n' < "$secret_names" \
+                        | grep -Ei '((vendure|kaiyuangouwu|damatong).*(usdt|wallet|payment)|(usdt|wallet|payment).*(vendure|kaiyuangouwu|damatong))' \
+                        | sed 's/^/AWS_SECRET_NAME /' || true
+                  else
+                      echo 'AWS_SECRET_INVENTORY access=denied_or_unavailable'
+                  fi
+
+                  audit_script_b64="$(base64 -w0 deploy/audit-production-payment-config.mjs)"
+                  remote_command="printf '%s' '${audit_script_b64}' | base64 -d | node"
+                  jq -n --arg command "$remote_command" \
+                    '{commands: [$command], executionTimeout: ["300"]}' > "$RUNNER_TEMP/payment-audit-ssm-parameters.json"
+
+                  command_id="$(aws ssm send-command \
+                    --region "$AWS_REGION" \
+                    --document-name AWS-RunShellScript \
+                    --instance-ids "$INSTANCE_ID" \
+                    --comment 'Audit masked Vendure payment configuration' \
+                    --parameters "file://$RUNNER_TEMP/payment-audit-ssm-parameters.json" \
+                    --timeout-seconds 120 \
+                    --query 'Command.CommandId' \
+                    --output text)"
+                  test -n "$command_id"
+
+                  status=Pending
+                  for attempt in $(seq 1 60); do
+                    status="$(aws ssm get-command-invocation \
+                      --region "$AWS_REGION" \
+                      --command-id "$command_id" \
+                      --instance-id "$INSTANCE_ID" \
+                      --query Status \
+                      --output text 2>/dev/null || true)"
+                    case "$status" in
+                      Success|Failed|Cancelled|TimedOut|Cancelling)
+                        break
+                        ;;
+                    esac
+                    sleep 5
+                  done
+
+                  aws ssm get-command-invocation \
+                    --region "$AWS_REGION" \
+                    --command-id "$command_id" \
+                    --instance-id "$INSTANCE_ID" \
+                    --query '{Status:Status,Output:StandardOutputContent,Error:StandardErrorContent}' \
+                    --output json | tee "$RUNNER_TEMP/payment-config-audit.json"
+                  test "$status" = Success
+
+                  {
+                    echo '## Masked production payment configuration audit'
+                    echo
+                    echo "- SSM command: \`$command_id\`"
+                    echo "- Status: \`$status\`"
+                    echo
+                    echo '```text'
+                    jq -r '.Output' "$RUNNER_TEMP/payment-config-audit.json"
+                    echo '```'
+                  } >> "$GITHUB_STEP_SUMMARY"
 
             - name: Check production health
               run: |
