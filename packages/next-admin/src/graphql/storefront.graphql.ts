@@ -180,8 +180,10 @@ export const SYSTEM_ANNOUNCEMENTS_QUERY = gql`
             priority
             titleZh
             titleEn
+            titleEnLocked
             contentZh
             contentEn
+            contentEnLocked
             linkUrl
             startsAt
             endsAt
@@ -391,8 +393,10 @@ export interface SystemAnnouncementRecord {
     priority: number;
     titleZh: string;
     titleEn: string;
+    titleEnLocked: boolean;
     contentZh: string;
     contentEn: string;
+    contentEnLocked: boolean;
     linkUrl: string | null;
     startsAt: string | null;
     endsAt: string | null;

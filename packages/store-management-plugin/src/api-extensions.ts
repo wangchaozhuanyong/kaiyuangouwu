@@ -589,8 +589,10 @@ export const adminApiExtensions = gql`
         channels: [Channel!]!
         titleZh: String!
         titleEn: String!
+        titleEnLocked: Boolean!
         contentZh: String!
         contentEn: String!
+        contentEnLocked: Boolean!
         linkUrl: String
         startsAt: DateTime
         endsAt: DateTime
@@ -601,8 +603,10 @@ export const adminApiExtensions = gql`
         priority: Int
         titleZh: String!
         titleEn: String
+        titleEnLocked: Boolean
         contentZh: String!
         contentEn: String
+        contentEnLocked: Boolean
         linkUrl: String
         startsAt: DateTime
         endsAt: DateTime
@@ -616,8 +620,10 @@ export const adminApiExtensions = gql`
         priority: Int
         titleZh: String!
         titleEn: String
+        titleEnLocked: Boolean
         contentZh: String!
         contentEn: String
+        contentEnLocked: Boolean
         linkUrl: String
         startsAt: DateTime
         endsAt: DateTime

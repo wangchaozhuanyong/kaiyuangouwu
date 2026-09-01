@@ -98,6 +98,117 @@ describe('ContentTranslationService localized fields', () => {
         });
     });
 
+    it('keeps an unchanged automatic translation unlocked without calling the provider again', async () => {
+        const translate = vi.fn();
+        const service = new ContentTranslationService({} as any, {
+            provider: { name: 'test', isConfigured: () => true, translate },
+            glossary: {},
+            sourceLanguageCode: 'zh_Hans',
+            targetLanguageCode: 'en',
+        });
+
+        const [field] = await service.prepareLocalizedFields([
+            {
+                path: 'title',
+                sourceText: '系统维护',
+                targetText: 'System maintenance',
+                existingSourceText: '系统维护',
+                existingTargetText: 'System maintenance',
+                manualLock: false,
+                existingLocked: false,
+            },
+        ]);
+
+        expect(translate).not.toHaveBeenCalled();
+        expect(field).toMatchObject({
+            translatedText: 'System maintenance',
+            status: 'AUTO_TRANSLATED',
+            origin: 'AUTO',
+            locked: false,
+        });
+    });
+
+    it('preserves manually locked English and marks it stale when only Chinese changes', async () => {
+        const service = new ContentTranslationService({} as any, {
+            provider: { name: 'test', isConfigured: () => true, translate: vi.fn() },
+            glossary: {},
+            sourceLanguageCode: 'zh_Hans',
+            targetLanguageCode: 'en',
+        });
+
+        const [field] = await service.prepareLocalizedFields([
+            {
+                path: 'title',
+                sourceText: '新的系统维护通知',
+                targetText: 'System maintenance',
+                existingSourceText: '系统维护',
+                existingTargetText: 'System maintenance',
+                manualLock: true,
+                existingLocked: true,
+            },
+        ]);
+
+        expect(field).toMatchObject({
+            translatedText: 'System maintenance',
+            status: 'STALE',
+            origin: 'MANUAL',
+            locked: true,
+        });
+    });
+
+    it('regenerates English when a manual lock is explicitly removed', async () => {
+        const translate = vi.fn(async () => ({
+            provider: 'test',
+            translations: [{ key: 'title', text: 'Fresh automatic translation' }],
+        }));
+        const service = new ContentTranslationService({} as any, {
+            provider: { name: 'test', isConfigured: () => true, translate },
+            glossary: {},
+            sourceLanguageCode: 'zh_Hans',
+            targetLanguageCode: 'en',
+        });
+
+        const [field] = await service.prepareLocalizedFields([
+            {
+                path: 'title',
+                sourceText: '系统维护',
+                targetText: 'Reviewed maintenance',
+                existingSourceText: '系统维护',
+                existingTargetText: 'Reviewed maintenance',
+                manualLock: false,
+                existingLocked: true,
+            },
+        ]);
+
+        expect(translate).toHaveBeenCalledOnce();
+        expect(field).toMatchObject({
+            translatedText: 'Fresh automatic translation',
+            status: 'AUTO_TRANSLATED',
+            origin: 'AUTO',
+            locked: false,
+        });
+    });
+
+    it('rejects an empty English value when manual lock is requested', async () => {
+        const service = new ContentTranslationService({} as any, {
+            provider: { name: 'test', isConfigured: () => true, translate: vi.fn() },
+            glossary: {},
+            sourceLanguageCode: 'zh_Hans',
+            targetLanguageCode: 'en',
+        });
+
+        await expect(
+            service.prepareLocalizedFields([
+                {
+                    path: 'title',
+                    sourceText: '系统维护',
+                    targetText: '',
+                    manualLock: true,
+                },
+            ]),
+        ).rejects.toThrow('必须填写不含中文的英文内容');
+    });
+
     it('counts the complete audit set while limiting returned detail rows', async () => {
         const allStatuses = Array.from({ length: 1_001 }, (_, index) => ({
             status: index === 1_000 ? 'MANUAL_LOCKED' : 'AUTO_TRANSLATED',

@@ -43,6 +43,7 @@ import {
 } from '../../graphql/marketing.graphql';
 import { useAccessibleDialog } from '../../hooks/use-accessible-dialog';
 import { useUrlTab } from '../../hooks/use-url-tab';
+import { getStatusLabel } from '../../utils/status-labels';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatDateTime, formatMoney, majorInputToMoney } from '../Sales/sales-utils';
 
@@ -2347,7 +2348,7 @@ function statusLabel(value: string) {
                 PARTIALLY_REVERSED: '部分扣回',
                 REVERSED: '已扣回',
             } as Record<string, string>
-        )[value] ?? value
+        )[value] ?? getStatusLabel(value)
     );
 }
 function posterLabel(value: string) {

@@ -15,8 +15,10 @@ export const systemAnnouncementsQuery = gql`
             }
             titleZh
             titleEn
+            titleEnLocked
             contentZh
             contentEn
+            contentEnLocked
             linkUrl
             startsAt
             endsAt
@@ -60,8 +62,10 @@ export interface SystemAnnouncementRecord {
     channels: Array<{ id: string; code: string }>;
     titleZh: string;
     titleEn: string;
+    titleEnLocked: boolean;
     contentZh: string;
     contentEn: string;
+    contentEnLocked: boolean;
     linkUrl: string | null;
     startsAt: string | null;
     endsAt: string | null;

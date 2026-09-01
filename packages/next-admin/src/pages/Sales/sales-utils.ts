@@ -1,3 +1,5 @@
+import { getStatusLabel } from '../../utils/status-labels';
+
 export interface SalesAddress {
   fullName?: string | null;
   company?: string | null;
@@ -60,7 +62,7 @@ export const orderStateLabels: Record<string, string> = {
   Cancelled: '已取消',
 };
 
-export const getOrderStateLabel = (state: string) => orderStateLabels[state] ?? state;
+export const getOrderStateLabel = (state: string) => orderStateLabels[state] ?? getStatusLabel(state);
 
 export const getOrderStateClass = (state: string) => {
   if (state === 'Delivered') return 'border-emerald-200 bg-emerald-50 text-emerald-700';

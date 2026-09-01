@@ -33,6 +33,7 @@ import {
     type ImageProviderProtocol,
 } from '../../graphql/plugins.graphql';
 import { useUrlTab } from '../../hooks/use-url-tab';
+import { getStatusLabel } from '../../utils/status-labels';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatDateTime, formatMoney, majorInputToMoney, moneyToMajorInput } from '../Sales/sales-utils';
 
@@ -860,7 +861,7 @@ function SkillPanel({
                                     <span
                                         className={`rounded px-2 py-0.5 text-[9px] font-bold ${active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}
                                     >
-                                        {active ? '当前激活' : release.status}
+                                        {active ? '当前激活' : getStatusLabel(release.status)}
                                     </span>
                                 </div>
                                 <p className="mt-1 truncate font-mono text-[9px] text-slate-400">
@@ -1074,7 +1075,7 @@ function StateBadge({ state }: { state: string }) {
     };
     return (
         <span className={`rounded px-2 py-0.5 text-[9px] font-bold ${classes}`}>
-            {labels[state] ?? state}
+            {labels[state] ?? getStatusLabel(state)}
         </span>
     );
 }
