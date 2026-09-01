@@ -117,6 +117,11 @@ describe('store management API extensions', () => {
                 definition.kind === Kind.OBJECT_TYPE_DEFINITION &&
                 definition.name.value === 'SystemAnnouncement',
         );
+        const usdtWallet = adminApiExtensions.definitions.find(
+            definition =>
+                definition.kind === Kind.OBJECT_TYPE_DEFINITION &&
+                definition.name.value === 'StoreUsdtWallet',
+        );
         const updateAnnouncementInput = adminApiExtensions.definitions.find(
             definition =>
                 definition.kind === Kind.INPUT_OBJECT_TYPE_DEFINITION &&
@@ -130,6 +135,7 @@ describe('store management API extensions', () => {
             adminQuery?.kind !== Kind.OBJECT_TYPE_EXTENSION ||
             adminMutation?.kind !== Kind.OBJECT_TYPE_EXTENSION ||
             announcement?.kind !== Kind.OBJECT_TYPE_DEFINITION ||
+            usdtWallet?.kind !== Kind.OBJECT_TYPE_DEFINITION ||
             updateAnnouncementInput?.kind !== Kind.INPUT_OBJECT_TYPE_DEFINITION ||
             shopQuery?.kind !== Kind.OBJECT_TYPE_EXTENSION
         ) {
@@ -159,6 +165,7 @@ describe('store management API extensions', () => {
         expect(announcement.fields?.map(field => field.name.value)).toEqual(
             expect.arrayContaining(['targetMode', 'channels', 'titleEnLocked', 'contentEnLocked']),
         );
+        expect(usdtWallet.fields?.map(field => field.name.value)).toContain('canReview');
         expect(announcement.fields?.map(field => field.name.value)).toHaveLength(
             new Set(announcement.fields?.map(field => field.name.value)).size,
         );

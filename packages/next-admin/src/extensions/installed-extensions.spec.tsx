@@ -5,7 +5,7 @@ import {
     getNextAdminExtensionRoutes,
     getNextAdminExtensions,
 } from './extension-api';
-import './installed-extensions';
+import { STORE_CURRENCY_COMPATIBILITY_TARGET } from './installed-extensions';
 
 describe('installed next-admin extensions', () => {
     it('registers all seven local plugins through the shared extension API', () => {
@@ -44,5 +44,9 @@ describe('installed next-admin extensions', () => {
             '/plugins/ai-access',
             '/plugins/translations',
         ]);
+    });
+
+    it('routes the legacy store currency entry to the USDT payment setup tab', () => {
+        expect(STORE_CURRENCY_COMPATIBILITY_TARGET).toBe('/settings/store-profile?tab=payment-shipping');
     });
 });

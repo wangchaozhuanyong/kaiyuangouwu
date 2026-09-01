@@ -17,6 +17,13 @@ import {
 } from '../../graphql/management.graphql';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { toUserFacingError } from '../../utils/user-facing-error';
+import { UsdtPaymentSetupPanel } from './UsdtPaymentSetupPanel';
+import {
+    USDT_PAYMENT_HANDLER_CODE,
+    USDT_PAYMENT_METHOD_CODE,
+    isSystemManagedUsdtPaymentMethod,
+    selectablePaymentHandlers,
+} from './store-usdt-utils';
 
 type PaymentMethodItem = StoreManagementResult['paymentMethods']['items'][number];
 type ShippingMethodItem = StoreManagementResult['shippingMethods']['items'][number];
@@ -121,57 +128,85 @@ export function PaymentShippingManager({
                         )}
                     </div>
                     <div className="divide-y divide-slate-100">
-                        {data.paymentMethods.items.map(item => (
-                            <div key={item.id} className="flex items-center justify-between gap-4 p-5">
-                                <div className="min-w-0">
-                                    <strong className="text-xs text-slate-900">{item.name}</strong>
-                                    <p className="mt-1 font-mono text-[9px] text-slate-400">
-                                        {item.code} · {item.handler.code}
-                                    </p>
-                                    {item.description && (
-                                        <p className="mt-1 line-clamp-2 text-[10px] text-slate-500">
-                                            {item.description}
+                        {data.paymentMethods.items.map(item => {
+                            const systemManaged = isSystemManagedUsdtPaymentMethod(item);
+                            return (
+                                <div key={item.id} className="flex items-center justify-between gap-4 p-5">
+                                    <div className="min-w-0">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <strong className="text-xs text-slate-900">{item.name}</strong>
+                                            {systemManaged && (
+                                                <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[9px] font-bold text-emerald-700">
+                                                    系统管理
+                                                </span>
+                                            )}
+                                        </div>
+                                        <p className="mt-1 font-mono text-[9px] text-slate-400">
+                                            {item.code} · {item.handler.code}
                                         </p>
-                                    )}
+                                        {item.description && (
+                                            <p className="mt-1 line-clamp-2 text-[10px] text-slate-500">
+                                                {item.description}
+                                            </p>
+                                        )}
+                                        {systemManaged && (
+                                            <p className="mt-1 text-[10px] text-emerald-700">
+                                                由下方 USDT 收款地址审核状态自动启停和分配。
+                                            </p>
+                                        )}
+                                    </div>
+                                    <div className="flex shrink-0 items-center gap-2">
+                                        {systemManaged ? (
+                                            <span className="text-[10px] font-bold text-slate-500">
+                                                {item.enabled ? '已启用' : '等待系统启用'}
+                                            </span>
+                                        ) : (
+                                            <>
+                                                {canUpdatePayment && (
+                                                    <label className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={item.enabled}
+                                                            onChange={event =>
+                                                                void changePayment(
+                                                                    item.id,
+                                                                    event.target.checked,
+                                                                )
+                                                            }
+                                                            disabled={toggleState.loading}
+                                                        />
+                                                        {item.enabled ? '启用' : '停用'}
+                                                    </label>
+                                                )}
+                                                {canUpdatePayment && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setEditor({ kind: 'payment', item })}
+                                                        className="rounded-md p-1.5 text-blue-600 hover:bg-blue-50"
+                                                        aria-label={`编辑支付方式${item.name}`}
+                                                    >
+                                                        <Pencil className="h-3.5 w-3.5" />
+                                                    </button>
+                                                )}
+                                                {canDeletePayment && (
+                                                    <button
+                                                        type="button"
+                                                        disabled={deleting}
+                                                        onClick={() =>
+                                                            void removeMethod({ kind: 'payment', item })
+                                                        }
+                                                        className="rounded-md p-1.5 text-rose-600 hover:bg-rose-50"
+                                                        aria-label={`删除支付方式${item.name}`}
+                                                    >
+                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                    </button>
+                                                )}
+                                            </>
+                                        )}
+                                    </div>
                                 </div>
-                                <div className="flex shrink-0 items-center gap-2">
-                                    {canUpdatePayment && (
-                                        <label className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500">
-                                            <input
-                                                type="checkbox"
-                                                checked={item.enabled}
-                                                onChange={event =>
-                                                    void changePayment(item.id, event.target.checked)
-                                                }
-                                                disabled={toggleState.loading}
-                                            />
-                                            {item.enabled ? '启用' : '停用'}
-                                        </label>
-                                    )}
-                                    {canUpdatePayment && (
-                                        <button
-                                            type="button"
-                                            onClick={() => setEditor({ kind: 'payment', item })}
-                                            className="rounded-md p-1.5 text-blue-600 hover:bg-blue-50"
-                                            aria-label={`编辑支付方式${item.name}`}
-                                        >
-                                            <Pencil className="h-3.5 w-3.5" />
-                                        </button>
-                                    )}
-                                    {canDeletePayment && (
-                                        <button
-                                            type="button"
-                                            disabled={deleting}
-                                            onClick={() => void removeMethod({ kind: 'payment', item })}
-                                            className="rounded-md p-1.5 text-rose-600 hover:bg-rose-50"
-                                            aria-label={`删除支付方式${item.name}`}
-                                        >
-                                            <Trash2 className="h-3.5 w-3.5" />
-                                        </button>
-                                    )}
-                                </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                         {!data.paymentMethods.items.length && (
                             <div className="p-10 text-center text-xs text-slate-400">未配置支付方式</div>
                         )}
@@ -246,6 +281,7 @@ export function PaymentShippingManager({
                     </section>
                 )}
             </div>
+            <UsdtPaymentSetupPanel key={data.activeChannel.id} onChanged={onChanged} onError={onError} />
             {editor && (
                 <MethodEditorDialog
                     state={editor}
@@ -310,7 +346,10 @@ function MethodEditorDialog({
 
     const checkerDefinitions =
         state.kind === 'payment' ? data.paymentMethodEligibilityCheckers : data.shippingEligibilityCheckers;
-    const mainDefinitions = state.kind === 'payment' ? data.paymentMethodHandlers : data.shippingCalculators;
+    const mainDefinitions =
+        state.kind === 'payment'
+            ? selectablePaymentHandlers(data.paymentMethodHandlers)
+            : data.shippingCalculators;
     const translation = {
         ...(item?.translations[0]?.id ? { id: item.translations[0].id } : {}),
         languageCode,
@@ -323,13 +362,19 @@ function MethodEditorDialog({
         try {
             const checker = checkerCode ? operationInput(checkerCode, checkerArgs, checkerDefinitions) : null;
             if (state.kind === 'payment') {
+                if (
+                    code.trim().toLowerCase() === USDT_PAYMENT_METHOD_CODE ||
+                    handlerCode === USDT_PAYMENT_HANDLER_CODE
+                ) {
+                    return onError('USDT 支付方式由下方专用收款配置自动管理，不能在这里创建或修改');
+                }
                 if (!handlerCode) return onError('请选择支付处理器');
                 const input = {
                     ...(item?.id ? { id: item.id } : {}),
                     code: code.trim(),
                     enabled,
                     checker,
-                    handler: operationInput(handlerCode, handlerArgs, data.paymentMethodHandlers),
+                    handler: operationInput(handlerCode, handlerArgs, mainDefinitions),
                     translations: [translation],
                 };
                 if (item?.id) await updatePayment({ variables: { input } });
