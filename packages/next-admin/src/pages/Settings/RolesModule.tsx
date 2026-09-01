@@ -852,6 +852,7 @@ function subjectLabel(subject: string) {
         ApiKey: 'API 密钥',
         Asset: '素材',
         Catalog: '商品目录',
+        CatalogImport: '商品批量导入',
         Channel: '渠道',
         Collection: '集合',
         Country: '国家地区',

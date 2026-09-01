@@ -9,7 +9,7 @@
             "@/vdb/*": ["../dashboard/src/lib/*"]
         }
     },
-    "files": ["./src/index.ts"],
+    "files": ["./src/index.ts", "./src/browser.ts"],
     "include": [],
     "exclude": ["./src/**/*.spec.ts"]
 }

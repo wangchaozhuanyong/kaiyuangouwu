@@ -8,6 +8,8 @@ describe('catalog import privacy contract', () => {
         const schema = print(adminApiExtensions);
 
         expect(schema).toContain('beginCatalogImport');
+        expect(schema).toContain('catalogImportRowPage');
+        expect(schema).toContain('type CatalogImportRowList implements PaginatedList');
         expect(schema).toContain('appendCatalogImportRows');
         expect(schema).toContain('finalizeCatalogImportPreview');
         expect(schema).toContain('saveCatalogProduct');

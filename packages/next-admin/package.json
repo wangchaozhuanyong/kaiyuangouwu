@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@apollo/client": "^4.2.12",
+    "@vendure/catalog-management-plugin": "0.1.0",
     "graphql": "^16.14.2",
     "lucide-react": "^1.33.0",
     "react": "^19.2.8",

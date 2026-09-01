@@ -60,6 +60,18 @@ export class CatalogManagementAdminResolver {
     }
 
     @Query()
+    @Allow(manageCatalogImportPermission.Read)
+    catalogImportRowPage(
+        @Ctx() ctx: RequestContext,
+        @Args('jobId') jobId: ID,
+        @Args('action') action?: CatalogImportAction,
+        @Args('skip') skip?: number,
+        @Args('take') take?: number,
+    ) {
+        return this.imports.findRowPage(ctx, jobId, action, skip, take);
+    }
+
+    @Query()
     @Allow(manageCatalogOperationsPermission.Read, manageCatalogImportPermission.Read)
     catalogIntegritySummary(@Ctx() ctx: RequestContext) {
         return this.operations.integritySummary(ctx);

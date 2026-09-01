@@ -127,6 +127,11 @@ export const adminApiExtensions = gql`
         appliedAt: DateTime
     }
 
+    type CatalogImportRowList implements PaginatedList {
+        items: [CatalogImportRow!]!
+        totalItems: Int!
+    }
+
     type CatalogWorkspaceStockLevel {
         stockLocationId: ID!
         stockLocationName: String!
@@ -463,6 +468,12 @@ export const adminApiExtensions = gql`
         catalogImportJob(id: ID!): CatalogImportJob!
         catalogImportJobs(skip: Int, take: Int): CatalogImportJobList!
         catalogImportRows(jobId: ID!, action: CatalogImportAction): [CatalogImportRow!]!
+        catalogImportRowPage(
+            jobId: ID!
+            action: CatalogImportAction
+            skip: Int
+            take: Int
+        ): CatalogImportRowList!
         catalogIntegritySummary: CatalogIntegritySummary!
         catalogProductCreationContext: CatalogProductCreationContext!
         catalogProductWorkspace(productId: ID!): CatalogProductWorkspace!

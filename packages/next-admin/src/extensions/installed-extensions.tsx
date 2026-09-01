@@ -3,6 +3,7 @@ import { Puzzle, Sparkles, Terminal } from 'lucide-react';
 import { lazy, type ComponentType } from 'react';
 import { Navigate } from 'react-router-dom';
 
+import { CatalogImportAction } from '../pages/Catalog/import/CatalogImportAction';
 import { routeModuleLoaders } from '../route-modules';
 
 import { defineNextAdminExtension } from './extension-api';
@@ -104,6 +105,20 @@ defineNextAdminExtension({
                 order: 40,
             },
             preload: routeModuleLoaders.translations,
+        },
+    ],
+});
+
+defineNextAdminExtension({
+    id: 'catalog-management-plugin',
+    actions: [
+        {
+            id: 'catalog-safe-import',
+            pageId: 'product-list',
+            label: '批量导入',
+            component: CatalogImportAction,
+            permissions: ['CreateCatalogImport'],
+            order: 10,
         },
     ],
 });
