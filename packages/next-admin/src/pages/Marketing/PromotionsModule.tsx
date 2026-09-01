@@ -850,39 +850,73 @@ function CouponReport({
                         <SmallMetric label="带动成交" value={formatMoney(totals.revenue, currencyCode)} />
                     </div>
                     <div className="overflow-x-auto">
-                        <table className="w-full min-w-[760px] text-left text-xs">
+                        <table className="w-full min-w-[980px] border-collapse text-left text-xs">
                             <thead className="border-y border-slate-200 bg-slate-50 text-slate-500">
                                 <tr>
-                                    <th className="p-3">日期</th>
-                                    <th className="p-3">领取</th>
-                                    <th className="p-3">核销</th>
-                                    <th className="p-3">退款</th>
-                                    <th className="p-3">返还/过期/作废</th>
-                                    <th className="p-3">优惠金额</th>
-                                    <th className="p-3">带动成交</th>
+                                    <th scope="col" className="whitespace-nowrap px-3 py-3">
+                                        日期
+                                    </th>
+                                    <th scope="col" className="whitespace-nowrap px-3 py-3">
+                                        领取
+                                    </th>
+                                    <th scope="col" className="whitespace-nowrap px-3 py-3">
+                                        核销
+                                    </th>
+                                    <th scope="col" className="whitespace-nowrap px-3 py-3">
+                                        退款
+                                    </th>
+                                    <th scope="col" className="whitespace-nowrap px-3 py-3">
+                                        返还
+                                    </th>
+                                    <th scope="col" className="whitespace-nowrap px-3 py-3">
+                                        过期
+                                    </th>
+                                    <th scope="col" className="whitespace-nowrap px-3 py-3">
+                                        作废
+                                    </th>
+                                    <th scope="col" className="whitespace-nowrap px-3 py-3">
+                                        优惠金额
+                                    </th>
+                                    <th scope="col" className="whitespace-nowrap px-3 py-3">
+                                        带动成交
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
                                 {metrics.map(item => (
-                                    <tr key={item.date}>
-                                        <td className="p-3 font-mono">{item.date}</td>
-                                        <td className="p-3 font-mono">{item.claimedCount}</td>
-                                        <td className="p-3 font-mono">{item.redeemedCount}</td>
-                                        <td className="p-3 font-mono">{item.refundedCount}</td>
-                                        <td className="p-3 font-mono">
-                                            {item.returnedCount}/{item.expiredCount}/{item.revokedCount}
+                                    <tr key={item.date} className="h-[52px] hover:bg-slate-50/80">
+                                        <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono">
+                                            {item.date}
                                         </td>
-                                        <td className="p-3 font-mono">
+                                        <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono">
+                                            {item.claimedCount}
+                                        </td>
+                                        <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono">
+                                            {item.redeemedCount}
+                                        </td>
+                                        <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono">
+                                            {item.refundedCount}
+                                        </td>
+                                        <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono">
+                                            {item.returnedCount}
+                                        </td>
+                                        <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono">
+                                            {item.expiredCount}
+                                        </td>
+                                        <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono">
+                                            {item.revokedCount}
+                                        </td>
+                                        <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono">
                                             {formatMoney(item.discountAmountTotal, currencyCode)}
                                         </td>
-                                        <td className="p-3 font-mono font-bold text-emerald-600">
+                                        <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono font-bold text-emerald-600">
                                             {formatMoney(item.assistedRevenueTotal, currencyCode)}
                                         </td>
                                     </tr>
                                 ))}
                                 {!metrics.length && (
                                     <tr>
-                                        <td colSpan={7} className="p-10 text-center text-slate-400">
+                                        <td colSpan={9} className="p-10 text-center text-slate-400">
                                             所选日期内暂无优惠券数据
                                         </td>
                                     </tr>
@@ -967,50 +1001,77 @@ function CouponLedger({
             ) : (
                 <>
                     <div className="overflow-x-auto">
-                        <table className="w-full min-w-[1000px] text-left text-xs">
+                        <table className="w-full min-w-[1320px] border-collapse text-left text-xs">
                             <thead className="border-b border-slate-200 bg-slate-50 text-slate-500">
                                 <tr>
-                                    <th className="p-3">时间</th>
-                                    <th className="p-3">事件</th>
-                                    <th className="p-3">优惠券</th>
-                                    <th className="p-3">客户</th>
-                                    <th className="p-3">订单</th>
-                                    <th className="p-3">优惠金额</th>
-                                    <th className="p-3">操作来源</th>
-                                    <th className="p-3">备注</th>
+                                    <th scope="col" className="whitespace-nowrap px-3 py-3">
+                                        时间
+                                    </th>
+                                    <th scope="col" className="whitespace-nowrap px-3 py-3">
+                                        事件
+                                    </th>
+                                    <th scope="col" className="whitespace-nowrap px-3 py-3">
+                                        优惠券
+                                    </th>
+                                    <th scope="col" className="whitespace-nowrap px-3 py-3">
+                                        客户姓名
+                                    </th>
+                                    <th scope="col" className="whitespace-nowrap px-3 py-3">
+                                        客户邮箱
+                                    </th>
+                                    <th scope="col" className="whitespace-nowrap px-3 py-3">
+                                        订单
+                                    </th>
+                                    <th scope="col" className="whitespace-nowrap px-3 py-3">
+                                        优惠金额
+                                    </th>
+                                    <th scope="col" className="whitespace-nowrap px-3 py-3">
+                                        操作来源
+                                    </th>
+                                    <th scope="col" className="whitespace-nowrap px-3 py-3">
+                                        备注
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
                                 {data?.items.map(item => (
-                                    <tr key={item.id}>
-                                        <td className="p-3 whitespace-nowrap text-[10px] text-slate-500">
+                                    <tr key={item.id} className="h-[52px] hover:bg-slate-50/80">
+                                        <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500">
                                             {formatDateTime(item.createdAt)}
                                         </td>
-                                        <td className="p-3">
+                                        <td className="h-[52px] whitespace-nowrap px-3 py-0">
                                             <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-700">
                                                 {ledgerLabels[item.eventType] ?? item.eventType}
                                             </span>
                                         </td>
-                                        <td className="p-3 font-medium text-slate-900">
-                                            {item.campaignName}
+                                        <td className="h-[52px] max-w-52 px-3 py-0 font-medium text-slate-900">
+                                            <span className="block truncate" title={item.campaignName}>
+                                                {item.campaignName}
+                                            </span>
                                         </td>
-                                        <td className="p-3">
-                                            <div className="font-medium">{item.customerName}</div>
-                                            <div className="text-[10px] text-slate-400">
+                                        <td className="h-[52px] max-w-40 px-3 py-0 font-medium">
+                                            <span className="block truncate" title={item.customerName}>
+                                                {item.customerName}
+                                            </span>
+                                        </td>
+                                        <td className="h-[52px] max-w-56 px-3 py-0 text-[10px] text-slate-500">
+                                            <span className="block truncate" title={item.customerEmail}>
                                                 {item.customerEmail}
-                                            </div>
+                                            </span>
                                         </td>
-                                        <td className="p-3 font-mono text-blue-600">
+                                        <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-blue-600">
                                             {item.orderCode ?? '—'}
                                         </td>
-                                        <td className="p-3 font-mono">
+                                        <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono">
                                             {item.discountAmount == null
                                                 ? '—'
                                                 : formatMoney(item.discountAmount, currencyCode)}
                                         </td>
-                                        <td className="p-3 text-slate-500">{item.actorType}</td>
+                                        <td className="h-[52px] whitespace-nowrap px-3 py-0 text-slate-500">
+                                            {item.actorType}
+                                        </td>
                                         <td
-                                            className="max-w-52 truncate p-3 text-slate-500"
+                                            className="h-[52px] max-w-52 truncate px-3 py-0 text-slate-500"
                                             title={item.note ?? ''}
                                         >
                                             {item.note ?? '—'}
@@ -1019,7 +1080,7 @@ function CouponLedger({
                                 ))}
                                 {!data?.items.length && (
                                     <tr>
-                                        <td colSpan={8} className="p-10 text-center text-slate-400">
+                                        <td colSpan={9} className="p-10 text-center text-slate-400">
                                             当前条件下没有流水
                                         </td>
                                     </tr>

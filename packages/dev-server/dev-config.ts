@@ -489,6 +489,7 @@ function trustProxySetting(): boolean | number | string {
 
 @VendurePlugin({
     imports: [PluginCommonModule],
+    compatibility: '^3.7.0',
     configuration: config => {
         config.settingsStoreFields = {
             ...config.settingsStoreFields,

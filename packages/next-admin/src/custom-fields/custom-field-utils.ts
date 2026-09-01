@@ -20,7 +20,13 @@ export function localizedText(
 }
 
 export function isDashboardVisibleCustomField(field: CustomFieldDefinition) {
-    return field.ui?.dashboard !== false && !field.internal && !field.deprecated;
+    return isGraphQlName(field.name) && field.ui?.dashboard !== false && !field.internal && !field.deprecated;
+}
+
+const GRAPHQL_NAME_PATTERN = /^[_A-Za-z][_0-9A-Za-z]*$/;
+
+function isGraphQlName(value: unknown): value is string {
+    return typeof value === 'string' && GRAPHQL_NAME_PATTERN.test(value);
 }
 
 export function getCustomFieldInputName(field: Pick<CustomFieldDefinition, 'name' | 'type' | 'list'>) {
@@ -159,12 +165,18 @@ export function validateCustomFieldValues(
 function selectionForField(field: CustomFieldDefinition | StructFieldDefinition): FieldNode {
     let selections: SelectionNode[] | undefined;
     if (field.type === 'relation') {
-        selections = ((field as CustomFieldDefinition).scalarFields ?? ['id']).map(name => ({
+        const configuredScalarFields = ((field as CustomFieldDefinition).scalarFields ?? []).filter(
+            isGraphQlName,
+        );
+        const scalarFields = configuredScalarFields.length > 0 ? configuredScalarFields : ['id'];
+        selections = scalarFields.map(name => ({
             kind: Kind.FIELD,
             name: { kind: Kind.NAME, value: name },
         }));
     } else if (field.type === 'struct') {
-        selections = ((field as CustomFieldDefinition).fields ?? []).map(selectionForField);
+        selections = ((field as CustomFieldDefinition).fields ?? [])
+            .filter(fieldDefinition => isGraphQlName(fieldDefinition.name))
+            .map(selectionForField);
     }
     return {
         kind: Kind.FIELD,

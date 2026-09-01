@@ -473,24 +473,50 @@ export function CatalogModule() {
 
                         {/* 真实数据列表 */}
                         {productList.length > 0 && (
-                            <table className="w-full text-left border-collapse text-xs">
+                            <table className="w-full min-w-[1480px] border-collapse text-left text-xs">
                                 <thead>
                                     <tr className="border-b border-slate-200 bg-slate-50/70 text-slate-500 font-bold whitespace-nowrap">
-                                        <th className="p-4 w-14">主图</th>
-                                        <th className="p-4 min-w-[240px]">商品名称 / SPU Slug</th>
-                                        <th className="p-4 min-w-[150px]">分类归属</th>
-                                        <th className="p-4">商品类型</th>
-                                        <th className="p-4">上架状态</th>
-                                        <th className="p-4">规格 SKU 变体</th>
-                                        <th className="p-4">
+                                        <th
+                                            scope="col"
+                                            className="sticky left-0 z-20 w-14 bg-slate-50 px-3 py-3"
+                                        >
+                                            主图
+                                        </th>
+                                        <th
+                                            scope="col"
+                                            className="sticky left-14 z-20 w-60 bg-slate-50 px-3 py-3"
+                                        >
+                                            商品名称
+                                        </th>
+                                        <th scope="col" className="w-56 px-3 py-3">
+                                            SPU Slug
+                                        </th>
+                                        <th scope="col" className="w-48 px-3 py-3">
+                                            分类归属
+                                        </th>
+                                        <th scope="col" className="w-28 px-3 py-3">
+                                            商品类型
+                                        </th>
+                                        <th scope="col" className="w-28 px-3 py-3">
+                                            上架状态
+                                        </th>
+                                        <th scope="col" className="w-28 px-3 py-3">
+                                            规格数量
+                                        </th>
+                                        <th scope="col" className="w-28 px-3 py-3">
                                             {commerceMode === 'DIGITAL_ONLY'
                                                 ? '虚拟可售库存'
                                                 : commerceMode === 'PHYSICAL_ONLY'
                                                   ? '在手总库存'
                                                   : '库存状态'}
                                         </th>
-                                        <th className="p-4">起售价</th>
-                                        <th className="sticky right-0 z-10 w-32 whitespace-nowrap border-l border-slate-200 bg-slate-50 p-4 text-right">
+                                        <th scope="col" className="w-36 px-3 py-3">
+                                            起售价
+                                        </th>
+                                        <th
+                                            scope="col"
+                                            className="sticky right-0 z-20 w-32 whitespace-nowrap border-l border-slate-200 bg-slate-50 px-3 py-3 text-right"
+                                        >
                                             操作
                                         </th>
                                     </tr>
@@ -544,10 +570,10 @@ export function CatalogModule() {
                                         return (
                                             <tr
                                                 key={product.id}
-                                                className="hover:bg-slate-50/80 transition-colors group"
+                                                className="group h-[52px] transition-colors hover:bg-slate-50/80"
                                             >
                                                 {/* Featured Asset (真实素材) */}
-                                                <td className="p-4">
+                                                <td className="sticky left-0 z-10 h-[52px] bg-white px-3 py-0 group-hover:bg-slate-50">
                                                     <button
                                                         type="button"
                                                         onClick={() =>
@@ -568,24 +594,29 @@ export function CatalogModule() {
                                                     </button>
                                                 </td>
 
-                                                {/* Name & Slug */}
-                                                <td className="p-4">
+                                                {/* Name */}
+                                                <td className="sticky left-14 z-10 h-[52px] max-w-60 bg-white px-3 py-0 group-hover:bg-slate-50">
                                                     <button
                                                         type="button"
                                                         onClick={() =>
                                                             navigate(`/catalog/products/${product.id}`)
                                                         }
-                                                        className="cursor-pointer text-left text-sm font-bold text-slate-900 hover:text-blue-600"
+                                                        className="block max-w-56 cursor-pointer truncate whitespace-nowrap text-left text-xs font-bold text-slate-900 hover:text-blue-600"
+                                                        title={product.name}
                                                     >
                                                         {product.name}
                                                     </button>
-                                                    <div className="text-[11px] text-slate-400 font-mono mt-0.5">
+                                                </td>
+
+                                                {/* Slug */}
+                                                <td className="h-[52px] max-w-56 px-3 py-0 font-mono text-[10px] text-slate-500">
+                                                    <span className="block truncate" title={product.slug}>
                                                         {product.slug}
-                                                    </div>
+                                                    </span>
                                                 </td>
 
                                                 {/* Category ownership */}
-                                                <td className="p-4 whitespace-nowrap">
+                                                <td className="h-[52px] whitespace-nowrap px-3 py-0">
                                                     <span
                                                         className={`inline-flex items-center rounded-md px-2 py-1 text-[11px] font-bold ${category.primary === '未分类' ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-700'}`}
                                                     >
@@ -599,7 +630,7 @@ export function CatalogModule() {
                                                 </td>
 
                                                 {/* Product type */}
-                                                <td className="p-4 whitespace-nowrap">
+                                                <td className="h-[52px] whitespace-nowrap px-3 py-0">
                                                     <span
                                                         className={`inline-flex rounded-md px-2 py-1 text-[11px] font-bold ${fulfillmentType === 'digital' ? 'bg-violet-50 text-violet-700' : 'bg-blue-50 text-blue-700'}`}
                                                     >
@@ -610,7 +641,7 @@ export function CatalogModule() {
                                                 </td>
 
                                                 {/* Status */}
-                                                <td className="p-4 whitespace-nowrap">
+                                                <td className="h-[52px] whitespace-nowrap px-3 py-0">
                                                     {product.enabled ? (
                                                         <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[11px] font-bold rounded flex items-center gap-1 w-max">
                                                             <CheckCircle className="w-3 h-3" /> 已上架
@@ -623,7 +654,7 @@ export function CatalogModule() {
                                                 </td>
 
                                                 {/* Variants Count */}
-                                                <td className="p-4 font-mono text-slate-600">
+                                                <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-slate-600">
                                                     {variants.length > 0 ? (
                                                         <span>
                                                             <strong className="text-slate-900">
@@ -639,7 +670,7 @@ export function CatalogModule() {
                                                 </td>
 
                                                 {/* Stock */}
-                                                <td className="p-4 font-mono font-bold">
+                                                <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono font-bold">
                                                     {variants.length > 0 ? (
                                                         <span
                                                             className={
@@ -662,7 +693,7 @@ export function CatalogModule() {
                                                 </td>
 
                                                 {/* Price */}
-                                                <td className="p-4 font-mono font-bold text-slate-900 text-sm">
+                                                <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-xs font-bold text-slate-900">
                                                     {minPriceVariant
                                                         ? formatMoney(
                                                               minPriceVariant.price,
@@ -672,7 +703,7 @@ export function CatalogModule() {
                                                 </td>
 
                                                 {/* Actions */}
-                                                <td className="sticky right-0 border-l border-slate-100 bg-white p-4 text-right whitespace-nowrap group-hover:bg-slate-50">
+                                                <td className="sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 bg-white px-3 py-0 text-right group-hover:bg-slate-50">
                                                     <div className="flex items-center justify-end gap-1.5">
                                                         <button
                                                             type="button"

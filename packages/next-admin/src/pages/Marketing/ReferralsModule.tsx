@@ -620,10 +620,11 @@ function PromotersPanel({
     return (
         <div className="space-y-4">
             <TableCard title="推广员团队" description="按邀请码汇总邀请人数与成交人数">
-                <table className="w-full min-w-[720px] text-left text-xs">
+                <table className="w-full min-w-[980px] border-collapse text-left text-xs">
                     <thead>
                         <tr>
-                            <Th>推广员</Th>
+                            <Th>推广员姓名</Th>
+                            <Th>推广员邮箱</Th>
                             <Th>邀请码</Th>
                             <Th>已邀请</Th>
                             <Th>已成交受邀人</Th>
@@ -632,9 +633,22 @@ function PromotersPanel({
                     </thead>
                     <tbody>
                         {summaries.map(item => (
-                            <tr key={item.customerId} className="border-t border-slate-100">
+                            <tr key={item.customerId} className="h-[52px] border-t border-slate-100">
                                 <Td>
-                                    <NameEmail name={item.customerName} email={item.customerEmail} />
+                                    <span
+                                        className="block max-w-44 truncate font-bold text-slate-900"
+                                        title={item.customerName || item.customerEmail}
+                                    >
+                                        {item.customerName || item.customerEmail}
+                                    </span>
+                                </Td>
+                                <Td>
+                                    <span
+                                        className="block max-w-56 truncate text-slate-500"
+                                        title={item.customerEmail}
+                                    >
+                                        {item.customerEmail}
+                                    </span>
                                 </Td>
                                 <Td>
                                     <span className="font-mono font-bold text-blue-600">
@@ -650,7 +664,7 @@ function PromotersPanel({
                                 </Td>
                             </tr>
                         ))}
-                        {!summaries.length && <EmptyRow colSpan={5} />}
+                        {!summaries.length && <EmptyRow colSpan={6} />}
                     </tbody>
                 </table>
                 <ReportPagination
@@ -660,11 +674,13 @@ function PromotersPanel({
                 />
             </TableCard>
             <TableCard title="邀请关系明细" description="每条绑定关系与首次成交时间均可追溯">
-                <table className="w-full min-w-[920px] text-left text-xs">
+                <table className="w-full min-w-[1420px] border-collapse text-left text-xs">
                     <thead>
                         <tr>
-                            <Th>邀请人</Th>
-                            <Th>受邀客户</Th>
+                            <Th>邀请人姓名</Th>
+                            <Th>邀请人邮箱</Th>
+                            <Th>受邀客户姓名</Th>
+                            <Th>受邀客户邮箱</Th>
                             <Th>邀请码</Th>
                             <Th>来源</Th>
                             <Th>绑定时间</Th>
@@ -673,12 +689,38 @@ function PromotersPanel({
                     </thead>
                     <tbody>
                         {relationships.map(item => (
-                            <tr key={item.id} className="border-t border-slate-100">
+                            <tr key={item.id} className="h-[52px] border-t border-slate-100">
                                 <Td>
-                                    <NameEmail name={item.inviterName} email={item.inviterEmail} />
+                                    <span
+                                        className="block max-w-40 truncate font-bold text-slate-900"
+                                        title={item.inviterName || item.inviterEmail}
+                                    >
+                                        {item.inviterName || item.inviterEmail}
+                                    </span>
                                 </Td>
                                 <Td>
-                                    <NameEmail name={item.inviteeName} email={item.inviteeEmail} />
+                                    <span
+                                        className="block max-w-56 truncate text-slate-500"
+                                        title={item.inviterEmail}
+                                    >
+                                        {item.inviterEmail}
+                                    </span>
+                                </Td>
+                                <Td>
+                                    <span
+                                        className="block max-w-40 truncate font-bold text-slate-900"
+                                        title={item.inviteeName || item.inviteeEmail}
+                                    >
+                                        {item.inviteeName || item.inviteeEmail}
+                                    </span>
+                                </Td>
+                                <Td>
+                                    <span
+                                        className="block max-w-56 truncate text-slate-500"
+                                        title={item.inviteeEmail}
+                                    >
+                                        {item.inviteeEmail}
+                                    </span>
                                 </Td>
                                 <Td>
                                     <span className="font-mono text-blue-600">{item.inviteCodeSnapshot}</span>
@@ -688,7 +730,7 @@ function PromotersPanel({
                                 <Td>{formatDateTime(item.firstPaidOrderAt)}</Td>
                             </tr>
                         ))}
-                        {!relationships.length && <EmptyRow colSpan={6} />}
+                        {!relationships.length && <EmptyRow colSpan={8} />}
                     </tbody>
                 </table>
                 <ReportPagination
@@ -733,12 +775,14 @@ function RewardsPanel({
             title="返利订单与退款扣回"
             description="奖励从待生效到可用、部分扣回或完全扣回均保留原始金额"
         >
-            <table className="w-full min-w-[1180px] text-left text-xs">
+            <table className="w-full min-w-[1760px] border-collapse text-left text-xs">
                 <thead>
                     <tr>
                         <Th>订单</Th>
-                        <Th>推广员</Th>
-                        <Th>受邀客户</Th>
+                        <Th>推广员姓名</Th>
+                        <Th>推广员邮箱</Th>
+                        <Th>受邀客户姓名</Th>
+                        <Th>受邀客户邮箱</Th>
                         <Th>有效金额</Th>
                         <Th>比例</Th>
                         <Th>奖励</Th>
@@ -750,15 +794,41 @@ function RewardsPanel({
                 </thead>
                 <tbody>
                     {items.map(item => (
-                        <tr key={item.id} className="border-t border-slate-100">
+                        <tr key={item.id} className="h-[52px] border-t border-slate-100">
                             <Td>
                                 <span className="font-mono font-bold text-blue-600">{item.orderCode}</span>
                             </Td>
                             <Td>
-                                <NameEmail name={item.inviterName} email={item.inviterEmail} />
+                                <span
+                                    className="block max-w-40 truncate font-bold text-slate-900"
+                                    title={item.inviterName || item.inviterEmail}
+                                >
+                                    {item.inviterName || item.inviterEmail}
+                                </span>
                             </Td>
                             <Td>
-                                <NameEmail name={item.inviteeName} email={item.inviteeEmail} />
+                                <span
+                                    className="block max-w-56 truncate text-slate-500"
+                                    title={item.inviterEmail}
+                                >
+                                    {item.inviterEmail}
+                                </span>
+                            </Td>
+                            <Td>
+                                <span
+                                    className="block max-w-40 truncate font-bold text-slate-900"
+                                    title={item.inviteeName || item.inviteeEmail}
+                                >
+                                    {item.inviteeName || item.inviteeEmail}
+                                </span>
+                            </Td>
+                            <Td>
+                                <span
+                                    className="block max-w-56 truncate text-slate-500"
+                                    title={item.inviteeEmail}
+                                >
+                                    {item.inviteeEmail}
+                                </span>
                             </Td>
                             <Td>{formatMoney(item.eligibleAmount, item.currencyCode)}</Td>
                             <Td>{item.rewardRate}%</Td>
@@ -775,7 +845,7 @@ function RewardsPanel({
                             <Td>{formatDateTime(item.availableAt)}</Td>
                         </tr>
                     ))}
-                    {!items.length && <EmptyRow colSpan={10} />}
+                    {!items.length && <EmptyRow colSpan={12} />}
                 </tbody>
             </table>
             <ReportPagination
@@ -834,11 +904,12 @@ function LedgerPanel({
                 title="钱包审计流水"
                 description="所有奖励、消费抵扣、退款追缴、提款和人工调整均写入不可变流水"
             >
-                <table className="w-full min-w-[1180px] text-left text-xs">
+                <table className="w-full min-w-[1500px] border-collapse text-left text-xs">
                     <thead>
                         <tr>
                             <Th>时间</Th>
-                            <Th>客户</Th>
+                            <Th>客户姓名</Th>
+                            <Th>客户邮箱</Th>
                             <Th>事件</Th>
                             <Th>可用变化</Th>
                             <Th>待生效变化</Th>
@@ -850,10 +921,23 @@ function LedgerPanel({
                     </thead>
                     <tbody>
                         {items.map(item => (
-                            <tr key={item.id} className="border-t border-slate-100">
+                            <tr key={item.id} className="h-[52px] border-t border-slate-100">
                                 <Td>{formatDateTime(item.createdAt)}</Td>
                                 <Td>
-                                    <NameEmail name={item.customerName} email={item.customerEmail} />
+                                    <span
+                                        className="block max-w-40 truncate font-bold text-slate-900"
+                                        title={item.customerName || item.customerEmail}
+                                    >
+                                        {item.customerName || item.customerEmail}
+                                    </span>
+                                </Td>
+                                <Td>
+                                    <span
+                                        className="block max-w-56 truncate text-slate-500"
+                                        title={item.customerEmail}
+                                    >
+                                        {item.customerEmail}
+                                    </span>
                                 </Td>
                                 <Td>
                                     <span className="font-mono text-[10px] font-bold text-slate-700">
@@ -876,13 +960,16 @@ function LedgerPanel({
                                     </span>
                                 </Td>
                                 <Td>
-                                    <span className="line-clamp-2 max-w-64 text-slate-500">
+                                    <span
+                                        className="block max-w-64 truncate text-slate-500"
+                                        title={item.note || undefined}
+                                    >
                                         {item.note || '—'}
                                     </span>
                                 </Td>
                             </tr>
                         ))}
-                        {!items.length && <EmptyRow colSpan={9} />}
+                        {!items.length && <EmptyRow colSpan={10} />}
                     </tbody>
                 </table>
                 <ReportPagination
@@ -929,13 +1016,15 @@ function WithdrawalsPanel({
             title="人工提款审批"
             description="批准仅代表审核通过；完成线下打款后必须填写外部流水号并标记已打款"
         >
-            <table className="w-full min-w-[1180px] text-left text-xs">
+            <table className="w-full min-w-[1680px] border-collapse text-left text-xs">
                 <thead>
                     <tr>
                         <Th>申请编号</Th>
-                        <Th>客户</Th>
+                        <Th>客户姓名</Th>
+                        <Th>客户邮箱</Th>
                         <Th>金额</Th>
-                        <Th>方式/账户</Th>
+                        <Th>付款方式</Th>
+                        <Th>脱敏账户</Th>
                         <Th>申请时间</Th>
                         <Th>状态</Th>
                         <Th>外部流水</Th>
@@ -944,12 +1033,25 @@ function WithdrawalsPanel({
                 </thead>
                 <tbody>
                     {items.map(item => (
-                        <tr key={item.id} className="border-t border-slate-100">
+                        <tr key={item.id} className="h-[52px] border-t border-slate-100">
                             <Td>
                                 <span className="font-mono font-bold text-slate-900">{item.code}</span>
                             </Td>
                             <Td>
-                                <NameEmail name={item.customerName} email={item.customerEmail} />
+                                <span
+                                    className="block max-w-40 truncate font-bold text-slate-900"
+                                    title={item.customerName || item.customerEmail}
+                                >
+                                    {item.customerName || item.customerEmail}
+                                </span>
+                            </Td>
+                            <Td>
+                                <span
+                                    className="block max-w-56 truncate text-slate-500"
+                                    title={item.customerEmail}
+                                >
+                                    {item.customerEmail}
+                                </span>
                             </Td>
                             <Td>
                                 <strong className="font-mono text-rose-600">
@@ -957,10 +1059,20 @@ function WithdrawalsPanel({
                                 </strong>
                             </Td>
                             <Td>
-                                <div className="font-bold text-slate-700">{item.payoutMethod}</div>
-                                <div className="mt-0.5 font-mono text-[10px] text-slate-400">
+                                <span
+                                    className="block max-w-40 truncate font-bold text-slate-700"
+                                    title={item.payoutMethod}
+                                >
+                                    {item.payoutMethod}
+                                </span>
+                            </Td>
+                            <Td>
+                                <span
+                                    className="block max-w-56 truncate font-mono text-[10px] text-slate-500"
+                                    title={item.payoutAccountMasked}
+                                >
                                     {item.payoutAccountMasked}
-                                </div>
+                                </span>
                             </Td>
                             <Td>{formatDateTime(item.createdAt)}</Td>
                             <Td>
@@ -970,7 +1082,7 @@ function WithdrawalsPanel({
                                 <span className="font-mono text-[10px]">{item.externalReference || '—'}</span>
                             </Td>
                             <Td>
-                                <div className="flex flex-wrap gap-1">
+                                <div className="flex flex-nowrap gap-1 whitespace-nowrap">
                                     {item.status === 'PENDING' && (
                                         <>
                                             <ActionButton
@@ -1012,7 +1124,7 @@ function WithdrawalsPanel({
                             </Td>
                         </tr>
                     ))}
-                    {!items.length && <EmptyRow colSpan={8} />}
+                    {!items.length && <EmptyRow colSpan={10} />}
                 </tbody>
             </table>
             <ReportPagination
@@ -1835,10 +1947,14 @@ function TableCard({
     );
 }
 function Th({ children }: { children: React.ReactNode }) {
-    return <th className="whitespace-nowrap bg-slate-50 p-3 font-bold text-slate-500">{children}</th>;
+    return (
+        <th scope="col" className="whitespace-nowrap bg-slate-50 px-3 py-3 font-bold text-slate-500">
+            {children}
+        </th>
+    );
 }
 function Td({ children }: { children: React.ReactNode }) {
-    return <td className="p-3 text-slate-700">{children}</td>;
+    return <td className="h-[52px] whitespace-nowrap px-3 py-0 text-slate-700">{children}</td>;
 }
 function EmptyRow({ colSpan }: { colSpan: number }) {
     return (

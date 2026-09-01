@@ -365,81 +365,135 @@ export function CustomersModule() {
                 ) : (
                     <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xs">
                         <div className="overflow-x-auto">
-                            <table className="w-full min-w-[980px] border-collapse text-left text-xs">
+                            <table className="w-full min-w-[1640px] border-collapse text-left text-xs">
                                 <thead className="border-b border-slate-200 bg-slate-50 font-bold text-slate-500">
                                     <tr>
-                                        <th className="p-4">客户</th>
-                                        <th className="p-4">账号状态</th>
-                                        <th className="p-4">客户分组</th>
-                                        <th className="p-4">历史订单</th>
-                                        <th className="p-4">最近下单</th>
-                                        <th className="p-4">注册时间</th>
-                                        <th className="p-4 text-right">操作</th>
+                                        <th
+                                            scope="col"
+                                            className="sticky left-0 z-20 w-44 whitespace-nowrap bg-slate-50 px-3 py-3"
+                                        >
+                                            姓名
+                                        </th>
+                                        <th scope="col" className="w-56 whitespace-nowrap px-3 py-3">
+                                            邮箱
+                                        </th>
+                                        <th scope="col" className="w-36 whitespace-nowrap px-3 py-3">
+                                            手机
+                                        </th>
+                                        <th scope="col" className="w-28 whitespace-nowrap px-3 py-3">
+                                            账号状态
+                                        </th>
+                                        <th scope="col" className="w-52 whitespace-nowrap px-3 py-3">
+                                            客户分组
+                                        </th>
+                                        <th scope="col" className="w-28 whitespace-nowrap px-3 py-3">
+                                            历史订单
+                                        </th>
+                                        <th scope="col" className="w-44 whitespace-nowrap px-3 py-3">
+                                            最近订单号
+                                        </th>
+                                        <th scope="col" className="w-40 whitespace-nowrap px-3 py-3">
+                                            最近下单时间
+                                        </th>
+                                        <th scope="col" className="w-40 whitespace-nowrap px-3 py-3">
+                                            注册时间
+                                        </th>
+                                        <th
+                                            scope="col"
+                                            className="sticky right-0 z-20 w-28 whitespace-nowrap border-l border-slate-200 bg-slate-50 px-3 py-3 text-right"
+                                        >
+                                            操作
+                                        </th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100 text-slate-700">
                                     {list.items.map(customer => {
                                         const latestOrder = customer.orders.items[0];
                                         return (
-                                            <tr key={customer.id} className="hover:bg-slate-50/80">
-                                                <td className="p-4">
+                                            <tr
+                                                key={customer.id}
+                                                className="group h-[52px] hover:bg-slate-50/80"
+                                            >
+                                                <td className="sticky left-0 z-10 h-[52px] max-w-44 bg-white px-3 py-0 group-hover:bg-slate-50">
                                                     <button
                                                         type="button"
                                                         onClick={() => setSelectedCustomerId(customer.id)}
-                                                        className="text-left font-bold text-slate-900 hover:text-blue-600"
+                                                        className="block max-w-40 truncate whitespace-nowrap text-left font-bold text-slate-900 hover:text-blue-600"
+                                                        title={customerName(customer)}
                                                     >
                                                         {customerName(customer)}
                                                     </button>
-                                                    <div className="mt-0.5 text-[11px] text-slate-400">
-                                                        {customer.phoneNumber || customer.emailAddress}
-                                                    </div>
                                                 </td>
-                                                <td className="p-4">
+                                                <td className="h-[52px] max-w-56 px-3 py-0">
+                                                    <span
+                                                        className="block truncate text-slate-600"
+                                                        title={customer.emailAddress}
+                                                    >
+                                                        {customer.emailAddress || '-'}
+                                                    </span>
+                                                </td>
+                                                <td className="h-[52px] max-w-36 px-3 py-0">
+                                                    <span
+                                                        className="block truncate font-mono text-[10px] text-slate-600"
+                                                        title={customer.phoneNumber || undefined}
+                                                    >
+                                                        {customer.phoneNumber || '-'}
+                                                    </span>
+                                                </td>
+                                                <td className="h-[52px] whitespace-nowrap px-3 py-0">
                                                     <StatusPill positive={Boolean(customer.user?.verified)}>
                                                         {customer.user?.verified ? '已验证' : '未验证'}
                                                     </StatusPill>
                                                 </td>
-                                                <td className="p-4">
-                                                    <div className="flex max-w-[220px] flex-wrap gap-1">
+                                                <td className="h-[52px] max-w-52 px-3 py-0">
+                                                    <div className="flex max-w-48 items-center gap-1 whitespace-nowrap">
                                                         {customer.groups.length ? (
-                                                            customer.groups.map(group => (
+                                                            <>
                                                                 <span
-                                                                    key={group.id}
-                                                                    className="rounded bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-700"
+                                                                    className="block min-w-0 truncate rounded bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-700"
+                                                                    title={customer.groups[0].name}
                                                                 >
-                                                                    {group.name}
+                                                                    {customer.groups[0].name}
                                                                 </span>
-                                                            ))
+                                                                {customer.groups.length > 1 && (
+                                                                    <span className="shrink-0 text-[10px] font-bold text-blue-700">
+                                                                        +{customer.groups.length - 1}
+                                                                    </span>
+                                                                )}
+                                                            </>
                                                         ) : (
                                                             <span className="text-slate-400">未分组</span>
                                                         )}
                                                     </div>
                                                 </td>
-                                                <td className="p-4 font-mono font-bold text-slate-900">
+                                                <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono font-bold text-slate-900">
                                                     {customer.orders.totalItems} 笔
                                                 </td>
-                                                <td className="p-4">
+                                                <td className="h-[52px] max-w-44 px-3 py-0">
                                                     {latestOrder ? (
-                                                        <div>
-                                                            <div className="font-mono font-bold text-blue-600">
-                                                                {latestOrder.code}
-                                                            </div>
-                                                            <div className="mt-0.5 text-[10px] text-slate-400">
-                                                                {formatDateTime(latestOrder.orderPlacedAt)}
-                                                            </div>
-                                                        </div>
+                                                        <span
+                                                            className="block truncate font-mono font-bold text-blue-600"
+                                                            title={latestOrder.code}
+                                                        >
+                                                            {latestOrder.code}
+                                                        </span>
                                                     ) : (
                                                         <span className="text-slate-400">尚未下单</span>
                                                     )}
                                                 </td>
-                                                <td className="p-4 text-[11px] text-slate-500">
+                                                <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500">
+                                                    {latestOrder
+                                                        ? formatDateTime(latestOrder.orderPlacedAt)
+                                                        : '-'}
+                                                </td>
+                                                <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500">
                                                     {formatDateTime(customer.createdAt)}
                                                 </td>
-                                                <td className="p-4 text-right">
+                                                <td className="sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 bg-white px-3 py-0 text-right group-hover:bg-slate-50">
                                                     <button
                                                         type="button"
                                                         onClick={() => setSelectedCustomerId(customer.id)}
-                                                        className="rounded-lg bg-blue-50 px-3 py-1.5 font-bold text-blue-700 hover:bg-blue-100"
+                                                        className="whitespace-nowrap rounded-lg bg-blue-50 px-3 py-1.5 text-[10px] font-bold text-blue-700 hover:bg-blue-100"
                                                     >
                                                         查看客户
                                                     </button>

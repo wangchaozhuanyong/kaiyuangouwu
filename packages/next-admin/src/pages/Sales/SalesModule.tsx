@@ -7,7 +7,6 @@ import {
     ChevronRight,
     Download,
     FileText,
-    Image as ImageIcon,
     PackageCheck,
     Plus,
     RefreshCw,
@@ -39,6 +38,7 @@ import {
     getOrderStateClass,
     getOrderStateLabel,
     getRemainingPhysicalLines,
+    summarizeOrderListItem,
 } from './sales-utils';
 
 type OrderTab = 'ALL' | 'DRAFT' | 'TO_SETTLE' | 'TO_FULFILL' | 'IN_TRANSIT' | 'DELIVERED' | 'CANCELLED';
@@ -60,6 +60,7 @@ interface SalesOrderLine {
         id: string;
         name: string;
         sku: string;
+        options?: Array<{ id: string; name: string; code: string }> | null;
         customFields?: { fulfillmentType?: string | null; digitalDeliveryMode?: string | null } | null;
     };
     customFields?: {
@@ -550,7 +551,7 @@ export function SalesModule() {
                         {loading && !data ? (
                             <div className="space-y-3 p-6" aria-label="正在加载订单">
                                 {[1, 2, 3, 4, 5].map(item => (
-                                    <div key={item} className="h-16 animate-pulse rounded-lg bg-slate-100" />
+                                    <div key={item} className="h-12 animate-pulse rounded-lg bg-slate-100" />
                                 ))}
                             </div>
                         ) : !error && orders.length === 0 ? (
@@ -564,10 +565,13 @@ export function SalesModule() {
                         ) : (
                             orders.length > 0 && (
                                 <div className="overflow-x-auto">
-                                    <table className="w-full min-w-[1080px] border-collapse text-left text-xs">
+                                    <table className="w-full min-w-[2180px] border-collapse text-left text-xs">
                                         <thead>
-                                            <tr className="border-b border-slate-200 bg-slate-50 text-slate-500">
-                                                <th className="w-12 p-4">
+                                            <tr className="border-b border-slate-200 bg-slate-50 text-[11px] font-bold text-slate-500">
+                                                <th
+                                                    scope="col"
+                                                    className="sticky left-0 z-20 w-12 bg-slate-50 px-3 py-3"
+                                                >
                                                     <input
                                                         type="checkbox"
                                                         checked={allSelectableChecked}
@@ -576,12 +580,57 @@ export function SalesModule() {
                                                         className="h-4 w-4 rounded"
                                                     />
                                                 </th>
-                                                <th className="p-4">订单</th>
-                                                <th className="p-4">商品明细</th>
-                                                <th className="p-4">买家 / 收货信息</th>
-                                                <th className="p-4">实付金额</th>
-                                                <th className="p-4">订单状态</th>
-                                                <th className="p-4 text-right">操作</th>
+                                                <th
+                                                    scope="col"
+                                                    className="sticky left-12 z-20 w-48 whitespace-nowrap bg-slate-50 px-3 py-3"
+                                                >
+                                                    订单号
+                                                </th>
+                                                <th scope="col" className="w-40 whitespace-nowrap px-3 py-3">
+                                                    下单时间
+                                                </th>
+                                                <th scope="col" className="w-24 whitespace-nowrap px-3 py-3">
+                                                    商品类型
+                                                </th>
+                                                <th scope="col" className="w-60 whitespace-nowrap px-3 py-3">
+                                                    商品名称
+                                                </th>
+                                                <th scope="col" className="w-48 whitespace-nowrap px-3 py-3">
+                                                    规格
+                                                </th>
+                                                <th scope="col" className="w-40 whitespace-nowrap px-3 py-3">
+                                                    SKU
+                                                </th>
+                                                <th
+                                                    scope="col"
+                                                    className="w-24 whitespace-nowrap px-3 py-3 text-center"
+                                                >
+                                                    购买数量
+                                                </th>
+                                                <th scope="col" className="w-40 whitespace-nowrap px-3 py-3">
+                                                    买家
+                                                </th>
+                                                <th scope="col" className="w-56 whitespace-nowrap px-3 py-3">
+                                                    联系方式
+                                                </th>
+                                                <th scope="col" className="w-72 whitespace-nowrap px-3 py-3">
+                                                    收货地址
+                                                </th>
+                                                <th scope="col" className="w-36 whitespace-nowrap px-3 py-3">
+                                                    实付金额
+                                                </th>
+                                                <th scope="col" className="w-32 whitespace-nowrap px-3 py-3">
+                                                    订单状态
+                                                </th>
+                                                <th scope="col" className="w-28 whitespace-nowrap px-3 py-3">
+                                                    履约状态
+                                                </th>
+                                                <th
+                                                    scope="col"
+                                                    className="sticky right-0 z-20 w-32 whitespace-nowrap border-l border-slate-200 bg-slate-50 px-3 py-3 text-right"
+                                                >
+                                                    操作
+                                                </th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-100">
@@ -591,16 +640,28 @@ export function SalesModule() {
                                                     canUpdateOrder &&
                                                     FULFILLABLE_STATES.includes(order.state) &&
                                                     remainingLines.length > 0;
-                                                const kind = getOrderFulfillmentKind(order);
+                                                const summary = summarizeOrderListItem(order);
+                                                const isSelected = selectedOrderIds.includes(order.id);
+                                                const stickyBackground = isSelected
+                                                    ? 'bg-blue-50'
+                                                    : 'bg-white group-hover:bg-slate-50';
+                                                const kindLabel =
+                                                    summary.fulfillmentKind === 'PHYSICAL'
+                                                        ? '实物'
+                                                        : summary.fulfillmentKind === 'DIGITAL'
+                                                          ? '虚拟'
+                                                          : '混合';
                                                 return (
                                                     <tr
                                                         key={order.id}
-                                                        className={`transition hover:bg-slate-50/80 ${selectedOrderIds.includes(order.id) ? 'bg-blue-50/50' : ''}`}
+                                                        className={`group h-[52px] transition hover:bg-slate-50/80 ${isSelected ? 'bg-blue-50/50' : ''}`}
                                                     >
-                                                        <td className="p-4">
+                                                        <td
+                                                            className={`sticky left-0 z-10 h-[52px] w-12 px-3 py-0 ${stickyBackground}`}
+                                                        >
                                                             <input
                                                                 type="checkbox"
-                                                                checked={selectedOrderIds.includes(order.id)}
+                                                                checked={isSelected}
                                                                 disabled={!canFulfill}
                                                                 onChange={() => toggleOrder(order.id)}
                                                                 aria-label={`选择订单 ${order.code}`}
@@ -612,115 +673,129 @@ export function SalesModule() {
                                                                 className="h-4 w-4 rounded disabled:cursor-not-allowed disabled:opacity-30"
                                                             />
                                                         </td>
-                                                        <td className="p-4">
+                                                        <td
+                                                            className={`sticky left-12 z-10 h-[52px] max-w-48 px-3 py-0 ${stickyBackground}`}
+                                                        >
                                                             <button
                                                                 type="button"
                                                                 onClick={() =>
                                                                     navigate(`/sales/orders/${order.id}`)
                                                                 }
-                                                                className="font-mono text-sm font-semibold text-slate-950 hover:text-blue-700"
+                                                                className="block max-w-44 truncate whitespace-nowrap font-mono text-xs font-bold text-slate-950 hover:text-blue-700"
+                                                                title={order.code}
                                                             >
                                                                 {order.code}
                                                             </button>
-                                                            <div className="mt-1 text-[11px] text-slate-400">
-                                                                {formatDateTime(
-                                                                    order.orderPlacedAt ?? order.createdAt,
-                                                                )}
-                                                            </div>
-                                                            <span className="mt-1.5 inline-block rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">
-                                                                {kind === 'PHYSICAL'
-                                                                    ? '实物'
-                                                                    : kind === 'DIGITAL'
-                                                                      ? '虚拟'
-                                                                      : '混合'}
-                                                                订单
-                                                            </span>
                                                         </td>
-                                                        <td className="max-w-xs p-4">
-                                                            <div className="space-y-2">
-                                                                {order.lines.slice(0, 2).map(line => (
-                                                                    <div
-                                                                        key={line.id}
-                                                                        className="flex items-center gap-2"
-                                                                    >
-                                                                        <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-slate-100">
-                                                                            {line.featuredAsset?.preview ? (
-                                                                                <img
-                                                                                    src={
-                                                                                        line.featuredAsset
-                                                                                            .preview
-                                                                                    }
-                                                                                    alt={
-                                                                                        line.productVariant
-                                                                                            .name
-                                                                                    }
-                                                                                    className="h-full w-full object-cover"
-                                                                                />
-                                                                            ) : (
-                                                                                <ImageIcon className="h-4 w-4 text-slate-300" />
-                                                                            )}
-                                                                        </div>
-                                                                        <div className="min-w-0">
-                                                                            <div className="truncate font-semibold text-slate-800">
-                                                                                {line.productVariant.name}
-                                                                            </div>
-                                                                            <div className="truncate font-mono text-[10px] text-slate-400">
-                                                                                {line.productVariant.sku} ×{' '}
-                                                                                {line.quantity}
-                                                                            </div>
-                                                                        </div>
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                            {order.lines.length > 2 && (
-                                                                <div className="mt-1 text-[10px] text-slate-400">
-                                                                    另有 {order.lines.length - 2} 项
-                                                                </div>
+                                                        <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500">
+                                                            {formatDateTime(
+                                                                order.orderPlacedAt ?? order.createdAt,
                                                             )}
                                                         </td>
-                                                        <td className="max-w-xs p-4">
-                                                            <div className="font-semibold text-slate-900">
-                                                                {getCustomerName(order.customer)}
-                                                            </div>
-                                                            <div className="mt-0.5 truncate text-[11px] text-slate-500">
-                                                                {order.customer?.emailAddress ?? '未留邮箱'}
-                                                            </div>
-                                                            <div className="mt-1 truncate text-[11px] text-slate-400">
-                                                                {formatAddress(order.shippingAddress)}
+                                                        <td className="h-[52px] whitespace-nowrap px-3 py-0">
+                                                            <span className="inline-flex whitespace-nowrap rounded bg-slate-100 px-2 py-1 text-[10px] font-semibold text-slate-700">
+                                                                {kindLabel}
+                                                            </span>
+                                                        </td>
+                                                        <td className="h-[52px] max-w-60 px-3 py-0">
+                                                            <div className="flex max-w-56 items-center gap-1 whitespace-nowrap">
+                                                                <span
+                                                                    tabIndex={0}
+                                                                    className="min-w-0 truncate font-semibold text-slate-800 outline-none focus:text-blue-700"
+                                                                    title={summary.productName}
+                                                                    aria-label={summary.productName}
+                                                                >
+                                                                    {summary.productName}
+                                                                </span>
+                                                                {summary.additionalLineCount > 0 && (
+                                                                    <span className="shrink-0 rounded bg-blue-50 px-1.5 py-0.5 text-[9px] font-bold text-blue-700">
+                                                                        +{summary.additionalLineCount}项
+                                                                    </span>
+                                                                )}
                                                             </div>
                                                         </td>
-                                                        <td className="p-4 font-mono text-sm font-semibold tabular-nums text-slate-950">
+                                                        <td className="h-[52px] max-w-48 px-3 py-0">
+                                                            <span
+                                                                tabIndex={0}
+                                                                className="block truncate outline-none focus:text-blue-700"
+                                                                title={summary.specification}
+                                                                aria-label={summary.specification}
+                                                            >
+                                                                {summary.specification}
+                                                            </span>
+                                                        </td>
+                                                        <td className="h-[52px] max-w-40 px-3 py-0">
+                                                            <span
+                                                                tabIndex={0}
+                                                                className="block truncate font-mono text-[10px] text-slate-600 outline-none focus:text-blue-700"
+                                                                title={summary.sku}
+                                                                aria-label={summary.sku}
+                                                            >
+                                                                {summary.sku}
+                                                            </span>
+                                                        </td>
+                                                        <td className="h-[52px] whitespace-nowrap px-3 py-0 text-center font-mono font-bold text-slate-800">
+                                                            {summary.quantity}
+                                                        </td>
+                                                        <td className="h-[52px] max-w-40 px-3 py-0">
+                                                            <span
+                                                                tabIndex={0}
+                                                                className="block truncate font-semibold text-slate-900 outline-none focus:text-blue-700"
+                                                                title={summary.customerName}
+                                                                aria-label={summary.customerName}
+                                                            >
+                                                                {summary.customerName}
+                                                            </span>
+                                                        </td>
+                                                        <td className="h-[52px] max-w-56 px-3 py-0">
+                                                            <span
+                                                                tabIndex={0}
+                                                                className="block truncate text-slate-600 outline-none focus:text-blue-700"
+                                                                title={summary.contact}
+                                                                aria-label={summary.contact}
+                                                            >
+                                                                {summary.contact}
+                                                            </span>
+                                                        </td>
+                                                        <td className="h-[52px] max-w-72 px-3 py-0">
+                                                            <span
+                                                                tabIndex={0}
+                                                                className="block truncate text-slate-500 outline-none focus:text-blue-700"
+                                                                title={summary.shippingAddress}
+                                                                aria-label={summary.shippingAddress}
+                                                            >
+                                                                {summary.shippingAddress}
+                                                            </span>
+                                                        </td>
+                                                        <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-xs font-bold tabular-nums text-slate-950">
                                                             {formatMoney(
                                                                 order.totalWithTax,
                                                                 order.currencyCode,
                                                             )}
-                                                            <div className="mt-1 text-[10px] font-normal text-slate-400">
-                                                                {order.totalQuantity} 件
-                                                            </div>
                                                         </td>
-                                                        <td className="p-4">
+                                                        <td className="h-[52px] whitespace-nowrap px-3 py-0">
                                                             <span
-                                                                className={`inline-flex rounded-md border px-2 py-1 text-[11px] font-semibold ${getOrderStateClass(order.state)}`}
+                                                                className={`inline-flex whitespace-nowrap rounded-md border px-2 py-1 text-[10px] font-semibold ${getOrderStateClass(order.state)}`}
                                                             >
                                                                 {getOrderStateLabel(order.state)}
                                                             </span>
-                                                            {remainingLines.length > 0 && (
-                                                                <div className="mt-1.5 text-[10px] text-amber-700">
-                                                                    {remainingLines.reduce(
-                                                                        (sum, line) => sum + line.quantity,
-                                                                        0,
-                                                                    )}{' '}
-                                                                    件实物待发
-                                                                </div>
-                                                            )}
                                                         </td>
-                                                        <td className="p-4 text-right">
+                                                        <td className="h-[52px] whitespace-nowrap px-3 py-0">
+                                                            <span
+                                                                className={`whitespace-nowrap text-[10px] font-semibold ${summary.remainingPhysicalQuantity > 0 ? 'text-amber-700' : 'text-slate-500'}`}
+                                                            >
+                                                                {summary.fulfillmentLabel}
+                                                            </span>
+                                                        </td>
+                                                        <td
+                                                            className={`sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 px-3 py-0 text-right ${stickyBackground}`}
+                                                        >
                                                             <button
                                                                 type="button"
                                                                 onClick={() =>
                                                                     navigate(`/sales/orders/${order.id}`)
                                                                 }
-                                                                className="rounded-lg bg-blue-50 px-3 py-1.5 font-semibold text-blue-700 transition hover:bg-blue-100 active:scale-[0.98]"
+                                                                className="whitespace-nowrap rounded-lg bg-blue-50 px-3 py-1.5 text-[10px] font-semibold text-blue-700 transition hover:bg-blue-100 active:scale-[0.98]"
                                                             >
                                                                 查看处理
                                                             </button>

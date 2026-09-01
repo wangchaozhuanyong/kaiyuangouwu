@@ -2207,31 +2207,71 @@ export function ProductEditor() {
                                 </div>
                             ) : (
                                 <div className="mobile-scrollbar-hidden overflow-x-auto">
-                                    <table className="w-full text-left border-collapse text-xs">
+                                    <table className="w-full min-w-[1180px] border-collapse text-left text-xs">
                                         <thead>
                                             <tr className="border-b border-slate-200 bg-slate-50 text-slate-500 font-bold whitespace-nowrap">
-                                                <th className="p-3.5">规格名称</th>
-                                                <th className="p-3.5 min-w-[150px]">
+                                                <th scope="col" className="whitespace-nowrap px-3 py-3">
+                                                    规格名称
+                                                </th>
+                                                <th
+                                                    scope="col"
+                                                    className="min-w-[150px] whitespace-nowrap px-3 py-3"
+                                                >
                                                     SKU 编码 <span className="text-rose-500">*</span>
                                                 </th>
-                                                <th className="p-3.5">
+                                                <th scope="col" className="whitespace-nowrap px-3 py-3">
                                                     售价 ({activeCurrencyCode}){' '}
                                                     <span className="text-rose-500">*</span>
                                                 </th>
                                                 {effectiveFulfillmentType === 'digital' ? (
                                                     <>
-                                                        <th className="p-3.5 min-w-[150px]">数字交付方式</th>
-                                                        <th className="p-3.5 min-w-[130px]">库存规则</th>
-                                                        <th className="p-3.5">可售库存</th>
+                                                        <th
+                                                            scope="col"
+                                                            className="min-w-[150px] whitespace-nowrap px-3 py-3"
+                                                        >
+                                                            数字交付方式
+                                                        </th>
+                                                        <th
+                                                            scope="col"
+                                                            className="min-w-[130px] whitespace-nowrap px-3 py-3"
+                                                        >
+                                                            库存规则
+                                                        </th>
+                                                        <th
+                                                            scope="col"
+                                                            className="whitespace-nowrap px-3 py-3"
+                                                        >
+                                                            可售库存
+                                                        </th>
                                                     </>
                                                 ) : (
                                                     <>
-                                                        <th className="p-3.5">在手库存 (OnHand)</th>
-                                                        <th className="p-3.5">锁定库存</th>
+                                                        <th
+                                                            scope="col"
+                                                            className="whitespace-nowrap px-3 py-3"
+                                                        >
+                                                            在手库存 (OnHand)
+                                                        </th>
+                                                        <th
+                                                            scope="col"
+                                                            className="whitespace-nowrap px-3 py-3"
+                                                        >
+                                                            锁定库存
+                                                        </th>
                                                     </>
                                                 )}
-                                                <th className="p-3.5 text-center">启用状态</th>
-                                                <th className="p-3.5 text-right w-16">操作</th>
+                                                <th
+                                                    scope="col"
+                                                    className="whitespace-nowrap px-3 py-3 text-center"
+                                                >
+                                                    启用状态
+                                                </th>
+                                                <th
+                                                    scope="col"
+                                                    className="w-16 whitespace-nowrap px-3 py-3 text-right"
+                                                >
+                                                    操作
+                                                </th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-100 text-slate-700">
@@ -2241,10 +2281,10 @@ export function ProductEditor() {
                                                 return (
                                                     <tr
                                                         key={variant.id || index}
-                                                        className="hover:bg-slate-50/80"
+                                                        className="h-[52px] hover:bg-slate-50/80"
                                                     >
                                                         {/* Variant Name */}
-                                                        <td className="p-3.5">
+                                                        <td className="h-[52px] px-3 py-2">
                                                             <input
                                                                 type="text"
                                                                 aria-label={`第 ${index + 1} 行规格名称`}
@@ -2262,7 +2302,7 @@ export function ProductEditor() {
                                                         </td>
 
                                                         {/* SKU */}
-                                                        <td className="p-3.5">
+                                                        <td className="h-[52px] px-3 py-2">
                                                             <input
                                                                 type="text"
                                                                 aria-label={`第 ${index + 1} 行 SKU 编码`}
@@ -2285,7 +2325,7 @@ export function ProductEditor() {
                                                         </td>
 
                                                         {/* Price */}
-                                                        <td className="p-3.5">
+                                                        <td className="h-[52px] px-3 py-2">
                                                             <div className="flex items-center gap-1">
                                                                 <span className="text-slate-400 font-mono">
                                                                     {activeCurrencyCode}
@@ -2316,7 +2356,7 @@ export function ProductEditor() {
 
                                                         {effectiveFulfillmentType === 'digital' ? (
                                                             <>
-                                                                <td className="p-3.5">
+                                                                <td className="h-[52px] px-3 py-2">
                                                                     <select
                                                                         aria-label={`第 ${index + 1} 行数字交付方式`}
                                                                         value={variant.digitalDeliveryMode}
@@ -2341,7 +2381,7 @@ export function ProductEditor() {
                                                                         </option>
                                                                     </select>
                                                                 </td>
-                                                                <td className="p-3.5">
+                                                                <td className="h-[52px] px-3 py-2">
                                                                     {variant.digitalDeliveryMode ===
                                                                     'file_download' ? (
                                                                         <select
@@ -2373,10 +2413,10 @@ export function ProductEditor() {
                                                                         </span>
                                                                     )}
                                                                 </td>
-                                                                <td className="p-3.5">
+                                                                <td className="h-[52px] px-3 py-2">
                                                                     {variant.digitalDeliveryMode ===
                                                                     'auto_card' ? (
-                                                                        <div className="space-y-1">
+                                                                        <div className="flex items-center gap-1 whitespace-nowrap">
                                                                             <div className="font-mono font-bold text-violet-700">
                                                                                 {variant.autoCardAvailableStock ??
                                                                                     0}
@@ -2417,7 +2457,7 @@ export function ProductEditor() {
                                                         ) : (
                                                             <>
                                                                 {/* Stock on Hand */}
-                                                                <td className="p-3.5">
+                                                                <td className="h-[52px] px-3 py-2">
                                                                     <input
                                                                         type="number"
                                                                         aria-label={`第 ${index + 1} 行在手库存`}
@@ -2440,14 +2480,14 @@ export function ProductEditor() {
                                                                 </td>
 
                                                                 {/* Allocated Stock */}
-                                                                <td className="p-3.5 font-mono text-slate-400">
+                                                                <td className="h-[52px] px-3 py-2 font-mono text-slate-400">
                                                                     {variant.stockAllocated || 0}
                                                                 </td>
                                                             </>
                                                         )}
 
                                                         {/* Enabled */}
-                                                        <td className="p-3.5 text-center">
+                                                        <td className="h-[52px] px-3 py-2 text-center">
                                                             <input
                                                                 type="checkbox"
                                                                 aria-label={`第 ${index + 1} 行 SKU 启用状态`}
@@ -2464,7 +2504,7 @@ export function ProductEditor() {
                                                         </td>
 
                                                         {/* Actions */}
-                                                        <td className="p-3.5 text-right">
+                                                        <td className="h-[52px] px-3 py-2 text-right">
                                                             <button
                                                                 type="button"
                                                                 onClick={() => handleDeleteVariant(index)}

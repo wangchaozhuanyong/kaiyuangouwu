@@ -658,6 +658,13 @@ function JobsPanel({
     onStateChange: (state: JobStateFilter) => void;
     onAction: (action: OutputAction) => void;
 }) {
+    const [selectedJob, setSelectedJob] = useState<ImageGenerationJobRecord | null>(null);
+
+    const selectOutputAction = (action: OutputAction) => {
+        setSelectedJob(null);
+        onAction(action);
+    };
+
     return (
         <section className="space-y-3">
             <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -695,130 +702,329 @@ function JobsPanel({
                     </p>
                 </div>
             )}
-            {jobs.map(job => (
-                <article key={job.id} className="rounded-xl border border-slate-200 bg-white p-4">
-                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start">
-                        <div className="min-w-0 flex-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                                <h3 className="font-mono text-xs font-bold text-slate-900">{job.id}</h3>
-                                <StateBadge state={job.state} />
-                                <span className="rounded bg-slate-100 px-2 py-0.5 text-[9px] text-slate-500">
-                                    {job.quantity} 张
-                                </span>
-                            </div>
-                            <div className="mt-2 grid gap-2 text-[10px] text-slate-500 sm:grid-cols-2 xl:grid-cols-4">
-                                <span>
-                                    模型 <strong className="text-slate-700">{job.modelNameSnapshot}</strong>
-                                </span>
-                                <span>
-                                    单价{' '}
-                                    <strong className="font-mono text-slate-700">
-                                        {formatMoney(job.unitPriceSnapshot, job.currencyCode)}
-                                    </strong>
-                                </span>
-                                <span>
-                                    已扣{' '}
-                                    <strong className="font-mono text-slate-700">
-                                        {formatMoney(job.capturedAmount, job.currencyCode)}
-                                    </strong>
-                                </span>
-                                <span>
-                                    已退{' '}
-                                    <strong className="font-mono text-slate-700">
-                                        {formatMoney(job.releasedAmount, job.currencyCode)}
-                                    </strong>
-                                </span>
-                            </div>
-                            {job.errorMessage && (
-                                <p className="mt-2 rounded bg-rose-50 p-2 text-[10px] text-rose-700">
-                                    {job.errorMessage}
-                                </p>
-                            )}
-                        </div>
-                        <div className="shrink-0 font-mono text-[10px] text-slate-400">
-                            {formatDateTime(job.createdAt)}
+            {jobs.length > 0 && (
+                <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xs">
+                    <div className="overflow-x-auto">
+                        <table className="w-full min-w-[1480px] border-collapse text-left text-xs">
+                            <thead>
+                                <tr className="border-b border-slate-200 bg-slate-50 text-[11px] font-bold text-slate-500">
+                                    <th
+                                        scope="col"
+                                        className="sticky left-0 z-10 w-56 whitespace-nowrap bg-slate-50 px-3 py-3"
+                                    >
+                                        任务 ID
+                                    </th>
+                                    <th scope="col" className="whitespace-nowrap px-3 py-3">
+                                        创建时间
+                                    </th>
+                                    <th scope="col" className="min-w-40 whitespace-nowrap px-3 py-3">
+                                        模型
+                                    </th>
+                                    <th scope="col" className="whitespace-nowrap px-3 py-3 text-center">
+                                        数量
+                                    </th>
+                                    <th scope="col" className="whitespace-nowrap px-3 py-3">
+                                        单价
+                                    </th>
+                                    <th scope="col" className="whitespace-nowrap px-3 py-3">
+                                        已扣金额
+                                    </th>
+                                    <th scope="col" className="whitespace-nowrap px-3 py-3">
+                                        已退金额
+                                    </th>
+                                    <th scope="col" className="whitespace-nowrap px-3 py-3">
+                                        任务状态
+                                    </th>
+                                    <th scope="col" className="min-w-52 whitespace-nowrap px-3 py-3">
+                                        输出结果
+                                    </th>
+                                    <th scope="col" className="min-w-56 whitespace-nowrap px-3 py-3">
+                                        错误
+                                    </th>
+                                    <th
+                                        scope="col"
+                                        className="sticky right-0 z-10 w-28 whitespace-nowrap border-l border-slate-200 bg-slate-50 px-3 py-3 text-right"
+                                    >
+                                        操作
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                                {jobs.map(job => {
+                                    const errorMessage =
+                                        job.errorMessage ??
+                                        job.outputs.find(output => output.errorMessage)?.errorMessage ??
+                                        '';
+                                    return (
+                                        <tr key={job.id} className="group h-12 hover:bg-slate-50/80">
+                                            <td className="sticky left-0 z-[1] max-w-56 bg-white px-3 py-2 group-hover:bg-slate-50">
+                                                <span
+                                                    className="block truncate font-mono font-bold text-slate-900"
+                                                    title={job.id}
+                                                >
+                                                    {job.id}
+                                                </span>
+                                            </td>
+                                            <td className="whitespace-nowrap px-3 py-2 font-mono text-[10px] text-slate-500">
+                                                {formatDateTime(job.createdAt)}
+                                            </td>
+                                            <td className="max-w-48 px-3 py-2">
+                                                <span
+                                                    className="block truncate font-semibold text-slate-800"
+                                                    title={job.modelNameSnapshot}
+                                                >
+                                                    {job.modelNameSnapshot}
+                                                </span>
+                                            </td>
+                                            <td className="whitespace-nowrap px-3 py-2 text-center font-mono font-bold text-slate-800">
+                                                {job.quantity}
+                                            </td>
+                                            <td className="whitespace-nowrap px-3 py-2 font-mono text-slate-700">
+                                                {formatMoney(job.unitPriceSnapshot, job.currencyCode)}
+                                            </td>
+                                            <td className="whitespace-nowrap px-3 py-2 font-mono font-bold text-slate-900">
+                                                {formatMoney(job.capturedAmount, job.currencyCode)}
+                                            </td>
+                                            <td className="whitespace-nowrap px-3 py-2 font-mono text-slate-600">
+                                                {formatMoney(job.releasedAmount, job.currencyCode)}
+                                            </td>
+                                            <td className="whitespace-nowrap px-3 py-2">
+                                                <StateBadge state={job.state} />
+                                            </td>
+                                            <td className="whitespace-nowrap px-3 py-2">
+                                                <OutputStateSummary outputs={job.outputs} />
+                                            </td>
+                                            <td className="max-w-56 px-3 py-2">
+                                                <span
+                                                    className={`block truncate text-[10px] ${errorMessage ? 'text-rose-600' : 'text-slate-400'}`}
+                                                    title={errorMessage || undefined}
+                                                >
+                                                    {errorMessage || '-'}
+                                                </span>
+                                            </td>
+                                            <td className="sticky right-0 border-l border-slate-100 bg-white px-3 py-2 text-right group-hover:bg-slate-50">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setSelectedJob(job)}
+                                                    className="whitespace-nowrap rounded-lg bg-blue-50 px-3 py-1.5 text-[10px] font-bold text-blue-700 hover:bg-blue-100"
+                                                >
+                                                    查看输出 {job.outputs.length}
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50/60 px-4 py-3 text-xs text-slate-500">
+                        <span>
+                            共 {total} 条，第 {page + 1}/{totalPages} 页
+                        </span>
+                        <div className="flex gap-2">
+                            <button
+                                type="button"
+                                disabled={page === 0 || loading}
+                                onClick={() => onPageChange(page - 1)}
+                                className="rounded border border-slate-300 bg-white p-1.5 disabled:opacity-40"
+                                aria-label="上一页"
+                            >
+                                <ChevronLeft className="h-4 w-4" />
+                            </button>
+                            <button
+                                type="button"
+                                disabled={page + 1 >= totalPages || loading}
+                                onClick={() => onPageChange(page + 1)}
+                                className="rounded border border-slate-300 bg-white p-1.5 disabled:opacity-40"
+                                aria-label="下一页"
+                            >
+                                <ChevronRight className="h-4 w-4" />
+                            </button>
                         </div>
                     </div>
-                    <div className="mt-3 grid gap-2 border-t border-slate-100 pt-3 sm:grid-cols-2 xl:grid-cols-4">
-                        {job.outputs.map(output => (
-                            <div key={output.id} className="rounded-lg bg-slate-50 p-3">
-                                <div className="flex items-center justify-between gap-2">
-                                    <span className="text-[10px] font-bold text-slate-700">
-                                        输出 {output.outputIndex + 1}
-                                    </span>
-                                    <StateBadge state={output.refundedAt ? 'REFUNDED' : output.state} />
-                                </div>
-                                <div className="mt-2 text-[9px] text-slate-400">
-                                    尝试 {output.attemptCount} 次
-                                </div>
-                                {output.errorMessage && (
-                                    <p className="mt-1 line-clamp-2 text-[9px] text-rose-600">
-                                        {output.errorMessage}
-                                    </p>
-                                )}
-                                <div className="mt-2 flex gap-1">
-                                    {output.state === 'UNKNOWN' && !output.refundedAt && (
-                                        <button
-                                            type="button"
-                                            onClick={() =>
-                                                onAction({
-                                                    kind: 'RETRY',
-                                                    jobId: job.id,
-                                                    outputId: output.id,
-                                                })
-                                            }
-                                            className="rounded bg-amber-100 px-2 py-1 text-[9px] font-bold text-amber-800"
-                                        >
-                                            确认后重试
-                                        </button>
-                                    )}
-                                    {output.state === 'SUCCEEDED' && !output.refundedAt && (
-                                        <button
-                                            type="button"
-                                            onClick={() =>
-                                                onAction({
-                                                    kind: 'REFUND',
-                                                    jobId: job.id,
-                                                    outputId: output.id,
-                                                })
-                                            }
-                                            className="rounded bg-blue-100 px-2 py-1 text-[9px] font-bold text-blue-800"
-                                        >
-                                            售后退费
-                                        </button>
-                                    )}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </article>
-            ))}
-            <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-500">
-                <span>
-                    共 {total} 条，第 {page + 1}/{totalPages} 页
+                </div>
+            )}
+            {selectedJob && (
+                <JobOutputsDialog
+                    job={selectedJob}
+                    onClose={() => setSelectedJob(null)}
+                    onAction={selectOutputAction}
+                />
+            )}
+        </section>
+    );
+}
+
+function OutputStateSummary({ outputs }: { outputs: ImageGenerationJobRecord['outputs'] }) {
+    const counts = new Map<string, number>();
+    outputs.forEach(output => {
+        const state = output.refundedAt ? 'REFUNDED' : output.state;
+        counts.set(state, (counts.get(state) ?? 0) + 1);
+    });
+    const states = [
+        ['SUCCEEDED', '成功', 'text-emerald-700'],
+        ['UNKNOWN', '待确认', 'text-amber-700'],
+        ['FAILED', '失败', 'text-rose-700'],
+        ['REFUNDED', '已退', 'text-blue-700'],
+        ['RUNNING', '生成中', 'text-slate-600'],
+        ['QUEUED', '排队', 'text-slate-600'],
+        ['CANCELLED', '取消', 'text-slate-500'],
+    ] as const;
+    const visibleStates = states.filter(([state]) => counts.has(state));
+
+    if (!visibleStates.length) return <span className="text-slate-400">无输出</span>;
+    return (
+        <div className="flex items-center gap-2">
+            {visibleStates.map(([state, label, className]) => (
+                <span key={state} className={`font-mono text-[10px] font-bold ${className}`}>
+                    {label} {counts.get(state)}
                 </span>
-                <div className="flex gap-2">
+            ))}
+        </div>
+    );
+}
+
+function JobOutputsDialog({
+    job,
+    onClose,
+    onAction,
+}: {
+    job: ImageGenerationJobRecord;
+    onClose: () => void;
+    onAction: (action: OutputAction) => void;
+}) {
+    return (
+        <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4"
+            onClick={onClose}
+        >
+            <AccessibleDialogSurface
+                accessibleName={`任务 ${job.id} 的输出明细`}
+                onRequestClose={onClose}
+                className="flex max-h-[85dvh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+                onClick={event => event.stopPropagation()}
+            >
+                <div className="flex items-center justify-between gap-4 border-b border-slate-200 px-5 py-4">
+                    <div className="min-w-0">
+                        <h2 className="text-sm font-bold text-slate-900">任务输出明细</h2>
+                        <p className="mt-1 truncate font-mono text-[10px] text-slate-400" title={job.id}>
+                            {job.id}
+                        </p>
+                    </div>
                     <button
                         type="button"
-                        disabled={page === 0 || loading}
-                        onClick={() => onPageChange(page - 1)}
-                        className="rounded border border-slate-300 bg-white p-1.5 disabled:opacity-40"
-                        aria-label="上一页"
+                        onClick={onClose}
+                        className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                        aria-label="关闭输出明细"
                     >
-                        <ChevronLeft className="h-4 w-4" />
-                    </button>
-                    <button
-                        type="button"
-                        disabled={page + 1 >= totalPages || loading}
-                        onClick={() => onPageChange(page + 1)}
-                        className="rounded border border-slate-300 bg-white p-1.5 disabled:opacity-40"
-                        aria-label="下一页"
-                    >
-                        <ChevronRight className="h-4 w-4" />
+                        <X className="h-4 w-4" />
                     </button>
                 </div>
-            </div>
-        </section>
+                <div className="overflow-auto p-4">
+                    <div className="overflow-hidden rounded-xl border border-slate-200">
+                        <div className="overflow-x-auto">
+                            <table className="w-full min-w-[820px] border-collapse text-left text-xs">
+                                <thead>
+                                    <tr className="border-b border-slate-200 bg-slate-50 text-[11px] font-bold text-slate-500">
+                                        <th scope="col" className="whitespace-nowrap px-3 py-3">
+                                            输出
+                                        </th>
+                                        <th scope="col" className="whitespace-nowrap px-3 py-3">
+                                            状态
+                                        </th>
+                                        <th scope="col" className="whitespace-nowrap px-3 py-3">
+                                            尝试次数
+                                        </th>
+                                        <th scope="col" className="whitespace-nowrap px-3 py-3">
+                                            完成时间
+                                        </th>
+                                        <th scope="col" className="min-w-64 whitespace-nowrap px-3 py-3">
+                                            错误
+                                        </th>
+                                        <th scope="col" className="whitespace-nowrap px-3 py-3 text-right">
+                                            操作
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                    {job.outputs.map(output => (
+                                        <tr key={output.id} className="h-12 hover:bg-slate-50/80">
+                                            <td className="whitespace-nowrap px-3 py-2 font-mono font-bold text-slate-800">
+                                                #{output.outputIndex + 1}
+                                            </td>
+                                            <td className="whitespace-nowrap px-3 py-2">
+                                                <StateBadge
+                                                    state={output.refundedAt ? 'REFUNDED' : output.state}
+                                                />
+                                            </td>
+                                            <td className="whitespace-nowrap px-3 py-2 text-center font-mono text-slate-600">
+                                                {output.attemptCount}
+                                            </td>
+                                            <td className="whitespace-nowrap px-3 py-2 font-mono text-[10px] text-slate-500">
+                                                {output.completedAt
+                                                    ? formatDateTime(output.completedAt)
+                                                    : '-'}
+                                            </td>
+                                            <td className="max-w-64 px-3 py-2">
+                                                <span
+                                                    className={`block truncate text-[10px] ${output.errorMessage ? 'text-rose-600' : 'text-slate-400'}`}
+                                                    title={output.errorMessage || undefined}
+                                                >
+                                                    {output.errorMessage || '-'}
+                                                </span>
+                                            </td>
+                                            <td className="whitespace-nowrap px-3 py-2 text-right">
+                                                {output.state === 'UNKNOWN' && !output.refundedAt ? (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            onAction({
+                                                                kind: 'RETRY',
+                                                                jobId: job.id,
+                                                                outputId: output.id,
+                                                            })
+                                                        }
+                                                        className="rounded-lg bg-amber-100 px-3 py-1.5 text-[10px] font-bold text-amber-800 hover:bg-amber-200"
+                                                    >
+                                                        确认后重试
+                                                    </button>
+                                                ) : output.state === 'SUCCEEDED' && !output.refundedAt ? (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            onAction({
+                                                                kind: 'REFUND',
+                                                                jobId: job.id,
+                                                                outputId: output.id,
+                                                            })
+                                                        }
+                                                        className="rounded-lg bg-blue-100 px-3 py-1.5 text-[10px] font-bold text-blue-800 hover:bg-blue-200"
+                                                    >
+                                                        售后退费
+                                                    </button>
+                                                ) : (
+                                                    <span className="text-slate-400">-</span>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {!job.outputs.length && (
+                                        <tr>
+                                            <td
+                                                colSpan={6}
+                                                className="p-10 text-center text-xs text-slate-400"
+                                            >
+                                                当前任务还没有输出记录
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </AccessibleDialogSurface>
+        </div>
     );
 }
 
@@ -1074,7 +1280,7 @@ function StateBadge({ state }: { state: string }) {
         REFUNDED: '已退费',
     };
     return (
-        <span className={`rounded px-2 py-0.5 text-[9px] font-bold ${classes}`}>
+        <span className={`whitespace-nowrap rounded px-2 py-0.5 text-[9px] font-bold ${classes}`}>
             {labels[state] ?? getStatusLabel(state)}
         </span>
     );

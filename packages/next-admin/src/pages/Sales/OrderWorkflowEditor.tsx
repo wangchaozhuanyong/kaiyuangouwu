@@ -33,7 +33,7 @@ import {
     TRANSITION_SALES_ORDER,
 } from '../../graphql/sales.graphql';
 import { toUserFacingError } from '../../utils/user-facing-error';
-import { formatMoney, getMutationError, majorInputToMoney } from './sales-utils';
+import { formatMoney, getMutationError, getOrderStateLabel, majorInputToMoney } from './sales-utils';
 
 interface ResultPayload {
     __typename: string;
@@ -473,7 +473,7 @@ export function DraftOrderEditor() {
         try {
             const response = await transitionOrder({ variables: { id: order.id, state } });
             resultOrThrow(response.data?.transitionOrderToState);
-            await refresh(`订单已进入 ${state}`);
+            await refresh(`订单已进入${getOrderStateLabel(state)}`);
             navigate(`/sales/orders/${order.id}`);
         } catch (error) {
             fail(error, '订单状态推进失败，请检查客户、地址、配送和商品是否完整');
@@ -514,7 +514,7 @@ export function DraftOrderEditor() {
         <main className="flex h-full min-w-0 flex-col overflow-hidden bg-slate-50">
             <WorkflowHeader
                 title={`草稿订单 ${order.code}`}
-                subtitle={`状态：${order.state} · 所有修改直接写入草稿`}
+                subtitle={`状态：${getOrderStateLabel(order.state)} · 所有修改直接写入草稿`}
                 onBack={() => navigate('/sales/orders?tab=drafts')}
                 actions={
                     <button
@@ -771,7 +771,7 @@ export function DraftOrderEditor() {
                                             onClick={() => void handleTransition(state)}
                                             className="rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
                                         >
-                                            完成草稿并进入 {state}
+                                            完成草稿并进入{getOrderStateLabel(state)}
                                         </button>
                                     ))}
                                     {order.nextStates.length === 0 && (
@@ -991,7 +991,7 @@ export function ModifyOrderEditor() {
     if (order.state !== 'Modifying')
         return (
             <WorkflowError
-                message={`订单当前处于 ${order.state}，必须先从订单详情将状态推进到 Modifying。`}
+                message={`订单当前处于${getOrderStateLabel(order.state)}，必须先从订单详情将状态推进到“修改中”。`}
                 onBack={() => navigate(`/sales/orders/${order.id}`)}
             />
         );
