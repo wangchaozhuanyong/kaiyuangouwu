@@ -52,6 +52,12 @@ export function asyncRouteTitle(routeName: RouteName, language: StorefrontLangua
     return routeTitles[routeName] ?? (isZh ? '正在加载' : 'Loading');
 }
 
+function rootRouteSkeletonVariant(routeName: RouteName): 'account' | 'checkout' | null {
+    if (routeName === 'account') return 'account';
+    if (routeName === 'cart') return 'checkout';
+    return null;
+}
+
 export function AsyncRouteStatePage({
     routeName,
     state,
@@ -69,27 +75,35 @@ export function AsyncRouteStatePage({
 }) {
     const isZh = language === 'zh';
     const title = asyncRouteTitle(routeName, language);
+    const rootSkeletonVariant = rootRouteSkeletonVariant(routeName);
+    const content =
+        state === 'loading' ? (
+            <PageSkeleton label={isZh ? '正在加载' : 'Loading'} variant={rootSkeletonVariant ?? 'default'} />
+        ) : (
+            <EmptyState
+                icon={state === 'paused' ? <WifiOff /> : <CircleAlert />}
+                title={
+                    state === 'paused'
+                        ? isZh
+                            ? '网络连接已暂停'
+                            : 'Connection paused'
+                        : isZh
+                          ? '页面数据加载失败'
+                          : 'Could not load this page'
+                }
+                detail={error}
+                action={isZh ? '重试' : 'Retry'}
+                onAction={onRetry}
+            />
+        );
+
+    if (rootSkeletonVariant) {
+        return <main className="page route-state-page lg:pt-[72px]">{content}</main>;
+    }
+
     return (
         <Subpage title={title} language={language} onBack={onBack}>
-            {state === 'loading' ? (
-                <PageSkeleton label={isZh ? '正在加载' : 'Loading'} />
-            ) : (
-                <EmptyState
-                    icon={state === 'paused' ? <WifiOff /> : <CircleAlert />}
-                    title={
-                        state === 'paused'
-                            ? isZh
-                                ? '网络连接已暂停'
-                                : 'Connection paused'
-                            : isZh
-                              ? '页面数据加载失败'
-                              : 'Could not load this page'
-                    }
-                    detail={error}
-                    action={isZh ? '重试' : 'Retry'}
-                    onAction={onRetry}
-                />
-            )}
+            {content}
         </Subpage>
     );
 }
