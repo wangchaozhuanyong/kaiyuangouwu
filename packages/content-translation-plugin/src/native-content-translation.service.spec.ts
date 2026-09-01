@@ -1,4 +1,4 @@
-import { Country, Product, ProductVariant, Province } from '@vendure/core';
+import { Collection, Country, Product, ProductVariant, Province } from '@vendure/core';
 import { describe, expect, it, vi } from 'vitest';
 
 import { contentTranslationInternals } from './content-translation.service.js';
@@ -687,6 +687,42 @@ describe('native content translation event routing', () => {
             skippedRecords: ['Product#product-without-source: Simplified Chinese content is missing'],
         });
         expect(translateEntity).not.toHaveBeenCalled();
+    });
+
+    it('excludes the internal root collection from customer-content backfill', async () => {
+        const repository = {
+            count: vi.fn(async () => 1),
+            find: vi.fn(async () => [
+                new Collection({
+                    id: 'visible-collection',
+                    isRoot: false,
+                    translations: [
+                        {
+                            languageCode: 'zh_Hans',
+                            name: '客户分类',
+                            slug: 'ke-hu-fen-lei',
+                            description: '',
+                        } as any,
+                    ],
+                }),
+            ]),
+        };
+        const service = new NativeContentTranslationService(
+            { publish: vi.fn(async () => undefined) } as any,
+            { getRepository: vi.fn(() => repository) } as any,
+            {} as any,
+        );
+        vi.spyOn(service, 'translateEntity').mockResolvedValue(undefined);
+
+        await expect(service.backfill({} as any, 'Collection', 100, 0)).resolves.toMatchObject({
+            total: 1,
+            scanned: 1,
+            processed: 1,
+            skipped: 0,
+            failed: 0,
+        });
+        expect(repository.count).toHaveBeenCalledWith({ where: { isRoot: false } });
+        expect(repository.find).toHaveBeenCalledWith(expect.objectContaining({ where: { isRoot: false } }));
     });
 
     it('runs every historical backfill page during automatic repair', async () => {
