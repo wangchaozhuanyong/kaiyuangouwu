@@ -179,6 +179,18 @@ const USAGE_RECORDS = gql`
     }
 `;
 
+const COUPON_LEDGER = gql`
+    query CouponE2ELedger($options: StoreCouponLedgerEntryListOptions) {
+        storeCouponLedger(options: $options) {
+            totalItems
+            items {
+                campaignId
+                eventType
+            }
+        }
+    }
+`;
+
 const ORDER_FIELDS = gql`
     fragment CouponE2EOrder on Order {
         id
@@ -429,6 +441,19 @@ describe('coupon lifecycle closed loop', () => {
         const coupon = claimed.claimStorefrontCoupon;
         expect(coupon).toMatchObject({ campaignId, status: 'AVAILABLE', usable: true });
         expect((await shopClient.query(USAGE_RECORDS)).myStorefrontCouponUsageRecords).toEqual([]);
+        const claimedLedger = await adminClient.query(COUPON_LEDGER, {
+            options: { take: 20, campaignId, eventType: 'CLAIMED' },
+        });
+        expect(claimedLedger.storeCouponLedger.totalItems).toBeGreaterThan(0);
+        expect(claimedLedger.storeCouponLedger.items).toEqual(
+            expect.arrayContaining([expect.objectContaining({ campaignId, eventType: 'CLAIMED' })]),
+        );
+        expect(claimedLedger.storeCouponLedger.items).toEqual(
+            claimedLedger.storeCouponLedger.items.filter(
+                (item: { campaignId: string; eventType: string }) =>
+                    item.campaignId === campaignId && item.eventType === 'CLAIMED',
+            ),
+        );
         expect(campaign(await shopClient.query(ACTIVE_COUPONS))).toMatchObject({
             claimed: true,
             claimable: false,
