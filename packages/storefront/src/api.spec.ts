@@ -93,7 +93,6 @@ describe('ShopApi storefront mutations', () => {
 
         await expect(new ShopApi(market, 'en').storefrontContent()).resolves.toEqual({
             blocks: [],
-            coupons: [],
             flashSales: [],
             systemAnnouncements: [],
             settings: { heroAutoplayIntervalSeconds: 8, configuredBlockTypes: [] },
@@ -110,7 +109,7 @@ describe('ShopApi storefront mutations', () => {
         const request = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as { query: string };
         expect(request.query).toContain('storefrontContent');
         expect(request.query).toContain('storefrontContentSettings');
-        expect(request.query).toContain('activeStorefrontCoupons');
+        expect(request.query).not.toContain('activeStorefrontCoupons');
         expect(request.query).toContain('activeStorefrontFlashSales');
         expect(request.query).not.toMatch(/activeStorefrontFlashSales\s*\{\s*id\s+name\b/u);
         expect(request.query).toContain('activeSystemAnnouncements');
@@ -343,7 +342,6 @@ describe('ShopApi storefront mutations', () => {
 
         await expect(new ShopApi(market).storefrontContent()).resolves.toEqual({
             blocks: [],
-            coupons: [],
             flashSales: [],
             systemAnnouncements: [],
             settings: { heroAutoplayIntervalSeconds: 5, configuredBlockTypes: [] },
@@ -358,7 +356,7 @@ describe('ShopApi storefront mutations', () => {
                     JSON.stringify({
                         errors: [
                             {
-                                message: 'Cannot query field "activeStorefrontCoupons" on type "Query".',
+                                message: 'Cannot query field "activeStorefrontFlashSales" on type "Query".',
                             },
                         ],
                     }),
@@ -380,7 +378,6 @@ describe('ShopApi storefront mutations', () => {
 
         await expect(new ShopApi(market).storefrontContent()).resolves.toEqual({
             blocks: [],
-            coupons: [],
             flashSales: [],
             systemAnnouncements: [],
             settings: { heroAutoplayIntervalSeconds: 7, configuredBlockTypes: [] },
@@ -389,10 +386,66 @@ describe('ShopApi storefront mutations', () => {
         expect(fetchMock).toHaveBeenCalledTimes(2);
         const modernRequest = JSON.parse(jsonRequestBody(fetchMock.mock.calls[0][1])) as { query: string };
         const legacyRequest = JSON.parse(jsonRequestBody(fetchMock.mock.calls[1][1])) as { query: string };
-        expect(modernRequest.query).toContain('activeStorefrontCoupons');
+        expect(modernRequest.query).toContain('activeStorefrontFlashSales');
         expect(legacyRequest.query).toContain('query StorefrontContentLegacy');
         expect(legacyRequest.query).not.toContain('activeStorefrontCoupons');
         expect(legacyRequest.query).not.toContain('configuredBlockTypes');
+    });
+
+    it('loads account-aware coupon campaigns through a separate request', async () => {
+        const campaign = {
+            id: 'campaign-1',
+            name: 'Account coupon',
+            kind: 'ORDER_FIXED',
+            startsAt: null,
+            endsAt: null,
+            claimStartsAt: null,
+            claimEndsAt: null,
+            validityDays: 30,
+            minimumSpend: 10_000,
+            currencyCode: 'CNY',
+            discountAmount: 1_000,
+            discountRate: null,
+            remainingIssueCount: 0,
+            claimed: true,
+            claimable: false,
+        };
+        const fetchMock = mockGraphQlResponse({ activeStorefrontCoupons: [campaign] });
+
+        await expect(new ShopApi(market).activeCouponCampaigns()).resolves.toEqual([campaign]);
+
+        const request = JSON.parse(jsonRequestBody(fetchMock.mock.calls[0][1])) as { query: string };
+        expect(request.query).toContain('query ActiveStorefrontCoupons');
+        expect(request.query).toContain('claimed');
+        expect(request.query).toContain('claimable');
+    });
+
+    it('returns no campaigns when the coupon extension is unavailable', async () => {
+        const fetchMock = vi.fn().mockResolvedValue(
+            new Response(
+                JSON.stringify({
+                    errors: [{ message: 'Cannot query field "activeStorefrontCoupons" on type "Query".' }],
+                }),
+                { status: 200, headers: { 'content-type': 'application/json' } },
+            ),
+        );
+        vi.stubGlobal('fetch', fetchMock);
+
+        await expect(new ShopApi(market).activeCouponCampaigns()).resolves.toEqual([]);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not hide non-schema coupon campaign failures', async () => {
+        const fetchMock = vi.fn().mockResolvedValue(
+            new Response(JSON.stringify({ errors: [{ message: 'Internal server error' }] }), {
+                status: 200,
+                headers: { 'content-type': 'application/json' },
+            }),
+        );
+        vi.stubGlobal('fetch', fetchMock);
+
+        await expect(new ShopApi(market).activeCouponCampaigns()).rejects.toThrow('Internal server error');
+        expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 
     it('does not hide non-schema storefront content failures behind the legacy fallback', async () => {

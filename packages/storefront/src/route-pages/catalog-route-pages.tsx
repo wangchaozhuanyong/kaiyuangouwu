@@ -30,6 +30,8 @@ export function HomeRoutePage() {
                 heroAutoplayIntervalSeconds: runtime.heroAutoplayIntervalSeconds,
                 configuredBlockTypes: runtime.configuredBlockTypes,
                 coupons: runtime.activeCoupons,
+                couponCampaignsLoading: runtime.couponCampaignsLoading,
+                couponCampaignsError: runtime.couponCampaignsError,
                 flashSales: runtime.activeFlashSales,
                 systemAnnouncements: runtime.systemAnnouncements,
                 bestSellerProducts: runtime.bestSellerProducts,
@@ -44,7 +46,6 @@ export function HomeRoutePage() {
                 storefrontDescription: runtime.storefrontDescription,
                 logoUrl: runtime.logoUrl,
                 addingVariantId: runtime.addingVariantId,
-                claimedCampaignIds: runtime.claimedCampaignIds,
                 couponLoading: runtime.cartLoading,
                 onCategorySelect: (collection: CollectionSummary) => {
                     const childId = collection.children?.[0]?.id ?? collection.id;
@@ -60,6 +61,7 @@ export function HomeRoutePage() {
                 onNotifications: () => runtime.navigate({ name: 'notifications' }),
                 onToast: runtime.notify,
                 onClaimCoupon: runtime.claimCoupon,
+                onCouponCampaignsRetry: () => void runtime.couponCampaignsQuery.refetch(),
                 onContentTarget: runtime.openContentTarget,
                 onContentRetry: () => void runtime.contentQuery?.refetch?.(),
                 onRetry: () => void runtime.refetchStorefront(),

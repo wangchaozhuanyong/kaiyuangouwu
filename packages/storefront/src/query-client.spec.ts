@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { ShopApiTimeoutError } from './api';
 import {
+    LEGACY_PUBLIC_QUERY_CACHE_KEYS,
     PUBLIC_QUERY_CACHE_KEY,
     PUBLIC_QUERY_CACHE_MAX_AGE,
     ROUTE_QUERY_STALE_TIME,
@@ -124,6 +125,27 @@ describe('public React Query session cache', () => {
         expect(storefrontQueryKeys.order('my', 'zh_Hans', 'customer-1', 'order-1')).not.toEqual(
             storefrontQueryKeys.order('my', 'zh_Hans', 'customer-2', 'order-1'),
         );
+        expect(storefrontQueryKeys.couponCampaigns('my', 'zh_Hans', 'customer-1')).not.toEqual(
+            storefrontQueryKeys.couponCampaigns('my', 'zh_Hans', 'customer-2'),
+        );
+        expect(storefrontQueryKeys.couponCampaigns('my', 'zh_Hans', 'customer-1')).not.toEqual(
+            storefrontQueryKeys.couponCampaigns('my', 'zh_Hans', null),
+        );
+        expect(storefrontQueryKeys.couponCampaigns('my', 'zh_Hans', null)[3]).toBe('private');
+    });
+
+    it('does not reuse account A coupon state after switching to account B in the same session', () => {
+        const client = createStorefrontQueryClient();
+        const accountAKey = storefrontQueryKeys.couponCampaigns('my', 'zh_Hans', 'customer-a');
+        const accountBKey = storefrontQueryKeys.couponCampaigns('my', 'zh_Hans', 'customer-b');
+        client.setQueryData(accountAKey, [{ id: 'campaign-1', claimed: true, claimable: false }]);
+
+        expect(client.getQueryData(accountBKey)).toBeUndefined();
+
+        client.removeQueries({
+            predicate: query => query.queryKey[0] === 'storefront' && query.queryKey[3] === 'private',
+        });
+        expect(client.getQueryData(accountAKey)).toBeUndefined();
     });
 
     it('persists only explicitly public successful queries', async () => {
@@ -137,6 +159,10 @@ describe('public React Query session cache', () => {
             queryKey: ['storefront', 'cn', 'zh', 'private', 'customer'],
             queryFn: () => ({ emailAddress: 'private@example.com' }),
         });
+        await client.fetchQuery({
+            queryKey: storefrontQueryKeys.couponCampaigns('cn', 'zh', 'customer-1'),
+            queryFn: () => [{ id: 'campaign-1', claimed: true }],
+        });
         const storage = memoryStorage();
 
         persistPublicQueryCache(client, storage, 1_000);
@@ -145,6 +171,8 @@ describe('public React Query session cache', () => {
         expect(serialized).toContain('product');
         expect(serialized).not.toContain('private@example.com');
         expect(serialized).not.toContain('customer');
+        expect(serialized).not.toContain('campaign-1');
+        expect(serialized).not.toContain('claimed');
     });
 
     it('restores a fresh cache and rejects entries older than five minutes', async () => {
@@ -164,5 +192,13 @@ describe('public React Query session cache', () => {
         const expired = createStorefrontQueryClient();
         expect(restorePublicQueryCache(expired, storage, 1_000 + PUBLIC_QUERY_CACHE_MAX_AGE + 1)).toBe(false);
         expect(storage.values.has(PUBLIC_QUERY_CACHE_KEY)).toBe(false);
+    });
+
+    it('removes the legacy v2 cache before restoring v3 data', () => {
+        const storage = memoryStorage();
+        storage.setItem(LEGACY_PUBLIC_QUERY_CACHE_KEYS[0], '{"accountCouponState":"claimed"}');
+
+        expect(restorePublicQueryCache(createStorefrontQueryClient(), storage, 2_000)).toBe(false);
+        expect(storage.values.has(LEGACY_PUBLIC_QUERY_CACHE_KEYS[0])).toBe(false);
     });
 });

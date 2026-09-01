@@ -1,4 +1,5 @@
 import { LanguageCode } from '@vendure/common/lib/generated-types';
+import { SUPER_ADMIN_USER_PASSWORD } from '@vendure/common/lib/shared-constants';
 import {
     ContentTranslationPlugin,
     type ContentTranslationProvider,
@@ -92,6 +93,14 @@ const REGISTER = gql`
                 errorCode
                 message
             }
+        }
+    }
+`;
+
+const LOGOUT = gql`
+    mutation CouponE2ELogout {
+        logout {
+            success
         }
     }
 `;
@@ -313,6 +322,7 @@ const REFUND = gql`
 
 let productVariantId = '';
 let campaignId = '';
+let soldOutCampaignId = '';
 let couponCode = '';
 
 describe('coupon lifecycle closed loop', () => {
@@ -380,6 +390,20 @@ describe('coupon lifecycle closed loop', () => {
             perCustomerClaimLimit: 1,
             returnOnFullRefund: true,
         });
+        const soldOutCampaign = await adminClient.query(CREATE_COUPON, {
+            input: {
+                name: '同设备账号隔离测试券',
+                kind: 'ORDER_FIXED',
+                minimumSpend: 10_000,
+                discountAmount: 1_000,
+                issueLimit: 1,
+                validityDays: 7,
+                stackPolicy: 'EXCLUSIVE',
+                returnOnCancellation: true,
+                returnOnFullRefund: true,
+            },
+        });
+        soldOutCampaignId = soldOutCampaign.createStoreCouponCampaign.id;
 
         const registered = await shopClient.query(REGISTER, {
             input: {
@@ -475,6 +499,7 @@ describe('coupon lifecycle closed loop', () => {
         const payment = firstPaidOrder.payments.find(
             (candidate: any) => candidate.method === couponPaymentHandler.code,
         );
+        adminClient.setRequestHeader('x-vendure-sensitive-action-password', SUPER_ADMIN_USER_PASSWORD);
         const refunded = await adminClient.query(REFUND, {
             input: {
                 lines: firstPaidOrder.lines.map((line: any) => ({
@@ -487,6 +512,7 @@ describe('coupon lifecycle closed loop', () => {
                 reason: 'Coupon lifecycle full refund',
             },
         });
+        adminClient.setRequestHeader('x-vendure-sensitive-action-password', null);
         assertSuccess(refunded.refundOrder);
         expect(refunded.refundOrder.state).toBe('Settled');
 
@@ -514,6 +540,29 @@ describe('coupon lifecycle closed loop', () => {
             ]),
         );
     }, 30_000);
+
+    it('does not expose account A coupon ownership or history after the same client logs in as account B', async () => {
+        await shopClient.query(CLAIM, { campaignId: soldOutCampaignId });
+        await shopClient.query(LOGOUT);
+        const registered = await shopClient.query(REGISTER, {
+            input: {
+                emailAddress: 'coupon-e2e-account-b@example.com',
+                firstName: 'Coupon',
+                lastName: 'Account B',
+                password: 'CouponPass456!',
+            },
+        });
+        assertSuccess(registered.registerCustomerWithReferral);
+        await shopClient.asUserWithCredentials('coupon-e2e-account-b@example.com', 'CouponPass456!');
+
+        expect(campaign(await shopClient.query(ACTIVE_COUPONS), soldOutCampaignId)).toMatchObject({
+            claimed: false,
+            claimable: false,
+            remainingIssueCount: 0,
+        });
+        expect((await shopClient.query(MY_COUPONS)).myStorefrontCoupons).toEqual([]);
+        expect((await shopClient.query(USAGE_RECORDS)).myStorefrontCouponUsageRecords).toEqual([]);
+    });
 });
 
 async function prepareOrderForPayment(): Promise<any> {
@@ -535,8 +584,8 @@ async function payOrder(): Promise<any> {
     return paid.addPaymentToOrder;
 }
 
-function campaign(result: any): any {
-    return result.activeStorefrontCoupons.find((item: any) => item.id === campaignId);
+function campaign(result: any, targetCampaignId = campaignId): any {
+    return result.activeStorefrontCoupons.find((item: any) => item.id === targetCampaignId);
 }
 
 function assertSuccess(result: { __typename?: string; message?: string }): void {

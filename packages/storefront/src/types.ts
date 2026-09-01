@@ -838,7 +838,6 @@ export interface StorefrontSystemAnnouncement {
 export interface StorefrontContentResponse {
     blocks: StorefrontContentBlock[];
     settings: StorefrontContentSettings;
-    coupons: StorefrontCouponCampaign[];
     flashSales: StorefrontFlashSale[];
     systemAnnouncements: StorefrontSystemAnnouncement[];
 }

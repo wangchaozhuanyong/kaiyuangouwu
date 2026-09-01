@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+    couponCampaignActionState,
+    couponCampaignsForCustomer,
     couponCampaignsForTab,
     couponCenterTabCount,
     customerCouponsForTab,
@@ -49,12 +51,12 @@ const coupon = (status: StoreCustomerCoupon['status']): StoreCustomerCoupon => (
 
 describe('coupon center state', () => {
     it('separates unclaimed activities from already claimed or sold-out activities', () => {
-        expect(
-            couponCampaignsForTab(
-                [campaign(false, true), campaign(true, true), campaign(false, false)],
-                'UNCLAIMED',
-            ),
-        ).toHaveLength(1);
+        const campaigns = [campaign(false, true), campaign(true, true), campaign(false, false)];
+        expect(couponCampaignsForTab(campaigns, 'UNCLAIMED')).toHaveLength(1);
+        expect(couponCampaignsForTab(campaigns, 'ACTIVITIES')).toHaveLength(2);
+        expect(couponCampaignsForTab(campaigns, 'ACTIVITIES')).not.toContainEqual(
+            expect.objectContaining({ claimed: false, claimable: false }),
+        );
     });
 
     it('keeps available, returned and locked coupons in the unused lifecycle view', () => {
@@ -79,5 +81,55 @@ describe('coupon center state', () => {
 
     it('recognizes a locked coupon without depending on a checkout order object', () => {
         expect(isLockedCoupon(coupon('LOCKED'))).toBe(true);
+    });
+
+    it('derives claimed state from the current account instead of global campaign inventory', () => {
+        const soldOutCampaign = {
+            ...campaign(false, false),
+            id: 'sold-out-campaign',
+        };
+        const firstAccountCoupon = {
+            ...coupon('AVAILABLE'),
+            id: 'first-account-coupon',
+            campaignId: soldOutCampaign.id,
+        };
+
+        expect(couponCampaignsForCustomer([soldOutCampaign], [firstAccountCoupon])[0]).toMatchObject({
+            claimed: true,
+            claimable: false,
+        });
+        expect(couponCampaignsForCustomer([soldOutCampaign], [])[0]).toMatchObject({
+            claimed: false,
+            claimable: false,
+        });
+        expect(
+            couponCampaignsForTab(
+                couponCampaignsForCustomer([soldOutCampaign], [firstAccountCoupon]),
+                'ACTIVITIES',
+            ),
+        ).toHaveLength(1);
+        expect(
+            couponCampaignsForTab(couponCampaignsForCustomer([soldOutCampaign], []), 'ACTIVITIES'),
+        ).toEqual([]);
+    });
+
+    it('explains that a sold-out campaign was not claimed by the current account', () => {
+        expect(couponCampaignActionState(campaign(false, false), 'zh')).toEqual({
+            canClaim: false,
+            label: '已领完',
+            detail: '本账号未领',
+        });
+    });
+
+    it('does not expose a claim action before current-account ownership is known', () => {
+        expect(couponCampaignActionState(campaign(false, true), 'zh', 'loading')).toEqual({
+            canClaim: false,
+            label: '核验中',
+        });
+        expect(couponCampaignActionState(campaign(false, true), 'zh', 'error')).toEqual({
+            canClaim: false,
+            label: '状态异常',
+            detail: '请重试',
+        });
     });
 });

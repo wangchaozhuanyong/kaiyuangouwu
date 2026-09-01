@@ -14,6 +14,39 @@ const ctx = {
 } as any;
 
 describe('StoreCouponLifecycleService', () => {
+    it('scopes coupon ownership to the authenticated customer for separate email accounts', async () => {
+        const find = vi.fn(async () => []);
+        const findOneByUserId = vi.fn(async (_ctx: unknown, userId: string) => ({
+            id: userId === 'user-1' ? 'customer-1' : 'customer-2',
+            emailAddress: userId === 'user-1' ? 'account-a@example.com' : 'account-b@example.com',
+        }));
+        const service = new StoreCouponLifecycleService(
+            { getRepository: () => ({ find }) } as any,
+            { findOneByUserId } as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+        );
+        vi.spyOn(service as any, 'reconcileCustomer').mockResolvedValue(undefined);
+
+        await service.findMine({ ...ctx, activeUserId: 'user-1' });
+        await service.findMine({ ...ctx, activeUserId: 'user-2' });
+
+        expect(find).toHaveBeenNthCalledWith(
+            1,
+            expect.objectContaining({
+                where: { channelId: 'channel-1', customerId: 'customer-1' },
+            }),
+        );
+        expect(find).toHaveBeenNthCalledWith(
+            2,
+            expect.objectContaining({
+                where: { channelId: 'channel-1', customerId: 'customer-2' },
+            }),
+        );
+    });
+
     it('redeems only after payment succeeds, not when checkout merely enters payment', async () => {
         const handlers = new Map<string, (event: any) => Promise<void>>();
         const service = new StoreCouponLifecycleService(
@@ -289,6 +322,11 @@ describe('StoreCouponLifecycleService', () => {
         ]);
         expect(find).toHaveBeenCalledWith(
             expect.objectContaining({
+                where: {
+                    channelId: 'channel-1',
+                    customerId: 'customer-1',
+                    status: expect.anything(),
+                },
                 relations: { customerCoupon: true, order: true },
                 order: { usedAt: 'DESC' },
             }),

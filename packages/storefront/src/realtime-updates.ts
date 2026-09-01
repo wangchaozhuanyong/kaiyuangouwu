@@ -108,7 +108,9 @@ export function storefrontRealtimeQueryMatches(
     const topics = new Set(event.topics);
 
     if (topics.has('config') && section === 'config') return true;
-    if (topics.has('content') && section === 'content') return true;
+    if (topics.has('content') && (section === 'content' || couponCampaignQueryMatches(key, scope))) {
+        return true;
+    }
     if (topics.has('catalog') && catalogQueryMatches(key, event)) return true;
     if (topics.has('reviews') && section === 'product-reviews') {
         const ids = new Set(event.entityIds ?? []);
@@ -118,6 +120,7 @@ export function storefrontRealtimeQueryMatches(
     if (section !== 'private') return false;
 
     const privateSection = key[4];
+    if (topics.has('coupons') && privateSection === 'coupon-campaigns') return true;
     if (topics.has('cart') && privateSection === 'cart') return true;
     if (topics.has('customer') && privateSection === 'customer' && key.length === 5) return true;
     if (topics.has('orders') && (privateSection === 'order' || privateSection === 'order-by-code'))
@@ -134,13 +137,27 @@ export function storefrontRealtimeQueryMatches(
     ) {
         return true;
     }
-    if (topics.has('coupons') && ['coupons', 'coupon-usage-records'].includes(String(customerSection))) {
+    if (
+        topics.has('coupons') &&
+        ['coupon-campaigns', 'coupons', 'coupon-usage-records'].includes(String(customerSection))
+    ) {
         return true;
     }
     if (topics.has('reviews') && ['reviews', 'review-candidates'].includes(String(customerSection))) {
         return true;
     }
     return topics.has('referral') && customerSection === 'referral';
+}
+
+function couponCampaignQueryMatches(key: QueryKey, scope: StorefrontRealtimeScope): boolean {
+    if (key[3] !== 'private') return false;
+    if (key[4] === 'coupon-campaigns') return key[5] === 'anonymous';
+    return (
+        Boolean(scope.customerId) &&
+        key[4] === 'customer' &&
+        String(key[5]) === scope.customerId &&
+        key[6] === 'coupon-campaigns'
+    );
 }
 
 function catalogQueryMatches(key: QueryKey, event: StorefrontRealtimeEvent): boolean {
