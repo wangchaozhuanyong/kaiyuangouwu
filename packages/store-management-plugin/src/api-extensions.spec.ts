@@ -47,6 +47,45 @@ describe('store management API extensions', () => {
         expect(shopFlashSale.fields?.map(field => field.name.value)).not.toContain('name');
     });
 
+    it('uses the generated coupon ledger list options input without a duplicate options argument', () => {
+        const ledgerOptions = adminApiExtensions.definitions.find(
+            definition =>
+                definition.kind === Kind.INPUT_OBJECT_TYPE_DEFINITION &&
+                definition.name.value === 'StoreCouponLedgerEntryListOptions',
+        );
+        const legacyOptions = adminApiExtensions.definitions.find(
+            definition =>
+                definition.kind === Kind.INPUT_OBJECT_TYPE_DEFINITION &&
+                definition.name.value === 'StoreCouponLedgerListOptions',
+        );
+        const query = adminApiExtensions.definitions.find(
+            definition => definition.kind === Kind.OBJECT_TYPE_EXTENSION && definition.name.value === 'Query',
+        );
+
+        expect(ledgerOptions?.kind).toBe(Kind.INPUT_OBJECT_TYPE_DEFINITION);
+        expect(legacyOptions).toBeUndefined();
+        expect(query?.kind).toBe(Kind.OBJECT_TYPE_EXTENSION);
+        if (
+            ledgerOptions?.kind !== Kind.INPUT_OBJECT_TYPE_DEFINITION ||
+            query?.kind !== Kind.OBJECT_TYPE_EXTENSION
+        ) {
+            throw new Error('Coupon ledger schema definitions are missing');
+        }
+        expect(ledgerOptions.fields?.map(field => field.name.value)).toEqual(
+            expect.arrayContaining(['skip', 'take', 'campaignId', 'customerId', 'orderId', 'eventType']),
+        );
+
+        const ledgerQuery = query.fields?.find(field => field.name.value === 'storeCouponLedger');
+        const optionsArguments = ledgerQuery?.arguments?.filter(
+            argument => argument.name.value === 'options',
+        );
+
+        expect(optionsArguments).toHaveLength(1);
+        expect(optionsArguments?.[0] && namedType(optionsArguments[0].type)).toBe(
+            'StoreCouponLedgerEntryListOptions',
+        );
+    });
+
     it('exposes an admin query for a selected customer referral wallets', () => {
         const query = adminApiExtensions.definitions.find(
             definition => definition.kind === Kind.OBJECT_TYPE_EXTENSION && definition.name.value === 'Query',

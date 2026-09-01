@@ -5,7 +5,7 @@ import { MerchantInitialPasswordService } from '../merchant-initial-password.ser
 import {
     CreateStoreCouponCampaignInput,
     CreateStoreFlashSaleInput,
-    StoreCouponLedgerListOptions,
+    StoreCouponLedgerEntryListOptions,
 } from '../types';
 
 import { StoreCouponLifecycleService } from './store-coupon-lifecycle.service';
@@ -33,7 +33,10 @@ export class StorePromotionCampaignAdminResolver {
 
     @Query()
     @Allow(Permission.ReadPromotion)
-    storeCouponLedger(@Ctx() ctx: RequestContext, @Args('options') options?: StoreCouponLedgerListOptions) {
+    storeCouponLedger(
+        @Ctx() ctx: RequestContext,
+        @Args('options') options?: StoreCouponLedgerEntryListOptions,
+    ) {
         return this.lifecycleService.findLedger(ctx, options);
     }
 

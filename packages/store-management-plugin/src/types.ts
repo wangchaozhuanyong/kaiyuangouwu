@@ -172,7 +172,7 @@ export interface StoreCustomerCouponView {
     usable: boolean;
 }
 
-export interface StoreCouponLedgerListOptions {
+export interface StoreCouponLedgerEntryListOptions {
     skip?: number | null;
     take?: number | null;
     campaignId?: ID | null;

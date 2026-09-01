@@ -750,7 +750,7 @@ export const adminApiExtensions = gql`
         totalItems: Int!
     }
 
-    input StoreCouponLedgerListOptions {
+    input StoreCouponLedgerEntryListOptions {
         skip: Int
         take: Int
         campaignId: ID
@@ -1139,7 +1139,7 @@ export const adminApiExtensions = gql`
         merchantInitialPasswordStatus: MerchantInitialPasswordStatus!
         storefrontPromotionPage: StorefrontPromotionPage!
         storeCouponCampaigns: [StoreCouponCampaign!]!
-        storeCouponLedger(options: StoreCouponLedgerListOptions): StoreCouponLedgerEntryList!
+        storeCouponLedger(options: StoreCouponLedgerEntryListOptions): StoreCouponLedgerEntryList!
         storeCouponDailyReport(from: DateTime!, to: DateTime!, campaignId: ID): [StoreCouponDailyMetric!]!
         storeFlashSales: [StoreFlashSale!]!
         systemAnnouncements: [SystemAnnouncement!]!

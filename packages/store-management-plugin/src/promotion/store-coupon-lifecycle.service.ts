@@ -32,8 +32,8 @@ import { convertChannelAmount } from '../store-currency-price-selection-strategy
 import {
     StoreCouponCampaignActionResult,
     StoreCouponLedgerEntryList,
+    StoreCouponLedgerEntryListOptions,
     StoreCouponLedgerEntryView,
-    StoreCouponLedgerListOptions,
     StoreCouponOrderAllocationView,
     StoreCouponUsageRecordView,
     StoreCustomerCouponView,
@@ -328,7 +328,7 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
 
     async findLedger(
         ctx: RequestContext,
-        options: StoreCouponLedgerListOptions = {},
+        options: StoreCouponLedgerEntryListOptions = {},
     ): Promise<StoreCouponLedgerEntryList> {
         const skip = boundedInteger(options.skip, 0, 0, 100_000);
         const take = boundedInteger(options.take, 50, 1, 200);
