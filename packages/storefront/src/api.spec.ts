@@ -1157,6 +1157,55 @@ describe('ShopApi storefront mutations', () => {
         expect(request.query).not.toContain('handlerCode');
     });
 
+    it('attaches the latest customer avatar to the active customer', async () => {
+        const avatar = { id: 'asset-1', preview: '/assets/avatar.webp' };
+        const activeCustomer = {
+            id: 'customer-1',
+            firstName: '雪',
+            lastName: '潘',
+            emailAddress: 'customer@example.com',
+            phoneNumber: null,
+            addresses: [],
+            orders: { items: [], totalItems: 0 },
+        };
+        const fetchMock = mockGraphQlResponse({ activeCustomer, myCustomerAvatar: avatar });
+
+        await expect(new ShopApi(market).activeCustomer()).resolves.toEqual({
+            ...activeCustomer,
+            avatar,
+        });
+        const request = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as { query: string };
+        expect(request.query).toContain('myCustomerAvatar { id preview }');
+    });
+
+    it('uploads a customer avatar with the GraphQL multipart request format', async () => {
+        const avatar = { id: 'asset-2', preview: '/assets/avatar.png' };
+        const fetchMock = mockGraphQlResponse({ setCustomerAvatar: avatar });
+        const file = new File([new Uint8Array([137, 80, 78, 71])], 'avatar.png', {
+            type: 'image/png',
+        });
+
+        await expect(new ShopApi(market).uploadCustomerAvatar(file)).resolves.toEqual(avatar);
+
+        const request = fetchMock.mock.calls[0][1] as RequestInit;
+        expect(request.headers).not.toHaveProperty('content-type');
+        expect(request.body).toBeInstanceOf(FormData);
+        const form = request.body as FormData;
+        const operationsEntry = form.get('operations');
+        const mapEntry = form.get('map');
+        if (typeof operationsEntry !== 'string' || typeof mapEntry !== 'string') {
+            throw new TypeError('Expected GraphQL multipart metadata');
+        }
+        const operations = JSON.parse(operationsEntry) as {
+            query: string;
+            variables: { file: null };
+        };
+        expect(operations.query).toContain('setCustomerAvatar(file: $file)');
+        expect(operations.variables).toEqual({ file: null });
+        expect(JSON.parse(mapEntry)).toEqual({ 0: ['variables.file'] });
+        expect((form.get('0') as File).name).toBe('avatar.png');
+    });
+
     it('paginates and filters customer orders on the server', async () => {
         const fetchMock = mockGraphQlResponse({
             activeCustomer: { orders: { totalItems: 14, items: [] } },

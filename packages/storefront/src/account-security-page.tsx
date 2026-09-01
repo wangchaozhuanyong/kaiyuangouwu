@@ -1,37 +1,105 @@
 import { useNavigate } from '@tanstack/react-router';
 import {
     ArrowLeft,
+    Camera,
     CheckCircle2,
     ChevronRight,
     KeyRound,
+    LoaderCircle,
     LogOut,
     MapPin,
     ShieldCheck,
     UserRound,
 } from 'lucide-react';
-import { ReactNode } from 'react';
+import { ChangeEvent, ReactNode, useEffect, useRef, useState } from 'react';
 
 import { routeNavigateOptions } from './storefront-router';
 import { ActiveCustomer, StorefrontLanguage } from './types';
 
 type AccountRoute = { name: 'login' | 'forgot-password' | 'addresses' };
 
+export const CUSTOMER_AVATAR_MAX_BYTES = 5 * 1024 * 1024;
+export const CUSTOMER_AVATAR_ACCEPT = 'image/jpeg,image/png,image/webp';
+
+export function customerAvatarValidationMessage(
+    file: Pick<File, 'size' | 'type'>,
+    language: StorefrontLanguage,
+): string | null {
+    const isZh = language === 'zh';
+    if (!file.size) return isZh ? '请选择有效的头像图片' : 'Choose a valid profile photo.';
+    if (!CUSTOMER_AVATAR_ACCEPT.split(',').includes(file.type.toLowerCase())) {
+        return isZh ? '仅支持 JPG、PNG 或 WebP 图片' : 'Use a JPG, PNG, or WebP image.';
+    }
+    if (file.size > CUSTOMER_AVATAR_MAX_BYTES) {
+        return isZh ? '头像图片不能超过 5MB' : 'Profile photos must be 5MB or smaller.';
+    }
+    return null;
+}
+
 export function AccountSecurityPage({
     customer,
     language,
     storefrontName,
     onBack,
+    onAvatarChange,
     onLogout,
 }: {
     customer: ActiveCustomer | null;
     language: StorefrontLanguage;
     storefrontName: string;
     onBack: () => void;
+    onAvatarChange: (file: File) => Promise<void>;
     onLogout: () => void;
 }) {
     const navigate = useNavigate();
     const navigateTo = (route: AccountRoute) => void navigate(routeNavigateOptions(route) as never);
     const isZh = language === 'zh';
+    const avatarInputRef = useRef<HTMLInputElement>(null);
+    const previewUrlRef = useRef<string | null>(null);
+    const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
+    const [avatarUploading, setAvatarUploading] = useState(false);
+    const [avatarError, setAvatarError] = useState<string | null>(null);
+
+    useEffect(
+        () => () => {
+            if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+        },
+        [],
+    );
+
+    const handleAvatarChange = async (event: ChangeEvent<HTMLInputElement>) => {
+        const file = event.currentTarget.files?.[0];
+        event.currentTarget.value = '';
+        if (!file) return;
+        const validationMessage = customerAvatarValidationMessage(file, language);
+        if (validationMessage) {
+            setAvatarError(validationMessage);
+            return;
+        }
+
+        if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+        previewUrlRef.current = URL.createObjectURL(file);
+        setAvatarPreviewUrl(previewUrlRef.current);
+        setAvatarError(null);
+        setAvatarUploading(true);
+        try {
+            await onAvatarChange(file);
+        } catch (error) {
+            setAvatarError(
+                error instanceof Error
+                    ? error.message
+                    : isZh
+                      ? '头像上传失败，请重试'
+                      : 'Profile photo upload failed. Try again.',
+            );
+        } finally {
+            setAvatarUploading(false);
+            if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+            previewUrlRef.current = null;
+            setAvatarPreviewUrl(null);
+        }
+    };
+
     if (!customer) {
         return (
             <Subpage title={isZh ? '账户与安全' : 'Account & Security'} language={language} onBack={onBack}>
@@ -48,6 +116,7 @@ export function AccountSecurityPage({
     const fullName = `${customer.lastName || ''}${customer.firstName || ''}`.trim();
     const displayName = fullName || customer.emailAddress.split('@')[0] || storefrontName;
     const initial = (fullName || customer.emailAddress).slice(0, 1).toUpperCase();
+    const avatarUrl = avatarPreviewUrl ?? customer.avatar?.preview ?? null;
 
     return (
         <main className="page subpage account-security-page">
@@ -60,9 +129,33 @@ export function AccountSecurityPage({
             <div className="security-page-body">
                 {/* 1. 用户信息高质感微卡片 */}
                 <section className="security-user-card" aria-label={isZh ? '个人信息' : 'Personal info'}>
-                    <div className="security-user-avatar" aria-hidden="true">
-                        {initial}
-                    </div>
+                    <button
+                        type="button"
+                        className="security-user-avatar"
+                        disabled={avatarUploading}
+                        aria-label={isZh ? '更换头像' : 'Change profile photo'}
+                        aria-busy={avatarUploading}
+                        aria-describedby={avatarError ? 'avatar-upload-message' : undefined}
+                        onClick={() => avatarInputRef.current?.click()}
+                    >
+                        {avatarUrl ? (
+                            <img className="security-user-avatar-image" src={avatarUrl} alt="" />
+                        ) : (
+                            <span aria-hidden="true">{initial}</span>
+                        )}
+                        <span className="security-avatar-edit" aria-hidden="true">
+                            {avatarUploading ? <LoaderCircle /> : <Camera />}
+                        </span>
+                    </button>
+                    <input
+                        ref={avatarInputRef}
+                        className="security-avatar-input"
+                        type="file"
+                        accept={CUSTOMER_AVATAR_ACCEPT}
+                        onChange={event => void handleAvatarChange(event)}
+                        tabIndex={-1}
+                        aria-hidden="true"
+                    />
                     <div className="security-user-meta">
                         <div className="security-user-title-row">
                             <h2 className="security-user-name">{displayName}</h2>
@@ -72,6 +165,15 @@ export function AccountSecurityPage({
                             </span>
                         </div>
                         <p className="security-user-email">{customer.emailAddress}</p>
+                        {(avatarUploading || avatarError) && (
+                            <p
+                                id="avatar-upload-message"
+                                className={`security-avatar-message${avatarError ? ' is-error' : ''}`}
+                                role={avatarError ? 'alert' : 'status'}
+                            >
+                                {avatarError ?? (isZh ? '正在上传头像…' : 'Uploading profile photo…')}
+                            </p>
+                        )}
                     </div>
                 </section>
 

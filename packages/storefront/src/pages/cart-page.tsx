@@ -1,9 +1,8 @@
-import type { RouteState } from '../storefront-router';
 import { useNavigate } from '@tanstack/react-router';
 import { Check, ChevronRight, Minus, Package, ShoppingBag, TicketPercent } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { routeHref, routeNavigateOptions } from '../storefront-router';
+import { routeHref, routeNavigateOptions, type RouteState } from '../storefront-router';
 import { CartGroup, CouponSheet } from '../storefront-ui/cart-ui';
 import { EmptyState, InlineError, ListSkeleton } from '../storefront-ui/page-shell';
 import { formatMoney } from '../storefront-ui/product-display';
@@ -476,6 +475,10 @@ export function CartPage() {
                     loading={loading}
                     onApply={onApplyCoupon}
                     onRemove={onRemoveCoupon}
+                    onBrowseCoupons={() => {
+                        setCouponOpen(false);
+                        navigateTo({ name: 'coupons' });
+                    }}
                     onClose={() => setCouponOpen(false)}
                 />
             )}

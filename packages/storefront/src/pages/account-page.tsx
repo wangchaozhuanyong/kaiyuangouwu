@@ -182,7 +182,15 @@ export function AccountPage() {
                                     aria-label={isZh ? '个人信息与安全' : 'Profile and security'}
                                 >
                                     <span className="grid size-[54px] shrink-0 place-items-center rounded-full border-[2.5px] border-white bg-[linear-gradient(135deg,#3b82f6_0%,#2563eb_50%,#1d4ed8_100%)] text-[22px] font-extrabold text-white lg:size-16 lg:text-[26px]">
-                                        {customerName.slice(0, 1).toUpperCase()}
+                                        {customer.avatar?.preview ? (
+                                            <img
+                                                className="size-full rounded-full object-cover"
+                                                src={customer.avatar.preview}
+                                                alt=""
+                                            />
+                                        ) : (
+                                            customerName.slice(0, 1).toUpperCase()
+                                        )}
                                     </span>
                                 </button>
                             </div>
