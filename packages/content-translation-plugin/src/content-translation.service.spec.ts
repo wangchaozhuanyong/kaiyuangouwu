@@ -28,13 +28,14 @@ describe('ContentTranslationService localized fields', () => {
         const provider = {
             name: 'test',
             isConfigured: () => true,
-            translate: async (request: any) => ({
-                provider: 'test',
-                translations: request.segments.map((segment: any) => ({
-                    key: segment.key,
-                    text: `EN:${segment.text}`,
-                })),
-            }),
+            translate: (request: any) =>
+                Promise.resolve({
+                    provider: 'test',
+                    translations: request.segments.map((segment: any) => ({
+                        key: segment.key,
+                        text: `EN:${segment.text}`,
+                    })),
+                }),
         };
         const service = new ContentTranslationService({} as any, {
             provider,
@@ -59,10 +60,11 @@ describe('ContentTranslationService localized fields', () => {
             provider: {
                 name: 'test',
                 isConfigured: () => true,
-                translate: async () => ({
-                    provider: 'test',
-                    translations: [{ key: 'title', text: 'New title' }],
-                }),
+                translate: () =>
+                    Promise.resolve({
+                        provider: 'test',
+                        translations: [{ key: 'title', text: 'New title' }],
+                    }),
             },
             glossary: {},
             sourceLanguageCode: 'zh_Hans',
@@ -83,10 +85,12 @@ describe('ContentTranslationService localized fields', () => {
     });
 
     it('regenerates an English field whose existing value still contains Chinese', async () => {
-        const translate = vi.fn(async () => ({
-            provider: 'test',
-            translations: [{ key: 'description', text: 'Official channel service' }],
-        }));
+        const translate = vi.fn(() =>
+            Promise.resolve({
+                provider: 'test',
+                translations: [{ key: 'description', text: 'Official channel service' }],
+            }),
+        );
         const service = new ContentTranslationService({} as any, {
             provider: { name: 'test', isConfigured: () => true, translate },
             glossary: {},
@@ -171,10 +175,12 @@ describe('ContentTranslationService localized fields', () => {
     });
 
     it('regenerates English when a manual lock is explicitly removed', async () => {
-        const translate = vi.fn(async () => ({
-            provider: 'test',
-            translations: [{ key: 'title', text: 'Fresh automatic translation' }],
-        }));
+        const translate = vi.fn(() =>
+            Promise.resolve({
+                provider: 'test',
+                translations: [{ key: 'title', text: 'Fresh automatic translation' }],
+            }),
+        );
         const service = new ContentTranslationService({} as any, {
             provider: { name: 'test', isConfigured: () => true, translate },
             glossary: {},
@@ -228,8 +234,8 @@ describe('ContentTranslationService localized fields', () => {
             status: index === 1_000 ? 'MANUAL_LOCKED' : 'AUTO_TRANSLATED',
         }));
         const repository = {
-            find: vi.fn(async (options: any) =>
-                options.take ? allStatuses.slice(0, options.take) : allStatuses,
+            find: vi.fn((options: any) =>
+                Promise.resolve(options.take ? allStatuses.slice(0, options.take) : allStatuses),
             ),
         };
         const service = new ContentTranslationService({ getRepository: vi.fn(() => repository) } as any, {
@@ -251,7 +257,7 @@ describe('ContentTranslationService localized fields', () => {
 
     it('counts stale translations in the active channel', async () => {
         const repository = {
-            count: vi.fn(async () => 3),
+            count: vi.fn().mockResolvedValue(3),
         };
         const service = new ContentTranslationService({ getRepository: vi.fn(() => repository) } as any, {
             provider: { name: 'test', isConfigured: () => true, translate: vi.fn() },
@@ -270,7 +276,7 @@ describe('ContentTranslationService localized fields', () => {
     });
 
     it('audits the active channel together with global translation records', async () => {
-        const repository = { find: vi.fn(async () => []) };
+        const repository = { find: vi.fn().mockResolvedValue([]) };
         const service = new ContentTranslationService({ getRepository: vi.fn(() => repository) } as any, {
             provider: { name: 'test', isConfigured: () => true, translate: vi.fn() },
             glossary: {},
