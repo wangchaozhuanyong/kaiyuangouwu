@@ -65,13 +65,29 @@ describe('StoreUsdtWalletService', () => {
             USDT_TRC20_CONTRACT_ADDRESS,
         );
 
-        expect(submitted).toMatchObject({ reviewStatus: 'PENDING', configured: false });
+        expect(submitted).toMatchObject({ reviewStatus: 'PENDING', configured: false, canReview: false });
         const submittedEntity = walletRepository.save.mock.calls.at(-1)?.[0];
         expect(submittedEntity?.pendingReceivingAddressEncrypted).toMatch(/^v2:/u);
         expect(submittedEntity?.pendingReceivingAddressEncrypted).not.toContain(USDT_TRC20_CONTRACT_ADDRESS);
         await expect(service.requireConfigured({ channelId: channel.id } as any)).rejects.toThrow(
             '尚未通过平台审核',
         );
+        await expect(
+            service.review({ activeUserId: 'merchant-user' } as any, {
+                channelId: channel.id,
+                approved: true,
+            }),
+        ).rejects.toThrow('提交人不能审核自己提交的 USDT 收款地址');
+        await expect(
+            service.review({ activeUserId: 'merchant-user' } as any, {
+                channelId: channel.id,
+                approved: false,
+                rejectionReason: 'self review is forbidden',
+            }),
+        ).rejects.toThrow('提交人不能审核自己提交的 USDT 收款地址');
+        expect(submittedEntity?.reviewStatus).toBe('PENDING');
+        expect(audits.map(audit => audit.action)).toEqual(['SUBMITTED']);
+        expect(assignToChannels).not.toHaveBeenCalled();
 
         const approved = await service.review({ activeUserId: 'superadmin-user' } as any, {
             channelId: channel.id,
@@ -79,7 +95,7 @@ describe('StoreUsdtWalletService', () => {
         });
         const configuration = await service.requireConfigured({ channelId: channel.id } as any);
 
-        expect(approved).toMatchObject({ reviewStatus: 'ACTIVE', configured: true });
+        expect(approved).toMatchObject({ reviewStatus: 'ACTIVE', configured: true, canReview: false });
         expect(configuration.receivingAddress).toBe(USDT_TRC20_CONTRACT_ADDRESS);
         expect(assignToChannels).toHaveBeenCalledWith(
             expect.anything(),
