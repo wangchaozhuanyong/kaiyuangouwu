@@ -135,6 +135,7 @@ test('verifies the signed promotion entry flow and production public surfaces', 
 
     assert.deepEqual(checks, [
         'public health',
+        'dashboard health',
         'unauthenticated Shop API gate',
         'signed promotion entry',
         'authenticated Shop API',
@@ -143,6 +144,29 @@ test('verifies the signed promotion entry flow and production public surfaces', 
         'dashboard asset graph',
         'public Admin API denial',
     ]);
+});
+
+test('rejects a dashboard origin without its same-origin health route', async () => {
+    const fetchImpl = async url => {
+        const requestUrl = new URL(url);
+        if (requestUrl.origin === 'https://store.example.com' && requestUrl.pathname === '/health') {
+            return new Response('{"status":"ok"}', {
+                status: 200,
+                headers: { 'content-type': 'application/json' },
+            });
+        }
+        return new Response('', { status: 404 });
+    };
+
+    await assert.rejects(
+        verifyProductionRelease({
+            storefrontUrl: 'https://store.example.com',
+            dashboardUrl: 'https://console.example.com/dashboard/',
+            fetchImpl,
+            timeoutMs: 1_000,
+        }),
+        /Dashboard health endpoint: expected HTTP 200, received 404/u,
+    );
 });
 
 test('rejects a Shop API that bypasses the required promotion gate', async t => {

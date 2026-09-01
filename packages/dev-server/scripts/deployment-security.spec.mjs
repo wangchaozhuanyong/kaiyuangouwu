@@ -49,6 +49,16 @@ void test('promotion route preserves backend CSP without inheriting the storefro
     assert.doesNotMatch(promoLocation, /add_header Content-Security-Policy/u);
 });
 
+void test('production console proxies the dashboard health check to Vendure', async () => {
+    const config = await readFile(path.join(repositoryRoot, 'deploy/nginx/damatong.conf'), 'utf8');
+    const consoleServer = config.slice(config.indexOf('server_name console.damatong.net;'));
+    const healthLocation = consoleServer.match(/location = \/health \{(?<body>[\s\S]*?)\n    \}/u);
+
+    assert.ok(healthLocation?.groups?.body);
+    assert.match(healthLocation.groups.body, /proxy_pass http:\/\/vendure_backend;/u);
+    assert.match(healthLocation.groups.body, /include proxy_params;/u);
+});
+
 void test('legacy browser fallback files bypass the promotion gate without weakening other routes', async () => {
     const config = await readFile(path.join(repositoryRoot, 'deploy/nginx/damatong.conf'), 'utf8');
     const fallbackLocations = ['/legacy-browser-guard.js', '/unsupported-browser.html'].map(route =>

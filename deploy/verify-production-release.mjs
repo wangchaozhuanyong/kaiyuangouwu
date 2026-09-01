@@ -259,6 +259,20 @@ export async function verifyProductionRelease({
     }
     checks.push('public health');
 
+    const dashboardHealthUrl = new URL('/health', dashboard);
+    const dashboardHealthResponse = await fetchWithTimeout(
+        fetchImpl,
+        dashboardHealthUrl,
+        { redirect: 'manual' },
+        timeoutMs,
+    );
+    expectStatus(dashboardHealthResponse, 200, 'Dashboard health endpoint');
+    const dashboardHealth = await readJson(dashboardHealthResponse, 'Dashboard health endpoint');
+    if (dashboardHealth?.status !== 'ok') {
+        throw new Error('Dashboard health endpoint: expected JSON status "ok"');
+    }
+    checks.push('dashboard health');
+
     const shopApiUrl = new URL('/shop-api', storefront);
     const blockedShopResponse = await fetchWithTimeout(fetchImpl, shopApiUrl, shopApiRequest(), timeoutMs);
     expectStatus(blockedShopResponse, 403, 'Shop API without promotion cookie');
