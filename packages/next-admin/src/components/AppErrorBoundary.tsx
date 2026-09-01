@@ -1,6 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 
-import { tryRecoverFromBuildError } from '../utils/build-recovery';
+import { loadLatestBuild, tryRecoverFromBuildError } from '../utils/build-recovery';
 
 interface AppErrorBoundaryProps {
     children: ReactNode;
@@ -51,10 +51,10 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
                     {!isRecovering && (
                         <button
                             type="button"
-                            onClick={() => window.location.reload()}
+                            onClick={() => loadLatestBuild()}
                             className="mt-5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700"
                         >
-                            刷新后台
+                            加载最新后台
                         </button>
                     )}
                 </section>

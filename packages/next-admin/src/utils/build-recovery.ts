@@ -1,5 +1,6 @@
 const BUILD_RECOVERY_STORAGE_KEY = 'vendure-admin-build-recovery-at';
 const BUILD_RECOVERY_COOLDOWN_MS = 60_000;
+const BUILD_RECOVERY_QUERY_KEY = '__vendure_admin_build';
 
 interface BuildRecoveryStorage {
     getItem(key: string): string | null;
@@ -7,9 +8,19 @@ interface BuildRecoveryStorage {
 }
 
 interface BuildRecoveryEnvironment {
+    currentUrl(): string;
     now(): number;
-    reload(): void;
+    replace(url: string): void;
     storage: BuildRecoveryStorage;
+}
+
+function browserEnvironment(): BuildRecoveryEnvironment {
+    return {
+        currentUrl: () => window.location.href,
+        now: () => Date.now(),
+        replace: url => window.location.replace(url),
+        storage: window.sessionStorage,
+    };
 }
 
 function errorDetails(error: unknown) {
@@ -35,13 +46,19 @@ export function isRecoverableBuildError(error: unknown) {
     );
 }
 
+export function buildRecoveryUrl(currentUrl: string, recoveryAt: number) {
+    const url = new URL(currentUrl);
+    url.searchParams.set(BUILD_RECOVERY_QUERY_KEY, String(recoveryAt));
+    return url.toString();
+}
+
+export function loadLatestBuild(environment: BuildRecoveryEnvironment = browserEnvironment()) {
+    environment.replace(buildRecoveryUrl(environment.currentUrl(), environment.now()));
+}
+
 export function tryRecoverFromBuildError(
     error: unknown,
-    environment: BuildRecoveryEnvironment = {
-        now: () => Date.now(),
-        reload: () => window.location.reload(),
-        storage: window.sessionStorage,
-    },
+    environment: BuildRecoveryEnvironment = browserEnvironment(),
 ) {
     if (!isRecoverableBuildError(error)) return false;
 
@@ -62,7 +79,7 @@ export function tryRecoverFromBuildError(
         return false;
     }
 
-    environment.reload();
+    environment.replace(buildRecoveryUrl(environment.currentUrl(), now));
     return true;
 }
 
