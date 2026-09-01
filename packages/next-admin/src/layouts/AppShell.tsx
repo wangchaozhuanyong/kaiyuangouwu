@@ -116,6 +116,19 @@ function NavLink({
     );
 }
 
+function extensionSectionLabel(sectionId?: string) {
+    const labels: Record<string, string> = {
+        catalog: '商品',
+        sales: '订单与售后',
+        customers: '客户',
+        marketing: '营销',
+        storefront: '店铺',
+        plugins: '插件与服务',
+        settings: '系统与权限',
+    };
+    return labels[sectionId ?? ''] ?? '扩展功能';
+}
+
 const THEME_OPTIONS: Array<{
     value: ThemePreference;
     label: string;
@@ -573,12 +586,12 @@ export function AppShell() {
                     cat: '店铺',
                     icon: Megaphone,
                 },
-                ...getNextAdminExtensionNavItems('plugins')
+                ...getNextAdminExtensionNavItems()
                     .filter(route => route.commandPalette !== false)
                     .map(route => ({
                         title: route.title,
                         path: route.path,
-                        cat: '插件与服务',
+                        cat: extensionSectionLabel(route.navItem?.sectionId),
                         icon: route.navItem?.icon ?? Blocks,
                     })),
                 {
@@ -785,6 +798,16 @@ export function AppShell() {
                             >
                                 素材媒体库
                             </NavLink>
+                            {getNextAdminExtensionNavItems('catalog').map(route => (
+                                <NavLink
+                                    key={route.id}
+                                    allowed={canAccessPath(route.path)}
+                                    to={route.path}
+                                    className={navItemClass}
+                                >
+                                    {route.navItem?.label ?? route.title}
+                                </NavLink>
+                            ))}
                         </div>
                     </div>
 
@@ -1004,7 +1027,7 @@ export function AppShell() {
                             )}
                         </button>
                         <div
-                            className={`overflow-hidden transition-[max-height,margin] duration-150 ease-out ${isSidebarOpen && openMenu === 'settings' ? 'max-h-60 mt-1 space-y-0.5' : 'max-h-0'}`}
+                            className={`overflow-hidden transition-[max-height,margin] duration-150 ease-out ${isSidebarOpen && openMenu === 'settings' ? 'max-h-80 mt-1 space-y-0.5' : 'max-h-0'}`}
                         >
                             <NavLink
                                 allowed={canAccessPath('/settings/store-profile')}
@@ -1025,6 +1048,16 @@ export function AppShell() {
                                     系统运维
                                 </NavLink>
                             )}
+                            {getNextAdminExtensionNavItems('settings').map(route => (
+                                <NavLink
+                                    key={route.id}
+                                    allowed={canAccessPath(route.path)}
+                                    to={route.path}
+                                    className={navItemClass}
+                                >
+                                    {route.navItem?.label ?? route.title}
+                                </NavLink>
+                            ))}
                         </div>
                     </div>
                 </nav>

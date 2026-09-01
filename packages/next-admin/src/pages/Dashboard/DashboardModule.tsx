@@ -26,6 +26,7 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { NextAdminDashboardAlerts, NextAdminDashboardWidgets } from '../../extensions/extension-hosts';
 import {
     DASHBOARD_BOOTSTRAP_QUERY,
     DASHBOARD_METRICS_QUERY,
@@ -291,6 +292,9 @@ export function DashboardModule() {
             </header>
 
             <main className="flex-1 overflow-y-auto px-5 py-6 sm:px-8">
+                <div className="mx-auto mb-4 w-full max-w-7xl">
+                    <NextAdminDashboardAlerts />
+                </div>
                 <div className="mx-auto grid w-full max-w-7xl grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-12">
                     {visibleWidgets.map(widgetId => {
                         const spanClass =
@@ -710,6 +714,9 @@ export function DashboardModule() {
                             </button>
                         </div>
                     )}
+                </div>
+                <div className="mx-auto mt-4 w-full max-w-7xl">
+                    <NextAdminDashboardWidgets />
                 </div>
             </main>
 

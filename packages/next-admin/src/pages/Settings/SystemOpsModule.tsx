@@ -12,6 +12,7 @@ import {
     Gauge,
     KeyRound,
     LoaderCircle,
+    Pencil,
     Play,
     Plus,
     RefreshCw,
@@ -26,6 +27,16 @@ import { useEffect, useMemo, useState } from 'react';
 import { getServerHealthUrl, sensitiveActionContext } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
+import { DynamicCustomFieldsForm } from '../../custom-fields/DynamicCustomFieldsForm';
+import type { CustomFieldDefinition, CustomFieldValueMap } from '../../custom-fields/custom-field-types';
+import {
+    addCustomFieldsToDocument,
+    customFieldInputFromValues,
+    customFieldValuesFromEntity,
+    localizedCustomFieldInputFromValues,
+    validateCustomFieldValues,
+} from '../../custom-fields/custom-field-utils';
+import { useCustomFieldDefinitions } from '../../custom-fields/custom-fields-context';
 import {
     CANCEL_JOB_MUTATION,
     CREATE_API_KEY_MUTATION,
@@ -34,6 +45,7 @@ import {
     RUN_SCHEDULED_TASK_MUTATION,
     SET_SETTINGS_STORE_VALUE_MUTATION,
     SYSTEM_OPERATIONS_QUERY,
+    UPDATE_API_KEY_MUTATION,
     UPDATE_SCHEDULED_TASK_MUTATION,
     type ApiKeyRecord,
     type ScheduledTaskRecord,
@@ -57,11 +69,16 @@ const SYSTEM_OPS_TABS = {
 const API_KEY_PAGE_SIZE = 50;
 
 export function SystemOpsModule() {
+    const apiKeyCustomFields = useCustomFieldDefinitions('ApiKey');
+    const systemOperationsDocument = useMemo(
+        () => addCustomFieldsToDocument(SYSTEM_OPERATIONS_QUERY, 'ApiKey', apiKeyCustomFields),
+        [apiKeyCustomFields],
+    );
     const [tab, setTab] = useUrlTab<Tab>(SYSTEM_OPS_TABS, 'health');
     const [notice, setNotice] = useState('');
     const [actionError, setActionError] = useState('');
     const [apiKeyPage, setApiKeyPage] = useState(0);
-    const query = useQuery<SystemOperationsResult>(SYSTEM_OPERATIONS_QUERY, {
+    const query = useQuery<SystemOperationsResult>(systemOperationsDocument, {
         variables: {
             jobOptions: { take: 100, sort: { createdAt: 'DESC' } },
             apiKeyOptions: {
@@ -197,6 +214,7 @@ export function SystemOpsModule() {
                                     totalPages={apiKeyTotalPages}
                                     loading={query.loading}
                                     roles={data.activeAdministrator?.user.roles ?? []}
+                                    customFieldDefinitions={apiKeyCustomFields}
                                     onPageChange={setApiKeyPage}
                                     onChanged={completed}
                                     onError={setActionError}
@@ -899,6 +917,7 @@ function ApiKeysPanel({
     totalPages,
     loading,
     roles,
+    customFieldDefinitions,
     onPageChange,
     onChanged,
     onError,
@@ -909,12 +928,14 @@ function ApiKeysPanel({
     totalPages: number;
     loading: boolean;
     roles: Array<{ id: string; code: string; description: string }>;
+    customFieldDefinitions: CustomFieldDefinition[];
     onPageChange: (page: number) => void;
     onChanged: (message: string) => Promise<void>;
     onError: (message: string) => void;
 }) {
     const requestConfirmation = useConfirmDialog();
     const [createOpen, setCreateOpen] = useState(false);
+    const [editingKey, setEditingKey] = useState<ApiKeyRecord | null>(null);
     const [secret, setSecret] = useState<{ title: string; value: string } | null>(null);
     const [rotate, rotateState] = useMutation<{ rotateApiKey: { apiKey: string } }>(ROTATE_API_KEY_MUTATION);
     const [remove, removeState] = useMutation<{
@@ -1001,6 +1022,15 @@ function ApiKeysPanel({
                         <div className="flex gap-2">
                             <button
                                 type="button"
+                                onClick={() => setEditingKey(key)}
+                                disabled={busy}
+                                className={secondaryButton}
+                            >
+                                <Pencil className="h-3.5 w-3.5" />
+                                编辑
+                            </button>
+                            <button
+                                type="button"
                                 onClick={() => void rotateKey(key)}
                                 disabled={busy}
                                 className={secondaryButton}
@@ -1061,10 +1091,161 @@ function ApiKeysPanel({
                     onError={onError}
                 />
             )}
+            {editingKey && (
+                <EditApiKeyDialog
+                    item={editingKey}
+                    roles={roles}
+                    customFieldDefinitions={customFieldDefinitions}
+                    onClose={() => setEditingKey(null)}
+                    onSaved={async () => {
+                        setEditingKey(null);
+                        await onChanged('API 密钥名称、角色与扩展字段已更新');
+                    }}
+                    onError={onError}
+                />
+            )}
             {secret && (
                 <SecretDialog title={secret.title} value={secret.value} onClose={() => setSecret(null)} />
             )}
         </section>
+    );
+}
+
+function EditApiKeyDialog({
+    item,
+    roles,
+    customFieldDefinitions,
+    onClose,
+    onSaved,
+    onError,
+}: {
+    item: ApiKeyRecord;
+    roles: Array<{ id: string; code: string; description: string }>;
+    customFieldDefinitions: CustomFieldDefinition[];
+    onClose: () => void;
+    onSaved: () => Promise<void>;
+    onError: (message: string) => void;
+}) {
+    const requestConfirmation = useConfirmDialog();
+    const sourceTranslation = item.translations[0];
+    const [name, setName] = useState(item.name);
+    const [roleIds, setRoleIds] = useState(item.user.roles.map(role => role.id));
+    const [customFieldValues, setCustomFieldValues] = useState<CustomFieldValueMap>(() =>
+        customFieldValuesFromEntity(customFieldDefinitions, item.customFields, item.translations),
+    );
+    const updateDocument = useMemo(
+        () => addCustomFieldsToDocument(UPDATE_API_KEY_MUTATION, 'ApiKey', customFieldDefinitions),
+        [customFieldDefinitions],
+    );
+    const [update, state] = useMutation(updateDocument);
+    const submit = async () => {
+        if (!name.trim() || !roleIds.length) return onError('请填写用途名称并至少选择一个角色');
+        const languageCode = sourceTranslation?.languageCode ?? 'zh_Hans';
+        const customFieldErrors = validateCustomFieldValues(
+            customFieldDefinitions,
+            customFieldValues,
+            languageCode,
+        );
+        if (Object.keys(customFieldErrors).length > 0) {
+            return onError(Object.values(customFieldErrors)[0] ?? 'API 密钥扩展字段校验失败');
+        }
+        const confirmation = await requestConfirmation({
+            title: `更新 API 密钥“${item.name}”？`,
+            description: '角色变更会立即影响该密钥可访问的管理 API，请验证当前管理员密码。',
+            confirmLabel: '验证并更新',
+            tone: 'warning',
+            requireCurrentPassword: true,
+        });
+        if (!confirmation) return;
+        try {
+            const response = await update({
+                variables: {
+                    input: {
+                        id: item.id,
+                        roleIds,
+                        customFields: customFieldInputFromValues(customFieldDefinitions, customFieldValues),
+                        translations: (item.translations.length
+                            ? item.translations
+                            : [{ id: '', languageCode, name: item.name }]
+                        ).map(translation => ({
+                            ...(translation.id ? { id: translation.id } : {}),
+                            languageCode: translation.languageCode,
+                            name: translation.languageCode === languageCode ? name.trim() : translation.name,
+                            customFields: localizedCustomFieldInputFromValues(
+                                customFieldDefinitions,
+                                customFieldValues,
+                                translation.languageCode,
+                            ),
+                        })),
+                    },
+                },
+                context: sensitiveActionContext(confirmation.currentPassword ?? ''),
+            });
+            if (!(response.data as { updateApiKey?: { id?: string } } | undefined)?.updateApiKey?.id) {
+                throw new Error('后端未返回更新后的 API 密钥');
+            }
+            await onSaved();
+        } catch (error) {
+            onError(errorText(error));
+        }
+    };
+    return (
+        <Modal
+            title="编辑 API 密钥"
+            description="可修改用途名称、关联角色和动态扩展字段；密钥值本身不会改变"
+            onClose={onClose}
+        >
+            <Field label="用途名称 *">
+                <input
+                    value={name}
+                    onChange={event => setName(event.target.value)}
+                    className={inputClass}
+                    autoFocus
+                />
+            </Field>
+            <div className="mt-5">
+                <div className="mb-2 text-xs font-bold text-slate-700">分配角色 *</div>
+                <div className="space-y-2">
+                    {roles.map(role => (
+                        <label
+                            key={role.id}
+                            className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 p-3 text-xs"
+                        >
+                            <input
+                                type="checkbox"
+                                checked={roleIds.includes(role.id)}
+                                onChange={() =>
+                                    setRoleIds(current =>
+                                        current.includes(role.id)
+                                            ? current.filter(id => id !== role.id)
+                                            : [...current, role.id],
+                                    )
+                                }
+                            />
+                            <span>
+                                <strong className="text-slate-800">{role.description || role.code}</strong>
+                                <code className="ml-2 font-mono text-[9px] text-slate-400">{role.code}</code>
+                            </span>
+                        </label>
+                    ))}
+                </div>
+            </div>
+            <div className="mt-5">
+                <DynamicCustomFieldsForm
+                    title="API 密钥扩展字段"
+                    fields={customFieldDefinitions}
+                    values={customFieldValues}
+                    onChange={setCustomFieldValues}
+                    disabled={state.loading}
+                />
+            </div>
+            <ModalActions
+                onClose={onClose}
+                onSave={() => void submit()}
+                saving={state.loading}
+                saveLabel="更新密钥"
+            />
+        </Modal>
     );
 }
 
@@ -1087,7 +1268,7 @@ function CreateApiKeyDialog({
         try {
             const response = await create({
                 variables: {
-                    input: { roleIds, translations: [{ languageCode: 'zh_CN', name: name.trim() }] },
+                    input: { roleIds, translations: [{ languageCode: 'zh_Hans', name: name.trim() }] },
                 },
             });
             const value = response.data?.createApiKey.apiKey;

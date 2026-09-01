@@ -5,7 +5,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 
 import { clearAuthSession, hasActiveChannelSelection, setInitialActiveChannel } from './apollo';
 import { ConfirmDialogProvider } from './components/ConfirmDialog';
-import { getNextAdminExtensionRoutes } from './extensions/extension-api';
+import { getNextAdminExtensionLegacyRoutes, getNextAdminExtensionRoutes } from './extensions/extension-api';
 import './extensions/installed-extensions';
 import { InitialPasswordChangeModule } from './pages/Auth/InitialPasswordChangeModule';
 import { LoginModule } from './pages/Auth/LoginModule';
@@ -279,6 +279,14 @@ function App() {
                                 <Route key={route.id} path={route.path.slice(1)} element={<Component />} />
                             );
                         })}
+
+                        {getNextAdminExtensionLegacyRoutes().map(route => (
+                            <Route
+                                key={route.id}
+                                path={route.path.slice(1)}
+                                element={<Navigate to={route.target} replace />}
+                            />
+                        ))}
 
                         {/* 8. ⚙️ 系统与权限 */}
                         <Route path="settings">

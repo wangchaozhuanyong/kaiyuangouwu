@@ -373,22 +373,30 @@ export const REMOVE_PRODUCTS_FROM_CHANNEL = gql`
 `;
 
 export const GET_ASSETS = gql`
+    fragment NextAdminAssetFields on Asset {
+        id
+        name
+        preview
+        source
+        type
+        fileSize
+        mimeType
+        width
+        height
+        tags {
+            id
+            value
+        }
+        translations {
+            id
+            languageCode
+            name
+        }
+    }
     query GetAssets($options: AssetListOptions) {
         assets(options: $options) {
             items {
-                id
-                name
-                preview
-                source
-                type
-                fileSize
-                mimeType
-                width
-                height
-                tags {
-                    id
-                    value
-                }
+                ...NextAdminAssetFields
             }
             totalItems
         }

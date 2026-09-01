@@ -16,7 +16,9 @@ import { assertSafeDevPopulateEnvironment } from './populate-safety';
  */
 async function populateDevDatabase(): Promise<void> {
     assertSafeDevPopulateEnvironment();
-    const { devConfig } = await import('./dev-config');
+    // Keep this lazy so the destructive-environment guard runs before the Vendure config is evaluated.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
+    const { devConfig } = require('./dev-config') as typeof import('./dev-config');
     const populateConfig = mergeConfig(
         defaultConfig,
         mergeConfig(devConfig, {

@@ -5,7 +5,9 @@ set -Eeuo pipefail
 readonly vendure_repo_dir="${VENDURE_REPO_DIR:-/var/www/kaiyuangouwu}"
 readonly vendure_env_file="${VENDURE_ENV_FILE:-${vendure_repo_dir}/packages/dev-server/.env}"
 readonly vendure_backup_dir="${VENDURE_BACKUP_DIR:-/var/backups/vendure-mysql}"
+readonly vendure_restore_drill_evidence="${VENDURE_RESTORE_DRILL_EVIDENCE:-/var/lib/vendure-readiness/restore-drill.json}"
 readonly maximum_backup_age_seconds="${VENDURE_MAXIMUM_BACKUP_AGE_SECONDS:-129600}"
+readonly maximum_restore_drill_age_seconds="${VENDURE_MAXIMUM_RESTORE_DRILL_AGE_SECONDS:-777600}"
 readonly maximum_disk_usage_percent="${VENDURE_MAXIMUM_DISK_USAGE_PERCENT:-85}"
 
 if [[ ! -r "${vendure_env_file}" ]]; then
@@ -52,6 +54,15 @@ elif [[ ! -f "${latest_backup_file}.sha256" ]] || ! (
     sha256sum --check --status "$(basename "${latest_backup_file}.sha256")"
 ); then
     failures+=("backup-checksum-invalid")
+fi
+
+restore_drill_epoch=""
+if [[ -f "${vendure_restore_drill_evidence}" ]]; then
+    restore_drill_epoch="$(stat --format='%Y' "${vendure_restore_drill_evidence}")"
+fi
+if [[ -z "${restore_drill_epoch}" ]] ||
+    ((current_epoch - restore_drill_epoch < 0 || current_epoch - restore_drill_epoch > maximum_restore_drill_age_seconds)); then
+    failures+=("restore-drill-missing-or-stale")
 fi
 
 disk_usage_percent="$(df --output=pcent / | tail -1 | tr -dc '0-9')"

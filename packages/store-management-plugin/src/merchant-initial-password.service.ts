@@ -14,6 +14,8 @@ import {
 import { StoreAdministratorAccess } from './entities/store-administrator-access.entity';
 
 const passwordProtectedAdminMutations = new Set([
+    'addManualPaymentToOrder',
+    'cancelPayment',
     'cancelOrder',
     'deleteAdministrator',
     'deleteAdministrators',
@@ -62,8 +64,17 @@ const passwordProtectedAdminMutations = new Set([
     'deleteZone',
     'deleteZones',
     'refundOrder',
+    'recordStoreUsdtManualRefund',
+    'refreshMyStoreExchangeRate',
+    'refreshMyStoreUsdtRate',
+    'reviewStoreUsdtWallet',
     'rotateApiKey',
+    'settlePayment',
     'settleRefund',
+    'submitMyStoreUsdtWallet',
+    'transitionPaymentToState',
+    'updateApiKey',
+    'updateMyStoreCurrencyConfiguration',
     'adjustReferralBalance',
     'processReferralWithdrawal',
     'updateRole',
