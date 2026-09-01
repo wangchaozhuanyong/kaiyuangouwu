@@ -104,6 +104,16 @@ describe('category navigation responsive spacing', () => {
         ).toHaveLength(3);
     });
 
+    it('aligns the mobile all-category row with the sort toolbar', () => {
+        expect(stylesheet).toMatch(
+            /\.category-subcat-sidebar\s*\{[^}]*padding:\s*0 0 calc\(var\(--bottom-navigation-height, 66px\) \+ 24px\);/,
+        );
+        expect(stylesheet).toMatch(
+            /\.subcat-side-all\s*\{[^}]*height:\s*38px;[^}]*min-height:\s*38px;[^}]*padding-block:\s*0;[^}]*flex-shrink:\s*0;/,
+        );
+        expect(stylesheet).toMatch(/\.category-results \.sort-bar\s*\{[^}]*height:\s*38px;/);
+    });
+
     it('keeps the search bar full width on narrow mobile screens', () => {
         expect(stylesheet).toMatch(
             /@media \(max-width:\s*370px\)[\s\S]*?\.category-topbar\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);[^}]*gap:\s*0;/,
