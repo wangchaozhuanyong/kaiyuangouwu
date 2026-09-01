@@ -1304,6 +1304,7 @@ export const shopApiExtensions = gql`
 
     extend type Query {
         storefrontBranding: StorefrontBranding!
+        myCustomerAvatar: Asset
         storefrontCurrencyConfiguration: StoreCurrencyConfiguration!
         activeStorefrontCoupons: [StorefrontCoupon!]!
         myStorefrontCoupons: [StoreCustomerCoupon!]!
@@ -1316,6 +1317,7 @@ export const shopApiExtensions = gql`
     }
 
     extend type Mutation {
+        setCustomerAvatar(file: Upload!): Asset!
         createStorefrontUsdtCheckoutQuote: StorefrontUsdtCheckoutQuote!
         claimStorefrontCoupon(campaignId: ID!): StoreCustomerCoupon!
         applyStorefrontCoupon(id: ID!): StoreCustomerCoupon!

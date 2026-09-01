@@ -3,6 +3,7 @@ import { consumeStorefrontRealtimeStream, StorefrontRealtimeEvent } from './real
 import {
     ActiveCustomer,
     AfterSalesRequest,
+    Asset,
     CollectionSummary,
     CreateAfterSalesRequestInput,
     CreateImageGenerationInput,
@@ -1007,7 +1008,10 @@ export class ShopApi {
     }
 
     async activeCustomer(signal?: AbortSignal): Promise<ActiveCustomer | null> {
-        const result = await this.request<{ activeCustomer: ActiveCustomer | null }>(
+        const result = await this.request<{
+            activeCustomer: Omit<ActiveCustomer, 'avatar'> | null;
+            myCustomerAvatar?: Asset | null;
+        }>(
             `
             query StorefrontCustomer {
                 activeCustomer {
@@ -1034,12 +1038,52 @@ export class ShopApi {
                         items { ${orderSummaryFields} }
                     }
                 }
+                myCustomerAvatar { id preview }
             }
         `,
             undefined,
             signal,
         );
-        return result.activeCustomer;
+        return result.activeCustomer
+            ? { ...result.activeCustomer, avatar: result.myCustomerAvatar ?? null }
+            : null;
+    }
+
+    async uploadCustomerAvatar(file: File): Promise<Asset> {
+        const operations = {
+            query: `mutation SetCustomerAvatar($file: Upload!) {
+                setCustomerAvatar(file: $file) { id preview }
+            }`,
+            variables: { file: null },
+        };
+        const form = new FormData();
+        form.set('operations', JSON.stringify(operations));
+        form.set('map', JSON.stringify({ 0: ['variables.file'] }));
+        form.set('0', file, file.name);
+        const headers: Record<string, string> = { 'language-code': this.languageCode };
+        if (SEND_CLIENT_CHANNEL_TOKEN) headers['vendure-token'] = this.market.code;
+        if (this.authToken) headers.authorization = `Bearer ${this.authToken}`;
+        const separator = API_URL.includes('?') ? '&' : '?';
+        const timeout = createRequestSignal(undefined, 60_000);
+        let response: Response;
+        let body: GraphQlResponse<{ setCustomerAvatar: Asset }>;
+        try {
+            response = await fetch(
+                `${API_URL}${separator}languageCode=${encodeURIComponent(this.languageCode)}&currencyCode=${encodeURIComponent(this.market.currencyCode)}`,
+                { method: 'POST', credentials: 'include', headers, body: form, signal: timeout.signal },
+            );
+            this.captureAuthToken(response);
+            body = (await response.json()) as GraphQlResponse<{ setCustomerAvatar: Asset }>;
+        } catch (error) {
+            if (timeout.didTimeout()) throw new ShopApiTimeoutError('头像上传超时，请检查网络后重试');
+            throw error;
+        } finally {
+            timeout.cleanup();
+        }
+        if (!response.ok || body.errors?.length || !body.data) {
+            throw new Error(body.errors?.[0]?.message ?? `Avatar upload failed (${response.status})`);
+        }
+        return body.data.setCustomerAvatar;
     }
 
     async customerOrders(

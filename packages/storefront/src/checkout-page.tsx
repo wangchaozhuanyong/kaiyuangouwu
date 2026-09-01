@@ -11,7 +11,6 @@ import {
     RotateCcw,
     ShoppingBag,
     Sparkles,
-    TicketPercent,
     Truck,
     X,
 } from 'lucide-react';
@@ -24,6 +23,7 @@ import { formatDisplayMoney } from './money-display';
 import { variantCanIncreaseQuantity } from './product-availability';
 import { acquireBodyScrollLock } from './scroll-lock';
 import { routeNavigateOptions } from './storefront-router';
+import { CouponSheet } from './storefront-ui/cart-ui';
 import { SafeImage } from './storefront-ui/product-display';
 import { checkoutPageStyles, pageClassName } from './tailwind/checkout-page-styles';
 import { TaxSummaryRows } from './tax-summary';
@@ -47,7 +47,7 @@ const checkoutPageClassName = (className?: string | false | null) =>
     pageClassName(checkoutPageStyles, className);
 
 const ORDER_NOTE_MAX_LENGTH = 500;
-type CheckoutRoute = { name: 'payment' | 'cart' | 'addresses' };
+type CheckoutRoute = { name: 'payment' | 'cart' | 'addresses' | 'coupons' };
 type CheckoutMode = 'checkout' | 'purchase';
 
 export function CheckoutPage({
@@ -942,6 +942,10 @@ export function CheckoutPage({
                     loading={submitting}
                     onApply={onApplyCoupon}
                     onRemove={onRemoveCoupon}
+                    onBrowseCoupons={() => {
+                        setCouponOpen(false);
+                        navigateTo({ name: 'coupons' });
+                    }}
                     onClose={() => setCouponOpen(false)}
                 />
             )}
@@ -1198,68 +1202,6 @@ function shippingMethodDetails(
         );
     }
     return details.join(' · ');
-}
-function CouponSheet({
-    coupons,
-    orderId,
-    language,
-    loading,
-    onApply,
-    onRemove,
-    onClose,
-}: {
-    coupons: StoreCustomerCoupon[];
-    orderId: string;
-    language: StorefrontLanguage;
-    loading: boolean;
-    onApply: (customerCouponId: string) => Promise<string | null>;
-    onRemove: (customerCouponId: string) => Promise<string | null>;
-    onClose: () => void;
-}) {
-    const isZh = language === 'zh';
-    const [submitting, setSubmitting] = useState(false);
-    const [error, setError] = useState('');
-    const choose = async (coupon: StoreCustomerCoupon) => {
-        setSubmitting(true);
-        setError('');
-        const applied = coupon.lockedOrderId === orderId;
-        const nextError = await (applied ? onRemove(coupon.id) : onApply(coupon.id));
-        setSubmitting(false);
-        if (nextError) setError(nextError);
-    };
-    const selectableCoupons = coupons.filter(coupon => coupon.usable || coupon.lockedOrderId === orderId);
-    return (
-        <Sheet title={isZh ? '选择优惠券' : 'Choose a coupon'} language={language} onClose={onClose}>
-            <div className={checkoutPageClassName('coupon-sheet-content')}>
-                {selectableCoupons.length ? (
-                    <section className={checkoutPageClassName('applied-coupons')}>
-                        <strong>{isZh ? '我的可用优惠券' : 'My available coupons'}</strong>
-                        {selectableCoupons.map(coupon => {
-                            const applied = coupon.lockedOrderId === orderId;
-                            return (
-                                <div key={coupon.id}>
-                                    <span>
-                                        <TicketPercent />
-                                        {coupon.campaignName}
-                                    </span>
-                                    <button
-                                        type="button"
-                                        onClick={() => void choose(coupon)}
-                                        disabled={loading || submitting}
-                                    >
-                                        {applied ? (isZh ? '取消使用' : 'Unapply') : isZh ? '使用' : 'Apply'}
-                                    </button>
-                                </div>
-                            );
-                        })}
-                    </section>
-                ) : (
-                    <p>{isZh ? '暂无可用优惠券，请先到领券中心领取' : 'No coupons available yet.'}</p>
-                )}
-                {error && <small className={checkoutPageClassName('form-error')}>{error}</small>}
-            </div>
-        </Sheet>
-    );
 }
 function Sheet({
     title,
