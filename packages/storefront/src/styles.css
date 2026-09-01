@@ -3851,7 +3851,7 @@ img.fatal-error-mark {
     border-right: 1px solid #edf2f7;
     display: flex;
     flex-direction: column;
-    padding: 4px 0 calc(var(--bottom-navigation-height, 66px) + 24px);
+    padding: 0 0 calc(var(--bottom-navigation-height, 66px) + 24px);
     scrollbar-width: none;
 }
 
@@ -3893,7 +3893,11 @@ img.fatal-error-mark {
 }
 
 .subcat-side-all {
+    height: 38px;
+    min-height: 38px;
+    padding-block: 0;
     flex-direction: row;
+    flex-shrink: 0;
     gap: 4px;
 }
 
