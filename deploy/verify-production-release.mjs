@@ -274,16 +274,24 @@ export async function verifyProductionRelease({
     checks.push('dashboard health');
 
     const shopApiUrl = new URL('/shop-api', storefront);
-    const blockedShopResponse = await fetchWithTimeout(fetchImpl, shopApiUrl, shopApiRequest(), timeoutMs);
-    expectStatus(blockedShopResponse, 403, 'Shop API without promotion cookie');
-    const blockedShopBody = await readJson(blockedShopResponse, 'Shop API without promotion cookie');
-    const gateError = blockedShopBody?.errors?.some(
-        error => error?.extensions?.code === 'STOREFRONT_ENTRY_REQUIRED',
-    );
-    if (!gateError) {
-        throw new Error('Shop API without promotion cookie: missing STOREFRONT_ENTRY_REQUIRED');
+    const publicShopResponse = await fetchWithTimeout(fetchImpl, shopApiUrl, shopApiRequest(), timeoutMs);
+    expectStatus(publicShopResponse, 200, 'Public Shop API');
+    const publicShopBody = await readJson(publicShopResponse, 'Public Shop API');
+    if (publicShopBody?.data?.__typename !== 'Query') {
+        throw new Error('Public Shop API: GraphQL probe did not return Query');
     }
-    checks.push('unauthenticated Shop API gate');
+    checks.push('public Shop API');
+
+    const storefrontResponse = await fetchWithTimeout(
+        fetchImpl,
+        storefront,
+        { redirect: 'manual' },
+        timeoutMs,
+    );
+    expectStatus(storefrontResponse, 200, 'Direct storefront');
+    const storefrontHtml = await storefrontResponse.text();
+    const assetUrl = extractStorefrontAssetUrl(storefrontHtml, storefront);
+    checks.push('direct storefront');
 
     const promotionUrl = new URL('/promo', storefront);
     const promotionResponse = await fetchWithTimeout(
@@ -294,6 +302,7 @@ export async function verifyProductionRelease({
     );
     expectStatus(promotionResponse, 200, 'Promotion entry page');
     const ticket = extractEntryTicket(await promotionResponse.text());
+    checks.push('optional promotion page');
 
     const enterUrl = new URL('/promo/enter', storefront);
     const enterResponse = await fetchWithTimeout(
@@ -311,39 +320,10 @@ export async function verifyProductionRelease({
     if (enterResponse.headers.get('location') !== '/') {
         throw new Error('Promotion entry submission: expected redirect location /');
     }
-    const entryCookie = extractEntryCookie(enterResponse.headers);
-    checks.push('signed promotion entry');
+    extractEntryCookie(enterResponse.headers);
+    checks.push('optional promotion entry');
 
-    const authenticatedShopResponse = await fetchWithTimeout(
-        fetchImpl,
-        shopApiUrl,
-        shopApiRequest(entryCookie),
-        timeoutMs,
-    );
-    expectStatus(authenticatedShopResponse, 200, 'Shop API with promotion cookie');
-    const authenticatedShopBody = await readJson(authenticatedShopResponse, 'Shop API with promotion cookie');
-    if (authenticatedShopBody?.data?.__typename !== 'Query') {
-        throw new Error('Shop API with promotion cookie: GraphQL probe did not return Query');
-    }
-    checks.push('authenticated Shop API');
-
-    const storefrontResponse = await fetchWithTimeout(
-        fetchImpl,
-        storefront,
-        { redirect: 'manual', headers: { cookie: entryCookie } },
-        timeoutMs,
-    );
-    expectStatus(storefrontResponse, 200, 'Authenticated storefront');
-    const storefrontHtml = await storefrontResponse.text();
-    const assetUrl = extractStorefrontAssetUrl(storefrontHtml, storefront);
-    checks.push('authenticated storefront');
-
-    const assetResponse = await fetchWithTimeout(
-        fetchImpl,
-        assetUrl,
-        { redirect: 'manual', headers: { cookie: entryCookie } },
-        timeoutMs,
-    );
+    const assetResponse = await fetchWithTimeout(fetchImpl, assetUrl, { redirect: 'manual' }, timeoutMs);
     expectStatus(assetResponse, 200, 'Storefront build asset');
     await assetResponse.body?.cancel();
     checks.push('storefront build asset');

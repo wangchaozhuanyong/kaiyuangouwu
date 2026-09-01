@@ -586,9 +586,8 @@ export class StorefrontPromotionHtmlService {
             form.attr('method', 'post');
             form.attr('action', '/promo/enter');
             form.removeAttr('target');
-            if (form.find('input[name="ticket"]').length === 0) {
-                form.prepend(`<input type="hidden" name="ticket" value="${this.escapeHtml(entryTicket)}">`);
-            }
+            form.find('input[name="ticket"]').remove();
+            form.prepend(`<input type="hidden" name="ticket" value="${this.escapeHtml(entryTicket)}">`);
             if (destination !== 'home') {
                 form.prepend(
                     `<input type="hidden" name="destination" value="${this.escapeHtml(destination)}">`,

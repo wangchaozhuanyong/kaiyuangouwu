@@ -419,16 +419,16 @@ export function evaluateProductionEnvironment(env, role, controls = {}) {
                 : 'CNAME, routing mode, or bypass hosts are unsafe',
     });
     pushCheck(checks, {
-        id: 'storefront-promotion-gate',
-        title: '推广页与主站入口隔离',
+        id: 'storefront-entry-mode',
+        title: '主站直达与可选推广页',
         passed:
-            normalized(env.STOREFRONT_PROMOTION_GATE_ENABLED) === 'true' &&
+            normalized(env.STOREFRONT_PROMOTION_GATE_ENABLED) === 'false' &&
             isConfiguredSecret(env.STOREFRONT_ENTRY_SECRET, 32),
         detail:
-            normalized(env.STOREFRONT_PROMOTION_GATE_ENABLED) === 'true' &&
+            normalized(env.STOREFRONT_PROMOTION_GATE_ENABLED) === 'false' &&
             isConfiguredSecret(env.STOREFRONT_ENTRY_SECRET, 32)
-                ? 'enabled'
-                : 'gate is disabled or signing secret is missing, short, or a placeholder',
+                ? 'main storefront direct; optional promotion links remain signed'
+                : 'promotion gate must be false and the shared signing secret must be configured',
     });
     const refundSenders = normalized(env.USDT_REFUND_SENDER_ADDRESSES)
         .split(',')

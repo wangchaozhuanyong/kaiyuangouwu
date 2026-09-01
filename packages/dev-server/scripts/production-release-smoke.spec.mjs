@@ -11,7 +11,10 @@ import {
     verifyProductionRelease,
 } from '../../../deploy/verify-production-release.mjs';
 
-async function startFixtureServer({ allowUnauthenticatedShopApi = false } = {}) {
+async function startFixtureServer({
+    requirePromotionCookie = false,
+    redirectStorefrontToPromo = false,
+} = {}) {
     const server = createServer((request, response) => {
         const requestUrl = new URL(request.url ?? '/', 'http://127.0.0.1');
         const hasEntryCookie = request.headers.cookie === 'storefront-entry=signed-cookie';
@@ -22,7 +25,7 @@ async function startFixtureServer({ allowUnauthenticatedShopApi = false } = {}) 
             return;
         }
         if (request.method === 'POST' && requestUrl.pathname === '/shop-api') {
-            if (!hasEntryCookie && !allowUnauthenticatedShopApi) {
+            if (!hasEntryCookie && requirePromotionCookie) {
                 response.writeHead(403, { 'content-type': 'application/json' });
                 response.end(
                     JSON.stringify({
@@ -67,7 +70,7 @@ async function startFixtureServer({ allowUnauthenticatedShopApi = false } = {}) 
             return;
         }
         if (request.method === 'GET' && requestUrl.pathname === '/') {
-            if (!hasEntryCookie) {
+            if (!hasEntryCookie && redirectStorefrontToPromo) {
                 response.writeHead(302, { location: '/promo' });
                 response.end();
                 return;
@@ -123,7 +126,7 @@ async function startFixtureServer({ allowUnauthenticatedShopApi = false } = {}) 
     };
 }
 
-test('verifies the signed promotion entry flow and production public surfaces', async t => {
+test('verifies the direct storefront, optional promotion entry and production public surfaces', async t => {
     const fixture = await startFixtureServer();
     t.after(fixture.close);
 
@@ -136,10 +139,10 @@ test('verifies the signed promotion entry flow and production public surfaces', 
     assert.deepEqual(checks, [
         'public health',
         'dashboard health',
-        'unauthenticated Shop API gate',
-        'signed promotion entry',
-        'authenticated Shop API',
-        'authenticated storefront',
+        'public Shop API',
+        'direct storefront',
+        'optional promotion page',
+        'optional promotion entry',
         'storefront build asset',
         'dashboard asset graph',
         'public Admin API denial',
@@ -169,8 +172,8 @@ test('rejects a dashboard origin without its same-origin health route', async ()
     );
 });
 
-test('rejects a Shop API that bypasses the required promotion gate', async t => {
-    const fixture = await startFixtureServer({ allowUnauthenticatedShopApi: true });
+test('rejects a Shop API that still requires a promotion cookie', async t => {
+    const fixture = await startFixtureServer({ requirePromotionCookie: true });
     t.after(fixture.close);
 
     await assert.rejects(
@@ -179,7 +182,21 @@ test('rejects a Shop API that bypasses the required promotion gate', async t => 
             dashboardUrl: `${fixture.origin}/dashboard/`,
             timeoutMs: 1_000,
         }),
-        /Shop API without promotion cookie: expected HTTP 403, received 200/u,
+        /Public Shop API: expected HTTP 200, received 403/u,
+    );
+});
+
+test('rejects a main storefront that still redirects to the promotion page', async t => {
+    const fixture = await startFixtureServer({ redirectStorefrontToPromo: true });
+    t.after(fixture.close);
+
+    await assert.rejects(
+        verifyProductionRelease({
+            storefrontUrl: fixture.origin,
+            dashboardUrl: `${fixture.origin}/dashboard/`,
+            timeoutMs: 1_000,
+        }),
+        /Direct storefront: expected HTTP 200, received 302/u,
     );
 });
 
