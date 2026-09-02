@@ -34,13 +34,13 @@ export async function awaitRunningJobs(
         const now = Date.now();
         if (runningJobs > 0) {
             lastActivity = now;
+            if (now - startTime >= timeout) {
+                throw new Error(
+                    `awaitRunningJobs timed out after ${timeout}ms with ${runningJobs} job(s) still running`,
+                );
+            }
         } else if (now - lastActivity >= confirmMs) {
             return;
-        }
-        if (now - startTime >= timeout) {
-            throw new Error(
-                `awaitRunningJobs timed out after ${timeout}ms with ${runningJobs} job(s) still running`,
-            );
         }
         await sleep(pollMs);
     }
