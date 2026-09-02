@@ -1,7 +1,6 @@
 import { useMutation, useQuery } from '@apollo/client/react';
 import {
     AlertCircle,
-    Check,
     ChevronLeft,
     ChevronRight,
     CircleDollarSign,
@@ -41,13 +40,22 @@ import {
     UPDATE_REFERRAL_POSTER_MUTATION,
     UPDATE_REFERRAL_PROGRAM_MUTATION,
 } from '../../graphql/marketing.graphql';
-import { useAccessibleDialog } from '../../hooks/use-accessible-dialog';
 import { useUrlTab } from '../../hooks/use-url-tab';
 import { getStatusLabel } from '../../utils/status-labels';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatDateTime, formatMoney, majorInputToMoney } from '../Sales/sales-utils';
 
-type ReferralTab = 'SETTINGS' | 'PROMOTERS' | 'REWARDS' | 'LEDGER' | 'WITHDRAWALS' | 'POSTERS';
+import { ErrorState, LoadingState, Message, Modal, TabButton } from '../Settings/settings-ui';
+import {
+    PosterAssetChoice,
+    PosterAssetLookupResult,
+    PosterDraft,
+    ProgramDraft,
+    ReferralTab,
+    ReportKey,
+    WithdrawalAction,
+} from './referrals-types';
+
 const REFERRAL_TABS = {
     settings: 'SETTINGS',
     promoters: 'PROMOTERS',
@@ -56,57 +64,6 @@ const REFERRAL_TABS = {
     withdrawals: 'WITHDRAWALS',
     posters: 'POSTERS',
 } as const;
-type ReportKey = 'summaries' | 'relationships' | 'rewards' | 'ledger' | 'withdrawals';
-type WithdrawalRecord = ReferralReportsResult['referralWithdrawals']['items'][number];
-type WithdrawalAction = { item: WithdrawalRecord; status: 'APPROVED' | 'PAID' | 'REJECTED' | 'CANCELLED' };
-
-interface ProgramDraft {
-    expectedUpdatedAt: string;
-    enabled: boolean;
-    rewardRate: number;
-    releaseDelayDays: number;
-    minimumOrderAmount: string;
-    maxRewardPerOrder: string;
-    allowBalanceSpend: boolean;
-    attributionWindowDays: number;
-    defaultPosterTemplate: string;
-}
-
-interface PosterDraft {
-    id?: string;
-    name: string;
-    enabled: boolean;
-    position: number;
-    layoutVariant: string;
-    posterBackgroundAssetId: string;
-    shareBackgroundAssetId: string;
-    titleZh: string;
-    titleEn: string;
-    headlineZh: string;
-    headlineEn: string;
-    rewardTextZh: string;
-    rewardTextEn: string;
-    siteIntroZh: string;
-    siteIntroEn: string;
-    serviceTextZh: string;
-    serviceTextEn: string;
-    foregroundColor: string;
-    accentColor: string;
-    overlayOpacity: number;
-}
-
-interface PosterAssetChoice {
-    id: string;
-    name: string;
-    preview: string;
-}
-
-interface PosterAssetLookupResult {
-    assets: {
-        totalItems: number;
-        items: PosterAssetChoice[];
-    };
-}
 
 const PAGE_SIZE = 50;
 
@@ -253,7 +210,7 @@ export function ReferralsModule() {
                     </Message>
                 )}
                 {program.loading && !program.data ? (
-                    <LoadingState label="正在读取邀请返利数据…" />
+                    <LoadingState />
                 ) : program.error ? (
                     <ErrorState message={program.error.message} onRetry={() => void program.refetch()} />
                 ) : (
@@ -267,54 +224,60 @@ export function ReferralsModule() {
                                         setActiveTab('SETTINGS');
                                         setSearch('');
                                     }}
-                                    icon={Settings2}
-                                    label="功能设置"
-                                />
+                                    icon={<Settings2 className="h-3.5 w-3.5" />}
+                                >
+                                    功能设置
+                                </TabButton>
                                 <TabButton
                                     active={activeTab === 'PROMOTERS'}
                                     onClick={() => {
                                         setActiveTab('PROMOTERS');
                                         setSearch('');
                                     }}
-                                    icon={Users}
-                                    label={`推广员 ${reports.data?.referralInviterSummaries.totalItems ?? 0}`}
-                                />
+                                    icon={<Users className="h-3.5 w-3.5" />}
+                                >
+                                    {`推广员 ${reports.data?.referralInviterSummaries.totalItems ?? 0}`}
+                                </TabButton>
                                 <TabButton
                                     active={activeTab === 'REWARDS'}
                                     onClick={() => {
                                         setActiveTab('REWARDS');
                                         setSearch('');
                                     }}
-                                    icon={Gift}
-                                    label={`返利订单 ${reports.data?.referralRewards.totalItems ?? 0}`}
-                                />
+                                    icon={<Gift className="h-3.5 w-3.5" />}
+                                >
+                                    {`返利订单 ${reports.data?.referralRewards.totalItems ?? 0}`}
+                                </TabButton>
                                 <TabButton
                                     active={activeTab === 'LEDGER'}
                                     onClick={() => {
                                         setActiveTab('LEDGER');
                                         setSearch('');
                                     }}
-                                    icon={WalletCards}
-                                    label="钱包流水"
-                                />
+                                    icon={<WalletCards className="h-3.5 w-3.5" />}
+                                >
+                                    钱包流水
+                                </TabButton>
                                 <TabButton
                                     active={activeTab === 'WITHDRAWALS'}
                                     onClick={() => {
                                         setActiveTab('WITHDRAWALS');
                                         setSearch('');
                                     }}
-                                    icon={CircleDollarSign}
-                                    label={`提款 ${reports.data?.referralWithdrawals.totalItems ?? 0}`}
-                                />
+                                    icon={<CircleDollarSign className="h-3.5 w-3.5" />}
+                                >
+                                    {`提款 ${reports.data?.referralWithdrawals.totalItems ?? 0}`}
+                                </TabButton>
                                 <TabButton
                                     active={activeTab === 'POSTERS'}
                                     onClick={() => {
                                         setActiveTab('POSTERS');
                                         setSearch('');
                                     }}
-                                    icon={ImagePlus}
-                                    label="分享海报"
-                                />
+                                    icon={<ImagePlus className="h-3.5 w-3.5" />}
+                                >
+                                    分享海报
+                                </TabButton>
                             </nav>
                             {activeTab !== 'SETTINGS' && activeTab !== 'POSTERS' && (
                                 <div className="relative max-w-md">
@@ -597,7 +560,7 @@ function PromotersPanel({
     changeSkip: (key: ReportKey, value: number) => void;
     onRetry: () => void;
 }) {
-    if (loading && !data) return <LoadingState label="正在读取推广员与邀请关系…" />;
+    if (loading && !data) return <LoadingState />;
     if (error) return <ErrorState message={error} onRetry={onRetry} />;
     const q = search.trim().toLowerCase();
     const summaries = (data?.referralInviterSummaries.items ?? []).filter(
@@ -754,7 +717,7 @@ function RewardsPanel({
     changeSkip: (value: number) => void;
     onRetry: () => void;
 }) {
-    if (loading && !data) return <LoadingState label="正在读取返利订单…" />;
+    if (loading && !data) return <LoadingState />;
     if (error) return <ErrorState message={error} onRetry={onRetry} />;
     const q = search.trim().toLowerCase();
     const items = (data?.referralRewards.items ?? []).filter(
@@ -868,7 +831,7 @@ function LedgerPanel({
     changeSkip: (value: number) => void;
     onRetry: () => void;
 }) {
-    if (loading && !data) return <LoadingState label="正在读取钱包流水…" />;
+    if (loading && !data) return <LoadingState />;
     if (error) return <ErrorState message={error} onRetry={onRetry} />;
     const q = search.trim().toLowerCase();
     const items = (data?.referralLedger.items ?? []).filter(
@@ -995,7 +958,7 @@ function WithdrawalsPanel({
     onAction: (action: WithdrawalAction) => void;
     onRetry: () => void;
 }) {
-    if (loading && !data) return <LoadingState label="正在读取提款申请…" />;
+    if (loading && !data) return <LoadingState />;
     if (error) return <ErrorState message={error} onRetry={onRetry} />;
     const q = search.trim().toLowerCase();
     const items = (data?.referralWithdrawals.items ?? []).filter(
@@ -1251,7 +1214,6 @@ function PostersPanel({
                     title="删除海报模板"
                     description={`确认删除“${deleting.name}”？如果它是默认模板，请先在功能设置中更换默认模板。`}
                     onClose={() => setDeleting(null)}
-                    width="max-w-md"
                 >
                     <ModalFooter
                         onCancel={() => setDeleting(null)}
@@ -1316,7 +1278,6 @@ function WithdrawalActionDialog({
             title={withdrawalActionLabel(action.status)}
             description={`申请 ${action.item.code} · ${formatMoney(action.item.amount, action.item.currencyCode)}`}
             onClose={onClose}
-            width="max-w-md"
         >
             <div className="rounded-xl bg-slate-50 p-3 text-xs">
                 <NameEmail name={action.item.customerName} email={action.item.customerEmail} />
@@ -1491,7 +1452,7 @@ function FinancialDialog({
     };
     if (!customer && lookup.error)
         return (
-            <Modal title={dialogTitle} description={dialogDescription} onClose={onClose} width="max-w-lg">
+            <Modal title={dialogTitle} description={dialogDescription} onClose={onClose}>
                 <div className="rounded-xl border border-rose-200 bg-rose-50 p-5 text-center" role="alert">
                     <AlertCircle className="mx-auto h-7 w-7 text-rose-500" />
                     <p className="mt-2 text-xs text-rose-700">
@@ -1509,13 +1470,13 @@ function FinancialDialog({
         );
     if (customer && wallets.loading && !wallets.data)
         return (
-            <Modal title={dialogTitle} description={dialogDescription} onClose={onClose} width="max-w-lg">
-                <LoadingState label="正在读取客户返利余额…" />
+            <Modal title={dialogTitle} description={dialogDescription} onClose={onClose}>
+                <LoadingState />
             </Modal>
         );
     if (customer && wallets.error)
         return (
-            <Modal title={dialogTitle} description={dialogDescription} onClose={onClose} width="max-w-lg">
+            <Modal title={dialogTitle} description={dialogDescription} onClose={onClose}>
                 <div className="rounded-xl border border-rose-200 bg-rose-50 p-5 text-center" role="alert">
                     <AlertCircle className="mx-auto h-7 w-7 text-rose-500" />
                     <p className="mt-2 text-xs text-rose-700">
@@ -1540,7 +1501,6 @@ function FinancialDialog({
                     : '支持正负调整，必须填写业务原因，操作会永久写入审计流水。'
             }
             onClose={onClose}
-            width="max-w-lg"
         >
             {!customer ? (
                 <>
@@ -1556,7 +1516,7 @@ function FinancialDialog({
                     </div>
                     <div className="mt-3 max-h-72 space-y-2 overflow-y-auto">
                         {lookup.loading && !lookup.data ? (
-                            <LoadingState label="正在查找客户…" />
+                            <LoadingState />
                         ) : (
                             lookup.data?.customers.items.map(item => (
                                 <button
@@ -1762,7 +1722,6 @@ function PosterEditor({
             title={draft.id ? '编辑分享海报模板' : '新建分享海报模板'}
             description="中文与英文内容分别填写；{rewardRate} 会在客户端替换为实时返利比例。"
             onClose={onClose}
-            width="max-w-4xl"
         >
             <div className="grid gap-4 sm:grid-cols-2">
                 <TextField
@@ -2068,28 +2027,6 @@ function SmallMetric({ label, value }: { label: string; value: string }) {
         </div>
     );
 }
-function TabButton({
-    active,
-    onClick,
-    icon: Icon,
-    label,
-}: {
-    active: boolean;
-    onClick: () => void;
-    icon: typeof Users;
-    label: string;
-}) {
-    return (
-        <button
-            type="button"
-            onClick={onClick}
-            className={`flex shrink-0 items-center gap-1.5 rounded-lg px-4 py-2 font-bold ${active ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'}`}
-        >
-            <Icon className="h-3.5 w-3.5" />
-            {label}
-        </button>
-    );
-}
 function ToggleField({
     label,
     detail,
@@ -2239,101 +2176,6 @@ function ModalFooter({
             >
                 {pending ? '处理中…' : confirmLabel}
             </button>
-        </div>
-    );
-}
-function Message({
-    kind,
-    children,
-    onClose,
-}: {
-    kind: 'success' | 'error';
-    children: React.ReactNode;
-    onClose: () => void;
-}) {
-    return (
-        <div
-            className={`flex items-center gap-2 rounded-xl border p-3 text-xs ${kind === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-rose-200 bg-rose-50 text-rose-800'}`}
-        >
-            {kind === 'success' ? <Check className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
-            <span className="flex-1">{children}</span>
-            <button type="button" onClick={onClose} aria-label="关闭提示">
-                <X className="h-4 w-4" />
-            </button>
-        </div>
-    );
-}
-function LoadingState({ label }: { label: string }) {
-    return (
-        <div className="flex min-h-52 items-center justify-center rounded-xl border border-slate-200 bg-white text-xs text-slate-500">
-            <LoaderCircle className="mr-2 h-5 w-5 animate-spin text-blue-600" />
-            {label}
-        </div>
-    );
-}
-function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
-    return (
-        <div className="rounded-xl border border-rose-200 bg-white p-10 text-center">
-            <AlertCircle className="mx-auto h-8 w-8 text-rose-500" />
-            <h3 className="mt-3 text-sm font-bold text-slate-900">邀请返利数据读取失败</h3>
-            <p className="mt-1 text-xs text-rose-600">{toUserFacingError(message)}</p>
-            <button
-                type="button"
-                onClick={onRetry}
-                className="mt-4 rounded-lg bg-slate-900 px-4 py-2 text-xs font-bold text-white"
-            >
-                重新加载
-            </button>
-        </div>
-    );
-}
-function Modal({
-    title,
-    description,
-    onClose,
-    width,
-    children,
-}: {
-    title: string;
-    description?: string;
-    onClose: () => void;
-    width: string;
-    children: React.ReactNode;
-}) {
-    const { dialogRef, titleId } = useAccessibleDialog(onClose);
-    return (
-        <div
-            className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-2xs"
-            onMouseDown={event => {
-                if (event.target === event.currentTarget) onClose();
-            }}
-        >
-            <div
-                ref={dialogRef as React.RefObject<HTMLDivElement>}
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby={titleId}
-                tabIndex={-1}
-                className={`max-h-[92vh] w-full ${width} overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl outline-none`}
-            >
-                <div className="sticky top-0 z-10 flex items-start justify-between border-b border-slate-100 bg-white px-5 py-4">
-                    <div>
-                        <h2 id={titleId} className="text-base font-bold text-slate-900">
-                            {title}
-                        </h2>
-                        {description && <p className="mt-1 text-[11px] text-slate-500">{description}</p>}
-                    </div>
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="rounded p-1 text-slate-400 hover:bg-slate-100"
-                        aria-label="关闭"
-                    >
-                        <X className="h-5 w-5" />
-                    </button>
-                </div>
-                <div className="p-5">{children}</div>
-            </div>
         </div>
     );
 }
