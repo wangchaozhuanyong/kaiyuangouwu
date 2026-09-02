@@ -28,7 +28,7 @@
         },
         {
             "path": "packages/next-admin/src/pages/Catalog/ProductEditor.tsx",
-            "maxLines": 2919,
+            "maxLines": 2691,
             "targetLines": 700,
             "owner": "next-admin-catalog"
         },
