@@ -34,7 +34,7 @@
         },
         {
             "path": "packages/next-admin/src/pages/Marketing/ReferralsModule.tsx",
-            "maxLines": 2338,
+            "maxLines": 391,
             "targetLines": 700,
             "owner": "next-admin-marketing"
         },
