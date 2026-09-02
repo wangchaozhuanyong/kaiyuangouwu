@@ -16,7 +16,7 @@
         },
         {
             "path": "packages/storefront/src/api.ts",
-            "maxLines": 2113,
+            "maxLines": 652,
             "targetLines": 500,
             "owner": "storefront-api"
         },
@@ -40,7 +40,7 @@
         },
         {
             "path": "packages/catalog-management-plugin/src/catalog-import.service.ts",
-            "maxLines": 2386,
+            "maxLines": 2065,
             "targetLines": 700,
             "owner": "catalog-import"
         },
