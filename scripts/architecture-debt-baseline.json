@@ -4,7 +4,7 @@
     "fileBudgets": [
         {
             "path": "packages/storefront/src/styles.css",
-            "maxLines": 15600,
+            "maxLines": 1029,
             "targetLines": 4000,
             "owner": "storefront-ui"
         },
