@@ -13,6 +13,7 @@ void test('production Nginx routes protected downloads and hardens both APIs', a
     assert.match(config, /limit_req_zone \$binary_remote_addr zone=vendure_shop_api/u);
     assert.match(config, /limit_req_zone \$binary_remote_addr zone=vendure_admin_api/u);
     assert.match(config, /limit_conn_zone \$binary_remote_addr zone=vendure_realtime_per_ip/u);
+    assert.match(config, /^limit_conn_status 429;$/mu);
     assert.match(config, /Strict-Transport-Security/u);
     assert.match(config, /Content-Security-Policy/u);
     assert.match(config, /Permissions-Policy/u);
@@ -42,7 +43,7 @@ void test('production Nginx routes protected downloads and hardens both APIs', a
     for (const location of realtimeLocations) {
         assert.match(location.groups.body, /proxy_buffering off;/u);
         assert.match(location.groups.body, /proxy_read_timeout 1h;/u);
-        assert.match(location.groups.body, /limit_conn vendure_realtime_per_ip 6;/u);
+        assert.match(location.groups.body, /limit_conn vendure_realtime_per_ip 12;/u);
     }
 });
 
