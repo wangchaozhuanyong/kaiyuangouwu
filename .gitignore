@@ -403,9 +403,11 @@ plans/
 
 # Local development data and generated test artifacts
 *.sqlite
+/packages/dev-server/vendure-dev*
 
 # Local visual QA evidence (not part of production artifacts)
 /design-qa.md
+/design-qa-*.png
 /audits/
 /category-ad-*.png
 /featured-collection-*.png
