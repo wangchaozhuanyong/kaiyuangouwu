@@ -1,0 +1,97 @@
+{
+    "schemaVersion": 1,
+    "policy": "Existing hotspots may shrink but must not grow. Raise a limit only with an explicit architectural review.",
+    "fileBudgets": [
+        {
+            "path": "packages/storefront/src/styles.css",
+            "maxLines": 15600,
+            "targetLines": 4000,
+            "owner": "storefront-ui"
+        },
+        {
+            "path": "packages/storefront/src/App.tsx",
+            "maxLines": 1789,
+            "targetLines": 500,
+            "owner": "storefront-shell"
+        },
+        {
+            "path": "packages/storefront/src/api.ts",
+            "maxLines": 2592,
+            "targetLines": 500,
+            "owner": "storefront-api"
+        },
+        {
+            "path": "packages/next-admin/src/pages/Settings/StoreSettingsModule.tsx",
+            "maxLines": 2965,
+            "targetLines": 700,
+            "owner": "next-admin-settings"
+        },
+        {
+            "path": "packages/next-admin/src/pages/Catalog/ProductEditor.tsx",
+            "maxLines": 2919,
+            "targetLines": 700,
+            "owner": "next-admin-catalog"
+        },
+        {
+            "path": "packages/next-admin/src/pages/Marketing/ReferralsModule.tsx",
+            "maxLines": 2496,
+            "targetLines": 700,
+            "owner": "next-admin-marketing"
+        },
+        {
+            "path": "packages/catalog-management-plugin/src/catalog-import.service.ts",
+            "maxLines": 2386,
+            "targetLines": 700,
+            "owner": "catalog-import"
+        },
+        {
+            "path": "packages/image-generation-plugin/src/image-generation.service.ts",
+            "maxLines": 1976,
+            "targetLines": 700,
+            "owner": "image-generation"
+        },
+        {
+            "path": "packages/image-generation-plugin/src/provider/image-provider.client.ts",
+            "maxLines": 1310,
+            "targetLines": 500,
+            "owner": "image-providers"
+        },
+        {
+            "path": "packages/store-management-plugin/src/referral/referral.service.ts",
+            "maxLines": 1864,
+            "targetLines": 700,
+            "owner": "referrals"
+        },
+        {
+            "path": "packages/store-management-plugin/src/api-extensions.ts",
+            "maxLines": 1334,
+            "targetLines": 500,
+            "owner": "store-management-api"
+        },
+        {
+            "path": "packages/dev-server/dev-config.ts",
+            "maxLines": 1100,
+            "targetLines": 600,
+            "owner": "runtime-configuration"
+        }
+    ],
+    "groupBudgets": [
+        {
+            "id": "legacy-dashboard-surfaces",
+            "paths": [
+                "packages/store-management-plugin/src/dashboard",
+                "packages/image-generation-plugin/src/dashboard",
+                "packages/catalog-management-plugin/src/dashboard",
+                "packages/content-translation-plugin/src/dashboard",
+                "packages/operations-dashboard-plugin/src/dashboard",
+                "packages/two-factor-dashboard-plugin/src/dashboard",
+                "packages/storefront-content-plugin/src/dashboard",
+                "packages/store-domain-plugin/src/dashboard"
+            ],
+            "extensions": [".ts", ".tsx", ".po"],
+            "maxLines": 43992,
+            "targetLines": 0,
+            "owner": "admin-platform"
+        }
+    ]
+}
