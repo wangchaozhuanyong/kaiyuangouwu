@@ -14,7 +14,10 @@ export interface ReferralPosterStyle {
     background: string;
     foreground: string;
     accent: string;
+    pattern: ReferralPosterPattern;
 }
+
+export type ReferralPosterPattern = 'minimal' | 'glacier' | 'flow' | 'deep-sea' | 'orbit';
 
 export const referralPosterStyles: ReferralPosterStyle[] = [
     {
@@ -25,47 +28,53 @@ export const referralPosterStyles: ReferralPosterStyle[] = [
         background: 'linear-gradient(145deg,#eef7ff,#ffffff 48%,#eaf4ff)',
         foreground: '#0e2a63',
         accent: '#1269e8',
+        pattern: 'minimal',
     },
     {
         id: 'BENEFIT_RED_GOLD',
         nameZh: '冰川蓝光',
         nameEn: 'Glacier blue',
-        colors: ['#e8f3ff', '#ffffff', '#dcecff'],
-        background: 'linear-gradient(145deg,#e8f3ff,#ffffff 55%,#dcecff)',
-        foreground: '#0e2a63',
-        accent: '#0b75e5',
+        colors: ['#d9f3ff', '#79c9f4', '#effcff'],
+        background: 'linear-gradient(145deg,#d9f3ff,#79c9f4 55%,#effcff)',
+        foreground: '#073b66',
+        accent: '#008ec4',
+        pattern: 'glacier',
     },
     {
         id: 'PRODUCT_STORY',
         nameZh: '青空流线',
         nameEn: 'Skyline flow',
-        colors: ['#e9fbff', '#ffffff', '#e5f3ff'],
-        background: 'linear-gradient(155deg,#e9fbff,#ffffff 48%,#e5f3ff)',
-        foreground: '#0e2a63',
-        accent: '#0ba9d5',
+        colors: ['#e7fff9', '#b8f1e5', '#dff4ff'],
+        background: 'linear-gradient(155deg,#e7fff9,#b8f1e5 48%,#dff4ff)',
+        foreground: '#0b4f5c',
+        accent: '#0797a5',
+        pattern: 'flow',
     },
     {
         id: 'PREMIUM_DARK',
         nameZh: '深海科技',
         nameEn: 'Deep-sea tech',
-        colors: ['#e7f0ff', '#f7fbff', '#dfeeff'],
-        background: 'linear-gradient(145deg,#e7f0ff,#f7fbff 55%,#dfeeff)',
-        foreground: '#0e2a63',
-        accent: '#2257c7',
+        colors: ['#020b1d', '#0b2857', '#07152f'],
+        background: 'linear-gradient(145deg,#020b1d,#0b2857 55%,#07152f)',
+        foreground: '#f3f8ff',
+        accent: '#59d5ff',
+        pattern: 'deep-sea',
     },
     {
         id: 'CLOUD_BRIDGE_ORBIT',
         nameZh: '云桥轨道',
         nameEn: 'CloudBridge orbit',
-        colors: ['#e8f6ff', '#ffffff', '#dff8ff'],
-        background: 'linear-gradient(145deg,#e8f6ff,#ffffff 48%,#dff8ff)',
-        foreground: '#0b2d63',
-        accent: '#0b75e5',
+        colors: ['#f1efff', '#d9e6ff', '#efe3ff'],
+        background: 'linear-gradient(145deg,#f1efff,#d9e6ff 48%,#efe3ff)',
+        foreground: '#31265f',
+        accent: '#6657dc',
+        pattern: 'orbit',
     },
 ];
 
 interface PosterView extends ReferralPosterTemplate {
     legacyColors?: [string, string, string];
+    legacyPattern?: ReferralPosterPattern;
 }
 
 export function ReferralPosterModal({
@@ -335,6 +344,7 @@ function legacyPosterTemplate(style: ReferralPosterStyle, isZh: boolean): Poster
         accentColor: style.accent,
         overlayOpacity: style.id === 'BRAND_MINIMAL' || style.id === 'PRODUCT_STORY' ? 0 : 20,
         legacyColors: style.colors,
+        legacyPattern: style.pattern,
     };
 }
 
@@ -364,8 +374,9 @@ async function renderReferralPoster({
     if (!context) throw new Error('Canvas unavailable');
 
     const backgroundUrl = template.posterBackgroundAsset?.source || template.posterBackgroundAsset?.preview;
-    paintMobileCloudBridgeBackground(context, template);
-    drawMobileHeroOrnament(context, accentColorForTemplate(template), template);
+    const palette = mobilePalette(template);
+    paintMobileCloudBridgeBackground(context, palette);
+    drawMobileHeroOrnament(context, palette);
     if (backgroundUrl) {
         try {
             const background = await loadImage(backgroundUrl, true);
@@ -378,8 +389,12 @@ async function renderReferralPoster({
         }
     }
 
-    const foreground = readableForeground(template.foregroundColor);
-    const accent = /^#[0-9A-F]{6}$/i.test(template.accentColor) ? template.accentColor : '#1269E8';
+    const isDarkSkin = palette.pattern === 'deep-sea';
+    const foreground = posterForegroundColor(template.foregroundColor, palette.pattern);
+    const accent = palette.accent;
+    const cardSurface = isDarkSkin ? 'rgba(8,28,62,0.88)' : 'rgba(255,255,255,0.9)';
+    const cardBorder = isDarkSkin ? 'rgba(89,213,255,0.42)' : 'rgba(126,180,247,0.45)';
+    const muted = isDarkSkin ? '#c7dcf5' : '#38558a';
     const font = '-apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif';
     context.textBaseline = 'alphabetic';
     const domain = getShareDomain(shareUrl);
@@ -464,28 +479,33 @@ async function renderReferralPoster({
     features.forEach(([titleZh, titleEn, textZh, textEn, icon], index) => {
         const y = 610 + index * 156;
         roundedRect(context, 70, y, 940, 132, 28);
-        context.fillStyle = 'rgba(255,255,255,0.9)';
+        context.fillStyle = cardSurface;
         context.fill();
-        context.strokeStyle = 'rgba(126, 180, 247, 0.45)';
+        context.strokeStyle = cardBorder;
         context.lineWidth = 2;
         context.stroke();
         drawFeatureIcon(context, icon, 130, y + 66, accent);
         context.fillStyle = foreground;
         context.font = `850 32px ${font}`;
         context.fillText(localized(titleZh, titleEn, isZh), 220, y + 57);
-        context.fillStyle = '#38558a';
+        context.fillStyle = muted;
         context.font = `600 24px ${font}`;
         context.fillText(localized(textZh, textEn, isZh), 220, y + 96);
     });
 
     // 04. QR information block
     roundedRect(context, 70, 1110, 940, 360, 30);
-    context.fillStyle = 'rgba(255,255,255,0.92)';
+    context.fillStyle = isDarkSkin ? 'rgba(8,28,62,0.92)' : 'rgba(255,255,255,0.92)';
     context.fill();
-    context.strokeStyle = 'rgba(126, 180, 247, 0.55)';
+    context.strokeStyle = isDarkSkin ? 'rgba(89,213,255,0.5)' : 'rgba(126,180,247,0.55)';
     context.lineWidth = 2;
     context.stroke();
     const qrImage = await loadImage(qrCodeUrl);
+    if (isDarkSkin) {
+        roundedRect(context, 100, 1142, 286, 286, 20);
+        context.fillStyle = '#ffffff';
+        context.fill();
+    }
     context.drawImage(qrImage, 108, 1150, 270, 270);
     context.fillStyle = foreground;
     context.font = `650 24px ${font}`;
@@ -512,7 +532,7 @@ async function renderReferralPoster({
         34,
         2,
     );
-    context.fillStyle = '#38558a';
+    context.fillStyle = muted;
     context.font = `550 20px ${font}`;
     drawWrappedText(
         context,
@@ -549,8 +569,8 @@ async function renderReferralPoster({
     // 05. CTA and footer
     roundedRect(context, 70, 1520, 940, 122, 61);
     const ctaGradient = context.createLinearGradient(70, 1520, 1010, 1642);
-    ctaGradient.addColorStop(0, '#1257d6');
-    ctaGradient.addColorStop(1, '#18b7df');
+    ctaGradient.addColorStop(0, palette.cta[0]);
+    ctaGradient.addColorStop(1, palette.cta[1]);
     context.fillStyle = ctaGradient;
     context.fill();
     context.fillStyle = '#ffffff';
@@ -566,70 +586,156 @@ async function renderReferralPoster({
     context.fillStyle = accent;
     context.font = `700 28px ${font}`;
     context.fillText(domain, 540, 1858);
-    context.fillStyle = '#38558a';
+    context.fillStyle = muted;
     context.font = `600 21px ${font}`;
     context.fillText(localized(template.footerTextZh, template.footerTextEn, isZh), 540, 1897);
     context.textAlign = 'start';
     return canvas.toDataURL('image/png');
 }
 
-function paintMobileCloudBridgeBackground(context: CanvasRenderingContext2D, template: PosterView): void {
-    const palette = mobilePalette(template);
+interface MobilePosterPalette {
+    background: [string, string, string];
+    accent: string;
+    pattern: ReferralPosterPattern;
+    cta: [string, string];
+}
+
+const posterPatternCta: Record<ReferralPosterPattern, [string, string]> = {
+    minimal: ['#1257d6', '#18b7df'],
+    glacier: ['#0077b6', '#63d6ff'],
+    flow: ['#087f8c', '#2fc59d'],
+    'deep-sea': ['#16468e', '#10a9c7'],
+    orbit: ['#5546c7', '#9175ea'],
+};
+
+function paintMobileCloudBridgeBackground(
+    context: CanvasRenderingContext2D,
+    palette: MobilePosterPalette,
+): void {
     const gradient = context.createLinearGradient(0, 0, 1080, 1920);
     gradient.addColorStop(0, palette.background[0]);
     gradient.addColorStop(0.48, palette.background[1]);
     gradient.addColorStop(1, palette.background[2]);
     context.fillStyle = gradient;
     context.fillRect(0, 0, 1080, 1920);
-    context.globalAlpha = 0.2;
-    context.fillStyle = palette.accent;
-    for (const [x, y, radius] of [
-        [960, 220, 230],
-        [120, 1660, 280],
-        [930, 1820, 220],
-    ] as const) {
-        context.beginPath();
-        context.arc(x, y, radius, 0, Math.PI * 2);
-        context.fill();
-    }
-    context.globalAlpha = 0.18;
-    context.fillStyle = palette.accent;
-    for (let x = 44; x < 1080; x += 42) {
-        for (let y = 30; y < 1920; y += 42) {
+    context.save();
+    if (palette.pattern === 'minimal') {
+        context.globalAlpha = 0.11;
+        context.fillStyle = palette.accent;
+        for (const [x, y, radius] of [
+            [970, 230, 210],
+            [100, 1730, 250],
+        ] as const) {
             context.beginPath();
-            context.arc(x, y, 2, 0, Math.PI * 2);
+            context.arc(x, y, radius, 0, Math.PI * 2);
             context.fill();
         }
+        context.globalAlpha = 0.08;
+        for (let x = 54; x < 1080; x += 54) {
+            for (let y = 40; y < 1920; y += 54) {
+                context.beginPath();
+                context.arc(x, y, 2, 0, Math.PI * 2);
+                context.fill();
+            }
+        }
+    } else if (palette.pattern === 'glacier') {
+        const shards = [
+            [720, -80, 1040, 360],
+            [820, 300, 1160, 720],
+            [-120, 1420, 330, 1980],
+            [120, 1550, 520, 2000],
+        ] as const;
+        shards.forEach(([left, top, right, bottom], index) => {
+            context.globalAlpha = index % 2 ? 0.18 : 0.28;
+            context.fillStyle = index % 2 ? '#ffffff' : palette.accent;
+            context.beginPath();
+            context.moveTo(left, top);
+            context.lineTo(right, top + 80);
+            context.lineTo(right - 90, bottom);
+            context.lineTo(left + 70, bottom - 110);
+            context.closePath();
+            context.fill();
+        });
+    } else if (palette.pattern === 'flow') {
+        context.strokeStyle = palette.accent;
+        context.lineCap = 'round';
+        for (let index = 0; index < 7; index += 1) {
+            const y = 180 + index * 270;
+            context.globalAlpha = 0.1 + (index % 3) * 0.035;
+            context.lineWidth = 12 - (index % 3) * 2;
+            context.beginPath();
+            context.moveTo(-140, y);
+            context.bezierCurveTo(180, y - 180, 700, y + 210, 1220, y - 100);
+            context.stroke();
+        }
+    } else if (palette.pattern === 'deep-sea') {
+        context.strokeStyle = palette.accent;
+        context.lineWidth = 2;
+        context.globalAlpha = 0.12;
+        for (let x = 0; x <= 1080; x += 72) {
+            context.beginPath();
+            context.moveTo(x, 0);
+            context.lineTo(x, 1920);
+            context.stroke();
+        }
+        for (let y = 0; y <= 1920; y += 72) {
+            context.beginPath();
+            context.moveTo(0, y);
+            context.lineTo(1080, y);
+            context.stroke();
+        }
+        drawCornerNetwork(context, 82, 1660, palette.accent, 0.5);
+        drawCornerNetwork(context, 920, 1810, palette.accent, 0.38);
+    } else {
+        context.strokeStyle = palette.accent;
+        context.lineWidth = 3;
+        context.globalAlpha = 0.18;
+        for (const [x, y, radius] of [
+            [930, 250, 260],
+            [150, 1690, 320],
+            [960, 1790, 210],
+        ] as const) {
+            context.beginPath();
+            context.arc(x, y, radius, 0, Math.PI * 2);
+            context.stroke();
+        }
+        context.fillStyle = palette.accent;
+        for (let x = 50; x < 1080; x += 86) {
+            for (let y = 50; y < 1920; y += 86) {
+                context.beginPath();
+                context.arc(x, y, 3, 0, Math.PI * 2);
+                context.fill();
+            }
+        }
     }
-    drawCornerNetwork(context, 82, 1635, palette.accent, 0.3);
-    drawCornerNetwork(context, 934, 1785, palette.accent, 0.22);
+    context.restore();
     context.globalAlpha = 1;
 }
 
-function mobilePalette(template: PosterView): {
-    background: [string, string, string];
-    accent: string;
-} {
+function mobilePalette(template: PosterView): MobilePosterPalette {
     const colors = template.legacyColors;
     const accent = accentColorForTemplate(template);
+    const pattern = template.legacyPattern ?? 'minimal';
     if (colors?.length === 3 && colors.every(color => /^#[0-9A-F]{6}$/i.test(color))) {
-        return { background: colors, accent };
+        return { background: colors, accent, pattern, cta: posterPatternCta[pattern] };
     }
-    return { background: ['#eef7ff', '#ffffff', '#eaf4ff'], accent };
+    return {
+        background: ['#eef7ff', '#ffffff', '#eaf4ff'],
+        accent,
+        pattern,
+        cta: [accent, '#18b7df'],
+    };
 }
 
 function accentColorForTemplate(template: PosterView): string {
     return /^#[0-9A-F]{6}$/i.test(template.accentColor) ? template.accentColor : '#1269E8';
 }
 
-function drawMobileHeroOrnament(
-    context: CanvasRenderingContext2D,
-    accent: string,
-    template: PosterView,
-): void {
+function drawMobileHeroOrnament(context: CanvasRenderingContext2D, palette: MobilePosterPalette): void {
     const centerX = 875;
     const centerY = 282;
-    const secondary = template.legacyColors?.[1] ?? '#56b9ef';
+    const accent = palette.accent;
+    const secondary = palette.background[1];
     context.save();
     context.globalAlpha = 0.22;
     const glow = context.createRadialGradient(centerX, centerY, 12, centerX, centerY, 244);
@@ -640,6 +746,87 @@ function drawMobileHeroOrnament(
     context.beginPath();
     context.arc(centerX, centerY, 244, 0, Math.PI * 2);
     context.fill();
+
+    if (palette.pattern === 'minimal') {
+        context.globalAlpha = 0.72;
+        context.fillStyle = 'rgba(255,255,255,0.86)';
+        context.beginPath();
+        context.arc(centerX, centerY, 112, 0, Math.PI * 2);
+        context.fill();
+        drawCloudBridgeMark(context, centerX, centerY, 82, accent);
+        context.restore();
+        return;
+    }
+
+    if (palette.pattern === 'glacier') {
+        context.globalAlpha = 0.78;
+        context.strokeStyle = accent;
+        context.fillStyle = 'rgba(255,255,255,0.72)';
+        context.lineWidth = 5;
+        context.beginPath();
+        context.moveTo(centerX, centerY - 128);
+        context.lineTo(centerX + 112, centerY - 28);
+        context.lineTo(centerX + 54, centerY + 126);
+        context.lineTo(centerX - 108, centerY + 72);
+        context.lineTo(centerX - 74, centerY - 72);
+        context.closePath();
+        context.fill();
+        context.stroke();
+        context.beginPath();
+        context.moveTo(centerX, centerY - 128);
+        context.lineTo(centerX - 12, centerY + 18);
+        context.lineTo(centerX + 112, centerY - 28);
+        context.moveTo(centerX - 12, centerY + 18);
+        context.lineTo(centerX + 54, centerY + 126);
+        context.moveTo(centerX - 12, centerY + 18);
+        context.lineTo(centerX - 108, centerY + 72);
+        context.stroke();
+        context.restore();
+        return;
+    }
+
+    if (palette.pattern === 'flow') {
+        context.globalAlpha = 0.62;
+        context.strokeStyle = accent;
+        context.lineCap = 'round';
+        for (let index = 0; index < 4; index += 1) {
+            context.lineWidth = 11 - index * 2;
+            context.beginPath();
+            context.moveTo(centerX - 190, centerY - 70 + index * 45);
+            context.bezierCurveTo(
+                centerX - 60,
+                centerY - 180 + index * 28,
+                centerX + 55,
+                centerY + 150 - index * 25,
+                centerX + 190,
+                centerY - 58 + index * 36,
+            );
+            context.stroke();
+        }
+        context.restore();
+        return;
+    }
+
+    if (palette.pattern === 'deep-sea') {
+        context.globalAlpha = 0.82;
+        context.strokeStyle = accent;
+        context.fillStyle = 'rgba(4,18,43,0.9)';
+        context.lineWidth = 6;
+        roundedRect(context, centerX - 82, centerY - 82, 164, 164, 34);
+        context.fill();
+        context.stroke();
+        for (const offset of [-116, -52, 52, 116]) {
+            context.beginPath();
+            context.moveTo(centerX + offset, centerY - 150);
+            context.lineTo(centerX + offset, centerY - 104);
+            context.moveTo(centerX + offset, centerY + 104);
+            context.lineTo(centerX + offset, centerY + 150);
+            context.stroke();
+        }
+        drawCloudBridgeMark(context, centerX, centerY, 74, accent);
+        context.restore();
+        return;
+    }
 
     context.globalAlpha = 0.4;
     context.strokeStyle = accent;
@@ -752,6 +939,14 @@ function readableForeground(value: string): string {
     const green = Number.parseInt(normalized.slice(2, 4), 16);
     const blue = Number.parseInt(normalized.slice(4, 6), 16);
     return red + green + blue > 630 ? '#0E2A63' : value;
+}
+
+export function posterForegroundColor(value: string, pattern: ReferralPosterPattern): string {
+    return pattern === 'deep-sea' ? validHexColor(value, '#f3f8ff') : readableForeground(value);
+}
+
+function validHexColor(value: string, fallback: string): string {
+    return /^#[0-9A-F]{6}$/i.test(value) ? value : fallback;
 }
 
 function drawImageContain(

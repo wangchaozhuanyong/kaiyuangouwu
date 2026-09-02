@@ -3,6 +3,7 @@ import {
     AlertCircle,
     Building2,
     CheckCircle2,
+    CircleDollarSign,
     Copy,
     CreditCard,
     ExternalLink,
@@ -16,6 +17,7 @@ import {
     RefreshCw,
     Store,
     Trash2,
+    WalletCards,
     X,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -82,18 +84,33 @@ import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatDateTime } from '../Sales/sales-utils';
 import { PaymentShippingManager } from './PaymentShippingManager';
+import { CurrencyAndRatesPanel, StoreUsdtPanel } from './StoreFinancePanel';
 
-type Tab = 'STORES' | 'DOMAINS' | 'SELLERS' | 'PAYMENT_SHIPPING' | 'BUSINESS';
+type Tab = 'STORES' | 'DOMAINS' | 'SELLERS' | 'PAYMENT_SHIPPING' | 'BUSINESS' | 'CURRENCY' | 'USDT';
 const STORE_SETTINGS_TABS = {
     stores: 'STORES',
     domains: 'DOMAINS',
     sellers: 'SELLERS',
     'payment-shipping': 'PAYMENT_SHIPPING',
     business: 'BUSINESS',
+    currency: 'CURRENCY',
+    usdt: 'USDT',
 } as const;
 
 export function StoreSettingsModule() {
     const { hasAnyPermission } = useAdminPermissions();
+    const sellerCustomFields = useCustomFieldDefinitions('Seller');
+    const paymentMethodCustomFields = useCustomFieldDefinitions('PaymentMethod');
+    const shippingMethodCustomFields = useCustomFieldDefinitions('ShippingMethod');
+    const storeManagementDocument = useMemo(() => {
+        const withSellers = addCustomFieldsToDocument(STORE_MANAGEMENT_QUERY, 'Seller', sellerCustomFields);
+        const withPaymentMethods = addCustomFieldsToDocument(
+            withSellers,
+            'PaymentMethod',
+            paymentMethodCustomFields,
+        );
+        return addCustomFieldsToDocument(withPaymentMethods, 'ShippingMethod', shippingMethodCustomFields);
+    }, [paymentMethodCustomFields, sellerCustomFields, shippingMethodCustomFields]);
     const [tab, setTab] = useUrlTab<Tab>(STORE_SETTINGS_TABS, 'stores');
     const [selectedStoreId, setSelectedStoreId] = useState('');
     const [storeEditor, setStoreEditor] = useState<StoreProfileRecord | null>(null);
@@ -103,7 +120,7 @@ export function StoreSettingsModule() {
     const [notice, setNotice] = useState('');
     const [actionError, setActionError] = useState('');
     const loadingAllStoreSettingsRef = useRef(false);
-    const query = useQuery<StoreManagementResult>(STORE_MANAGEMENT_QUERY, {
+    const query = useQuery<StoreManagementResult>(storeManagementDocument, {
         variables: {
             sellerOptions: { skip: 0, take: 100, sort: { createdAt: 'DESC' } },
             paymentMethodOptions: { skip: 0, take: 100, sort: { createdAt: 'DESC' } },
@@ -173,6 +190,7 @@ export function StoreSettingsModule() {
         'ReadTaxCategory',
         'ReadTaxRate',
     ]);
+    const canReadFinance = hasAnyPermission(['ReadStoreProfile']);
 
     const completed = async (message: string) => {
         setNotice(message);
@@ -257,6 +275,24 @@ export function StoreSettingsModule() {
                         >
                             支付与交付
                         </TabButton>
+                        {canReadFinance && (
+                            <TabButton
+                                active={tab === 'CURRENCY'}
+                                onClick={() => setTab('CURRENCY')}
+                                icon={<CircleDollarSign className="h-3.5 w-3.5" />}
+                            >
+                                币种与汇率
+                            </TabButton>
+                        )}
+                        {canReadFinance && (
+                            <TabButton
+                                active={tab === 'USDT'}
+                                onClick={() => setTab('USDT')}
+                                icon={<WalletCards className="h-3.5 w-3.5" />}
+                            >
+                                USDT 收款
+                            </TabButton>
+                        )}
                         {canReadBusinessSettings && (
                             <TabButton
                                 active={tab === 'BUSINESS'}
@@ -313,6 +349,7 @@ export function StoreSettingsModule() {
                         {tab === 'SELLERS' && (
                             <SellersPanel
                                 sellers={query.data?.sellers.items ?? []}
+                                customFieldDefinitions={sellerCustomFields}
                                 onChanged={completed}
                                 onError={setActionError}
                             />
@@ -320,6 +357,8 @@ export function StoreSettingsModule() {
                         {tab === 'PAYMENT_SHIPPING' && (
                             <PaymentShippingManager
                                 data={query.data!}
+                                paymentMethodCustomFields={paymentMethodCustomFields}
+                                shippingMethodCustomFields={shippingMethodCustomFields}
                                 onChanged={completed}
                                 onError={setActionError}
                             />
@@ -327,6 +366,8 @@ export function StoreSettingsModule() {
                         {tab === 'BUSINESS' && canReadBusinessSettings && (
                             <BusinessBasicsPanel onChanged={completed} onError={setActionError} />
                         )}
+                        {tab === 'CURRENCY' && canReadFinance && <CurrencyAndRatesPanel />}
+                        {tab === 'USDT' && canReadFinance && <StoreUsdtPanel />}
                     </>
                 )}
             </main>
@@ -366,6 +407,7 @@ export function StoreSettingsModule() {
             )}
             {sellerOpen && (
                 <SellerDialog
+                    customFieldDefinitions={sellerCustomFields}
                     onClose={() => setSellerOpen(false)}
                     onCompleted={completed}
                     onError={setActionError}
@@ -831,10 +873,12 @@ function DomainsPanel({
 
 function SellersPanel({
     sellers,
+    customFieldDefinitions,
     onChanged,
     onError,
 }: {
     sellers: StoreManagementResult['sellers']['items'];
+    customFieldDefinitions: ReturnType<typeof useCustomFieldDefinitions>;
     onChanged: (message: string) => Promise<void>;
     onError: (message: string) => void;
 }) {
@@ -946,6 +990,7 @@ function SellersPanel({
             {editing && (
                 <SellerDialog
                     existing={editing}
+                    customFieldDefinitions={customFieldDefinitions}
                     onClose={() => setEditing(null)}
                     onCompleted={async message => {
                         setEditing(null);
@@ -2642,23 +2687,36 @@ function ProvisionStoreDialog({
 
 function SellerDialog({
     existing,
+    customFieldDefinitions,
     onClose,
     onCompleted,
     onError,
 }: {
     existing?: StoreManagementResult['sellers']['items'][number];
+    customFieldDefinitions: ReturnType<typeof useCustomFieldDefinitions>;
     onClose: () => void;
     onCompleted: (message: string) => Promise<void>;
     onError: (message: string) => void;
 }) {
     const [name, setName] = useState(existing?.name ?? '');
+    const [customFieldValues, setCustomFieldValues] = useState<CustomFieldValueMap>(() =>
+        customFieldValuesFromEntity(customFieldDefinitions, existing?.customFields),
+    );
     const [create, state] = useMutation(CREATE_SELLER_MUTATION);
     const [update, updateState] = useMutation(UPDATE_SELLER_MUTATION);
     const submit = async () => {
         if (!name.trim()) return onError('请填写商家主体名称');
+        const customFieldErrors = validateCustomFieldValues(customFieldDefinitions, customFieldValues);
+        if (Object.keys(customFieldErrors).length > 0) {
+            return onError(Object.values(customFieldErrors)[0] ?? '商家主体扩展字段校验失败');
+        }
         try {
-            if (existing) await update({ variables: { input: { id: existing.id, name: name.trim() } } });
-            else await create({ variables: { input: { name: name.trim() } } });
+            const customFields = customFieldInputFromValues(customFieldDefinitions, customFieldValues);
+            if (existing) {
+                await update({ variables: { input: { id: existing.id, name: name.trim(), customFields } } });
+            } else {
+                await create({ variables: { input: { name: name.trim(), customFields } } });
+            }
             await onCompleted(existing ? '商家主体已更新' : '商家主体已创建');
         } catch (error) {
             onError(errorText(error));
@@ -2678,6 +2736,15 @@ function SellerDialog({
                     autoFocus
                 />
             </Field>
+            <div className="mt-5">
+                <DynamicCustomFieldsForm
+                    title="商家主体扩展字段"
+                    fields={customFieldDefinitions}
+                    values={customFieldValues}
+                    onChange={setCustomFieldValues}
+                    disabled={state.loading || updateState.loading}
+                />
+            </div>
             <ModalActions
                 onClose={onClose}
                 onSave={() => void submit()}
@@ -2744,7 +2811,7 @@ function TabButton({
         <button
             type="button"
             onClick={onClick}
-            className={`flex shrink-0 items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-bold ${active ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
+            className={`tablet-touch-target flex shrink-0 items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-bold ${active ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
         >
             {icon}
             {children}
@@ -2892,7 +2959,7 @@ function mergeById<T extends { id: string }>(current: T[], next: T[]) {
 const inputClass =
     'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-normal text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-50 disabled:text-slate-400';
 const primaryButton =
-    'flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50';
+    'tablet-touch-target flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50';
 const secondaryButton =
-    'flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50';
+    'tablet-touch-target flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50';
 const theadClass = 'border-b border-slate-200 bg-slate-50 text-[10px] font-bold text-slate-500';

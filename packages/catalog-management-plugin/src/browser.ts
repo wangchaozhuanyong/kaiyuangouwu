@@ -14,3 +14,10 @@ export {
     type LocalCatalogRowError,
 } from './dashboard/catalog-local-file.js';
 export type { NormalizedCatalogRow } from './types.js';
+
+export {
+    downloadCatalogBlob,
+    exportCatalogRowsLocally,
+    type CatalogExportFormat,
+} from './dashboard/catalog-export-file.js';
+export type { CatalogExportRowRecord } from './dashboard/catalog-management.graphql.js';

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { OrderListSummaryInput } from './sales-utils';
-import { summarizeOrderListItem } from './sales-utils';
+import { buildCompatibleRefundOrderInput, summarizeOrderListItem } from './sales-utils';
 
 const physicalLine = (overrides: Partial<OrderListSummaryInput['lines'][number]> = {}) => ({
     id: 'line-physical',
@@ -126,5 +126,18 @@ describe('summarizeOrderListItem', () => {
         expect(summary.customerName).toBe('游客订单');
         expect(summary.contact).toBe('未留联系方式');
         expect(summary.shippingAddress).toBe(longAddress);
+    });
+});
+
+describe('buildCompatibleRefundOrderInput', () => {
+    it('同时发送 amount 和旧版非空退款字段的零值', () => {
+        expect(buildCompatibleRefundOrderInput('payment-1', 1130, 'UAT refund')).toEqual({
+            paymentId: 'payment-1',
+            amount: 1130,
+            reason: 'UAT refund',
+            lines: [],
+            shipping: 0,
+            adjustment: 0,
+        });
     });
 });

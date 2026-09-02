@@ -171,6 +171,46 @@ export const UPDATE_CUSTOMER_MUTATION = gql`
     }
 `;
 
+export const CREATE_CUSTOMER_MUTATION = gql`
+    mutation AdminCreateCustomer($input: CreateCustomerInput!) {
+        createCustomer(input: $input) {
+            __typename
+            ... on Customer {
+                id
+            }
+            ... on ErrorResult {
+                errorCode
+                message
+            }
+        }
+    }
+`;
+
+export const DELETE_CUSTOMERS_MUTATION = gql`
+    mutation AdminDeleteCustomers($ids: [ID!]!) {
+        deleteCustomers(ids: $ids) {
+            result
+            message
+        }
+    }
+`;
+
+export const ADD_CUSTOMERS_TO_GROUP_MUTATION = gql`
+    mutation AdminAddCustomersToGroup($customerIds: [ID!]!, $groupId: ID!) {
+        addCustomersToGroup(customerIds: $customerIds, customerGroupId: $groupId) {
+            id
+        }
+    }
+`;
+
+export const REMOVE_CUSTOMERS_FROM_GROUP_MUTATION = gql`
+    mutation AdminRemoveCustomersFromGroup($customerIds: [ID!]!, $groupId: ID!) {
+        removeCustomersFromGroup(customerIds: $customerIds, customerGroupId: $groupId) {
+            id
+        }
+    }
+`;
+
 export const CREATE_CUSTOMER_ADDRESS_MUTATION = gql`
     mutation AdminCreateCustomerAddress($customerId: ID!, $input: CreateAddressInput!) {
         createCustomerAddress(customerId: $customerId, input: $input) {
@@ -325,6 +365,7 @@ export interface CustomerDetailRecord extends Omit<CustomerListRecord, 'orders'>
     addresses: CustomerAddressRecord[] | null;
     orders: { totalItems: number; items: CustomerOrderRecord[] };
     history: { totalItems: number; items: CustomerHistoryRecord[] };
+    customFields?: Record<string, unknown> | null;
 }
 
 export interface CustomerDetailResult {

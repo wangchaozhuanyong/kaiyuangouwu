@@ -2,7 +2,13 @@ import { Component, useMemo, type ReactNode } from 'react';
 
 import { useAdminPermissions } from '../hooks/use-admin-permissions';
 
-import { getNextAdminActions, getNextAdminPageBlocks, type NextAdminPageBlockContext } from './extension-api';
+import {
+    getNextAdminActions,
+    getNextAdminDashboardAlerts,
+    getNextAdminDashboardWidgets,
+    getNextAdminPageBlocks,
+    type NextAdminPageBlockContext,
+} from './extension-api';
 
 class ExtensionBoundary extends Component<{ children: ReactNode; extensionId: string }, { failed: boolean }> {
     state = { failed: false };
@@ -79,6 +85,55 @@ export function NextAdminActions({
                     <ExtensionBoundary key={action.id} extensionId={action.id}>
                         <Action context={context} />
                     </ExtensionBoundary>
+                );
+            })}
+        </div>
+    );
+}
+
+export function NextAdminDashboardAlerts() {
+    const { hasAnyPermission } = useAdminPermissions();
+    const alerts = getNextAdminDashboardAlerts().filter(alert => hasAnyPermission(alert.permissions ?? []));
+    if (alerts.length === 0) return null;
+    return (
+        <div className="space-y-3" data-extension-location="dashboard:alerts">
+            {alerts.map(alert => {
+                const Alert = alert.component;
+                return (
+                    <ExtensionBoundary key={alert.id} extensionId={alert.id}>
+                        <Alert />
+                    </ExtensionBoundary>
+                );
+            })}
+        </div>
+    );
+}
+
+export function NextAdminDashboardWidgets() {
+    const { hasAnyPermission } = useAdminPermissions();
+    const widgets = getNextAdminDashboardWidgets().filter(widget =>
+        hasAnyPermission(widget.permissions ?? []),
+    );
+    if (widgets.length === 0) return null;
+    return (
+        <div className="grid gap-4 xl:grid-cols-2" data-extension-location="dashboard:widgets">
+            {widgets.map(widget => {
+                const Widget = widget.component;
+                return (
+                    <section
+                        key={widget.id}
+                        className="min-w-0 rounded-xl border border-slate-200 bg-white p-5 shadow-xs"
+                    >
+                        <div className="mb-4">
+                            <h2 className="text-sm font-bold text-slate-900">{widget.title}</h2>
+                            {widget.description && (
+                                <p className="mt-1 text-xs text-slate-500">{widget.description}</p>
+                            )}
+                        </div>
+                        <ExtensionBoundary extensionId={widget.id}>
+                            <Widget />
+                        </ExtensionBoundary>
+                    </section>
                 );
             })}
         </div>

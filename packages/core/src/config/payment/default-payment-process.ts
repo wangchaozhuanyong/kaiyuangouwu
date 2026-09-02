@@ -1,5 +1,6 @@
 import { HistoryEntryType } from '@vendure/common/lib/generated-types';
 
+import { isGraphQlErrorResult } from '../../common/error/error-result';
 import { PaymentState } from '../../service/helpers/payment-state-machine/payment-state';
 import { orderTotalIsCovered } from '../../service/helpers/utils/order-utils';
 
@@ -79,13 +80,19 @@ export const defaultPaymentProcess: PaymentProcess<PaymentState> = {
             order.state !== 'PaymentSettled' &&
             order.state !== 'ArrangingAdditionalPayment'
         ) {
-            await orderService.transitionToState(ctx, order.id, 'PaymentSettled');
+            const result = await orderService.transitionToState(ctx, order.id, 'PaymentSettled');
+            if (isGraphQlErrorResult(result)) {
+                throw new Error(result.transitionError);
+            }
         } else if (
             orderTotalIsCovered(order, ['Authorized', 'Settled']) &&
             order.state !== 'PaymentAuthorized' &&
             order.state !== 'ArrangingAdditionalPayment'
         ) {
-            await orderService.transitionToState(ctx, order.id, 'PaymentAuthorized');
+            const result = await orderService.transitionToState(ctx, order.id, 'PaymentAuthorized');
+            if (isGraphQlErrorResult(result)) {
+                throw new Error(result.transitionError);
+            }
         }
     },
 };

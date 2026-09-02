@@ -17,11 +17,26 @@ import {
     Video,
     X,
 } from 'lucide-react';
-import { useDeferredValue, useRef, useState } from 'react';
+import { useDeferredValue, useMemo, useRef, useState } from 'react';
 import { sensitiveActionContext, uploadAdminFiles } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
-import { CREATE_ASSETS_MULTIPART, DELETE_ASSET, UPDATE_ASSET } from '../../graphql/catalog-admin.graphql';
+import { DynamicCustomFieldsForm } from '../../custom-fields/DynamicCustomFieldsForm';
+import type { CustomFieldValueMap } from '../../custom-fields/custom-field-types';
+import {
+    addCustomFieldsToDocument,
+    customFieldInputFromValues,
+    customFieldValuesFromEntity,
+    localizedCustomFieldInputFromValues,
+    validateCustomFieldValues,
+} from '../../custom-fields/custom-field-utils';
+import { useCustomFieldDefinitions } from '../../custom-fields/custom-fields-context';
+import {
+    CREATE_ASSETS_MULTIPART,
+    DELETE_ASSET,
+    DELETE_ASSETS,
+    UPDATE_ASSET,
+} from '../../graphql/catalog-admin.graphql';
 import { GET_ASSETS } from '../../graphql/catalog.graphql';
 import { toUserFacingError } from '../../utils/user-facing-error';
 
@@ -36,6 +51,13 @@ interface AssetItem {
     preview: string;
     source: string;
     tags: Array<{ id: string; value: string }>;
+    translations: Array<{
+        id: string;
+        languageCode: string;
+        name: string;
+        customFields?: Record<string, unknown> | null;
+    }>;
+    customFields?: Record<string, unknown> | null;
 }
 
 interface PendingFile {
@@ -74,7 +96,13 @@ const cleanupPreview = (file: PendingFile) => {
 
 export function AssetsModule() {
     const requestConfirmation = useConfirmDialog();
+    const assetCustomFields = useCustomFieldDefinitions('Asset');
+    const assetsDocument = useMemo(
+        () => addCustomFieldsToDocument(GET_ASSETS, 'Asset', assetCustomFields),
+        [assetCustomFields],
+    );
     const [selectedAsset, setSelectedAsset] = useState<AssetItem | null>(null);
+    const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>([]);
     const [activeTypeFilter, setActiveTypeFilter] = useState<'ALL' | 'IMAGE' | 'VIDEO'>('ALL');
     const [searchTerm, setSearchTerm] = useState('');
     const [page, setPage] = useState(0);
@@ -85,6 +113,7 @@ export function AssetsModule() {
     const [isUploading, setIsUploading] = useState(false);
     const [editName, setEditName] = useState('');
     const [editTags, setEditTags] = useState('');
+    const [customFieldValues, setCustomFieldValues] = useState<CustomFieldValueMap>({});
     const [savingAsset, setSavingAsset] = useState(false);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
     const deferredSearch = useDeferredValue(searchTerm.trim());
@@ -93,7 +122,7 @@ export function AssetsModule() {
         ...(deferredSearch ? { name: { contains: deferredSearch } } : {}),
     };
 
-    const { data, loading, error, refetch } = useQuery<GetAssetsData>(GET_ASSETS, {
+    const { data, loading, error, refetch } = useQuery<GetAssetsData>(assetsDocument, {
         variables: {
             options: {
                 skip: page * PAGE_SIZE,
@@ -107,6 +136,9 @@ export function AssetsModule() {
     });
     const [updateAsset] = useMutation(UPDATE_ASSET);
     const [deleteAsset] = useMutation<{ deleteAsset: { result: string; message?: string } }>(DELETE_ASSET);
+    const [deleteAssets, deleteAssetsState] = useMutation<{
+        deleteAssets: { result: string; message?: string };
+    }>(DELETE_ASSETS);
     const assets = data?.assets.items ?? [];
     const totalItems = data?.assets.totalItems ?? 0;
     const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
@@ -228,6 +260,9 @@ export function AssetsModule() {
         setSelectedAsset(asset);
         setEditName(asset.name);
         setEditTags(asset.tags.map(tag => tag.value).join('，'));
+        setCustomFieldValues(
+            customFieldValuesFromEntity(assetCustomFields, asset.customFields, asset.translations),
+        );
         setActionError('');
     };
 
@@ -242,10 +277,34 @@ export function AssetsModule() {
             .split(/[，,\n]/)
             .map(tag => tag.trim())
             .filter(Boolean);
+        const customFieldErrors = validateCustomFieldValues(assetCustomFields, customFieldValues);
+        if (Object.keys(customFieldErrors).length > 0) {
+            showError(Object.values(customFieldErrors)[0] ?? '素材扩展字段校验失败');
+            return;
+        }
         setSavingAsset(true);
         setActionError('');
         try {
-            await updateAsset({ variables: { input: { id: selectedAsset.id, name, tags } } });
+            await updateAsset({
+                variables: {
+                    input: {
+                        id: selectedAsset.id,
+                        name,
+                        tags,
+                        customFields: customFieldInputFromValues(assetCustomFields, customFieldValues),
+                        translations: selectedAsset.translations.map(translation => ({
+                            id: translation.id,
+                            languageCode: translation.languageCode,
+                            name: translation.name,
+                            customFields: localizedCustomFieldInputFromValues(
+                                assetCustomFields,
+                                customFieldValues,
+                                translation.languageCode,
+                            ),
+                        })),
+                    },
+                },
+            });
             await refetch();
             setSelectedAsset(null);
             showNotice('已保存素材《' + name + '》的名称与标签');
@@ -292,6 +351,38 @@ export function AssetsModule() {
             showError(toUserFacingError(deleteError, '素材删除失败，请稍后重试'));
         } finally {
             setSavingAsset(false);
+        }
+    };
+
+    const handleBulkDelete = async () => {
+        if (!selectedAssetIds.length) return;
+        const confirmation = await requestConfirmation({
+            title: `批量删除 ${selectedAssetIds.length} 个素材？`,
+            description: '仅删除未被业务数据引用的素材；任一素材仍被引用时，后端会拒绝本次删除。',
+            confirmLabel: '验证并删除',
+            tone: 'danger',
+            requireCurrentPassword: true,
+        });
+        if (!confirmation) return;
+        try {
+            const response = await deleteAssets({
+                variables: {
+                    input: {
+                        assetIds: selectedAssetIds,
+                        force: false,
+                        deleteFromAllChannels: false,
+                    },
+                },
+                context: sensitiveActionContext(confirmation.currentPassword ?? ''),
+            });
+            const result = response.data?.deleteAssets;
+            if (result?.result !== 'DELETED') throw new Error(result?.message || '后端拒绝批量删除素材');
+            const deletedCount = selectedAssetIds.length;
+            setSelectedAssetIds([]);
+            await refetch();
+            showNotice(`已删除 ${deletedCount} 个素材`);
+        } catch (bulkDeleteError) {
+            showError(toUserFacingError(bulkDeleteError, '素材批量删除失败'));
         }
     };
 
@@ -391,6 +482,35 @@ export function AssetsModule() {
                             />
                         </div>
                     </div>
+                    {assets.length > 0 && (
+                        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3">
+                            <label className="flex items-center gap-2 text-xs font-bold text-slate-600">
+                                <input
+                                    type="checkbox"
+                                    checked={assets.every(asset => selectedAssetIds.includes(asset.id))}
+                                    onChange={event =>
+                                        setSelectedAssetIds(current =>
+                                            event.target.checked
+                                                ? [...new Set([...current, ...assets.map(asset => asset.id)])]
+                                                : current.filter(
+                                                      id => !assets.some(asset => asset.id === id),
+                                                  ),
+                                        )
+                                    }
+                                />
+                                选择当前页（已选 {selectedAssetIds.length}）
+                            </label>
+                            <button
+                                type="button"
+                                onClick={() => void handleBulkDelete()}
+                                disabled={!selectedAssetIds.length || deleteAssetsState.loading}
+                                className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700 disabled:opacity-40"
+                            >
+                                <Trash2 className="h-3.5 w-3.5" />
+                                {deleteAssetsState.loading ? '删除中…' : '批量删除'}
+                            </button>
+                        </div>
+                    )}
                     {loading && !data ? (
                         <div className="grid grid-cols-2 gap-4 p-6 sm:grid-cols-4 md:grid-cols-5">
                             {[1, 2, 3, 4, 5].map(item => (
@@ -408,40 +528,60 @@ export function AssetsModule() {
                     ) : (
                         <div className="grid grid-cols-2 gap-4 p-6 sm:grid-cols-4 md:grid-cols-5">
                             {assets.map(asset => (
-                                <button
-                                    type="button"
+                                <div
                                     key={asset.id}
-                                    onClick={() => openAsset(asset)}
-                                    className="group overflow-hidden rounded-xl border border-slate-200 bg-slate-50 text-left hover:border-blue-400 hover:shadow-md"
+                                    className="group relative overflow-hidden rounded-xl border border-slate-200 bg-slate-50 text-left hover:border-blue-400 hover:shadow-md"
                                 >
-                                    <div className="relative flex aspect-square items-center justify-center overflow-hidden bg-slate-100">
-                                        {asset.type === 'IMAGE' ? (
-                                            <img
-                                                src={asset.preview}
-                                                alt={asset.name}
-                                                className="h-full w-full object-cover transition-transform group-hover:scale-105"
-                                            />
-                                        ) : asset.type === 'VIDEO' ? (
-                                            <Video className="h-9 w-9 text-slate-400" />
-                                        ) : (
-                                            <File className="h-9 w-9 text-slate-400" />
-                                        )}
-                                        <span className="absolute right-1.5 top-1.5 rounded-lg bg-white/90 p-1.5 text-slate-600 opacity-0 shadow-sm group-hover:opacity-100">
-                                            <FileEdit className="h-3.5 w-3.5" />
-                                        </span>
-                                    </div>
-                                    <div className="p-3">
-                                        <div className="truncate font-bold text-slate-900">{asset.name}</div>
-                                        <div className="mt-1 flex justify-between font-mono text-[10px] text-slate-400">
-                                            <span>
-                                                {asset.width && asset.height
-                                                    ? asset.width + '×' + asset.height
-                                                    : asset.type}
+                                    <label className="absolute left-2 top-2 z-10 rounded-md bg-white/90 p-1 shadow-sm">
+                                        <input
+                                            type="checkbox"
+                                            aria-label={`选择素材 ${asset.name}`}
+                                            checked={selectedAssetIds.includes(asset.id)}
+                                            onChange={event =>
+                                                setSelectedAssetIds(current =>
+                                                    event.target.checked
+                                                        ? [...current, asset.id]
+                                                        : current.filter(id => id !== asset.id),
+                                                )
+                                            }
+                                        />
+                                    </label>
+                                    <button
+                                        type="button"
+                                        onClick={() => openAsset(asset)}
+                                        className="block w-full text-left"
+                                    >
+                                        <div className="relative flex aspect-square items-center justify-center overflow-hidden bg-slate-100">
+                                            {asset.type === 'IMAGE' ? (
+                                                <img
+                                                    src={asset.preview}
+                                                    alt={asset.name}
+                                                    className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                                                />
+                                            ) : asset.type === 'VIDEO' ? (
+                                                <Video className="h-9 w-9 text-slate-400" />
+                                            ) : (
+                                                <File className="h-9 w-9 text-slate-400" />
+                                            )}
+                                            <span className="absolute right-1.5 top-1.5 rounded-lg bg-white/90 p-1.5 text-slate-600 opacity-0 shadow-sm group-hover:opacity-100">
+                                                <FileEdit className="h-3.5 w-3.5" />
                                             </span>
-                                            <span>{formatFileSize(asset.fileSize)}</span>
                                         </div>
-                                    </div>
-                                </button>
+                                        <div className="p-3">
+                                            <div className="truncate font-bold text-slate-900">
+                                                {asset.name}
+                                            </div>
+                                            <div className="mt-1 flex justify-between font-mono text-[10px] text-slate-400">
+                                                <span>
+                                                    {asset.width && asset.height
+                                                        ? asset.width + '×' + asset.height
+                                                        : asset.type}
+                                                </span>
+                                                <span>{formatFileSize(asset.fileSize)}</span>
+                                            </div>
+                                        </div>
+                                    </button>
+                                </div>
                             ))}
                         </div>
                     )}
@@ -711,6 +851,13 @@ export function AssetsModule() {
                                     </button>
                                 </div>
                             </div>
+                            <DynamicCustomFieldsForm
+                                title="素材扩展字段"
+                                fields={assetCustomFields}
+                                values={customFieldValues}
+                                onChange={setCustomFieldValues}
+                                disabled={savingAsset}
+                            />
                             {actionError && (
                                 <div className="rounded-lg bg-rose-50 p-3 text-rose-700">{actionError}</div>
                             )}

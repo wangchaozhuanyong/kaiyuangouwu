@@ -1,4 +1,5 @@
 import { useMutation, useQuery } from '@apollo/client/react';
+import type { CatalogExportRowRecord } from '@vendure/catalog-management-plugin/browser';
 import {
     AlertCircle,
     AlertTriangle,
@@ -6,6 +7,7 @@ import {
     ArrowRightLeft,
     ArrowUpRight,
     Boxes,
+    CalendarClock,
     CheckCircle2,
     ChevronLeft,
     ChevronRight,
@@ -26,23 +28,31 @@ import { useConfirmDialog } from '../../components/confirm-dialog-context';
 import {
     CREATE_STOCK_LOCATION,
     DELETE_STOCK_LOCATION,
+    DELETE_STOCK_LOCATIONS,
     GET_INVENTORY_OVERVIEW,
     GET_STOCK_LOCATIONS,
     UPDATE_STOCK_LOCATION,
     UPDATE_VARIANT_STOCK,
 } from '../../graphql/catalog-admin.graphql';
+import {
+    CATALOG_EXPORT_ROWS_QUERY,
+    SAVE_CATALOG_INVENTORY_LOT_MUTATION,
+} from '../../graphql/catalog-operations.graphql';
 import { UPDATE_PRODUCT_VARIANTS } from '../../graphql/catalog.graphql';
 import { useUrlTab } from '../../hooks/use-url-tab';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatMoney } from '../Sales/sales-utils';
+import { dateInputToUtcDateTime } from './catalog-date';
 
-type InventoryTab = 'SKU_OPERATIONS' | 'ALL' | 'LOW_STOCK' | 'OUT_OF_STOCK' | 'MOVEMENTS_LOG' | 'WAREHOUSES';
+type InventoryTab =
+    'SKU_OPERATIONS' | 'ALL' | 'LOW_STOCK' | 'OUT_OF_STOCK' | 'MOVEMENTS_LOG' | 'LOTS' | 'WAREHOUSES';
 const INVENTORY_TABS = {
     skus: 'SKU_OPERATIONS',
     all: 'ALL',
     'low-stock': 'LOW_STOCK',
     'out-of-stock': 'OUT_OF_STOCK',
     movements: 'MOVEMENTS_LOG',
+    lots: 'LOTS',
     warehouses: 'WAREHOUSES',
 } as const;
 type StockStatus = 'NORMAL' | 'LOW_STOCK' | 'OUT_OF_STOCK';
@@ -112,8 +122,37 @@ interface MovementRow extends StockMovementItem {
     sku: string;
 }
 
+interface InventoryLotRow {
+    id: string;
+    productId: string;
+    productName: string;
+    variantId: string;
+    sku: string;
+    stockLocationId: string;
+    stockLocationName: string;
+    lotCode: string;
+    manufacturedAt: string | null;
+    expiresAt: string | null;
+    quantityOnHand: number;
+    purchaseCostMicrounits: number | null;
+    currencyCode: string;
+    state: string;
+}
+
+interface InventoryLotDraft {
+    id?: string;
+    productVariantId: string;
+    stockLocationId: string;
+    lotCode: string;
+    manufacturedAt: string;
+    expiresAt: string;
+    quantityOnHand: string;
+    purchaseCost: string;
+}
+
 const EMPTY_VARIANTS: ProductVariantItem[] = [];
 const EMPTY_LOCATIONS: StockLocationItem[] = [];
+const EMPTY_CATALOG_EXPORT_ROWS: CatalogExportRowRecord[] = [];
 const PAGE_SIZE = 50;
 const movementLabels: Record<StockMovementItem['type'], string> = {
     ADJUSTMENT: '库存盘点调整',
@@ -157,8 +196,11 @@ export function InventoryWarehouseModule() {
     const [transferToLocationId, setTransferToLocationId] = useState('');
     const [savingLocation, setSavingLocation] = useState(false);
     const [selectedVariantIds, setSelectedVariantIds] = useState<string[]>([]);
+    const [selectedLocationIds, setSelectedLocationIds] = useState<string[]>([]);
+    const [bulkLocationTransferId, setBulkLocationTransferId] = useState('');
     const [bulkPrice, setBulkPrice] = useState('');
     const [bulkUpdating, setBulkUpdating] = useState(false);
+    const [lotDraft, setLotDraft] = useState<InventoryLotDraft | null>(null);
     const loadingAllLocationsRef = useRef(false);
 
     const { data, loading, error, refetch } = useQuery<InventoryData>(GET_INVENTORY_OVERVIEW, {
@@ -190,6 +232,14 @@ export function InventoryWarehouseModule() {
         fetchMore: fetchMoreLocations,
         loading: locationsLoading,
     } = locationQuery;
+    const lotQuery = useQuery<{
+        catalogExportRows: { items: CatalogExportRowRecord[]; totalItems: number };
+    }>(CATALOG_EXPORT_ROWS_QUERY, {
+        variables: { skip: page * PAGE_SIZE, take: PAGE_SIZE },
+        skip: activeTab !== 'LOTS',
+        fetchPolicy: 'cache-and-network',
+        notifyOnNetworkStatusChange: true,
+    });
 
     useEffect(() => {
         const result = locationData?.stockLocations;
@@ -225,7 +275,13 @@ export function InventoryWarehouseModule() {
     const [deleteLocation] = useMutation<{ deleteStockLocation: { result: string; message?: string } }>(
         DELETE_STOCK_LOCATION,
     );
-    const [updateProductVariants] = useMutation(UPDATE_PRODUCT_VARIANTS);
+    const [deleteLocations, deleteLocationsState] = useMutation<{
+        deleteStockLocations: Array<{ result: string; message?: string }>;
+    }>(DELETE_STOCK_LOCATIONS);
+    const [updateProductVariants] = useMutation<{
+        updateProductVariants: Array<{ id: string } | null>;
+    }>(UPDATE_PRODUCT_VARIANTS);
+    const [saveInventoryLot, saveInventoryLotState] = useMutation(SAVE_CATALOG_INVENTORY_LOT_MUTATION);
 
     const variants = data?.productVariants.items ?? EMPTY_VARIANTS;
     const locations = locationData?.stockLocations.items ?? EMPTY_LOCATIONS;
@@ -233,10 +289,14 @@ export function InventoryWarehouseModule() {
     const totalVariants = data?.productVariants.totalItems ?? 0;
     const totalPages = Math.max(1, Math.ceil(totalVariants / PAGE_SIZE));
     const refetchAll = async () => {
-        await Promise.all([refetch(), locationQuery.refetch()]);
+        await Promise.all([
+            refetch(),
+            locationQuery.refetch(),
+            ...(activeTab === 'LOTS' ? [lotQuery.refetch()] : []),
+        ]);
     };
-    const pageLoading = loading || locationsLoading;
-    const pageError = error ?? locationError;
+    const pageLoading = loading || locationsLoading || (activeTab === 'LOTS' && lotQuery.loading);
+    const pageError = error ?? locationError ?? (activeTab === 'LOTS' ? lotQuery.error : undefined);
 
     const stockList = useMemo<StockRow[]>(
         () =>
@@ -281,6 +341,22 @@ export function InventoryWarehouseModule() {
                 .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt)),
         [variants],
     );
+    const lotVariants = lotQuery.data?.catalogExportRows.items ?? EMPTY_CATALOG_EXPORT_ROWS;
+    const lotRows = useMemo<InventoryLotRow[]>(
+        () =>
+            lotVariants.flatMap(variant =>
+                variant.lots.map(lot => ({
+                    ...lot,
+                    productId: variant.productId,
+                    productName: variant.productName,
+                    variantId: variant.variantId,
+                    sku: variant.sku,
+                })),
+            ),
+        [lotVariants],
+    );
+    const lotTotalVariants = lotQuery.data?.catalogExportRows.totalItems ?? 0;
+    const lotTotalPages = Math.max(1, Math.ceil(lotTotalVariants / PAGE_SIZE));
 
     const filteredStockList = stockList.filter(stock => {
         if (activeTab === 'LOW_STOCK' && stock.status !== 'LOW_STOCK') return false;
@@ -296,6 +372,68 @@ export function InventoryWarehouseModule() {
     const showError = (message: string) => {
         setActionError(message);
         setNotification('');
+    };
+
+    const openNewLot = () => {
+        const variant = lotVariants.find(item => item.stockLevels.length > 0);
+        if (!variant) {
+            showError('当前页没有可用的 SKU 与库存点，请先完成库存点关联');
+            return;
+        }
+        setLotDraft({
+            productVariantId: variant.variantId,
+            stockLocationId: variant.stockLevels[0].stockLocationId,
+            lotCode: '',
+            manufacturedAt: '',
+            expiresAt: '',
+            quantityOnHand: '0',
+            purchaseCost: '',
+        });
+        setActionError('');
+    };
+
+    const saveLot = async () => {
+        if (!lotDraft) return;
+        const variant = lotVariants.find(item => item.variantId === lotDraft.productVariantId);
+        const lotCode = lotDraft.lotCode.trim();
+        const quantityOnHand = Number(lotDraft.quantityOnHand);
+        const purchaseCost = lotDraft.purchaseCost.trim() ? Number(lotDraft.purchaseCost) : null;
+        if (!variant || !lotCode) {
+            showError('请选择 SKU 并填写批次号');
+            return;
+        }
+        if (!Number.isInteger(quantityOnHand) || quantityOnHand < 0) {
+            showError('批次数量必须是不小于 0 的整数');
+            return;
+        }
+        if (purchaseCost != null && (!Number.isFinite(purchaseCost) || purchaseCost < 0)) {
+            showError('请输入有效的非负批次成本');
+            return;
+        }
+        setActionError('');
+        try {
+            await saveInventoryLot({
+                variables: {
+                    input: {
+                        ...(lotDraft.id ? { id: lotDraft.id } : {}),
+                        productVariantId: lotDraft.productVariantId,
+                        stockLocationId: lotDraft.stockLocationId,
+                        lotCode,
+                        manufacturedAt: dateInputToUtcDateTime(lotDraft.manufacturedAt),
+                        expiresAt: dateInputToUtcDateTime(lotDraft.expiresAt),
+                        quantityOnHand,
+                        purchaseCostMicrounits:
+                            purchaseCost == null ? null : Math.round(purchaseCost * 1_000),
+                        currencyCode: variant.currencyCode,
+                    },
+                },
+            });
+            setLotDraft(null);
+            await Promise.all([lotQuery.refetch(), refetch()]);
+            showNotice('库存批次已保存，对应库存流水已同步');
+        } catch (lotError) {
+            showError(toUserFacingError(lotError, '库存批次保存失败，请检查输入后重试'));
+        }
     };
 
     const handleAdjustSubmit = async () => {
@@ -446,17 +584,79 @@ export function InventoryWarehouseModule() {
         setBulkUpdating(true);
         setActionError('');
         try {
-            await updateProductVariants({
+            const response = await updateProductVariants({
                 variables: { input: selectedVariantIds.map(id => ({ id, enabled: nextEnabled })) },
                 context: sensitiveActionContext(confirmation.currentPassword ?? ''),
             });
+            const updatedIds = new Set(
+                (response.data?.updateProductVariants ?? [])
+                    .filter((item): item is { id: string } => Boolean(item?.id))
+                    .map(item => item.id),
+            );
+            const failedIds = selectedVariantIds.filter(id => !updatedIds.has(id));
             await refetchAll();
-            showNotice(`已批量${nextEnabled ? '上架' : '下架'} ${selectedVariantIds.length} 个 SKU`);
-            setSelectedVariantIds([]);
+            setSelectedVariantIds(failedIds);
+            if (failedIds.length) {
+                throw new Error(`已更新 ${updatedIds.size} 个，${failedIds.length} 个 SKU 未被后端确认`);
+            }
+            showNotice(`已批量${nextEnabled ? '上架' : '下架'} ${updatedIds.size} 个 SKU`);
         } catch (updateError) {
             showError(toUserFacingError(updateError, 'SKU 批量状态更新失败，请稍后重试'));
         } finally {
             setBulkUpdating(false);
+        }
+    };
+
+    const handleBulkDeleteLocations = async () => {
+        if (!selectedLocationIds.length || deleteLocationsState.loading) return;
+        if (bulkLocationTransferId && selectedLocationIds.includes(bulkLocationTransferId)) {
+            showError('库存迁移目标不能同时被删除');
+            return;
+        }
+        const confirmation = await requestConfirmation({
+            title: `批量删除 ${selectedLocationIds.length} 个库存点？`,
+            description: bulkLocationTransferId
+                ? '后端会将关联库存迁移到指定目标后逐项删除，并回传每项结果。'
+                : '未选择迁移目标；仍有关联库存的库存点将由后端拒绝删除。',
+            confirmLabel: '验证并批量删除',
+            tone: 'danger',
+            requireCurrentPassword: true,
+        });
+        if (!confirmation) return;
+        setActionError('');
+        try {
+            const response = await deleteLocations({
+                variables: {
+                    input: selectedLocationIds.map(id => ({
+                        id,
+                        transferToLocationId: bulkLocationTransferId || undefined,
+                    })),
+                },
+                context: sensitiveActionContext(confirmation.currentPassword ?? ''),
+            });
+            const results = response.data?.deleteStockLocations ?? [];
+            const deletedIds = selectedLocationIds.filter(
+                (_id, index) => results[index]?.result === 'DELETED',
+            );
+            const failures = results
+                .map((result, index) => ({ result, id: selectedLocationIds[index] }))
+                .filter(item => item.result.result !== 'DELETED');
+            const failedCount = selectedLocationIds.length - deletedIds.length;
+            await refetchAll();
+            setSelectedLocationIds(current => current.filter(id => !deletedIds.includes(id)));
+            if (failedCount) {
+                showError(
+                    `已删除 ${deletedIds.length} 个，${failedCount} 个失败：${
+                        failures.map(item => item.result.message || `ID ${item.id}`).join('；') ||
+                        '后端未返回完整结果'
+                    }`,
+                );
+            } else {
+                showNotice(`已删除 ${deletedIds.length} 个库存点`);
+                setBulkLocationTransferId('');
+            }
+        } catch (deleteError) {
+            showError(toUserFacingError(deleteError, '库存点批量删除失败'));
         }
     };
 
@@ -477,12 +677,21 @@ export function InventoryWarehouseModule() {
         setBulkUpdating(true);
         setActionError('');
         try {
-            await updateProductVariants({
+            const response = await updateProductVariants({
                 variables: { input: selectedVariantIds.map(id => ({ id, price: Math.round(amount * 100) })) },
             });
+            const updatedIds = new Set(
+                (response.data?.updateProductVariants ?? [])
+                    .filter((item): item is { id: string } => Boolean(item?.id))
+                    .map(item => item.id),
+            );
+            const failedIds = selectedVariantIds.filter(id => !updatedIds.has(id));
             await refetchAll();
-            showNotice(`已更新 ${selectedVariantIds.length} 个 SKU 的当前店铺价格`);
-            setSelectedVariantIds([]);
+            setSelectedVariantIds(failedIds);
+            if (failedIds.length) {
+                throw new Error(`已更新 ${updatedIds.size} 个，${failedIds.length} 个 SKU 未被后端确认`);
+            }
+            showNotice(`已更新 ${updatedIds.size} 个 SKU 的当前店铺价格`);
             setBulkPrice('');
         } catch (updateError) {
             showError(toUserFacingError(updateError, 'SKU 批量调价失败，请稍后重试'));
@@ -504,6 +713,7 @@ export function InventoryWarehouseModule() {
         ['LOW_STOCK', AlertTriangle, '本页低库存 (' + lowStockCount + ')'],
         ['OUT_OF_STOCK', ShieldAlert, '本页缺货 (' + outOfStockCount + ')'],
         ['MOVEMENTS_LOG', ArrowRightLeft, '本页流水 (' + movementLogs.length + ')'],
+        ['LOTS', CalendarClock, '批次与效期 (' + lotRows.length + ')'],
         ['WAREHOUSES', Warehouse, '库存点 (' + locations.length + ')'],
     ];
 
@@ -517,14 +727,63 @@ export function InventoryWarehouseModule() {
                     </p>
                 </div>
                 {activeTab === 'WAREHOUSES' ? (
-                    <button
-                        type="button"
-                        onClick={() => openLocationModal()}
-                        className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-blue-700"
-                    >
-                        <Plus className="h-3.5 w-3.5" />
-                        新增库存点
-                    </button>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <select
+                            value={bulkLocationTransferId}
+                            onChange={event => setBulkLocationTransferId(event.target.value)}
+                            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs"
+                            aria-label="批量删除前的库存迁移目标"
+                        >
+                            <option value="">不迁移关联库存</option>
+                            {locations
+                                .filter(location => !selectedLocationIds.includes(location.id))
+                                .map(location => (
+                                    <option key={location.id} value={location.id}>
+                                        迁移到 {location.name}
+                                    </option>
+                                ))}
+                        </select>
+                        <button
+                            type="button"
+                            onClick={() => void handleBulkDeleteLocations()}
+                            disabled={!selectedLocationIds.length || deleteLocationsState.loading}
+                            className="flex items-center gap-1.5 rounded-lg border border-rose-200 bg-white px-3.5 py-2 text-xs font-bold text-rose-700 hover:bg-rose-50 disabled:opacity-40"
+                        >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            批量删除 {selectedLocationIds.length || ''}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => openLocationModal()}
+                            className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-blue-700"
+                        >
+                            <Plus className="h-3.5 w-3.5" />
+                            新增库存点
+                        </button>
+                    </div>
+                ) : activeTab === 'LOTS' ? (
+                    <div className="flex flex-wrap gap-2">
+                        <button
+                            type="button"
+                            onClick={() => void lotQuery.refetch()}
+                            disabled={lotQuery.loading}
+                            className="flex items-center gap-1.5 rounded-lg bg-slate-100 px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-200 disabled:opacity-50"
+                        >
+                            <RefreshCw
+                                className={'h-3.5 w-3.5 ' + (lotQuery.loading ? 'animate-spin' : '')}
+                            />
+                            刷新批次
+                        </button>
+                        <button
+                            type="button"
+                            onClick={openNewLot}
+                            disabled={!lotVariants.some(variant => variant.stockLevels.length > 0)}
+                            className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-40"
+                        >
+                            <Plus className="h-3.5 w-3.5" />
+                            新增库存批次
+                        </button>
+                    </div>
                 ) : (
                     <button
                         type="button"
@@ -983,6 +1242,136 @@ export function InventoryWarehouseModule() {
                             onPageChange={changePage}
                         />
                     </div>
+                ) : activeTab === 'LOTS' ? (
+                    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xs">
+                        <div className="border-b border-amber-100 bg-amber-50 p-3 text-[11px] text-amber-800">
+                            按商品分页读取当前店铺的真实批次；保存数量时后端会同步生成库存调整流水。
+                        </div>
+                        {lotRows.length === 0 ? (
+                            <div className="space-y-3 p-16 text-center text-xs text-slate-400">
+                                <CalendarClock className="mx-auto h-10 w-10 text-slate-300" />
+                                <p>当前页还没有库存批次</p>
+                                <button
+                                    type="button"
+                                    onClick={openNewLot}
+                                    disabled={!lotVariants.some(variant => variant.stockLevels.length > 0)}
+                                    className="font-bold text-blue-600 disabled:text-slate-300"
+                                >
+                                    为当前页 SKU 创建第一个批次
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="overflow-x-auto">
+                                <table className="w-full min-w-[1260px] border-collapse text-left text-xs">
+                                    <thead className="border-b border-slate-200 bg-slate-50 text-slate-500">
+                                        <tr>
+                                            {[
+                                                '商品',
+                                                'SKU',
+                                                '库存点',
+                                                '批次号',
+                                                '生产日期',
+                                                '到期日期',
+                                                '数量',
+                                                '批次成本',
+                                                '状态',
+                                                '操作',
+                                            ].map(label => (
+                                                <th
+                                                    key={label}
+                                                    scope="col"
+                                                    className="whitespace-nowrap px-3 py-3"
+                                                >
+                                                    {label}
+                                                </th>
+                                            ))}
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100">
+                                        {lotRows.map(lot => (
+                                            <tr key={lot.id} className="h-[52px] hover:bg-slate-50">
+                                                <td className="max-w-56 px-3 py-0 font-bold text-slate-900">
+                                                    <span className="block truncate" title={lot.productName}>
+                                                        {lot.productName}
+                                                    </span>
+                                                </td>
+                                                <td className="max-w-44 px-3 py-0 font-mono text-[10px]">
+                                                    <span className="block truncate" title={lot.sku}>
+                                                        {lot.sku}
+                                                    </span>
+                                                </td>
+                                                <td className="whitespace-nowrap px-3 py-0">
+                                                    {lot.stockLocationName}
+                                                </td>
+                                                <td className="whitespace-nowrap px-3 py-0 font-mono font-bold">
+                                                    {lot.lotCode}
+                                                </td>
+                                                <td className="whitespace-nowrap px-3 py-0">
+                                                    {formatDate(lot.manufacturedAt)}
+                                                </td>
+                                                <td className="whitespace-nowrap px-3 py-0">
+                                                    {formatDate(lot.expiresAt)}
+                                                </td>
+                                                <td className="px-3 py-0 font-mono font-bold">
+                                                    {lot.quantityOnHand}
+                                                </td>
+                                                <td className="whitespace-nowrap px-3 py-0 font-mono">
+                                                    {lot.purchaseCostMicrounits == null
+                                                        ? '—'
+                                                        : `${lot.currencyCode} ${(lot.purchaseCostMicrounits / 1_000).toFixed(3)}`}
+                                                </td>
+                                                <td className="whitespace-nowrap px-3 py-0">{lot.state}</td>
+                                                <td className="whitespace-nowrap px-3 py-0">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            setLotDraft({
+                                                                id: lot.id,
+                                                                productVariantId: lot.variantId,
+                                                                stockLocationId: lot.stockLocationId,
+                                                                lotCode: lot.lotCode,
+                                                                manufacturedAt: inputDate(lot.manufacturedAt),
+                                                                expiresAt: inputDate(lot.expiresAt),
+                                                                quantityOnHand: String(lot.quantityOnHand),
+                                                                purchaseCost:
+                                                                    lot.purchaseCostMicrounits == null
+                                                                        ? ''
+                                                                        : (
+                                                                              lot.purchaseCostMicrounits /
+                                                                              1_000
+                                                                          ).toFixed(3),
+                                                            })
+                                                        }
+                                                        className="mr-3 font-bold text-blue-600 hover:underline"
+                                                    >
+                                                        编辑
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            navigate(
+                                                                `/catalog/products/${lot.productId}?tab=variants`,
+                                                            )
+                                                        }
+                                                        className="font-bold text-slate-500 hover:underline"
+                                                    >
+                                                        商品详情
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                        <InventoryPagination
+                            page={page}
+                            totalPages={lotTotalPages}
+                            totalItems={lotTotalVariants}
+                            itemLabel="个 SKU"
+                            onPageChange={changePage}
+                        />
+                    </div>
                 ) : activeTab === 'MOVEMENTS_LOG' ? (
                     <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xs">
                         <div className="border-b border-blue-100 bg-blue-50 p-3 text-[11px] text-blue-700">
@@ -1083,12 +1472,26 @@ export function InventoryWarehouseModule() {
                                     className="space-y-3 rounded-xl border border-slate-200 bg-white p-5 shadow-2xs"
                                 >
                                     <div className="flex items-start justify-between border-b border-slate-100 pb-3">
-                                        <div>
-                                            <h3 className="text-sm font-bold text-slate-900">
-                                                {location.name}
-                                            </h3>
-                                            <div className="font-mono text-[10px] text-slate-400">
-                                                ID: {location.id}
+                                        <div className="flex items-start gap-3">
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedLocationIds.includes(location.id)}
+                                                onChange={() =>
+                                                    setSelectedLocationIds(current =>
+                                                        current.includes(location.id)
+                                                            ? current.filter(id => id !== location.id)
+                                                            : [...current, location.id],
+                                                    )
+                                                }
+                                                aria-label={`选择库存点 ${location.name}`}
+                                            />
+                                            <div>
+                                                <h3 className="text-sm font-bold text-slate-900">
+                                                    {location.name}
+                                                </h3>
+                                                <div className="font-mono text-[10px] text-slate-400">
+                                                    ID: {location.id}
+                                                </div>
                                             </div>
                                         </div>
                                         <button
@@ -1311,6 +1714,17 @@ export function InventoryWarehouseModule() {
                     </AccessibleDialogSurface>
                 </div>
             )}
+
+            {lotDraft && (
+                <InventoryLotDialog
+                    draft={lotDraft}
+                    variants={lotVariants}
+                    saving={saveInventoryLotState.loading}
+                    onChange={setLotDraft}
+                    onClose={() => !saveInventoryLotState.loading && setLotDraft(null)}
+                    onSave={() => void saveLot()}
+                />
+            )}
         </div>
     );
 }
@@ -1319,17 +1733,19 @@ function InventoryPagination({
     page,
     totalPages,
     totalItems,
+    itemLabel = '个 SKU',
     onPageChange,
 }: {
     page: number;
     totalPages: number;
     totalItems: number;
+    itemLabel?: string;
     onPageChange: (page: number) => void;
 }) {
     return (
         <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500">
             <span>
-                共 {totalItems} 个 SKU，第 {page + 1}/{totalPages} 页
+                共 {totalItems} {itemLabel}，第 {page + 1}/{totalPages} 页
             </span>
             <div className="flex gap-2">
                 <button
@@ -1353,4 +1769,173 @@ function InventoryPagination({
             </div>
         </div>
     );
+}
+
+function InventoryLotDialog({
+    draft,
+    variants,
+    saving,
+    onChange,
+    onClose,
+    onSave,
+}: {
+    draft: InventoryLotDraft;
+    variants: CatalogExportRowRecord[];
+    saving: boolean;
+    onChange: (draft: InventoryLotDraft) => void;
+    onClose: () => void;
+    onSave: () => void;
+}) {
+    const selectedVariant =
+        variants.find(variant => variant.variantId === draft.productVariantId) ?? variants[0];
+    const update = (patch: Partial<InventoryLotDraft>) => onChange({ ...draft, ...patch });
+
+    return (
+        <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs"
+            onClick={onClose}
+        >
+            <AccessibleDialogSurface
+                accessibleName={draft.id ? '编辑库存批次' : '新增库存批次'}
+                onRequestClose={onClose}
+                onClick={event => event.stopPropagation()}
+                className="w-full max-w-2xl space-y-4 rounded-2xl bg-white p-6 text-xs shadow-2xl"
+            >
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                    <div>
+                        <h2 className="text-base font-bold text-slate-900">
+                            {draft.id ? '编辑库存批次' : '新增库存批次'}
+                        </h2>
+                        <p className="mt-1 text-slate-500">数量变化会同步写入 Vendure 库存流水。</p>
+                    </div>
+                    <button type="button" onClick={onClose} disabled={saving} aria-label="关闭批次编辑">
+                        <X className="h-5 w-5 text-slate-400" />
+                    </button>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                    <label className="font-bold text-slate-600">
+                        SKU *
+                        <select
+                            value={draft.productVariantId}
+                            onChange={event => {
+                                const next = variants.find(
+                                    variant => variant.variantId === event.target.value,
+                                );
+                                update({
+                                    productVariantId: event.target.value,
+                                    stockLocationId: next?.stockLevels[0]?.stockLocationId ?? '',
+                                });
+                            }}
+                            disabled={Boolean(draft.id)}
+                            className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-normal disabled:bg-slate-100"
+                        >
+                            {variants.map(variant => (
+                                <option key={variant.variantId} value={variant.variantId}>
+                                    {variant.productName} · {variant.sku}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
+                    <label className="font-bold text-slate-600">
+                        库存点 *
+                        <select
+                            value={draft.stockLocationId}
+                            onChange={event => update({ stockLocationId: event.target.value })}
+                            disabled={Boolean(draft.id)}
+                            className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-normal disabled:bg-slate-100"
+                        >
+                            {selectedVariant?.stockLevels.map(location => (
+                                <option key={location.stockLocationId} value={location.stockLocationId}>
+                                    {location.stockLocationName}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
+                    <InventoryLotField
+                        label="批次号 *"
+                        value={draft.lotCode}
+                        onChange={lotCode => update({ lotCode })}
+                    />
+                    <InventoryLotField
+                        label="批次数量 *"
+                        type="number"
+                        value={draft.quantityOnHand}
+                        onChange={quantityOnHand => update({ quantityOnHand })}
+                    />
+                    <InventoryLotField
+                        label="生产日期"
+                        type="date"
+                        value={draft.manufacturedAt}
+                        onChange={manufacturedAt => update({ manufacturedAt })}
+                    />
+                    <InventoryLotField
+                        label="到期日期"
+                        type="date"
+                        value={draft.expiresAt}
+                        onChange={expiresAt => update({ expiresAt })}
+                    />
+                    <InventoryLotField
+                        label={`批次成本 (${selectedVariant?.currencyCode ?? '当前店铺币种'})`}
+                        type="number"
+                        value={draft.purchaseCost}
+                        onChange={purchaseCost => update({ purchaseCost })}
+                    />
+                </div>
+                <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        disabled={saving}
+                        className="rounded-lg bg-slate-100 px-4 py-2 font-bold text-slate-700"
+                    >
+                        取消
+                    </button>
+                    <button
+                        type="button"
+                        onClick={onSave}
+                        disabled={saving}
+                        className="rounded-lg bg-blue-600 px-4 py-2 font-bold text-white disabled:opacity-40"
+                    >
+                        {saving ? '保存中…' : '保存批次'}
+                    </button>
+                </div>
+            </AccessibleDialogSurface>
+        </div>
+    );
+}
+
+function InventoryLotField({
+    label,
+    value,
+    type = 'text',
+    onChange,
+}: {
+    label: string;
+    value: string;
+    type?: 'text' | 'number' | 'date';
+    onChange: (value: string) => void;
+}) {
+    return (
+        <label className="font-bold text-slate-600">
+            {label}
+            <input
+                type={type}
+                value={value}
+                onChange={event => onChange(event.target.value)}
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-normal outline-none focus:ring-1 focus:ring-blue-500"
+            />
+        </label>
+    );
+}
+
+function formatDate(value: string | null) {
+    if (!value) return '—';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString('zh-CN');
+}
+
+function inputDate(value: string | null) {
+    if (!value) return '';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 10);
 }

@@ -318,12 +318,22 @@ void test('scheduled production monitor checks memory, processes, and health thr
     assert.doesNotMatch(script, /printf[^\n]*errorMessage/u);
     assert.match(script, /https:\/\/damatong\.net\/health/u);
     assert.match(script, /verify-dashboard-assets\.mjs/u);
+    assert.match(script, /require_recent_systemd_success/u);
+    assert.match(script, /vendure-production-healthcheck\.timer/u);
+    assert.match(script, /vendure-production-healthcheck\.service/u);
+    assert.match(script, /vendure-mysql-restore-drill\.timer/u);
+    assert.match(script, /vendure-mysql-restore-drill\.service/u);
+    assert.match(script, /ExecMainExitTimestamp/u);
+    assert.match(script, /restore_drill_maximum_age_seconds=777600/u);
     assert.match(script, /pm2 jlist/u);
     assert.match(script, /vendure-api/u);
     assert.match(script, /vendure-worker/u);
     assert.match(script, /PRODUCTION_HEALTH_MONITOR_OK/u);
     assert.match(systemdHealthcheck, /127\.0\.0\.1:3002\/image-generation\/health/u);
     assert.match(systemdHealthcheck, /image-generation-health-failed/u);
+    assert.match(systemdHealthcheck, /restore-drill\.json/u);
+    assert.match(systemdHealthcheck, /maximum_restore_drill_age_seconds/u);
+    assert.match(systemdHealthcheck, /restore-drill-missing-or-stale/u);
 
     assert.match(workflow, /schedule:/u);
     assert.match(workflow, /workflow_dispatch:/u);

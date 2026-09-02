@@ -1,6 +1,49 @@
 import { gql } from '@apollo/client';
 
+const COLLECTION_OPERATION_DEFINITION_FIELDS = gql`
+    fragment NextAdminCollectionOperationDefinitionFields on ConfigurableOperationDefinition {
+        code
+        description
+        args {
+            name
+            type
+            list
+            required
+            defaultValue
+            label
+            description
+            ui
+        }
+    }
+`;
+
 export const GET_CATALOG_TAXONOMY = gql`
+    ${COLLECTION_OPERATION_DEFINITION_FIELDS}
+    fragment NextAdminCollectionTaxonomyFields on Collection {
+        id
+        name
+        slug
+        description
+        isPrivate
+        parentId
+        position
+        productVariantCount
+        inheritFilters
+        filters {
+            code
+            args {
+                name
+                value
+            }
+        }
+        translations {
+            id
+            languageCode
+            name
+            slug
+            description
+        }
+    }
     query GetCatalogTaxonomy(
         $collectionOptions: CollectionListOptions
         $optionGroupOptions: ProductOptionGroupListOptions
@@ -8,21 +51,7 @@ export const GET_CATALOG_TAXONOMY = gql`
     ) {
         collections(options: $collectionOptions) {
             items {
-                id
-                name
-                slug
-                description
-                isPrivate
-                parentId
-                position
-                productVariantCount
-                translations {
-                    id
-                    languageCode
-                    name
-                    slug
-                    description
-                }
+                ...NextAdminCollectionTaxonomyFields
             }
             totalItems
         }
@@ -77,6 +106,31 @@ export const GET_CATALOG_TAXONOMY = gql`
         activeChannel {
             id
             defaultLanguageCode
+        }
+        collectionFilters {
+            ...NextAdminCollectionOperationDefinitionFields
+        }
+    }
+`;
+
+export const PREVIEW_COLLECTION_VARIANTS = gql`
+    query NextAdminPreviewCollectionVariants(
+        $input: PreviewCollectionVariantsInput!
+        $options: ProductVariantListOptions
+    ) {
+        previewCollectionVariants(input: $input, options: $options) {
+            totalItems
+            items {
+                id
+                sku
+                name
+                price
+                priceWithTax
+                product {
+                    id
+                    name
+                }
+            }
         }
     }
 `;
@@ -320,6 +374,15 @@ export const DELETE_STOCK_LOCATION = gql`
     }
 `;
 
+export const DELETE_STOCK_LOCATIONS = gql`
+    mutation DeleteCatalogStockLocations($input: [DeleteStockLocationInput!]!) {
+        deleteStockLocations(input: $input) {
+            result
+            message
+        }
+    }
+`;
+
 export const UPDATE_ASSET = gql`
     mutation UpdateCatalogAsset($input: UpdateAssetInput!) {
         updateAsset(input: $input) {
@@ -336,6 +399,15 @@ export const UPDATE_ASSET = gql`
 export const DELETE_ASSET = gql`
     mutation DeleteCatalogAsset($input: DeleteAssetInput!) {
         deleteAsset(input: $input) {
+            result
+            message
+        }
+    }
+`;
+
+export const DELETE_ASSETS = gql`
+    mutation DeleteCatalogAssets($input: DeleteAssetsInput!) {
+        deleteAssets(input: $input) {
             result
             message
         }

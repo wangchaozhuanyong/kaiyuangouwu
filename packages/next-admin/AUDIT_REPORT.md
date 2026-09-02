@@ -1,12 +1,67 @@
-# Vendure 新管理后台最终审计报告
+# Vendure 新管理后台功能等价审计报告
 
-审计日期：2026-08-31
+更新日期：2026-09-02
 
 项目：`packages/next-admin`
 
-分支：`release/workspace-consolidation-20260826`
+分支：`fix/next-admin-two-factor-codes-20260901`
 
-## 1. 审计结论
+## 0. 2026-09-01 纠偏与补齐结论
+
+2026-08-31 的真实浏览器审计只证明当时的新页面可达、可加载，没有逐项对账旧 Dashboard 中的 route、action、pageBlock、widget 和 alert。因此本报告原先的“没有明显遗漏”结论作废，后文中的浏览器数据仅保留为 2026-08-31 历史基线，不能当作本轮新增功能的 UAT 证据。
+
+本轮已完成代码级补齐：
+
+- 商品供应链：供货商页面、高级 SKU 运营工作区、采购成本/条码/单位/包装换算/保质期/库存上下限/供应商关联、批次效期、自动拆包、完整性检查及 XLSX/CSV 导出。
+- 支付与订单：币种汇率、USDT 收款地址申请/审核/流水/手工退款记录，以及手工支付、支付结算/取消/状态转换、退款结算、优惠券分摊和多商家子订单。
+- Vendure 原生等价：客户创建/删除/批量分组、通用 Promotion 条件与动作编辑、SKU 多币种价格、商品批量 Channel、集合规则与预览、配送试算、API Key 名称/角色/扩展字段、素材与库存点批量操作。
+- 动态扩展字段：补到 Customer、ProductVariant、Asset、Collection、PaymentMethod、ShippingMethod、Seller 和 ApiKey；可翻译实体同时保存 locale 扩展字段。
+- 插件表面：商业服务页文案、今日推荐数据、翻译待办提醒已进入新后台。
+- 兼容和防遗漏：`legacyPaths` 由扩展路由层统一生成，28 个旧本地插件路由都映射到精确新地址；静态能力合同同时检查 action、pageBlock、widget 和 alert，禁止用无关工作台重定向充数。
+
+本轮还完成了隔离运行时 UAT：
+
+- 使用临时 SQLite 数据库 `/tmp/vendure-next-admin-uat-20260901.MHe4xG/uat.sqlite` 启动生产构建挂载和真实 Admin API；没有连接生产数据库。
+- 分别使用合成超级管理员与受限管理员验证登录、菜单/路由权限、后端拒绝和跨 Channel 隔离。
+- 2FA 工具完成新增、加密落库、管理员归属隔离、旧 URL 跳转和动态码显示；它仍是“第三方 TOTP 密钥保存工具”，不是登录 2FA。
+- 商品侧完成高级 SKU、包装与自动拆包、多币种价格、供货商、批次效期、标准导出、集合规则预览和配送试算；批次 `UAT-LOT-20260901` 的生产/到期时间已按 UTC ISO 保存并回读。
+- 系统与插件侧完成 API Key 名称/角色编辑、商业服务页文案、推荐数据组件、翻译告警、币种汇率、USDT 页面及代表性旧链接跳转。
+- 订单侧完成状态可用性校验：`Draft`、`PaymentSettled` 和未结金额为零时不再显示“手工添加支付”；`ArrangingPayment` 且有未结金额时才显示。
+- 资金链路在合成订单上完成真实 mutation：手工支付成功落库；数字订单自动进入 `PaymentSettled`/`Delivered`；退款从 `Pending` 经管理员密码和真实退款交易号结算到 `Settled`。
+- UAT 发现并修复退款兼容参数缺口：`RefundOrderInput` 现在同时发送 `amount` 及旧非空列的 `lines: []`、`shipping: 0`、`adjustment: 0`，避免数字订单退款触发数据库非空约束。
+- 浏览器验收未发现持续加载或页面级错误；前序全路由检查的 console error/warning 为 0。
+- 在独立 MySQL 8.0.46 证据库 `vendure_next_admin_uat_20260901_2312` 完成 37 个待执行迁移、单步回滚、重新应用和无待执行迁移幂等复跑；迁移数从 58 到 95，回滚为 94，再次恢复到 95。
+- 在独立 MySQL 业务库 `vendure_next_admin_fixture_uat_20260901_2331` 完成实物订单手工支付、全额退款和并发库存竞争。两个订单争抢最后一件可用库存时只有一个进入 `PaymentSettled`，另一个返回库存不足且没有残留 Payment，未超卖。
+- MySQL UAT 发现并修复两项资金一致性问题：纯实物订单不再被人工数字交付邮箱校验误拦截；付款结算时订单无法进入 `PaymentSettled` 会抛错并回滚 Payment，避免“付款已结算、订单仍待付款”的部分成功。
+- API server 与 worker 同时运行后，15 个定时任务和 17 个任务队列在系统运维页可见；一分钟级 USDT、优惠券、返利和生图任务均执行成功，`apply-collection-filters`、`send-email`、`update-search-index` 记录全部为 `COMPLETED`，无 pending/running/retrying。
+- 破坏性矩阵在隔离 MySQL 库完成客户创建/删除、草稿创建/删除、API Key 创建/改名/删除、付款取消、订单取消、返利余额正负调整、提款 `PENDING → APPROVED → PAID`；超额提款和删除非草稿订单分别被后端拒绝，API Key 明文未写入证据输出。
+- 本机会话响应头已确认 `HttpOnly; SameSite=Lax` 且 Cookie 值脱敏；生产配置代码在 `NODE_ENV=production` 强制 `Secure`、HTTPS CORS 白名单和强 Cookie/2FA 密钥。Apollo 层关闭内置 CSRF 是因为 CORS 由 Express 统一处理；生产仍必须使用精确 Origin 白名单，不能启用通配来源。
+
+本轮当前验证：
+
+```text
+next-admin test                              通过，24 files / 99 tests
+next-admin TypeScript                        通过
+next-admin lint                              通过，0 warning
+next-admin production build                  通过
+新增/修改 GraphQL operation + 插件 SDL    通过，56 / 56
+敏感管理操作后端测试                      通过，27 / 27
+catalog/commerce/store 插件 typecheck/test/build 通过
+store-management-plugin test                  通过，48 files / 279 tests
+core 支付事务回滚回归测试与 build             通过
+dev-server typecheck                           通过
+dev-server migration tests                     通过，58 files / 219 passed / 1 skipped
+dev-server workflow tests                      通过，140 / 140
+git diff --check                              通过
+```
+
+MySQL UAT、worker 和隔离破坏性流程已完成。2026-09-02 又对真实生产环境做了只读复核：当前生产数据库明确为 MySQL 8.0，不需要 PostgreSQL UAT；线上版本 `2cbe9f57ab14d798b8c2bdb79ed58554cb74b103` 的发布记录中，migration/server/worker 三套 `audit:production-env` 分别以 `35/0/0`、`36/0/0`、`34/0/0` 通过，并留下异地 MySQL 备份、恢复演练/健康检查 timer、不可变运行时和回滚指针证据。公网 HTTPS、安全头、精确 CORS 白名单和 9 项发布链路验证均通过；独立生产监控和脱敏支付配置审计也通过。
+
+本地不注入生产环境变量时，`audit:production-env` 仍会按设计返回 `BLOCKED`（28 blocker / 5 manual）；这只证明门禁会拒绝空配置，不能再用于代表线上生产状态。当前 worktree 的功能补齐差异仍未 commit、push、创建 PR 或部署，线上通过的是既有生产版本，不包含本地未提交差异。
+
+本次复核另修复了一项持续监控缺口：外部生产监控现在会检查健康检查与 MySQL 恢复演练 timer 是否启用/运行、对应 service 最近结果是否成功且未过期；本机 systemd 健康脚本也会拒绝缺失或超过 9 天的恢复演练证据。相关 shell 语法、部署安全和商城 readiness 共 28 项测试已通过。该监控增强同样只存在于当前未提交 worktree，需随本批代码发布后才会在线上生效。
+
+## 1. 2026-08-31 历史浏览器基线
 
 当前新管理后台的页面合并方向合理，适合中国电商运营人员的高频操作习惯。设计与页面架构可以结束 Gemini 阶段并进入工程接管，不需要恢复成原先大量彼此割裂的小页面。
 
@@ -50,13 +105,13 @@
 
 旧路径仍通过重定向兼容，例如 `/catalog/collections`、`/sales/shipments`、`/marketing/flash-sales` 和 `/settings/job-queue`，不会因页面合并导致旧链接失效。
 
-### 2.3 不应恢复的页面
+### 2.3 2FA 与监控能力边界
 
-- 买家 2FA 动态码工具：涉及第三方 OTP 密钥存储，当前缺少完整加密、审计和威胁模型，不应做成可用页面。
+- 管理后台 2FA 动态码工具：现已明确为管理员保存第三方 TOTP 密钥的工具，不是买家或管理员账号登录 2FA；后端已实现按管理员隔离、AES-256-GCM 加密存储和删除流程，并在 `/plugins/two-factor-codes` 恢复入口。
 - 管理员 TOTP 与恢复码：当前后端没有完整绑定、登录二次验证、恢复和哈希存储能力，不应只做前端假页面。
 - CPU、内存、数据库连接池趋势：当前没有真实监控数据源，不应展示模拟图表。
 
-这些是后端能力缺口，不是前端页面遗漏。
+管理员账号登录 2FA 与系统监控仍是后端能力缺口；第三方 TOTP 动态码工具已经独立交付，不能再与登录 2FA 混为一谈。
 
 ## 3. 真实浏览器覆盖
 
@@ -122,39 +177,43 @@
 - 商品永久删除确认、订单退款、订单取消的密码与危险操作说明。
 - 复杂商品编辑触发未保存离开提示。
 
-审计没有提交删除、退款、取消、改密、提现或余额调整等会改变业务数据的操作。
+2026-08-31 历史审计没有提交删除、退款、取消、改密、提现或余额调整等业务 mutation。2026-09-01 本轮只在隔离 SQLite/MySQL UAT 中提交合成 2FA、库存批次、API Key、经营模式、付款/退款、订单取消、客户/草稿删除、返利余额和提款数据，未触碰生产数据。
 
 ## 6. 仍需上线前完成
 
-| 优先级 | 项目                                             | 原因                                                                       |
-| ------ | ------------------------------------------------ | -------------------------------------------------------------------------- |
-| P0     | 在目标 MySQL/PostgreSQL 上执行迁移演练和回滚演练 | 本机 MySQL 未启动；SQLite 启动时出现既有索引/临时表差异提示                |
-| P0     | 使用普通管理员账号跑权限矩阵                     | 当前真实浏览器会话是超级管理员，普通角色的菜单、路由和后端拒绝需单独验证   |
-| P0     | 在隔离 UAT 数据库执行真实 mutation 流程          | 本轮为保护数据没有提交删除、退款、取消、提现、余额调整和密钥变更           |
-| P1     | 同时启动 worker 后验证队列与定时任务             | 当前审计只启动 API server，运维页真实显示 `0/5` 工作队列和未结算近期任务   |
-| P1     | 完成生产 Cookie 会话安全方案                     | 需结合生产域名、SameSite、Secure、CORS、CSRF 与 Vendure `tokenMethod` 配置 |
-| P2     | 渐进拆分 1000～2200 行的大型模块                 | 不阻塞当前功能，但会增加后续维护和测试成本                                 |
-| P2     | 审核根工作区 `pacote@21.0.1` high 漏洞           | 应单独评估依赖与锁文件影响，不与页面修复混改                               |
+| 优先级 | 项目                                                   | 原因                                                                                     |
+| ------ | ------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
+| P0     | 将当前未提交差异走代码审查、CI 和不可变制品发布链      | 现网基础设施门禁已 READY，但线上版本 `2cbe9f57...` 不包含当前 worktree 的未提交功能补齐 |
+| P0     | 若要开放 USDT 收款，完成商户钱包申请和超管审核         | 脱敏生产审计显示 2 个 Channel 均未配置钱包，当前 `active=0`，不得自动代商户启用           |
+| P1     | 使用生产只读管理员凭据复核登录 Cookie 与商城 readiness | 未使用生产账号登录；Cookie 实际响应及税率、配送、邮件、真实支付可售条件仍需业务配置证据 |
+| P1     | 持续保留定时备份、恢复演练和告警送达证据               | 本次发布链已校验 timer 与最近成功结果；后续仍需按计划持续监控，不能把一次通过当永久通过  |
+| P1     | 为 Gemini 生图配置第二个健康密钥                       | 当前监控为健康，但只有一个 Gemini Key，没有故障切换                                       |
+| P2     | 渐进拆分 1000～2200 行的大型模块                       | 不阻塞当前功能，但会增加后续维护和测试成本                                               |
+| P2     | 审核根工作区 `pacote@21.0.1` high 漏洞                 | 应单独评估依赖与锁文件影响，不与页面修复混改                                             |
 
 ## 7. 最终门禁结果
 
 ```text
 bun run lint                                      通过，0 error / 0 warning
-bun run test                                      通过，19 / 19
+bun run test                                      通过，24 files / 99 tests
 bun run build                                     通过
-merchant-initial-password.service.spec.ts         通过，16 / 16
-set-session-token.spec.ts                          通过，2 / 2
-GraphQL operation/schema 校验                     通过，169 / 169
+新增/修改 GraphQL operation + 插件 SDL            通过，56 / 56
+敏感管理操作后端测试                              通过，27 / 27
+store-management-plugin typecheck                 通过
+store-management-plugin test                      通过，48 files / 279 tests
+core 支付事务回滚测试与 build                     通过
+dev-server typecheck / migrations / workflow      通过，219 + 140 tests
 登录态浏览器 console                              0 error / 0 warning
 ```
 
 Vite 构建仅提示第三方依赖中的 `use client` 指令被忽略，不影响构建产物。
 
-## 8. 交付判断
+## 8. 当前交付判断
 
 - 可以结束页面设计阶段并由工程侧接管：是。
-- 是否存在明显遗漏页面：没有；2FA 与深度监控属于后端阻塞能力，不应伪装为已交付页面。
+- 原“没有明显遗漏”结论：已作废。当前静态能力合同中的旧插件路由和本轮列出的原生能力均已有新页面或嵌入点；已验收表面获得隔离 SQLite UAT 的运行时证据，未验收项仍不能仅凭重定向或静态存在判定等价。
 - 是否存在多余页面：没有；客户管理和 AI 服务商接入分别承担核心运营与平台级密钥隔离职责。
-- 是否可以直接部署生产：暂不建议。完成第 6 节三个 P0 项后再做生产放行。
+- 真实生产基础设施门禁是否通过：是。现网 MySQL、HTTPS/CORS、备份、恢复演练、监控、不可变制品和 API/worker readiness 已有 2026-09-02 只读证据。
+- 当前 worktree 是否可以直接部署生产：否。功能差异尚未提交和经过对应提交的完整 CI/制品构建；必须走既有发布链，不能把现网基础设施 READY 误当作这批代码已经上线。
 
-说明：`packages/next-admin/` 当前仍是 Git 未跟踪目录；工作区还包含其他项目的既有修改。本轮未 commit、push、创建 PR 或部署。
+说明：本轮修改位于独立 Git worktree，仅修改功能补齐相关文件；未 commit、push、创建 PR 或部署。2026-09-02 只触发了既有的只读生产健康/支付配置监控，没有修改生产配置或业务数据。

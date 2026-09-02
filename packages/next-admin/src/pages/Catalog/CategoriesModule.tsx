@@ -1,10 +1,11 @@
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useLazyQuery, useMutation, useQuery } from '@apollo/client/react';
 import {
     AlertCircle,
     CheckCircle2,
     ChevronDown,
     ChevronRight,
     Edit3,
+    Eye,
     FolderTree,
     Plus,
     RefreshCw,
@@ -17,6 +18,16 @@ import { useEffect, useMemo, useState } from 'react';
 import { sensitiveActionContext } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
+import { DynamicCustomFieldsForm } from '../../custom-fields/DynamicCustomFieldsForm';
+import type { CustomFieldValueMap } from '../../custom-fields/custom-field-types';
+import {
+    addCustomFieldsToDocument,
+    customFieldInputFromValues,
+    customFieldValuesFromEntity,
+    localizedCustomFieldInputFromValues,
+    validateCustomFieldValues,
+} from '../../custom-fields/custom-field-utils';
+import { useCustomFieldDefinitions } from '../../custom-fields/custom-fields-context';
 import {
     CREATE_COLLECTION,
     CREATE_FACET,
@@ -29,12 +40,18 @@ import {
     DELETE_OPTION_GROUP,
     DELETE_PRODUCT_OPTION,
     GET_CATALOG_TAXONOMY,
+    PREVIEW_COLLECTION_VARIANTS,
     UPDATE_COLLECTION,
     UPDATE_FACET,
     UPDATE_FACET_VALUE,
     UPDATE_OPTION_GROUP,
     UPDATE_PRODUCT_OPTION,
 } from '../../graphql/catalog-admin.graphql';
+import type {
+    OperationArgDefinition,
+    OperationDefinition,
+    OperationValue,
+} from '../../graphql/generic-promotions.graphql';
 import { useUrlTab } from '../../hooks/use-url-tab';
 import { toUserFacingError } from '../../utils/user-facing-error';
 
@@ -47,6 +64,7 @@ interface TranslationItem {
     name: string;
     slug?: string;
     description?: string;
+    customFields?: Record<string, unknown> | null;
 }
 
 interface CollectionItem {
@@ -58,6 +76,9 @@ interface CollectionItem {
     parentId?: string | null;
     position: number;
     productVariantCount: number;
+    inheritFilters: boolean;
+    filters: Array<{ code: string; args: Array<{ name: string; value: string }> }>;
+    customFields?: Record<string, unknown> | null;
     translations: TranslationItem[];
 }
 
@@ -91,6 +112,7 @@ interface CatalogTaxonomyData {
     productOptionGroups: { items: OptionGroupItem[]; totalItems: number };
     facets: { items: FacetItem[]; totalItems: number };
     activeChannel: { id: string; defaultLanguageCode: string };
+    collectionFilters: OperationDefinition[];
 }
 
 interface CollectionTreeNode extends CollectionItem {
@@ -134,6 +156,11 @@ const deletionSucceeded = (response?: { result?: string; message?: string }) => 
 
 export function CategoriesModule() {
     const requestConfirmation = useConfirmDialog();
+    const collectionCustomFields = useCustomFieldDefinitions('Collection');
+    const taxonomyDocument = useMemo(
+        () => addCustomFieldsToDocument(GET_CATALOG_TAXONOMY, 'Collection', collectionCustomFields),
+        [collectionCustomFields],
+    );
     const [activeTab, setActiveTab] = useUrlTab<ActiveTab>(CATEGORY_TABS, 'categories');
     const [notification, setNotification] = useState('');
     const [actionError, setActionError] = useState('');
@@ -144,10 +171,13 @@ export function CategoriesModule() {
     const [formValues, setFormValues] = useState('');
     const [formParentId, setFormParentId] = useState('');
     const [formIsPrivate, setFormIsPrivate] = useState(false);
+    const [formInheritFilters, setFormInheritFilters] = useState(true);
+    const [formFilters, setFormFilters] = useState<OperationValue[]>([]);
+    const [customFieldValues, setCustomFieldValues] = useState<CustomFieldValueMap>({});
     const [saving, setSaving] = useState(false);
     const [expandedCollectionIds, setExpandedCollectionIds] = useState<Set<string> | null>(null);
 
-    const { data, loading, error, refetch, fetchMore } = useQuery<CatalogTaxonomyData>(GET_CATALOG_TAXONOMY, {
+    const { data, loading, error, refetch, fetchMore } = useQuery<CatalogTaxonomyData>(taxonomyDocument, {
         variables: {
             collectionOptions: { topLevelOnly: false, skip: 0, take: 100, sort: { position: 'ASC' } },
             optionGroupOptions: { skip: 0, take: 100, sort: { updatedAt: 'DESC' } },
@@ -303,6 +333,17 @@ export function CategoriesModule() {
         );
         setFormParentId(item && 'parentId' in item ? (item.parentId ?? '') : '');
         setFormIsPrivate(item && 'isPrivate' in item ? item.isPrivate : false);
+        setFormInheritFilters(item && 'filters' in item ? item.inheritFilters : true);
+        setFormFilters(
+            item && 'filters' in item
+                ? item.filters.map(filter => ({ code: filter.code, arguments: filter.args }))
+                : [],
+        );
+        setCustomFieldValues(
+            item && 'filters' in item
+                ? customFieldValuesFromEntity(collectionCustomFields, item.customFields, item.translations)
+                : customFieldValuesFromEntity(collectionCustomFields, null),
+        );
         setActionError('');
         setIsEditorOpen(true);
     };
@@ -405,6 +446,17 @@ export function CategoriesModule() {
                       : 'facet',
             );
         const values = splitValues(formValues);
+        if (activeTab === 'CATEGORIES') {
+            const customFieldErrors = validateCustomFieldValues(
+                collectionCustomFields,
+                customFieldValues,
+                languageCode,
+            );
+            if (Object.keys(customFieldErrors).length > 0) {
+                showError(Object.values(customFieldErrors)[0] ?? '分类扩展字段校验失败');
+                return;
+            }
+        }
         const removesExistingValues =
             editingItem &&
             (('options' in editingItem && values.length < editingItem.options.length) ||
@@ -433,6 +485,12 @@ export function CategoriesModule() {
                                 id: editingItem.id,
                                 isPrivate: formIsPrivate,
                                 parentId: formParentId || null,
+                                inheritFilters: formInheritFilters,
+                                filters: collectionFilterInput(formFilters, data?.collectionFilters ?? []),
+                                customFields: customFieldInputFromValues(
+                                    collectionCustomFields,
+                                    customFieldValues,
+                                ),
                                 translations: [
                                     {
                                         languageCode,
@@ -442,6 +500,11 @@ export function CategoriesModule() {
                                             getSourceTranslation(editingItem)?.description ||
                                             editingItem.description ||
                                             '',
+                                        customFields: localizedCustomFieldInputFromValues(
+                                            collectionCustomFields,
+                                            customFieldValues,
+                                            languageCode,
+                                        ),
                                     },
                                 ],
                             },
@@ -453,9 +516,25 @@ export function CategoriesModule() {
                             input: {
                                 isPrivate: formIsPrivate,
                                 parentId: formParentId || undefined,
-                                inheritFilters: true,
-                                filters: [],
-                                translations: [{ languageCode, name, slug: code, description: '' }],
+                                inheritFilters: formInheritFilters,
+                                filters: collectionFilterInput(formFilters, data?.collectionFilters ?? []),
+                                customFields: customFieldInputFromValues(
+                                    collectionCustomFields,
+                                    customFieldValues,
+                                ),
+                                translations: [
+                                    {
+                                        languageCode,
+                                        name,
+                                        slug: code,
+                                        description: '',
+                                        customFields: localizedCustomFieldInputFromValues(
+                                            collectionCustomFields,
+                                            customFieldValues,
+                                            languageCode,
+                                        ),
+                                    },
+                                ],
                             },
                         },
                     });
@@ -885,7 +964,7 @@ export function CategoriesModule() {
                     <AccessibleDialogSurface
                         accessibleName={editingItem ? '编辑目录数据' : '新增目录数据'}
                         onRequestClose={closeEditor}
-                        className="w-full max-w-md space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl"
+                        className={`max-h-[92vh] w-full ${activeTab === 'CATEGORIES' ? 'max-w-4xl' : 'max-w-md'} space-y-4 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl`}
                         onClick={event => event.stopPropagation()}
                     >
                         <div className="flex items-center justify-between">
@@ -931,25 +1010,42 @@ export function CategoriesModule() {
                             />
                         </div>
                         {activeTab === 'CATEGORIES' ? (
-                            <div>
-                                <label className="mb-1 block text-xs font-bold text-slate-700">
-                                    上级分类
-                                </label>
-                                <select
-                                    value={formParentId}
-                                    onChange={event => setFormParentId(event.target.value)}
-                                    className="w-full rounded-lg border border-slate-300 bg-white p-2.5 text-xs"
-                                >
-                                    <option value="">设为顶级分类</option>
-                                    {collections
-                                        .filter(item => item.id !== editingItem?.id)
-                                        .map(item => (
-                                            <option key={item.id} value={item.id}>
-                                                {item.name}
-                                            </option>
-                                        ))}
-                                </select>
-                            </div>
+                            <>
+                                <div>
+                                    <label className="mb-1 block text-xs font-bold text-slate-700">
+                                        上级分类
+                                    </label>
+                                    <select
+                                        value={formParentId}
+                                        onChange={event => setFormParentId(event.target.value)}
+                                        className="w-full rounded-lg border border-slate-300 bg-white p-2.5 text-xs"
+                                    >
+                                        <option value="">设为顶级分类</option>
+                                        {collections
+                                            .filter(item => item.id !== editingItem?.id)
+                                            .map(item => (
+                                                <option key={item.id} value={item.id}>
+                                                    {item.name}
+                                                </option>
+                                            ))}
+                                    </select>
+                                </div>
+                                <CollectionFiltersEditor
+                                    values={formFilters}
+                                    definitions={data?.collectionFilters ?? []}
+                                    inheritFilters={formInheritFilters}
+                                    parentId={formParentId}
+                                    onInheritFiltersChange={setFormInheritFilters}
+                                    onChange={setFormFilters}
+                                />
+                                <DynamicCustomFieldsForm
+                                    title="分类扩展字段"
+                                    fields={collectionCustomFields}
+                                    values={customFieldValues}
+                                    onChange={setCustomFieldValues}
+                                    disabled={saving}
+                                />
+                            </>
                         ) : (
                             <div>
                                 <label className="mb-1 block text-xs font-bold text-slate-700">
@@ -1005,4 +1101,278 @@ export function CategoriesModule() {
             )}
         </div>
     );
+}
+
+function CollectionFiltersEditor({
+    values,
+    definitions,
+    inheritFilters,
+    parentId,
+    onChange,
+    onInheritFiltersChange,
+}: {
+    values: OperationValue[];
+    definitions: OperationDefinition[];
+    inheritFilters: boolean;
+    parentId: string;
+    onChange: (values: OperationValue[]) => void;
+    onInheritFiltersChange: (value: boolean) => void;
+}) {
+    const [selectedCode, setSelectedCode] = useState(definitions[0]?.code ?? '');
+    const [previewError, setPreviewError] = useState('');
+    const [preview, previewState] = useLazyQuery<{
+        previewCollectionVariants: {
+            totalItems: number;
+            items: Array<{
+                id: string;
+                sku: string;
+                name: string;
+                price: number;
+                priceWithTax: number;
+                product: { id: string; name: string };
+            }>;
+        };
+    }>(PREVIEW_COLLECTION_VARIANTS, { fetchPolicy: 'no-cache' });
+
+    const add = () => {
+        const definition = definitions.find(item => item.code === selectedCode);
+        if (!definition) return;
+        onChange([
+            ...values,
+            {
+                code: definition.code,
+                arguments: definition.args.map(arg => ({
+                    name: arg.name,
+                    value: collectionDefaultArgValue(arg),
+                })),
+            },
+        ]);
+    };
+    const runPreview = async () => {
+        setPreviewError('');
+        try {
+            await preview({
+                variables: {
+                    input: {
+                        parentId: parentId || undefined,
+                        inheritFilters,
+                        filters: collectionFilterInput(values, definitions),
+                    },
+                    options: { take: 20, sort: { name: 'ASC' } },
+                },
+            });
+        } catch (cause) {
+            setPreviewError(toUserFacingError(cause, '分类内容预览失败'));
+        }
+    };
+
+    return (
+        <section className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                    <h4 className="text-xs font-bold text-slate-800">集合筛选规则</h4>
+                    <p className="mt-1 text-[10px] leading-4 text-slate-500">
+                        规则来自当前 Vendure 服务端注册的 CollectionFilter，可在保存前预览命中的 SKU。
+                    </p>
+                </div>
+                <label className="flex shrink-0 items-center gap-2 text-xs font-bold text-slate-700">
+                    <input
+                        type="checkbox"
+                        checked={inheritFilters}
+                        onChange={event => onInheritFiltersChange(event.target.checked)}
+                    />
+                    继承上级筛选
+                </label>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row">
+                <select
+                    value={selectedCode}
+                    onChange={event => setSelectedCode(event.target.value)}
+                    className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs"
+                >
+                    <option value="">请选择筛选器</option>
+                    {definitions.map(definition => (
+                        <option key={definition.code} value={definition.code}>
+                            {definition.description || definition.code}
+                        </option>
+                    ))}
+                </select>
+                <button
+                    type="button"
+                    onClick={add}
+                    disabled={!selectedCode}
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold disabled:opacity-40"
+                >
+                    <Plus className="mr-1 inline h-3.5 w-3.5" />
+                    添加规则
+                </button>
+            </div>
+            <div className="space-y-3">
+                {values.map((operation, operationIndex) => {
+                    const definition = definitions.find(item => item.code === operation.code);
+                    return (
+                        <article
+                            key={`${operation.code}-${operationIndex}`}
+                            className="rounded-lg border border-slate-200 bg-white p-4"
+                        >
+                            <div className="flex items-start justify-between gap-3">
+                                <div>
+                                    <strong className="text-xs text-slate-800">
+                                        {definition?.description || operation.code}
+                                    </strong>
+                                    <code className="ml-2 text-[10px] text-slate-400">{operation.code}</code>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        onChange(values.filter((_, index) => index !== operationIndex))
+                                    }
+                                    className="text-rose-600"
+                                    aria-label={`删除筛选规则 ${operation.code}`}
+                                >
+                                    <Trash2 className="h-4 w-4" />
+                                </button>
+                            </div>
+                            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                                {(definition?.args ?? []).map(arg => (
+                                    <CollectionFilterArgument
+                                        key={arg.name}
+                                        definition={arg}
+                                        value={
+                                            operation.arguments.find(item => item.name === arg.name)?.value ??
+                                            ''
+                                        }
+                                        onChange={value =>
+                                            onChange(
+                                                values.map((item, index) =>
+                                                    index === operationIndex
+                                                        ? {
+                                                              ...item,
+                                                              arguments: item.arguments.map(argument =>
+                                                                  argument.name === arg.name
+                                                                      ? { ...argument, value }
+                                                                      : argument,
+                                                              ),
+                                                          }
+                                                        : item,
+                                                ),
+                                            )
+                                        }
+                                    />
+                                ))}
+                            </div>
+                        </article>
+                    );
+                })}
+                {!values.length && (
+                    <p className="rounded-lg border border-dashed border-slate-300 bg-white p-5 text-center text-xs text-slate-500">
+                        未配置筛选规则；集合本身不会自动命中商品。
+                    </p>
+                )}
+            </div>
+            {previewError && (
+                <p className="text-xs text-rose-700" role="alert">
+                    {previewError}
+                </p>
+            )}
+            {previewState.data && (
+                <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
+                    <strong className="text-xs text-blue-900">
+                        命中 {previewState.data.previewCollectionVariants.totalItems} 个 SKU
+                    </strong>
+                    <ul className="mt-2 grid gap-1 text-[10px] text-blue-800 sm:grid-cols-2">
+                        {previewState.data.previewCollectionVariants.items.map(item => (
+                            <li key={item.id} className="truncate">
+                                {item.product.name} · {item.name} · {item.sku}
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            )}
+            <button
+                type="button"
+                onClick={() => void runPreview()}
+                disabled={previewState.loading}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-3 py-2 text-xs font-bold text-white disabled:opacity-40"
+            >
+                <Eye className="h-3.5 w-3.5" />
+                {previewState.loading ? '预览中…' : '预览集合内容'}
+            </button>
+        </section>
+    );
+}
+
+function CollectionFilterArgument({
+    definition,
+    value,
+    onChange,
+}: {
+    definition: OperationArgDefinition;
+    value: string;
+    onChange: (value: string) => void;
+}) {
+    const label = definition.label || definition.name;
+    return (
+        <label className="text-xs font-bold text-slate-600">
+            {label}
+            {definition.required ? ' *' : ''}
+            {definition.type.toLowerCase() === 'boolean' && !definition.list ? (
+                <select
+                    value={value}
+                    onChange={event => onChange(event.target.value)}
+                    className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-normal"
+                >
+                    <option value="true">true</option>
+                    <option value="false">false</option>
+                </select>
+            ) : (
+                <input
+                    value={value}
+                    onChange={event => onChange(event.target.value)}
+                    placeholder={definition.list ? '["value-1"]' : definition.type}
+                    className={`mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-normal ${definition.list ? 'font-mono' : ''}`}
+                />
+            )}
+            {definition.description && (
+                <small className="mt-1 block font-normal leading-4 text-slate-400">
+                    {definition.description}
+                    {definition.list ? ' · JSON 数组' : ''}
+                </small>
+            )}
+        </label>
+    );
+}
+
+function collectionFilterInput(values: OperationValue[], definitions: OperationDefinition[]) {
+    return values.map(operation => {
+        const definition = definitions.find(item => item.code === operation.code);
+        if (!definition) throw new Error(`服务端未注册集合筛选器 ${operation.code}`);
+        return {
+            code: operation.code,
+            arguments: definition.args.map(arg => {
+                const value = operation.arguments.find(item => item.name === arg.name)?.value.trim() ?? '';
+                if (arg.required && !value)
+                    throw new Error(
+                        `${definition.description || operation.code} 的 ${arg.label || arg.name} 不能为空`,
+                    );
+                if (arg.list && value) {
+                    const parsed = JSON.parse(value) as unknown;
+                    if (!Array.isArray(parsed)) throw new Error(`${arg.label || arg.name} 必须是 JSON 数组`);
+                }
+                if (
+                    ['int', 'float', 'money'].includes(arg.type.toLowerCase()) &&
+                    value &&
+                    !Number.isFinite(Number(value))
+                )
+                    throw new Error(`${arg.label || arg.name} 必须是数字`);
+                return { name: arg.name, value };
+            }),
+        };
+    });
+}
+
+function collectionDefaultArgValue(arg: OperationArgDefinition) {
+    if (arg.defaultValue == null)
+        return arg.type.toLowerCase() === 'boolean' ? 'false' : arg.list ? '[]' : '';
+    return typeof arg.defaultValue === 'string' ? arg.defaultValue : JSON.stringify(arg.defaultValue);
 }

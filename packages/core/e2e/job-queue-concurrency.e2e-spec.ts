@@ -14,6 +14,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { initialData } from '../../../e2e-common/e2e-initial-data';
 import { TEST_SETUP_TIMEOUT_MS, testConfig } from '../../../e2e-common/test-config';
 
+import { pollUntil } from './utils/poll-until';
+
 @VendurePlugin({
     imports: [PluginCommonModule],
 })
@@ -121,10 +123,7 @@ describe('Job queue per-queue concurrency', () => {
         }
         await Promise.all(jobPromises);
 
-        // Wait for all jobs to complete (5 jobs * 100ms each / concurrency + buffer)
-        // slow-queue: 5 jobs / 1 concurrency = 500ms
-        // fast-queue: 5 jobs / 3 concurrency = ~200ms
-        await new Promise(resolve => setTimeout(resolve, 1500));
+        await pollUntil(() => ConcurrencyTestPlugin.processedJobs.length >= 10, { timeout: 5_000 });
 
         // Verify slow queue never exceeded concurrency of 1
         expect(ConcurrencyTestPlugin.slowQueueMaxConcurrent).toBe(1);

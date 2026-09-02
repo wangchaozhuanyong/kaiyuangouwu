@@ -5,7 +5,7 @@ const pageSource = readFileSync(new URL('./pages/ai-image-studio-page.tsx', impo
 const stylesheet = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
 const apiSource = readFileSync(new URL('./api.ts', import.meta.url), 'utf8');
 
-describe('AI Image Studio compact generation flow', () => {
+describe('AI Image Studio responsive generation flow', () => {
     it('defaults consent to checked while preserving the generation gate', () => {
         expect(pageSource).toContain('const [termsAccepted, setTermsAccepted] = useState(true)');
         expect(pageSource).toContain('setTermsAccepted(true)');
@@ -35,6 +35,20 @@ describe('AI Image Studio compact generation flow', () => {
         expect(pageSource).toContain('className="ai-studio-bottom-sheet"');
         expect(stylesheet).toContain('.ai-studio-fixed-generate');
         expect(stylesheet).toContain('position: fixed');
+    });
+
+    it('provides a dedicated desktop workbench without changing the compact mobile flow', () => {
+        expect(pageSource).toContain('className="ai-studio-controls"');
+        expect(pageSource).toContain("'生成参数与结算'");
+        expect(stylesheet).toContain('/* AI Image Studio — desktop workbench */');
+        expect(stylesheet).toContain('@media (min-width: 960px)');
+        expect(stylesheet).toMatch(
+            /\.ai-studio-shell \{[^}]*grid-template-columns: minmax\(0, 1fr\) minmax\(340px, 400px\);/,
+        );
+        expect(stylesheet).toMatch(
+            /\.ai-studio-fixed-generate \{[^}]*position: static;[^}]*transform: none;/,
+        );
+        expect(stylesheet).toContain('.sheet.ai-studio-history-detail-sheet');
     });
 
     it('renders filterable compact history with an information sheet', () => {

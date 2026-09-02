@@ -159,6 +159,68 @@ const STORE_PROFILE_FIELDS = gql`
 
 export const STORE_MANAGEMENT_QUERY = gql`
     ${STORE_PROFILE_FIELDS}
+    fragment NextAdminSellerManagementFields on Seller {
+        id
+        createdAt
+        updatedAt
+        name
+    }
+    fragment NextAdminPaymentMethodManagementFields on PaymentMethod {
+        id
+        name
+        description
+        code
+        enabled
+        updatedAt
+        translations {
+            id
+            languageCode
+            name
+            description
+        }
+        checker {
+            code
+            args {
+                name
+                value
+            }
+        }
+        handler {
+            code
+            args {
+                name
+                value
+            }
+        }
+    }
+    fragment NextAdminShippingMethodManagementFields on ShippingMethod {
+        id
+        name
+        description
+        code
+        fulfillmentHandlerCode
+        updatedAt
+        translations {
+            id
+            languageCode
+            name
+            description
+        }
+        checker {
+            code
+            args {
+                name
+                value
+            }
+        }
+        calculator {
+            code
+            args {
+                name
+                value
+            }
+        }
+    }
     query NextAdminStoreManagement(
         $sellerOptions: SellerListOptions
         $paymentMethodOptions: PaymentMethodListOptions
@@ -176,6 +238,7 @@ export const STORE_MANAGEMENT_QUERY = gql`
         activeChannel {
             id
             defaultLanguageCode
+            defaultCurrencyCode
         }
         storeProfiles {
             ...NextAdminStoreProfileFields
@@ -189,72 +252,19 @@ export const STORE_MANAGEMENT_QUERY = gql`
         sellers(options: $sellerOptions) {
             totalItems
             items {
-                id
-                createdAt
-                updatedAt
-                name
+                ...NextAdminSellerManagementFields
             }
         }
         paymentMethods(options: $paymentMethodOptions) {
             totalItems
             items {
-                id
-                name
-                description
-                code
-                enabled
-                updatedAt
-                translations {
-                    id
-                    languageCode
-                    name
-                    description
-                }
-                checker {
-                    code
-                    args {
-                        name
-                        value
-                    }
-                }
-                handler {
-                    code
-                    args {
-                        name
-                        value
-                    }
-                }
+                ...NextAdminPaymentMethodManagementFields
             }
         }
         shippingMethods(options: $shippingMethodOptions) {
             totalItems
             items {
-                id
-                name
-                description
-                code
-                fulfillmentHandlerCode
-                updatedAt
-                translations {
-                    id
-                    languageCode
-                    name
-                    description
-                }
-                checker {
-                    code
-                    args {
-                        name
-                        value
-                    }
-                }
-                calculator {
-                    code
-                    args {
-                        name
-                        value
-                    }
-                }
+                ...NextAdminShippingMethodManagementFields
             }
         }
         paymentMethodEligibilityCheckers {
@@ -782,7 +792,36 @@ export const DELETE_STORE_DOMAIN_MUTATION = gql`
     }
 `;
 
+const API_KEY_FIELDS = gql`
+    fragment NextAdminApiKeyFields on ApiKey {
+        id
+        createdAt
+        updatedAt
+        lookupId
+        lastUsedAt
+        name
+        owner {
+            id
+            identifier
+        }
+        user {
+            id
+            roles {
+                id
+                code
+                description
+            }
+        }
+        translations {
+            id
+            languageCode
+            name
+        }
+    }
+`;
+
 export const SYSTEM_OPERATIONS_QUERY = gql`
+    ${API_KEY_FIELDS}
     query NextAdminSystemOperations($jobOptions: JobListOptions, $apiKeyOptions: ApiKeyListOptions) {
         jobs(options: $jobOptions) {
             totalItems
@@ -825,16 +864,7 @@ export const SYSTEM_OPERATIONS_QUERY = gql`
         apiKeys(options: $apiKeyOptions) {
             totalItems
             items {
-                id
-                createdAt
-                updatedAt
-                lookupId
-                lastUsedAt
-                name
-                owner {
-                    id
-                    identifier
-                }
+                ...NextAdminApiKeyFields
             }
         }
         activeAdministrator {
@@ -906,11 +936,33 @@ export const ROTATE_API_KEY_MUTATION = gql`
     }
 `;
 
+export const UPDATE_API_KEY_MUTATION = gql`
+    ${API_KEY_FIELDS}
+    mutation NextAdminUpdateApiKey($input: UpdateApiKeyInput!) {
+        updateApiKey(input: $input) {
+            ...NextAdminApiKeyFields
+        }
+    }
+`;
+
 export const DELETE_API_KEYS_MUTATION = gql`
     mutation NextAdminDeleteApiKeys($ids: [ID!]!) {
         deleteApiKeys(ids: $ids) {
             result
             message
+        }
+    }
+`;
+
+export const TEST_SHIPPING_METHOD_QUERY = gql`
+    query NextAdminTestShippingMethod($input: TestShippingMethodInput!) {
+        testShippingMethod(input: $input) {
+            eligible
+            quote {
+                price
+                priceWithTax
+                metadata
+            }
         }
     }
 `;
@@ -1001,6 +1053,7 @@ export interface ManagementTranslationRecord {
     languageCode: string;
     name: string;
     description: string;
+    customFields?: Record<string, unknown> | null;
 }
 
 export interface StoreManagementResult {
@@ -1008,7 +1061,7 @@ export interface StoreManagementResult {
         id: string;
         user: { roles: Array<{ id: string; code: string }> };
     } | null;
-    activeChannel: { id: string; defaultLanguageCode: string };
+    activeChannel: { id: string; defaultLanguageCode: string; defaultCurrencyCode: string };
     storeProfiles: StoreProfileRecord[];
     storeProvisioningTemplates: Array<{
         id: string;
@@ -1018,7 +1071,13 @@ export interface StoreManagementResult {
     }>;
     sellers: {
         totalItems: number;
-        items: Array<{ id: string; createdAt: string; updatedAt: string; name: string }>;
+        items: Array<{
+            id: string;
+            createdAt: string;
+            updatedAt: string;
+            name: string;
+            customFields?: Record<string, unknown> | null;
+        }>;
     };
     paymentMethods: {
         totalItems: number;
@@ -1032,6 +1091,7 @@ export interface StoreManagementResult {
             translations: ManagementTranslationRecord[];
             checker: ConfigurableOperationRecord | null;
             handler: ConfigurableOperationRecord;
+            customFields?: Record<string, unknown> | null;
         }>;
     };
     shippingMethods: {
@@ -1046,6 +1106,7 @@ export interface StoreManagementResult {
             translations: ManagementTranslationRecord[];
             checker: ConfigurableOperationRecord;
             calculator: ConfigurableOperationRecord;
+            customFields?: Record<string, unknown> | null;
         }>;
     };
     paymentMethodEligibilityCheckers: ConfigurableOperationDefinitionRecord[];
@@ -1179,6 +1240,17 @@ export interface ApiKeyRecord {
     lastUsedAt: string | null;
     name: string;
     owner: { id: string; identifier: string } | null;
+    user: {
+        id: string;
+        roles: Array<{ id: string; code: string; description: string }>;
+    };
+    translations: Array<{
+        id: string;
+        languageCode: string;
+        name: string;
+        customFields?: Record<string, unknown> | null;
+    }>;
+    customFields?: Record<string, unknown> | null;
 }
 
 export interface SystemOperationsResult {

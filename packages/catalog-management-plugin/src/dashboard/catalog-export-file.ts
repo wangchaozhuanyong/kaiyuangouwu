@@ -1,3 +1,5 @@
+/// <reference types="vite/client" />
+
 import type { CatalogExportRowRecord } from './catalog-management.graphql';
 
 import CatalogExportFileWorker from './catalog-export-file.worker?worker';
