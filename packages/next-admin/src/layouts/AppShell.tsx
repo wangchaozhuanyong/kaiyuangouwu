@@ -126,6 +126,11 @@ const THEME_OPTIONS: Array<{
     { value: 'dark', label: '深色', Icon: Moon },
 ];
 
+// 768–1279px 保留完整内容宽度，导航通过抽屉按需展开；
+// 仅在宽桌面上常驻侧栏，避免横屏平板的数据表被压缩到窄视区。
+const PERSISTENT_SIDEBAR_MEDIA_QUERY = '(min-width: 1280px)';
+const OVERLAY_SIDEBAR_MEDIA_QUERY = '(max-width: 1279px)';
+
 export function AppShell() {
     const location = useLocation();
     const routerNavigate = useNavigate();
@@ -136,9 +141,11 @@ export function AppShell() {
         preloadNextAdminExtensionRoute(target);
         startTransition(() => void routerNavigate(target, options));
     };
-    const [isDesktop, setIsDesktop] = useState(() => window.matchMedia('(min-width: 1024px)').matches);
+    const [isDesktop, setIsDesktop] = useState(
+        () => window.matchMedia(PERSISTENT_SIDEBAR_MEDIA_QUERY).matches,
+    );
     const [isSidebarOpen, setIsSidebarOpen] = useState(
-        () => window.matchMedia('(min-width: 1024px)').matches,
+        () => window.matchMedia(PERSISTENT_SIDEBAR_MEDIA_QUERY).matches,
     );
     const sidebarRef = useRef<HTMLElement>(null);
     const sidebarToggleRef = useRef<HTMLButtonElement>(null);
@@ -339,7 +346,7 @@ export function AppShell() {
     }, [isDesktop]);
 
     useEffect(() => {
-        const mediaQuery = window.matchMedia('(min-width: 1024px)');
+        const mediaQuery = window.matchMedia(PERSISTENT_SIDEBAR_MEDIA_QUERY);
         const handleViewportChange = (event: MediaQueryListEvent) => {
             setIsDesktop(event.matches);
             setIsSidebarOpen(event.matches);
@@ -644,7 +651,7 @@ export function AppShell() {
             {isSidebarOpen && (
                 <button
                     type="button"
-                    className="fixed inset-0 z-30 bg-slate-950/50 lg:hidden"
+                    className="fixed inset-0 z-30 bg-slate-950/50 xl:hidden"
                     onClick={() => setIsSidebarOpen(false)}
                     aria-label="关闭侧边栏"
                 />
@@ -656,7 +663,7 @@ export function AppShell() {
                 ref={sidebarRef}
                 aria-hidden={!isDesktop && !isSidebarOpen}
                 inert={!isDesktop && !isSidebarOpen ? true : undefined}
-                className={`fixed inset-y-0 left-0 z-40 flex w-64 shrink-0 flex-col bg-[#1c2128] text-slate-300 transition-[transform,width] duration-150 ease-out lg:relative lg:z-20 ${isSidebarOpen ? 'translate-x-0 lg:w-64' : '-translate-x-full lg:w-16 lg:translate-x-0'}`}
+                className={`fixed inset-y-0 left-0 z-40 flex w-64 shrink-0 flex-col bg-[#1c2128] text-slate-300 transition-[transform,width] duration-150 ease-out xl:relative xl:z-20 ${isSidebarOpen ? 'translate-x-0 xl:w-64' : '-translate-x-full xl:w-16 xl:translate-x-0'}`}
             >
                 <div className="h-14 border-b border-white/10 flex items-center justify-center shrink-0">
                     <div className="flex items-center gap-2">
@@ -687,7 +694,7 @@ export function AppShell() {
                     onClick={event => {
                         if (
                             (event.target as HTMLElement).closest('a') &&
-                            window.matchMedia('(max-width: 1023px)').matches
+                            window.matchMedia(OVERLAY_SIDEBAR_MEDIA_QUERY).matches
                         ) {
                             setIsSidebarOpen(false);
                         }

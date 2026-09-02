@@ -234,6 +234,10 @@
         background-color: var(--admin-surface-subtle);
     }
 
+    .dark .group:hover .group-hover\:bg-slate-50 {
+        background-color: var(--admin-surface-subtle);
+    }
+
     .dark .hover\:bg-slate-100:hover {
         background-color: #263449;
     }
@@ -284,6 +288,67 @@
 
     .scrollbar-hidden::-webkit-scrollbar {
         display: none;
+    }
+
+    /*
+     * Tablet workspace (768–1279px)
+     *
+     * The shell switches to an overlay navigation drawer in this range, so data-heavy
+     * pages keep the full viewport width. Tighten page gutters slightly and preserve a
+     * visible, touch-friendly horizontal scroll affordance for wide administration tables.
+     */
+    @media (min-width: 768px) and (max-width: 1279px) {
+        #main-content :where(.sm\:p-8) {
+            padding: 1.5rem;
+        }
+
+        #main-content :where(.sm\:px-8) {
+            padding-inline: 1.5rem;
+        }
+
+        #app-sidebar nav :where(a, button) {
+            min-height: 2.75rem;
+        }
+
+        #main-content :where(.tablet-touch-target) {
+            min-width: 2.75rem;
+            min-height: 2.75rem;
+        }
+
+        #main-content :where(.overflow-x-auto) {
+            overscroll-behavior-inline: contain;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-color: #94a3b8 #e2e8f0;
+            scrollbar-gutter: stable;
+            scrollbar-width: thin;
+        }
+
+        #main-content :where(.overflow-x-auto)::-webkit-scrollbar {
+            height: 0.5rem;
+        }
+
+        #main-content :where(.overflow-x-auto)::-webkit-scrollbar-track {
+            background: #e2e8f0;
+        }
+
+        #main-content :where(.overflow-x-auto)::-webkit-scrollbar-thumb {
+            border: 2px solid #e2e8f0;
+            border-radius: 999px;
+            background: #94a3b8;
+        }
+
+        .dark #main-content :where(.overflow-x-auto) {
+            scrollbar-color: #64748b #1e293b;
+        }
+
+        .dark #main-content :where(.overflow-x-auto)::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+
+        .dark #main-content :where(.overflow-x-auto)::-webkit-scrollbar-thumb {
+            border-color: #1e293b;
+            background: #64748b;
+        }
     }
 
     @media (max-width: 767px) {
