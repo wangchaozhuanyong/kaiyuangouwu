@@ -16,13 +16,13 @@
         },
         {
             "path": "packages/storefront/src/api.ts",
-            "maxLines": 2592,
+            "maxLines": 2113,
             "targetLines": 500,
             "owner": "storefront-api"
         },
         {
             "path": "packages/next-admin/src/pages/Settings/StoreSettingsModule.tsx",
-            "maxLines": 2965,
+            "maxLines": 2788,
             "targetLines": 700,
             "owner": "next-admin-settings"
         },
