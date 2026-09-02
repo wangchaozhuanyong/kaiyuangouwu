@@ -46,7 +46,7 @@
         },
         {
             "path": "packages/image-generation-plugin/src/image-generation.service.ts",
-            "maxLines": 1751,
+            "maxLines": 1736,
             "targetLines": 700,
             "owner": "image-generation"
         },
