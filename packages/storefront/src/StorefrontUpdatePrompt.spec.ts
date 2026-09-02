@@ -1,9 +1,9 @@
-import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { readStorefrontStylesheet } from './test-stylesheet';
 
 import { getStorefrontUpdateCopy } from './StorefrontUpdatePrompt';
 
-const stylesheet = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
+const stylesheet = readStorefrontStylesheet();
 
 describe('StorefrontUpdatePrompt', () => {
     it('uses one language throughout the update notice', () => {

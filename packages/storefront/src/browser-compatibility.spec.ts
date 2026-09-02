@@ -1,9 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 import { describe, expect, it } from 'vitest';
+import { readStorefrontStylesheet } from './test-stylesheet';
 
 const indexHtml = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-const stylesheet = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
+const stylesheet = readStorefrontStylesheet();
 const viteConfig = readFileSync(new URL('../vite.config.ts', import.meta.url), 'utf8');
 const legacyGuard = readFileSync(new URL('../public/legacy-browser-guard.js', import.meta.url), 'utf8');
 const unsupportedBrowserHtml = readFileSync(
