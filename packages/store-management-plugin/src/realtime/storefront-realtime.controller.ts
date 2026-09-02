@@ -7,6 +7,7 @@ import { StorefrontPromotionAccessService } from '../promotion/storefront-promot
 import { StorefrontRealtimePayload, StorefrontRealtimeService } from './storefront-realtime.service';
 
 const HEARTBEAT_INTERVAL_MS = 15_000;
+const BACKPRESSURE_TIMEOUT_MS = HEARTBEAT_INTERVAL_MS * 2;
 
 @Controller('storefront-realtime')
 export class StorefrontRealtimeController {
@@ -32,35 +33,115 @@ export class StorefrontRealtimeController {
         const channelId = String(storefrontRequest.channelId);
         const admin = clientType === 'admin' && hasAdminChannelAccess(session, channelId);
 
-        res.status(200);
-        res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
-        res.setHeader('Cache-Control', 'no-cache, no-store, no-transform');
-        res.setHeader('Connection', 'keep-alive');
-        res.setHeader('X-Accel-Buffering', 'no');
-        res.flushHeaders?.();
-        writeSse(res, 'ready', {
-            version: 1,
-            heartbeatIntervalMs: HEARTBEAT_INTERVAL_MS,
-        });
+        let closed = false;
+        let backpressured = false;
+        let backpressureTimeout: ReturnType<typeof setTimeout> | undefined;
+        const resources: {
+            heartbeat?: ReturnType<typeof setInterval>;
+            removeClient?: () => void;
+        } = {};
+        const onDrain = () => {
+            if (closed) return;
+            backpressured = false;
+            if (backpressureTimeout) clearTimeout(backpressureTimeout);
+            backpressureTimeout = undefined;
+        };
+        const cleanup = (): boolean => {
+            if (closed) return false;
+            closed = true;
+            if (resources.heartbeat) clearInterval(resources.heartbeat);
+            if (backpressureTimeout) clearTimeout(backpressureTimeout);
+            res.off('drain', onDrain);
+            resources.removeClient?.();
+            return true;
+        };
+        const abortResponse = () => {
+            if (!cleanup()) return;
+            if (!res.destroyed) res.destroy();
+        };
+        const trackBackpressure = (writeAccepted: boolean) => {
+            if (writeAccepted || backpressured || closed) return;
+            backpressured = true;
+            res.once('drain', onDrain);
+            backpressureTimeout = setTimeout(abortResponse, BACKPRESSURE_TIMEOUT_MS);
+            backpressureTimeout.unref?.();
+        };
+        req.once('aborted', abortResponse);
+        req.once('close', cleanup);
+        res.once('close', cleanup);
+        res.once('error', cleanup);
 
-        const removeClient = this.realtime.addClient({
+        if (req.aborted) {
+            abortResponse();
+            return;
+        }
+        if (!isResponseWritable(res)) {
+            cleanup();
+            return;
+        }
+        try {
+            res.status(200);
+            res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+            res.setHeader('Cache-Control', 'no-cache, no-store, no-transform');
+            res.setHeader('Connection', 'keep-alive');
+            res.setHeader('X-Accel-Buffering', 'no');
+            res.flushHeaders?.();
+            if (closed || !isResponseWritable(res)) {
+                cleanup();
+                return;
+            }
+            trackBackpressure(
+                writeSse(res, 'ready', {
+                    version: 1,
+                    heartbeatIntervalMs: HEARTBEAT_INTERVAL_MS,
+                }),
+            );
+        } catch {
+            abortResponse();
+            return;
+        }
+
+        if (closed) return;
+        resources.removeClient = this.realtime.addClient({
             channelId,
             userId: session?.user?.id == null ? undefined : String(session.user.id),
             activeOrderId: session?.activeOrderId == null ? undefined : String(session.activeOrderId),
             admin,
-            send: payload => writeSse(res, 'invalidate', payload, payload.id),
+            send: payload => {
+                if (closed) return;
+                if (backpressured) {
+                    abortResponse();
+                    return;
+                }
+                if (!isResponseWritable(res)) {
+                    cleanup();
+                    return;
+                }
+                try {
+                    trackBackpressure(writeSse(res, 'invalidate', payload, payload.id));
+                } catch (error) {
+                    abortResponse();
+                    throw error;
+                }
+            },
         });
-        const heartbeat = setInterval(() => res.write(': heartbeat\n\n'), HEARTBEAT_INTERVAL_MS);
-        heartbeat.unref?.();
-        let closed = false;
-        const cleanup = () => {
-            if (closed) return;
-            closed = true;
-            clearInterval(heartbeat);
-            removeClient();
-        };
-        req.once('close', cleanup);
-        res.once('close', cleanup);
+        if (closed) {
+            resources.removeClient();
+            return;
+        }
+        resources.heartbeat = setInterval(() => {
+            if (!isResponseWritable(res)) {
+                cleanup();
+                return;
+            }
+            if (backpressured) return;
+            try {
+                trackBackpressure(res.write(': heartbeat\n\n'));
+            } catch {
+                abortResponse();
+            }
+        }, HEARTBEAT_INTERVAL_MS);
+        resources.heartbeat.unref?.();
     }
 }
 
@@ -69,10 +150,12 @@ function writeSse(
     event: string,
     data: StorefrontRealtimePayload | Record<string, unknown>,
     id?: string,
-): void {
-    if (id) response.write(`id: ${id}\n`);
-    response.write(`event: ${event}\n`);
-    response.write(`data: ${JSON.stringify(data)}\n\n`);
+): boolean {
+    return response.write(`${id ? `id: ${id}\n` : ''}event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+}
+
+function isResponseWritable(response: Response): boolean {
+    return !response.destroyed && !response.writableEnded;
 }
 
 function sessionToken(req: Request): string | undefined {

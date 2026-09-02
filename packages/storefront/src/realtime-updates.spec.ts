@@ -33,6 +33,7 @@ describe('storefront realtime stream', () => {
 
     it('handles an event split across network chunks', async () => {
         const encoder = new TextEncoder();
+        const cancel = vi.fn();
         const body = new ReadableStream<Uint8Array>({
             start(controller) {
                 controller.enqueue(encoder.encode('event: invalidate\ndata: {"version":1,"id":"event-2",'));
@@ -41,12 +42,88 @@ describe('storefront realtime stream', () => {
                 );
                 controller.close();
             },
+            cancel,
         });
         const onEvent = vi.fn();
 
         await consumeStorefrontRealtimeStream(body, onEvent);
 
         expect(onEvent).toHaveBeenCalledWith(expect.objectContaining({ id: 'event-2', topics: ['config'] }));
+        expect(cancel).not.toHaveBeenCalled();
+    });
+
+    it('reports a valid ready frame once before consuming invalidation events', async () => {
+        const encoder = new TextEncoder();
+        const body = new ReadableStream<Uint8Array>({
+            start(controller) {
+                controller.enqueue(
+                    encoder.encode(
+                        'event: ready\ndata: {"version":1,"heartbeatIntervalMs":15000}\n\n' +
+                            'event: ready\ndata: {"version":1,"heartbeatIntervalMs":15000}\n\n',
+                    ),
+                );
+                controller.close();
+            },
+        });
+        const onReady = vi.fn();
+
+        await consumeStorefrontRealtimeStream(body, vi.fn(), { onReady });
+
+        expect(onReady).toHaveBeenCalledTimes(1);
+    });
+
+    it('cancels the underlying stream when an event callback throws', async () => {
+        const encoder = new TextEncoder();
+        const cancel = vi.fn();
+        const failure = new Error('invalidation failed');
+        const body = new ReadableStream<Uint8Array>({
+            start(controller) {
+                controller.enqueue(
+                    encoder.encode(
+                        'event: invalidate\ndata: {"version":1,"id":"event-3","occurredAt":"2026-08-30T00:00:00.000Z","topics":["content"]}\n\n',
+                    ),
+                );
+            },
+            cancel,
+        });
+
+        await expect(
+            consumeStorefrontRealtimeStream(body, () => {
+                throw failure;
+            }),
+        ).rejects.toBe(failure);
+        expect(cancel).toHaveBeenCalledWith(failure);
+    });
+
+    it('cancels the underlying stream when an oversized frame is rejected', async () => {
+        const encoder = new TextEncoder();
+        const cancel = vi.fn();
+        const body = new ReadableStream<Uint8Array>({
+            start(controller) {
+                controller.enqueue(encoder.encode(`data: ${'x'.repeat(256 * 1024)}`));
+            },
+            cancel,
+        });
+
+        await expect(consumeStorefrontRealtimeStream(body, vi.fn())).rejects.toThrow(
+            'Storefront realtime event exceeded the maximum size',
+        );
+        expect(cancel).toHaveBeenCalledTimes(1);
+    });
+
+    it('cancels an active reader when the caller aborts', async () => {
+        const cancel = vi.fn();
+        const body = new ReadableStream<Uint8Array>({ cancel });
+        const controller = new AbortController();
+        const reason = new DOMException('Unmounted', 'AbortError');
+        const pending = consumeStorefrontRealtimeStream(body, vi.fn(), {
+            signal: controller.signal,
+        });
+
+        controller.abort(reason);
+
+        await pending;
+        expect(cancel).toHaveBeenCalledWith(reason);
     });
 });
 

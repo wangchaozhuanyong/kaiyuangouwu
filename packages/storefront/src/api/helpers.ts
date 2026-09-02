@@ -184,3 +184,87 @@ export function abortableDelay(durationMs: number, signal: AbortSignal): Promise
         }
     });
 }
+
+export const STOREFRONT_REALTIME_INITIAL_RETRY_DELAY_MS = 1_000;
+export const STOREFRONT_REALTIME_MAX_RETRY_DELAY_MS = 30_000;
+export const STOREFRONT_REALTIME_RATE_LIMIT_MIN_RETRY_DELAY_MS = 5_000;
+export const STOREFRONT_REALTIME_RATE_LIMIT_MAX_RETRY_DELAY_MS = 60_000;
+export const STOREFRONT_REALTIME_RETRY_JITTER_RATIO = 0.2;
+
+export class StorefrontRealtimeConnectionError extends Error {
+    constructor(
+        readonly status: number,
+        readonly retryAfter: string | null,
+    ) {
+        super(`Storefront realtime connection failed (${status})`);
+        this.name = 'StorefrontRealtimeConnectionError';
+    }
+}
+
+export function calculateStorefrontRealtimeRetry(options: {
+    status?: number;
+    retryAfter?: string | null;
+    baseDelayMs: number;
+    random?: number;
+    nowMs?: number;
+}): { delayMs: number; nextBaseDelayMs: number } {
+    const rateLimited = options.status === 429;
+    const minimumDelayMs = rateLimited
+        ? STOREFRONT_REALTIME_RATE_LIMIT_MIN_RETRY_DELAY_MS
+        : STOREFRONT_REALTIME_INITIAL_RETRY_DELAY_MS;
+    const maximumDelayMs = rateLimited
+        ? STOREFRONT_REALTIME_RATE_LIMIT_MAX_RETRY_DELAY_MS
+        : STOREFRONT_REALTIME_MAX_RETRY_DELAY_MS;
+    const finiteBaseDelayMs = Number.isFinite(options.baseDelayMs) ? options.baseDelayMs : minimumDelayMs;
+    const baseDelayMs = Math.min(maximumDelayMs, Math.max(minimumDelayMs, finiteBaseDelayMs));
+    const retryAfterMs = rateLimited
+        ? parseStorefrontRealtimeRetryAfter(options.retryAfter, options.nowMs ?? Date.now())
+        : undefined;
+    const requiredDelayMs = Math.min(maximumDelayMs, Math.max(baseDelayMs, retryAfterMs ?? 0));
+    const minimumJitteredDelayMs =
+        retryAfterMs == null
+            ? Math.max(minimumDelayMs, requiredDelayMs * (1 - STOREFRONT_REALTIME_RETRY_JITTER_RATIO))
+            : requiredDelayMs;
+    const maximumJitteredDelayMs =
+        retryAfterMs == null
+            ? Math.min(maximumDelayMs, requiredDelayMs * (1 + STOREFRONT_REALTIME_RETRY_JITTER_RATIO))
+            : Math.min(
+                  maximumDelayMs,
+                  requiredDelayMs + Math.min(1_000, requiredDelayMs * STOREFRONT_REALTIME_RETRY_JITTER_RATIO),
+              );
+    const candidateRandom = options.random ?? Math.random();
+    const random = Number.isFinite(candidateRandom) ? Math.min(1, Math.max(0, candidateRandom)) : 0;
+
+    return {
+        delayMs: Math.round(
+            minimumJitteredDelayMs + (maximumJitteredDelayMs - minimumJitteredDelayMs) * random,
+        ),
+        nextBaseDelayMs: Math.min(baseDelayMs * 2, maximumDelayMs),
+    };
+}
+
+export function parseStorefrontRealtimeRetryAfter(
+    value: string | null | undefined,
+    nowMs: number,
+): number | undefined {
+    const normalized = value?.trim();
+    if (!normalized) return undefined;
+    const seconds = Number(normalized);
+    if (Number.isFinite(seconds) && seconds >= 0) return Math.ceil(seconds * 1_000);
+    const retryAtMs = Date.parse(normalized);
+    if (!Number.isFinite(retryAtMs)) return undefined;
+    return Math.max(0, retryAtMs - nowMs);
+}
+
+export async function cancelStorefrontRealtimeBody(
+    body: ReadableStream<Uint8Array> | null,
+    reason: unknown,
+): Promise<void> {
+    if (!body || body.locked) return;
+    try {
+        await body.cancel(reason);
+    } catch {
+        // The connection failure remains the actionable error even if the body has already closed.
+    }
+}
+

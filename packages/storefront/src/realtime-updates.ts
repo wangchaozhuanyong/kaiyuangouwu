@@ -31,13 +31,42 @@ interface StorefrontRealtimeScope {
 
 const MAX_PENDING_EVENT_BYTES = 256 * 1024;
 
+export interface StorefrontRealtimeStreamOptions {
+    signal?: AbortSignal;
+    onReady?: () => void;
+}
+
 export async function consumeStorefrontRealtimeStream(
     body: ReadableStream<Uint8Array>,
     onEvent: (event: StorefrontRealtimeEvent) => void,
+    options: StorefrontRealtimeStreamOptions = {},
 ): Promise<void> {
     const reader = body.getReader();
     const decoder = new TextDecoder();
     let pending = '';
+    let completedNaturally = false;
+    let failure: unknown;
+    let ready = false;
+    let cancellation: Promise<void> | undefined;
+    const cancelReader = (reason?: unknown) => {
+        if (cancellation) return cancellation;
+        try {
+            cancellation = reader.cancel(reason).catch(() => undefined);
+        } catch {
+            cancellation = Promise.resolve();
+        }
+        return cancellation;
+    };
+    const abort = () => {
+        void cancelReader(options.signal?.reason);
+    };
+
+    if (options.signal?.aborted) {
+        await cancelReader(options.signal.reason);
+        reader.releaseLock();
+        return;
+    }
+    options.signal?.addEventListener('abort', abort, { once: true });
     try {
         while (true) {
             const { done, value } = await reader.read();
@@ -48,27 +77,30 @@ export async function consumeStorefrontRealtimeStream(
             const frames = pending.split(/\r?\n\r?\n/u);
             pending = done ? '' : (frames.pop() ?? '');
             for (const frame of frames) {
+                if (!ready && isStorefrontRealtimeReadyFrame(frame)) {
+                    ready = true;
+                    options.onReady?.();
+                }
                 const parsed = parseStorefrontRealtimeFrame(frame);
                 if (parsed) onEvent(parsed);
             }
-            if (done) return;
+            if (done) {
+                completedNaturally = !options.signal?.aborted;
+                return;
+            }
         }
+    } catch (error) {
+        failure = error;
+        throw error;
     } finally {
+        options.signal?.removeEventListener('abort', abort);
+        if (!completedNaturally) await cancelReader(failure ?? options.signal?.reason);
         reader.releaseLock();
     }
 }
 
 export function parseStorefrontRealtimeFrame(frame: string): StorefrontRealtimeEvent | null {
-    let eventName = 'message';
-    const data: string[] = [];
-    for (const line of frame.split(/\r?\n/u)) {
-        if (!line || line.startsWith(':')) continue;
-        const separator = line.indexOf(':');
-        const field = separator === -1 ? line : line.slice(0, separator);
-        const value = separator === -1 ? '' : line.slice(separator + 1).replace(/^ /u, '');
-        if (field === 'event') eventName = value;
-        if (field === 'data') data.push(value);
-    }
+    const { eventName, data } = parseStorefrontRealtimeFrameFields(frame);
     if (eventName !== 'invalidate' || data.length === 0) return null;
     try {
         const candidate = JSON.parse(data.join('\n')) as Partial<StorefrontRealtimeEvent>;
@@ -85,6 +117,34 @@ export function parseStorefrontRealtimeFrame(frame: string): StorefrontRealtimeE
     } catch {
         return null;
     }
+}
+
+function isStorefrontRealtimeReadyFrame(frame: string): boolean {
+    const { eventName, data } = parseStorefrontRealtimeFrameFields(frame);
+    if (eventName !== 'ready' || data.length === 0) return false;
+    try {
+        const candidate = JSON.parse(data.join('\n')) as { version?: unknown };
+        return candidate.version === 1;
+    } catch {
+        return false;
+    }
+}
+
+function parseStorefrontRealtimeFrameFields(frame: string): {
+    eventName: string;
+    data: string[];
+} {
+    let eventName = 'message';
+    const data: string[] = [];
+    for (const line of frame.split(/\r?\n/u)) {
+        if (!line || line.startsWith(':')) continue;
+        const separator = line.indexOf(':');
+        const field = separator === -1 ? line : line.slice(0, separator);
+        const value = separator === -1 ? '' : line.slice(separator + 1).replace(/^ /u, '');
+        if (field === 'event') eventName = value;
+        if (field === 'data') data.push(value);
+    }
+    return { eventName, data };
 }
 
 export async function invalidateStorefrontRealtimeQueries(

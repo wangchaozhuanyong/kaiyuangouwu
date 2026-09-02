@@ -9,6 +9,7 @@ readonly memory_guard="${repository}/deploy/production-memory-guard.cjs"
 readonly environment_file="${repository}/packages/dev-server/.env"
 readonly healthcheck_maximum_age_seconds=1200
 readonly restore_drill_maximum_age_seconds=777600
+readonly audit_storefront_realtime_capacity="${AUDIT_STOREFRONT_REALTIME_CAPACITY:-false}"
 
 fail() {
     printf 'Production health monitor failed: %s\n' "$1" >&2
@@ -51,6 +52,8 @@ require_recent_systemd_success() {
 [[ -r "${environment_file}" ]] || fail 'production environment file is not readable'
 [[ -L "${current_pointer}" ]] || fail 'current runtime pointer is missing'
 [[ -f "${current_marker}" ]] || fail 'current runtime marker is missing'
+[[ "${audit_storefront_realtime_capacity}" =~ ^(true|false)$ ]] ||
+    fail 'AUDIT_STOREFRONT_REALTIME_CAPACITY must be true or false'
 
 readonly candidate="$(readlink -f "${current_pointer}")"
 readonly target_sha="$(tr -d '[:space:]' <"${current_marker}")"
@@ -177,6 +180,28 @@ while IFS=$'\t' read -r model provider outcome count; do
 done <<<"${missing_cost_rows}"
 
 curl --fail --silent --show-error --max-time 15 https://damatong.net/health >/dev/null
+node "${repository}/deploy/verify-storefront-realtime.mjs" \
+    --mode public-smoke \
+    --url 'https://damatong.net/storefront-realtime/events?client=storefront' \
+    --ready-timeout-ms 2000 \
+    --heartbeat-timeout-ms 18000 \
+    --release-id "${target_sha}"
+if [[ "${audit_storefront_realtime_capacity}" == true ]]; then
+    node "${repository}/deploy/verify-storefront-realtime.mjs" \
+        --mode origin-full \
+        --url 'https://damatong.net/storefront-realtime/events?client=storefront' \
+        --connect-address 127.0.0.1 \
+        --connection-limit 12 \
+        --safe-concurrency 8 \
+        --open-interval-ms 200 \
+        --hold-open-ms 5000 \
+        --ready-timeout-ms 3000 \
+        --heartbeat-timeout-ms 18000 \
+        --release-timeout-ms 5000 \
+        --recovery-poll-ms 250 \
+        --serial-cycles 3 \
+        --release-id "${target_sha}"
+fi
 node "${repository}/deploy/verify-dashboard-assets.mjs" \
     --dashboard-url https://console.damatong.net/dashboard/
 

@@ -356,11 +356,46 @@ node deploy/verify-production-release.mjs \
 
 验收脚本会确认主域名首页和 Shop API 无推广 Cookie 也能直接访问，同时单独验证 `/promo` 推广页与签名进入按钮仍然有效。然后继续检查带哈希的实际前台 JS/CSS 资源、Dashboard 和公网 Admin API 拒绝策略。Dashboard 验证会以发布 SHA 追加缓存穿透参数，并递归检查入口 HTML 引用及 JS 中声明的所有懒加载 JS/CSS；任一资源 404、状态码或 MIME 类型异常均视为发布失败并回滚。`/assets/` 目录本身不是有效静态资源验收地址。
 
-实时更新端点必须返回 `text/event-stream`，并在两秒内输出 `ready` 事件：
+实时更新端点必须返回 `text/event-stream`，在两秒内输出有效 `ready` 事件，并在 18 秒内输出 heartbeat。使用会在读到目标帧后主动关闭并等待 socket 释放的验证器，不使用依赖 `curl --max-time` 强制中断的连续探测：
 
 ```bash
-curl -sS -N --max-time 2 https://damatong.net/storefront-realtime/events | sed -n '1,4p'
+node deploy/verify-storefront-realtime.mjs \
+  --mode public-smoke \
+  --url 'https://damatong.net/storefront-realtime/events?client=storefront' \
+  --ready-timeout-ms 2000 \
+  --heartbeat-timeout-ms 18000 \
+  --release-id "$(cat /var/www/kaiyuangouwu-releases/current-sha)"
 ```
+
+定时 `Monitor Production Health` 只执行上述单连接 smoke，避免监控自身定期打满连接。发布后如需执行完整容量与释放审计，必须人工触发该工作流并显式设置 `audit_realtime_capacity=true`。完整审计通过生产机回环访问 Nginx，使用三个隔离的合成访客 IP，不会占用真实访客的单 IP 配额：
+
+```bash
+node deploy/verify-storefront-realtime.mjs \
+  --mode origin-full \
+  --url 'https://damatong.net/storefront-realtime/events?client=storefront' \
+  --connect-address 127.0.0.1 \
+  --connection-limit 12 \
+  --safe-concurrency 8 \
+  --open-interval-ms 200 \
+  --hold-open-ms 5000 \
+  --ready-timeout-ms 3000 \
+  --heartbeat-timeout-ms 18000 \
+  --release-timeout-ms 5000 \
+  --recovery-poll-ms 250 \
+  --serial-cycles 3 \
+  --release-id "$(cat /var/www/kaiyuangouwu-releases/current-sha)"
+```
+
+完整审计的四个独立门禁是：
+
+- 公网正常用户：单连接返回 HTTP 200、`text/event-stream`，两秒内收到版本与 heartbeat 间隔都合法的 `ready`，并在 18 秒内收到 heartbeat；
+- 安全并发：同一合成 IP 的 8 条连接全部在三秒内就绪，并共同保持五秒；
+- 边界与超限：新合成 IP 的前 12 条全部就绪，第 13 条只允许返回 HTTP 429，已接受连接必须继续收到 heartbeat；
+- 释放恢复：第三个合成 IP 关闭 12 条连接后，同 IP 在五秒内重新同时占满 12 个槽位并保持五秒，之后三轮“连接—`ready`—明确关闭”全部通过。
+
+释放窗口内短暂的 429 是有界重试的测量值，不是失败；超过五秒仍未重新同时占满 12 个槽位才失败。任何 503 或其他 5xx 都立即失败。Nginx 会将该路由的 `limit_conn_status`、`limit_req_status`、HTTP 状态、请求/上游时间、连接编号与 Cloudflare Ray ID 写入 `/var/log/nginx/damatong-storefront-realtime.log`，用于区分连接上限 429 和请求速率 429，不记录 Cookie、Authorization 或响应正文。`origin-full` 只证明本机 Nginx 到应用的槽位释放，不能代替 Cloudflare 到源站取消延迟的公网链路评估；公网 smoke 的 CF Ray ID 必须与上述专用日志关联后再定位该类延迟。
+
+只有未执行任何主动容量测试时，公网单连接持续无法就绪或返回 5xx，才属于实时更新可用性回滚条件。完整容量审计中的边界、超限或释放时间不符合预期时，必须先清理全部探测连接并停止发布收尾，不自动回滚到已知会恢复更低连接上限或 503 语义的旧版本。验证器未能确认自身连接已清理时，结果记为“验收无效”而不是“产品失败”，需换用新的合成 IP 重试。
 
 另外检查：
 
