@@ -10,7 +10,7 @@
         },
         {
             "path": "packages/storefront/src/App.tsx",
-            "maxLines": 1789,
+            "maxLines": 1616,
             "targetLines": 500,
             "owner": "storefront-shell"
         },
