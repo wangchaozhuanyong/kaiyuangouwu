@@ -10,6 +10,10 @@ import {
 export const API_URL = String(import.meta.env.VITE_SHOP_API_URL ?? '/shop-api');
 export const AUTH_TOKEN_HEADER = 'vendure-auth-token';
 export const AUTH_TOKEN_STORAGE_PREFIX = 'vendure-shop-auth-token';
+export const SHOP_API_QUERY_TIMEOUT_MS = 20_000;
+export const SEND_CLIENT_CHANNEL_TOKEN =
+    import.meta.env.VITE_CLIENT_CHANNEL_SWITCHING === 'true' ||
+    (import.meta.env.DEV && import.meta.env.VITE_CLIENT_CHANNEL_SWITCHING !== 'false');
 
 export function isStorefrontQuery(document: string): boolean {
     return /^\s*(?:query\b|\{)/u.test(document);
