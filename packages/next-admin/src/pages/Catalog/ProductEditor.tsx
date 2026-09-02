@@ -4,8 +4,6 @@ import {
     ArrowLeft,
     Check,
     CheckCircle2,
-    ChevronLeft,
-    ChevronRight,
     FolderTree,
     Image as ImageIcon,
     Layers,
@@ -66,11 +64,7 @@ import {
 import { useUnsavedChangesWarning } from '../../hooks/use-unsaved-changes-warning';
 import { useUrlTab } from '../../hooks/use-url-tab';
 import { getChannelDisplayName } from '../../utils/channel-display';
-import {
-    fulfillmentTypeForMode,
-    stockPolicyForDeliveryMode,
-    trackInventoryForDigitalVariant,
-} from '../../utils/commerce-mode';
+import { fulfillmentTypeForMode, stockPolicyForDeliveryMode } from '../../utils/commerce-mode';
 import {
     hasDirectProductAssignment,
     setDirectProductAssignment,
@@ -78,208 +72,27 @@ import {
 } from '../../utils/product-collection-assignment';
 import { toUserFacingError } from '../../utils/user-facing-error';
 
-type ProductEditorTab = 'BASIC' | 'VARIANTS' | 'FACETS_COLLECTIONS';
-const PRODUCT_EDITOR_TABS = {
-    basic: 'BASIC',
-    variants: 'VARIANTS',
-    attributes: 'FACETS_COLLECTIONS',
-} as const;
-const SOURCE_LANGUAGE_CODE = 'zh_Hans';
-const LOOKUP_PAGE_SIZE = 30;
-const ASSET_PAGE_SIZE = 40;
-const PRODUCT_MANAGED_CUSTOM_FIELDS = [
-    'fulfillmentType',
-    'refundPolicy',
-    'manualDeliverySlaMinutes',
-] as const;
-
-interface ProductVariantState {
-    id?: string;
-    sku: string;
-    name: string;
-    price: string;
-    stockOnHand: number | '';
-    stockAllocated: number;
-    enabled: boolean;
-    digitalDeliveryMode: DigitalDeliveryMode;
-    digitalStockPolicy: DigitalStockPolicy;
-    autoCardAvailableStock?: number | null;
-    optionIds: string[];
-    isNew?: boolean;
-}
-
-interface FacetValueItem {
-    id: string;
-    code: string;
-    name: string;
-}
-
-interface FacetItem {
-    id: string;
-    code: string;
-    name: string;
-    values: FacetValueItem[];
-}
-
-interface AssetItem {
-    id: string;
-    name: string;
-    preview: string;
-    type: string;
-    fileSize?: number;
-}
-
-interface OptionGroupItem {
-    id: string;
-    name: string;
-    code: string;
-    productCount: number;
-    options: Array<{ id: string; name: string; code: string }>;
-}
-
-interface CollectionItem {
-    id: string;
-    name: string;
-    slug: string;
-    filters: CollectionFilterValue[];
-}
-
-interface CatalogChannel {
-    id: string;
-    code: string;
-    token: string;
-    defaultCurrencyCode: string;
-}
-
-interface ProductDetailRecord {
-    id: string;
-    enabled: boolean;
-    name: string;
-    slug: string;
-    description: string;
-    customFields?:
-        | ({
-              fulfillmentType?: FulfillmentType | null;
-              refundPolicy?: RefundPolicy | null;
-              manualDeliverySlaMinutes?: number | null;
-          } & Record<string, unknown>)
-        | null;
-    featuredAsset?: { id: string; preview: string; name: string } | null;
-    assets: Array<{ id: string; name: string; preview: string }>;
-    translations: Array<{
-        id: string;
-        languageCode: string;
-        name: string;
-        slug: string;
-        description: string;
-        customFields?: Record<string, unknown> | null;
-    }>;
-    optionGroups: Array<{ id: string }>;
-    facetValues: Array<{ id: string }>;
-    collections: CollectionItem[];
-    channels: Array<{ id: string; code: string }>;
-    variants: Array<{
-        id: string;
-        enabled: boolean;
-        name: string;
-        sku: string;
-        price: number;
-        stockOnHand: number;
-        stockAllocated: number;
-        trackInventory: string;
-        autoCardAvailableStock?: number | null;
-        customFields?: {
-            fulfillmentType?: FulfillmentType | null;
-            digitalDeliveryMode?: DigitalDeliveryMode | null;
-            digitalStockPolicy?: DigitalStockPolicy | null;
-        } | null;
-        options: Array<{ id: string }>;
-        translations: Array<{
-            languageCode: string;
-            name: string;
-        }>;
-    }>;
-}
-
-interface ProductEditorSnapshotInput {
-    productName: string;
-    slug: string;
-    enabled: boolean;
-    description: string;
-    fulfillmentType: FulfillmentType;
-    refundPolicy: RefundPolicy;
-    manualDeliverySlaMinutes: number;
-    featuredAssetId: string | null;
-    selectedAssetIds: string[];
-    selectedFacetValueIds: string[];
-    selectedCollectionIds: string[];
-    selectedChannelIds: string[];
-    selectedOptionGroupIds: string[];
-    variants: ProductVariantState[];
-    dynamicCustomFields: CustomFieldValueMap;
-}
-
-const serializeProductEditor = (input: ProductEditorSnapshotInput) =>
-    JSON.stringify({
-        ...input,
-        selectedAssetIds: [...input.selectedAssetIds].sort(),
-        selectedFacetValueIds: [...input.selectedFacetValueIds].sort(),
-        selectedCollectionIds: [...input.selectedCollectionIds].sort(),
-        selectedChannelIds: [...input.selectedChannelIds].sort(),
-        selectedOptionGroupIds: [...input.selectedOptionGroupIds].sort(),
-        variants: input.variants.map(variant => ({
-            id: variant.id ?? null,
-            sku: variant.sku,
-            name: variant.name,
-            price: variant.price,
-            stockOnHand: variant.stockOnHand,
-            stockAllocated: variant.stockAllocated,
-            enabled: variant.enabled,
-            digitalDeliveryMode: variant.digitalDeliveryMode,
-            digitalStockPolicy: variant.digitalStockPolicy,
-            optionIds: [...variant.optionIds].sort(),
-            isNew: Boolean(variant.isNew),
-        })),
-    });
-
-const createSlugFromName = (value: string) => {
-    const normalized = value
-        .trim()
-        .toLowerCase()
-        .normalize('NFKD')
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '');
-    return normalized || `product-${Date.now().toString(36)}`;
-};
-
-const variantFulfillmentInput = (variant: ProductVariantState, fulfillmentType: FulfillmentType) => {
-    if (fulfillmentType === 'physical') {
-        return {
-            stockOnHand: variant.stockOnHand === '' ? 0 : Number(variant.stockOnHand),
-            trackInventory: 'INHERIT' as const,
-            customFields: {
-                digitalStockPolicy: 'limited' as const,
-            },
-        };
-    }
-    const digitalStockPolicy = stockPolicyForDeliveryMode(
-        variant.digitalDeliveryMode,
-        variant.digitalStockPolicy,
-    );
-    return {
-        stockOnHand:
-            variant.digitalDeliveryMode === 'auto_card' || digitalStockPolicy === 'unlimited'
-                ? 0
-                : variant.stockOnHand === ''
-                  ? 0
-                  : Number(variant.stockOnHand),
-        trackInventory: trackInventoryForDigitalVariant(variant.digitalDeliveryMode, digitalStockPolicy),
-        customFields: {
-            digitalDeliveryMode: variant.digitalDeliveryMode,
-            digitalStockPolicy,
-        },
-    };
-};
+import { LookupPager } from './LookupPager';
+import type {
+    AssetItem,
+    CatalogChannel,
+    CollectionItem,
+    FacetItem,
+    OptionGroupItem,
+    ProductDetailRecord,
+    ProductEditorTab,
+    ProductVariantState,
+} from './product-editor-types';
+import {
+    ASSET_PAGE_SIZE,
+    createSlugFromName,
+    LOOKUP_PAGE_SIZE,
+    PRODUCT_EDITOR_TABS,
+    PRODUCT_MANAGED_CUSTOM_FIELDS,
+    serializeProductEditor,
+    SOURCE_LANGUAGE_CODE,
+    variantFulfillmentInput,
+} from './product-editor-types';
 
 export function ProductEditor() {
     const requestConfirmation = useConfirmDialog();
@@ -2873,47 +2686,6 @@ export function ProductEditor() {
                     </AccessibleDialogSurface>
                 </div>
             )}
-        </div>
-    );
-}
-
-function LookupPager({
-    page,
-    pageSize,
-    totalItems,
-    onPageChange,
-}: {
-    page: number;
-    pageSize: number;
-    totalItems: number;
-    onPageChange: (page: number) => void;
-}) {
-    const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
-    return (
-        <div className="flex items-center justify-between gap-3 text-[10px] text-slate-400">
-            <span>
-                共 {totalItems} 条 · {Math.min(page + 1, totalPages)} / {totalPages} 页
-            </span>
-            <div className="flex gap-1.5">
-                <button
-                    type="button"
-                    onClick={() => onPageChange(Math.max(0, page - 1))}
-                    disabled={page === 0}
-                    className="rounded-lg border border-slate-200 bg-white p-1.5 text-slate-500 disabled:opacity-30"
-                    aria-label="上一页"
-                >
-                    <ChevronLeft className="h-3.5 w-3.5" />
-                </button>
-                <button
-                    type="button"
-                    onClick={() => onPageChange(Math.min(totalPages - 1, page + 1))}
-                    disabled={page >= totalPages - 1}
-                    className="rounded-lg border border-slate-200 bg-white p-1.5 text-slate-500 disabled:opacity-30"
-                    aria-label="下一页"
-                >
-                    <ChevronRight className="h-3.5 w-3.5" />
-                </button>
-            </div>
         </div>
     );
 }
