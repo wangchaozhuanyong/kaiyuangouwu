@@ -4,7 +4,9 @@ import {
     CircleDollarSign,
     CreditCard,
     Globe2,
+    Plus,
     ReceiptText,
+    RefreshCw,
     Store,
     WalletCards,
 } from 'lucide-react';
@@ -19,9 +21,9 @@ import {
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { useUrlTab } from '../../hooks/use-url-tab';
 import { getChannelDisplayName } from '../../utils/channel-display';
+import { toUserFacingError } from '../../utils/user-facing-error';
 import { BusinessBasicsPanel } from './BusinessSettingsPanels';
 import { PaymentShippingManager } from './PaymentShippingManager';
-import { ErrorState, LoadingState, Message, TabButton, primaryButton } from './settings-ui';
 import {
     ProvisionStoreDialog,
     SellerDialog,
@@ -31,6 +33,16 @@ import {
 } from './StoreDialogs';
 import { CurrencyAndRatesPanel, StoreUsdtPanel } from './StoreFinancePanel';
 import { CommerceModePanel, DomainsPanel, SellersPanel, StoresPanel } from './StorePanels';
+import {
+    ErrorState,
+    LoadingState,
+    Message,
+    TabButton,
+    inputClass,
+    mergeById,
+    primaryButton,
+    secondaryButton,
+} from './settings-ui';
 
 type Tab = 'STORES' | 'DOMAINS' | 'SELLERS' | 'PAYMENT_SHIPPING' | 'BUSINESS' | 'CURRENCY' | 'USDT';
 const STORE_SETTINGS_TABS = {

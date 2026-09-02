@@ -31,6 +31,7 @@ import {
     UPDATE_GLOBAL_SETTINGS_MUTATION,
     type BusinessSettingsResult,
 } from '../../graphql/management.graphql';
+import { toUserFacingError } from '../../utils/user-facing-error';
 import {
     ErrorState,
     Field,

@@ -22,7 +22,7 @@
         },
         {
             "path": "packages/next-admin/src/pages/Settings/StoreSettingsModule.tsx",
-            "maxLines": 2779,
+            "maxLines": 451,
             "targetLines": 700,
             "owner": "next-admin-settings"
         },
@@ -34,7 +34,7 @@
         },
         {
             "path": "packages/next-admin/src/pages/Marketing/ReferralsModule.tsx",
-            "maxLines": 2496,
+            "maxLines": 2338,
             "targetLines": 700,
             "owner": "next-admin-marketing"
         },

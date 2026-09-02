@@ -47,11 +47,13 @@ export function Modal({
     title,
     description,
     onClose,
+    width = 'max-w-3xl',
     children,
 }: {
     title: string;
     description?: string;
     onClose: () => void;
+    width?: string;
     children: React.ReactNode;
 }) {
     const { dialogRef, titleId } = useAccessibleDialog(onClose);
@@ -63,7 +65,7 @@ export function Modal({
                 aria-modal="true"
                 aria-labelledby={titleId}
                 tabIndex={-1}
-                className="max-h-[94vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl outline-none"
+                className={`max-h-[94vh] w-full ${width} overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl outline-none`}
             >
                 <div className="mb-5 flex items-start justify-between gap-4">
                     <div>

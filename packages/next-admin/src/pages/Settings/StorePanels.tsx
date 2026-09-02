@@ -1,8 +1,9 @@
 import { useMutation, useQuery } from '@apollo/client/react';
 import { ExternalLink, Globe2, Pencil, Plus, Store, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { client } from '../../apollo';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
-import type { useCustomFieldDefinitions } from '../../custom-fields/custom-fields-context';
+import { useCustomFieldDefinitions } from '../../custom-fields/custom-fields-context';
 import {
     STORE_COMMERCE_MODE_QUERY,
     UPDATE_STORE_COMMERCE_MODE_MUTATION,
@@ -22,9 +23,11 @@ import {
     type StoreProfileRecord,
 } from '../../graphql/management.graphql';
 import { getChannelDisplayName } from '../../utils/channel-display';
+import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatDateTime } from '../Sales/sales-utils';
-import { storeName } from './StoreDialogs';
 import {
+    EmptyState,
+    ErrorState,
     LoadingState,
     StatusBadge,
     StoreInfo,
@@ -34,6 +37,7 @@ import {
     secondaryButton,
     theadClass,
 } from './settings-ui';
+import { SellerDialog, storeName } from './StoreDialogs';
 
 export function CommerceModePanel({
     onChanged,
