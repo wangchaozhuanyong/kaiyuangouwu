@@ -55,12 +55,10 @@ import { CartCheckoutApi } from './api/cart-checkout';
 import { CatalogApi } from './api/catalog';
 import { ContentReviewsApi } from './api/content-reviews';
 import {
-    abortableDelay,
     API_URL,
     AUTH_TOKEN_HEADER,
     authTokenStorageKey,
     calculateStorefrontRealtimeRetry,
-    cancelStorefrontRealtimeBody,
     createRequestSignal,
     ErrorResult,
     GraphQlResponse,
@@ -70,13 +68,12 @@ import {
     SHOP_API_QUERY_TIMEOUT_MS,
     ShopApiError,
     ShopApiTimeoutError,
-    STOREFRONT_REALTIME_INITIAL_RETRY_DELAY_MS,
     StorefrontRealtimeConnectionError,
-    storefrontRealtimeUrl,
 } from './api/helpers';
 import { ImageStudioApi } from './api/image-studio';
+import { RealtimeApi } from './api/realtime';
 import { ReferralsApi } from './api/referrals';
-import { consumeStorefrontRealtimeStream, StorefrontRealtimeEvent } from './realtime-updates';
+import { StorefrontRealtimeEvent } from './realtime-updates';
 
 export {
     calculateStorefrontRealtimeRetry,
@@ -96,6 +93,7 @@ export class ShopApi {
     private readonly referralsApi: ReferralsApi;
     private readonly imageStudioApi: ImageStudioApi;
     private readonly cartCheckoutApi: CartCheckoutApi;
+    private readonly realtimeApi: RealtimeApi;
 
     constructor(
         private readonly market: MarketConfig,
@@ -125,6 +123,7 @@ export class ShopApi {
         this.referralsApi = new ReferralsApi(ctx);
         this.imageStudioApi = new ImageStudioApi(ctx);
         this.cartCheckoutApi = new CartCheckoutApi(ctx);
+        this.realtimeApi = new RealtimeApi(ctx);
     }
 
     async storefrontConfig(signal?: AbortSignal): Promise<StorefrontConfig> {
@@ -519,49 +518,7 @@ export class ShopApi {
         onEvent: (event: StorefrontRealtimeEvent) => void,
         signal: AbortSignal,
     ): Promise<void> {
-        let retryDelayMs = STOREFRONT_REALTIME_INITIAL_RETRY_DELAY_MS;
-        while (!signal.aborted) {
-            try {
-                const headers: Record<string, string> = { accept: 'text/event-stream' };
-                if (SEND_CLIENT_CHANNEL_TOKEN) headers['vendure-token'] = this.market.code;
-                if (this.authToken) headers.authorization = `Bearer ${this.authToken}`;
-                const response = await fetch(storefrontRealtimeUrl(), {
-                    method: 'GET',
-                    credentials: 'include',
-                    headers,
-                    cache: 'no-store',
-                    signal,
-                });
-                if (!response.ok) {
-                    const error = new StorefrontRealtimeConnectionError(
-                        response.status,
-                        response.headers.get('retry-after'),
-                    );
-                    await cancelStorefrontRealtimeBody(response.body, error);
-                    throw error;
-                }
-                if (!response.body) {
-                    throw new StorefrontRealtimeConnectionError(response.status, null);
-                }
-                await consumeStorefrontRealtimeStream(response.body, onEvent, {
-                    signal,
-                    onReady: () => {
-                        retryDelayMs = STOREFRONT_REALTIME_INITIAL_RETRY_DELAY_MS;
-                    },
-                });
-                if (!signal.aborted) throw new Error('Storefront realtime connection closed');
-            } catch (error) {
-                if (signal.aborted || (error instanceof DOMException && error.name === 'AbortError')) return;
-                const retry = calculateStorefrontRealtimeRetry({
-                    status: error instanceof StorefrontRealtimeConnectionError ? error.status : undefined,
-                    retryAfter:
-                        error instanceof StorefrontRealtimeConnectionError ? error.retryAfter : undefined,
-                    baseDelayMs: retryDelayMs,
-                });
-                await abortableDelay(retry.delayMs, signal);
-                retryDelayMs = retry.nextBaseDelayMs;
-            }
-        }
+        return this.realtimeApi.watchRealtime(onEvent, signal);
     }
 
     private async request<T>(
