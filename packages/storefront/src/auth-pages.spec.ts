@@ -1,7 +1,7 @@
-import { readFileSync } from 'node:fs';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
+import { readStorefrontStylesheet } from './test-stylesheet';
 
 import { ShopApiError } from './api';
 import {
@@ -241,7 +241,7 @@ describe('auth password visibility controls', () => {
 
 describe('managed auth visual layout', () => {
     it('keeps the dashboard preview composition visible on mobile and short screens', () => {
-        const styles = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
+        const styles = readStorefrontStylesheet();
 
         expect(styles).toContain('--auth-managed-hero-height: clamp(210px, 58.974vw, 230px)');
         expect(styles).toContain('.auth-page .auth-hero-message-managed > .auth-hero-copy > p');

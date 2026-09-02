@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { readStorefrontStylesheet } from './test-stylesheet';
 
 import { categoryTargetSelection, centeredHorizontalScrollLeft } from './category-navigation';
 
@@ -60,7 +61,7 @@ describe('category navigation scrolling', () => {
 });
 
 describe('category navigation responsive spacing', () => {
-    const stylesheet = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
+    const stylesheet = readStorefrontStylesheet();
     const categoryPageSource = readFileSync(new URL('./pages/category-page.tsx', import.meta.url), 'utf8');
 
     it('keeps client plugin spacing symmetric at every insertion point', () => {

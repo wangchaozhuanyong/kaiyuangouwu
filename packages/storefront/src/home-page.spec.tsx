@@ -1,6 +1,6 @@
-import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
+import { readStorefrontStylesheet } from './test-stylesheet';
 
 import { buildHomeNoticeItems, CurrencySelectionSheet, HomePage, NoticeDetailSheet } from './pages/home-page';
 import { StorefrontContext } from './StorefrontContext';
@@ -309,7 +309,7 @@ describe('HomePage localized trust bar layout', () => {
             ],
         };
         const markup = renderHome({ contentBlocks: [managedTrustBlock] });
-        const stylesheet = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
+        const stylesheet = readStorefrontStylesheet();
 
         expect(markup).toContain('class="home-trust-bar has-long-copy"');
         expect(stylesheet).toMatch(
@@ -364,7 +364,7 @@ describe('HomePage account-aware coupon campaigns', () => {
 describe('HomePage mobile header layout', () => {
     it('renders the brand controls in one row without a search entry', () => {
         const markup = renderHome();
-        const stylesheet = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
+        const stylesheet = readStorefrontStylesheet();
 
         expect(markup).toContain('class="topbar home-topbar"');
         expect(markup).not.toContain('class="search-trigger"');
@@ -385,7 +385,7 @@ describe('HomePage mobile header layout', () => {
             currencyLoading: false,
             onCurrencyChange: vi.fn(),
         });
-        const stylesheet = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
+        const stylesheet = readStorefrontStylesheet();
 
         expect(markup).toContain('class="currency-select"');
         expect(markup).toContain('aria-haspopup="dialog"');
@@ -433,7 +433,7 @@ describe('HomePage desktop intro layout', () => {
         const markup = renderHome({
             contentBlocks: [positionedHeroBlock, positionedTrustBlock, quickLinksBlock],
         });
-        const stylesheet = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
+        const stylesheet = readStorefrontStylesheet();
 
         expect(markup).toContain('class="home-intro-grid is-desktop-grouped"');
         expect(stylesheet).toMatch(
@@ -636,7 +636,7 @@ describe('HomePage core category cards', () => {
     });
 
     it('keeps the two managed cards in one row on narrow screens', () => {
-        const stylesheet = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
+        const stylesheet = readStorefrontStylesheet();
 
         expect(stylesheet).toMatch(
             /@media \(max-width: 620px\)[\s\S]*?\.home-dual-showcase\[data-card-template='tech-duo'\]\s*\{[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\);/,
@@ -720,7 +720,7 @@ describe('HomePage featured collection', () => {
             contentBlocks: [collectionBlock],
             managedContentProducts: productsInCollection,
         });
-        const stylesheet = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
+        const stylesheet = readStorefrontStylesheet();
 
         expect(markup).toContain('class="featured-collection-mosaic"');
         expect(markup).toContain('data-product-count="5"');

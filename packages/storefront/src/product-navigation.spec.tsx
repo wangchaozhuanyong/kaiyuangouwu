@@ -1,6 +1,6 @@
-import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
+import { readStorefrontStylesheet } from './test-stylesheet';
 
 import { ProductCard } from './components/common/product-card';
 import { buildProductRowSmartInfo, ProductRow } from './components/common/product-row';
@@ -114,7 +114,7 @@ describe('product image navigation layers', () => {
                 onOpen={vi.fn()}
             />,
         );
-        const stylesheet = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
+        const stylesheet = readStorefrontStylesheet();
 
         expect(markup).toContain('product-row-detail-link');
         expect(markup).toContain('ai-product-cover');
@@ -134,7 +134,7 @@ describe('product image navigation layers', () => {
                 onOpen={vi.fn()}
             />,
         );
-        const stylesheet = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
+        const stylesheet = readStorefrontStylesheet();
 
         expect(markup).toContain('price-lockup');
         expect(stylesheet).toMatch(/\.price-lockup\s*\{[^}]*display:\s*inline-flex;/);

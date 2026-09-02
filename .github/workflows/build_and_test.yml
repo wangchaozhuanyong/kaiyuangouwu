@@ -45,7 +45,7 @@ jobs:
                   fi
                   changed=$(git diff --name-only "$(git merge-base "$base" HEAD)" HEAD)
 
-                  if echo "$changed" | grep -qE '^(packages/|package\.json|bun\.lock|bunfig\.toml)'; then
+                  if echo "$changed" | grep -qE '^(packages/|scripts/(architecture-debt|check-migration-registry)|package\.json|bun\.lock|bunfig\.toml)'; then
                     echo "packages=true" >> "$GITHUB_OUTPUT"
                   else
                     echo "packages=false" >> "$GITHUB_OUTPUT"
@@ -73,6 +73,11 @@ jobs:
         steps:
             - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
             - uses: ./.github/actions/setup
+            - name: Check migration registry and architecture debt budgets
+              run: |
+                  bun run check:migration-registry
+                  bun run check:architecture-debt
+                  bun run test:repository-checks
             - name: Build
               env:
                   NODE_ENV: production

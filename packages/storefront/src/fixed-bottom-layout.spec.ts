@@ -1,10 +1,10 @@
-import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { readStorefrontStylesheet } from './test-stylesheet';
 
 import { checkoutPageStyles } from './tailwind/checkout-page-styles';
 import { orderPageStyles } from './tailwind/order-page-styles';
 
-const stylesheet = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
+const stylesheet = readStorefrontStylesheet();
 
 describe('fixed bottom layout clearance', () => {
     it('uses one page-level clearance model for every fixed bottom bar', () => {

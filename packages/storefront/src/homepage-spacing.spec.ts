@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { readStorefrontStylesheet } from './test-stylesheet';
 
-const stylesheet = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
+const stylesheet = readStorefrontStylesheet();
 const homePageSource = readFileSync(new URL('./pages/home-page.tsx', import.meta.url), 'utf8');
 
 describe('homepage module spacing', () => {

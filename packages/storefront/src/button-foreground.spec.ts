@@ -1,7 +1,7 @@
-import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { readStorefrontStylesheet } from './test-stylesheet';
 
-const stylesheet = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
+const stylesheet = readStorefrontStylesheet();
 
 describe('global button foreground styles', () => {
     it('does not override Tailwind text color utilities from an unlayered rule', () => {
