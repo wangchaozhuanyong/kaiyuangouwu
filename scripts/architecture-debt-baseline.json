@@ -10,7 +10,7 @@
         },
         {
             "path": "packages/storefront/src/App.tsx",
-            "maxLines": 73,
+            "maxLines": 70,
             "targetLines": 500,
             "owner": "storefront-shell"
         },
@@ -46,7 +46,7 @@
         },
         {
             "path": "packages/image-generation-plugin/src/image-generation.service.ts",
-            "maxLines": 1976,
+            "maxLines": 1751,
             "targetLines": 700,
             "owner": "image-generation"
         },
