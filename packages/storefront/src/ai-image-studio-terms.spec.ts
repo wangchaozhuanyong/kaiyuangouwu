@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 
 const pageSource = readFileSync(new URL('./pages/ai-image-studio-page.tsx', import.meta.url), 'utf8');
 const stylesheet = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
-const apiSource = readFileSync(new URL('./api.ts', import.meta.url), 'utf8');
+const apiSource =
+    readFileSync(new URL('./api.ts', import.meta.url), 'utf8') +
+    readFileSync(new URL('./api/fragments.ts', import.meta.url), 'utf8');
 
 describe('AI Image Studio responsive generation flow', () => {
     it('defaults consent to checked while preserving the generation gate', () => {

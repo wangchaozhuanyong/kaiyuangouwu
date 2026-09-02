@@ -2482,15 +2482,6 @@ function StoreDeprovisionDialog({
     );
 }
 
-function ImpactStat({ label, value }: { label: string; value: string | number }) {
-    return (
-        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-            <div className="text-[10px] text-slate-400">{label}</div>
-            <div className="mt-1 text-sm font-bold text-slate-900">{value}</div>
-        </div>
-    );
-}
-
 function ProvisionStoreDialog({
     templates,
     onClose,
