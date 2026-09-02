@@ -215,7 +215,7 @@ export class StorefrontRealtimeService implements OnApplicationBootstrap, OnAppl
         const orderIds = new Set(uniqueStrings(change.orderIds ?? []));
         const privateEvent = userIds.size > 0 || orderIds.size > 0;
 
-        for (const client of this.clients.values()) {
+        for (const [clientId, client] of this.clients) {
             if (!change.allChannels && !channelIds.has(client.channelId)) continue;
             if (
                 privateEvent &&
@@ -231,6 +231,7 @@ export class StorefrontRealtimeService implements OnApplicationBootstrap, OnAppl
                 Logger.warn(
                     `Failed to write storefront realtime event: ${error instanceof Error ? error.message : String(error)}`,
                 );
+                this.clients.delete(clientId);
             }
         }
     }

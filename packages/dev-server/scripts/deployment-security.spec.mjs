@@ -14,6 +14,13 @@ void test('production Nginx routes protected downloads and hardens both APIs', a
     assert.match(config, /limit_req_zone \$binary_remote_addr zone=vendure_admin_api/u);
     assert.match(config, /limit_conn_zone \$binary_remote_addr zone=vendure_realtime_per_ip/u);
     assert.match(config, /^limit_conn_status 429;$/mu);
+    assert.match(config, /^log_format vendure_realtime escape=json$/mu);
+    assert.match(config, /"limit_conn_status":"\$limit_conn_status"/u);
+    assert.match(config, /"limit_req_status":"\$limit_req_status"/u);
+    assert.match(config, /"request_time":\$request_time/u);
+    assert.match(config, /"upstream_response_time":"\$upstream_response_time"/u);
+    assert.match(config, /"connection":\$connection/u);
+    assert.match(config, /"cf_ray":"\$http_cf_ray"/u);
     assert.match(config, /Strict-Transport-Security/u);
     assert.match(config, /Content-Security-Policy/u);
     assert.match(config, /Permissions-Policy/u);
@@ -23,7 +30,15 @@ void test('production Nginx routes protected downloads and hardens both APIs', a
     assert.match(config, /location = \/sitemap\.xml/u);
     assert.match(config, /proxy_pass http:\/\/vendure_backend\/promo\/sitemap/u);
     assert.match(config, /real_ip_header CF-Connecting-IP/u);
+    assert.match(config, /^set_real_ip_from 127\.0\.0\.0\/8;$/mu);
+    assert.match(config, /^set_real_ip_from ::1\/128;$/mu);
     assert.match(config, /geo \$realip_remote_addr \$trusted_cloudflare_origin/u);
+    const trustedOriginGeo = config.match(
+        /geo \$realip_remote_addr \$trusted_cloudflare_origin \{(?<body>[\s\S]*?)\n\}/u,
+    );
+    assert.ok(trustedOriginGeo?.groups?.body);
+    assert.match(trustedOriginGeo.groups.body, /^\s+127\.0\.0\.0\/8 1;$/mu);
+    assert.match(trustedOriginGeo.groups.body, /^\s+::1\/128 1;$/mu);
     assert.equal(
         [...config.matchAll(/if \(\$trusted_cloudflare_origin = 0\) \{ return 444; \}/gu)].length,
         4,
@@ -44,6 +59,11 @@ void test('production Nginx routes protected downloads and hardens both APIs', a
         assert.match(location.groups.body, /proxy_buffering off;/u);
         assert.match(location.groups.body, /proxy_read_timeout 1h;/u);
         assert.match(location.groups.body, /limit_conn vendure_realtime_per_ip 12;/u);
+        assert.match(
+            location.groups.body,
+            /access_log \/var\/log\/nginx\/damatong-storefront-realtime\.log vendure_realtime;/u,
+        );
+        assert.match(location.groups.body, /proxy_ignore_client_abort off;/u);
     }
 });
 
@@ -167,6 +187,14 @@ void test('production runbook verifies a direct storefront with an optional prom
     const runbook = await readFile(path.join(repositoryRoot, 'deploy/DEPLOYMENT_RUNBOOK.md'), 'utf8');
 
     assert.match(runbook, /node deploy\/verify-production-release\.mjs/u);
+    assert.match(runbook, /node deploy\/verify-storefront-realtime\.mjs/u);
+    assert.match(
+        runbook,
+        /--mode public-smoke \\\n\s+--url [^\n]+ \\\n\s+--ready-timeout-ms 2000 \\\n\s+--heartbeat-timeout-ms 18000 \\\n\s+--release-id/u,
+    );
+    assert.match(runbook, /--mode origin-full/u);
+    assert.match(runbook, /audit_realtime_capacity=true/u);
+    assert.doesNotMatch(runbook, /curl[^\n]*storefront-realtime\/events/u);
     assert.match(runbook, /主域名首页和 Shop API 无推广 Cookie 也能直接访问/u);
     assert.doesNotMatch(runbook, /STOREFRONT_ENTRY_REQUIRED/u);
     assert.doesNotMatch(runbook, /curl -I https:\/\/damatong\.net\/assets\//u);
@@ -317,6 +345,16 @@ void test('scheduled production monitor checks memory, processes, and health thr
     assert.match(script, /REGEXP_SUBSTR\(errorMessage/u);
     assert.doesNotMatch(script, /printf[^\n]*errorMessage/u);
     assert.match(script, /https:\/\/damatong\.net\/health/u);
+    assert.match(script, /verify-storefront-realtime\.mjs/u);
+    assert.match(
+        script,
+        /--mode public-smoke \\\n\s+--url [^\n]+ \\\n\s+--ready-timeout-ms 2000 \\\n\s+--heartbeat-timeout-ms 18000 \\\n\s+--release-id "\$\{target_sha\}"/u,
+    );
+    assert.match(script, /AUDIT_STOREFRONT_REALTIME_CAPACITY/u);
+    assert.match(script, /--mode origin-full/u);
+    assert.match(script, /--connection-limit 12/u);
+    assert.match(script, /--safe-concurrency 8/u);
+    assert.match(script, /--release-timeout-ms 5000/u);
     assert.match(script, /verify-dashboard-assets\.mjs/u);
     assert.match(script, /require_recent_systemd_success/u);
     assert.match(script, /vendure-production-healthcheck\.timer/u);
@@ -337,6 +375,8 @@ void test('scheduled production monitor checks memory, processes, and health thr
 
     assert.match(workflow, /schedule:/u);
     assert.match(workflow, /workflow_dispatch:/u);
+    assert.match(workflow, /audit_realtime_capacity:/u);
+    assert.match(workflow, /AUDIT_STOREFRONT_REALTIME_CAPACITY=\$\{REALTIME_CAPACITY_AUDIT\}/u);
     assert.match(workflow, /id-token: write/u);
     assert.match(workflow, /aws-actions\/configure-aws-credentials@[0-9a-f]{40}/u);
     assert.match(workflow, /AWS-RunShellScript/u);

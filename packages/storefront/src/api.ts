@@ -59,6 +59,8 @@ import {
     API_URL,
     AUTH_TOKEN_HEADER,
     authTokenStorageKey,
+    calculateStorefrontRealtimeRetry,
+    cancelStorefrontRealtimeBody,
     createRequestSignal,
     ErrorResult,
     GraphQlResponse,
@@ -68,13 +70,21 @@ import {
     SHOP_API_QUERY_TIMEOUT_MS,
     ShopApiError,
     ShopApiTimeoutError,
+    STOREFRONT_REALTIME_INITIAL_RETRY_DELAY_MS,
+    StorefrontRealtimeConnectionError,
     storefrontRealtimeUrl,
 } from './api/helpers';
 import { ImageStudioApi } from './api/image-studio';
 import { ReferralsApi } from './api/referrals';
 import { consumeStorefrontRealtimeStream, StorefrontRealtimeEvent } from './realtime-updates';
 
-export { SHOP_API_QUERY_TIMEOUT_MS, ShopApiError, ShopApiTimeoutError };
+export {
+    calculateStorefrontRealtimeRetry,
+    SHOP_API_QUERY_TIMEOUT_MS,
+    ShopApiError,
+    ShopApiTimeoutError,
+    StorefrontRealtimeConnectionError,
+};
 
 export class ShopApi {
     private readonly authTokenStorageKey: string | null;
@@ -509,7 +519,7 @@ export class ShopApi {
         onEvent: (event: StorefrontRealtimeEvent) => void,
         signal: AbortSignal,
     ): Promise<void> {
-        let retryDelayMs = 1_000;
+        let retryDelayMs = STOREFRONT_REALTIME_INITIAL_RETRY_DELAY_MS;
         while (!signal.aborted) {
             try {
                 const headers: Record<string, string> = { accept: 'text/event-stream' };
@@ -522,16 +532,34 @@ export class ShopApi {
                     cache: 'no-store',
                     signal,
                 });
-                if (!response.ok || !response.body) {
-                    throw new Error(`Storefront realtime connection failed (${response.status})`);
+                if (!response.ok) {
+                    const error = new StorefrontRealtimeConnectionError(
+                        response.status,
+                        response.headers.get('retry-after'),
+                    );
+                    await cancelStorefrontRealtimeBody(response.body, error);
+                    throw error;
                 }
-                retryDelayMs = 1_000;
-                await consumeStorefrontRealtimeStream(response.body, onEvent);
+                if (!response.body) {
+                    throw new StorefrontRealtimeConnectionError(response.status, null);
+                }
+                await consumeStorefrontRealtimeStream(response.body, onEvent, {
+                    signal,
+                    onReady: () => {
+                        retryDelayMs = STOREFRONT_REALTIME_INITIAL_RETRY_DELAY_MS;
+                    },
+                });
                 if (!signal.aborted) throw new Error('Storefront realtime connection closed');
             } catch (error) {
                 if (signal.aborted || (error instanceof DOMException && error.name === 'AbortError')) return;
-                await abortableDelay(retryDelayMs, signal);
-                retryDelayMs = Math.min(retryDelayMs * 2, 30_000);
+                const retry = calculateStorefrontRealtimeRetry({
+                    status: error instanceof StorefrontRealtimeConnectionError ? error.status : undefined,
+                    retryAfter:
+                        error instanceof StorefrontRealtimeConnectionError ? error.retryAfter : undefined,
+                    baseDelayMs: retryDelayMs,
+                });
+                await abortableDelay(retry.delayMs, signal);
+                retryDelayMs = retry.nextBaseDelayMs;
             }
         }
     }

@@ -10,6 +10,11 @@ on:
                 required: false
                 default: false
                 type: boolean
+            audit_realtime_capacity:
+                description: Run the isolated 8/12/13 storefront realtime capacity and release audit
+                required: false
+                default: false
+                type: boolean
 
 permissions:
     contents: read
@@ -126,7 +131,12 @@ jobs:
 
             - name: Check production health
               run: |
-                  REMOTE_COMMAND="sudo -H -u ubuntu /bin/bash /var/www/kaiyuangouwu/deploy/monitor-production-health.sh"
+                  REALTIME_CAPACITY_AUDIT=false
+                  if [ "${{ github.event_name }}" = "workflow_dispatch" ] && \
+                     [ "${{ inputs.audit_realtime_capacity }}" = "true" ]; then
+                      REALTIME_CAPACITY_AUDIT=true
+                  fi
+                  REMOTE_COMMAND="sudo -H -u ubuntu env AUDIT_STOREFRONT_REALTIME_CAPACITY=${REALTIME_CAPACITY_AUDIT} /bin/bash /var/www/kaiyuangouwu/deploy/monitor-production-health.sh"
                   jq -n --arg command "$REMOTE_COMMAND" \
                     '{commands: [$command], executionTimeout: ["300"]}' > "$RUNNER_TEMP/ssm-parameters.json"
 

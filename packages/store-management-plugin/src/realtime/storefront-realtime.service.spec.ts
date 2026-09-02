@@ -65,4 +65,20 @@ describe('StorefrontRealtimeService', () => {
 
         expect(send).not.toHaveBeenCalled();
     });
+
+    it('removes a client whose write fails without interrupting other clients', () => {
+        const realtime = service();
+        const failed = vi.fn(() => {
+            throw new Error('response closed');
+        });
+        const healthy = vi.fn();
+        realtime.addClient({ channelId: 'store-a', send: failed });
+        realtime.addClient({ channelId: 'store-a', send: healthy });
+
+        realtime.publish({ topics: ['content'], channelIds: ['store-a'] });
+        realtime.publish({ topics: ['content'], channelIds: ['store-a'] });
+
+        expect(failed).toHaveBeenCalledOnce();
+        expect(healthy).toHaveBeenCalledTimes(2);
+    });
 });
