@@ -1,4 +1,36 @@
-import { productAvailability } from './product-availability';
+import {
+    afterSalesFields,
+    cartFields,
+    cartResultFields,
+    checkoutResultFields,
+    customerCouponFields,
+    imageGenerationJobFields,
+    orderFields,
+    orderSummaryFields,
+    productFields,
+    productPackagingFields,
+    referralWalletFields,
+    storefrontReviewFields,
+} from './api/fragments';
+import {
+    abortableDelay,
+    API_URL,
+    AUTH_TOKEN_HEADER,
+    authTokenStorageKey,
+    createRequestSignal,
+    ErrorResult,
+    GraphQlResponse,
+    isMissingStorefrontCatalogSchema,
+    isStorefrontContentSchemaCompatibilityError,
+    isStorefrontQuery,
+    matchesCatalogFilters,
+    readSessionAuthToken,
+    ShopApiError,
+    ShopApiTimeoutError,
+    sortNativeCatalogProducts,
+    StorefrontContentQueryResult,
+    storefrontRealtimeUrl,
+} from './api/helpers';
 import { consumeStorefrontRealtimeStream, StorefrontRealtimeEvent } from './realtime-updates';
 import {
     ActiveCustomer,
@@ -41,486 +73,23 @@ import {
     StorefrontCatalogInput,
     StorefrontCheckoutSession,
     StorefrontConfig,
-    StorefrontContentBlock,
     StorefrontContentResponse,
     StorefrontCouponCampaign,
     StorefrontCurrencyConfiguration,
-    StorefrontFlashSale,
     StorefrontReview,
     StorefrontReviewCandidate,
     StorefrontReviewList,
-    StorefrontSystemAnnouncement,
     StorefrontUsdtCheckoutQuote,
     SubmitStorefrontReviewInput,
     VendureLanguageCode,
 } from './types';
 
-const API_URL = String(import.meta.env.VITE_SHOP_API_URL ?? '/shop-api');
-const AUTH_TOKEN_HEADER = 'vendure-auth-token';
-const AUTH_TOKEN_STORAGE_PREFIX = 'vendure-shop-auth-token';
 const NATIVE_CATALOG_BATCH_SIZE = 100;
 const STOREFRONT_CATALOG_MAX_TAKE = 48;
 export const SHOP_API_QUERY_TIMEOUT_MS = 20_000;
 const SEND_CLIENT_CHANNEL_TOKEN =
     import.meta.env.VITE_CLIENT_CHANNEL_SWITCHING === 'true' ||
     (import.meta.env.DEV && import.meta.env.VITE_CLIENT_CHANNEL_SWITCHING !== 'false');
-
-function isStorefrontQuery(document: string): boolean {
-    return /^\s*(?:query\b|\{)/u.test(document);
-}
-
-interface StorefrontContentQueryResult {
-    storefrontContent: StorefrontContentBlock[];
-    activeStorefrontFlashSales?: StorefrontFlashSale[];
-    activeSystemAnnouncements?: StorefrontSystemAnnouncement[];
-    storefrontContentSettings?: {
-        heroAutoplayIntervalSeconds: number;
-        configuredBlockTypes?: Array<StorefrontContentBlock['type']>;
-    };
-}
-
-function isStorefrontContentSchemaCompatibilityError(error: unknown): boolean {
-    return (
-        error instanceof Error &&
-        /cannot query field|unknown (?:field|argument)|is not defined by type/iu.test(error.message)
-    );
-}
-
-const productFields = `
-    id
-    createdAt
-    name
-    slug
-    description
-    featuredAsset { id preview }
-    assets { id preview }
-    collections { id name slug parentId }
-    customFields { fulfillmentType refundPolicy manualDeliverySlaMinutes }
-    variants {
-        id
-        name
-        sku
-        priceWithTax
-        currencyCode
-        saleableStockLevel
-        autoCardAvailableStock
-        featuredAsset { id preview }
-        product { id name featuredAsset { id preview } }
-        customFields { fulfillmentType digitalDeliveryMode digitalStockPolicy }
-    }
-`;
-
-const productPackagingFields = `
-    packaging {
-        id
-        enabled
-        autoUnpack
-        unitLabel
-        packageLabel
-        unitsPerPackage
-        unitVariant { id name sku }
-        packageVariant { id name sku }
-    }
-`;
-
-const orderFields = `
-    id
-    code
-    state
-    orderPlacedAt
-    totalQuantity
-    subTotalWithTax
-    shippingWithTax
-    totalWithTax
-    currencyCode
-    customer { id emailAddress }
-    payments { id method amount state }
-    discounts { description amountWithTax }
-    taxSummary { description taxRate taxBase taxTotal }
-    couponCodes
-    customFields { customerNote deliveryEmail }
-    fulfillments {
-        id
-        state
-        method
-        trackingCode
-        createdAt
-        updatedAt
-    }
-    digitalDeliveries {
-        orderLineId
-        sku
-        name
-        status
-        downloadUrl
-        expiresAt
-    }
-    autoCardDeliveries {
-        id
-        createdAt
-        updatedAt
-        state
-        productName
-        sku
-        quantity
-        attemptCount
-        sentAt
-        orderLineId
-    }
-    manualDigitalDeliveries {
-        id
-        createdAt
-        updatedAt
-        state
-        productName
-        sku
-        quantity
-        expectedAt
-        overdue
-        attemptCount
-        lastError
-        sentAt
-        orderLineId
-    }
-    lines {
-        id
-        quantity
-        linePriceWithTax
-        proratedUnitPriceWithTax
-        productVariant {
-            id
-            name
-            sku
-            priceWithTax
-            currencyCode
-            saleableStockLevel
-            autoCardAvailableStock
-            featuredAsset { id preview }
-            product { id name featuredAsset { id preview } }
-            customFields { fulfillmentType digitalDeliveryMode digitalStockPolicy }
-        }
-        customFields { fulfillmentTypeSnapshot digitalDeliveryModeSnapshot refundPolicySnapshot manualDeliverySlaMinutesSnapshot }
-    }
-    checkoutFulfillment {
-        fulfillmentType
-        containsPhysicalProducts
-        containsDigitalProducts
-        requiresShippingAddress
-        requiresShippingMethod
-    }
-    checkoutShipping {
-        methodCode
-        methodName
-        priceWithTax
-        estimateMinDays
-        estimateMaxDays
-        freeShippingThreshold
-        freeShippingApplied
-    }
-`;
-
-const customerCouponFields = `
-    id
-    campaignId
-    campaignName
-    campaignKind
-    status
-    minimumSpend
-    currencyCode
-    discountAmount
-    discountRate
-    claimedAt
-    validFrom
-    validUntil
-    lockedAt
-    usedAt
-    returnedAt
-    expiredAt
-    lockedOrderId
-    usedOrderId
-    returnCount
-    usable
-`;
-
-const referralWalletFields = `
-    id
-    createdAt
-    updatedAt
-    currencyCode
-    availableBalance
-    pendingBalance
-    reservedBalance
-`;
-
-const imageGenerationJobFields = `
-    id
-    createdAt
-    updatedAt
-    state
-    modelCodeSnapshot
-    modelNameSnapshot
-    officialModelIdSnapshot
-    originalPrompt
-    finalPrompt
-    promptSkillHash
-    referenceMode
-    aspectRatio
-    resolution
-    quantity
-    unitPriceSnapshot
-    reservedAmount
-    expectedChargeAmount
-    freeQuantityReserved
-    freeQuantityCaptured
-    paidQuantityReserved
-    capturedAmount
-    releasedAmount
-    currencyCode
-    termsVersion
-    errorMessage
-    completedAt
-    referenceAsset { id originalName mimeType byteSize width height expiresAt previewUrl }
-    outputs { id outputIndex state attemptCount errorMessage failureCode completedAt refundedAt billingMode chargeAmount width height imageUrl downloadUrl }
-`;
-
-// Keep paginated order queries below the production complexity limit. Full order
-// details are fetched separately by id when a customer opens an order.
-const orderSummaryFields = `
-    id
-    code
-    state
-    orderPlacedAt
-    totalQuantity
-    totalWithTax
-    currencyCode
-    fulfillments {
-        state
-        method
-        trackingCode
-        updatedAt
-    }
-    lines {
-        id
-        quantity
-        linePriceWithTax
-        productVariant {
-            id
-            name
-            sku
-            priceWithTax
-            currencyCode
-            saleableStockLevel
-            autoCardAvailableStock
-            featuredAsset { id preview }
-            product { id name featuredAsset { id preview } }
-            customFields { fulfillmentType digitalDeliveryMode }
-        }
-        customFields { fulfillmentTypeSnapshot digitalDeliveryModeSnapshot }
-    }
-    checkoutFulfillment { containsDigitalProducts }
-    checkoutShipping { methodName }
-`;
-
-const afterSalesFields = `
-    id
-    createdAt
-    updatedAt
-    code
-    type
-    state
-    reason
-    description
-    currencyCode
-    requestedAmount
-    approvedAmount
-    resolution
-    respondedAt
-    completedAt
-    cancelledAt
-    order { id code state }
-    items {
-        id
-        orderLineId
-        quantity
-        unitPriceWithTax
-        lineAmountWithTax
-        productName
-        sku
-        fulfillmentType
-    }
-    events {
-        id
-        createdAt
-        state
-        actorType
-        actorLabel
-        note
-    }
-`;
-
-const storefrontReviewFields = `
-    id
-    createdAt
-    updatedAt
-    state
-    rating
-    title
-    body
-    customerName
-    productName
-    sku
-    merchantResponse
-    moderatedAt
-    orderLineId
-    productId
-    productVariantId
-    verifiedPurchase
-`;
-
-const cartFields = `
-    id
-    revision
-    state
-    projectedRevision
-    totalQuantity
-    selectedLineCount
-    selectedQuantity
-    selectionState
-    lines {
-        id
-        quantity
-        selected
-        available
-        productVariant {
-            id
-            name
-            sku
-            priceWithTax
-            currencyCode
-            saleableStockLevel
-            autoCardAvailableStock
-            featuredAsset { id preview }
-            product { id name featuredAsset { id preview } }
-            customFields { fulfillmentType digitalDeliveryMode }
-        }
-    }
-    checkoutOrder { ${orderFields} }
-`;
-
-const cartResultFields = `
-    __typename
-    ... on StorefrontCart { ${cartFields} }
-    ... on ErrorResult { errorCode message }
-`;
-
-const checkoutResultFields = `
-    __typename
-    ... on StorefrontCheckoutSession {
-        cart { ${cartFields} }
-        order { ${orderFields} }
-        checkout { id cartRevision state completedAt }
-    }
-    ... on ErrorResult { errorCode message }
-`;
-
-interface GraphQlResponse<T> {
-    data?: T;
-    errors?: Array<{ message: string }>;
-}
-
-interface ErrorResult {
-    __typename?: string;
-    errorCode?: string;
-    message?: string;
-    authenticationError?: string;
-}
-
-function authTokenStorageKey(marketCode: string): string | null {
-    if (typeof window === 'undefined') return null;
-    const apiUrl = new URL(API_URL, window.location.href);
-    if (apiUrl.origin === window.location.origin) return null;
-    return `${AUTH_TOKEN_STORAGE_PREFIX}:${apiUrl.origin}${apiUrl.pathname}:${marketCode}`;
-}
-
-function readSessionAuthToken(storageKey: string | null): string | null {
-    if (!storageKey) return null;
-    try {
-        return sessionStorage.getItem(storageKey);
-    } catch {
-        return null;
-    }
-}
-
-export class ShopApiError extends Error {
-    constructor(
-        readonly errorCode: string,
-        message: string,
-        readonly authenticationError?: string,
-    ) {
-        super(message);
-        this.name = 'ShopApiError';
-    }
-}
-
-export class ShopApiTimeoutError extends Error {
-    constructor(
-        message: string,
-        readonly resultUnknown = false,
-    ) {
-        super(message);
-        this.name = 'ShopApiTimeoutError';
-    }
-}
-
-function isMissingStorefrontCatalogSchema(error: unknown): boolean {
-    if (!(error instanceof Error)) return false;
-    return (
-        error.message.includes('Unknown type "StorefrontCatalogInput"') ||
-        error.message.includes('Cannot query field "storefrontCatalog"')
-    );
-}
-
-function catalogVariants(product: Product, input: StorefrontCatalogInput): Product['variants'] {
-    if (!input.fulfillmentType) return product.variants;
-    return product.variants.filter(variant => variant.customFields.fulfillmentType === input.fulfillmentType);
-}
-
-function minimumCatalogPrice(product: Product, input: StorefrontCatalogInput): number {
-    const prices = catalogVariants(product, input).map(variant => variant.priceWithTax);
-    return prices.length ? Math.min(...prices) : Number.POSITIVE_INFINITY;
-}
-
-function matchesCatalogFilters(product: Product, input: StorefrontCatalogInput): boolean {
-    const variants = catalogVariants(product, input);
-    if (!variants.length) return false;
-    if (input.inStockOnly && !variants.some(variant => !productAvailability(variant).soldOut)) {
-        return false;
-    }
-    const minimumPrice = Math.min(...variants.map(variant => variant.priceWithTax));
-    if (input.minPriceWithTax != null && minimumPrice < input.minPriceWithTax) return false;
-    if (input.maxPriceWithTax != null && minimumPrice > input.maxPriceWithTax) return false;
-    return true;
-}
-
-function sortNativeCatalogProducts(
-    products: Product[],
-    input: StorefrontCatalogInput,
-    locale: string,
-): Product[] {
-    const sorted = [...products];
-    if (input.sort === 'sales') return sorted;
-    if (input.sort === 'newest') {
-        return sorted.sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
-    }
-    if (input.sort === 'price-asc' || input.sort === 'price-desc') {
-        const direction = input.sort === 'price-asc' ? 1 : -1;
-        return sorted.sort(
-            (left, right) =>
-                (minimumCatalogPrice(left, input) - minimumCatalogPrice(right, input)) * direction,
-        );
-    }
-    return sorted.sort((left, right) => left.name.localeCompare(right.name, locale));
-}
 
 export class ShopApi {
     private readonly authTokenStorageKey: string | null;
@@ -2541,52 +2110,4 @@ export class ShopApi {
     }
 }
 
-function createRequestSignal(external?: AbortSignal, timeoutMs?: number) {
-    if (!timeoutMs) {
-        return { signal: external, cleanup: () => undefined, didTimeout: () => false };
-    }
-    const controller = new AbortController();
-    let timedOut = false;
-    const abortFromExternal = () => controller.abort(external?.reason);
-    if (external?.aborted) abortFromExternal();
-    else external?.addEventListener('abort', abortFromExternal, { once: true });
-    const timer = timeoutMs
-        ? setTimeout(() => {
-              timedOut = true;
-              controller.abort();
-          }, timeoutMs)
-        : undefined;
-    return {
-        signal: controller.signal,
-        cleanup() {
-            if (timer) clearTimeout(timer);
-            external?.removeEventListener('abort', abortFromExternal);
-        },
-        didTimeout: () => timedOut,
-    };
-}
-
-function storefrontRealtimeUrl(): string {
-    const url = new URL(API_URL, window.location.href);
-    url.search = '';
-    url.hash = '';
-    url.pathname = url.pathname.replace(/\/shop-api\/?$/u, '/storefront-realtime/events');
-    if (!url.pathname.endsWith('/storefront-realtime/events')) {
-        url.pathname = '/storefront-realtime/events';
-    }
-    url.searchParams.set('client', 'storefront');
-    return url.toString();
-}
-
-function abortableDelay(durationMs: number, signal: AbortSignal): Promise<void> {
-    return new Promise(resolve => {
-        if (signal.aborted) return resolve();
-        const timer = window.setTimeout(finish, durationMs);
-        signal.addEventListener('abort', finish, { once: true });
-        function finish() {
-            window.clearTimeout(timer);
-            signal.removeEventListener('abort', finish);
-            resolve();
-        }
-    });
-}
+export { ShopApiError, ShopApiTimeoutError };
