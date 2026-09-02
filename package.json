@@ -115,7 +115,7 @@
         "@sigstore/verify": "3.1.1",
         "axios": "1.18.0",
         "engine.io": "6.6.9",
-        "fast-uri": "3.1.5",
+        "fast-uri": "3.1.6",
         "fast-xml-parser": "5.7.0",
         "file-type": "21.3.4",
         "flatted": "3.4.4",
