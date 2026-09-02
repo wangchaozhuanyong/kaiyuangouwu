@@ -7,10 +7,44 @@ readonly current_pointer="/var/www/kaiyuangouwu-current"
 readonly current_marker="/var/www/kaiyuangouwu-releases/current-sha"
 readonly memory_guard="${repository}/deploy/production-memory-guard.cjs"
 readonly environment_file="${repository}/packages/dev-server/.env"
+readonly healthcheck_maximum_age_seconds=1200
+readonly restore_drill_maximum_age_seconds=777600
 
 fail() {
     printf 'Production health monitor failed: %s\n' "$1" >&2
     exit 1
+}
+
+require_recent_systemd_success() {
+    local timer_name="$1"
+    local service_name="$2"
+    local maximum_age_seconds="$3"
+    local result
+    local completed_at
+    local completed_epoch
+    local current_epoch
+    local age_seconds
+
+    [[ "$(systemctl is-enabled "${timer_name}")" == "enabled" ]] ||
+        fail "${timer_name} is not enabled"
+    [[ "$(systemctl is-active "${timer_name}")" == "active" ]] ||
+        fail "${timer_name} is not active"
+
+    result="$(systemctl show "${service_name}" -p Result --value)"
+    [[ "${result}" == "success" ]] || fail "${service_name} last result is ${result:-missing}"
+
+    completed_at="$(systemctl show "${service_name}" -p ExecMainExitTimestamp --value)"
+    [[ -n "${completed_at}" && "${completed_at}" != "n/a" ]] ||
+        fail "${service_name} has no completion timestamp"
+    completed_epoch="$(date -u --date="${completed_at}" +%s 2>/dev/null)" ||
+        fail "${service_name} completion timestamp is invalid"
+    current_epoch="$(date -u +%s)"
+    age_seconds=$((current_epoch - completed_epoch))
+    ((age_seconds >= 0 && age_seconds <= maximum_age_seconds)) ||
+        fail "${service_name} last success is stale (${age_seconds}s)"
+
+    printf 'PRODUCTION_SYSTEMD_CHECK timer=%s service=%s age_seconds=%s status=healthy\n' \
+        "${timer_name}" "${service_name}" "${age_seconds}"
 }
 
 [[ -f "${memory_guard}" ]] || fail 'memory guard is missing'
@@ -26,6 +60,15 @@ readonly candidate_name="$(basename "${candidate}")"
 [[ "${target_sha}" =~ ^[0-9a-f]{40}$ ]] || fail 'current runtime marker is invalid'
 [[ "${candidate_name}" =~ ^${target_sha}-[0-9]+-[0-9]+-linux-x64$ ]] ||
     fail 'current runtime does not match its version marker'
+
+require_recent_systemd_success \
+    vendure-production-healthcheck.timer \
+    vendure-production-healthcheck.service \
+    "${healthcheck_maximum_age_seconds}"
+require_recent_systemd_success \
+    vendure-mysql-restore-drill.timer \
+    vendure-mysql-restore-drill.service \
+    "${restore_drill_maximum_age_seconds}"
 
 node "${memory_guard}" --stage scheduled-monitor --check
 curl --fail --silent --show-error --max-time 10 http://127.0.0.1:3002/health >/dev/null

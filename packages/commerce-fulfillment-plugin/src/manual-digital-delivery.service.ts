@@ -65,13 +65,17 @@ export class ManualDigitalDeliveryService {
         if (order.state !== 'PaymentSettled') {
             return [];
         }
+        const manualServiceLines = order.lines.filter(isManualServiceOrderLine);
+        if (manualServiceLines.length === 0) {
+            return [];
+        }
         const recipientEmail = order.customFields?.deliveryEmail?.trim();
         if (!recipientEmail) {
             throw new Error('人工虚拟交付订单缺少交付邮箱');
         }
         const repository = this.connection.getRepository(ctx, ManualDigitalDelivery);
         const deliveries: ManualDigitalDelivery[] = [];
-        for (const line of order.lines.filter(isManualServiceOrderLine)) {
+        for (const line of manualServiceLines) {
             const existing = await repository.findOne({ where: { orderLineId: line.id } });
             if (existing) {
                 deliveries.push(existing);

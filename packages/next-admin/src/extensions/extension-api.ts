@@ -13,12 +13,30 @@ export interface NextAdminExtensionNavItem {
 export interface NextAdminExtensionRoute {
     id: string;
     path: `/${string}`;
+    /**
+     * Previous Dashboard URLs which must keep resolving to this capability.
+     * These aliases are rendered as redirects by the application router and
+     * are deliberately kept out of navigation and command-palette results.
+     */
+    legacyPaths?: NextAdminLegacyPath[];
     title: string;
     component: NextAdminExtensionComponent;
     permissions?: string[];
     navItem?: NextAdminExtensionNavItem;
     commandPalette?: boolean;
     preload?: () => Promise<unknown>;
+}
+
+export type NextAdminLegacyPath =
+    | `/${string}`
+    | {
+          path: `/${string}`;
+          /** Optional tab/query-aware destination for capabilities merged into a new page. */
+          target: `/${string}`;
+      };
+
+function legacyPathname(value: NextAdminLegacyPath) {
+    return typeof value === 'string' ? value : value.path;
 }
 
 export interface NextAdminPageBlockContext {
@@ -44,6 +62,22 @@ export interface NextAdminActionDefinition {
     permissions?: string[];
 }
 
+export interface NextAdminDashboardWidgetDefinition {
+    id: string;
+    title: string;
+    component: ComponentType;
+    description?: string;
+    order?: number;
+    permissions?: string[];
+}
+
+export interface NextAdminDashboardAlertDefinition {
+    id: string;
+    component: ComponentType;
+    order?: number;
+    permissions?: string[];
+}
+
 export interface NextAdminCustomFieldInputProps {
     disabled?: boolean;
     field: Record<string, unknown>;
@@ -56,6 +90,8 @@ export interface NextAdminExtension {
     routes?: NextAdminExtensionRoute[];
     pageBlocks?: NextAdminPageBlockDefinition[];
     actions?: NextAdminActionDefinition[];
+    dashboardWidgets?: NextAdminDashboardWidgetDefinition[];
+    alerts?: NextAdminDashboardAlertDefinition[];
     customFieldComponents?: Record<string, ComponentType<NextAdminCustomFieldInputProps>>;
 }
 
@@ -69,7 +105,9 @@ function validateExtension(extension: NextAdminExtension) {
 
     const existingRoutes = getNextAdminExtensionRoutes();
     const existingRouteIds = new Set(existingRoutes.map(route => route.id));
-    const existingPaths = new Set(existingRoutes.map(route => route.path));
+    const existingPaths = new Set(
+        existingRoutes.flatMap(route => [route.path, ...(route.legacyPaths ?? []).map(legacyPathname)]),
+    );
     const ownRouteIds = new Set<string>();
     const ownPaths = new Set<string>();
     for (const route of extension.routes ?? []) {
@@ -79,11 +117,14 @@ function validateExtension(extension: NextAdminExtension) {
         if (existingRouteIds.has(route.id) || ownRouteIds.has(route.id)) {
             throw new Error(`Next Admin extension route id already registered: ${route.id}`);
         }
-        if (existingPaths.has(route.path) || ownPaths.has(route.path)) {
-            throw new Error(`Next Admin extension route path already registered: ${route.path}`);
+        const routePaths = [route.path, ...(route.legacyPaths ?? []).map(legacyPathname)];
+        for (const path of routePaths) {
+            if (existingPaths.has(path) || ownPaths.has(path)) {
+                throw new Error(`Next Admin extension route path already registered: ${path}`);
+            }
+            ownPaths.add(path);
         }
         ownRouteIds.add(route.id);
-        ownPaths.add(route.path);
     }
 }
 
@@ -102,7 +143,21 @@ export function getNextAdminExtensionRoutes() {
 }
 
 export function getNextAdminExtensionRoute(pathname: string) {
-    return getNextAdminExtensionRoutes().find(route => route.path === pathname);
+    return getNextAdminExtensionRoutes().find(
+        route =>
+            route.path === pathname ||
+            route.legacyPaths?.some(legacyPath => legacyPathname(legacyPath) === pathname),
+    );
+}
+
+export function getNextAdminExtensionLegacyRoutes() {
+    return getNextAdminExtensionRoutes().flatMap(route =>
+        (route.legacyPaths ?? []).map(legacyPath => ({
+            id: `${route.id}:legacy:${legacyPathname(legacyPath)}`,
+            path: legacyPathname(legacyPath),
+            target: typeof legacyPath === 'string' ? route.path : legacyPath.target,
+        })),
+    );
 }
 
 export function getNextAdminExtensionNavItems(sectionId?: string) {
@@ -122,6 +177,18 @@ export function getNextAdminActions(pageId: string) {
     return getNextAdminExtensions()
         .flatMap(extension => extension.actions ?? [])
         .filter(action => action.pageId === pageId)
+        .sort((left, right) => (left.order ?? 0) - (right.order ?? 0));
+}
+
+export function getNextAdminDashboardWidgets() {
+    return getNextAdminExtensions()
+        .flatMap(extension => extension.dashboardWidgets ?? [])
+        .sort((left, right) => (left.order ?? 0) - (right.order ?? 0));
+}
+
+export function getNextAdminDashboardAlerts() {
+    return getNextAdminExtensions()
+        .flatMap(extension => extension.alerts ?? [])
         .sort((left, right) => (left.order ?? 0) - (right.order ?? 0));
 }
 

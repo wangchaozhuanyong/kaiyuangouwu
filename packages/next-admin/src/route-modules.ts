@@ -2,6 +2,7 @@ export const routeModuleLoaders = {
     profile: () => import('./pages/Auth/ProfileModule'),
     dashboard: () => import('./pages/Dashboard/DashboardModule'),
     catalog: () => import('./pages/Catalog/CatalogModule'),
+    suppliers: () => import('./pages/Catalog/SuppliersModule'),
     productEditor: () => import('./pages/Catalog/ProductEditor'),
     categories: () => import('./pages/Catalog/CategoriesModule'),
     inventory: () => import('./pages/Catalog/InventoryWarehouseModule'),
@@ -17,11 +18,14 @@ export const routeModuleLoaders = {
     referrals: () => import('./pages/Marketing/ReferralsModule'),
     storefront: () => import('./pages/Storefront/StorefrontModule'),
     storefrontContent: () => import('./pages/Storefront/StorefrontContentModule'),
+    businessServicesCopy: () => import('./pages/Storefront/BusinessServicesCopyModule'),
     clientPlugins: () => import('./pages/Plugins/ClientPluginsModule'),
+    twoFactorCodes: () => import('./pages/Plugins/TwoFactorCodesModule'),
     aiImageSettings: () => import('./pages/Plugins/AiImageSettingsModule'),
     aiImageAccess: () => import('./pages/Plugins/AiImageAccessModule'),
     translations: () => import('./pages/Settings/TranslationsModule'),
     storeSettings: () => import('./pages/Settings/StoreSettingsModule'),
+    usdtPayments: () => import('./pages/Settings/UsdtPaymentManagementModule'),
     roles: () => import('./pages/Settings/RolesModule'),
     systemOps: () => import('./pages/Settings/SystemOpsModule'),
 } as const;
@@ -34,6 +38,7 @@ export function getRouteModuleKey(target: string): RouteModuleKey | null {
     if (pathname === '/dashboard' || pathname === '/') return 'dashboard';
     if (pathname === '/profile') return 'profile';
     if (pathname.startsWith('/catalog/products/')) return 'productEditor';
+    if (pathname === '/catalog/suppliers') return 'suppliers';
     if (pathname === '/catalog/categories') return 'categories';
     if (pathname === '/catalog/inventory') return 'inventory';
     if (pathname === '/catalog/card-pool') return 'cardPool';
@@ -49,13 +54,16 @@ export function getRouteModuleKey(target: string): RouteModuleKey | null {
     if (pathname === '/marketing/referrals') return 'referrals';
     if (pathname.startsWith('/marketing')) return 'promotions';
     if (pathname === '/storefront/content') return 'storefrontContent';
+    if (pathname === '/storefront/business-services-copy') return 'businessServicesCopy';
     if (pathname.startsWith('/storefront')) return 'storefront';
     if (pathname === '/plugins/ai-settings') return 'aiImageSettings';
     if (pathname === '/plugins/ai-access') return 'aiImageAccess';
     if (pathname === '/plugins/translations') return 'translations';
+    if (pathname === '/plugins/two-factor-codes') return 'twoFactorCodes';
     if (pathname.startsWith('/plugins')) return 'clientPlugins';
     if (pathname === '/settings/team') return 'roles';
     if (pathname === '/settings/system-ops') return 'systemOps';
+    if (pathname === '/settings/usdt-payments') return 'usdtPayments';
     if (pathname.startsWith('/settings')) return 'storeSettings';
     return null;
 }

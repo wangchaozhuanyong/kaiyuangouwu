@@ -1,14 +1,23 @@
-import { useMutation, useQuery } from '@apollo/client/react';
-import { CreditCard, Pencil, Plus, Trash2, Truck, X } from 'lucide-react';
+import { useLazyQuery, useMutation, useQuery } from '@apollo/client/react';
+import { Beaker, CreditCard, Pencil, Plus, Trash2, Truck, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
+import { DynamicCustomFieldsForm } from '../../custom-fields/DynamicCustomFieldsForm';
+import type { CustomFieldDefinition, CustomFieldValueMap } from '../../custom-fields/custom-field-types';
+import {
+    customFieldInputFromValues,
+    customFieldValuesFromEntity,
+    localizedCustomFieldInputFromValues,
+    validateCustomFieldValues,
+} from '../../custom-fields/custom-field-utils';
 import { STORE_COMMERCE_MODE_QUERY, type StoreCommerceModeData } from '../../graphql/commerce.graphql';
 import {
     CREATE_PAYMENT_METHOD_MUTATION,
     CREATE_SHIPPING_METHOD_MUTATION,
     DELETE_PAYMENT_METHOD_MUTATION,
     DELETE_SHIPPING_METHOD_MUTATION,
+    TEST_SHIPPING_METHOD_QUERY,
     UPDATE_PAYMENT_METHOD_MUTATION,
     UPDATE_SHIPPING_METHOD_MUTATION,
     type ConfigurableOperationDefinitionRecord,
@@ -39,10 +48,14 @@ const inputClass =
 
 export function PaymentShippingManager({
     data,
+    paymentMethodCustomFields,
+    shippingMethodCustomFields,
     onChanged,
     onError,
 }: {
     data: StoreManagementResult;
+    paymentMethodCustomFields: CustomFieldDefinition[];
+    shippingMethodCustomFields: CustomFieldDefinition[];
     onChanged: (message: string) => Promise<void>;
     onError: (message: string) => void;
 }) {
@@ -286,6 +299,9 @@ export function PaymentShippingManager({
                 <MethodEditorDialog
                     state={editor}
                     data={data}
+                    customFieldDefinitions={
+                        editor.kind === 'payment' ? paymentMethodCustomFields : shippingMethodCustomFields
+                    }
                     onClose={() => setEditor(null)}
                     onCompleted={async message => {
                         setEditor(null);
@@ -300,12 +316,14 @@ export function PaymentShippingManager({
 
 function MethodEditorDialog({
     data,
+    customFieldDefinitions,
     onClose,
     onCompleted,
     onError,
     state,
 }: {
     data: StoreManagementResult;
+    customFieldDefinitions: CustomFieldDefinition[];
     onClose: () => void;
     onCompleted: (message: string) => Promise<void>;
     onError: (message: string) => void;
@@ -334,6 +352,9 @@ function MethodEditorDialog({
     const [calculatorArgs, setCalculatorArgs] = useState(() =>
         argsToForm(state.kind === 'shipping' ? state.item?.calculator : undefined),
     );
+    const [customFieldValues, setCustomFieldValues] = useState<CustomFieldValueMap>(() =>
+        customFieldValuesFromEntity(customFieldDefinitions, item?.customFields, item?.translations),
+    );
     const [createPayment, createPaymentState] = useMutation(CREATE_PAYMENT_METHOD_MUTATION);
     const [updatePayment, updatePaymentState] = useMutation(UPDATE_PAYMENT_METHOD_MUTATION);
     const [createShipping, createShippingState] = useMutation(CREATE_SHIPPING_METHOD_MUTATION);
@@ -350,17 +371,35 @@ function MethodEditorDialog({
         state.kind === 'payment'
             ? selectablePaymentHandlers(data.paymentMethodHandlers)
             : data.shippingCalculators;
-    const translation = {
-        ...(item?.translations[0]?.id ? { id: item.translations[0].id } : {}),
-        languageCode,
-        name: name.trim(),
-        description: description.trim(),
-    };
-
     const submit = async () => {
         if (!code.trim() || !name.trim()) return onError('请填写配置代码和显示名称');
+        const customFieldErrors = validateCustomFieldValues(
+            customFieldDefinitions,
+            customFieldValues,
+            languageCode,
+        );
+        if (Object.keys(customFieldErrors).length > 0) {
+            return onError(Object.values(customFieldErrors)[0] ?? '扩展字段校验失败');
+        }
         try {
             const checker = checkerCode ? operationInput(checkerCode, checkerArgs, checkerDefinitions) : null;
+            const customFields = customFieldInputFromValues(customFieldDefinitions, customFieldValues);
+            const translations = (
+                item?.translations.length
+                    ? item.translations
+                    : [{ id: '', languageCode, name: '', description: '' }]
+            ).map(translation => ({
+                ...(translation.id ? { id: translation.id } : {}),
+                languageCode: translation.languageCode,
+                name: translation.languageCode === languageCode ? name.trim() : translation.name,
+                description:
+                    translation.languageCode === languageCode ? description.trim() : translation.description,
+                customFields: localizedCustomFieldInputFromValues(
+                    customFieldDefinitions,
+                    customFieldValues,
+                    translation.languageCode,
+                ),
+            }));
             if (state.kind === 'payment') {
                 if (
                     code.trim().toLowerCase() === USDT_PAYMENT_METHOD_CODE ||
@@ -375,7 +414,8 @@ function MethodEditorDialog({
                     enabled,
                     checker,
                     handler: operationInput(handlerCode, handlerArgs, mainDefinitions),
-                    translations: [translation],
+                    translations,
+                    customFields,
                 };
                 if (item?.id) await updatePayment({ variables: { input } });
                 else await createPayment({ variables: { input } });
@@ -389,7 +429,8 @@ function MethodEditorDialog({
                     fulfillmentHandler,
                     checker: operationInput(checkerCode, checkerArgs, data.shippingEligibilityCheckers),
                     calculator: operationInput(calculatorCode, calculatorArgs, data.shippingCalculators),
-                    translations: [translation],
+                    translations,
+                    customFields,
                 };
                 if (item?.id) await updateShipping({ variables: { input } });
                 else await createShipping({ variables: { input } });
@@ -505,8 +546,24 @@ function MethodEditorDialog({
                                     ))}
                                 </select>
                             </Field>
+                            <ShippingMethodTester
+                                checkerCode={checkerCode}
+                                checkerArgs={checkerArgs}
+                                calculatorCode={calculatorCode}
+                                calculatorArgs={calculatorArgs}
+                                checkerDefinitions={data.shippingEligibilityCheckers}
+                                calculatorDefinitions={data.shippingCalculators}
+                                currencyCode={data.activeChannel.defaultCurrencyCode}
+                            />
                         </>
                     )}
+                    <DynamicCustomFieldsForm
+                        title={`${state.kind === 'payment' ? '支付方式' : '配送方式'}扩展字段`}
+                        fields={customFieldDefinitions}
+                        values={customFieldValues}
+                        onChange={setCustomFieldValues}
+                        disabled={busy}
+                    />
                 </div>
                 <footer className="sticky bottom-0 flex justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4">
                     <button type="button" onClick={onClose} className={secondaryButton}>
@@ -523,6 +580,149 @@ function MethodEditorDialog({
                 </footer>
             </AccessibleDialogSurface>
         </div>
+    );
+}
+
+function ShippingMethodTester({
+    checkerCode,
+    checkerArgs,
+    calculatorCode,
+    calculatorArgs,
+    checkerDefinitions,
+    calculatorDefinitions,
+    currencyCode,
+}: {
+    checkerCode: string;
+    checkerArgs: Record<string, string>;
+    calculatorCode: string;
+    calculatorArgs: Record<string, string>;
+    checkerDefinitions: ConfigurableOperationDefinitionRecord[];
+    calculatorDefinitions: ConfigurableOperationDefinitionRecord[];
+    currencyCode: string;
+}) {
+    const [variantId, setVariantId] = useState('');
+    const [quantity, setQuantity] = useState('1');
+    const [countryCode, setCountryCode] = useState('CN');
+    const [streetLine1, setStreetLine1] = useState('测试地址');
+    const [city, setCity] = useState('');
+    const [postalCode, setPostalCode] = useState('');
+    const [error, setError] = useState('');
+    const [testMethod, result] = useLazyQuery<{
+        testShippingMethod: {
+            eligible: boolean;
+            quote: { price: number; priceWithTax: number; metadata: unknown } | null;
+        };
+    }>(TEST_SHIPPING_METHOD_QUERY, { fetchPolicy: 'no-cache' });
+    const run = async () => {
+        setError('');
+        const parsedQuantity = Number(quantity);
+        if (!variantId.trim()) return setError('请输入用于试算的商品 SKU ID');
+        if (!Number.isInteger(parsedQuantity) || parsedQuantity < 1) return setError('数量必须是正整数');
+        if (!/^[A-Za-z]{2}$/.test(countryCode.trim())) return setError('国家代码必须是两位 ISO 代码');
+        if (!streetLine1.trim()) return setError('地址第一行不能为空');
+        try {
+            await testMethod({
+                variables: {
+                    input: {
+                        checker: operationInput(checkerCode, checkerArgs, checkerDefinitions),
+                        calculator: operationInput(calculatorCode, calculatorArgs, calculatorDefinitions),
+                        shippingAddress: {
+                            streetLine1: streetLine1.trim(),
+                            city: city.trim() || undefined,
+                            postalCode: postalCode.trim() || undefined,
+                            countryCode: countryCode.trim().toUpperCase(),
+                        },
+                        lines: [{ productVariantId: variantId.trim(), quantity: parsedQuantity }],
+                    },
+                },
+            });
+        } catch (cause) {
+            setError(toUserFacingError(cause, '配送方式试算失败'));
+        }
+    };
+    const value = result.data?.testShippingMethod;
+    return (
+        <section className="rounded-xl border border-blue-200 bg-blue-50/40 p-4">
+            <div className="flex items-start gap-2">
+                <Beaker className="mt-0.5 h-4 w-4 text-blue-600" />
+                <div>
+                    <h3 className="text-xs font-bold text-slate-800">配送方式试算</h3>
+                    <p className="mt-1 text-[10px] leading-4 text-slate-500">
+                        使用当前未保存的检查器和计算器参数，只执行 Vendure 试算查询，不创建订单。
+                    </p>
+                </div>
+            </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                <Field label="商品 SKU ID *">
+                    <input
+                        value={variantId}
+                        onChange={event => setVariantId(event.target.value)}
+                        className={inputClass}
+                    />
+                </Field>
+                <Field label="数量 *">
+                    <input
+                        type="number"
+                        min="1"
+                        value={quantity}
+                        onChange={event => setQuantity(event.target.value)}
+                        className={inputClass}
+                    />
+                </Field>
+                <Field label="国家代码 *">
+                    <input
+                        value={countryCode}
+                        maxLength={2}
+                        onChange={event => setCountryCode(event.target.value)}
+                        className={inputClass}
+                    />
+                </Field>
+                <Field label="地址第一行 *">
+                    <input
+                        value={streetLine1}
+                        onChange={event => setStreetLine1(event.target.value)}
+                        className={inputClass}
+                    />
+                </Field>
+                <Field label="城市">
+                    <input
+                        value={city}
+                        onChange={event => setCity(event.target.value)}
+                        className={inputClass}
+                    />
+                </Field>
+                <Field label="邮编">
+                    <input
+                        value={postalCode}
+                        onChange={event => setPostalCode(event.target.value)}
+                        className={inputClass}
+                    />
+                </Field>
+            </div>
+            {error && (
+                <p className="mt-3 text-xs text-rose-700" role="alert">
+                    {error}
+                </p>
+            )}
+            {value && (
+                <div
+                    className={`mt-3 rounded-lg border p-3 text-xs ${value.eligible ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-amber-200 bg-amber-50 text-amber-800'}`}
+                >
+                    {value.eligible && value.quote
+                        ? `符合条件 · 未税 ${(value.quote.price / 100).toFixed(2)} ${currencyCode} · 含税 ${(value.quote.priceWithTax / 100).toFixed(2)} ${currencyCode}`
+                        : '当前地址与商品不符合此配送方式条件'}
+                </div>
+            )}
+            <button
+                type="button"
+                onClick={() => void run()}
+                disabled={result.loading || !checkerCode || !calculatorCode}
+                className={`${secondaryButton} mt-3`}
+            >
+                <Beaker className="h-3.5 w-3.5" />
+                {result.loading ? '试算中…' : '执行试算'}
+            </button>
+        </section>
     );
 }
 

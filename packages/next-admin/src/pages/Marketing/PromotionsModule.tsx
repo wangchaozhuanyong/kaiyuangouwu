@@ -15,6 +15,7 @@ import {
     RefreshCw,
     Search,
     Send,
+    Settings2,
     ShieldAlert,
     Trash2,
     TrendingUp,
@@ -47,13 +48,15 @@ import { useAccessibleDialog } from '../../hooks/use-accessible-dialog';
 import { useUrlTab } from '../../hooks/use-url-tab';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatDateTime, formatMoney, majorInputToMoney } from '../Sales/sales-utils';
+import { GenericPromotionsPanel } from './GenericPromotionsPanel';
 
-type PromotionTab = 'COUPONS' | 'FLASH_SALES' | 'REPORT' | 'LEDGER';
+type PromotionTab = 'COUPONS' | 'FLASH_SALES' | 'REPORT' | 'LEDGER' | 'GENERIC';
 const PROMOTION_TABS = {
     coupons: 'COUPONS',
     'flash-sales': 'FLASH_SALES',
     report: 'REPORT',
     ledger: 'LEDGER',
+    generic: 'GENERIC',
 } as const;
 type SensitiveAction =
     | { kind: 'TOGGLE'; id: string; name: string; enabled: boolean }
@@ -332,6 +335,12 @@ export function PromotionsModule() {
                         icon={ShieldAlert}
                         label="使用流水"
                     />
+                    <TabButton
+                        active={activeTab === 'GENERIC'}
+                        onClick={() => setActiveTab('GENERIC')}
+                        icon={Settings2}
+                        label="通用促销"
+                    />
                 </nav>
                 {(activeTab === 'COUPONS' || activeTab === 'FLASH_SALES') && (
                     <div className="relative max-w-md">
@@ -356,7 +365,9 @@ export function PromotionsModule() {
                     </div>
                 )}
 
-                {overview.loading && !overview.data ? (
+                {activeTab === 'GENERIC' ? (
+                    <GenericPromotionsPanel />
+                ) : overview.loading && !overview.data ? (
                     <LoadingState label="正在读取营销活动…" />
                 ) : overview.error ? (
                     <ErrorState message={overview.error.message} onRetry={() => void overview.refetch()} />

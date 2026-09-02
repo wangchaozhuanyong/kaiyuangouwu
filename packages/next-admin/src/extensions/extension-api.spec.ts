@@ -2,6 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
     defineNextAdminExtension,
+    getNextAdminDashboardAlerts,
+    getNextAdminDashboardWidgets,
+    getNextAdminExtensionLegacyRoutes,
     getNextAdminExtensionNavItems,
     getNextAdminExtensionRoute,
     getNextAdminExtensionRoutes,
@@ -27,6 +30,7 @@ describe('next-admin extension registry', () => {
                 {
                     id: 'first',
                     path: '/plugins/first',
+                    legacyPaths: ['/first'],
                     title: 'First',
                     component: Component,
                     navItem: { label: 'First', sectionId: 'plugins', order: 10 },
@@ -36,7 +40,28 @@ describe('next-admin extension registry', () => {
 
         expect(getNextAdminExtensionRoutes()).toHaveLength(2);
         expect(getNextAdminExtensionRoute('/plugins/first')?.id).toBe('first');
+        expect(getNextAdminExtensionRoute('/first')?.id).toBe('first');
+        expect(getNextAdminExtensionLegacyRoutes()).toEqual([
+            { id: 'first:legacy:/first', path: '/first', target: '/plugins/first' },
+        ]);
         expect(getNextAdminExtensionNavItems('plugins').map(route => route.id)).toEqual(['first', 'second']);
+    });
+
+    it('registers ordered dashboard widgets and alerts', () => {
+        defineNextAdminExtension({
+            id: 'dashboard-example',
+            dashboardWidgets: [
+                { id: 'late', title: 'Late', component: Component, order: 20 },
+                { id: 'early', title: 'Early', component: Component, order: 10 },
+            ],
+            alerts: [
+                { id: 'late-alert', component: Component, order: 20 },
+                { id: 'early-alert', component: Component, order: 10 },
+            ],
+        });
+
+        expect(getNextAdminDashboardWidgets().map(item => item.id)).toEqual(['early', 'late']);
+        expect(getNextAdminDashboardAlerts().map(item => item.id)).toEqual(['early-alert', 'late-alert']);
     });
 
     it('rejects duplicate extension ids and route paths', () => {
@@ -61,6 +86,21 @@ describe('next-admin extension registry', () => {
                         id: 'another-route',
                         path: '/plugins/first',
                         title: 'Another',
+                        component: Component,
+                    },
+                ],
+            }),
+        ).toThrow(/path already registered/);
+
+        expect(() =>
+            defineNextAdminExtension({
+                id: 'legacy-duplicate',
+                routes: [
+                    {
+                        id: 'legacy-duplicate-route',
+                        path: '/plugins/legacy-duplicate',
+                        legacyPaths: ['/plugins/first'],
+                        title: 'Legacy duplicate',
                         component: Component,
                     },
                 ],

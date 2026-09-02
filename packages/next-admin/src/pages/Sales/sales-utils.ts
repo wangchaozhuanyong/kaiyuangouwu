@@ -53,6 +53,29 @@ export interface GraphqlMutationResult {
     transitionError?: string;
 }
 
+export interface CompatibleRefundOrderInput {
+    paymentId: string;
+    amount: number;
+    reason: string;
+    lines: [];
+    shipping: 0;
+    adjustment: 0;
+}
+
+export const buildCompatibleRefundOrderInput = (
+    paymentId: string,
+    amount: number,
+    reason: string,
+): CompatibleRefundOrderInput => ({
+    paymentId,
+    amount,
+    reason,
+    // Vendure still persists these deprecated columns as non-null on supported schemas.
+    lines: [],
+    shipping: 0,
+    adjustment: 0,
+});
+
 export const orderStateLabels: Record<string, string> = {
     AddingItems: '购物车中',
     Draft: '草稿订单',

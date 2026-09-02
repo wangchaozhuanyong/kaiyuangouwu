@@ -72,6 +72,24 @@ function createHarness(state: ManualDigitalDelivery['state'] = 'DRAFT') {
 }
 
 describe('ManualDigitalDeliveryService invariants', () => {
+    it('does not require a delivery email for a physical-only settled order', async () => {
+        const test = createHarness();
+
+        await expect(
+            test.service.createSettledOrderTasks(test.ctx, {
+                id: 'order-physical',
+                state: 'PaymentSettled',
+                customFields: {},
+                lines: [
+                    {
+                        customFields: { fulfillmentTypeSnapshot: 'physical' },
+                        productVariant: { customFields: { fulfillmentType: 'physical' } },
+                    },
+                ],
+            } as any),
+        ).resolves.toEqual([]);
+    });
+
     it('blocks publishing when the number of finished packages differs from the order quantity', async () => {
         const test = createHarness();
 

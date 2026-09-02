@@ -24,17 +24,28 @@ import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { sensitiveActionContext } from '../../apollo';
+import { SensitiveActionDialog } from '../../components/SensitiveActionDialog';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
+import { DynamicCustomFieldsForm } from '../../custom-fields/DynamicCustomFieldsForm';
+import type { CustomFieldValueMap } from '../../custom-fields/custom-field-types';
+import {
+    addCustomFieldsToDocument,
+    customFieldInputFromValues,
+    customFieldValuesFromEntity,
+    validateCustomFieldValues,
+} from '../../custom-fields/custom-field-utils';
+import { useCustomFieldDefinitions } from '../../custom-fields/custom-fields-context';
 import {
     ADD_CUSTOMER_NOTE_MUTATION,
     ADD_CUSTOMER_TO_GROUP_MUTATION,
+    ADD_CUSTOMERS_TO_GROUP_MUTATION,
     CREATE_CUSTOMER_ADDRESS_MUTATION,
     CREATE_CUSTOMER_GROUP_MUTATION,
-    CUSTOMERS_QUERY,
+    CREATE_CUSTOMER_MUTATION,
     CUSTOMER_ADDRESS_COUNTRIES_QUERY,
     CUSTOMER_DETAIL_QUERY,
-    CUSTOMER_GROUPS_QUERY,
     CUSTOMER_GROUP_MEMBERS_QUERY,
+    CUSTOMER_GROUPS_QUERY,
     CustomerAddressCountriesResult,
     CustomerAddressRecord,
     CustomerDetailResult,
@@ -42,10 +53,13 @@ import {
     CustomerGroupRecord,
     CustomerGroupsResult,
     CustomerListRecord,
+    CUSTOMERS_QUERY,
     CustomersResult,
     DELETE_CUSTOMER_ADDRESS_MUTATION,
     DELETE_CUSTOMER_GROUP_MUTATION,
+    DELETE_CUSTOMERS_MUTATION,
     REMOVE_CUSTOMER_FROM_GROUP_MUTATION,
+    REMOVE_CUSTOMERS_FROM_GROUP_MUTATION,
     UPDATE_CUSTOMER_ADDRESS_MUTATION,
     UPDATE_CUSTOMER_GROUP_MUTATION,
     UPDATE_CUSTOMER_MUTATION,
@@ -164,15 +178,34 @@ function errorText(error: unknown) {
 
 export function CustomersModule() {
     const navigate = useNavigate();
+    const { hasAnyPermission } = useAdminPermissions();
+    const canCreateCustomer = hasAnyPermission(['CreateCustomer']);
+    const canDeleteCustomer = hasAnyPermission(['DeleteCustomer']);
+    const canUpdateCustomer = hasAnyPermission(['UpdateCustomer']);
     const { page, searchParams, searchTerm, setFilter, setPage, setSearchTerm } = useUrlListState();
     const selectedGroupId = searchParams.get('group') ?? 'ALL';
     const setSelectedGroupId = (groupId: string) => setFilter('group', groupId, 'ALL');
     const deferredSearchTerm = useDeferredValue(searchTerm);
     const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
     const [groupManagerOpen, setGroupManagerOpen] = useState(false);
+    const [createOpen, setCreateOpen] = useState(false);
+    const [createDraft, setCreateDraft] = useState<CustomerForm>(emptyCustomerForm);
+    const [selectedCustomerIds, setSelectedCustomerIds] = useState<string[]>([]);
+    const [bulkGroupId, setBulkGroupId] = useState('');
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [notice, setNotice] = useState('');
     const [actionError, setActionError] = useState('');
     const loadingAllGroupsRef = useRef(false);
+    const [createCustomer, createState] = useMutation(CREATE_CUSTOMER_MUTATION);
+    const [deleteCustomers, deleteState] = useMutation<{
+        deleteCustomers: Array<{ result: string; message?: string | null }>;
+    }>(DELETE_CUSTOMERS_MUTATION);
+    const [addCustomersToGroup, addBulkState] = useMutation<{
+        addCustomersToGroup: { id: string };
+    }>(ADD_CUSTOMERS_TO_GROUP_MUTATION);
+    const [removeCustomersFromGroup, removeBulkState] = useMutation<{
+        removeCustomersFromGroup: { id: string };
+    }>(REMOVE_CUSTOMERS_FROM_GROUP_MUTATION);
 
     const options = useMemo(
         () => ({
@@ -248,6 +281,94 @@ export function CustomersModule() {
         await Promise.all([activeQuery.refetch(), groupQuery.refetch()]);
     };
 
+    const saveNewCustomer = async () => {
+        if (!createDraft.emailAddress.trim()) {
+            setActionError('邮箱不能为空');
+            return;
+        }
+        try {
+            const result = await createCustomer({
+                variables: {
+                    input: {
+                        title: createDraft.title.trim() || null,
+                        firstName: createDraft.firstName.trim(),
+                        lastName: createDraft.lastName.trim(),
+                        emailAddress: createDraft.emailAddress.trim(),
+                        phoneNumber: createDraft.phoneNumber.trim() || null,
+                    },
+                },
+            });
+            const payload = (
+                result.data as
+                    { createCustomer?: { __typename?: string; message?: string; id?: string } } | undefined
+            )?.createCustomer;
+            if (payload?.__typename !== 'Customer' || !payload.id) throw new Error(getMutationError(payload));
+            setCreateOpen(false);
+            setCreateDraft(emptyCustomerForm);
+            setNotice('客户已创建');
+            await refresh();
+            setSelectedCustomerId(payload.id);
+        } catch (cause) {
+            setActionError(errorText(cause));
+        }
+    };
+    const changeSelectedGroup = async (kind: 'add' | 'remove') => {
+        if (!selectedCustomerIds.length || !bulkGroupId) return;
+        try {
+            const payload =
+                kind === 'add'
+                    ? (
+                          await addCustomersToGroup({
+                              variables: { customerIds: selectedCustomerIds, groupId: bulkGroupId },
+                          })
+                      ).data?.addCustomersToGroup
+                    : (
+                          await removeCustomersFromGroup({
+                              variables: { customerIds: selectedCustomerIds, groupId: bulkGroupId },
+                          })
+                      ).data?.removeCustomersFromGroup;
+            if (!payload?.id) throw new Error('后端未返回已更新客户组');
+            setNotice(`${selectedCustomerIds.length} 位客户已${kind === 'add' ? '加入' : '移出'}分组`);
+            setSelectedCustomerIds([]);
+            setBulkGroupId('');
+            await refresh();
+        } catch (cause) {
+            setActionError(errorText(cause));
+        }
+    };
+    const removeSelectedCustomers = async (currentPassword: string) => {
+        try {
+            const result = await deleteCustomers({
+                variables: { ids: selectedCustomerIds },
+                context: sensitiveActionContext(currentPassword),
+            });
+            const outcomes = result.data?.deleteCustomers ?? [];
+            const deletedIds = selectedCustomerIds.filter(
+                (_id, index) => outcomes[index]?.result === 'DELETED',
+            );
+            const failures = outcomes.filter(item => item.result !== 'DELETED');
+            if (deletedIds.length) {
+                setSelectedCustomerIds(current => current.filter(id => !deletedIds.includes(id)));
+                await refresh();
+            }
+            if (outcomes.length !== selectedCustomerIds.length || failures.length) {
+                throw new Error(
+                    `已删除 ${deletedIds.length} 位，${selectedCustomerIds.length - deletedIds.length} 位失败：${
+                        failures
+                            .map(item => item.message)
+                            .filter(Boolean)
+                            .join('；') || '后端未返回完整结果'
+                    }`,
+                );
+            }
+            setNotice(`已删除 ${outcomes.length} 位客户`);
+            setSelectedCustomerIds([]);
+            setDeleteDialogOpen(false);
+        } catch (cause) {
+            setActionError(errorText(cause));
+        }
+    };
+
     return (
         <div className="flex h-full flex-col bg-slate-50">
             <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-4 sm:px-8">
@@ -259,6 +380,16 @@ export function CustomersModule() {
                         </p>
                     </div>
                     <div className="flex items-center gap-2">
+                        {canCreateCustomer && (
+                            <button
+                                type="button"
+                                onClick={() => setCreateOpen(true)}
+                                className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white"
+                            >
+                                <Plus className="h-3.5 w-3.5" />
+                                新建客户
+                            </button>
+                        )}
                         <button
                             type="button"
                             onClick={() => setGroupManagerOpen(true)}
@@ -351,6 +482,61 @@ export function CustomersModule() {
                         </span>
                         <span>列表只展示后端可核实字段，不推算虚假消费画像</span>
                     </div>
+                    {selectedCustomerIds.length > 0 && (
+                        <div className="mt-3 flex flex-col gap-2 border-t border-slate-100 pt-3 sm:flex-row sm:items-center">
+                            <strong className="text-xs text-slate-700">
+                                已选 {selectedCustomerIds.length} 位
+                            </strong>
+                            {canUpdateCustomer && (
+                                <>
+                                    <select
+                                        value={bulkGroupId}
+                                        onChange={event => setBulkGroupId(event.target.value)}
+                                        className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs"
+                                    >
+                                        <option value="">选择客户分组</option>
+                                        {groups.map(group => (
+                                            <option key={group.id} value={group.id}>
+                                                {group.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <button
+                                        type="button"
+                                        onClick={() => void changeSelectedGroup('add')}
+                                        disabled={!bulkGroupId || addBulkState.loading}
+                                        className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold disabled:opacity-40"
+                                    >
+                                        加入分组
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => void changeSelectedGroup('remove')}
+                                        disabled={!bulkGroupId || removeBulkState.loading}
+                                        className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold disabled:opacity-40"
+                                    >
+                                        移出分组
+                                    </button>
+                                </>
+                            )}
+                            {canDeleteCustomer && (
+                                <button
+                                    type="button"
+                                    onClick={() => setDeleteDialogOpen(true)}
+                                    className="rounded-lg border border-rose-300 px-3 py-2 text-xs font-bold text-rose-700"
+                                >
+                                    删除所选
+                                </button>
+                            )}
+                            <button
+                                type="button"
+                                onClick={() => setSelectedCustomerIds([])}
+                                className="text-xs font-bold text-slate-500"
+                            >
+                                取消选择
+                            </button>
+                        </div>
+                    )}
                 </section>
 
                 {activeQuery.loading && !list ? (
@@ -368,9 +554,29 @@ export function CustomersModule() {
                             <table className="w-full min-w-[1640px] border-collapse text-left text-xs">
                                 <thead className="border-b border-slate-200 bg-slate-50 font-bold text-slate-500">
                                     <tr>
+                                        <th scope="col" className="w-10 bg-slate-50 px-3 py-3">
+                                            <input
+                                                type="checkbox"
+                                                aria-label="选择当前页全部客户"
+                                                checked={
+                                                    Boolean(list?.items.length) &&
+                                                    list!.items.every(item =>
+                                                        selectedCustomerIds.includes(item.id),
+                                                    )
+                                                }
+                                                onChange={event => {
+                                                    const ids = list?.items.map(item => item.id) ?? [];
+                                                    setSelectedCustomerIds(current =>
+                                                        event.target.checked
+                                                            ? [...new Set([...current, ...ids])]
+                                                            : current.filter(id => !ids.includes(id)),
+                                                    );
+                                                }}
+                                            />
+                                        </th>
                                         <th
                                             scope="col"
-                                            className="sticky left-0 z-20 w-44 whitespace-nowrap bg-slate-50 px-3 py-3"
+                                            className="sticky left-10 z-20 w-44 whitespace-nowrap bg-slate-50 px-3 py-3"
                                         >
                                             姓名
                                         </th>
@@ -414,7 +620,23 @@ export function CustomersModule() {
                                                 key={customer.id}
                                                 className="group h-[52px] hover:bg-slate-50/80"
                                             >
-                                                <td className="sticky left-0 z-10 h-[52px] max-w-44 bg-white px-3 py-0 group-hover:bg-slate-50">
+                                                <td className="h-[52px] px-3 py-0">
+                                                    <input
+                                                        type="checkbox"
+                                                        aria-label={`选择 ${customerName(customer)}`}
+                                                        checked={selectedCustomerIds.includes(customer.id)}
+                                                        onChange={event =>
+                                                            setSelectedCustomerIds(current =>
+                                                                event.target.checked
+                                                                    ? [...current, customer.id]
+                                                                    : current.filter(
+                                                                          id => id !== customer.id,
+                                                                      ),
+                                                            )
+                                                        }
+                                                    />
+                                                </td>
+                                                <td className="sticky left-10 z-10 h-[52px] max-w-44 bg-white px-3 py-0 group-hover:bg-slate-50">
                                                     <button
                                                         type="button"
                                                         onClick={() => setSelectedCustomerId(customer.id)}
@@ -537,6 +759,29 @@ export function CustomersModule() {
                 }}
                 onError={setActionError}
             />
+            {createOpen && (
+                <Modal title="新建客户" width="max-w-xl" onClose={() => setCreateOpen(false)}>
+                    <CustomerEditForm
+                        form={createDraft}
+                        setForm={setCreateDraft}
+                        pending={createState.loading}
+                        onCancel={() => setCreateOpen(false)}
+                        onSave={() => void saveNewCustomer()}
+                    />
+                </Modal>
+            )}
+            <SensitiveActionDialog
+                open={deleteDialogOpen}
+                title={`删除 ${selectedCustomerIds.length} 位客户`}
+                description="删除可能因关联订单被后端拒绝。系统将验证当前管理员密码，只有后端逐项确认后才显示成功。"
+                confirmLabel="验证并删除"
+                loading={deleteState.loading}
+                error={actionError}
+                onClose={() => {
+                    if (!deleteState.loading) setDeleteDialogOpen(false);
+                }}
+                onConfirm={removeSelectedCustomers}
+            />
         </div>
     );
 }
@@ -558,7 +803,13 @@ function CustomerDrawer({
     onViewOrders: (email: string) => void;
     onViewOrder: (id: string) => void;
 }) {
-    const { data, loading, error, refetch } = useQuery<CustomerDetailResult>(CUSTOMER_DETAIL_QUERY, {
+    const customerCustomFields = useCustomFieldDefinitions('Customer');
+    const customerDetailDocument = useMemo(
+        () =>
+            addCustomFieldsToDocument(CUSTOMER_DETAIL_QUERY, 'Customer', customerCustomFields, ['customer']),
+        [customerCustomFields],
+    );
+    const { data, loading, error, refetch } = useQuery<CustomerDetailResult>(customerDetailDocument, {
         variables: { id: customerId },
         skip: !customerId,
         fetchPolicy: 'cache-and-network',
@@ -566,9 +817,19 @@ function CustomerDrawer({
     const customer = data?.customer;
     const [editing, setEditing] = useState(false);
     const [formDraft, setFormDraft] = useState<CustomerForm | null>(null);
+    const [customFieldValues, setCustomFieldValues] = useState<CustomFieldValueMap>({});
+    const [customFieldSourceId, setCustomFieldSourceId] = useState('');
     const [note, setNote] = useState('');
     const [selectedGroup, setSelectedGroup] = useState('');
     const [addressEditor, setAddressEditor] = useState<CustomerAddressRecord | 'create' | null>(null);
+
+    /* oxlint-disable react/set-state-in-effect -- the versioned customer response initializes the edit draft. */
+    useEffect(() => {
+        if (!customer || customer.id === customFieldSourceId) return;
+        setCustomFieldValues(customFieldValuesFromEntity(customerCustomFields, customer.customFields));
+        setCustomFieldSourceId(customer.id);
+    }, [customer, customerCustomFields, customFieldSourceId]);
+    /* oxlint-enable react/set-state-in-effect */
 
     const { hasAnyPermission } = useAdminPermissions();
     const canCreateAddress = hasAnyPermission(['CreateCustomer']);
@@ -622,6 +883,10 @@ function CustomerDrawer({
 
     const saveCustomer = async () => {
         if (!customer || !form.emailAddress.trim()) return onError('邮箱不能为空');
+        const customFieldErrors = validateCustomFieldValues(customerCustomFields, customFieldValues);
+        if (Object.keys(customFieldErrors).length > 0) {
+            return onError(Object.values(customFieldErrors)[0] ?? '客户扩展字段校验失败');
+        }
         try {
             const result = await updateCustomer({
                 variables: {
@@ -632,6 +897,7 @@ function CustomerDrawer({
                         lastName: form.lastName.trim(),
                         emailAddress: form.emailAddress.trim(),
                         phoneNumber: form.phoneNumber.trim() || null,
+                        customFields: customFieldInputFromValues(customerCustomFields, customFieldValues),
                     },
                 },
             });
@@ -828,6 +1094,12 @@ function CustomerDrawer({
                                         onCancel={() => {
                                             setEditing(false);
                                             setFormDraft(null);
+                                            setCustomFieldValues(
+                                                customFieldValuesFromEntity(
+                                                    customerCustomFields,
+                                                    customer.customFields,
+                                                ),
+                                            );
                                         }}
                                         onSave={() => void saveCustomer()}
                                     />
@@ -840,6 +1112,15 @@ function CustomerDrawer({
                                     </div>
                                 )}
                             </section>
+                            {editing && (
+                                <DynamicCustomFieldsForm
+                                    title="客户扩展字段"
+                                    fields={customerCustomFields}
+                                    values={customFieldValues}
+                                    onChange={setCustomFieldValues}
+                                    disabled={!canUpdateCustomer || updateState.loading}
+                                />
+                            )}
                             <section className="rounded-xl border border-slate-200 p-4">
                                 <h3 className="mb-3 flex items-center gap-1.5 text-xs font-bold text-slate-900">
                                     <Tag className="h-4 w-4 text-blue-600" />

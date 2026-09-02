@@ -7,7 +7,7 @@ import { MerchantInitialPasswordService } from './merchant-initial-password.serv
 function createService(access: StoreAdministratorAccess | null = null, currentPasswordMatches = false) {
     const accessRepository = {
         findOne: vi.fn().mockResolvedValue(access),
-        save: vi.fn(async value => value),
+        save: vi.fn(value => Promise.resolve(value)),
     };
     const authenticationMethod = { passwordHash: 'current-hash' };
     const userRepository = {
@@ -123,11 +123,22 @@ describe('MerchantInitialPasswordService', () => {
     });
 
     it.each([
+        'addManualPaymentToOrder',
+        'cancelPayment',
         'refundOrder',
+        'settlePayment',
         'settleRefund',
+        'transitionPaymentToState',
         'cancelOrder',
         'updateRole',
+        'updateApiKey',
         'rotateApiKey',
+        'updateMyStoreCurrencyConfiguration',
+        'refreshMyStoreExchangeRate',
+        'refreshMyStoreUsdtRate',
+        'submitMyStoreUsdtWallet',
+        'reviewStoreUsdtWallet',
+        'recordStoreUsdtManualRefund',
         'adjustReferralBalance',
         'processReferralWithdrawal',
     ])('requires the current password for %s', async fieldName => {

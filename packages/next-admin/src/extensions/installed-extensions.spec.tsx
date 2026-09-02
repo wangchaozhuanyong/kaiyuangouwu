@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+    getNextAdminExtensionLegacyRoutes,
     getNextAdminExtensionNavItems,
     getNextAdminExtensionRoutes,
     getNextAdminExtensions,
@@ -8,10 +9,11 @@ import {
 import { STORE_CURRENCY_COMPATIBILITY_TARGET } from './installed-extensions';
 
 describe('installed next-admin extensions', () => {
-    it('registers all seven local plugins through the shared extension API', () => {
+    it('registers all eight local plugins through the shared extension API', () => {
         expect(getNextAdminExtensions().map(extension => extension.id)).toEqual([
             'image-generation-plugin',
             'content-translation-plugin',
+            'two-factor-dashboard-plugin',
             'catalog-management-plugin',
             'storefront-content-plugin',
             'operations-dashboard-plugin',
@@ -24,25 +26,42 @@ describe('installed next-admin extensions', () => {
         const catalogExtension = getNextAdminExtensions().find(
             extension => extension.id === 'catalog-management-plugin',
         );
-        expect(catalogExtension?.actions).toEqual([
-            expect.objectContaining({
-                id: 'catalog-safe-import',
-                pageId: 'product-list',
-                permissions: ['CreateCatalogImport'],
-            }),
-        ]);
+        expect(catalogExtension?.actions).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    id: 'catalog-safe-import',
+                    pageId: 'product-list',
+                    permissions: ['CreateCatalogImport'],
+                }),
+                expect.objectContaining({ id: 'catalog-standard-export', pageId: 'product-list' }),
+                expect.objectContaining({ id: 'catalog-bulk-channels', pageId: 'product-list' }),
+            ]),
+        );
     });
 
     it('provides unique routes plus the plugin navigation entries', () => {
         const routes = getNextAdminExtensionRoutes();
-        expect(routes).toHaveLength(21);
+        expect(routes).toHaveLength(25);
         expect(new Set(routes.map(route => route.id)).size).toBe(routes.length);
         expect(new Set(routes.map(route => route.path)).size).toBe(routes.length);
+        expect(routes).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    id: 'two-factor-codes',
+                    path: '/plugins/two-factor-codes',
+                }),
+            ]),
+        );
+        expect(getNextAdminExtensionLegacyRoutes()).toContainEqual(
+            expect.objectContaining({ path: '/two-factor-codes', target: '/plugins/two-factor-codes' }),
+        );
         expect(getNextAdminExtensionNavItems('plugins').map(route => route.path)).toEqual([
             '/plugins/client-plugins',
+            '/storefront/business-services-copy',
             '/plugins/ai-settings',
             '/plugins/ai-access',
             '/plugins/translations',
+            '/plugins/two-factor-codes',
         ]);
     });
 

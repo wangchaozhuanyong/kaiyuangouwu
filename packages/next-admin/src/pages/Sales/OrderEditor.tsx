@@ -50,6 +50,7 @@ import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import {
+    buildCompatibleRefundOrderInput,
     formatAddress,
     formatDateTime,
     formatMoney,
@@ -451,11 +452,11 @@ export function OrderEditor() {
         try {
             const response = await refundOrder({
                 variables: {
-                    input: {
-                        paymentId: selectedPayment.payment.id,
+                    input: buildCompatibleRefundOrderInput(
+                        selectedPayment.payment.id,
                         amount,
-                        reason: refundReason.trim(),
-                    },
+                        refundReason.trim(),
+                    ),
                 },
                 context: sensitiveActionContext(refundCurrentPassword),
             });
