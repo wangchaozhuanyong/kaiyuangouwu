@@ -5,7 +5,7 @@ import {
     readStoredSettlementCurrency,
     writeStoredCurrency,
     writeStoredSettlementCurrency,
-} from './App';
+} from './storefront-utils';
 import { MarketConfig } from './types';
 
 const market: MarketConfig = {

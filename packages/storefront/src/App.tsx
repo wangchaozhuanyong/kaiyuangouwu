@@ -15,9 +15,6 @@ import {
     languageCodeFor,
     localeFor,
     marketForStorefrontConfig,
-    parseManualStorefrontLanguagePreference,
-    resolveStorefrontLanguage,
-    serializeManualStorefrontLanguagePreference,
     uiCopy,
 } from './i18n';
 import {
@@ -57,6 +54,33 @@ import { readStoredStrings, scopedStorageKey } from './storefront-storage';
 import { StorefrontContext } from './StorefrontContext';
 import { cacheLogoUrl } from './StorefrontErrorBoundary';
 import { StorefrontUpdatePrompt } from './StorefrontUpdatePrompt';
+
+import { useAutoMattedLogo } from './hooks/useAutoMattedLogo';
+import {
+    contentNumberSetting,
+    contentStringArraySetting,
+    DEFAULT_STOREFRONT_NAMES,
+    FAVORITE_PRODUCT_LIMIT,
+    FAVORITE_PRODUCT_STORAGE_KEY,
+    minimumProductPrice,
+    normalizeStorefrontName,
+    productImage,
+    readStoredCurrency,
+    readStoredLanguage,
+    readStoredSettlementCurrency,
+    RECENT_PRODUCT_LIMIT,
+    RECENT_PRODUCT_STORAGE_KEY,
+    setMetaContent,
+    STOREFRONT_CURRENCY_PREFERENCE_STORAGE_KEY,
+    STOREFRONT_LANGUAGE_PREFERENCE_STORAGE_KEY,
+    STOREFRONT_NAME_MAX_DISPLAY_UNITS,
+    STOREFRONT_SETTLEMENT_CURRENCY_PREFERENCE_STORAGE_KEY,
+    storefrontNameDisplayUnits,
+    trimText,
+    writeManualLanguage,
+    writeStoredCurrency,
+    writeStoredSettlementCurrency,
+} from './storefront-utils';
 import {
     ActiveCustomer,
     CreateAfterSalesRequestInput,
@@ -77,199 +101,31 @@ export { HomeDualCategoryShowcase } from './storefront-ui/content-ui';
 export { rootPages, routeFromHash, routeHash };
 export type { MainPage, OrderTab, RouteName, RouteState, SortMode };
 
-export const STOREFRONT_NAME_MAX_DISPLAY_UNITS = 16;
-export const FAVORITE_PRODUCT_STORAGE_KEY = 'storefront-favorite-product-ids';
-export const RECENT_PRODUCT_STORAGE_KEY = 'storefront-recent-product-ids';
-export const STOREFRONT_LANGUAGE_PREFERENCE_STORAGE_KEY = 'storefront-language-preference-v2';
-export const STOREFRONT_CURRENCY_PREFERENCE_STORAGE_KEY = 'storefront-currency-preference-v1';
-export const STOREFRONT_SETTLEMENT_CURRENCY_PREFERENCE_STORAGE_KEY =
-    'storefront-settlement-currency-preference-v1';
-export const FAVORITE_PRODUCT_LIMIT = 100;
-export const RECENT_PRODUCT_LIMIT = 20;
-
-export function storefrontNameDisplayUnits(value: string): number {
-    return Array.from(value).reduce((total, character) => {
-        const isWideCharacter = /[\p{Script=Han}\uFF01-\uFF60]/u.test(character);
-        return total + (isWideCharacter ? 2 : 1);
-    }, 0);
-}
-
-export function normalizeStorefrontName(value: string | null | undefined, fallback: string): string {
-    const normalized = value?.trim() ?? '';
-    if (!normalized || storefrontNameDisplayUnits(normalized) > STOREFRONT_NAME_MAX_DISPLAY_UNITS) {
-        return fallback;
-    }
-    return normalized;
-}
-
-export function readStoredLanguage(market: MarketConfig): StorefrontLanguage {
-    try {
-        const manualPreference = parseManualStorefrontLanguagePreference(
-            localStorage.getItem(scopedStorageKey(STOREFRONT_LANGUAGE_PREFERENCE_STORAGE_KEY, market.code)),
-        );
-        return resolveStorefrontLanguage(market, manualPreference);
-    } catch {
-        return resolveStorefrontLanguage(market, null);
-    }
-}
-
-export function writeManualLanguage(marketCode: string, language: StorefrontLanguage): void {
-    try {
-        localStorage.setItem(
-            scopedStorageKey(STOREFRONT_LANGUAGE_PREFERENCE_STORAGE_KEY, marketCode),
-            serializeManualStorefrontLanguagePreference(language),
-        );
-    } catch {
-        // A disabled localStorage must not prevent language changes.
-    }
-}
-
-export function readStoredCurrency(market: MarketConfig, available?: readonly string[]): string {
-    try {
-        const stored = localStorage.getItem(
-            scopedStorageKey(STOREFRONT_CURRENCY_PREFERENCE_STORAGE_KEY, market.code),
-        );
-        if (stored && (!available || available.includes(stored))) return stored;
-    } catch {
-        // A disabled localStorage must not prevent the storefront from loading.
-    }
-    return available?.includes(market.currencyCode)
-        ? market.currencyCode
-        : (available?.[0] ?? market.currencyCode);
-}
-
-export function writeStoredCurrency(marketCode: string, currencyCode: string): void {
-    try {
-        localStorage.setItem(
-            scopedStorageKey(STOREFRONT_CURRENCY_PREFERENCE_STORAGE_KEY, marketCode),
-            currencyCode,
-        );
-    } catch {
-        // The in-memory choice still works for this page lifetime.
-    }
-}
-
-export function readStoredSettlementCurrency(market: MarketConfig, available?: readonly string[]): string {
-    try {
-        const stored = localStorage.getItem(
-            scopedStorageKey(STOREFRONT_SETTLEMENT_CURRENCY_PREFERENCE_STORAGE_KEY, market.code),
-        );
-        if (stored && stored !== 'USDT' && (!available || available.includes(stored))) return stored;
-    } catch {
-        // A disabled localStorage must not prevent the storefront from loading.
-    }
-    return available?.includes(market.currencyCode)
-        ? market.currencyCode
-        : (available?.[0] ?? market.currencyCode);
-}
-
-export function writeStoredSettlementCurrency(marketCode: string, currencyCode: string): void {
-    if (currencyCode === 'USDT') return;
-    try {
-        localStorage.setItem(
-            scopedStorageKey(STOREFRONT_SETTLEMENT_CURRENCY_PREFERENCE_STORAGE_KEY, marketCode),
-            currencyCode,
-        );
-    } catch {
-        // The in-memory choice still works for this page lifetime.
-    }
-}
-
-export function setMetaContent(selector: string, content: string): void {
-    document.querySelector<HTMLMetaElement>(selector)?.setAttribute('content', content);
-}
-
-/**
- * 智能 Canvas 自动抠图 Hook：
- * 检测上传 Logo 的四角背景色，自动将纯黑/纯白/单色背景去除为透明 PNG，
- * 并应用边缘抗锯齿羽化，彻底解决底色框不协调问题。
- */
-export function useAutoMattedLogo(url: string | null): string | null {
-    const [transparentUrl, setTransparentUrl] = useState<string | null>(url);
-
-    useEffect(() => {
-        if (!url) {
-            setTransparentUrl(null);
-            return;
-        }
-
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.src = url;
-
-        img.onload = () => {
-            try {
-                const canvas = document.createElement('canvas');
-                const ctx = canvas.getContext('2d', { willReadFrequently: true });
-                if (!ctx) {
-                    setTransparentUrl(url);
-                    return;
-                }
-
-                canvas.width = img.naturalWidth || img.width;
-                canvas.height = img.naturalHeight || img.height;
-                ctx.drawImage(img, 0, 0);
-
-                const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                const data = imgData.data;
-
-                // 采样四个角落像素判断背景色
-                const corners = [
-                    [0, 0],
-                    [canvas.width - 1, 0],
-                    [0, canvas.height - 1],
-                    [canvas.width - 1, canvas.height - 1],
-                ];
-
-                const cornerColors = corners.map(([x, y]) => {
-                    const idx = (y * canvas.width + x) * 4;
-                    return [data[idx], data[idx + 1], data[idx + 2], data[idx + 3]];
-                });
-
-                const [r0, g0, b0, a0] = cornerColors[0];
-                if (a0 > 0) {
-                    const isCornerBg = cornerColors.every(
-                        ([r, g, b]) => Math.hypot(r - r0, g - g0, b - b0) < 40,
-                    );
-
-                    if (isCornerBg) {
-                        for (let i = 0; i < data.length; i += 4) {
-                            const r = data[i];
-                            const g = data[i + 1];
-                            const b = data[i + 2];
-                            const a = data[i + 3];
-                            if (a > 0) {
-                                const diff = Math.hypot(r - r0, g - g0, b - b0);
-                                if (diff < 45) {
-                                    data[i + 3] = 0;
-                                } else if (diff < 70) {
-                                    data[i + 3] = Math.round(a * ((diff - 45) / 25));
-                                }
-                            }
-                        }
-                        ctx.putImageData(imgData, 0, 0);
-                        setTransparentUrl(canvas.toDataURL('image/png'));
-                        return;
-                    }
-                }
-                setTransparentUrl(url);
-            } catch {
-                setTransparentUrl(url);
-            }
-        };
-
-        img.onerror = () => {
-            setTransparentUrl(url);
-        };
-    }, [url]);
-
-    return transparentUrl;
-}
-
-/** Renders the store logo image if available, otherwise falls back to the newly crafted high-def vector logo. */
-export const DEFAULT_STOREFRONT_NAMES: Record<StorefrontLanguage, string> = {
-    zh: '云桥Ai',
-    en: 'Yunqiao Ai',
+export {
+    contentNumberSetting,
+    contentStringArraySetting,
+    DEFAULT_STOREFRONT_NAMES,
+    FAVORITE_PRODUCT_LIMIT,
+    FAVORITE_PRODUCT_STORAGE_KEY,
+    minimumProductPrice,
+    normalizeStorefrontName,
+    productImage,
+    readStoredCurrency,
+    readStoredLanguage,
+    readStoredSettlementCurrency,
+    RECENT_PRODUCT_LIMIT,
+    RECENT_PRODUCT_STORAGE_KEY,
+    setMetaContent,
+    STOREFRONT_CURRENCY_PREFERENCE_STORAGE_KEY,
+    STOREFRONT_LANGUAGE_PREFERENCE_STORAGE_KEY,
+    STOREFRONT_NAME_MAX_DISPLAY_UNITS,
+    STOREFRONT_SETTLEMENT_CURRENCY_PREFERENCE_STORAGE_KEY,
+    storefrontNameDisplayUnits,
+    trimText,
+    useAutoMattedLogo,
+    writeManualLanguage,
+    writeStoredCurrency,
+    writeStoredSettlementCurrency,
 };
 
 export function App() {
@@ -1757,33 +1613,4 @@ export function App() {
             </div>
         </StorefrontContext.Provider>
     );
-}
-
-export function productImage(product?: Product | null): string | null {
-    return product?.featuredAsset?.preview ?? product?.assets?.[0]?.preview ?? null;
-}
-
-export function minimumProductPrice(product: Product): number {
-    return Math.min(...product.variants.map(variant => variant.priceWithTax), Number.MAX_SAFE_INTEGER);
-}
-
-export function trimText(value: string | undefined, length: number): string {
-    if (!value) return '';
-    const clean = value
-        .replace(/<[^>]+>/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-    return clean.length > length ? `${clean.slice(0, length)}…` : clean;
-}
-
-export function contentNumberSetting(value: unknown, fallback: number): number {
-    return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
-}
-
-export function contentStringArraySetting(value: unknown): string[] {
-    return Array.isArray(value)
-        ? Array.from(
-              new Set(value.flatMap(item => (typeof item === 'string' && item.trim() ? [item.trim()] : []))),
-          )
-        : [];
 }
