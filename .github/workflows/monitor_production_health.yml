@@ -54,29 +54,8 @@ jobs:
               run: |
                   set -Eeuo pipefail
 
-                  parameter_names="$RUNNER_TEMP/payment-parameter-names.txt"
-                  secret_names="$RUNNER_TEMP/payment-secret-names.txt"
-                  if aws ssm describe-parameters \
-                    --region "$AWS_REGION" \
-                    --query 'Parameters[].Name' \
-                    --output text > "$parameter_names" 2>/dev/null; then
-                      tr '\t' '\n' < "$parameter_names" \
-                        | grep -Ei '((vendure|kaiyuangouwu|damatong).*(usdt|wallet|payment)|(usdt|wallet|payment).*(vendure|kaiyuangouwu|damatong))' \
-                        | sed 's/^/AWS_PARAMETER_NAME /' || true
-                  else
-                      echo 'AWS_PARAMETER_INVENTORY access=denied_or_unavailable'
-                  fi
-
-                  if aws secretsmanager list-secrets \
-                    --region "$AWS_REGION" \
-                    --query 'SecretList[].Name' \
-                    --output text > "$secret_names" 2>/dev/null; then
-                      tr '\t' '\n' < "$secret_names" \
-                        | grep -Ei '((vendure|kaiyuangouwu|damatong).*(usdt|wallet|payment)|(usdt|wallet|payment).*(vendure|kaiyuangouwu|damatong))' \
-                        | sed 's/^/AWS_SECRET_NAME /' || true
-                  else
-                      echo 'AWS_SECRET_INVENTORY access=denied_or_unavailable'
-                  fi
+                  echo 'AWS_PARAMETER_INVENTORY status=skipped access=not_granted_by_design'
+                  echo 'AWS_SECRET_INVENTORY status=skipped access=not_granted_by_design'
 
                   audit_script_b64="$(base64 -w0 deploy/audit-production-payment-config.mjs)"
                   remote_command="printf '%s' '${audit_script_b64}' | base64 -d | node"
@@ -123,6 +102,7 @@ jobs:
                     echo
                     echo "- SSM command: \`$command_id\`"
                     echo "- Status: \`$status\`"
+                    echo '- Account-wide parameter and secret name inventories: `skipped (not granted by design)`'
                     echo
                     echo '```text'
                     jq -r '.Output' "$RUNNER_TEMP/payment-config-audit.json"
