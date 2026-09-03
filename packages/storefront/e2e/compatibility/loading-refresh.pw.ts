@@ -17,6 +17,16 @@ async function authorizeLocalStorefront(page: Page) {
     ]);
 }
 
+async function isolateRouteLoadingFromShopApi(page: Page) {
+    await page.route('**/shop-api?**', async route => {
+        await route.fulfill({
+            status: 503,
+            contentType: 'application/json',
+            body: JSON.stringify({ errors: [{ message: 'Route-loading compatibility fixture' }] }),
+        });
+    });
+}
+
 async function holdRouteChunk(page: Page, chunkNames: readonly string[]) {
     let delayed = false;
     let markRequested!: () => void;
@@ -46,6 +56,7 @@ async function holdRouteChunk(page: Page, chunkNames: readonly string[]) {
 
 test('分类页硬刷新显示中文路由骨架并保留筛选参数', async ({ page }) => {
     await authorizeLocalStorefront(page);
+    await isolateRouteLoadingFromShopApi(page);
     const delayedChunk = await holdRouteChunk(page, ['category', 'catalog-route-pages', 'category-page']);
 
     const navigation = page.goto(
@@ -76,6 +87,7 @@ test('分类页硬刷新显示中文路由骨架并保留筛选参数', async ({
 
 test('目标路由未解析时底部导航保持当前页高亮', async ({ page }) => {
     await authorizeLocalStorefront(page);
+    await isolateRouteLoadingFromShopApi(page);
     await page.goto('/category', { waitUntil: 'domcontentloaded' });
     await expect(page.locator('main.category-page')).toBeVisible();
     const delayedChunk = await holdRouteChunk(page, [
