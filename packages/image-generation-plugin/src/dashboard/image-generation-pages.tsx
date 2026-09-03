@@ -2498,7 +2498,7 @@ function PromptModelManager({
                                     max: 500,
                                 },
                                 {
-                                    label: 'API Key',
+                                    label: '接口密钥（API Key）',
                                     key: 'apiKey' as const,
                                     type: 'password',
                                     ph: '填写 API Key',
@@ -2544,7 +2544,7 @@ function PromptModelManager({
                                 >
                                     <option value="">自动推断（根据模型 ID）</option>
                                     <option value="OPENAI">OpenAI 兼容（chat/completions）</option>
-                                    <option value="GEMINI">Gemini（generateContent）</option>
+                                    <option value="GEMINI">Gemini 接口（generateContent）</option>
                                 </select>
                             </Field>
                             <div className="grid grid-cols-2 gap-4">
