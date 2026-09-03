@@ -132,4 +132,12 @@ describe('FavoriteProductsPage', () => {
         expect(markup).toContain('测试商品');
         expect(markup).not.toContain('aria-label="Loading"');
     });
+
+    it('shows favorites count in header and omits redundant section header', () => {
+        const markup = renderFavorites([product]);
+
+        expect(markup).toContain('我的收藏 (1)');
+        expect(markup).not.toContain('已收藏商品');
+        expect(markup).not.toContain('共 1 件商品');
+    });
 });

@@ -567,6 +567,13 @@
     caret-color: var(--auth-accent);
 }
 
+.login-content form input:focus,
+.login-content form input:focus-visible {
+    outline: 0 !important;
+    border: 0 !important;
+    box-shadow: none !important;
+}
+
 .login-content form input::placeholder {
     color: #8a9692;
     opacity: 1;
@@ -822,4 +829,3 @@
         padding-top: 26px;
     }
 }
-

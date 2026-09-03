@@ -400,6 +400,7 @@ export function CartPage() {
                         <ProductSection
                             title={isZh ? '顺手带一件' : 'Complete the order'}
                             subtitle={isZh ? '从当前店铺继续挑选' : 'More from this store'}
+                            subtitlePlacement="end"
                             products={products
                                 .filter(
                                     product =>

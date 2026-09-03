@@ -1,15 +1,24 @@
+import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { ArrowLeft, CircleCheck, Mail, MapPin, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { FormEvent, ReactNode, useEffect, useId, useRef, useState } from 'react';
 
 import { ShopApi } from './api';
+import { languageCodeFor } from './i18n';
+import {
+    PUBLIC_QUERY_GC_TIME,
+    PUBLIC_QUERY_STALE_TIME,
+    publicQueryMeta,
+    ROUTE_QUERY_STALE_TIME,
+    storefrontQueryKeys,
+} from './query-client';
+import { PageSkeleton } from './route-loading';
 import { acquireBodyScrollLock } from './scroll-lock';
 import { routeNavigateOptions } from './storefront-router';
 import {
     ActiveCustomer,
     CustomerAddress,
     CustomerAddressInput,
-    CustomerDeliveryEmail,
     MarketConfig,
     StoreCommerceMode,
     StorefrontConfig,
@@ -27,6 +36,7 @@ export function AddressesPage({
     market,
     availableCountries,
     language,
+    commerceMode: initialCommerceMode,
     onBack,
     onCustomerChange,
     onNotify,
@@ -36,37 +46,55 @@ export function AddressesPage({
     market: MarketConfig;
     availableCountries: StorefrontConfig['availableCountries'];
     language: StorefrontLanguage;
+    commerceMode?: StoreCommerceMode | null;
     onBack: () => void;
     onCustomerChange: (customer: ActiveCustomer | null) => void;
     onNotify: (message: string) => void;
 }) {
     const navigate = useNavigate();
     const isZh = language === 'zh';
+    const vendureLanguage = languageCodeFor(language);
     const [open, setOpen] = useState(false);
     const [editingAddress, setEditingAddress] = useState<CustomerAddress | null>(null);
     const [submitting, setSubmitting] = useState(false);
     const [formError, setFormError] = useState('');
-    const [activeTab, setActiveTab] = useState<'physical' | 'email'>('physical');
-    const [commerceMode, setCommerceMode] = useState<StoreCommerceMode>('HYBRID');
-    const [deliveryEmails, setDeliveryEmails] = useState<CustomerDeliveryEmail[]>([]);
     const [emailOpen, setEmailOpen] = useState(false);
+    const [selectedTab, setSelectedTab] = useState<'physical' | 'email' | null>(null);
 
-    useEffect(() => {
-        if (!customer) return;
-        const controller = new AbortController();
-        void Promise.all([
-            api.activeStoreCommerceMode(controller.signal),
-            api.myDeliveryEmails(controller.signal),
-        ])
-            .then(([mode, emails]) => {
-                setCommerceMode(mode);
-                setDeliveryEmails(emails);
-                if (mode === 'DIGITAL_ONLY') setActiveTab('email');
-                if (mode === 'PHYSICAL_ONLY') setActiveTab('physical');
-            })
-            .catch(() => undefined);
-        return () => controller.abort();
-    }, [api, customer]);
+    const commerceModeQuery = useQuery({
+        queryKey: storefrontQueryKeys.commerceMode(storefrontQueryKeys.market(market)),
+        queryFn: ({ signal }) => api.activeStoreCommerceMode(signal),
+        initialData: initialCommerceMode ?? undefined,
+        staleTime: PUBLIC_QUERY_STALE_TIME,
+        gcTime: PUBLIC_QUERY_GC_TIME,
+        meta: publicQueryMeta(),
+    });
+    const commerceMode = commerceModeQuery.data ?? initialCommerceMode ?? null;
+
+    const deliveryEmailsQueryKey = customer
+        ? storefrontQueryKeys.deliveryEmails(storefrontQueryKeys.market(market), vendureLanguage, customer.id)
+        : null;
+
+    const deliveryEmailsQuery = useQuery({
+        queryKey: deliveryEmailsQueryKey ?? ['storefront', 'anonymous', 'delivery-emails'],
+        queryFn: ({ signal }) => api.myDeliveryEmails(signal),
+        enabled: Boolean(
+            customer &&
+            (commerceMode === null || commerceMode === 'HYBRID' || commerceMode === 'DIGITAL_ONLY'),
+        ),
+        staleTime: ROUTE_QUERY_STALE_TIME,
+        gcTime: PUBLIC_QUERY_GC_TIME,
+    });
+    const deliveryEmails = deliveryEmailsQuery.data ?? [];
+
+    const effectiveTab: 'physical' | 'email' =
+        commerceMode === 'DIGITAL_ONLY'
+            ? 'email'
+            : commerceMode === 'PHYSICAL_ONLY'
+              ? 'physical'
+              : (selectedTab ??
+                (customer?.addresses?.length ? 'physical' : deliveryEmails.length ? 'email' : 'physical'));
+
     if (!customer) {
         return (
             <Subpage title={isZh ? '收货信息' : 'Delivery contacts'} language={language} onBack={onBack}>
@@ -76,6 +104,14 @@ export function AddressesPage({
                     action={isZh ? '去登录' : 'Sign in'}
                     onAction={() => void navigate(routeNavigateOptions({ name: 'login' }) as never)}
                 />
+            </Subpage>
+        );
+    }
+
+    if (!commerceMode && commerceModeQuery.isLoading) {
+        return (
+            <Subpage title={isZh ? '收货信息' : 'Delivery contacts'} language={language} onBack={onBack}>
+                <PageSkeleton label={isZh ? '正在加载收货信息' : 'Loading delivery contacts'} />
             </Subpage>
         );
     }
@@ -162,7 +198,6 @@ export function AddressesPage({
         setFormError('');
         setOpen(true);
     };
-    const refreshDeliveryEmails = async () => setDeliveryEmails(await api.myDeliveryEmails());
     const saveEmail = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         const data = new FormData(event.currentTarget);
@@ -175,7 +210,7 @@ export function AddressesPage({
                 label: formText(data, 'label'),
                 isDefault: data.get('isDefault') === 'on',
             });
-            await refreshDeliveryEmails();
+            await deliveryEmailsQuery.refetch();
             setEmailOpen(false);
             onNotify(isZh ? '交付邮箱已保存' : 'Delivery email saved');
         } catch (requestError) {
@@ -192,27 +227,57 @@ export function AddressesPage({
     };
     const removeEmail = async (id: string) => {
         if (!window.confirm(isZh ? '确定删除这个交付邮箱吗？' : 'Delete this delivery email?')) return;
-        await api.deleteDeliveryEmail(id);
-        await refreshDeliveryEmails();
-        onNotify(isZh ? '交付邮箱已删除' : 'Delivery email deleted');
+        try {
+            await api.deleteDeliveryEmail(id);
+            await deliveryEmailsQuery.refetch();
+            onNotify(isZh ? '交付邮箱已删除' : 'Delivery email deleted');
+        } catch (requestError) {
+            onNotify(
+                requestError instanceof Error
+                    ? requestError.message
+                    : isZh
+                      ? '删除失败'
+                      : 'Could not delete email',
+            );
+        }
     };
     const makeDefaultEmail = async (id: string) => {
-        await api.setDefaultDeliveryEmail(id);
-        await refreshDeliveryEmails();
-        onNotify(isZh ? '默认交付邮箱已更新' : 'Default delivery email updated');
+        try {
+            await api.setDefaultDeliveryEmail(id);
+            await deliveryEmailsQuery.refetch();
+            onNotify(isZh ? '默认交付邮箱已更新' : 'Default delivery email updated');
+        } catch (requestError) {
+            onNotify(
+                requestError instanceof Error
+                    ? requestError.message
+                    : isZh
+                      ? '设置默认交付邮箱失败'
+                      : 'Could not set default email',
+            );
+        }
     };
+
+    const pageTitle =
+        commerceMode === 'PHYSICAL_ONLY'
+            ? isZh
+                ? '收货地址'
+                : 'Delivery addresses'
+            : isZh
+              ? '收货信息'
+              : 'Delivery contacts';
+
     return (
         <main className="page subpage addresses-page">
             <SubHeader
-                title={isZh ? '收货信息' : 'Delivery contacts'}
+                title={pageTitle}
                 language={language}
                 onBack={onBack}
                 action={
                     <button
                         type="button"
-                        onClick={() => (activeTab === 'email' ? setEmailOpen(true) : startEdit(null))}
+                        onClick={() => (effectiveTab === 'email' ? setEmailOpen(true) : startEdit(null))}
                         aria-label={
-                            activeTab === 'email'
+                            effectiveTab === 'email'
                                 ? isZh
                                     ? '新增交付邮箱'
                                     : 'Add delivery email'
@@ -232,23 +297,23 @@ export function AddressesPage({
                 >
                     <button
                         type="button"
-                        className={activeTab === 'physical' ? 'is-active' : undefined}
-                        onClick={() => setActiveTab('physical')}
+                        className={effectiveTab === 'physical' ? 'is-active' : undefined}
+                        onClick={() => setSelectedTab('physical')}
                     >
                         <MapPin />
                         {isZh ? '实际地址' : 'Physical addresses'}
                     </button>
                     <button
                         type="button"
-                        className={activeTab === 'email' ? 'is-active' : undefined}
-                        onClick={() => setActiveTab('email')}
+                        className={effectiveTab === 'email' ? 'is-active' : undefined}
+                        onClick={() => setSelectedTab('email')}
                     >
                         <Mail />
                         {isZh ? '交付邮箱' : 'Delivery emails'}
                     </button>
                 </nav>
             )}
-            {activeTab === 'physical' &&
+            {effectiveTab === 'physical' &&
                 (customer.addresses?.length ? (
                     <div className="address-list">
                         {customer.addresses.map(address => (
@@ -290,8 +355,10 @@ export function AddressesPage({
                         onAction={() => startEdit(null)}
                     />
                 ))}
-            {activeTab === 'email' &&
-                (deliveryEmails.length ? (
+            {effectiveTab === 'email' &&
+                (deliveryEmailsQuery.isLoading && !deliveryEmailsQuery.data ? (
+                    <PageSkeleton label={isZh ? '正在加载交付邮箱' : 'Loading delivery emails'} />
+                ) : deliveryEmails.length ? (
                     <div className="address-list delivery-email-list">
                         {deliveryEmails.map(email => (
                             <article className="address-card delivery-email-card" key={email.id}>
@@ -413,7 +480,10 @@ export function AddressesPage({
                 <Sheet
                     title={isZh ? '新增交付邮箱' : 'Add delivery email'}
                     language={language}
-                    onClose={() => setEmailOpen(false)}
+                    onClose={() => {
+                        setEmailOpen(false);
+                        setFormError('');
+                    }}
                 >
                     <form className="address-form" onSubmit={event => void saveEmail(event)}>
                         <Field

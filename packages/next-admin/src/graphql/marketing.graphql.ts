@@ -434,6 +434,7 @@ export const UPDATE_REFERRAL_PROGRAM_MUTATION = gql`
             allowBalanceSpend
             attributionWindowDays
             defaultPosterTemplate
+            posterTemplates
         }
     }
 `;

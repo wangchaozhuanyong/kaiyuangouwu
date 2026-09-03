@@ -7,6 +7,8 @@ import {
     ReferralProgramRecord,
     ReferralProgramResult,
     ReferralReportsResult,
+    UPDATE_REFERRAL_POSTER_MUTATION,
+    UPDATE_REFERRAL_PROGRAM_MUTATION,
 } from '../../graphql/marketing.graphql';
 import { formatDateTime, formatMoney } from '../Sales/sales-utils';
 import { ErrorState, LoadingState, Message, Modal } from '../Settings/settings-ui';
@@ -62,6 +64,44 @@ export function TodayOverview({ data }: { data: ReferralProgramResult['referralT
         </section>
     );
 }
+
+export const SYSTEM_POSTER_TEMPLATES = [
+    {
+        id: 'BRAND_MINIMAL',
+        nameZh: '云桥简约',
+        nameEn: 'CloudBridge minimal',
+        desc: '经典白蓝极简科技版式，通用度最高，适合各类数字化产品。',
+        gradient: 'linear-gradient(135deg, #1d4ed8, #60a5fa)',
+    },
+    {
+        id: 'BENEFIT_RED_GOLD',
+        nameZh: '冰川蓝光',
+        nameEn: 'Glacier blue',
+        desc: '冷光科技冰川蓝渐变，视觉聚焦，适合 SaaS 与 AI 服务。',
+        gradient: 'linear-gradient(135deg, #0284c7, #38bdf8)',
+    },
+    {
+        id: 'PRODUCT_STORY',
+        nameZh: '青空流线',
+        nameEn: 'Skyline flow',
+        desc: '青空流线清新风格，视觉轻盈舒适，适合生活化与创作工具。',
+        gradient: 'linear-gradient(135deg, #0369a1, #06b6d4)',
+    },
+    {
+        id: 'PREMIUM_DARK',
+        nameZh: '深海科技',
+        nameEn: 'Deep-sea tech',
+        desc: '深邃极客暗黑风，对比度鲜明，适合高阶开发者与 AI 工具。',
+        gradient: 'linear-gradient(135deg, #020b1d, #0f2b5c)',
+    },
+    {
+        id: 'CLOUD_BRIDGE_ORBIT',
+        nameZh: '云桥轨道',
+        nameEn: 'CloudBridge orbit',
+        desc: '紫蓝科技轨道渐变，未来感与营销冲击力强。',
+        gradient: 'linear-gradient(135deg, #4338ca, #7c3aed)',
+    },
+] as const;
 
 export function ProgramSettings({
     draft,
@@ -143,9 +183,11 @@ export function ProgramSettings({
                         onChange={event => setDraft({ ...draft, defaultPosterTemplate: event.target.value })}
                         className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-normal text-slate-900"
                     >
-                        {program.posterTemplates.map(template => (
-                            <option key={template} value={template}>
-                                {posterLabel(template)}
+                        {SYSTEM_POSTER_TEMPLATES.filter(t =>
+                            (draft.posterTemplates ?? []).includes(t.id),
+                        ).map(template => (
+                            <option key={template.id} value={template.id}>
+                                {template.nameZh}（系统预置）
                             </option>
                         ))}
                         {program.posterTemplateConfigs
@@ -728,6 +770,130 @@ export function PostersPanel({
     const [remove, state] = useMutation<{
         deleteReferralPosterTemplate: { result: string; message?: string | null };
     }>(DELETE_REFERRAL_POSTER_MUTATION);
+    const [updateProgram, updateProgramState] = useMutation(UPDATE_REFERRAL_PROGRAM_MUTATION);
+    const [updatePoster, updatePosterState] = useMutation(UPDATE_REFERRAL_POSTER_MUTATION);
+
+    const toggleSystemTemplate = async (templateId: string, enabled: boolean) => {
+        const current = program.posterTemplates ?? [];
+        const next = enabled
+            ? [...new Set([...current, templateId])]
+            : current.filter(id => id !== templateId);
+        let nextDefault = program.defaultPosterTemplate;
+        if (!enabled && program.defaultPosterTemplate === templateId) {
+            const customEnabled = program.posterTemplateConfigs.filter(t => t.enabled).map(t => t.id);
+            const allRemaining = [...next, ...customEnabled];
+            if (allRemaining.length > 0) nextDefault = allRemaining[0];
+        }
+        try {
+            await updateProgram({
+                variables: {
+                    input: {
+                        expectedUpdatedAt: program.updatedAt,
+                        enabled: program.enabled,
+                        rewardRate: program.rewardRate,
+                        releaseDelayDays: program.releaseDelayDays,
+                        minimumOrderAmount: program.minimumOrderAmount,
+                        maxRewardPerOrder: program.maxRewardPerOrder,
+                        allowBalanceSpend: program.allowBalanceSpend,
+                        attributionWindowDays: program.attributionWindowDays,
+                        defaultPosterTemplate: nextDefault,
+                        posterTemplates: next,
+                    },
+                },
+            });
+            await onChanged(
+                `系统预置模板「${posterLabel(templateId)}」已${enabled ? '开启客户端显示' : '隐藏'}`,
+            );
+        } catch (error) {
+            onError(errorText(error));
+        }
+    };
+
+    const makeDefaultTemplate = async (templateId: string) => {
+        try {
+            await updateProgram({
+                variables: {
+                    input: {
+                        expectedUpdatedAt: program.updatedAt,
+                        enabled: program.enabled,
+                        rewardRate: program.rewardRate,
+                        releaseDelayDays: program.releaseDelayDays,
+                        minimumOrderAmount: program.minimumOrderAmount,
+                        maxRewardPerOrder: program.maxRewardPerOrder,
+                        allowBalanceSpend: program.allowBalanceSpend,
+                        attributionWindowDays: program.attributionWindowDays,
+                        defaultPosterTemplate: templateId,
+                        posterTemplates: program.posterTemplates,
+                    },
+                },
+            });
+            await onChanged(`默认海报已设置为「${posterLabel(templateId)}」`);
+        } catch (error) {
+            onError(errorText(error));
+        }
+    };
+
+    const toggleCustomTemplate = async (template: ReferralPosterRecord, enabled: boolean) => {
+        let nextDefault = program.defaultPosterTemplate;
+        if (!enabled && program.defaultPosterTemplate === template.id) {
+            const currentSystem = program.posterTemplates ?? [];
+            const otherCustom = program.posterTemplateConfigs
+                .filter(t => t.id !== template.id && t.enabled)
+                .map(t => t.id);
+            const allRemaining = [...currentSystem, ...otherCustom];
+            if (allRemaining.length > 0) nextDefault = allRemaining[0];
+        }
+        try {
+            await updatePoster({
+                variables: {
+                    input: {
+                        id: template.id,
+                        name: template.name,
+                        enabled,
+                        position: template.position,
+                        layoutVariant: template.layoutVariant,
+                        posterBackgroundAssetId: template.posterBackgroundAsset?.id || null,
+                        shareBackgroundAssetId: template.shareBackgroundAsset?.id || null,
+                        titleZh: template.titleZh,
+                        titleEn: template.titleEn,
+                        headlineZh: template.headlineZh,
+                        headlineEn: template.headlineEn,
+                        rewardTextZh: template.rewardTextZh,
+                        rewardTextEn: template.rewardTextEn,
+                        siteIntroZh: template.siteIntroZh,
+                        siteIntroEn: template.siteIntroEn,
+                        serviceTextZh: template.serviceTextZh,
+                        serviceTextEn: template.serviceTextEn,
+                        foregroundColor: template.foregroundColor,
+                        accentColor: template.accentColor,
+                        overlayOpacity: template.overlayOpacity,
+                    },
+                },
+            });
+            if (nextDefault !== program.defaultPosterTemplate) {
+                await updateProgram({
+                    variables: {
+                        input: {
+                            expectedUpdatedAt: program.updatedAt,
+                            enabled: program.enabled,
+                            rewardRate: program.rewardRate,
+                            releaseDelayDays: program.releaseDelayDays,
+                            minimumOrderAmount: program.minimumOrderAmount,
+                            maxRewardPerOrder: program.maxRewardPerOrder,
+                            allowBalanceSpend: program.allowBalanceSpend,
+                            attributionWindowDays: program.attributionWindowDays,
+                            defaultPosterTemplate: nextDefault,
+                            posterTemplates: program.posterTemplates,
+                        },
+                    },
+                });
+            }
+            await onChanged(`模板「${template.name}」已${enabled ? '启用客户端显示' : '停用隐藏'}`);
+        } catch (error) {
+            onError(errorText(error));
+        }
+    };
+
     const deleteTemplate = async () => {
         if (!deleting) return;
         try {
@@ -742,14 +908,107 @@ export function PostersPanel({
             onError(errorText(error));
         }
     };
+
+    const isProgramBusy = updateProgramState.loading || updatePosterState.loading;
+
     return (
-        <>
+        <div className="space-y-6">
+            {/* 系统预置海报模板 */}
+            <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-2xs">
+                <div className="border-b border-slate-100 pb-4">
+                    <h2 className="text-sm font-bold text-slate-900">系统预置海报模板</h2>
+                    <p className="mt-1 text-[11px] text-slate-500">
+                        系统内置 5
+                        款全屏移动端海报模板（1080×1920）。您可以通过“在客户端显示”开关自由选择哪些在买家端展示；开启的模板会自动与自定义模板一同在前台展示。
+                    </p>
+                </div>
+                <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                    {SYSTEM_POSTER_TEMPLATES.map(sys => {
+                        const isEnabled = (program.posterTemplates ?? []).includes(sys.id);
+                        const isDefault = program.defaultPosterTemplate === sys.id;
+                        return (
+                            <article
+                                key={sys.id}
+                                className="flex flex-col justify-between overflow-hidden rounded-xl border border-slate-200"
+                            >
+                                <div>
+                                    <div
+                                        className="aspect-[16/9] p-4 text-white flex flex-col justify-between"
+                                        style={{ background: sys.gradient }}
+                                    >
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-[10px] font-bold uppercase tracking-wider opacity-90">
+                                                预置海报
+                                            </span>
+                                            {isDefault && (
+                                                <span className="rounded bg-white/90 px-1.5 py-0.5 text-[10px] font-bold text-slate-900">
+                                                    当前默认
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div>
+                                            <div className="text-sm font-bold drop-shadow-sm">
+                                                {sys.nameZh}
+                                            </div>
+                                            <div className="text-[11px] opacity-80">{sys.nameEn}</div>
+                                        </div>
+                                    </div>
+                                    <div className="p-3 space-y-1.5">
+                                        <div className="flex items-center justify-between">
+                                            <h3 className="text-xs font-bold text-slate-900">{sys.nameZh}</h3>
+                                            <span
+                                                className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
+                                                    isEnabled
+                                                        ? 'bg-emerald-50 text-emerald-700'
+                                                        : 'bg-slate-100 text-slate-400'
+                                                }`}
+                                            >
+                                                {isEnabled ? '已启用显示' : '已隐藏'}
+                                            </span>
+                                        </div>
+                                        <p className="text-[11px] text-slate-500 leading-relaxed">
+                                            {sys.desc}
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="p-3 pt-0 space-y-2">
+                                    <label className="flex cursor-pointer items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5 text-xs">
+                                        <span className="text-[11px] font-medium text-slate-700">
+                                            在客户端显示
+                                        </span>
+                                        <input
+                                            type="checkbox"
+                                            checked={isEnabled}
+                                            disabled={isProgramBusy}
+                                            onChange={e =>
+                                                void toggleSystemTemplate(sys.id, e.target.checked)
+                                            }
+                                            className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                        />
+                                    </label>
+                                    <button
+                                        type="button"
+                                        disabled={isProgramBusy || !isEnabled || isDefault}
+                                        onClick={() => void makeDefaultTemplate(sys.id)}
+                                        className="w-full rounded-lg border border-slate-200 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                                    >
+                                        {isDefault ? '当前为默认海报' : '设为默认海报'}
+                                    </button>
+                                </div>
+                            </article>
+                        );
+                    })}
+                </div>
+            </section>
+
+            {/* 自定义海报模板 */}
             <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-2xs">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-4">
                     <div>
-                        <h2 className="text-sm font-bold text-slate-900">分享海报模板</h2>
+                        <h2 className="text-sm font-bold text-slate-900">店铺自定义海报模板</h2>
                         <p className="mt-1 text-[11px] text-slate-500">
-                            配置买家端生成的邀请海报和分享图，不再使用外部演示图片。
+                            上传您自己设计的专属背景图（建议尺寸 1080×1920
+                            竖版）。开启开关后，买家在前台即可选用该海报。
                         </p>
                     </div>
                     <button
@@ -762,69 +1021,112 @@ export function PostersPanel({
                     </button>
                 </div>
                 <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                    {program.posterTemplateConfigs.map(template => (
-                        <article
-                            key={template.id}
-                            className="overflow-hidden rounded-xl border border-slate-200"
-                        >
-                            <div
-                                className="aspect-[16/9] bg-slate-100"
-                                style={{
-                                    background: template.posterBackgroundAsset
-                                        ? `url(${template.posterBackgroundAsset.preview}) center/cover`
-                                        : `linear-gradient(135deg, ${template.accentColor}, ${template.foregroundColor})`,
-                                }}
+                    {program.posterTemplateConfigs.map(template => {
+                        const isDefault = program.defaultPosterTemplate === template.id;
+                        return (
+                            <article
+                                key={template.id}
+                                className="flex flex-col justify-between overflow-hidden rounded-xl border border-slate-200"
                             >
-                                <div
-                                    className="flex h-full items-end p-4"
-                                    style={{
-                                        backgroundColor: `rgba(15,23,42,${template.overlayOpacity / 100})`,
-                                    }}
-                                >
-                                    <div style={{ color: template.foregroundColor }}>
-                                        <div className="text-xs font-bold">{template.titleZh}</div>
-                                        <div className="mt-1 text-lg font-bold">{template.headlineZh}</div>
+                                <div>
+                                    <div
+                                        className="aspect-[16/9] bg-slate-100"
+                                        style={{
+                                            background: template.posterBackgroundAsset
+                                                ? `url(${template.posterBackgroundAsset.preview}) center/cover`
+                                                : `linear-gradient(135deg, ${template.accentColor}, ${template.foregroundColor})`,
+                                        }}
+                                    >
+                                        <div
+                                            className="flex h-full items-end p-4"
+                                            style={{
+                                                backgroundColor: `rgba(15,23,42,${template.overlayOpacity / 100})`,
+                                            }}
+                                        >
+                                            <div style={{ color: template.foregroundColor }}>
+                                                <div className="text-xs font-bold">{template.titleZh}</div>
+                                                <div className="mt-1 text-lg font-bold">
+                                                    {template.headlineZh}
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
-                                </div>
-                            </div>
-                            <div className="p-3">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <h3 className="text-xs font-bold text-slate-900">{template.name}</h3>
+                                    <div className="p-3">
+                                        <div className="flex items-center justify-between">
+                                            <h3 className="text-xs font-bold text-slate-900">
+                                                {template.name}
+                                            </h3>
+                                            <div className="flex items-center gap-1">
+                                                <span
+                                                    className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
+                                                        template.enabled
+                                                            ? 'bg-emerald-50 text-emerald-700'
+                                                            : 'bg-slate-100 text-slate-400'
+                                                    }`}
+                                                >
+                                                    {template.enabled ? '已启用' : '已停用'}
+                                                </span>
+                                                {isDefault && (
+                                                    <span className="rounded bg-slate-900 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                                                        默认
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
                                         <p className="mt-0.5 text-[10px] text-slate-400">
-                                            {template.enabled ? '已启用' : '已停用'} · 排序{' '}
-                                            {template.position}
-                                            {program.defaultPosterTemplate === template.id
-                                                ? ' · 默认模板'
-                                                : ''}
+                                            移动端 1080×1920 · 排序 {template.position}
                                         </p>
                                     </div>
-                                    <div className="flex gap-1">
+                                </div>
+                                <div className="p-3 pt-0 space-y-2">
+                                    <label className="flex cursor-pointer items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5 text-xs">
+                                        <span className="text-[11px] font-medium text-slate-700">
+                                            在客户端显示
+                                        </span>
+                                        <input
+                                            type="checkbox"
+                                            checked={template.enabled}
+                                            disabled={isProgramBusy}
+                                            onChange={e =>
+                                                void toggleCustomTemplate(template, e.target.checked)
+                                            }
+                                            className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                        />
+                                    </label>
+                                    <div className="grid grid-cols-3 gap-1.5">
                                         <button
                                             type="button"
                                             onClick={() => onEdit(template)}
-                                            className="rounded p-1.5 text-slate-500 hover:bg-slate-100"
-                                            aria-label="编辑模板"
+                                            className="flex items-center justify-center gap-1 rounded-lg border border-slate-200 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
                                         >
-                                            <Edit3 className="h-4 w-4" />
+                                            <Edit3 className="h-3 w-3" />
+                                            编辑
+                                        </button>
+                                        <button
+                                            type="button"
+                                            disabled={isProgramBusy || !template.enabled || isDefault}
+                                            onClick={() => void makeDefaultTemplate(template.id)}
+                                            className="rounded-lg border border-slate-200 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                                        >
+                                            设为默认
                                         </button>
                                         <button
                                             type="button"
                                             onClick={() => setDeleting(template)}
                                             disabled={state.loading}
-                                            className="rounded p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
-                                            aria-label="删除模板"
+                                            className="flex items-center justify-center gap-1 rounded-lg border border-rose-200 py-1.5 text-xs font-medium text-rose-600 hover:bg-rose-50"
                                         >
-                                            <Trash2 className="h-4 w-4" />
+                                            <Trash2 className="h-3 w-3" />
+                                            删除
                                         </button>
                                     </div>
                                 </div>
-                            </div>
-                        </article>
-                    ))}
+                            </article>
+                        );
+                    })}
                     {!program.posterTemplateConfigs.length && (
                         <div className="col-span-full py-12 text-center text-xs text-slate-400">
-                            尚未创建自定义海报模板，可继续使用系统内置模板。
+                            暂无店铺自定义海报模板。点击右上角“新建模板”可上传您自己设计的专属海报图。
                         </div>
                     )}
                 </div>
@@ -845,6 +1147,6 @@ export function PostersPanel({
                     />
                 </Modal>
             )}
-        </>
+        </div>
     );
 }

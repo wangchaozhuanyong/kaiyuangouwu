@@ -83,6 +83,13 @@
     font: inherit;
 }
 
+.ai-studio-prompt-wrap textarea:focus,
+.ai-studio-prompt-wrap textarea:focus-visible {
+    outline: 0 !important;
+    border: 0 !important;
+    box-shadow: none !important;
+}
+
 .ai-studio-prompt-tools,
 .ai-studio-reference,
 .ai-studio-option-row,

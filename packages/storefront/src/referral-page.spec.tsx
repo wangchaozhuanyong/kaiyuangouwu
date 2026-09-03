@@ -64,7 +64,7 @@ const overview: MyReferralOverview = {
     ledger: [],
 };
 
-function renderReferralPage(): string {
+function renderReferralPage(customOverview?: Partial<MyReferralOverview>): string {
     vi.stubGlobal('window', { location: { origin: 'https://storefront.example.com' } });
     const client = createStorefrontQueryClient();
     const languageCode = languageCodeFor('zh');
@@ -74,7 +74,7 @@ function renderReferralPage(): string {
     );
     client.setQueryData(
         storefrontQueryKeys.customerReferral(storefrontQueryKeys.market(market), languageCode, customer.id),
-        overview,
+        { ...overview, ...customOverview },
     );
 
     const api = {
@@ -141,5 +141,48 @@ describe('referral page reward summary', () => {
             /奖励流水<\/h2><span class="text-xs font-bold tabular-nums text-slate-500">0<\/span>/,
         );
         expect(markup).not.toContain('奖励、生效、退款扣回与消费抵扣全程留痕');
+    });
+
+    it('paginates invitees list with previous and next buttons', () => {
+        const invitees = Array.from({ length: 15 }, (_, i) => ({
+            id: `invitee-${i + 1}`,
+            displayName: `好友${i + 1}`,
+            boundAt: '2026-08-26T00:00:00.000Z',
+            firstPaidOrderAt: i % 2 === 0 ? '2026-08-27T00:00:00.000Z' : null,
+        }));
+
+        const markup = renderReferralPage({
+            invitedCount: 15,
+            invitees,
+        });
+
+        expect(markup).toContain('好友1');
+        expect(markup).toContain('好友10');
+        expect(markup).not.toContain('好友11');
+        expect(markup).toContain('共 15 条 · 第 1/2 页');
+        expect(markup).toMatch(/disabled=""[^>]*aria-label="上一页"/);
+        expect(markup).not.toMatch(/disabled=""[^>]*aria-label="下一页"/);
+    });
+
+    it('paginates reward activity ledger list with previous and next buttons', () => {
+        const ledger = Array.from({ length: 12 }, (_, i) => ({
+            id: `ledger-${i + 1}`,
+            createdAt: '2026-08-26T00:00:00.000Z',
+            eventType: 'REWARD_PENDING',
+            currencyCode: 'CNY',
+            availableDelta: 0,
+            pendingDelta: (i + 1) * 10,
+            reservedDelta: 0,
+            availableAfter: 0,
+            pendingAfter: (i + 1) * 10,
+            reservedAfter: 0,
+            actorType: 'SYSTEM',
+        }));
+
+        const markup = renderReferralPage({ ledger });
+
+        expect(markup).toContain('共 12 条 · 第 1/2 页');
+        expect(markup).toMatch(/disabled=""[^>]*aria-label="上一页"/);
+        expect(markup).not.toMatch(/disabled=""[^>]*aria-label="下一页"/);
     });
 });

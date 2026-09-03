@@ -50,21 +50,21 @@ export function App() {
                         <Outlet />
                     </Suspense>
                 </div>
-                {shouldShowBottomNavigation(displayedRoute.name, navigationBlock) && (
-                    <BottomNavigation
-                        activeRoute={displayedRoute.name}
-                        cartQuantity={cart?.totalQuantity ?? 0}
-                        language={language}
-                        navigationBlock={navigationBlock}
-                    />
-                )}
-                {toast && (
-                    <div className="toast" role="status" aria-live="polite">
-                        {toast}
-                    </div>
-                )}
-                <StorefrontUpdatePrompt language={language} />
             </div>
+            {shouldShowBottomNavigation(displayedRoute.name, navigationBlock) && (
+                <BottomNavigation
+                    activeRoute={displayedRoute.name}
+                    cartQuantity={cart?.totalQuantity ?? 0}
+                    language={language}
+                    navigationBlock={navigationBlock}
+                />
+            )}
+            {toast && (
+                <div className="toast" role="status" aria-live="polite">
+                    {toast}
+                </div>
+            )}
+            <StorefrontUpdatePrompt language={language} />
         </StorefrontContext.Provider>
     );
 }

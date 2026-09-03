@@ -207,4 +207,18 @@ describe('product image navigation layers', () => {
         expect(markup).toContain('Sold out');
         expect(markup).not.toContain('已售罄');
     });
+
+    it('ensures product detail header has transparent background, dark frosted buttons and no blur when unscrolled', () => {
+        const stylesheet = readStorefrontStylesheet();
+
+        expect(stylesheet).toMatch(/\.topbar\.product-detail-header[\s\S]*?background:\s*transparent;/);
+        expect(stylesheet).toMatch(/\.topbar\.product-detail-header[\s\S]*?backdrop-filter:\s*none;/);
+        expect(stylesheet).toMatch(/\.topbar\.product-detail-header[\s\S]*?margin-bottom:\s*-52px;/);
+        expect(stylesheet).toMatch(
+            /\.topbar\.product-detail-header\s+button[\s\S]*?background:\s*rgba\(24,\s*28,\s*26,\s*0\.46\);/,
+        );
+        expect(stylesheet).toMatch(
+            /\.topbar\.product-detail-header\.is-scrolled[\s\S]*?background:\s*rgba\(255,\s*255,\s*255,\s*0\.96\);/,
+        );
+    });
 });

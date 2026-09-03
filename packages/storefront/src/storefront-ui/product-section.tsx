@@ -20,6 +20,7 @@ export function ProductSection({
     favoriteProductIds,
     onProduct,
     onFavorite,
+    subtitlePlacement,
 }: {
     title?: string;
     subtitle?: string;
@@ -35,6 +36,7 @@ export function ProductSection({
     favoriteProductIds?: string[];
     onProduct: (product: Product) => void;
     onFavorite?: (product: Product) => void;
+    subtitlePlacement?: 'below' | 'end';
 }) {
     if (!products.length) return null;
     return (
@@ -42,13 +44,16 @@ export function ProductSection({
             className={`content-section product-section${className ? ` ${className}` : ''}`}
             style={style}
         >
-            <SectionHeader
-                title={title}
-                subtitle={subtitle}
-                centerLabel={centerLabel}
-                action={action}
-                onAction={onAction}
-            />
+            {title || subtitle || centerLabel || action ? (
+                <SectionHeader
+                    title={title}
+                    subtitle={subtitle}
+                    centerLabel={centerLabel}
+                    action={action}
+                    onAction={onAction}
+                    subtitlePlacement={subtitlePlacement}
+                />
+            ) : null}
             <div className="product-grid">
                 {products.map(product => (
                     <ProductCard

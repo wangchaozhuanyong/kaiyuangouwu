@@ -95,5 +95,21 @@ describe('bottom navigation configuration', () => {
         expect(source).toContain('lg:top-0 lg:bottom-auto');
         expect(source).toContain('lg:shadow-none lg:backdrop-blur-none');
         expect(source).not.toContain('sm:top-0');
+        expect(source).toContain('storefront-bottom-nav');
+    });
+
+    it('mounts navigation outside storefront-app to prevent mobile Safari clipping traps', () => {
+        const appSource = readFileSync(new URL('./App.tsx', import.meta.url), 'utf8');
+        // storefront-app closing tag must precede BottomNavigation
+        const storefrontAppClosingIndex = appSource.indexOf(
+            '</div>\n            {shouldShowBottomNavigation',
+        );
+        expect(storefrontAppClosingIndex).toBeGreaterThan(-1);
+
+        const stylesheet = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
+        expect(stylesheet).toContain('.storefront-bottom-nav');
+        expect(stylesheet).toContain('transform: translate3d(-50%, 0, 0)');
+        expect(stylesheet).toContain('overscroll-behavior-y: none');
+        expect(stylesheet).toContain('scrollbar-width: none');
     });
 });
