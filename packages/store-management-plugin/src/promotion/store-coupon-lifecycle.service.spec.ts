@@ -27,6 +27,7 @@ describe('StoreCouponLifecycleService', () => {
             {} as any,
             {} as any,
             {} as any,
+            {} as any,
         );
         vi.spyOn(service as any, 'reconcileCustomer').mockResolvedValue(undefined);
 
@@ -64,6 +65,7 @@ describe('StoreCouponLifecycleService', () => {
                 }),
             } as any,
             {} as any,
+            {} as any,
         );
         const redeem = vi.spyOn(service as any, 'redeemForPaidOrder').mockResolvedValue(undefined);
 
@@ -92,6 +94,7 @@ describe('StoreCouponLifecycleService', () => {
                     getRepository: () => ({ find: vi.fn(async () => [promotion]), update }),
                 },
             } as any,
+            {} as any,
             {} as any,
             {} as any,
             {} as any,
@@ -132,6 +135,7 @@ describe('StoreCouponLifecycleService', () => {
                     }),
                 },
             } as any,
+            {} as any,
             {} as any,
             {} as any,
             {} as any,
@@ -240,6 +244,7 @@ describe('StoreCouponLifecycleService', () => {
             {} as any,
             {} as any,
             {} as any,
+            {} as any,
         );
 
         await (service as any).redeemForPaidOrder(ctx, order.id);
@@ -275,10 +280,65 @@ describe('StoreCouponLifecycleService', () => {
             } as any,
             {} as any,
             {} as any,
+            {} as any,
         );
 
         await expect(service.apply(ctx, 'coupon-1')).rejects.toThrow('优惠券已使用');
         expect(applyCouponCode).not.toHaveBeenCalled();
+    });
+
+    it('applies the coupon with the largest calculated saving for the active order', async () => {
+        const now = Date.now();
+        const promotions = [
+            { id: 'promotion-1', couponCode: 'FIXED_30', enabled: true, deletedAt: null },
+            { id: 'promotion-2', couponCode: 'CATEGORY_20', enabled: true, deletedAt: null },
+        ] as any[];
+        const coupons = promotions.map((promotion, index) => ({
+            id: `coupon-${index + 1}`,
+            channelId: 'channel-1',
+            customerId: 'customer-1',
+            promotionId: promotion.id,
+            promotion,
+            campaignConfig: { stackPolicy: 'EXCLUSIVE' },
+            campaignName: index === 0 ? '30元券' : '分类八折券',
+            status: 'AVAILABLE',
+            validFrom: new Date(now - 60_000),
+            validUntil: new Date(now + 60_000),
+            claimedAt: new Date(now - index * 1_000),
+        })) as any[];
+        const service = new StoreCouponLifecycleService(
+            {
+                getRepository: () => ({ find: vi.fn(async () => coupons) }),
+            } as any,
+            { findOneByUserId: vi.fn(async () => ({ id: 'customer-1' })) } as any,
+            {
+                getActivePromotionsInChannel: vi.fn(async () => promotions),
+                getExhaustedPromotionIds: vi.fn(async () => new Set()),
+                validateCouponCode: vi.fn(async (_ctx: unknown, code: string) =>
+                    promotions.find(promotion => promotion.couponCode === code),
+                ),
+            } as any,
+            {
+                getActiveOrderForUser: vi.fn(async () => ({
+                    id: 'order-1',
+                    lines: [{ id: 'line-1' }],
+                    couponCodes: [],
+                })),
+            } as any,
+            {} as any,
+            {} as any,
+            {} as any,
+        );
+        vi.spyOn(service as any, 'reconcileCustomer').mockResolvedValue(undefined);
+        vi.spyOn(service as any, 'estimateCouponSavings').mockImplementation(async (...args: unknown[]) =>
+            (args[2] as { id: string }).id === 'promotion-1' ? 3_000 : 4_500,
+        );
+        const apply = vi
+            .spyOn(service, 'apply')
+            .mockResolvedValue({ id: 'coupon-2', campaignName: '分类八折券' } as any);
+
+        await expect(service.applyBest(ctx)).resolves.toMatchObject({ id: 'coupon-2' });
+        expect(apply).toHaveBeenCalledWith(ctx, 'coupon-2');
     });
 
     it('keeps a refunded allocation in the customer usage history', async () => {
@@ -306,6 +366,7 @@ describe('StoreCouponLifecycleService', () => {
         const service = new StoreCouponLifecycleService(
             { getRepository: () => ({ find }) } as any,
             { findOneByUserId: vi.fn(async () => ({ id: 'customer-1' })) } as any,
+            {} as any,
             {} as any,
             {} as any,
             {} as any,
@@ -436,6 +497,7 @@ function createIssueHarness({
         {} as any,
         { publish: vi.fn(async () => undefined) } as any,
         {} as any,
+        {} as any,
     );
     return {
         service,
@@ -514,6 +576,7 @@ function createRefundHarness({
             getRepository: (_ctx: unknown, entity: any) => repositories.get(entity),
             getEntityOrThrow: vi.fn(async () => order),
         } as any,
+        {} as any,
         {} as any,
         {} as any,
         {} as any,

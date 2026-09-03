@@ -311,6 +311,16 @@ export function useStorefrontAppState() {
         refetchInterval: customer ? 60_000 : false,
     });
     const myCoupons = customerCouponsQuery.data ?? [];
+    const couponAutoSelectionScope =
+        cart?.checkoutOrder && customer ? `${customer.id}:${cart.id}:${cart.checkoutOrder.id}` : '';
+    const couponAutoSelectionAttemptKey = couponAutoSelectionScope
+        ? `${couponAutoSelectionScope}:${cart?.revision ?? 0}:${myCoupons
+              .map(coupon => `${coupon.id}:${coupon.status}:${coupon.lockedOrderId ?? ''}`)
+              .sort()
+              .join('|')}`
+        : '';
+    const couponAutoSelectionAttemptRef = useRef('');
+    const couponAutoSelectionSuppressedRef = useRef('');
     const customerCouponUsageRecordsQuery = useQuery({
         queryKey: storefrontQueryKeys.customerCouponUsageRecords(
             storefrontQueryKeys.market(market),
@@ -964,6 +974,7 @@ export function useStorefrontAppState() {
 
     const applyCoupon = useCallback(
         async (customerCouponId: string): Promise<string | null> => {
+            couponAutoSelectionSuppressedRef.current = couponAutoSelectionScope;
             setCartLoading(true);
             setCartError(null);
             try {
@@ -980,7 +991,16 @@ export function useStorefrontAppState() {
                 setCartLoading(false);
             }
         },
-        [api, customerCouponQueryKey, isZh, notify, queryClient, refreshCart, text.loadError],
+        [
+            api,
+            couponAutoSelectionScope,
+            customerCouponQueryKey,
+            isZh,
+            notify,
+            queryClient,
+            refreshCart,
+            text.loadError,
+        ],
     );
 
     const claimCoupon = useCallback(
@@ -1056,6 +1076,7 @@ export function useStorefrontAppState() {
 
     const removeCoupon = useCallback(
         async (customerCouponId: string): Promise<string | null> => {
+            couponAutoSelectionSuppressedRef.current = couponAutoSelectionScope;
             setCartLoading(true);
             setCartError(null);
             try {
@@ -1072,8 +1093,76 @@ export function useStorefrontAppState() {
                 setCartLoading(false);
             }
         },
-        [api, customerCouponQueryKey, isZh, notify, queryClient, refreshCart, text.loadError],
+        [
+            api,
+            couponAutoSelectionScope,
+            customerCouponQueryKey,
+            isZh,
+            notify,
+            queryClient,
+            refreshCart,
+            text.loadError,
+        ],
     );
+
+    useEffect(() => {
+        const order = cart?.checkoutOrder;
+        if (
+            !customer ||
+            !order?.lines.length ||
+            cart?.state !== 'OPEN' ||
+            !(['cart', 'checkout', 'purchase'] as RouteName[]).includes(route.name) ||
+            customerCouponsQuery.isPending ||
+            !couponAutoSelectionScope ||
+            !couponAutoSelectionAttemptKey ||
+            couponAutoSelectionSuppressedRef.current === couponAutoSelectionScope ||
+            couponAutoSelectionAttemptRef.current === couponAutoSelectionAttemptKey ||
+            myCoupons.some(coupon => coupon.lockedOrderId === order.id) ||
+            !myCoupons.some(coupon => coupon.usable)
+        ) {
+            return;
+        }
+
+        couponAutoSelectionAttemptRef.current = couponAutoSelectionAttemptKey;
+        let active = true;
+        void api
+            .applyBestCustomerCoupon()
+            .then(async coupon => {
+                if (!coupon) return;
+                queryClient.setQueryData<StoreCustomerCoupon[]>(customerCouponQueryKey, current =>
+                    current?.map(existing => (existing.id === coupon.id ? coupon : existing)),
+                );
+                if (active) {
+                    notify(
+                        isZh
+                            ? `已自动选择最优惠券：${coupon.campaignName}`
+                            : `Best coupon applied: ${coupon.campaignName}`,
+                    );
+                }
+                await Promise.all([
+                    refreshCart(),
+                    queryClient.invalidateQueries({ queryKey: customerCouponQueryKey }),
+                ]);
+            })
+            .catch(() => undefined);
+        return () => {
+            active = false;
+        };
+    }, [
+        api,
+        cart,
+        couponAutoSelectionAttemptKey,
+        couponAutoSelectionScope,
+        customer,
+        customerCouponQueryKey,
+        customerCouponsQuery.isPending,
+        isZh,
+        myCoupons,
+        notify,
+        queryClient,
+        refreshCart,
+        route.name,
+    ]);
 
     const reopenPendingOrder = useCallback(
         async (order: Order) => {

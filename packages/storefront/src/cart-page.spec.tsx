@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { CartPage } from './pages/cart-page';
 import { StorefrontContext } from './StorefrontContext';
-import { MarketConfig, Product, StorefrontCart } from './types';
+import { MarketConfig, Order, Product, StoreCustomerCoupon, StorefrontCart } from './types';
 
 vi.mock('@tanstack/react-router', async importOriginal => ({
     ...(await importOriginal<typeof import('@tanstack/react-router')>()),
@@ -71,7 +71,53 @@ const callbacks = {
     onRemoveCoupon: vi.fn().mockResolvedValue(null),
 };
 
-function renderCart(value: StorefrontCart | null, products: Product[] = []) {
+const checkoutOrder: Order = {
+    id: 'order-1',
+    code: 'T0001',
+    state: 'AddingItems',
+    totalQuantity: 1,
+    subTotalWithTax: 31381,
+    shippingWithTax: 0,
+    totalWithTax: 31381,
+    currencyCode: 'MYR',
+    lines: [],
+    discounts: [],
+    taxSummary: [],
+    couponCodes: [],
+    customFields: {},
+};
+
+function coupon(overrides: Partial<StoreCustomerCoupon> = {}): StoreCustomerCoupon {
+    return {
+        id: 'coupon-1',
+        campaignId: 'campaign-1',
+        campaignName: '新客优惠券',
+        campaignKind: 'ORDER_FIXED',
+        status: 'AVAILABLE',
+        minimumSpend: 1000,
+        currencyCode: 'MYR',
+        discountAmount: 500,
+        discountRate: null,
+        claimedAt: '2026-09-01T00:00:00.000Z',
+        validFrom: '2026-09-01T00:00:00.000Z',
+        validUntil: null,
+        lockedAt: null,
+        usedAt: null,
+        returnedAt: null,
+        expiredAt: null,
+        lockedOrderId: null,
+        usedOrderId: null,
+        returnCount: 0,
+        usable: true,
+        ...overrides,
+    };
+}
+
+function renderCart(
+    value: StorefrontCart | null,
+    products: Product[] = [],
+    coupons: StoreCustomerCoupon[] = [],
+) {
     return renderToStaticMarkup(
         createElement(
             StorefrontContext.Provider,
@@ -87,7 +133,7 @@ function renderCart(value: StorefrontCart | null, products: Product[] = []) {
                     error: null,
                     addingVariantId: null,
                     favoriteProductIds: [],
-                    coupons: [],
+                    coupons,
                     ...callbacks,
                 },
             },
@@ -182,5 +228,30 @@ describe('CartPage guest cart', () => {
         expect(markup).toContain('顺手带一件');
         expect(markup).toContain('class="section-header has-end-subtitle"');
         expect(markup).toContain('class="section-header-end-subtitle">从当前店铺继续挑选</p>');
+    });
+
+    it('shows only the manually selected coupon name instead of matching automatic discounts', () => {
+        const cartWithAutomaticDiscount = {
+            ...cart,
+            checkoutOrder: {
+                ...checkoutOrder,
+                discounts: [{ description: '店铺自动优惠', amountWithTax: -500 }],
+            },
+        };
+        const unselectedMarkup = renderCart(cartWithAutomaticDiscount, [], [coupon()]);
+        const couponRowMarkup = unselectedMarkup.match(/<button class="coupon-row"[\s\S]*?<\/button>/)?.[0];
+
+        expect(couponRowMarkup).toContain('选择已领取优惠券');
+        expect(couponRowMarkup).not.toContain('已优惠');
+        expect(couponRowMarkup).not.toContain('新客优惠券');
+
+        const selectedMarkup = renderCart(
+            cartWithAutomaticDiscount,
+            [],
+            [coupon({ status: 'LOCKED', lockedOrderId: checkoutOrder.id, usable: false })],
+        );
+
+        expect(selectedMarkup).toContain('title="新客优惠券">新客优惠券</small>');
+        expect(selectedMarkup).not.toContain('选择已领取优惠券');
     });
 });

@@ -34,10 +34,11 @@ const couponPaymentHandler = new PaymentMethodHandler({
 const translationProvider: ContentTranslationProvider = {
     name: 'coupon-e2e-passthrough',
     isConfigured: () => true,
-    translate: async request => ({
-        provider: 'coupon-e2e-passthrough',
-        translations: request.segments.map(segment => ({ key: segment.key, text: segment.text })),
-    }),
+    translate: request =>
+        Promise.resolve({
+            provider: 'coupon-e2e-passthrough',
+            translations: request.segments.map(segment => ({ key: segment.key, text: segment.text })),
+        }),
 };
 
 const config = mergeConfig(testConfig(), {
@@ -150,6 +151,15 @@ const APPLY_OWNED_COUPON = gql`
     ${COUPON_FIELDS}
     mutation CouponE2EApplyOwned($id: ID!) {
         applyStorefrontCoupon(id: $id) {
+            ...CouponE2ECustomerCoupon
+        }
+    }
+`;
+
+const APPLY_BEST_OWNED_COUPON = gql`
+    ${COUPON_FIELDS}
+    mutation CouponE2EApplyBestOwned {
+        applyBestStorefrontCoupon {
             ...CouponE2ECustomerCoupon
         }
     }
@@ -335,6 +345,8 @@ const REFUND = gql`
 let productVariantId = '';
 let campaignId = '';
 let soldOutCampaignId = '';
+let smallerDiscountCampaignId = '';
+let bestDiscountCampaignId = '';
 let couponCode = '';
 
 describe('coupon lifecycle closed loop', () => {
@@ -416,6 +428,34 @@ describe('coupon lifecycle closed loop', () => {
             },
         });
         soldOutCampaignId = soldOutCampaign.createStoreCouponCampaign.id;
+        const smallerDiscountCampaign = await adminClient.query(CREATE_COUPON, {
+            input: {
+                name: '自动选券5元券',
+                kind: 'ORDER_FIXED',
+                minimumSpend: 10_000,
+                discountAmount: 500,
+                issueLimit: 10,
+                validityDays: 7,
+                stackPolicy: 'EXCLUSIVE',
+                returnOnCancellation: true,
+                returnOnFullRefund: true,
+            },
+        });
+        smallerDiscountCampaignId = smallerDiscountCampaign.createStoreCouponCampaign.id;
+        const bestDiscountCampaign = await adminClient.query(CREATE_COUPON, {
+            input: {
+                name: '自动选券20元券',
+                kind: 'ORDER_FIXED',
+                minimumSpend: 10_000,
+                discountAmount: 2_000,
+                issueLimit: 10,
+                validityDays: 7,
+                stackPolicy: 'EXCLUSIVE',
+                returnOnCancellation: true,
+                returnOnFullRefund: true,
+            },
+        });
+        bestDiscountCampaignId = bestDiscountCampaign.createStoreCouponCampaign.id;
 
         const registered = await shopClient.query(REGISTER, {
             input: {
@@ -587,6 +627,38 @@ describe('coupon lifecycle closed loop', () => {
         });
         expect((await shopClient.query(MY_COUPONS)).myStorefrontCoupons).toEqual([]);
         expect((await shopClient.query(USAGE_RECORDS)).myStorefrontCouponUsageRecords).toEqual([]);
+    });
+
+    it('calculates and applies the owned coupon with the largest saving', async () => {
+        await shopClient.query(LOGOUT);
+        const registered = await shopClient.query(REGISTER, {
+            input: {
+                emailAddress: 'coupon-e2e-best-selection@example.com',
+                firstName: 'Coupon',
+                lastName: 'Best Selection',
+                password: 'CouponPass789!',
+            },
+        });
+        assertSuccess(registered.registerCustomerWithReferral);
+        await shopClient.asUserWithCredentials('coupon-e2e-best-selection@example.com', 'CouponPass789!');
+
+        await shopClient.query(CLAIM, { campaignId: smallerDiscountCampaignId });
+        await shopClient.query(CLAIM, { campaignId: bestDiscountCampaignId });
+        const added = await shopClient.query(ADD_ITEM, { productVariantId });
+        assertSuccess(added.addItemToOrder);
+
+        const selected = await shopClient.query(APPLY_BEST_OWNED_COUPON);
+        expect(selected.applyBestStorefrontCoupon).toMatchObject({
+            campaignId: bestDiscountCampaignId,
+            status: 'LOCKED',
+            lockedOrderId: added.addItemToOrder.id,
+        });
+        expect((await shopClient.query(MY_COUPONS)).myStorefrontCoupons).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({ campaignId: smallerDiscountCampaignId, status: 'AVAILABLE' }),
+                expect.objectContaining({ campaignId: bestDiscountCampaignId, status: 'LOCKED' }),
+            ]),
+        );
     });
 });
 

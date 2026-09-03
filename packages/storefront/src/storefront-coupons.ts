@@ -23,6 +23,22 @@ export interface StorefrontCouponCard {
     claimable: boolean;
 }
 
+export function appliedCouponLabel(
+    coupons: StoreCustomerCoupon[],
+    orderId: string,
+    language: StorefrontLanguage,
+): string | null {
+    const names = Array.from(
+        new Set(
+            coupons
+                .filter(coupon => coupon.lockedOrderId === orderId)
+                .map(coupon => coupon.campaignName.trim())
+                .filter(Boolean),
+        ),
+    );
+    return names.length ? names.join(language === 'zh' ? '、' : ', ') : null;
+}
+
 const couponThemes: StorefrontCouponTheme[] = ['gold', 'rose', 'blue', 'emerald'];
 
 const couponThemeByKind: Record<StorefrontCouponCampaign['kind'], StorefrontCouponTheme> = {

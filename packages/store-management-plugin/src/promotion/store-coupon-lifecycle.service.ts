@@ -8,6 +8,7 @@ import {
     idsAreEqual,
     isGraphQlErrorResult,
     Order,
+    OrderCalculator,
     OrderService,
     OrderStateTransitionEvent,
     Promotion,
@@ -56,6 +57,7 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
         private readonly orderService: OrderService,
         private readonly eventBus: EventBus,
         private readonly requestContextService: RequestContextService,
+        private readonly orderCalculator: OrderCalculator,
     ) {}
 
     async onApplicationBootstrap(): Promise<void> {
@@ -230,6 +232,77 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
         }
         await this.publishCustomerCouponChanged(ctx, customer);
         return this.toCustomerCouponView(ctx, coupon);
+    }
+
+    async applyBest(ctx: RequestContext): Promise<StoreCustomerCouponView | null> {
+        const customer = await this.activeCustomerOrThrow(ctx);
+        if (!ctx.activeUserId) throw new UserInputError('请先登录后使用优惠券');
+        const order = await this.orderService.getActiveOrderForUser(ctx, ctx.activeUserId);
+        if (!order || !order.lines?.length) return null;
+
+        await this.reconcileCustomer(ctx, customer.id);
+        const coupons = await this.connection.getRepository(ctx, CustomerCoupon).find({
+            where: { channelId: ctx.channelId, customerId: customer.id },
+            relations: { promotion: true, campaignConfig: true },
+            order: { claimedAt: 'ASC' },
+            take: 200,
+        });
+        const selected = coupons.find(
+            coupon => coupon.status === 'LOCKED' && idsAreEqual(coupon.lockedOrderId, order.id),
+        );
+        if (selected) return this.toCustomerCouponView(ctx, selected);
+
+        const now = new Date();
+        const candidates = coupons.filter(
+            coupon =>
+                usableCustomerCouponStatuses.includes(coupon.status) &&
+                coupon.validFrom <= now &&
+                !this.isExpired(coupon, now) &&
+                Boolean(coupon.promotion?.enabled && !coupon.promotion.deletedAt),
+        );
+        if (!candidates.length) return null;
+
+        const allPromotions = await this.promotionService.getActivePromotionsInChannel(ctx);
+        const exhaustedPromotionIds = await this.promotionService.getExhaustedPromotionIds(
+            ctx,
+            allPromotions,
+            customer.id,
+        );
+        const activePromotions = allPromotions.filter(
+            promotion => !exhaustedPromotionIds.has(promotion.id.toString()),
+        );
+        const ownedCouponCodes = new Set(
+            coupons
+                .map(coupon => coupon.promotion?.couponCode?.toLocaleLowerCase())
+                .filter((couponCode): couponCode is string => Boolean(couponCode)),
+        );
+        const baseCouponCodes = (order.couponCodes ?? []).filter(
+            couponCode => !ownedCouponCodes.has(couponCode.toLocaleLowerCase()),
+        );
+        const estimates: CouponSavingsEstimate[] = [];
+
+        for (const coupon of candidates) {
+            const promotion = activePromotions.find(active => idsAreEqual(active.id, coupon.promotionId));
+            if (!promotion?.couponCode) continue;
+            const validation = await this.promotionService.validateCouponCode(
+                ctx,
+                promotion.couponCode,
+                customer.id,
+                order.id,
+            );
+            if (isGraphQlErrorResult(validation)) continue;
+            const amountWithTax = await this.estimateCouponSavings(
+                ctx,
+                order.id,
+                promotion,
+                activePromotions,
+                baseCouponCodes,
+            );
+            if (amountWithTax > 0) estimates.push({ coupon, amountWithTax });
+        }
+
+        const best = estimates.sort(compareCouponSavings)[0];
+        return best ? this.apply(ctx, best.coupon.id) : null;
     }
 
     async remove(ctx: RequestContext, customerCouponId: ID): Promise<StoreCustomerCouponView> {
@@ -849,6 +922,26 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
         });
     }
 
+    private async estimateCouponSavings(
+        ctx: RequestContext,
+        orderId: ID,
+        promotion: Promotion,
+        activePromotions: Promotion[],
+        baseCouponCodes: string[],
+    ) {
+        const trialOrder = await this.orderService.findOne(ctx, orderId);
+        if (!trialOrder) return 0;
+        const trialPromotion = promotionWithoutCustomerEntitlement(promotion);
+        const trialPromotions = activePromotions.map(active =>
+            idsAreEqual(active.id, promotion.id) ? trialPromotion : active,
+        );
+        trialOrder.couponCodes = [...baseCouponCodes, promotion.couponCode];
+        await this.orderCalculator.applyPriceAdjustments(ctx, trialOrder, trialPromotions, [], {
+            recalculateShipping: false,
+        });
+        return discountSnapshot(trialOrder, promotion.id).amountWithTax;
+    }
+
     private async activeCustomerOrThrow(ctx: RequestContext) {
         if (!ctx.activeUserId) throw new UserInputError('请先登录后领取或使用优惠券');
         const customer = await this.customerService.findOneByUserId(ctx, ctx.activeUserId);
@@ -1039,6 +1132,29 @@ function earliestDate(first: Date | null | undefined, second: Date | null | unde
     if (!first) return second ?? null;
     if (!second) return first;
     return first <= second ? first : second;
+}
+
+interface CouponSavingsEstimate {
+    coupon: CustomerCoupon;
+    amountWithTax: number;
+}
+
+function compareCouponSavings(left: CouponSavingsEstimate, right: CouponSavingsEstimate) {
+    if (left.amountWithTax !== right.amountWithTax) return right.amountWithTax - left.amountWithTax;
+    const leftExpiry = left.coupon.validUntil?.getTime() ?? Number.POSITIVE_INFINITY;
+    const rightExpiry = right.coupon.validUntil?.getTime() ?? Number.POSITIVE_INFINITY;
+    if (leftExpiry !== rightExpiry) return leftExpiry - rightExpiry;
+    const claimedDifference = left.coupon.claimedAt.getTime() - right.coupon.claimedAt.getTime();
+    return claimedDifference || String(left.coupon.id).localeCompare(String(right.coupon.id));
+}
+
+function promotionWithoutCustomerEntitlement(promotion: Promotion) {
+    return new Promotion({
+        ...promotion,
+        conditions: promotion.conditions.filter(
+            condition => condition.code !== 'store_customer_coupon_entitlement',
+        ),
+    });
 }
 
 function discountSnapshot(order: Order, promotionId: ID) {
