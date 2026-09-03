@@ -762,6 +762,8 @@ export interface StorefrontCouponCampaign {
     currencyCode?: string;
     discountAmount: number | null;
     discountRate: number | null;
+    collectionIds?: string[];
+    productVariantIds?: string[];
     remainingIssueCount: number | null;
     claimed: boolean;
     claimable: boolean;

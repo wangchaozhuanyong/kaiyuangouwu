@@ -96,6 +96,7 @@ describe('bottom navigation configuration', () => {
         expect(source).toContain('lg:shadow-none lg:backdrop-blur-none');
         expect(source).not.toContain('sm:top-0');
         expect(source).toContain('storefront-bottom-nav');
+        expect(source).not.toContain('-translate-x-1/2');
     });
 
     it('mounts navigation outside storefront-app to prevent mobile Safari clipping traps', () => {

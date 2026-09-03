@@ -34,6 +34,7 @@ export default defineConfig(({ mode }) => {
             proxy: {
                 '/shop-api': apiProxyTarget,
                 '/storefront-realtime': apiProxyTarget,
+                '/assets/preview': apiProxyTarget,
                 '/image-generation': apiProxyTarget,
             },
         },

@@ -47,6 +47,22 @@ describe('store management API extensions', () => {
         expect(shopFlashSale.fields?.map(field => field.name.value)).not.toContain('name');
     });
 
+    it('exposes coupon product scopes through the Shop API', () => {
+        const storefrontCoupon = shopApiExtensions.definitions.find(
+            definition =>
+                definition.kind === Kind.OBJECT_TYPE_DEFINITION &&
+                definition.name.value === 'StorefrontCoupon',
+        );
+
+        expect(storefrontCoupon?.kind).toBe(Kind.OBJECT_TYPE_DEFINITION);
+        if (storefrontCoupon?.kind !== Kind.OBJECT_TYPE_DEFINITION) {
+            throw new Error('StorefrontCoupon type is missing');
+        }
+        expect(storefrontCoupon.fields?.map(field => field.name.value)).toEqual(
+            expect.arrayContaining(['collectionIds', 'productVariantIds']),
+        );
+    });
+
     it('uses the generated coupon ledger list options input without a duplicate options argument', () => {
         const ledgerOptions = adminApiExtensions.definitions.find(
             definition =>
