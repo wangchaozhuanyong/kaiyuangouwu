@@ -3,6 +3,9 @@ import { expect, test } from '@playwright/test';
 import { BaseListPage } from '../../page-objects/list-page.base.js';
 import { expectProductEditorOpen } from '../../utils/product-test-helpers.js';
 
+const waitForAdminApiResponse = (page: import('@playwright/test').Page) =>
+    page.waitForResponse(response => response.url().includes('/admin-api') && response.status() === 200);
+
 test.describe('Product List', () => {
     const listPage = (page: import('@playwright/test').Page) =>
         new BaseListPage(page, {
@@ -88,10 +91,7 @@ test.describe('Product List', () => {
             // Select "photo" facet value
             const photoItem = popover.getByRole('option', { name: 'photo' });
             await expect(photoItem).toBeVisible();
-            await photoItem.click();
-
-            // Wait for the filtered results to load
-            await page.waitForResponse(resp => resp.url().includes('/admin-api') && resp.status() === 200);
+            await Promise.all([waitForAdminApiResponse(page), photoItem.click()]);
 
             // Close the popover by pressing Escape
             await page.keyboard.press('Escape');
@@ -124,8 +124,10 @@ test.describe('Product List', () => {
             await expect(popover.getByRole('option', { name: 'Back' })).toBeVisible();
 
             // Select "electronics"
-            await popover.getByRole('option', { name: 'electronics' }).click();
-            await page.waitForResponse(resp => resp.url().includes('/admin-api') && resp.status() === 200);
+            await Promise.all([
+                waitForAdminApiResponse(page),
+                popover.getByRole('option', { name: 'electronics' }).click(),
+            ]);
             await page.keyboard.press('Escape');
 
             // Verify the badge shows the name, not an ID
@@ -156,8 +158,10 @@ test.describe('Product List', () => {
             const popover = page.locator('[data-slot="popover-content"]');
             await expect(popover).toBeVisible({ timeout: 5_000 });
             await popover.getByRole('option', { name: 'category' }).click();
-            await popover.getByRole('option', { name: 'electronics' }).click();
-            await page.waitForResponse(resp => resp.url().includes('/admin-api') && resp.status() === 200);
+            await Promise.all([
+                waitForAdminApiResponse(page),
+                popover.getByRole('option', { name: 'electronics' }).click(),
+            ]);
 
             // Close and reopen to access "Clear filters"
             await page.keyboard.press('Escape');
@@ -167,8 +171,10 @@ test.describe('Product List', () => {
             await expect(popover).toBeVisible({ timeout: 5_000 });
 
             // Click "Clear filters"
-            await popover.getByRole('option', { name: 'Clear filters' }).click();
-            await page.waitForResponse(resp => resp.url().includes('/admin-api') && resp.status() === 200);
+            await Promise.all([
+                waitForAdminApiResponse(page),
+                popover.getByRole('option', { name: 'Clear filters' }).click(),
+            ]);
 
             // The list should now show all products again
             await expect(lp.getRows()).toHaveCount(initialRowCount);
@@ -188,10 +194,7 @@ test.describe('Product List', () => {
 
             // Type in the search box
             const searchInput = popover.getByPlaceholder('Search filter attribute values...');
-            await searchInput.fill('electr');
-
-            // Wait for search results
-            await page.waitForResponse(resp => resp.url().includes('/admin-api') && resp.status() === 200);
+            await Promise.all([waitForAdminApiResponse(page), searchInput.fill('electr')]);
 
             // Should show "electronics" in the search results
             await expect(popover.getByRole('option', { name: 'electronics' })).toBeVisible();
@@ -279,12 +282,15 @@ test.describe('Product List', () => {
 
             // Open the page size select and choose 20
             await lp.getPageSizeSelect().click();
-            await page.getByRole('option', { name: '20' }).click();
-            await page.waitForResponse(resp => resp.url().includes('/admin-api') && resp.status() === 200);
+            await Promise.all([
+                waitForAdminApiResponse(page),
+                page.getByRole('option', { name: '20' }).click(),
+            ]);
 
             // Should now show more rows (seed data has 20+ products)
-            const newCount = await lp.getRows().count();
-            expect(newCount).toBeGreaterThan(initialCount);
+            await expect
+                .poll(async () => lp.getRows().count(), { timeout: 10_000 })
+                .toBeGreaterThan(initialCount);
         });
 
         test('should hide a column via column settings', async ({ page }) => {
@@ -339,14 +345,16 @@ test.describe('Product List', () => {
             await dialog.getByPlaceholder('Enter filter value...').fill('Camera');
 
             // Apply the filter
-            await dialog.getByRole('button', { name: 'Apply filter' }).click();
-
-            // Wait for filtered results
-            await page.waitForResponse(resp => resp.url().includes('/admin-api') && resp.status() === 200);
+            await Promise.all([
+                waitForAdminApiResponse(page),
+                dialog.getByRole('button', { name: 'Apply filter' }).click(),
+            ]);
 
             // Should show fewer rows than before
+            await expect
+                .poll(async () => lp.getRows().count(), { timeout: 10_000 })
+                .toBeLessThan(initialCount);
             const filteredCount = await lp.getRows().count();
-            expect(filteredCount).toBeLessThan(initialCount);
             expect(filteredCount).toBeGreaterThan(0);
 
             // A filter badge should appear in the toolbar
@@ -372,15 +380,20 @@ test.describe('Product List', () => {
 
             const dialog = page.locator('[role="dialog"]');
             await dialog.getByPlaceholder('Enter filter value...').fill('Camera');
-            await dialog.getByRole('button', { name: 'Apply filter' }).click();
-            await page.waitForResponse(resp => resp.url().includes('/admin-api') && resp.status() === 200);
+            await Promise.all([
+                waitForAdminApiResponse(page),
+                dialog.getByRole('button', { name: 'Apply filter' }).click(),
+            ]);
 
-            const filteredCount = await lp.getRows().count();
-            expect(filteredCount).toBeLessThan(initialCount);
+            await expect
+                .poll(async () => lp.getRows().count(), { timeout: 10_000 })
+                .toBeLessThan(initialCount);
 
             // Click "Clear all" to remove the filter
-            await page.getByRole('button', { name: 'Clear all' }).click();
-            await page.waitForResponse(resp => resp.url().includes('/admin-api') && resp.status() === 200);
+            await Promise.all([
+                waitForAdminApiResponse(page),
+                page.getByRole('button', { name: 'Clear all' }).click(),
+            ]);
 
             // Row count should return to the initial count
             await lp.expectRowCount(initialCount);
@@ -404,8 +417,10 @@ test.describe('Product List', () => {
 
             // Default: operator "is equal to", value "True"
             // Apply the filter as-is (enabled = true)
-            await dialog.getByRole('button', { name: 'Apply filter' }).click();
-            await page.waitForResponse(resp => resp.url().includes('/admin-api') && resp.status() === 200);
+            await Promise.all([
+                waitForAdminApiResponse(page),
+                dialog.getByRole('button', { name: 'Apply filter' }).click(),
+            ]);
 
             // All visible rows should be enabled products
             const filteredCount = await lp.getRows().count();
@@ -413,8 +428,10 @@ test.describe('Product List', () => {
             expect(filteredCount).toBeLessThanOrEqual(initialCount);
 
             // Clean up: clear the filter
-            await page.getByRole('button', { name: 'Clear all' }).click();
-            await page.waitForResponse(resp => resp.url().includes('/admin-api') && resp.status() === 200);
+            await Promise.all([
+                waitForAdminApiResponse(page),
+                page.getByRole('button', { name: 'Clear all' }).click(),
+            ]);
         });
     });
 });

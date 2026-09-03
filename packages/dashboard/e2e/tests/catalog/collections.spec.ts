@@ -261,18 +261,26 @@ test('deletes a product group from the list row actions', async ({ page }) => {
     );
     const collectionId = createCollection.id as string;
     let deletionConfirmed = false;
-    let deletionFailure: unknown;
 
     try {
         await page.goto('/collections');
+        const searchResponse = page.waitForResponse(
+            response =>
+                response.url().includes('/admin-api') &&
+                response.status() === 200 &&
+                (response.request().postData() ?? '').includes('CollectionList') &&
+                (response.request().postData() ?? '').includes(collectionName),
+            { timeout: 30_000 },
+        );
         await page.getByPlaceholder('Search product group names...').fill(collectionName);
+        await searchResponse;
 
         const row = page.locator('tbody tr').filter({ has: page.getByText(collectionName) });
         await expect(row).toBeVisible({ timeout: 10_000 });
         await row.getByRole('button', { name: 'Delete', exact: true }).click();
 
         const dialog = page.getByRole('alertdialog');
-        await expect(dialog.getByText('Confirm deletion')).toBeVisible();
+        await expect(dialog.getByText('Confirm deletion')).toBeVisible({ timeout: 10_000 });
         const deleteResponse = page.waitForResponse(
             response =>
                 response.url().includes('/admin-api') &&
@@ -287,9 +295,6 @@ test('deletes a product group from the list row actions', async ({ page }) => {
 
         await expect(page.getByText('Deleted successfully')).toBeVisible({ timeout: 10_000 });
         await expect(row).toBeHidden({ timeout: 10_000 });
-    } catch (error) {
-        deletionFailure = error;
-        throw error;
     } finally {
         if (!deletionConfirmed) {
             try {
@@ -301,11 +306,8 @@ test('deletes a product group from the list row actions', async ({ page }) => {
                         id: collectionId,
                     });
                 }
-            } catch (cleanupError) {
-                // Preserve the primary UI failure if the best-effort cleanup also times out.
-                if (deletionFailure === undefined) {
-                    throw cleanupError;
-                }
+            } catch {
+                // Cleanup is best-effort and must not mask the primary UI failure.
             }
         }
     }
