@@ -12,7 +12,8 @@ import {
     UserInputError,
     isGraphQlErrorResult,
 } from '@vendure/core';
-import { In, IsNull } from 'typeorm';
+import { AdminNotificationRequestedEvent } from '@vendure/operations-dashboard-plugin';
+import { In, IsNull, LessThanOrEqual } from 'typeorm';
 
 import { AutoCardCipherService } from './auto-card-cipher.service';
 import {
@@ -189,6 +190,7 @@ export class ManualDigitalDeliveryService {
         delivery.lastDispatchedAt = new Date();
         const saved = await this.connection.getRepository(ctx, ManualDigitalDelivery).save(delivery);
         await this.addEvent(ctx, saved, 'PUBLISHED', '管理员发布了人工交付成品', 'ADMIN');
+        await this.resolveOverdue(ctx, saved);
         await this.eventBus.publish(new ManualDigitalDeliveryReadyEvent(ctx, String(saved.id)));
         return this.attachView(saved);
     }
@@ -218,6 +220,7 @@ export class ManualDigitalDeliveryService {
             delivery.lastError = `成品数量异常：订单需要 ${delivery.quantity} 份，实际保存 ${packages.length} 份`;
             await this.connection.getRepository(ctx, ManualDigitalDelivery).save(delivery);
             await this.addEvent(ctx, delivery, 'MANUAL_REVIEW', delivery.lastError);
+            await this.publishDeliveryFailure(ctx, delivery, delivery.lastError);
             throw new Error(delivery.lastError);
         }
         const assetIds = [...new Set(packages.flatMap(item => item.attachmentAssetIds))];
@@ -242,6 +245,7 @@ export class ManualDigitalDeliveryService {
 
     async recordEmailResult(ctx: RequestContext, id: ID, success: boolean, error?: Error): Promise<void> {
         const delivery = await this.ownedDelivery(ctx, id);
+        const wasManualReview = delivery.state === 'MANUAL_REVIEW';
         if (success && delivery.state === 'SENT') {
             return;
         }
@@ -258,6 +262,9 @@ export class ManualDigitalDeliveryService {
                     ? '邮件多次发送失败，已转人工核查'
                     : '人工交付邮件发送失败，将重试原成品',
             );
+            if (delivery.state === 'MANUAL_REVIEW') {
+                await this.publishDeliveryFailure(ctx, delivery, delivery.lastError);
+            }
             return;
         }
         delivery.state = 'SENT';
@@ -265,6 +272,8 @@ export class ManualDigitalDeliveryService {
         delivery.lastError = null;
         await this.connection.getRepository(ctx, ManualDigitalDelivery).save(delivery);
         await this.addEvent(ctx, delivery, 'EMAIL_SENT', '人工交付邮件已发送');
+        if (wasManualReview) await this.resolveDeliveryFailure(ctx, delivery);
+        await this.resolveOverdue(ctx, delivery);
         await this.completeFulfillment(ctx, delivery);
     }
 
@@ -275,12 +284,17 @@ export class ManualDigitalDeliveryService {
             delivery.state = 'CANCELLED';
             await repository.save(delivery);
             await this.addEvent(ctx, delivery, 'CANCELLED', '订单取消，人工交付任务已关闭');
+            await this.resolveOverdue(ctx, delivery);
         }
     }
 
     async reconcilePending(): Promise<{ redispatched: number; completedFulfillments: number }> {
         const deliveries = await this.connection.rawConnection.getRepository(ManualDigitalDelivery).find({
-            where: [{ state: In(['SENDING', 'EMAIL_FAILED']) }, { state: 'SENT', fulfillmentId: IsNull() }],
+            where: [
+                { state: In(['SENDING', 'EMAIL_FAILED']) },
+                { state: 'SENT', fulfillmentId: IsNull() },
+                { state: In(['WAITING_PROCESSING', 'DRAFT']), expectedAt: LessThanOrEqual(new Date()) },
+            ],
             relations: { channel: true, order: true, orderLine: true },
             order: { createdAt: 'ASC' },
             take: 200,
@@ -293,6 +307,10 @@ export class ManualDigitalDeliveryService {
                 channelOrToken: delivery.channel,
             });
             try {
+                if (['WAITING_PROCESSING', 'DRAFT'].includes(delivery.state)) {
+                    await this.publishOverdue(ctx, delivery);
+                    continue;
+                }
                 if (delivery.state === 'SENT' && !delivery.fulfillmentId) {
                     await this.completeFulfillment(ctx, delivery);
                     completedFulfillments++;
@@ -426,7 +444,7 @@ export class ManualDigitalDeliveryService {
         return delivery;
     }
 
-    private async addEvent(
+    private addEvent(
         ctx: RequestContext,
         delivery: ManualDigitalDelivery,
         type: ManualDigitalDeliveryEventType,
@@ -443,4 +461,95 @@ export class ManualDigitalDeliveryService {
             }),
         );
     }
+
+    private publishDeliveryFailure(
+        ctx: RequestContext,
+        delivery: ManualDigitalDelivery,
+        reason: string,
+    ): Promise<void> {
+        return this.eventBus.publish(
+            new AdminNotificationRequestedEvent(ctx, {
+                mode: 'INCIDENT_FIRING',
+                eventType: 'commerce.fulfillment.manual_delivery_failed',
+                category: 'FULFILLMENT',
+                severity: 'P1',
+                sourceType: 'ManualDigitalDelivery',
+                sourceId: String(delivery.id),
+                fingerprint: `commerce.fulfillment.manual_delivery_failed:${delivery.id}`,
+                title: `人工交付发送失败 · 订单 ${delivery.order?.code ?? delivery.orderId}`,
+                payload: {
+                    channelId: String(delivery.channelId),
+                    deliveryId: String(delivery.id),
+                    orderId: String(delivery.orderId),
+                    orderCode: delivery.order?.code ?? null,
+                    sku: delivery.sku,
+                    quantity: delivery.quantity,
+                    attemptCount: delivery.attemptCount,
+                    reason: safeOperationalError(reason),
+                    adminPath: `/sales/orders/${delivery.orderId}`,
+                },
+            }),
+        );
+    }
+
+    private resolveDeliveryFailure(ctx: RequestContext, delivery: ManualDigitalDelivery): Promise<void> {
+        return this.eventBus.publish(
+            new AdminNotificationRequestedEvent(ctx, {
+                mode: 'INCIDENT_RESOLVED',
+                eventType: 'commerce.fulfillment.manual_delivery_failed',
+                category: 'FULFILLMENT',
+                severity: 'P2',
+                fingerprint: `commerce.fulfillment.manual_delivery_failed:${delivery.id}`,
+                title: '人工交付发送已恢复',
+                payload: { deliveryId: String(delivery.id), state: delivery.state },
+            }),
+        );
+    }
+
+    private publishOverdue(ctx: RequestContext, delivery: ManualDigitalDelivery): Promise<void> {
+        return this.eventBus.publish(
+            new AdminNotificationRequestedEvent(ctx, {
+                mode: 'INCIDENT_FIRING',
+                eventType: 'commerce.fulfillment.manual_delivery_overdue',
+                category: 'FULFILLMENT',
+                severity: 'P1',
+                sourceType: 'ManualDigitalDelivery',
+                sourceId: String(delivery.id),
+                fingerprint: `commerce.fulfillment.manual_delivery_overdue:${delivery.id}`,
+                title: `人工交付已超过承诺时间 · 订单 ${delivery.order?.code ?? delivery.orderId}`,
+                payload: {
+                    channelId: String(delivery.channelId),
+                    deliveryId: String(delivery.id),
+                    orderId: String(delivery.orderId),
+                    orderCode: delivery.order?.code ?? null,
+                    sku: delivery.sku,
+                    expectedAt: delivery.expectedAt.toISOString(),
+                    adminPath: `/sales/orders/${delivery.orderId}`,
+                },
+            }),
+        );
+    }
+
+    private resolveOverdue(ctx: RequestContext, delivery: ManualDigitalDelivery): Promise<void> {
+        if (delivery.expectedAt.getTime() > Date.now()) return Promise.resolve();
+        return this.eventBus.publish(
+            new AdminNotificationRequestedEvent(ctx, {
+                mode: 'INCIDENT_RESOLVED',
+                eventType: 'commerce.fulfillment.manual_delivery_overdue',
+                category: 'FULFILLMENT',
+                severity: 'P2',
+                fingerprint: `commerce.fulfillment.manual_delivery_overdue:${delivery.id}`,
+                title: '人工交付超时已恢复',
+                payload: { deliveryId: String(delivery.id), state: delivery.state },
+            }),
+        );
+    }
+}
+
+function safeOperationalError(value: unknown): string {
+    return String(value)
+        .replace(/[\u0000-\u001f\u007f]+/gu, ' ')
+        .replace(/\s+/gu, ' ')
+        .trim()
+        .slice(0, 500);
 }

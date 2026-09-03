@@ -1,3 +1,4 @@
+import { AdminNotificationRequestedEvent } from '@vendure/operations-dashboard-plugin';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { StorefrontUsdtCheckoutQuote } from '../entities/storefront-usdt-checkout-quote.entity';
@@ -33,6 +34,7 @@ describe('UsdtPaymentService', () => {
             {} as any,
             {} as any,
             { get: () => wallet, requireConfigured: () => wallet } as any,
+            {} as any,
             {} as any,
         );
         const quote = new StorefrontUsdtCheckoutQuote({
@@ -124,6 +126,7 @@ describe('UsdtPaymentService', () => {
             { create: vi.fn().mockResolvedValue({ channelId: 'channel-1' }) } as any,
             { get: () => wallet, requireConfigured: () => wallet } as any,
             tronClient as any,
+            { publish: vi.fn() } as any,
         );
 
         const result = await service.scanPendingPayments({} as any, now);
@@ -140,5 +143,56 @@ describe('UsdtPaymentService', () => {
             paymentId: 'payment-1',
             blockNumber: 85_700_193,
         });
+    });
+
+    it('raises a deduplicated P0 event for a solidified transfer with an unmatched amount', async () => {
+        const now = new Date('2026-08-26T02:05:00.000Z');
+        const intent = new StorefrontUsdtPaymentIntent({
+            id: 'intent-1',
+            channelId: 'channel-1',
+            orderId: 'order-1',
+            channel: { id: 'channel-1' },
+            createdAt: new Date('2026-08-26T02:00:00.000Z'),
+            expiresAt: new Date('2026-08-26T02:10:00.000Z'),
+            expectedUsdtAmount: '13.850123',
+            receivingAddress,
+            status: 'PENDING',
+        });
+        const intentRepository = {
+            find: vi.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([intent]),
+            save: vi.fn().mockImplementation(value => Promise.resolve(value)),
+        };
+        const transfer = {
+            transactionId: 'b'.repeat(64),
+            from: 'TSender',
+            to: receivingAddress,
+            amount: '13.000000',
+            blockTimestamp: now,
+        };
+        const eventBus = { publish: vi.fn().mockResolvedValue(undefined) };
+        const service = new UsdtPaymentService(
+            { getRepository: () => intentRepository } as any,
+            {} as any,
+            {} as any,
+            { get: () => wallet, requireConfigured: () => wallet } as any,
+            {
+                incomingTransfers: vi.fn().mockResolvedValue([transfer]),
+                solidifiedTransaction: vi.fn().mockResolvedValue({ blockNumber: 100 }),
+            } as any,
+            eventBus as any,
+        );
+
+        const result = await service.scanPendingPayments({ channelId: 'channel-1' } as any, now);
+
+        expect(result).toMatchObject({ settledCount: 0, manualReviewCount: 0 });
+        expect(eventBus.publish).toHaveBeenCalledOnce();
+        const event = eventBus.publish.mock.calls[0][0];
+        expect(event).toBeInstanceOf(AdminNotificationRequestedEvent);
+        expect(event.notification).toMatchObject({
+            eventType: 'commerce.payment.amount_mismatch',
+            severity: 'P0',
+            dedupKey: `commerce.payment.amount_mismatch:${transfer.transactionId}`,
+        });
+        expect(event.notification.payload).not.toHaveProperty('receivingAddress', receivingAddress);
     });
 });

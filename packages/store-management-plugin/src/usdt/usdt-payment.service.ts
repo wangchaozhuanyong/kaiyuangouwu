@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import {
     Channel,
+    EventBus,
     isGraphQlErrorResult,
     OrderService,
     Payment,
@@ -8,6 +9,7 @@ import {
     RequestContextService,
     TransactionalConnection,
 } from '@vendure/core';
+import { AdminNotificationRequestedEvent } from '@vendure/operations-dashboard-plugin';
 import { createHash, randomInt } from 'node:crypto';
 import { LessThan, MoreThan, QueryFailedError } from 'typeorm';
 
@@ -89,6 +91,7 @@ export class UsdtPaymentService {
         private readonly requestContextService: RequestContextService,
         private readonly storeWallets: StoreUsdtWalletService,
         private readonly tronClient: UsdtTrc20Client,
+        private readonly eventBus: EventBus,
     ) {}
 
     async walletStatus(
@@ -359,13 +362,38 @@ export class UsdtPaymentService {
                 new Date(oldestCreatedAt.getTime() - PAYMENT_MATCH_GRACE_MS),
             );
             result.transferCount += transfers.length;
+            const matches = new Map<string, ConfirmedTrc20Transfer>();
+            const matchedTransactionIds = new Set<string>();
+            for (const intent of addressIntents) {
+                const transfer = findMatchingTransfer(intent, transfers);
+                if (!transfer) continue;
+                matches.set(String(intent.id), transfer);
+                matchedTransactionIds.add(transfer.transactionId);
+            }
+            for (const transfer of findUnmatchedTransfers(addressIntents, transfers, matchedTransactionIds)) {
+                const solidified = await this.tronClient.solidifiedTransaction(transfer.transactionId);
+                if (!solidified) continue;
+                await this.publishAmountMismatch(ctx, addressIntents, transfer, solidified.blockNumber);
+            }
             for (const intent of addressIntents) {
                 intent.lastCheckedAt = now;
-                const transfer = findMatchingTransfer(intent, transfers);
+                const transfer = matches.get(String(intent.id));
                 if (!transfer) continue;
                 const solidified = await this.tronClient.solidifiedTransaction(transfer.transactionId);
                 if (!solidified) continue;
-                const status = await this.settleMatchedIntent(intent, transfer, solidified.blockNumber, now);
+                let status: string;
+                try {
+                    status = await this.settleMatchedIntent(intent, transfer, solidified.blockNumber, now);
+                } catch (error) {
+                    await this.publishManualReview(
+                        ctx,
+                        intent,
+                        `USDT 入账后未能完整落库：${safeError(error)}`,
+                        transfer,
+                        'payment-persistence',
+                    );
+                    throw error;
+                }
                 intent.status = status as StorefrontUsdtPaymentIntent['status'];
                 if (status === USDT_PAYMENT_INTENT_STATUS.settled) result.settledCount += 1;
                 if (status === USDT_PAYMENT_INTENT_STATUS.manualReview) result.manualReviewCount += 1;
@@ -401,6 +429,13 @@ export class UsdtPaymentService {
                 locked.status = USDT_PAYMENT_INTENT_STATUS.manualReview;
                 locked.failureReason = '订单绑定的收款钱包快照未通过完整性校验';
                 await repository.save(locked, { reload: false });
+                await this.publishManualReview(
+                    ctx,
+                    locked,
+                    locked.failureReason,
+                    transfer,
+                    'wallet-snapshot',
+                );
                 return locked.status;
             }
 
@@ -435,6 +470,13 @@ export class UsdtPaymentService {
                 locked.status = USDT_PAYMENT_INTENT_STATUS.manualReview;
                 locked.failureReason = paymentResult.message.slice(0, 500);
                 await repository.save(locked, { reload: false });
+                await this.publishManualReview(
+                    ctx,
+                    locked,
+                    locked.failureReason,
+                    transfer,
+                    'vendure-payment',
+                );
                 return locked.status;
             }
 
@@ -451,6 +493,69 @@ export class UsdtPaymentService {
             await repository.save(locked, { reload: false });
             return locked.status;
         });
+    }
+
+    private async publishAmountMismatch(
+        ctx: RequestContext,
+        intents: StorefrontUsdtPaymentIntent[],
+        transfer: ConfirmedTrc20Transfer,
+        blockNumber: number,
+    ): Promise<void> {
+        await this.eventBus.publish(
+            new AdminNotificationRequestedEvent(ctx, {
+                eventType: 'commerce.payment.amount_mismatch',
+                category: 'PAYMENT',
+                severity: 'P0',
+                sourceType: 'Trc20Transfer',
+                sourceId: transfer.transactionId,
+                dedupKey: `commerce.payment.amount_mismatch:${transfer.transactionId}`,
+                title: 'USDT 收款金额未匹配待支付订单',
+                payload: {
+                    channelIds: [...new Set(intents.map(intent => String(intent.channelId)))],
+                    intentIds: intents.map(intent => String(intent.id)),
+                    expectedAmounts: [...new Set(intents.map(intent => intent.expectedUsdtAmount))],
+                    receivedAmount: transfer.amount,
+                    transactionId: transfer.transactionId,
+                    blockNumber,
+                    blockTimestamp: transfer.blockTimestamp.toISOString(),
+                    receivingAddress: maskTronAddress(transfer.to),
+                    senderAddress: maskTronAddress(transfer.from),
+                    adminPath: '/settings/usdt-payments',
+                },
+            }),
+        );
+    }
+
+    private async publishManualReview(
+        ctx: RequestContext,
+        intent: StorefrontUsdtPaymentIntent,
+        reason: string,
+        transfer: ConfirmedTrc20Transfer,
+        reasonCode: string,
+    ): Promise<void> {
+        await this.eventBus.publish(
+            new AdminNotificationRequestedEvent(ctx, {
+                mode: 'INCIDENT_FIRING',
+                eventType: 'commerce.payment.manual_review',
+                category: 'PAYMENT',
+                severity: 'P0',
+                sourceType: 'StorefrontUsdtPaymentIntent',
+                sourceId: String(intent.id),
+                fingerprint: `commerce.payment.manual_review:${intent.id}`,
+                title: 'USDT 付款需要立即人工复核',
+                payload: {
+                    channelId: String(intent.channelId),
+                    intentId: String(intent.id),
+                    orderId: String(intent.orderId),
+                    expectedAmount: intent.expectedUsdtAmount,
+                    receivedAmount: transfer.amount,
+                    transactionId: transfer.transactionId,
+                    reasonCode,
+                    reason: safeError(reason),
+                    adminPath: '/settings/usdt-payments',
+                },
+            }),
+        );
     }
 
     private async findLockedIntent(
@@ -491,6 +596,32 @@ export function findMatchingTransfer(
     );
 }
 
+export function findUnmatchedTransfers(
+    intents: Array<
+        Pick<
+            StorefrontUsdtPaymentIntent,
+            'expectedUsdtAmount' | 'receivingAddress' | 'createdAt' | 'expiresAt'
+        >
+    >,
+    transfers: ConfirmedTrc20Transfer[],
+    matchedTransactionIds: ReadonlySet<string>,
+): ConfirmedTrc20Transfer[] {
+    return transfers.filter(transfer => {
+        if (matchedTransactionIds.has(transfer.transactionId)) return false;
+        return intents.some(intent => {
+            const earliest = intent.createdAt.getTime() - PAYMENT_MATCH_GRACE_MS;
+            const latest = intent.expiresAt.getTime() + PAYMENT_MATCH_GRACE_MS;
+            const timestamp = transfer.blockTimestamp.getTime();
+            return (
+                transfer.to === intent.receivingAddress &&
+                transfer.amount !== intent.expectedUsdtAmount &&
+                timestamp >= earliest &&
+                timestamp <= latest
+            );
+        });
+    });
+}
+
 export function createMatchKey(network: string, addressFingerprint: string, usdtAmount: string): string {
     return createHash('sha256')
         .update(`storefront-usdt-match:v1:${network}:${addressFingerprint}:${usdtAmount}`, 'utf8')
@@ -527,6 +658,14 @@ function isUniqueConstraintViolation(error: unknown): boolean {
 
 function isLockUnsupported(error: unknown): boolean {
     return error instanceof Error && /Locking not supported|pessimistic lock/iu.test(error.message);
+}
+
+function safeError(error: unknown): string {
+    return (error instanceof Error ? error.message : String(error))
+        .replace(/[\u0000-\u001f\u007f]+/gu, ' ')
+        .replace(/\s+/gu, ' ')
+        .trim()
+        .slice(0, 500);
 }
 
 function roundUsdt(value: number): number {
