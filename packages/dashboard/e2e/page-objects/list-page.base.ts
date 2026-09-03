@@ -135,20 +135,29 @@ export class BaseListPage {
     /** Click the sort button in the column header matching `name`. */
     async clickColumnSort(name: string) {
         const header = this.dataTable.locator('thead th').filter({ hasText: name });
+        const response = this.page.waitForResponse(
+            resp => resp.url().includes('/admin-api') && resp.status() === 200,
+        );
         await header.getByRole('button').first().click();
-        await this.page.waitForResponse(resp => resp.url().includes('/admin-api') && resp.status() === 200);
+        await response;
     }
 
     /** Click the "Go to next page" pagination button. */
     async clickNextPage() {
+        const response = this.page.waitForResponse(
+            resp => resp.url().includes('/admin-api') && resp.status() === 200,
+        );
         await this.page.getByRole('button', { name: 'Go to next page' }).click();
-        await this.page.waitForResponse(resp => resp.url().includes('/admin-api') && resp.status() === 200);
+        await response;
     }
 
     /** Click the "Go to previous page" pagination button. */
     async clickPreviousPage() {
+        const response = this.page.waitForResponse(
+            resp => resp.url().includes('/admin-api') && resp.status() === 200,
+        );
         await this.page.getByRole('button', { name: 'Go to previous page' }).click();
-        await this.page.waitForResponse(resp => resp.url().includes('/admin-api') && resp.status() === 200);
+        await response;
     }
 
     /** Get a locator for the rows-per-page Select trigger in the pagination footer. */

@@ -233,6 +233,10 @@ test.describe('Product group hierarchy workflow', () => {
 });
 
 test('deletes a product group from the list row actions', async ({ page }) => {
+    // This flow combines API setup, sensitive-action confirmation and fallback cleanup.
+    // Shared CI runners can exceed the default 30-second budget before cleanup completes.
+    test.slow();
+
     const client = new VendureAdminClient(page);
     await client.login();
     const suffix = Date.now();
@@ -257,6 +261,7 @@ test('deletes a product group from the list row actions', async ({ page }) => {
     );
     const collectionId = createCollection.id as string;
     let deletionConfirmed = false;
+    let deletionFailure: unknown;
 
     try {
         await page.goto('/collections');
@@ -268,20 +273,39 @@ test('deletes a product group from the list row actions', async ({ page }) => {
 
         const dialog = page.getByRole('alertdialog');
         await expect(dialog.getByText('Confirm deletion')).toBeVisible();
+        const deleteResponse = page.waitForResponse(
+            response =>
+                response.url().includes('/admin-api') &&
+                response.status() === 200 &&
+                (response.request().postData() ?? '').includes('DeleteCollection'),
+            { timeout: 30_000 },
+        );
         await confirmSensitiveAction(dialog, 'Delete');
+        const { data } = await (await deleteResponse).json();
+        expect(data.deleteCollection.result).toBe('DELETED');
+        deletionConfirmed = true;
 
         await expect(page.getByText('Deleted successfully')).toBeVisible({ timeout: 10_000 });
-        await expect(row).toBeHidden();
-        deletionConfirmed = true;
+        await expect(row).toBeHidden({ timeout: 10_000 });
+    } catch (error) {
+        deletionFailure = error;
+        throw error;
     } finally {
         if (!deletionConfirmed) {
-            const { collection } = await client.gql(`query ($id: ID!) { collection(id: $id) { id } }`, {
-                id: collectionId,
-            });
-            if (collection) {
-                await client.gql(`mutation ($id: ID!) { deleteCollection(id: $id) { result } }`, {
+            try {
+                const { collection } = await client.gql(`query ($id: ID!) { collection(id: $id) { id } }`, {
                     id: collectionId,
                 });
+                if (collection) {
+                    await client.gql(`mutation ($id: ID!) { deleteCollection(id: $id) { result } }`, {
+                        id: collectionId,
+                    });
+                }
+            } catch (cleanupError) {
+                // Preserve the primary UI failure if the best-effort cleanup also times out.
+                if (deletionFailure === undefined) {
+                    throw cleanupError;
+                }
             }
         }
     }
