@@ -18,12 +18,7 @@ import { imagePricingSnapshot, quoteImageMoney } from '../image-billing-quote';
 import { ImageGenerationConfigService } from '../image-generation-config.service';
 import { ImageUsageQuotaService } from '../image-usage-quota.service';
 import { ImageProviderClient } from '../provider/image-provider.client';
-import {
-    type ImagePromptSpec,
-    type ImageProviderScope,
-    type ImageReferenceMode,
-    type OptimizeImagePromptInput,
-} from '../types';
+import { type ImagePromptSpec, type ImageReferenceMode, type OptimizeImagePromptInput } from '../types';
 
 import {
     detectPromptLanguage,
@@ -42,8 +37,6 @@ const OPTIMIZER_SYSTEM_PROMPT_BASE = [
     'String arrays must contain strings only. Preserve any exact requested text verbatim. Never invent ',
     'a brand, logo, price, promotion, certification, medical claim, product claim, or identity.',
 ].join('\n');
-const PROMPT_PROVIDER_SCOPES = ['OPENAI', 'GEMINI'] as const satisfies readonly ImageProviderScope[];
-
 @Injectable()
 export class ImagePromptEngineService {
     constructor(
@@ -108,29 +101,17 @@ export class ImagePromptEngineService {
                 referenceMode,
                 targetLanguage: outputLanguage === 'zh' ? 'Simplified Chinese' : 'English',
             });
-            // ── New unified prompt model selection ──
-            const maxAttempts = 3;
-            let selected:
-                | {
-                      credential: any;
-                      modelId: string;
-                      result: any;
-                  }
-                | undefined;
-            const triedConfigIds = new Set<string>();
-            for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-                const { config: promptModelConfig, selectionReason } =
-                    await this.configService.selectPromptModel(ctx);
-                if (triedConfigIds.has(String(promptModelConfig.id))) break;
-                triedConfigIds.add(String(promptModelConfig.id));
-                const routedCredential = this.configService.promptModelAsCredential(promptModelConfig);
-                optimizerModelId = promptModelConfig.modelId;
-                credentialCode = promptModelConfig.code;
-                credentialName = promptModelConfig.name;
-                credentialLast4 = promptModelConfig.apiKeyLast4;
-                credentialSelectionReason = selectionReason;
-                upstreamCallCount += 1;
-                try {
+            const selected = await firstSuccessfulPromptModel(
+                3,
+                excludedConfigIds => this.configService.selectPromptModel(ctx, excludedConfigIds),
+                async ({ config: promptModelConfig, selectionReason }) => {
+                    const routedCredential = this.configService.promptModelAsCredential(promptModelConfig);
+                    optimizerModelId = promptModelConfig.modelId;
+                    credentialCode = promptModelConfig.code;
+                    credentialName = promptModelConfig.name;
+                    credentialLast4 = promptModelConfig.apiKeyLast4;
+                    credentialSelectionReason = selectionReason;
+                    upstreamCallCount += 1;
                     const result = await this.providerClient.optimizePrompt(
                         routedCredential,
                         promptModelConfig.modelId,
@@ -140,13 +121,13 @@ export class ImagePromptEngineService {
                     await this.configService
                         .recordPromptModelSuccess(ctx, promptModelConfig)
                         .catch(() => undefined);
-                    selected = {
+                    return {
                         credential: routedCredential,
                         modelId: promptModelConfig.modelId,
                         result,
                     };
-                    break;
-                } catch (error) {
+                },
+                async ({ config: promptModelConfig }, error) => {
                     const details = providerFailureDetails(error);
                     await this.configService
                         .recordPromptModelFailure(ctx, promptModelConfig, {
@@ -155,18 +136,13 @@ export class ImagePromptEngineService {
                             message: error instanceof Error ? error.message : String(error),
                         })
                         .catch(() => undefined);
-                    const safelyRejected = [401, 403, 429].includes(details.httpStatus ?? 0);
-                    if (!safelyRejected) throw error;
-                }
-            }
-            if (!selected) {
-                throw new Error('所有提示词优化模型均不可用');
-            }
+                },
+            );
             const {
                 credential: selectedCredential,
                 modelId: selectedModelId,
                 result: selectedResult,
-            } = selected;
+            } = selected.result;
             telemetry = selectedResult.telemetry as Record<string, any> | undefined;
             const parsed = this.parseSpec(selectedResult.text);
             if (!parsed) upstreamCallCount += 1;
@@ -629,37 +605,42 @@ export function optimizerSystemPrompt(language: PromptOutputLanguage): string {
     return `${OPTIMIZER_SYSTEM_PROMPT_BASE}\n${languageInstruction}`;
 }
 
-export async function firstSuccessfulPromptProvider<T>(
-    attempt: (scope: ImageProviderScope) => Promise<T>,
-): Promise<T> {
+export async function firstSuccessfulPromptModel<TRoute extends { config: { id: string | number } }, TResult>(
+    maxAttempts: number,
+    select: (excludedConfigIds: readonly string[]) => Promise<TRoute>,
+    attempt: (route: TRoute) => Promise<TResult>,
+    onFailure: (route: TRoute, error: unknown) => Promise<void>,
+): Promise<{ route: TRoute; result: TResult }> {
+    if (!Number.isSafeInteger(maxAttempts) || maxAttempts < 1) {
+        throw new Error('Prompt model maxAttempts must be a positive integer');
+    }
     let lastError: unknown;
-    for (const scope of PROMPT_PROVIDER_SCOPES) {
+    const triedConfigIds = new Set<string>();
+    for (let attemptIndex = 0; attemptIndex < maxAttempts; attemptIndex += 1) {
+        const route = await select([...triedConfigIds]);
+        const configId = String(route.config.id);
+        if (triedConfigIds.has(configId)) {
+            throw new Error(`Prompt model selector returned duplicate config ${configId}`);
+        }
+        triedConfigIds.add(configId);
         try {
-            return await attempt(scope);
+            return { route, result: await attempt(route) };
         } catch (error) {
             lastError = error;
+            await onFailure(route, error);
+            if (!shouldFailoverPromptModel(error)) throw errorFromUnknown(error, '提示词优化模型调用失败');
         }
     }
-    throw errorFromUnknown(lastError, '没有可用的提示词优化 Key');
+    throw errorFromUnknown(lastError, '所有提示词优化模型均不可用');
 }
 
-export async function firstSuccessfulFixedPromptRoute<T>(
-    routes: Array<{ role: 'PRIMARY' | 'FALLBACK'; credentialCode: string; modelId: string }>,
-    attempt: (route: { role: 'PRIMARY' | 'FALLBACK'; credentialCode: string; modelId: string }) => Promise<T>,
-): Promise<T> {
-    let lastError: unknown;
-    for (const route of routes) {
-        try {
-            return await attempt(route);
-        } catch (error) {
-            lastError = error;
-        }
-    }
-    throw errorFromUnknown(lastError, '统一提示词路由没有可用的 Key');
-}
-
-function providerScopeName(scope: ImageProviderScope): string {
-    return scope === 'OPENAI' ? 'GPT/OpenAI' : 'Gemini';
+export function shouldFailoverPromptModel(error: unknown): boolean {
+    const { httpStatus } = providerFailureDetails(error);
+    return (
+        httpStatus == null ||
+        [401, 403, 404, 408, 409, 425, 429].includes(httpStatus) ||
+        (httpStatus >= 500 && httpStatus <= 599)
+    );
 }
 
 function errorFromUnknown(error: unknown, fallbackMessage: string): Error {

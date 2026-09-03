@@ -838,15 +838,16 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
         const apiKey = input.apiKey?.trim();
         if (!existing && !apiKey) throw new UserInputError('首次配置必须填写 API Key');
         const normalizedBaseUrl = baseUrl.toString().replace(/\/$/u, '');
+        const apiFormat = normalizeApiFormat(input.apiFormat, modelId);
         const connectionChanged =
             !existing ||
             Boolean(apiKey) ||
             existing.baseUrl !== normalizedBaseUrl ||
-            existing.modelId !== modelId;
+            existing.modelId !== modelId ||
+            existing.apiFormat !== apiFormat;
         const encryptedApiKey = apiKey ? this.cipher.encrypt(apiKey) : existing?.encryptedApiKey;
         if (!encryptedApiKey) throw new UserInputError('首次配置必须填写 API Key');
         const healthStatus = connectionChanged ? 'UNTESTED' : (existing?.healthStatus ?? 'UNTESTED');
-        const apiFormat = normalizeApiFormat(input.apiFormat, modelId);
         const values = {
             code,
             name: requiredText(input.name, 120, '提示词模型名称'),
@@ -888,7 +889,6 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
         config.healthMessage = result.message.slice(0, 500);
         config.consecutiveFailures = result.ok ? 0 : config.consecutiveFailures + 1;
         config.cooldownUntil = null;
-        if (result.ok && !config.enabled) config.enabled = true;
         if (!result.ok) config.enabled = false;
         await repository.save(config, { reload: false });
         return { ...result, testedAt: config.lastTestedAt };
@@ -907,10 +907,11 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
 
     async selectPromptModel(
         ctx: RequestContext,
+        excludedConfigIds: readonly string[] = [],
     ): Promise<{ config: ImagePromptModelConfig; selectionReason: string }> {
         return this.connection.withTransaction(ctx, async txCtx => {
             const repository = this.connection.getRepository(txCtx, ImagePromptModelConfig);
-            const candidates = await repository
+            const query = repository
                 .createQueryBuilder('config')
                 .where('config.enabled = :enabled', { enabled: true })
                 .andWhere('config.archivedAt IS NULL')
@@ -919,8 +920,11 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
                     now: new Date(),
                 })
                 .orderBy('config.priority', 'ASC')
-                .addOrderBy('config.id', 'ASC')
-                .getMany();
+                .addOrderBy('config.id', 'ASC');
+            if (excludedConfigIds.length) {
+                query.andWhere('config.id NOT IN (:...excludedConfigIds)', { excludedConfigIds });
+            }
+            const candidates = await query.getMany();
             if (!candidates.length) {
                 throw new UserInputError(
                     '没有可用的提示词优化模型，请在「提示词优化模型」中添加并启用至少一个',

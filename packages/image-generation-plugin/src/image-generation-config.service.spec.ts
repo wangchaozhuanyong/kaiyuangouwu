@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { ImageGenerationCostEvent } from './entities/image-generation-cost-event.entity';
 import { ImageModelConfig } from './entities/image-model-config.entity';
+import { ImagePromptModelConfig } from './entities/image-prompt-model-config.entity';
 import { ImagePromptSkillRelease } from './entities/image-prompt-skill-release.entity';
 import { ImageProviderCredentialModel } from './entities/image-provider-credential-model.entity';
 import { ImageProviderCredential } from './entities/image-provider-credential.entity';
@@ -300,6 +301,141 @@ describe('ImageGenerationConfigService provider bindings', () => {
                 modelCodes: [],
             }),
         ).rejects.toThrow('稳定代码创建后不能修改');
+    });
+});
+
+describe('ImageGenerationConfigService prompt model lifecycle', () => {
+    it('invalidates health and disables routing when the API format changes', async () => {
+        const existing = new ImagePromptModelConfig({
+            id: 1,
+            code: 'prompt-primary',
+            name: 'Prompt Primary',
+            enabled: true,
+            baseUrl: 'https://relay.example.com/v1',
+            encryptedApiKey: 'encrypted',
+            apiKeyLast4: '1234',
+            modelId: 'shared-model-id',
+            apiFormat: 'OPENAI',
+            priority: 10,
+            weight: 1,
+            currentWeight: 0,
+            healthStatus: 'HEALTHY',
+            healthMessage: 'ok',
+            lastTestedAt: new Date('2026-09-03T00:00:00.000Z'),
+            consecutiveFailures: 0,
+            cooldownUntil: null,
+            lastUsedAt: null,
+            archivedAt: null,
+        });
+        const repository = {
+            findOne: vi.fn().mockResolvedValue(existing),
+            save: vi.fn((value: ImagePromptModelConfig) => Promise.resolve(value)),
+        };
+        const service = new ImageGenerationConfigService(
+            {},
+            { getRepository: vi.fn(() => repository) } as never,
+            { encrypt: vi.fn() } as never,
+            { validate: vi.fn((value: string) => Promise.resolve(new URL(value))) } as never,
+            {} as never,
+            {} as never,
+            {} as never,
+        );
+
+        const saved = await service.savePromptModel({} as never, {
+            id: '1',
+            code: 'prompt-primary',
+            name: 'Prompt Primary',
+            enabled: true,
+            baseUrl: 'https://relay.example.com/v1',
+            apiKey: null,
+            modelId: 'shared-model-id',
+            apiFormat: 'GEMINI',
+            priority: 10,
+            weight: 1,
+        });
+
+        expect(saved).toMatchObject({
+            apiFormat: 'GEMINI',
+            enabled: false,
+            healthStatus: 'UNTESTED',
+            healthMessage: null,
+            lastTestedAt: null,
+        });
+    });
+
+    it('records a successful test without silently enabling a disabled model', async () => {
+        const config = new ImagePromptModelConfig({
+            id: 1,
+            code: 'prompt-primary',
+            enabled: false,
+            archivedAt: null,
+            modelId: 'gpt-5.4-mini',
+            consecutiveFailures: 2,
+        });
+        const repository = {
+            findOne: vi.fn().mockResolvedValue(config),
+            save: vi.fn((value: ImagePromptModelConfig) => Promise.resolve(value)),
+        };
+        const service = new ImageGenerationConfigService(
+            {},
+            { getRepository: vi.fn(() => repository) } as never,
+            {} as never,
+            {} as never,
+            { testModel: vi.fn().mockResolvedValue({ ok: true, message: 'ok' }) } as never,
+            {} as never,
+            {} as never,
+        );
+        vi.spyOn(service, 'promptModelAsCredential').mockReturnValue({} as never);
+
+        await service.testPromptModel({} as never, '1');
+
+        expect(config).toMatchObject({
+            enabled: false,
+            healthStatus: 'HEALTHY',
+            healthMessage: 'ok',
+            consecutiveFailures: 0,
+        });
+    });
+
+    it('excludes previously attempted model IDs from the next selection query', async () => {
+        const query = {
+            where: vi.fn(),
+            andWhere: vi.fn(),
+            orderBy: vi.fn(),
+            addOrderBy: vi.fn(),
+            getMany: vi
+                .fn()
+                .mockResolvedValue([
+                    new ImagePromptModelConfig({ id: 2, priority: 10, weight: 1, currentWeight: 0 }),
+                ]),
+        };
+        for (const method of ['where', 'andWhere', 'orderBy', 'addOrderBy'] as const) {
+            query[method].mockReturnValue(query);
+        }
+        const repository = {
+            createQueryBuilder: vi.fn(() => query),
+            save: vi.fn().mockResolvedValue(undefined),
+        };
+        const connection = {
+            withTransaction: vi.fn((_ctx: unknown, work: (ctx: unknown) => unknown) => work({})),
+            getRepository: vi.fn(() => repository),
+        };
+        const service = new ImageGenerationConfigService(
+            {},
+            connection as never,
+            {} as never,
+            {} as never,
+            {} as never,
+            {} as never,
+            {} as never,
+        );
+
+        const selected = await service.selectPromptModel({} as never, ['1']);
+
+        expect(selected.config.id).toBe(2);
+        expect(query.andWhere).toHaveBeenCalledWith('config.id NOT IN (:...excludedConfigIds)', {
+            excludedConfigIds: ['1'],
+        });
     });
 });
 
