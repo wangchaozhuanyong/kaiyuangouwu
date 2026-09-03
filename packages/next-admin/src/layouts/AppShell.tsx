@@ -73,6 +73,11 @@ import {
 import { getChannelDisplayLabel } from '../utils/channel-display';
 import { commerceModeAllowsPath } from '../utils/commerce-mode';
 import { toUserFacingError } from '../utils/user-facing-error';
+import {
+    hasAppShellPermissionSnapshot,
+    isAppShellPermissionLoading,
+    resolveAppShellOpenMenu,
+} from './app-shell-navigation';
 
 interface OpenTab {
     path: string;
@@ -148,11 +153,15 @@ export function AppShell() {
     const location = useLocation();
     const routerNavigate = useNavigate();
     const { preference: themePreference, resolvedTheme, setPreference: setThemePreference } = useTheme();
-    const navigate = (target: string, options?: NavigateOptions) => {
-        if (!requestAppNavigation(target)) return;
+    const completeNavigation = (target: string, options?: NavigateOptions) => {
         preloadRoute(target);
         preloadNextAdminExtensionRoute(target);
         startTransition(() => void routerNavigate(target, options));
+    };
+    const navigate = (target: string, options?: NavigateOptions) => {
+        if (!requestAppNavigation(target)) return false;
+        completeNavigation(target, options);
+        return true;
     };
     const [isDesktop, setIsDesktop] = useState(
         () => window.matchMedia(PERSISTENT_SIDEBAR_MEDIA_QUERY).matches,
@@ -219,10 +228,13 @@ export function AppShell() {
         getRequiredPermissionsForAdminPath(location.pathname);
     const currentRouteRequiresPermission = currentRoutePermissions.length > 0;
     const canAccessCurrentRoute = canAccessPath(location.pathname);
+    const hasPermissionSnapshot = hasAppShellPermissionSnapshot(channelData);
     const channelsError = appShellError;
     const channelsLoading = appShellLoading;
-    const profileError = appShellError;
-    const profileLoading = appShellLoading;
+    const channelControlsLoading = !channelData && appShellLoading;
+    // Apollo 在 fetchMore/refetch 期间也会报 loading。权限快照已存在时不应用后台请求遮住当前页面。
+    const profileError = hasPermissionSnapshot ? undefined : appShellError;
+    const profileLoading = isAppShellPermissionLoading(channelData, appShellLoading);
     const refetchProfile = refetchAppShell;
 
     useEffect(() => {
@@ -385,25 +397,11 @@ export function AppShell() {
         wasMobileSidebarOpenRef.current = isSidebarOpen;
     }, [isDesktop, isSidebarOpen]);
 
-    useEffect(() => {
-        // 自动根据当前路由激活并只展开对应的一个父分类 (手风琴模式)
-        if (location.pathname === '/dashboard') {
-            setOpenMenu(null);
-        } else if (location.pathname.startsWith('/catalog')) {
-            setOpenMenu('catalog');
-        } else if (location.pathname.startsWith('/sales')) {
-            setOpenMenu('sales');
-        } else if (location.pathname.startsWith('/customers')) {
-            setOpenMenu(null);
-        } else if (location.pathname.startsWith('/marketing')) {
-            setOpenMenu('marketing');
-        } else if (location.pathname.startsWith('/storefront')) {
-            setOpenMenu('storefront');
-        } else if (location.pathname.startsWith('/plugins')) {
-            setOpenMenu('plugins');
-        } else if (location.pathname.startsWith('/settings')) {
-            setOpenMenu('settings');
-        }
+    useLayoutEffect(() => {
+        // 扩展页面可以挂在与 URL 前缀不同的导航分组，应优先遵循注册信息。
+        const extensionRoute = getNextAdminExtensionRoute(location.pathname);
+        const nextOpenMenu = resolveAppShellOpenMenu(location.pathname, extensionRoute?.navItem?.sectionId);
+        if (nextOpenMenu !== undefined) setOpenMenu(nextOpenMenu);
 
         const routeTitles: Record<string, string> = {
             '/dashboard': '工作台',
@@ -427,8 +425,7 @@ export function AppShell() {
             '/settings/system-ops': '系统运维 [超管]',
         };
 
-        let currentTitle =
-            getNextAdminExtensionRoute(location.pathname)?.title ?? routeTitles[location.pathname];
+        let currentTitle = extensionRoute?.title ?? routeTitles[location.pathname];
         if (!currentTitle) {
             if (location.pathname.startsWith('/catalog/products/')) {
                 currentTitle = '编辑商品详情';
@@ -467,25 +464,30 @@ export function AppShell() {
     };
 
     const handleLogout = async () => {
-        if (isLoggingOut) return;
+        if (isLoggingOut || !requestAppNavigation('/login')) return;
         setIsLoggingOut(true);
         try {
             await logoutAdministrator();
         } finally {
             setIsUserMenuOpen(false);
             setIsLoggingOut(false);
-            navigate('/login', { replace: true });
+            completeNavigation('/login', { replace: true });
         }
     };
 
     const handleChannelChange = async (channelToken: string) => {
-        if (isChannelSwitching || channelToken === channelData?.activeChannel.token) return;
+        if (
+            isChannelSwitching ||
+            channelToken === channelData?.activeChannel.token ||
+            !requestAppNavigation('/dashboard')
+        )
+            return;
         setIsChannelSwitching(true);
         setChannelError('');
         try {
             await switchActiveChannel(channelToken);
             setTabs([{ path: '/dashboard', href: '/dashboard', label: '工作台' }]);
-            navigate('/dashboard', { replace: true });
+            completeNavigation('/dashboard', { replace: true });
         } catch (error) {
             setChannelError(toUserFacingError(error, '店铺切换失败，请稍后重试'));
         } finally {
@@ -497,12 +499,12 @@ export function AppShell() {
         e.preventDefault();
         e.stopPropagation();
         const newTabs = tabs.filter(t => t.path !== path);
-        setTabs(newTabs);
         if (location.pathname === path && newTabs.length > 0) {
-            navigate(newTabs[newTabs.length - 1].href);
+            if (!navigate(newTabs[newTabs.length - 1].href)) return;
         } else if (newTabs.length === 0) {
-            navigate('/dashboard');
+            if (!navigate('/dashboard')) return;
         }
+        setTabs(newTabs);
     };
 
     const closeOtherTabs = () => {
@@ -1089,7 +1091,7 @@ export function AppShell() {
                             <select
                                 value={channelData?.activeChannel.token ?? ''}
                                 onChange={event => void handleChannelChange(event.target.value)}
-                                disabled={channelsLoading || isChannelSwitching || !channelData}
+                                disabled={channelControlsLoading || isChannelSwitching || !channelData}
                                 aria-label="切换当前店铺"
                                 title={channelError || '切换后商品、订单、库存等数据将按所选店铺重新加载'}
                                 className={`h-8 max-w-28 rounded-lg border bg-white pl-2 pr-6 text-xs font-bold outline-none sm:max-w-44 ${channelError ? 'border-rose-300 text-rose-700' : 'border-slate-200 text-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-100'}`}
@@ -1372,6 +1374,7 @@ export function AppShell() {
                                                 role="menuitem"
                                                 className="text-rose-600 hover:text-rose-700 font-normal cursor-pointer"
                                                 onClick={() => {
+                                                    if (!navigate('/dashboard')) return;
                                                     setTabs([
                                                         {
                                                             path: '/dashboard',
@@ -1379,7 +1382,6 @@ export function AppShell() {
                                                             label: '工作台',
                                                         },
                                                     ]);
-                                                    navigate('/dashboard');
                                                     setIsMoreTabsOpen(false);
                                                 }}
                                             >

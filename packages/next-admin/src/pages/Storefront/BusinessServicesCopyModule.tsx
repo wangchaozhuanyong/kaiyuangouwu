@@ -12,6 +12,7 @@ import {
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
+import { resolveVersionedDraft } from '../../utils/versioned-draft';
 import { storefrontBlockInput } from './storefront-content-utils';
 
 const BLOCK_CODE = 'storefront-client-plugins';
@@ -35,17 +36,20 @@ export function BusinessServicesCopyModule() {
     const query = useQuery<StorefrontContentResult>(STOREFRONT_CONTENT_QUERY, {
         fetchPolicy: 'cache-and-network',
     });
-    const [draft, setDraft] = useState<StorefrontContentBlock | null>(null);
-    const [signature, setSignature] = useState('');
+    const source = query.data?.storefrontContentBlocks.find(
+        block => block.type === 'CLIENT_PLUGINS' && block.code === BLOCK_CODE,
+    );
+    const sourceSignature = source ? `${source.id}:${source.updatedAt}` : query.data ? 'empty' : '';
+    const [storedDraft, setDraft] = useState<StorefrontContentBlock | null>(() =>
+        sourceSignature ? copyDraft(source) : null,
+    );
+    const [signature, setSignature] = useState(sourceSignature);
     const [previewLanguage, setPreviewLanguage] = useState<Language>('zh_Hans');
     const [notice, setNotice] = useState('');
     const [error, setError] = useState('');
     const [create, createState] = useMutation(CREATE_STOREFRONT_BLOCK_MUTATION);
     const [update, updateState] = useMutation(UPDATE_STOREFRONT_BLOCK_MUTATION);
-    const source = query.data?.storefrontContentBlocks.find(
-        block => block.type === 'CLIENT_PLUGINS' && block.code === BLOCK_CODE,
-    );
-    const sourceSignature = source ? `${source.id}:${source.updatedAt}` : query.data ? 'empty' : '';
+    const draft = resolveVersionedDraft(sourceSignature, signature, copyDraft(source), storedDraft);
 
     /* oxlint-disable react/set-state-in-effect -- GraphQL result is the versioned draft source. */
     useEffect(() => {

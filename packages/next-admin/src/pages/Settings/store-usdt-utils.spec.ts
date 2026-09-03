@@ -10,7 +10,9 @@ import {
     isPlausibleTronMainnetAddress,
     isSystemManagedUsdtPaymentMethod,
     selectablePaymentHandlers,
+    storePaymentMethodLabel,
     storeUsdtConfigurationChanged,
+    storeUsdtPaymentIntentStatusLabel,
     storeUsdtWalletStatusLabel,
     toStoreUsdtConfigurationDraft,
     validateStoreUsdtConfigurationDraft,
@@ -109,6 +111,18 @@ describe('store USDT setup helpers', () => {
         ).toContain('每日采集时间');
         expect(storeUsdtWalletStatusLabel('PENDING')).toBe('等待平台审核');
         expect(storeUsdtWalletStatusLabel('ACTIVE')).toBe('已审核启用');
+    });
+
+    it('replaces payment codes and USDT intent enums with Chinese business labels', () => {
+        expect(storePaymentMethodLabel('usdt-trc20')).toBe('USDT 链上支付（TRC20）');
+        expect(storePaymentMethodLabel('production-coupon-atomicity-test')).toBe('内部测试支付');
+        expect(storePaymentMethodLabel('provider-specific-code')).toBe('其他支付方式');
+        expect(storePaymentMethodLabel('微信支付')).toBe('微信支付');
+        expect(storeUsdtPaymentIntentStatusLabel('PENDING')).toBe('待付款');
+        expect(storeUsdtPaymentIntentStatusLabel('SETTLED')).toBe('已到账');
+        expect(storeUsdtPaymentIntentStatusLabel('MANUAL_REVIEW')).toBe('待人工复核');
+        expect(storeUsdtPaymentIntentStatusLabel('EXPIRED')).toBe('已过期');
+        expect(storeUsdtPaymentIntentStatusLabel('NEW_BACKEND_STATUS')).toBe('未知状态');
     });
 });
 

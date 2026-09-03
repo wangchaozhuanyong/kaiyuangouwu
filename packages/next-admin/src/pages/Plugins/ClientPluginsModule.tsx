@@ -28,6 +28,7 @@ import {
 } from '../../graphql/storefront.graphql';
 import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
+import { resolveVersionedDraft } from '../../utils/versioned-draft';
 import {
     emptyBlockTranslation,
     emptyItemTranslation,
@@ -103,14 +104,30 @@ const placementOptions: Array<[Placement, string, string]> = [
 ];
 
 export function ClientPluginsModule() {
-    const [draft, setDraft] = useState<StorefrontContentBlock | null>(null);
-    const [loadedSignature, setLoadedSignature] = useState('');
     const [notice, setNotice] = useState('');
     const [actionError, setActionError] = useState('');
     const [collectionSearch, setCollectionSearch] = useState('');
     const content = useQuery<StorefrontContentResult>(STOREFRONT_CONTENT_QUERY, {
         fetchPolicy: 'cache-and-network',
     });
+    const sourceBlock = content.data?.storefrontContentBlocks.find(
+        block => block.type === 'CLIENT_PLUGINS' && block.code === 'storefront-client-plugins',
+    );
+    const sourceSignature = sourceBlock
+        ? `${sourceBlock.id}:${sourceBlock.updatedAt}`
+        : content.data
+          ? 'empty'
+          : '';
+    const [storedDraft, setDraft] = useState<StorefrontContentBlock | null>(() =>
+        sourceSignature ? createDraft(sourceBlock) : null,
+    );
+    const [loadedSignature, setLoadedSignature] = useState(sourceSignature);
+    const draft = resolveVersionedDraft(
+        sourceSignature,
+        loadedSignature,
+        createDraft(sourceBlock),
+        storedDraft,
+    );
     const selectedCollectionIds = useMemo(
         () => [...new Set((draft?.items ?? []).flatMap(item => pluginCategoryIds(item)))].sort(),
         [draft],
@@ -140,14 +157,6 @@ export function ClientPluginsModule() {
     });
     const [create, createState] = useMutation(CREATE_STOREFRONT_BLOCK_MUTATION);
     const [update, updateState] = useMutation(UPDATE_STOREFRONT_BLOCK_MUTATION);
-    const sourceBlock = content.data?.storefrontContentBlocks.find(
-        block => block.type === 'CLIENT_PLUGINS' && block.code === 'storefront-client-plugins',
-    );
-    const sourceSignature = sourceBlock
-        ? `${sourceBlock.id}:${sourceBlock.updatedAt}`
-        : content.data
-          ? 'empty'
-          : '';
     /* oxlint-disable react/set-state-in-effect -- GraphQL 结果是编辑草稿的外部版本源 */
     useEffect(() => {
         if (!sourceSignature || sourceSignature === loadedSignature) return;
