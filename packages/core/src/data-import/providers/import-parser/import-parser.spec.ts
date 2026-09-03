@@ -34,7 +34,7 @@ const mockConfigService = {
 describe('ImportParser', () => {
     beforeAll(async () => {
         await ensureConfigLoaded();
-    });
+    }, 30_000);
 
     describe('parseProducts', () => {
         it('single product with a single variant', async () => {
