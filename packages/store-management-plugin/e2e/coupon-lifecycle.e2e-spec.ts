@@ -113,6 +113,8 @@ const ACTIVE_COUPONS = gql`
             claimed
             claimable
             remainingIssueCount
+            collectionIds
+            productVariantIds
         }
     }
 `;
@@ -475,7 +477,12 @@ describe('coupon lifecycle closed loop', () => {
 
     it('claims once, requires explicit application, redeems only after payment and preserves refund history', async () => {
         const activeBeforeClaim = await shopClient.query(ACTIVE_COUPONS);
-        expect(campaign(activeBeforeClaim)).toMatchObject({ claimed: false, claimable: true });
+        expect(campaign(activeBeforeClaim)).toMatchObject({
+            claimed: false,
+            claimable: true,
+            collectionIds: [],
+            productVariantIds: [],
+        });
 
         const claimed = await shopClient.query(CLAIM, { campaignId });
         const coupon = claimed.claimStorefrontCoupon;

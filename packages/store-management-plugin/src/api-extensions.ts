@@ -1251,6 +1251,8 @@ export const shopApiExtensions = gql`
         currencyCode: CurrencyCode!
         discountAmount: Money
         discountRate: Float
+        collectionIds: [ID!]!
+        productVariantIds: [ID!]!
         claimStartsAt: DateTime
         claimEndsAt: DateTime
         validityDays: Int

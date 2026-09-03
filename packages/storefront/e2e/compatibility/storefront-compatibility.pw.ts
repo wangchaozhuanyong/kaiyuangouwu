@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 
 const routes = ['/', '/login', '/register', '/support', '/legal?id=privacy'];
 
@@ -33,6 +33,49 @@ async function enterStorefront(page: Page) {
     }
 
     await expect(page.locator('#root')).toBeVisible();
+}
+
+async function mockActiveCoupons(page: Page, campaigns: Array<Record<string, unknown>>) {
+    await page.route('**/shop-api?**', async route => {
+        const requestBody = route.request().postDataJSON() as { query?: string } | null;
+        if (!requestBody?.query?.includes('query ActiveStorefrontCoupons')) {
+            await route.continue();
+            return;
+        }
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({ data: { activeStorefrontCoupons: campaigns } }),
+        });
+    });
+}
+
+async function waitForHomepageContent(page: Page, content: Locator) {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+        const retryButton = page.getByRole('button', { name: /^(?:重新加载|Try again)$/u });
+        if (await retryButton.isVisible()) await retryButton.click();
+
+        try {
+            await content.first().waitFor({ state: 'visible', timeout: 10_000 });
+            return content;
+        } catch (error) {
+            if (attempt === 2) throw error;
+            await page.reload({ waitUntil: 'domcontentloaded' });
+        }
+    }
+
+    return content;
+}
+
+async function waitForHomepageActions(page: Page) {
+    return waitForHomepageContent(page, page.locator('.section-header-action-btn'));
+}
+
+async function openFirstProduct(page: Page) {
+    const productEntry = page.getByRole('button', { name: /^查看 / }).first();
+    await waitForHomepageContent(page, productEntry);
+    await productEntry.click();
+    await expect(page).toHaveURL(/\/product\?id=/);
 }
 
 test('核心公开页面在目标浏览器中正常渲染', async ({ page }) => {
@@ -76,8 +119,7 @@ test('核心公开页面在目标浏览器中正常渲染', async ({ page }) => 
         expect(visualState.brokenImages, `${route} 不应包含破损图片`).toEqual([]);
 
         if (route === '/') {
-            const actions = page.locator('.section-header-action-btn');
-            await expect(actions.first()).toBeVisible();
+            const actions = await waitForHomepageActions(page);
 
             for (let index = 0; index < (await actions.count()); index += 1) {
                 const box = await actions.nth(index).boundingBox();
@@ -89,6 +131,108 @@ test('核心公开页面在目标浏览器中正常渲染', async ({ page }) => 
 
     expect(pageErrors).toEqual([]);
     expect(badResources).toEqual([]);
+});
+
+test('商品详情头部在页面滚动时保持可见', async ({ page }) => {
+    await enterStorefront(page);
+
+    await openFirstProduct(page);
+
+    const header = page.locator('.product-detail-header');
+    await expect(header).toBeVisible();
+    await expect(page.locator('.detail-promotions')).toHaveCount(0);
+    await expect(page.locator('.detail-info-row')).toHaveCount(0);
+
+    const variantOptions = page.locator('.detail-options > div > button');
+    const variantCount = await variantOptions.count();
+    expect(variantCount).toBeGreaterThan(0);
+    await expect(page.locator('.detail-options > header > span')).toHaveText(`${variantCount} 个规格可选`);
+
+    const serviceItems = page.locator('.detail-service-bar > span');
+    await expect(serviceItems).toHaveCount(3);
+    const serviceGeometry = await serviceItems.evaluateAll(elements =>
+        elements.map(element => {
+            const box = element.getBoundingClientRect();
+            return { top: Math.round(box.top), width: Math.round(box.width) };
+        }),
+    );
+    expect(
+        Math.max(...serviceGeometry.map(item => item.top)) -
+            Math.min(...serviceGeometry.map(item => item.top)),
+    ).toBeLessThanOrEqual(1);
+    expect(
+        Math.max(...serviceGeometry.map(item => item.width)) -
+            Math.min(...serviceGeometry.map(item => item.width)),
+    ).toBeLessThanOrEqual(1);
+
+    await page.evaluate(() => window.scrollTo(0, Math.min(600, document.documentElement.scrollHeight)));
+
+    await expect
+        .poll(() => header.evaluate(element => Math.round(element.getBoundingClientRect().top)))
+        .toBe(0);
+});
+
+test('商品详情显示匹配优惠券的券后价并可进入优惠券中心', async ({ page }) => {
+    // The compatibility suite reads the live catalog, whose first product can use any channel currency.
+    // Leaving the optional legacy field unset keeps this test focused on product applicability.
+    await mockActiveCoupons(page, [
+        {
+            id: 'e2e-order-coupon',
+            name: '全场八折券',
+            kind: 'ORDER_PERCENTAGE',
+            startsAt: null,
+            endsAt: null,
+            claimStartsAt: null,
+            claimEndsAt: null,
+            validityDays: null,
+            minimumSpend: 0,
+            discountAmount: null,
+            discountRate: 8,
+            collectionIds: [],
+            productVariantIds: [],
+            remainingIssueCount: 100,
+            claimed: false,
+            claimable: true,
+        },
+    ]);
+
+    await enterStorefront(page);
+    await openFirstProduct(page);
+
+    const couponPrice = page.locator('.detail-coupon-price');
+    await expect(couponPrice).toBeVisible();
+    await expect(couponPrice).toContainText('券后');
+    await couponPrice.click();
+    await expect(page).toHaveURL(/\/coupons$/);
+});
+
+test('商品详情在优惠券不匹配时保持原价展示', async ({ page }) => {
+    await mockActiveCoupons(page, [
+        {
+            id: 'e2e-other-product-coupon',
+            name: '其他商品八折券',
+            kind: 'PRODUCT_PERCENTAGE',
+            startsAt: null,
+            endsAt: null,
+            claimStartsAt: null,
+            claimEndsAt: null,
+            validityDays: null,
+            minimumSpend: 0,
+            discountAmount: null,
+            discountRate: 8,
+            collectionIds: [],
+            productVariantIds: ['a-variant-that-does-not-exist'],
+            remainingIssueCount: 100,
+            claimed: false,
+            claimable: true,
+        },
+    ]);
+
+    await enterStorefront(page);
+    await openFirstProduct(page);
+
+    await expect(page.locator('.detail-price')).toBeVisible();
+    await expect(page.locator('.detail-coupon-price')).toHaveCount(0);
 });
 
 test('键盘焦点在原生选择控件和深色按钮上清晰可见', async ({ page }) => {

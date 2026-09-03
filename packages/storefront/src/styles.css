@@ -470,7 +470,7 @@ img {
 .subpage {
     --page-bottom-fixed-height: 0px;
     --page-end-gap: var(--subpage-end-gap);
-    overflow-x: hidden;
+    overflow-x: clip;
 }
 
 .product-detail-page {

@@ -1283,6 +1283,11 @@
         grid-template-columns: minmax(0, 1fr);
         gap: 7px;
     }
+
+    .detail-service-bar span + span {
+        border-top: 1px solid var(--line);
+        border-left: 0;
+    }
 }
 
 @media (max-width: 350px) {

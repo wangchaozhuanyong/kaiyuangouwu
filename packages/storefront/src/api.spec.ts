@@ -406,6 +406,8 @@ describe('ShopApi storefront mutations', () => {
             currencyCode: 'CNY',
             discountAmount: 1_000,
             discountRate: null,
+            collectionIds: [],
+            productVariantIds: [],
             remainingIssueCount: 0,
             claimed: true,
             claimable: false,
@@ -418,6 +420,8 @@ describe('ShopApi storefront mutations', () => {
         expect(request.query).toContain('query ActiveStorefrontCoupons');
         expect(request.query).toContain('claimed');
         expect(request.query).toContain('claimable');
+        expect(request.query).toContain('collectionIds');
+        expect(request.query).toContain('productVariantIds');
     });
 
     it('returns no campaigns when the coupon extension is unavailable', async () => {

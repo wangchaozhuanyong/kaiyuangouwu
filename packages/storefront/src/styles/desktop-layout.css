@@ -606,14 +606,12 @@
         aspect-ratio: var(--product-media-ratio);
         align-self: start;
         grid-column: 1 / 7;
-        grid-row: 2 / 6;
+        grid-row: 2 / 4;
         border-radius: 8px;
     }
 
     .product-detail-page > .detail-summary,
-    .product-detail-page > .detail-promotions,
-    .product-detail-page > .detail-options,
-    .product-detail-page > .detail-info-row {
+    .product-detail-page > .detail-options {
         margin-top: 0;
         grid-column: 7 / -1;
     }
@@ -622,16 +620,8 @@
         grid-row: 2;
     }
 
-    .product-detail-page > .detail-promotions {
-        grid-row: 3;
-    }
-
     .product-detail-page > .detail-options {
-        grid-row: 4;
-    }
-
-    .product-detail-page > .detail-info-row {
-        grid-row: 5;
+        grid-row: 3;
     }
 
     .product-detail-page > .detail-service-bar,
@@ -641,19 +631,15 @@
     }
 
     .product-detail-page > .detail-service-bar {
-        grid-row: 6;
-        grid-template-columns: repeat(3, max-content);
-        gap: 32px;
+        grid-row: 4;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 0;
         align-items: center;
     }
 
     .product-detail-page > .detail-service-bar span {
         align-items: center;
         white-space: nowrap;
-    }
-
-    .product-detail-page > .detail-service-bar span:last-child {
-        grid-column: auto;
     }
 
     .product-detail-page > .detail-review-block {
@@ -676,9 +662,7 @@
     }
 
     .detail-summary,
-    .detail-promotions,
     .detail-options,
-    .detail-info-row,
     .detail-service-bar {
         border: 1px solid var(--line);
         border-radius: 8px;
