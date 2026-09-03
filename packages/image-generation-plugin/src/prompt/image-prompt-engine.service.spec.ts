@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-    firstSuccessfulFixedPromptRoute,
-    firstSuccessfulPromptProvider,
+    firstSuccessfulPromptModel,
     ImagePromptEngineService,
     optimizerSystemPrompt,
+    shouldFailoverPromptModel,
     startOfBeijingDay,
 } from './image-prompt-engine.service';
 
@@ -37,41 +37,72 @@ describe('prompt optimization daily quota boundary', () => {
 });
 
 describe('prompt provider failover', () => {
-    it('uses only the configured fixed primary and fallback routes in order', async () => {
+    it.each([
+        ['network error', new Error('socket closed')],
+        ['server error', Object.assign(new Error('upstream unavailable'), { details: { httpStatus: 503 } })],
+        ['rate limit', Object.assign(new Error('rate limited'), { details: { httpStatus: 429 } })],
+    ])('uses a distinct fallback model after a %s', async (_label, firstError) => {
         const attempts: string[] = [];
+        const exclusions: string[][] = [];
+        const failures: string[] = [];
         const routes = [
-            { role: 'PRIMARY' as const, credentialCode: 'gemini-primary', modelId: 'gemini-2.5-flash' },
-            { role: 'FALLBACK' as const, credentialCode: 'openai-fallback', modelId: 'gpt-5.4-mini' },
+            { config: { id: 'model-1' }, code: 'gemini-primary' },
+            { config: { id: 'model-2' }, code: 'openai-fallback' },
         ];
 
-        const result = await firstSuccessfulFixedPromptRoute(routes, route => {
-            attempts.push(route.credentialCode);
-            return route.role === 'PRIMARY'
-                ? Promise.reject(new Error('Gemini unavailable'))
-                : Promise.resolve(route.modelId);
-        });
+        const selected = await firstSuccessfulPromptModel(
+            3,
+            excludedIds => {
+                exclusions.push([...excludedIds]);
+                const route = routes[excludedIds.length];
+                if (!route) throw new Error('missing test route');
+                return Promise.resolve(route);
+            },
+            route => {
+                attempts.push(route.code);
+                return route.config.id === 'model-1'
+                    ? Promise.reject(firstError)
+                    : Promise.resolve('gpt-5.4-mini');
+            },
+            route => {
+                failures.push(route.code);
+                return Promise.resolve();
+            },
+        );
 
-        expect(result).toBe('gpt-5.4-mini');
+        expect(selected.result).toBe('gpt-5.4-mini');
+        expect(selected.route.config.id).toBe('model-2');
         expect(attempts).toEqual(['gemini-primary', 'openai-fallback']);
+        expect(exclusions).toEqual([[], ['model-1']]);
+        expect(failures).toEqual(['gemini-primary']);
     });
 
-    it('tries GPT/OpenAI first and falls back to Gemini', async () => {
+    it('does not send invalid requests to another provider', async () => {
         const attempts: string[] = [];
-
-        const result = await firstSuccessfulPromptProvider(scope => {
-            attempts.push(scope);
-            if (scope === 'OPENAI') return Promise.reject(new Error('OpenAI unavailable'));
-            return Promise.resolve('gemini-result');
+        const invalidRequest = Object.assign(new Error('invalid prompt payload'), {
+            details: { httpStatus: 422 },
         });
 
-        expect(result).toBe('gemini-result');
-        expect(attempts).toEqual(['OPENAI', 'GEMINI']);
+        await expect(
+            firstSuccessfulPromptModel(
+                3,
+                excludedIds => Promise.resolve({ config: { id: `model-${excludedIds.length + 1}` } }),
+                route => {
+                    attempts.push(String(route.config.id));
+                    return Promise.reject(invalidRequest);
+                },
+                () => Promise.resolve(),
+            ),
+        ).rejects.toThrow('invalid prompt payload');
+
+        expect(attempts).toEqual(['model-1']);
     });
 
-    it('returns the final provider error when no prompt provider works', async () => {
-        await expect(
-            firstSuccessfulPromptProvider(scope => Promise.reject(new Error(`${scope} unavailable`))),
-        ).rejects.toThrow('GEMINI unavailable');
+    it('classifies bounded failover statuses', () => {
+        expect(shouldFailoverPromptModel(new Error('network error'))).toBe(true);
+        expect(shouldFailoverPromptModel({ details: { httpStatus: 502 } })).toBe(true);
+        expect(shouldFailoverPromptModel({ details: { httpStatus: 401 } })).toBe(true);
+        expect(shouldFailoverPromptModel({ details: { httpStatus: 422 } })).toBe(false);
     });
 });
 

@@ -2357,8 +2357,10 @@ function PromptModelManager({
                 testImagePromptModelMutation,
                 { id },
             ),
-        onSuccess: res =>
-            (res.testImagePromptModel.ok ? toast.success : toast.error)(res.testImagePromptModel.message),
+        onSuccess: res => {
+            (res.testImagePromptModel.ok ? toast.success : toast.error)(res.testImagePromptModel.message);
+            onChanged();
+        },
         onError: error => toast.error(errorMessage(error)),
     });
 
@@ -2422,10 +2424,8 @@ function PromptModelManager({
                                         size="sm"
                                         variant="ghost"
                                         disabled={test.isPending}
-                                        onClick={() => {
-                                            test.mutate(config.id);
-                                            onChanged();
-                                        }}
+                                        aria-label={`测试提示词模型 ${config.name}`}
+                                        onClick={() => test.mutate(config.id)}
                                     >
                                         <RefreshCw
                                             className={`h-4 w-4 ${test.isPending ? 'animate-spin' : ''}`}
