@@ -172,12 +172,15 @@ describe('CheckoutPage digital delivery', () => {
         expect(markup).toContain('name="confirmDeliveryEmail"');
     });
 
-    it('does not use red accent focus border or outline for digital delivery email inputs and selects', () => {
-        const style = checkoutPageStyles['digital-delivery-email-field'];
-        expect(style).not.toContain('var(--accent)');
-        expect(style).toContain('[&_input:focus]:[border-color:#3b82f6]');
-        expect(style).toContain('[&_select:focus]:[border-color:#3b82f6]');
-        expect(style).toContain('[&_select:focus]:[outline:0]');
+    it('does not use red focus styling for delivery email inputs or the saved-email trigger', () => {
+        const fieldStyle = checkoutPageStyles['digital-delivery-email-field'];
+        const triggerStyle = checkoutPageStyles['digital-delivery-email-trigger'];
+
+        expect(fieldStyle).not.toContain('var(--accent)');
+        expect(fieldStyle).toContain('[&_input:focus]:[border-color:#3b82f6]');
+        expect(triggerStyle).not.toContain('var(--accent)');
+        expect(triggerStyle).toContain('[&:focus-visible]:[border-color:#3b82f6]');
+        expect(triggerStyle).toContain('[&:focus-visible]:[outline:0]');
     });
 
     it('centers checkout-assurance spans and displays full-width order submission button with count and price', () => {

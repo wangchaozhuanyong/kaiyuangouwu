@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+    claimableCouponCampaigns,
     couponCampaignActionState,
     couponCampaignsForCustomer,
     couponCampaignsForTab,
     couponCenterTabCount,
     customerCouponsForTab,
     isLockedCoupon,
+    markCouponCampaignClaimed,
 } from './coupon-center-state';
 import { type StoreCustomerCoupon, type StorefrontCouponCampaign } from './types';
 
@@ -52,11 +54,24 @@ const coupon = (status: StoreCustomerCoupon['status']): StoreCustomerCoupon => (
 describe('coupon center state', () => {
     it('separates unclaimed activities from already claimed or sold-out activities', () => {
         const campaigns = [campaign(false, true), campaign(true, true), campaign(false, false)];
-        expect(couponCampaignsForTab(campaigns, 'UNCLAIMED')).toHaveLength(1);
+        expect(claimableCouponCampaigns(campaigns)).toHaveLength(1);
+        expect(couponCampaignsForTab(campaigns, 'UNCLAIMED')).toEqual(claimableCouponCampaigns(campaigns));
         expect(couponCampaignsForTab(campaigns, 'ACTIVITIES')).toHaveLength(2);
         expect(couponCampaignsForTab(campaigns, 'ACTIVITIES')).not.toContainEqual(
             expect.objectContaining({ claimed: false, claimable: false }),
         );
+    });
+
+    it('removes a verified claim from claimable campaigns without mutating the original data', () => {
+        const claimedCampaign = { ...campaign(false, true), id: 'claimed-campaign' };
+        const remainingCampaign = { ...campaign(false, true), id: 'remaining-campaign' };
+        const campaigns = [claimedCampaign, remainingCampaign];
+
+        const updated = markCouponCampaignClaimed(campaigns, claimedCampaign.id);
+
+        expect(claimableCouponCampaigns(updated).map(item => item.id)).toEqual(['remaining-campaign']);
+        expect(updated[0]).toMatchObject({ claimed: true, claimable: false });
+        expect(campaigns[0]).toMatchObject({ claimed: false, claimable: true });
     });
 
     it('keeps available, returned and locked coupons in the unused lifecycle view', () => {

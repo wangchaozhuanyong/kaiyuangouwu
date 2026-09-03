@@ -19,6 +19,7 @@ import {
 import { useEffect, useState } from 'react';
 
 import { selectManagedProducts } from '../home-merchandising';
+import { resolveManagedContentCopy } from '../managed-content-copy';
 import { storefrontWebpUrl } from '../responsive-image';
 import { StorefrontCouponCard } from '../storefront-coupons';
 import { STOREFRONT_LOGO_IMAGE } from '../storefront-images';
@@ -315,18 +316,19 @@ export function RecommendationPage({
     const isZh = language === 'zh';
     return (
         <Subpage
-            title={block?.title || (isZh ? '猜你喜欢' : 'You may also like')}
+            title={resolveManagedContentCopy(block, 'title', isZh ? '猜你喜欢' : 'You may also like')}
             language={language}
             onBack={onBack}
         >
             {products.length ? (
                 <ProductSection
-                    subtitle={
-                        block?.subtitle ||
-                        (isZh
+                    subtitle={resolveManagedContentCopy(
+                        block,
+                        'subtitle',
+                        isZh
                             ? '结合你的购买品类和浏览记录推荐'
-                            : 'Based on your purchase categories and browsing history')
-                    }
+                            : 'Based on your purchase categories and browsing history',
+                    )}
                     products={products}
                     market={market}
                     locale={locale}

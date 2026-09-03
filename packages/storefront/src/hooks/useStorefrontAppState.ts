@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { ShopApi, ShopApiError } from '../api';
 import { categoryTargetSelection } from '../category-navigation';
+import { markCouponCampaignClaimed } from '../coupon-center-state';
 import { claimAndVerifyCoupon } from '../coupon-claim-verification';
 import { normalizeHeroAutoplayIntervalSeconds } from '../hero-carousel';
 import { buildBestSellerProducts, buildRecommendationProducts } from '../home-merchandising';
@@ -44,8 +45,6 @@ import {
     SortMode,
 } from '../storefront-router';
 import { readStoredStrings, scopedStorageKey } from '../storefront-storage';
-import { cacheLogoUrl } from '../StorefrontErrorBoundary';
-
 import {
     contentNumberSetting,
     contentStringArraySetting,
@@ -65,6 +64,7 @@ import {
     writeStoredCurrency,
     writeStoredSettlementCurrency,
 } from '../storefront-utils';
+import { cacheLogoUrl } from '../StorefrontErrorBoundary';
 import {
     ActiveCustomer,
     CreateAfterSalesRequestInput,
@@ -78,6 +78,7 @@ import {
     StorefrontCart,
     StorefrontConfig,
     StorefrontContentTargetType,
+    StorefrontCouponCampaign,
     StorefrontLanguage,
 } from '../types';
 
@@ -996,6 +997,13 @@ export function useStorefrontAppState() {
                     queryClient.setQueryData<StoreCustomerCoupon[]>(customerCouponQueryKey, result.coupons);
                 } else {
                     void queryClient.invalidateQueries({ queryKey: customerCouponQueryKey });
+                }
+                if (result.status === 'verified') {
+                    queryClient.setQueryData<StorefrontCouponCampaign[]>(
+                        couponCampaignsQueryKey,
+                        campaigns =>
+                            campaigns ? markCouponCampaignClaimed(campaigns, campaignId) : campaigns,
+                    );
                 }
                 await Promise.all([
                     queryClient.invalidateQueries({ queryKey: couponCampaignsQueryKey }),

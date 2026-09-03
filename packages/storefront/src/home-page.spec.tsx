@@ -1,9 +1,9 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
-import { readStorefrontStylesheet } from './test-stylesheet';
 
 import { buildHomeNoticeItems, CurrencySelectionSheet, HomePage, NoticeDetailSheet } from './pages/home-page';
 import { StorefrontContext } from './StorefrontContext';
+import { readStorefrontStylesheet } from './test-stylesheet';
 import { MarketConfig, Product, StorefrontContentBlock, StorefrontCouponCampaign } from './types';
 
 vi.mock('@tanstack/react-router', async importOriginal => ({
@@ -128,6 +128,19 @@ const couponBlock: StorefrontContentBlock = {
     type: 'COUPONS',
     imageUrl: null,
     title: '专享特惠专区',
+    items: [],
+};
+
+const recommendationsBlock: StorefrontContentBlock = {
+    ...heroBlock,
+    id: 'recommendations-1',
+    code: 'homepage-recommendations',
+    type: 'RECOMMENDATIONS',
+    imageUrl: null,
+    title: '猜你喜欢',
+    subtitle: '',
+    body: '',
+    ctaLabel: '',
     items: [],
 };
 
@@ -332,7 +345,7 @@ describe('HomePage account-aware coupon campaigns', () => {
         expect(markup).not.toContain('coupon-hub-section');
     });
 
-    it('keeps an owned sold-out campaign visible for the current account', () => {
+    it('hides the module when the current account already claimed the last visible campaign', () => {
         const markup = renderHome({
             contentBlocks: [couponBlock],
             coupons: [
@@ -345,7 +358,27 @@ describe('HomePage account-aware coupon campaigns', () => {
             ],
         });
 
-        expect(markup).toContain('满100减10');
+        expect(markup).not.toContain('满100减10');
+        expect(markup).not.toContain('coupon-hub-section');
+    });
+
+    it('removes a claimed campaign but keeps the module while another campaign is claimable', () => {
+        const markup = renderHome({
+            contentBlocks: [couponBlock],
+            coupons: [
+                { ...couponCampaign, claimed: true, claimable: false },
+                {
+                    ...couponCampaign,
+                    id: 'campaign-2',
+                    name: '满200减20',
+                    claimed: false,
+                    claimable: true,
+                },
+            ],
+        });
+
+        expect(markup).not.toContain('满100减10');
+        expect(markup).toContain('满200减20');
         expect(markup).toContain('coupon-hub-section');
     });
 
@@ -653,6 +686,27 @@ describe('HomePage category promotion', () => {
 
         expect(markup).toContain('class="section-header-end-subtitle">右侧副标题</p>');
         expect(markup).not.toContain('不应显示的按钮文案');
+    });
+});
+
+describe('HomePage recommendations managed copy', () => {
+    it('keeps an intentionally empty Dashboard subtitle empty', () => {
+        const markup = renderHome({
+            contentBlocks: [recommendationsBlock],
+            recommendationProducts: [product],
+        });
+
+        expect(markup).toContain('猜你喜欢');
+        expect(markup).not.toContain('继续发现合适的好物');
+    });
+
+    it('renders the subtitle returned by the Dashboard content API', () => {
+        const markup = renderHome({
+            contentBlocks: [{ ...recommendationsBlock, subtitle: '后台设置的推荐说明' }],
+            recommendationProducts: [product],
+        });
+
+        expect(markup).toContain('后台设置的推荐说明');
     });
 });
 

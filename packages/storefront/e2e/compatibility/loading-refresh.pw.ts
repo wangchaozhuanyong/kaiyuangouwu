@@ -17,33 +17,54 @@ async function authorizeLocalStorefront(page: Page) {
     ]);
 }
 
-async function delayRouteChunk(page: Page, chunkNames: readonly string[], delayMs = 800) {
+async function holdRouteChunk(page: Page, chunkNames: readonly string[]) {
     let delayed = false;
+    let markRequested!: () => void;
+    let releaseRequest!: () => void;
+    const requested = new Promise<void>(resolve => {
+        markRequested = resolve;
+    });
+    const released = new Promise<void>(resolve => {
+        releaseRequest = resolve;
+    });
+
     await page.route(/\/assets\/[^/]+\.js(?:\?.*)?$/u, async route => {
         const fileName = new URL(route.request().url()).pathname.split('/').at(-1) ?? '';
         if (!delayed && chunkNames.some(chunkName => fileName.startsWith(`${chunkName}-`))) {
             delayed = true;
-            await new Promise(resolve => setTimeout(resolve, delayMs));
+            markRequested();
+            await released;
         }
         await route.continue();
     });
+
+    return {
+        waitUntilRequested: () => requested,
+        release: releaseRequest,
+    };
 }
 
 test('分类页硬刷新显示中文路由骨架并保留筛选参数', async ({ page }) => {
     await authorizeLocalStorefront(page);
-    await delayRouteChunk(page, ['category', 'catalog-route-pages', 'category-page']);
+    const delayedChunk = await holdRouteChunk(page, ['category', 'catalog-route-pages', 'category-page']);
 
-    await page.goto(
+    const navigation = page.goto(
         '/category?collectionId=collection-1&childId=child-1&sort=sales&fulfillment=digital&inStockOnly=true',
         { waitUntil: 'domcontentloaded' },
     );
+    await delayedChunk.waitUntilRequested();
 
     const pendingMain = page.locator('main.page-skeleton--catalog[role="status"]');
-    await expect(pendingMain).toBeVisible();
-    await expect(pendingMain).toHaveAttribute('aria-label', '正在加载页面');
-    await expect(pendingMain).toHaveAttribute('aria-busy', 'true');
-    await expect(page.getByRole('status', { name: 'Loading' })).toHaveCount(0);
+    try {
+        await expect(pendingMain).toBeVisible();
+        await expect(pendingMain).toHaveAttribute('aria-label', '正在加载页面');
+        await expect(pendingMain).toHaveAttribute('aria-busy', 'true');
+        await expect(page.getByRole('status', { name: 'Loading' })).toHaveCount(0);
+    } finally {
+        delayedChunk.release();
+    }
 
+    await navigation;
     await expect(page.locator('main.category-page')).toBeVisible();
     const url = new URL(page.url());
     expect(url.searchParams.get('collectionId')).toBe('collection-1');
@@ -57,7 +78,11 @@ test('目标路由未解析时底部导航保持当前页高亮', async ({ page 
     await authorizeLocalStorefront(page);
     await page.goto('/category', { waitUntil: 'domcontentloaded' });
     await expect(page.locator('main.category-page')).toBeVisible();
-    await delayRouteChunk(page, ['services', 'content-route-pages', 'business-services-page']);
+    const delayedChunk = await holdRouteChunk(page, [
+        'services',
+        'content-route-pages',
+        'business-services-page',
+    ]);
 
     const categoryNavigation = page.locator('nav[aria-label] a[href="/category"]');
     const servicesNavigation = page.locator('nav[aria-label] a[href="/services"]');
@@ -65,8 +90,13 @@ test('目标路由未解析时底部导航保持当前页高亮', async ({ page 
 
     await servicesNavigation.click();
     await expect(page).toHaveURL(/\/services(?:\?|$)/u);
-    await expect(categoryNavigation).toHaveAttribute('aria-current', 'page');
-    await expect(servicesNavigation).not.toHaveAttribute('aria-current', 'page');
+    await delayedChunk.waitUntilRequested();
+    try {
+        await expect(categoryNavigation).toHaveAttribute('aria-current', 'page');
+        await expect(servicesNavigation).not.toHaveAttribute('aria-current', 'page');
+    } finally {
+        delayedChunk.release();
+    }
 
     await expect(page.locator('main.business-services-page')).toBeVisible();
     await expect(servicesNavigation).toHaveAttribute('aria-current', 'page');
