@@ -1,0 +1,238 @@
+name: Cleanup Merged Production Branches
+
+on:
+    workflow_dispatch:
+        inputs:
+            production_sha:
+                description: Exact 40-character SHA currently running in production
+                required: true
+                type: string
+            deployment_run_id:
+                description: Successful Deploy Production Runtime workflow run ID
+                required: true
+                type: string
+            acceptance_run_id:
+                description: Successful manual Monitor Production Health workflow run ID
+                required: true
+                type: string
+            apply:
+                description: Delete eligible branches after reviewing a dry run
+                required: true
+                default: false
+                type: boolean
+
+permissions:
+    actions: read
+    contents: write
+    id-token: write
+
+concurrency:
+    group: production-branch-cleanup
+    cancel-in-progress: false
+
+jobs:
+    cleanup:
+        name: verify release evidence and clean merged branches
+        runs-on: ubuntu-24.04
+        timeout-minutes: 10
+        env:
+            ACCEPTANCE_RUN_ID: ${{ inputs.acceptance_run_id }}
+            APPLY_CHANGES: ${{ inputs.apply }}
+            AWS_ACCOUNT_ID: '079740175286'
+            AWS_REGION: ap-northeast-1
+            AWS_ROLE_ARN: arn:aws:iam::079740175286:role/yunqiao-vendure-github-deploy
+            DEPLOYMENT_RUN_ID: ${{ inputs.deployment_run_id }}
+            GH_TOKEN: ${{ github.token }}
+            INSTANCE_ID: i-041a146558e432cbf
+            PRODUCTION_SHA: ${{ inputs.production_sha }}
+
+        steps:
+            - name: Validate immutable release evidence
+              shell: bash
+              run: |
+                  set -Eeuo pipefail
+
+                  if [[ ! "$PRODUCTION_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+                      echo 'production_sha must be a full lowercase Git SHA' >&2
+                      exit 1
+                  fi
+                  if [[ ! "$DEPLOYMENT_RUN_ID" =~ ^[0-9]+$ ]] || [[ ! "$ACCEPTANCE_RUN_ID" =~ ^[0-9]+$ ]]; then
+                      echo 'workflow run IDs must contain digits only' >&2
+                      exit 1
+                  fi
+
+                  deployment_run="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${DEPLOYMENT_RUN_ID}")"
+                  jq -e --arg sha "$PRODUCTION_SHA" '
+                      .path == ".github/workflows/deploy_production_runtime.yml" and
+                      .event == "workflow_run" and
+                      .head_branch == "main" and
+                      .head_sha == $sha and
+                      .status == "completed" and
+                      .conclusion == "success"
+                  ' <<< "$deployment_run" >/dev/null || {
+                      echo 'deployment workflow evidence does not match production_sha' >&2
+                      exit 1
+                  }
+
+                  acceptance_run="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${ACCEPTANCE_RUN_ID}")"
+                  jq -e --arg sha "$PRODUCTION_SHA" '
+                      .path == ".github/workflows/monitor_production_health.yml" and
+                      .event == "workflow_dispatch" and
+                      .head_branch == "main" and
+                      .head_sha == $sha and
+                      .status == "completed" and
+                      .conclusion == "success"
+                  ' <<< "$acceptance_run" >/dev/null || {
+                      echo 'acceptance workflow evidence does not match production_sha' >&2
+                      exit 1
+                  }
+
+                  default_sha="$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq '.commit.sha')"
+                  ancestry_status="$(
+                      gh api "repos/${GITHUB_REPOSITORY}/compare/${PRODUCTION_SHA}...${default_sha}" --jq '.status'
+                  )"
+                  if [[ "$ancestry_status" != 'ahead' && "$ancestry_status" != 'identical' ]]; then
+                      echo 'production_sha is not reachable from the current main branch' >&2
+                      exit 1
+                  fi
+
+            - name: Configure short-lived AWS credentials
+              uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+              with:
+                  role-to-assume: ${{ env.AWS_ROLE_ARN }}
+                  role-session-name: vendure-branch-cleanup-${{ github.run_id }}
+                  aws-region: ${{ env.AWS_REGION }}
+                  allowed-account-ids: ${{ env.AWS_ACCOUNT_ID }}
+
+            - name: Confirm the active production SHA
+              shell: bash
+              run: |
+                  set -Eeuo pipefail
+
+                  remote_command='sudo -H -u ubuntu cat /var/www/kaiyuangouwu-releases/current-sha'
+                  jq -n --arg command "$remote_command" \
+                    '{commands: [$command], executionTimeout: ["120"]}' > "$RUNNER_TEMP/current-sha-parameters.json"
+
+                  command_id="$(aws ssm send-command \
+                    --region "$AWS_REGION" \
+                    --document-name AWS-RunShellScript \
+                    --instance-ids "$INSTANCE_ID" \
+                    --comment "Confirm Vendure production SHA before branch cleanup" \
+                    --parameters "file://$RUNNER_TEMP/current-sha-parameters.json" \
+                    --timeout-seconds 60 \
+                    --query 'Command.CommandId' \
+                    --output text)"
+                  test -n "$command_id"
+
+                  status=Pending
+                  for attempt in $(seq 1 30); do
+                      status="$(aws ssm get-command-invocation \
+                        --region "$AWS_REGION" \
+                        --command-id "$command_id" \
+                        --instance-id "$INSTANCE_ID" \
+                        --query Status \
+                        --output text 2>/dev/null || true)"
+                      case "$status" in
+                        Success|Failed|Cancelled|TimedOut|Cancelling)
+                          break
+                          ;;
+                      esac
+                      sleep 5
+                  done
+
+                  test "$status" = Success
+                  active_sha="$(aws ssm get-command-invocation \
+                    --region "$AWS_REGION" \
+                    --command-id "$command_id" \
+                    --instance-id "$INSTANCE_ID" \
+                    --query StandardOutputContent \
+                    --output text | tr -d '\r\n')"
+                  if [[ "$active_sha" != "$PRODUCTION_SHA" ]]; then
+                      echo "active production SHA does not match production_sha" >&2
+                      exit 1
+                  fi
+
+                  echo "ACTIVE_PRODUCTION_SHA=$active_sha"
+
+            - name: Select and optionally delete eligible branches
+              shell: bash
+              run: |
+                  set -Eeuo pipefail
+
+                  open_heads="$RUNNER_TEMP/open-branch-heads.txt"
+                  remote_branches="$RUNNER_TEMP/remote-branches.tsv"
+                  candidates="$RUNNER_TEMP/cleanup-candidates.tsv"
+
+                  gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls?state=open&per_page=100" \
+                    | jq -r --arg repo "$GITHUB_REPOSITORY" \
+                        '.[] | select(.head.repo.full_name? == $repo) | .head.ref' \
+                    | sort -u > "$open_heads"
+                  gh api --paginate "repos/${GITHUB_REPOSITORY}/branches?per_page=100" \
+                    --jq '.[] | [.name, .commit.sha] | @tsv' > "$remote_branches"
+                  : > "$candidates"
+
+                  while IFS=$'\t' read -r branch branch_sha; do
+                      case "$branch" in
+                        feat/*|fix/*|hotfix/*|release/*)
+                          ;;
+                        *)
+                          continue
+                          ;;
+                      esac
+
+                      if grep -Fqx -- "$branch" "$open_heads"; then
+                          echo "BRANCH_RETAINED name=$branch reason=open_pull_request"
+                          continue
+                      fi
+
+                      ancestry_status="$(
+                          gh api "repos/${GITHUB_REPOSITORY}/compare/${branch_sha}...${PRODUCTION_SHA}" \
+                            --jq '.status'
+                      )"
+                      if [[ "$ancestry_status" != 'ahead' && "$ancestry_status" != 'identical' ]]; then
+                          echo "BRANCH_RETAINED name=$branch reason=not_in_production"
+                          continue
+                      fi
+
+                      printf '%s\t%s\n' "$branch" "$branch_sha" >> "$candidates"
+                      echo "BRANCH_ELIGIBLE name=$branch sha=$branch_sha"
+                  done < "$remote_branches"
+
+                  candidate_count="$(wc -l < "$candidates" | tr -d ' ')"
+                  if [[ "$APPLY_CHANGES" != 'true' ]]; then
+                      echo "BRANCH_CLEANUP mode=dry-run eligible=$candidate_count deleted=0"
+                      {
+                          echo '## Merged production branch cleanup'
+                          echo
+                          echo "- Production SHA: \`$PRODUCTION_SHA\`"
+                          echo '- Mode: `dry-run`'
+                          echo "- Eligible branches: \`$candidate_count\`"
+                      } >> "$GITHUB_STEP_SUMMARY"
+                      exit 0
+                  fi
+
+                  deleted_count=0
+                  while IFS=$'\t' read -r branch recorded_sha; do
+                      encoded_branch="$(jq -rn --arg value "$branch" '$value | @uri')"
+                      current_sha="$(
+                          gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${encoded_branch}" --jq '.object.sha'
+                      )"
+                      if [[ "$current_sha" != "$recorded_sha" ]]; then
+                          echo "branch moved after eligibility check: $branch" >&2
+                          exit 1
+                      fi
+
+                      gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${encoded_branch}"
+                      deleted_count=$((deleted_count + 1))
+                      echo "BRANCH_DELETED name=$branch sha=$recorded_sha"
+                  done < "$candidates"
+
+                  echo "BRANCH_CLEANUP mode=apply eligible=$candidate_count deleted=$deleted_count"
+                  {
+                      echo '## Merged production branch cleanup'
+                      echo
+                      echo "- Production SHA: \`$PRODUCTION_SHA\`"
+                      echo '- Mode: `apply`'
+                      echo "- Eligible branches: \`$candidate_count\`"
+                      echo "- Deleted branches: \`$deleted_count\`"
+                  } >> "$GITHUB_STEP_SUMMARY"

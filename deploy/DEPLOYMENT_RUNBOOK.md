@@ -1,6 +1,6 @@
 # Vendure 生产发布手册
 
-最后核对：2026-08-29
+最后核对：2026-09-03
 
 本文件只记录稳定的部署入口和无密钥操作流程，不保存密码、令牌、数据库连接值或私钥内容。
 
@@ -23,6 +23,14 @@
 5. 每次部署记录必须固定保存：来源分支、生产引用（`main` 或正式标签）、完整 commit SHA、正式版本标签（如使用）、CI 制品名称、制品 SHA-256、制品工作流运行编号、部署工作流运行编号、环境、UTC 部署时间、操作人、上一个生产 SHA 和验收结果。当前非容器发布以制品名称和 SHA-256 为准；以后使用容器时还必须记录不可变镜像 digest，只有镜像版本名或 tag 不合格。
 6. 缺少分支祖先关系、不可变制品标识、发布记录或上线验收证据时必须停止发布，禁止以手工复制、服务器现场构建或跳过门禁的方式继续。
 7. 回滚只允许切换到上一个已验证的不可变制品，并记录原因、`ROLLBACK_SHA` 和回滚验收结果；禁止强制回退 `main`、从旧分支重新构建或把旧 `dist` 覆盖到当前运行目录。
+
+GitHub 仓库设置中的“Automatically delete head branches”必须保持关闭。发布收尾使用
+`Cleanup Merged Production Branches` 手动工作流，填写精确 `production_sha`、成功的
+`Deploy Production Runtime` 运行编号和同一 SHA 的手动 `Monitor Production Health` 验收运行编号。
+必须先保持 `apply=false` 执行 dry-run 并审核候选清单，再以相同证据设置 `apply=true`。
+工作流会通过 SSM 复核服务器当前 SHA，只删除名称以 `feat/`、`fix/`、`hotfix/` 或 `release/`
+开头、没有开放 PR 且分支头已包含在该生产 SHA 中的远程分支；`backup/`、`archive/`、`artifact/`
+以及任何未合并或尚未上线的分支一律保留。
 
 建议使用以下字段保存每次发布记录；没有使用容器时 `image_digest` 记为 `n/a`：
 
@@ -342,7 +350,7 @@ sudo -n systemctl reload nginx
 10. 从候选产物预演并执行本次审核过的库存继承修复，再预演并执行店铺图片同步；两者写入都必须使用 `--apply --allow-remote`，成功后才原子切换 `kaiyuangouwu-current`。
 11. 验收前台、后台、Shop API、Admin API、静态资源和 PM2 状态，确认线上 Git SHA。
 12. 完成发布记录中的制品名称、制品 SHA-256、制品与部署工作流编号、UTC 时间和验收结果；记录必须能够唯一定位生产运行的代码和制品。
-13. 发布与验收成功后，删除已经合并且不再使用的远程功能/热修复分支；撤销临时 SSH 规则，仅保留原有固定规则。候选和回滚包按策略保留，不删除用户数据。
+13. 发布与验收成功后，先用 `Cleanup Merged Production Branches` 的 dry-run 核对候选，再以 `apply=true` 删除已包含在当前生产 SHA 且不再使用的远程功能/热修复/release 分支；撤销临时 SSH 规则，仅保留原有固定规则。候选和回滚包按策略保留，不删除用户数据。
 
 ## 上线验收
 
