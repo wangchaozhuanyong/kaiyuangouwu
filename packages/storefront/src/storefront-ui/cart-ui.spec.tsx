@@ -13,6 +13,32 @@ const handlers = {
     onClose: vi.fn(),
 };
 
+function coupon(overrides: Partial<StoreCustomerCoupon> = {}): StoreCustomerCoupon {
+    return {
+        id: 'coupon-1',
+        campaignId: 'campaign-1',
+        campaignName: '新客优惠券',
+        campaignKind: 'ORDER_FIXED',
+        status: 'AVAILABLE',
+        minimumSpend: 1000,
+        currencyCode: 'MYR',
+        discountAmount: 500,
+        discountRate: null,
+        claimedAt: '2026-09-01T00:00:00.000Z',
+        validFrom: '2026-09-01T00:00:00.000Z',
+        validUntil: null,
+        lockedAt: null,
+        usedAt: null,
+        returnedAt: null,
+        expiredAt: null,
+        lockedOrderId: null,
+        usedOrderId: null,
+        returnCount: 0,
+        usable: true,
+        ...overrides,
+    };
+}
+
 function renderCouponSheet(coupons: StoreCustomerCoupon[]) {
     return renderToStaticMarkup(
         createElement(CouponSheet, {
@@ -39,34 +65,38 @@ describe('CouponSheet', () => {
     });
 
     it('preserves the selectable coupon list when a coupon is available', () => {
-        const coupon: StoreCustomerCoupon = {
-            id: 'coupon-1',
-            campaignId: 'campaign-1',
-            campaignName: '新客优惠券',
-            campaignKind: 'ORDER_FIXED',
-            status: 'AVAILABLE',
-            minimumSpend: 1000,
-            currencyCode: 'MYR',
-            discountAmount: 500,
-            discountRate: null,
-            claimedAt: '2026-09-01T00:00:00.000Z',
-            validFrom: '2026-09-01T00:00:00.000Z',
-            validUntil: null,
-            lockedAt: null,
-            usedAt: null,
-            returnedAt: null,
-            expiredAt: null,
-            lockedOrderId: null,
-            usedOrderId: null,
-            returnCount: 0,
-            usable: true,
-        };
+        const markup = renderCouponSheet([coupon()]);
 
-        const markup = renderCouponSheet([coupon]);
-
-        expect(markup).toContain('我的可用优惠券');
+        expect(markup).toContain('我的优惠券');
         expect(markup).toContain('新客优惠券');
         expect(markup).toContain('使用');
         expect(markup).not.toContain('还没有可用优惠券');
+    });
+
+    it('shows every owned coupon while disabling coupons that cannot be selected', () => {
+        const markup = renderCouponSheet([
+            coupon(),
+            coupon({
+                id: 'coupon-2',
+                campaignName: '已过期优惠券',
+                status: 'EXPIRED',
+                expiredAt: '2026-09-03T00:00:00.000Z',
+                usable: false,
+            }),
+            coupon({
+                id: 'coupon-3',
+                campaignName: '其他订单优惠券',
+                status: 'LOCKED',
+                lockedAt: '2026-09-03T00:00:00.000Z',
+                lockedOrderId: 'order-2',
+                usable: false,
+            }),
+        ]);
+
+        expect(markup).toContain('新客优惠券');
+        expect(markup).toContain('已过期优惠券');
+        expect(markup).toContain('其他订单优惠券');
+        expect(markup).toMatch(/<button[^>]*disabled=""[^>]*>已过期<\/button>/);
+        expect(markup).toMatch(/<button[^>]*disabled=""[^>]*>其他订单使用中<\/button>/);
     });
 });
