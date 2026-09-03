@@ -35,6 +35,21 @@ async function enterStorefront(page: Page) {
     await expect(page.locator('#root')).toBeVisible();
 }
 
+async function mockActiveCoupons(page: Page, campaigns: Array<Record<string, unknown>>) {
+    await page.route('**/shop-api?**', async route => {
+        const requestBody = route.request().postDataJSON() as { query?: string } | null;
+        if (!requestBody?.query?.includes('query ActiveStorefrontCoupons')) {
+            await route.continue();
+            return;
+        }
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({ data: { activeStorefrontCoupons: campaigns } }),
+        });
+    });
+}
+
 test('核心公开页面在目标浏览器中正常渲染', async ({ page }) => {
     const pageErrors: string[] = [];
     const badResources: string[] = [];
@@ -89,6 +104,119 @@ test('核心公开页面在目标浏览器中正常渲染', async ({ page }) => 
 
     expect(pageErrors).toEqual([]);
     expect(badResources).toEqual([]);
+});
+
+test('商品详情头部在页面滚动时保持可见', async ({ page }) => {
+    await enterStorefront(page);
+
+    const productEntry = page.getByRole('button', { name: /^查看 / }).first();
+    await expect(productEntry).toBeVisible();
+    await productEntry.click();
+    await expect(page).toHaveURL(/\/product\?id=/);
+
+    const header = page.locator('.product-detail-header');
+    await expect(header).toBeVisible();
+    await expect(page.locator('.detail-promotions')).toHaveCount(0);
+    await expect(page.locator('.detail-info-row')).toHaveCount(0);
+
+    const variantOptions = page.locator('.detail-options > div > button');
+    const variantCount = await variantOptions.count();
+    expect(variantCount).toBeGreaterThan(0);
+    await expect(page.locator('.detail-options > header > span')).toHaveText(`${variantCount} 个规格可选`);
+
+    const serviceItems = page.locator('.detail-service-bar > span');
+    await expect(serviceItems).toHaveCount(3);
+    const serviceGeometry = await serviceItems.evaluateAll(elements =>
+        elements.map(element => {
+            const box = element.getBoundingClientRect();
+            return { top: Math.round(box.top), width: Math.round(box.width) };
+        }),
+    );
+    expect(
+        Math.max(...serviceGeometry.map(item => item.top)) -
+            Math.min(...serviceGeometry.map(item => item.top)),
+    ).toBeLessThanOrEqual(1);
+    expect(
+        Math.max(...serviceGeometry.map(item => item.width)) -
+            Math.min(...serviceGeometry.map(item => item.width)),
+    ).toBeLessThanOrEqual(1);
+
+    await page.evaluate(() => window.scrollTo(0, Math.min(600, document.documentElement.scrollHeight)));
+
+    await expect
+        .poll(() => header.evaluate(element => Math.round(element.getBoundingClientRect().top)))
+        .toBe(0);
+});
+
+test('商品详情显示匹配优惠券的券后价并可进入优惠券中心', async ({ page }) => {
+    await mockActiveCoupons(page, [
+        {
+            id: 'e2e-order-coupon',
+            name: '全场八折券',
+            kind: 'ORDER_PERCENTAGE',
+            startsAt: null,
+            endsAt: null,
+            claimStartsAt: null,
+            claimEndsAt: null,
+            validityDays: null,
+            minimumSpend: 0,
+            currencyCode: 'CNY',
+            discountAmount: null,
+            discountRate: 8,
+            collectionIds: [],
+            productVariantIds: [],
+            remainingIssueCount: 100,
+            claimed: false,
+            claimable: true,
+        },
+    ]);
+
+    await enterStorefront(page);
+    await page
+        .getByRole('button', { name: /^查看 / })
+        .first()
+        .click();
+    await expect(page).toHaveURL(/\/product\?id=/);
+
+    const couponPrice = page.locator('.detail-coupon-price');
+    await expect(couponPrice).toBeVisible();
+    await expect(couponPrice).toContainText('券后');
+    await couponPrice.click();
+    await expect(page).toHaveURL(/\/coupons$/);
+});
+
+test('商品详情在优惠券不匹配时保持原价展示', async ({ page }) => {
+    await mockActiveCoupons(page, [
+        {
+            id: 'e2e-other-product-coupon',
+            name: '其他商品八折券',
+            kind: 'PRODUCT_PERCENTAGE',
+            startsAt: null,
+            endsAt: null,
+            claimStartsAt: null,
+            claimEndsAt: null,
+            validityDays: null,
+            minimumSpend: 0,
+            currencyCode: 'CNY',
+            discountAmount: null,
+            discountRate: 8,
+            collectionIds: [],
+            productVariantIds: ['a-variant-that-does-not-exist'],
+            remainingIssueCount: 100,
+            claimed: false,
+            claimable: true,
+        },
+    ]);
+
+    await enterStorefront(page);
+    await page
+        .getByRole('button', { name: /^查看 / })
+        .first()
+        .click();
+    await expect(page).toHaveURL(/\/product\?id=/);
+
+    await expect(page.locator('.detail-price')).toBeVisible();
+    await expect(page.locator('.detail-coupon-price')).toHaveCount(0);
 });
 
 test('键盘焦点在原生选择控件和深色按钮上清晰可见', async ({ page }) => {

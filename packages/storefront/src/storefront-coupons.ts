@@ -23,6 +23,22 @@ export interface StorefrontCouponCard {
     claimable: boolean;
 }
 
+export interface ProductCouponPrice {
+    campaignId: string;
+    campaignName: string;
+    priceWithTax: number;
+    savedAmount: number;
+}
+
+interface ProductCouponPriceInput {
+    campaigns: StorefrontCouponCampaign[];
+    customerCoupons: StoreCustomerCoupon[];
+    collectionIds: string[];
+    productVariantId: string;
+    priceWithTax: number;
+    currencyCode: string;
+}
+
 const couponThemes: StorefrontCouponTheme[] = ['gold', 'rose', 'blue', 'emerald'];
 
 const couponThemeByKind: Record<StorefrontCouponCampaign['kind'], StorefrontCouponTheme> = {
@@ -31,6 +47,68 @@ const couponThemeByKind: Record<StorefrontCouponCampaign['kind'], StorefrontCoup
     COLLECTION_PERCENTAGE: 'blue',
     PRODUCT_PERCENTAGE: 'emerald',
 };
+
+export function bestProductCouponPrice({
+    campaigns,
+    customerCoupons,
+    collectionIds,
+    productVariantId,
+    priceWithTax,
+    currencyCode,
+}: ProductCouponPriceInput): ProductCouponPrice | null {
+    if (!Number.isFinite(priceWithTax) || priceWithTax <= 0) return null;
+
+    const usableCampaignIds = new Set(
+        customerCoupons.filter(coupon => coupon.usable).map(coupon => coupon.campaignId),
+    );
+    const collectionIdSet = new Set(collectionIds);
+    let best: ProductCouponPrice | null = null;
+
+    for (const campaign of campaigns) {
+        if (!campaign.claimable && !usableCampaignIds.has(campaign.id)) continue;
+        if (campaign.currencyCode && campaign.currencyCode !== currencyCode) continue;
+        if (campaign.minimumSpend > priceWithTax) continue;
+        if (!couponMatchesProduct(campaign, collectionIdSet, productVariantId)) continue;
+
+        const discountedPrice = couponDiscountedPrice(campaign, priceWithTax);
+        if (discountedPrice == null || discountedPrice >= priceWithTax) continue;
+        if (best && best.priceWithTax <= discountedPrice) continue;
+
+        best = {
+            campaignId: campaign.id,
+            campaignName: campaign.name,
+            priceWithTax: discountedPrice,
+            savedAmount: priceWithTax - discountedPrice,
+        };
+    }
+
+    return best;
+}
+
+function couponMatchesProduct(
+    campaign: StorefrontCouponCampaign,
+    collectionIds: Set<string>,
+    productVariantId: string,
+): boolean {
+    if (campaign.kind === 'COLLECTION_PERCENTAGE') {
+        return Boolean(campaign.collectionIds?.some(id => collectionIds.has(id)));
+    }
+    if (campaign.kind === 'PRODUCT_PERCENTAGE') {
+        return Boolean(campaign.productVariantIds?.includes(productVariantId));
+    }
+    return true;
+}
+
+function couponDiscountedPrice(campaign: StorefrontCouponCampaign, priceWithTax: number): number | null {
+    if (campaign.kind === 'ORDER_FIXED') {
+        if (campaign.discountAmount == null || campaign.discountAmount <= 0) return null;
+        return Math.max(0, priceWithTax - campaign.discountAmount);
+    }
+    if (campaign.discountRate == null || campaign.discountRate <= 0 || campaign.discountRate >= 10) {
+        return null;
+    }
+    return Math.max(0, Math.round((priceWithTax * campaign.discountRate) / 10));
+}
 
 export function couponCardsFromBlock(
     block: StorefrontContentBlock | undefined,

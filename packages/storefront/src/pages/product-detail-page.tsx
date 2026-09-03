@@ -1,12 +1,12 @@
 import { useNavigate, useRouter } from '@tanstack/react-router';
 import {
+    ChevronRight,
     CircleCheck,
     Heart,
     Package,
     RotateCcw,
     Share2,
     ShoppingCart,
-    TicketPercent,
     Truck,
 } from 'lucide-react';
 import { Suspense, useEffect, useState } from 'react';
@@ -16,6 +16,7 @@ import { LazySharePosterModal } from '../lazy-storefront-pages';
 import { productAvailability, productAvailabilityLabel } from '../product-availability';
 import { ProductReviewsSection } from '../review-pages';
 import { productDescriptionText, sanitizeProductDescription } from '../rich-text';
+import { bestProductCouponPrice } from '../storefront-coupons';
 import { routeNavigateOptions, type RouteState } from '../storefront-router';
 import { SubHeader } from '../storefront-ui/page-shell';
 import {
@@ -32,6 +33,8 @@ import {
     MarketConfig,
     Product,
     ProductVariant,
+    StoreCustomerCoupon,
+    StorefrontCouponCampaign,
     StorefrontFlashSaleItem,
     StorefrontLanguage,
 } from '../types';
@@ -49,6 +52,8 @@ interface ProductDetailPageProps {
     storefrontName: string;
     logoUrl: string | null;
     flashSaleItems: StorefrontFlashSaleItem[];
+    couponCampaigns: StorefrontCouponCampaign[];
+    customerCoupons: StoreCustomerCoupon[];
     addingVariantId: string | null;
     favorite: boolean;
     onAdd: (variant: ProductVariant) => void;
@@ -86,6 +91,8 @@ export function ProductDetailPage() {
         storefrontName,
         logoUrl,
         flashSaleItems,
+        couponCampaigns,
+        customerCoupons,
         addingVariantId,
         favorite,
         onAdd,
@@ -99,6 +106,20 @@ export function ProductDetailPage() {
     const [headerScrolled, setHeaderScrolled] = useState(false);
     const variant = product.variants.find(item => item.id === variantId) ?? product.variants[0];
     const activeFlashItem = flashSaleItems.find(item => item.productVariantId === variant?.id);
+    const displayedPrice = activeFlashItem?.salePrice ?? variant?.priceWithTax ?? null;
+    const displayedCurrencyCode =
+        activeFlashItem?.currencyCode ?? variant?.currencyCode ?? market.currencyCode;
+    const couponPrice =
+        variant && displayedPrice != null
+            ? bestProductCouponPrice({
+                  campaigns: couponCampaigns,
+                  customerCoupons,
+                  collectionIds: product.collections.map(collection => collection.id),
+                  productVariantId: variant.id,
+                  priceWithTax: displayedPrice,
+                  currencyCode: displayedCurrencyCode,
+              })
+            : null;
     const assets = product.assets.length
         ? product.assets
         : product.featuredAsset
@@ -202,24 +223,42 @@ export function ProductDetailPage() {
             </section>
             <section className="detail-summary">
                 <div className="detail-price-line">
-                    <p className={`detail-price${activeFlashItem ? ' is-flash-sale' : ''}`}>
-                        <strong>
-                            {activeFlashItem
-                                ? formatMoney(activeFlashItem.salePrice, activeFlashItem.currencyCode, locale)
-                                : variant
-                                  ? formatMoney(variant.priceWithTax, variant.currencyCode, locale)
-                                  : '--'}
-                        </strong>
-                        {activeFlashItem ? (
-                            <del>
-                                {formatMoney(
-                                    activeFlashItem.originalPrice,
-                                    activeFlashItem.currencyCode,
-                                    locale,
-                                )}
-                            </del>
+                    <div className="detail-price-stack">
+                        <p className={`detail-price${activeFlashItem ? ' is-flash-sale' : ''}`}>
+                            <strong>
+                                {displayedPrice != null
+                                    ? formatMoney(displayedPrice, displayedCurrencyCode, locale)
+                                    : '--'}
+                            </strong>
+                            {activeFlashItem ? (
+                                <del>
+                                    {formatMoney(
+                                        activeFlashItem.originalPrice,
+                                        activeFlashItem.currencyCode,
+                                        locale,
+                                    )}
+                                </del>
+                            ) : null}
+                        </p>
+                        {couponPrice ? (
+                            <button
+                                type="button"
+                                className="detail-coupon-price"
+                                onClick={() => navigateTo({ name: 'coupons' })}
+                                aria-label={
+                                    isZh
+                                        ? `查看优惠券，券后价 ${formatMoney(couponPrice.priceWithTax, displayedCurrencyCode, locale)}`
+                                        : `View coupon, price after coupon ${formatMoney(couponPrice.priceWithTax, displayedCurrencyCode, locale)}`
+                                }
+                            >
+                                <span>{isZh ? '券后' : 'With coupon'}</span>
+                                <strong>
+                                    {formatMoney(couponPrice.priceWithTax, displayedCurrencyCode, locale)}
+                                </strong>
+                                <ChevronRight aria-hidden="true" />
+                            </button>
                         ) : null}
-                    </p>
+                    </div>
                     <span>{stockLabel}</span>
                 </div>
                 <div className="detail-tags">
@@ -261,30 +300,14 @@ export function ProductDetailPage() {
                 <h1>{product.name}</h1>
                 <p>{descriptionText || (isZh ? '暂无更多商品说明' : 'No additional description')}</p>
             </section>
-            <section className="detail-promotions">
-                <div>
-                    <span>{isZh ? '优惠' : 'Offers'}</span>
-                    <strong>
-                        <TicketPercent />
-                        {isZh ? '可用优惠将在结算时自动抵扣' : 'Eligible offers apply automatically'}
-                    </strong>
-                </div>
-                <div>
-                    <span>{isZh ? '活动' : 'Activity'}</span>
-                    <strong>
-                        {activeFlashItem
-                            ? isZh
-                                ? '限时秒杀价已生效，结算时自动核对'
-                                : 'Flash-sale price is active and verified at checkout'
-                            : isZh
-                              ? '店铺活动以结算页展示为准'
-                              : 'Store promotions are confirmed at checkout'}
-                    </strong>
-                </div>
-            </section>
             <section className="detail-options">
                 <header>
                     <strong>{isZh ? '选择规格' : 'Choose an option'}</strong>
+                    <span>
+                        {isZh
+                            ? `${product.variants.length} 个规格可选`
+                            : `${product.variants.length} ${product.variants.length === 1 ? 'option' : 'options'}`}
+                    </span>
                 </header>
                 <div>
                     {product.variants.map(item => (
@@ -323,29 +346,12 @@ export function ProductDetailPage() {
                     </p>
                 )}
             </section>
-            <div className="detail-info-row">
-                <span>{isDigital ? (isZh ? '获取方式' : 'Access') : isZh ? '送至' : 'Deliver to'}</span>
-                <strong>
-                    {isAutoCard
-                        ? isZh
-                            ? '付款后系统按号池顺序发送到下单邮箱'
-                            : 'Credentials are assigned in sequence and emailed after payment'
-                        : isFileDownload
-                          ? isZh
-                              ? '付款后在订单中获取文件下载入口'
-                              : 'Get the file download from your order after payment'
-                          : isDigital
-                            ? isZh
-                                ? `付款后由商家处理，预计${manualSlaText}内发送至邮箱`
-                                : `The merchant processes it and sends it by email within ${manualSlaText}`
-                            : isZh
-                              ? '结算页选择收货地址并确认时效'
-                              : 'Choose an address and confirm timing at checkout'}
-                </strong>
-            </div>
-            <section className="detail-service-bar has-long-copy">
+            <section
+                className="detail-service-bar"
+                aria-label={isZh ? '商品服务说明' : 'Product service details'}
+            >
                 <span>
-                    <CircleCheck />
+                    <CircleCheck aria-hidden="true" />
                     {isAutoCard
                         ? isZh
                             ? '邮箱自动发卡'
@@ -363,7 +369,7 @@ export function ProductDetailPage() {
                               : 'Order details'}
                 </span>
                 <span>
-                    <Truck />
+                    <Truck aria-hidden="true" />
                     {isDigital
                         ? isAutoCard
                             ? isZh
@@ -381,18 +387,18 @@ export function ProductDetailPage() {
                           : 'Tracked delivery'}
                 </span>
                 <span>
-                    <RotateCcw />
+                    <RotateCcw aria-hidden="true" />
                     {refundPolicy === 'NON_REFUNDABLE'
                         ? isZh
-                            ? '不支持退款 · 异常可联系客服'
-                            : 'Non-refundable · support for delivery issues'
+                            ? '不支持退款'
+                            : 'Non-refundable'
                         : refundPolicy === 'SEVEN_DAY_NO_REASON'
                           ? isZh
                               ? '支持7天无理由'
                               : 'Seven-day no-reason return'
                           : isZh
-                            ? '可申请退款 · 商家审核'
-                            : 'Refund request · merchant review'}
+                            ? '退款需商家审核'
+                            : 'Refund subject to review'}
                 </span>
             </section>
             <ProductReviewsSection api={api} productId={product.id} market={market} language={language} />

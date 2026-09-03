@@ -176,6 +176,8 @@ export function ProductRoutePage() {
                 flashSaleItems: runtime.activeFlashSaleItems.filter(
                     (item: { productId: string }) => item.productId === product.id,
                 ),
+                couponCampaigns: runtime.activeCoupons,
+                customerCoupons: runtime.myCoupons,
                 addingVariantId: runtime.addingVariantId,
                 favorite: runtime.favoriteProductIds.includes(product.id),
                 onAdd: (variant: ProductVariant) => void runtime.addToCart(variant),

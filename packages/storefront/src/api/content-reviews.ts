@@ -214,6 +214,8 @@ export class ContentReviewsApi extends BaseDomainApi {
                         currencyCode
                         discountAmount
                         discountRate
+                        collectionIds
+                        productVariantIds
                         remainingIssueCount
                         claimed
                         claimable

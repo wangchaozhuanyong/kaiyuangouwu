@@ -1,13 +1,63 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+    bestProductCouponPrice,
     couponCardFromCustomerCoupon,
     couponCardFromUsageRecord,
     couponCardsFromBlock,
     couponCardsFromCampaigns,
     couponScopeLabel,
 } from './storefront-coupons';
-import { StorefrontContentBlock, StorefrontCouponCampaign } from './types';
+import { StoreCustomerCoupon, StorefrontContentBlock, StorefrontCouponCampaign } from './types';
+
+function couponCampaign(overrides: Partial<StorefrontCouponCampaign>): StorefrontCouponCampaign {
+    return {
+        id: 'campaign-1',
+        name: '测试优惠券',
+        kind: 'ORDER_PERCENTAGE',
+        startsAt: null,
+        endsAt: null,
+        claimStartsAt: null,
+        claimEndsAt: null,
+        validityDays: null,
+        minimumSpend: 0,
+        currencyCode: 'CNY',
+        discountAmount: null,
+        discountRate: 8.5,
+        collectionIds: [],
+        productVariantIds: [],
+        remainingIssueCount: null,
+        claimed: false,
+        claimable: true,
+        ...overrides,
+    };
+}
+
+function customerCoupon(overrides: Partial<StoreCustomerCoupon>): StoreCustomerCoupon {
+    return {
+        id: 'customer-coupon-1',
+        campaignId: 'campaign-1',
+        campaignName: '测试优惠券',
+        campaignKind: 'ORDER_PERCENTAGE',
+        status: 'AVAILABLE',
+        minimumSpend: 0,
+        currencyCode: 'CNY',
+        discountAmount: null,
+        discountRate: 8,
+        claimedAt: '2026-09-01T00:00:00.000Z',
+        validFrom: '2026-09-01T00:00:00.000Z',
+        validUntil: null,
+        lockedAt: null,
+        usedAt: null,
+        returnedAt: null,
+        expiredAt: null,
+        lockedOrderId: null,
+        usedOrderId: null,
+        returnCount: 0,
+        usable: true,
+        ...overrides,
+    };
+}
 
 function couponBlock(): StorefrontContentBlock {
     return {
@@ -53,6 +103,101 @@ function couponBlock(): StorefrontContentBlock {
 }
 
 describe('storefront coupons', () => {
+    it('uses the lowest eligible coupon price for the selected product variant', () => {
+        const result = bestProductCouponPrice({
+            campaigns: [
+                couponCampaign({
+                    id: 'minimum-not-met',
+                    kind: 'ORDER_FIXED',
+                    minimumSpend: 3_000,
+                    discountAmount: 1_000,
+                    discountRate: null,
+                }),
+                couponCampaign({
+                    id: 'matching-collection',
+                    kind: 'COLLECTION_PERCENTAGE',
+                    discountRate: 8.5,
+                    collectionIds: ['collection-1'],
+                }),
+                couponCampaign({
+                    id: 'best-product-coupon',
+                    name: '单品七五折',
+                    kind: 'PRODUCT_PERCENTAGE',
+                    discountRate: 7.5,
+                    productVariantIds: ['variant-1'],
+                }),
+                couponCampaign({
+                    id: 'other-product',
+                    kind: 'PRODUCT_PERCENTAGE',
+                    discountRate: 5,
+                    productVariantIds: ['variant-2'],
+                }),
+            ],
+            customerCoupons: [],
+            collectionIds: ['collection-1'],
+            productVariantId: 'variant-1',
+            priceWithTax: 2_500,
+            currencyCode: 'CNY',
+        });
+
+        expect(result).toEqual({
+            campaignId: 'best-product-coupon',
+            campaignName: '单品七五折',
+            priceWithTax: 1_875,
+            savedAmount: 625,
+        });
+    });
+
+    it('shows an owned coupon only while that customer coupon is usable', () => {
+        const campaign = couponCampaign({ claimed: true, claimable: false, discountRate: 8 });
+        const input = {
+            campaigns: [campaign],
+            collectionIds: [],
+            productVariantId: 'variant-1',
+            priceWithTax: 2_500,
+            currencyCode: 'CNY',
+        };
+
+        expect(bestProductCouponPrice({ ...input, customerCoupons: [] })).toBeNull();
+        expect(
+            bestProductCouponPrice({
+                ...input,
+                customerCoupons: [customerCoupon({ usable: true })],
+            }),
+        ).toMatchObject({ priceWithTax: 2_000, savedAmount: 500 });
+        expect(
+            bestProductCouponPrice({
+                ...input,
+                customerCoupons: [customerCoupon({ usable: false, status: 'USED' })],
+            }),
+        ).toBeNull();
+    });
+
+    it('keeps the regular price when no coupon matches the product', () => {
+        expect(
+            bestProductCouponPrice({
+                campaigns: [
+                    couponCampaign({
+                        kind: 'COLLECTION_PERCENTAGE',
+                        collectionIds: ['another-collection'],
+                    }),
+                    couponCampaign({
+                        id: 'minimum-not-met',
+                        kind: 'ORDER_FIXED',
+                        minimumSpend: 5_000,
+                        discountAmount: 1_000,
+                        discountRate: null,
+                    }),
+                ],
+                customerCoupons: [],
+                collectionIds: ['collection-1'],
+                productVariantId: 'variant-1',
+                priceWithTax: 2_500,
+                currencyCode: 'CNY',
+            }),
+        ).toBeNull();
+    });
+
     it('maps only coupon targets into the existing ticket design', () => {
         expect(couponCardsFromBlock(couponBlock(), 'zh')).toEqual([
             expect.objectContaining({

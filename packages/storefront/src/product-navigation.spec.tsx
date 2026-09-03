@@ -1,9 +1,9 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
-import { readStorefrontStylesheet } from './test-stylesheet';
 
 import { ProductCard } from './components/common/product-card';
 import { buildProductRowSmartInfo, ProductRow } from './components/common/product-row';
+import { readStorefrontStylesheet } from './test-stylesheet';
 import { MarketConfig, Product } from './types';
 
 const market: MarketConfig = {
@@ -211,6 +211,7 @@ describe('product image navigation layers', () => {
     it('ensures product detail header has transparent background, dark frosted buttons and no blur when unscrolled', () => {
         const stylesheet = readStorefrontStylesheet();
 
+        expect(stylesheet).toMatch(/\.subpage\s*\{[^}]*overflow-x:\s*clip;/);
         expect(stylesheet).toMatch(/\.topbar\.product-detail-header[\s\S]*?background:\s*transparent;/);
         expect(stylesheet).toMatch(/\.topbar\.product-detail-header[\s\S]*?backdrop-filter:\s*none;/);
         expect(stylesheet).toMatch(/\.topbar\.product-detail-header[\s\S]*?margin-bottom:\s*-52px;/);

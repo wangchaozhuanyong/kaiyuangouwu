@@ -34,10 +34,11 @@ const couponPaymentHandler = new PaymentMethodHandler({
 const translationProvider: ContentTranslationProvider = {
     name: 'coupon-e2e-passthrough',
     isConfigured: () => true,
-    translate: async request => ({
-        provider: 'coupon-e2e-passthrough',
-        translations: request.segments.map(segment => ({ key: segment.key, text: segment.text })),
-    }),
+    translate: request =>
+        Promise.resolve({
+            provider: 'coupon-e2e-passthrough',
+            translations: request.segments.map(segment => ({ key: segment.key, text: segment.text })),
+        }),
 };
 
 const config = mergeConfig(testConfig(), {
@@ -112,6 +113,8 @@ const ACTIVE_COUPONS = gql`
             claimed
             claimable
             remainingIssueCount
+            collectionIds
+            productVariantIds
         }
     }
 `;
@@ -435,7 +438,12 @@ describe('coupon lifecycle closed loop', () => {
 
     it('claims once, requires explicit application, redeems only after payment and preserves refund history', async () => {
         const activeBeforeClaim = await shopClient.query(ACTIVE_COUPONS);
-        expect(campaign(activeBeforeClaim)).toMatchObject({ claimed: false, claimable: true });
+        expect(campaign(activeBeforeClaim)).toMatchObject({
+            claimed: false,
+            claimable: true,
+            collectionIds: [],
+            productVariantIds: [],
+        });
 
         const claimed = await shopClient.query(CLAIM, { campaignId });
         const coupon = claimed.claimStorefrontCoupon;
