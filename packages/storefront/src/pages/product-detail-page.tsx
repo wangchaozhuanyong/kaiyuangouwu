@@ -120,13 +120,7 @@ export function ProductDetailPage() {
     );
     const isUnitVariant = packaging?.unitVariant.id === variant?.id;
     const isPackageVariant = packaging?.packageVariant.id === variant?.id;
-    const unavailable =
-        !variant ||
-        (variant.customFields.fulfillmentType === 'physical' && variant.stockLevel === 'OUT_OF_STOCK') ||
-        (isDigital &&
-            variant.customFields.digitalStockPolicy === 'limited' &&
-            variant.stockLevel === 'OUT_OF_STOCK') ||
-        (isAutoCard && (variant.autoCardAvailableStock ?? 0) < 1);
+    const unavailable = !variant || availability.soldOut;
     const similarProducts = products.filter(item => item.id !== product.id).slice(0, 4);
     const descriptionText = productDescriptionText(product.description);
     const descriptionHtml = sanitizeProductDescription(product.description);
@@ -349,7 +343,7 @@ export function ProductDetailPage() {
                               : 'Choose an address and confirm timing at checkout'}
                 </strong>
             </div>
-            <section className={`detail-service-bar${isZh ? '' : ' has-long-copy'}`}>
+            <section className="detail-service-bar has-long-copy">
                 <span>
                     <CircleCheck />
                     {isAutoCard

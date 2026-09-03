@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { CartPage } from './pages/cart-page';
 import { StorefrontContext } from './StorefrontContext';
-import { MarketConfig, StorefrontCart } from './types';
+import { MarketConfig, Product, StorefrontCart } from './types';
 
 vi.mock('@tanstack/react-router', async importOriginal => ({
     ...(await importOriginal<typeof import('@tanstack/react-router')>()),
@@ -71,7 +71,7 @@ const callbacks = {
     onRemoveCoupon: vi.fn().mockResolvedValue(null),
 };
 
-function renderCart(value: StorefrontCart | null) {
+function renderCart(value: StorefrontCart | null, products: Product[] = []) {
     return renderToStaticMarkup(
         createElement(
             StorefrontContext.Provider,
@@ -79,7 +79,7 @@ function renderCart(value: StorefrontCart | null) {
                 value: {
                     cart: value,
                     customer: null,
-                    products: [],
+                    products,
                     market,
                     locale: market.locale,
                     language: 'zh' as const,
@@ -145,5 +145,42 @@ describe('CartPage guest cart', () => {
         expect(markup).toContain('class="page cart-page is-empty"');
         expect(markup).not.toContain('游客购物车已保存');
         expect(markup).not.toContain('结算（');
+    });
+
+    it('places the subtitle on the right side of the 顺手带一件 heading', () => {
+        const testProduct: Product = {
+            id: 'product-2',
+            createdAt: '2026-08-16T00:00:00.000Z',
+            name: '推荐搭配商品',
+            slug: 'recommended-product',
+            description: '',
+            featuredAsset: null,
+            assets: [],
+            collections: [],
+            variants: [
+                {
+                    id: 'variant-2',
+                    name: '默认规格',
+                    sku: 'REC-2',
+                    priceWithTax: 2000,
+                    currencyCode: 'MYR',
+                    stockLevel: 'IN_STOCK',
+                    saleableStockLevel: 10,
+                    featuredAsset: null,
+                    product: {
+                        id: 'product-2',
+                        name: '推荐搭配商品',
+                        featuredAsset: null,
+                    },
+                    customFields: { fulfillmentType: 'physical' } as any,
+                },
+            ],
+        };
+
+        const markup = renderCart(cart, [testProduct]);
+
+        expect(markup).toContain('顺手带一件');
+        expect(markup).toContain('class="section-header has-end-subtitle"');
+        expect(markup).toContain('class="section-header-end-subtitle">从当前店铺继续挑选</p>');
     });
 });

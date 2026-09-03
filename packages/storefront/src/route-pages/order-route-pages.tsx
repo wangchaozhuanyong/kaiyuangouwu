@@ -138,6 +138,7 @@ export function AddressesRoutePage() {
                     market={runtime.market}
                     availableCountries={runtime.availableCountries}
                     language={runtime.language}
+                    commerceMode={runtime.commerceMode}
                     onBack={runtime.goBack}
                     onCustomerChange={(customer: ActiveCustomer | null) => runtime.setCustomer(customer)}
                     onNotify={runtime.notify}
@@ -157,6 +158,7 @@ export function AccountSecurityRoutePage() {
                     customer={runtime.customer}
                     language={runtime.language}
                     storefrontName={runtime.storefrontName}
+                    commerceMode={runtime.commerceMode}
                     onBack={runtime.goBack}
                     onAvatarChange={async (file: File) => {
                         const avatar = await runtime.api.uploadCustomerAvatar(file);

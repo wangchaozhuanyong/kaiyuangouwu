@@ -213,6 +213,14 @@ export function useStorefrontAppState() {
         meta: publicQueryMeta(),
         refetchInterval: 60_000,
     });
+    const commerceModeQuery = useQuery({
+        queryKey: storefrontQueryKeys.commerceMode(storefrontQueryKeys.market(market)),
+        queryFn: ({ signal }) => api.activeStoreCommerceMode(signal),
+        staleTime: PUBLIC_QUERY_STALE_TIME,
+        gcTime: PUBLIC_QUERY_GC_TIME,
+        meta: publicQueryMeta(),
+        refetchInterval: 60_000,
+    });
     const cartQueryKey = storefrontQueryKeys.cart(storefrontQueryKeys.market(market), vendureLanguageCode);
     const customerQueryKey = storefrontQueryKeys.customer(
         storefrontQueryKeys.market(market),
@@ -774,6 +782,14 @@ export function useStorefrontAppState() {
                     setCartError(
                         isZh ? '购物车已更新，请重新操作' : 'Your cart was updated. Please try again.',
                     );
+                } else if (
+                    requestError instanceof ShopApiError &&
+                    (requestError.errorCode === 'CART_PROJECTION_ERROR' ||
+                        requestError.message.includes('synchronized to checkout'))
+                ) {
+                    const message = isZh ? '商品库存不足或已售罄' : 'The item is out of stock';
+                    setCartError(message);
+                    notify(message);
                 } else {
                     setCartError(requestError instanceof Error ? requestError.message : text.loadError);
                 }
@@ -846,16 +862,28 @@ export function useStorefrontAppState() {
                             ? '购物车已更新，请重新点击立即购买'
                             : 'Your cart was updated. Please try Buy now again.',
                     );
+                } else if (
+                    requestError instanceof ShopApiError &&
+                    (requestError.errorCode === 'CART_PROJECTION_ERROR' ||
+                        requestError.message.includes('synchronized to checkout'))
+                ) {
+                    setCartError(isZh ? '所选商品库存不足或已售罄' : 'The selected item is out of stock');
                 } else {
                     setCartError(requestError instanceof Error ? requestError.message : text.loadError);
                 }
-                notify(
-                    requestError instanceof Error
-                        ? requestError.message
-                        : isZh
-                          ? '暂时无法发起购买'
-                          : 'Could not start the purchase',
-                );
+                const errorMessage =
+                    requestError instanceof ShopApiError &&
+                    (requestError.errorCode === 'CART_PROJECTION_ERROR' ||
+                        requestError.message.includes('synchronized to checkout'))
+                        ? isZh
+                            ? '所选商品库存不足或已售罄'
+                            : 'The selected item is out of stock'
+                        : requestError instanceof Error
+                          ? requestError.message
+                          : isZh
+                            ? '暂时无法发起购买'
+                            : 'Could not start the purchase';
+                notify(errorMessage);
             } finally {
                 setAddingVariantId(null);
                 setCartLoading(false);
@@ -1163,6 +1191,16 @@ export function useStorefrontAppState() {
                         ? '购物车已更新，请确认后重新结算'
                         : 'Your cart was updated. Please review it and try again.',
                 );
+            } else if (
+                requestError instanceof ShopApiError &&
+                (requestError.errorCode === 'CART_PROJECTION_ERROR' ||
+                    requestError.message.includes('synchronized to checkout'))
+            ) {
+                setCartError(
+                    isZh
+                        ? '所选商品库存不足或已售罄，请调整后重新结算'
+                        : 'Selected items are out of stock. Please adjust your cart.',
+                );
             } else {
                 setCartError(requestError instanceof Error ? requestError.message : text.loadError);
             }
@@ -1460,6 +1498,8 @@ export function useStorefrontAppState() {
         cartLoadState,
         cartQueryError,
         cartQuery,
+        commerceMode: commerceModeQuery.data ?? null,
+        commerceModeQuery,
         customer,
         customerLoadState,
         customerLoadError,

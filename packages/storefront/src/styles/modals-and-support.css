@@ -227,6 +227,22 @@
     background: #f1f5f9;
 }
 
+.poster-templates-scroll {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.poster-templates-scroll::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+}
+
 /* ==========================================================================
    客服中心：品牌双色服务时间条与直达渠道
    ========================================================================== */
@@ -1551,4 +1567,3 @@
         min-height: 52px;
     }
 }
-

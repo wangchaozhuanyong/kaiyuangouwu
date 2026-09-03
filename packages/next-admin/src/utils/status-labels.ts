@@ -68,3 +68,38 @@ export function getTranslationStatusLabel(status?: string | null): string {
     if (!normalized) return '未知状态';
     return TRANSLATION_STATUS_LABELS[normalized] ?? getStatusLabel(normalized);
 }
+
+const SYSTEM_ROLE_LABELS: Readonly<Record<string, string>> = {
+    __super_admin_role__: '超级管理员',
+    __customer_role__: '普通客户',
+    SuperAdmin: '超级管理员',
+    'Super Administrator': '超级管理员',
+    Customer: '普通客户',
+    Administrator: '系统管理员',
+    Admin: '系统管理员',
+    Operator: '运营专员',
+    Support: '客服专员',
+    'Customer Support': '客服专员',
+    Finance: '财务专员',
+};
+
+export function getRoleLabel(role?: { code?: string; description?: string } | string | null): string {
+    if (!role) return '未分配角色';
+    if (typeof role === 'string') {
+        const key = role.trim();
+        return SYSTEM_ROLE_LABELS[key] ?? key;
+    }
+    const code = role.code?.trim() || '';
+    const desc = role.description?.trim() || '';
+    if (code && SYSTEM_ROLE_LABELS[code]) return SYSTEM_ROLE_LABELS[code];
+    if (desc && SYSTEM_ROLE_LABELS[desc]) return SYSTEM_ROLE_LABELS[desc];
+    return desc || code || '未命名角色';
+}
+
+export function getRoleCodeLabel(code?: string | null): string {
+    const normalized = code?.trim();
+    if (!normalized) return '';
+    if (normalized === '__super_admin_role__') return '系统内置 · __super_admin_role__';
+    if (normalized === '__customer_role__') return '系统内置 · __customer_role__';
+    return normalized;
+}

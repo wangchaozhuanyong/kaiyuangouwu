@@ -42,4 +42,7 @@ export class ReferralProgramConfig extends VendureEntity {
 
     @Column({ type: 'varchar', length: 64, default: 'BRAND_MINIMAL' })
     defaultPosterTemplate: string;
+
+    @Column({ type: 'simple-array', nullable: true })
+    posterTemplates: string[] | null;
 }

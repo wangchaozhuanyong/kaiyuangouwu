@@ -156,13 +156,13 @@ export function AccountPage() {
         : '';
 
     return (
-        <main className="page pb-8 lg:grid lg:content-start lg:gap-4 lg:px-6 lg:pb-8 lg:pt-[88px]">
+        <main className="page lg:grid lg:content-start lg:gap-4 lg:px-6 lg:pb-8 lg:pt-[88px]">
             <section
-                className="relative m-0 overflow-hidden bg-[#b91c1c] bg-[radial-gradient(ellipse_90%_70%_at_85%_-10%,rgba(254,202,202,0.45)_0%,transparent_60%),radial-gradient(ellipse_80%_60%_at_15%_100%,rgba(253,164,175,0.35)_0%,transparent_60%),linear-gradient(145deg,#991b1b_0%,#c5221f_50%,#e11d48_100%)] px-3 pb-5 pt-4 text-white shadow-[inset_0_-1px_0_rgba(0,0,0,0.08)] before:pointer-events-none before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_75%_20%,rgba(255,255,255,0.25)_0%,transparent_50%),radial-gradient(circle_at_20%_80%,rgba(255,255,255,0.15)_0%,transparent_40%)] before:content-[''] lg:col-span-full lg:rounded-2xl lg:px-7 lg:py-6"
+                className="relative m-0 overflow-hidden bg-[#090d16] bg-[radial-gradient(ellipse_90%_70%_at_85%_-10%,rgba(217,119,6,0.18)_0%,transparent_60%),radial-gradient(ellipse_80%_60%_at_15%_100%,rgba(30,58,138,0.22)_0%,transparent_60%),linear-gradient(145deg,#090d16_0%,#0f172a_50%,#1e293b_100%)] px-3 pb-5 pt-4 text-white shadow-[inset_0_-1px_0_rgba(255,255,255,0.08)] before:pointer-events-none before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_80%_15%,rgba(251,191,36,0.12)_0%,transparent_50%),radial-gradient(circle_at_20%_80%,rgba(255,255,255,0.04)_0%,transparent_40%)] before:content-[''] lg:col-span-full lg:rounded-2xl lg:border lg:border-white/10 lg:px-7 lg:py-6"
                 aria-labelledby={customer ? undefined : 'guest-account-title'}
             >
                 {customer ? (
-                    <div className="relative z-[1] flex flex-col items-center rounded-[18px] border border-white bg-white/95 px-3.5 pb-3.5 pt-4 text-center shadow-[0_12px_28px_-6px_rgba(153,27,27,0.22),0_4px_12px_-2px_rgba(15,23,42,0.04)] backdrop-blur-xl">
+                    <div className="relative z-[1] flex flex-col items-center rounded-[18px] border border-white/90 bg-white/95 px-3.5 pb-3.5 pt-4 text-center shadow-[0_20px_40px_-12px_rgba(0,0,0,0.45),0_4px_16px_rgba(0,0,0,0.15)] backdrop-blur-xl">
                         <button
                             className="absolute right-3 top-3 z-[2] grid size-[34px] shrink-0 place-items-center rounded-full border border-slate-200/90 bg-white p-0 text-slate-600 shadow-[0_2px_6px_rgba(15,23,42,0.04)] transition-all duration-200 hover:rotate-[30deg] hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 [&_svg]:size-4"
                             type="button"
@@ -296,7 +296,7 @@ export function AccountPage() {
                         </div>
                     </div>
                 ) : (
-                    <div className="relative z-[1] flex flex-col items-center gap-2.5 rounded-[18px] border border-white bg-white/95 px-3.5 pb-3.5 pt-4 text-center shadow-[0_12px_28px_-6px_rgba(153,27,27,0.22),0_4px_12px_-2px_rgba(15,23,42,0.04)] backdrop-blur-xl">
+                    <div className="relative z-[1] flex flex-col items-center gap-2.5 rounded-[18px] border border-white/90 bg-white/95 px-3.5 pb-3.5 pt-4 text-center shadow-[0_20px_40px_-12px_rgba(0,0,0,0.45),0_4px_16px_rgba(0,0,0,0.15)] backdrop-blur-xl">
                         <div className="flex w-full items-center gap-3.5 px-1 pb-1 pt-0.5 text-left">
                             <div className="mb-0 shrink-0 rounded-full bg-[linear-gradient(135deg,rgba(255,255,255,0.95),rgba(245,158,11,0.5),rgba(255,255,255,0.95))] p-[2.5px] shadow-[0_0_14px_rgba(245,158,11,0.25),0_3px_10px_rgba(15,23,42,0.08)]">
                                 <span className="grid size-[54px] shrink-0 place-items-center rounded-full border-[2.5px] border-white bg-[linear-gradient(135deg,#94a3b8_0%,#64748b_100%)] text-white lg:size-16 [&_svg]:size-[26px]">

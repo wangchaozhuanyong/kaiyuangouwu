@@ -848,6 +848,7 @@ export const adminApiExtensions = gql`
         allowBalanceSpend: Boolean!
         attributionWindowDays: Int!
         defaultPosterTemplate: String!
+        posterTemplates: [String!]
     }
 
     input CreateReferralPosterTemplateInput {

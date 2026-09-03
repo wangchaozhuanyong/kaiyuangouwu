@@ -54,7 +54,7 @@ import {
     type SystemOperationsResult,
 } from '../../graphql/management.graphql';
 import { useUrlTab } from '../../hooks/use-url-tab';
-import { getStatusLabel } from '../../utils/status-labels';
+import { getRoleCodeLabel, getRoleLabel, getStatusLabel } from '../../utils/status-labels';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatDateTime } from '../Sales/sales-utils';
 
@@ -1223,8 +1223,10 @@ function EditApiKeyDialog({
                                 }
                             />
                             <span>
-                                <strong className="text-slate-800">{role.description || role.code}</strong>
-                                <code className="ml-2 font-mono text-[9px] text-slate-400">{role.code}</code>
+                                <strong className="text-slate-800">{getRoleLabel(role)}</strong>
+                                <code className="ml-2 font-mono text-[9px] text-slate-400">
+                                    {getRoleCodeLabel(role.code)}
+                                </code>
                             </span>
                         </label>
                     ))}
@@ -1309,8 +1311,10 @@ function CreateApiKeyDialog({
                                 }
                             />
                             <span>
-                                <strong className="text-slate-800">{role.description || role.code}</strong>
-                                <code className="ml-2 font-mono text-[9px] text-slate-400">{role.code}</code>
+                                <strong className="text-slate-800">{getRoleLabel(role)}</strong>
+                                <code className="ml-2 font-mono text-[9px] text-slate-400">
+                                    {getRoleCodeLabel(role.code)}
+                                </code>
                             </span>
                         </label>
                     ))}

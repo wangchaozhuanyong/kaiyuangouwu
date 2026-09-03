@@ -110,6 +110,21 @@ export function CheckoutPage({
             customer?.addresses?.[0]?.id ??
             '',
     );
+    const addressSwitcherRef = useRef<HTMLDivElement>(null);
+    const addressChipRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
+
+    useEffect(() => {
+        const container = addressSwitcherRef.current;
+        const chip = addressChipRefs.current.get(selectedAddressId);
+        if (!container || !chip) return;
+        const containerWidth = container.clientWidth;
+        const targetScrollLeft = chip.offsetLeft - (containerWidth - chip.offsetWidth) / 2;
+        container.scrollTo({
+            left: Math.max(0, targetScrollLeft),
+            behavior: 'smooth',
+        });
+    }, [selectedAddressId]);
+
     const activeAddress =
         customer?.addresses?.find(address => address.id === selectedAddressId) ??
         customer?.addresses?.find(address => address.defaultShippingAddress) ??
@@ -340,13 +355,14 @@ export function CheckoutPage({
             );
             navigateTo({ name: 'payment' }, true);
         } catch (requestError) {
-            setFormError(
+            const errorMessage =
                 requestError instanceof Error
                     ? requestError.message
                     : isZh
                       ? '提交订单失败'
-                      : 'Could not submit order',
-            );
+                      : 'Could not submit order';
+            setFormError(errorMessage);
+            onNotify(errorMessage);
             try {
                 onCartChange(await api.cart());
             } catch {
@@ -630,6 +646,7 @@ export function CheckoutPage({
 
                         {customer?.addresses && customer.addresses.length > 1 && (
                             <div
+                                ref={addressSwitcherRef}
                                 className={checkoutPageClassName('checkout-address-quick-switcher')}
                                 aria-label={isZh ? '快捷选择收货地址' : 'Quick select address'}
                             >
@@ -637,6 +654,10 @@ export function CheckoutPage({
                                     <button
                                         type="button"
                                         key={addr.id}
+                                        ref={el => {
+                                            if (el) addressChipRefs.current.set(addr.id, el);
+                                            else addressChipRefs.current.delete(addr.id);
+                                        }}
                                         className={checkoutPageClassName(
                                             `checkout-address-chip-card${addr.id === (activeAddress?.id ?? '') ? ' is-active' : ''}`,
                                         )}
@@ -887,50 +908,28 @@ export function CheckoutPage({
                         {compactCopy.orders.returns}
                     </span>
                 </section>
-                {formError && <InlineError message={formError} />}
                 <div className={checkoutPageClassName('submit-order-bar')}>
-                    <div
-                        className={checkoutPageClassName(
-                            directPurchase ? 'purchase-submit-total' : undefined,
-                        )}
-                    >
-                        {directPurchase ? (
-                            <>
-                                <small>{isZh ? '合计' : 'Total'}</small>
-                                <strong>{formatMoney(order.totalWithTax, order.currencyCode, locale)}</strong>
-                            </>
-                        ) : (
-                            <>
-                                <small>
-                                    {isZh
-                                        ? `共 ${order.totalQuantity} 件`
-                                        : `${order.totalQuantity} ${order.totalQuantity === 1 ? 'item' : 'items'}`}
-                                </small>
-                                <span>
-                                    {isZh ? '合计' : 'Total'}{' '}
-                                    <strong>
-                                        {formatMoney(order.totalWithTax, order.currencyCode, locale)}
-                                    </strong>
-                                </span>
-                            </>
-                        )}
-                    </div>
                     <button type="submit" disabled={submitting}>
-                        {submitting
-                            ? isZh
-                                ? '处理中'
-                                : 'Processing'
-                            : requiresShipping && !shippingMethods.length
-                              ? isZh
-                                  ? '下一步，选择配送'
-                                  : 'Continue to delivery'
-                              : directPurchase
-                                ? isZh
-                                    ? '确认并支付'
-                                    : 'Confirm and pay'
-                                : isZh
-                                  ? '提交订单'
-                                  : 'Submit order'}
+                        {(() => {
+                            if (submitting) return isZh ? '处理中…' : 'Processing…';
+                            if (requiresShipping && !shippingMethods.length) {
+                                return isZh ? '下一步，选择配送' : 'Continue to delivery';
+                            }
+                            const totalFormatted = formatMoney(
+                                order.totalWithTax,
+                                order.currencyCode,
+                                locale,
+                            );
+                            const itemLabel = `${order.totalQuantity} ${order.totalQuantity === 1 ? 'item' : 'items'}`;
+                            if (directPurchase) {
+                                return isZh
+                                    ? `确认并支付（${order.totalQuantity}件）需支付 ${totalFormatted}`
+                                    : `Confirm and pay (${itemLabel}) · ${totalFormatted}`;
+                            }
+                            return isZh
+                                ? `提交订单（${order.totalQuantity}件）需支付 ${totalFormatted}`
+                                : `Place order (${itemLabel}) · ${totalFormatted}`;
+                        })()}
                     </button>
                 </div>
             </form>
@@ -1354,7 +1353,11 @@ function EmptyState({
 }
 function InlineError({ message }: { message: string }) {
     return (
-        <div className={checkoutPageClassName('inline-error')} role="alert">
+        <div
+            className={checkoutPageClassName('inline-error')}
+            role="alert"
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}
+        >
             <span>{message}</span>
         </div>
     );

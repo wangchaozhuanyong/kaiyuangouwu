@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { ShopApi } from './api';
 import { CheckoutPage } from './checkout-page';
+import { checkoutPageStyles } from './tailwind/checkout-page-styles';
 import { ActiveCustomer, MarketConfig, Order, OrderLine, ProductVariant, StorefrontCart } from './types';
 
 vi.mock('@tanstack/react-router', () => ({ useNavigate: () => vi.fn() }));
@@ -169,5 +170,47 @@ describe('CheckoutPage digital delivery', () => {
         expect(markup).toContain('填写地址后计算');
         expect(markup).toContain('name="deliveryEmail"');
         expect(markup).toContain('name="confirmDeliveryEmail"');
+    });
+
+    it('does not use red accent focus border or outline for digital delivery email inputs and selects', () => {
+        const style = checkoutPageStyles['digital-delivery-email-field'];
+        expect(style).not.toContain('var(--accent)');
+        expect(style).toContain('[&_input:focus]:[border-color:#3b82f6]');
+        expect(style).toContain('[&_select:focus]:[border-color:#3b82f6]');
+        expect(style).toContain('[&_select:focus]:[outline:0]');
+    });
+
+    it('centers checkout-assurance spans and displays full-width order submission button with count and price', () => {
+        const assuranceStyle = checkoutPageStyles['checkout-assurance'];
+        expect(assuranceStyle).toContain('[&_span]:[justify-content:center]');
+
+        const submitStyle = checkoutPageStyles['submit-order-bar'];
+        expect(submitStyle).toContain('[display:flex]');
+        expect(submitStyle).toContain('[&>button]:[width:100%]');
+
+        const markup = renderCheckout(orderFor('DIGITAL'), null);
+        expect(markup).toContain('确认并支付（1件）需支付');
+
+        const checkoutMarkup = renderToStaticMarkup(
+            createElement(CheckoutPage, {
+                mode: 'checkout',
+                api: {} as ShopApi,
+                cart: cartFor(orderFor('DIGITAL')),
+                order: orderFor('DIGITAL'),
+                customer: null,
+                market,
+                availableCountries: [{ code: 'MY', name: '马来西亚' }],
+                locale: market.locale,
+                language: 'zh' as const,
+                onBack: vi.fn(),
+                onSessionChange: vi.fn(),
+                onCartChange: vi.fn(),
+                onNotify: vi.fn(),
+                coupons: [],
+                onApplyCoupon: vi.fn().mockResolvedValue(null),
+                onRemoveCoupon: vi.fn().mockResolvedValue(null),
+            }),
+        );
+        expect(checkoutMarkup).toContain('提交订单（1件）需支付');
     });
 });

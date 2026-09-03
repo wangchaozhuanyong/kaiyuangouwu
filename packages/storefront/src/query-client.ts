@@ -120,6 +120,7 @@ export const storefrontQueryKeys = {
     scope: (marketCode: string, languageCode: string) => ['storefront', marketCode, languageCode] as const,
     config: (marketCode: string, languageCode: string) =>
         [...storefrontQueryKeys.scope(marketCode, languageCode), 'config'] as const,
+    commerceMode: (marketCode: string) => ['storefront', marketCode, 'commerce-mode'] as const,
     content: (marketCode: string, languageCode: string) =>
         [...storefrontQueryKeys.scope(marketCode, languageCode), 'content'] as const,
     collections: (marketCode: string, languageCode: string) =>
@@ -161,6 +162,11 @@ export const storefrontQueryKeys = {
         ] as const,
     customerScope: (marketCode: string, languageCode: string, customerId: string) =>
         [...storefrontQueryKeys.privateScope(marketCode, languageCode), 'customer', customerId] as const,
+    deliveryEmails: (marketCode: string, languageCode: string, customerId: string) =>
+        [
+            ...storefrontQueryKeys.customerScope(marketCode, languageCode, customerId),
+            'delivery-emails',
+        ] as const,
     customerOrderCounts: (marketCode: string, languageCode: string, customerId: string) =>
         [...storefrontQueryKeys.customerScope(marketCode, languageCode, customerId), 'order-counts'] as const,
     afterSalesRequests: (marketCode: string, languageCode: string, customerId: string) =>

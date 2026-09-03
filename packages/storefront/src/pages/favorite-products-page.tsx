@@ -1,6 +1,6 @@
-import type { RouteState } from '../storefront-router';
 import { useNavigate, useRouter } from '@tanstack/react-router';
 import { Heart, Trash2, WifiOff } from 'lucide-react';
+import type { RouteState } from '../storefront-router';
 
 import { ShopApi } from '../api';
 import { offlineLoadError } from '../loading-state';
@@ -46,7 +46,7 @@ export function FavoriteProductsPage() {
     return (
         <main className="page subpage favorites-page">
             <SubHeader
-                title={isZh ? '我的收藏' : 'My favorites'}
+                title={isZh ? `我的收藏 (${productIds.length})` : `My favorites (${productIds.length})`}
                 language={language}
                 onBack={goBack}
                 action={
@@ -73,12 +73,6 @@ export function FavoriteProductsPage() {
                 />
             ) : availableProducts.length ? (
                 <ProductSection
-                    title={isZh ? '已收藏商品' : 'Saved products'}
-                    subtitle={
-                        isZh
-                            ? `共 ${availableProducts.length} 件商品`
-                            : `${availableProducts.length} products`
-                    }
                     products={availableProducts}
                     market={market}
                     locale={locale}

@@ -7,6 +7,7 @@ import {
     KeyRound,
     LoaderCircle,
     LogOut,
+    Mail,
     MapPin,
     ShieldCheck,
     UserRound,
@@ -14,7 +15,7 @@ import {
 import { ChangeEvent, ReactNode, useEffect, useRef, useState } from 'react';
 
 import { routeNavigateOptions } from './storefront-router';
-import { ActiveCustomer, StorefrontLanguage } from './types';
+import { ActiveCustomer, StoreCommerceMode, StorefrontLanguage } from './types';
 
 type AccountRoute = { name: 'login' | 'forgot-password' | 'addresses' };
 
@@ -40,6 +41,7 @@ export function AccountSecurityPage({
     customer,
     language,
     storefrontName,
+    commerceMode,
     onBack,
     onAvatarChange,
     onLogout,
@@ -47,6 +49,7 @@ export function AccountSecurityPage({
     customer: ActiveCustomer | null;
     language: StorefrontLanguage;
     storefrontName: string;
+    commerceMode?: StoreCommerceMode | null;
     onBack: () => void;
     onAvatarChange: (file: File) => Promise<void>;
     onLogout: () => void;
@@ -211,21 +214,37 @@ export function AccountSecurityPage({
                             onClick={() => navigateTo({ name: 'addresses' })}
                         >
                             <span className="security-item-icon icon-address" aria-hidden="true">
-                                <MapPin size={17} />
+                                {commerceMode === 'DIGITAL_ONLY' ? <Mail size={17} /> : <MapPin size={17} />}
                             </span>
                             <div className="security-item-info">
                                 <strong className="security-item-title">
-                                    {isZh ? '收货地址管理' : 'Delivery Addresses'}
+                                    {commerceMode === 'DIGITAL_ONLY'
+                                        ? isZh
+                                            ? '交付邮箱管理'
+                                            : 'Delivery Emails'
+                                        : isZh
+                                          ? '收货地址管理'
+                                          : 'Delivery Addresses'}
                                 </strong>
                                 <span className="security-item-subtitle">
-                                    {isZh ? '管理实物商品默认收货地址' : 'Manage default shipping addresses'}
+                                    {commerceMode === 'DIGITAL_ONLY'
+                                        ? isZh
+                                            ? '管理数字商品交付邮箱'
+                                            : 'Manage digital delivery emails'
+                                        : isZh
+                                          ? '管理实物商品默认收货地址'
+                                          : 'Manage default shipping addresses'}
                                 </span>
                             </div>
                             <span className="security-item-tail">
                                 <span className="security-tail-text">
-                                    {isZh
-                                        ? `${customer.addresses?.length ?? 0} 个地址`
-                                        : `${customer.addresses?.length ?? 0} addresses`}
+                                    {commerceMode === 'DIGITAL_ONLY'
+                                        ? isZh
+                                            ? '去管理'
+                                            : 'Manage'
+                                        : isZh
+                                          ? `${customer.addresses?.length ?? 0} 个地址`
+                                          : `${customer.addresses?.length ?? 0} addresses`}
                                 </span>
                                 <ChevronRight size={15} aria-hidden="true" />
                             </span>

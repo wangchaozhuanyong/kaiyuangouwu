@@ -30,6 +30,7 @@ import {
     type TeamManagementResult,
 } from '../../graphql/management.graphql';
 import { useUrlTab } from '../../hooks/use-url-tab';
+import { getRoleCodeLabel, getRoleLabel } from '../../utils/status-labels';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatDateTime } from '../Sales/sales-utils';
 
@@ -104,13 +105,13 @@ export function RolesModule() {
     const members = query.data?.administrators.items ?? [];
     const filteredMembers = members.filter(item =>
         includesSearch(
-            `${item.firstName} ${item.lastName} ${item.emailAddress} ${item.user.identifier} ${item.user.roles.map(role => `${role.code} ${role.description}`).join(' ')}`,
+            `${item.firstName} ${item.lastName} ${item.emailAddress} ${item.user.identifier} ${item.user.roles.map(role => `${role.code} ${role.description} ${getRoleLabel(role)}`).join(' ')}`,
             search,
         ),
     );
     const filteredRoles = roles.filter(item =>
         includesSearch(
-            `${item.code} ${item.description} ${item.channels.map(channel => channel.code).join(' ')} ${item.permissions.join(' ')}`,
+            `${item.code} ${item.description} ${getRoleLabel(item)} ${item.channels.map(channel => channel.code).join(' ')} ${item.permissions.join(' ')}`,
             search,
         ),
     );
@@ -358,15 +359,9 @@ function MembersTable({
                                     <div className="flex max-w-52 items-center gap-1 whitespace-nowrap">
                                         <span
                                             className="min-w-0 truncate rounded bg-slate-100 px-2 py-1 text-[10px] text-slate-600"
-                                            title={
-                                                member.user.roles[0]?.description ||
-                                                member.user.roles[0]?.code ||
-                                                '未分配角色'
-                                            }
+                                            title={getRoleLabel(member.user.roles[0])}
                                         >
-                                            {member.user.roles[0]?.description ||
-                                                member.user.roles[0]?.code ||
-                                                '未分配角色'}
+                                            {getRoleLabel(member.user.roles[0])}
                                         </span>
                                         {member.user.roles.length > 1 && (
                                             <span className="shrink-0 text-[10px] text-slate-500">
@@ -435,7 +430,7 @@ function RolesTable({
         if (isSystemRole(role)) return;
         const count = memberCount(role.id);
         const confirmation = await requestConfirmation({
-            title: `删除角色“${role.description || role.code}”？`,
+            title: `删除角色“${getRoleLabel(role)}”？`,
             description:
                 count > 0
                     ? `当前仍有 ${count} 名员工关联此角色。后端会校验是否允许删除，请先确认员工仍有其它有效角色。`
@@ -502,7 +497,7 @@ function RolesTable({
                                             <Shield
                                                 className={`h-4 w-4 ${system ? 'text-emerald-600' : 'text-blue-600'}`}
                                             />
-                                            {role.description || role.code}
+                                            {getRoleLabel(role)}
                                         </div>
                                     </td>
                                     <td className="h-[52px] whitespace-nowrap px-3 py-0 text-[10px] font-bold text-slate-600">
@@ -552,7 +547,7 @@ function RolesTable({
                                                     disabled={state.loading}
                                                     onClick={() => void destroy(role)}
                                                     className={`${iconButton} text-rose-600 disabled:opacity-30`}
-                                                    aria-label={`删除角色${role.description || role.code}`}
+                                                    aria-label={`删除角色${getRoleLabel(role)}`}
                                                 >
                                                     <Trash2 className="h-3.5 w-3.5" />
                                                 </button>
@@ -689,11 +684,9 @@ function MemberEditor({
                                 className="mt-0.5"
                             />
                             <span>
-                                <strong className="block text-slate-800">
-                                    {role.description || role.code}
-                                </strong>
+                                <strong className="block text-slate-800">{getRoleLabel(role)}</strong>
                                 <span className="mt-1 block font-mono text-[9px] text-slate-400">
-                                    {role.code}
+                                    {getRoleCodeLabel(role.code)}
                                 </span>
                             </span>
                         </label>
@@ -750,7 +743,7 @@ function RoleEditor({
             const input = { code: code.trim(), description: description.trim(), channelIds, permissions };
             if (existing) {
                 const confirmation = await requestConfirmation({
-                    title: `保存角色“${existing.description || existing.code}”的权限变更？`,
+                    title: `保存角色“${getRoleLabel(existing)}”的权限变更？`,
                     description: '角色权限保存后会立即影响所有关联员工，请输入当前管理员密码。',
                     confirmLabel: '验证并保存',
                     tone: 'warning',

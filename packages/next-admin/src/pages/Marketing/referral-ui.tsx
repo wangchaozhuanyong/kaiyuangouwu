@@ -320,6 +320,7 @@ export function programDraft(program: ReferralProgramRecord): ProgramDraft {
         allowBalanceSpend: program.allowBalanceSpend,
         attributionWindowDays: program.attributionWindowDays,
         defaultPosterTemplate: program.defaultPosterTemplate,
+        posterTemplates: [...(program.posterTemplates ?? [])],
     };
 }
 export function programDraftError(draft: ProgramDraft) {
@@ -435,10 +436,11 @@ export function posterLabel(value: string) {
     return (
         (
             {
-                BRAND_MINIMAL: '品牌简约',
-                BENEFIT_RED_GOLD: '红金礼遇',
-                PRODUCT_STORY: '生活故事',
-                PREMIUM_DARK: '鎏金深色',
+                BRAND_MINIMAL: '云桥简约',
+                BENEFIT_RED_GOLD: '冰川蓝光',
+                PRODUCT_STORY: '青空流线',
+                PREMIUM_DARK: '深海科技',
+                CLOUD_BRIDGE_ORBIT: '云桥轨道',
             } as Record<string, string>
         )[value] ?? value
     );

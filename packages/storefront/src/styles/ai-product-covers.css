@@ -408,6 +408,13 @@
     color: #0f172a;
 }
 
+.price-range-inputs input:focus,
+.price-range-inputs input:focus-visible {
+    outline: 0 !important;
+    border: 0 !important;
+    box-shadow: none !important;
+}
+
 .price-separator {
     color: #94a3b8;
     font-weight: 600;
@@ -1062,7 +1069,7 @@
 }
 
 .round-check input:focus-visible + span {
-    outline: 2px solid color-mix(in srgb, var(--accent) 55%, white);
+    outline: 2px solid rgba(15, 23, 42, 0.22);
     outline-offset: 2px;
 }
 
@@ -1112,7 +1119,7 @@
 }
 
 .cart-line-swipe-toggle:focus-visible {
-    outline: 2px solid color-mix(in srgb, var(--accent) 56%, white);
+    outline: 2px solid rgba(15, 23, 42, 0.22);
     outline-offset: 1px;
 }
 
@@ -1862,6 +1869,18 @@
     border-radius: 8px;
     background: white;
     font: inherit;
+    transition:
+        border-color 180ms ease,
+        box-shadow 180ms ease;
+}
+
+.review-composer input:focus,
+.review-composer input:focus-visible,
+.review-composer textarea:focus,
+.review-composer textarea:focus-visible {
+    outline: 0 !important;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.14);
 }
 
 .review-composer textarea {
@@ -2145,4 +2164,3 @@
     font-size: 21px;
     font-weight: var(--font-weight-semibold);
 }
-
