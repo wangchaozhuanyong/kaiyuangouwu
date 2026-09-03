@@ -133,6 +133,12 @@ GitHub OIDC 临时角色通过 AWS SSM 执行只读检查：物理可用内存�
 状态与运行目录、本机及公网 `/health`，以及绕过 CDN 缓存后的 Dashboard 动态资源图。任一项不符合门禁时工作流失败并保留当次
 `PRODUCTION_MEMORY` 趋势数据；不依赖 SSH 或长期 AWS Access Key。
 
+手动设置 `audit_payment_config=true` 时，工作流只通过 SSM 执行仓库内的脱敏运行时审计，并以该审计
+是否成功作为强制门禁。部署 OIDC 角色按最小权限设计，不授予账户级 `ssm:DescribeParameters` 或
+`secretsmanager:ListSecrets` 清单权限，工作流也不尝试枚举参数或密钥名称；日志固定记录
+`access=not_granted_by_design`，不得把有意未授权误报为 AWS 服务不可用。如需账户级清单治理，必须使用
+独立只读审计角色和单独批准的工作流，且不得输出参数值或密钥值。
+
 若候选 API 未通过健康检查且自动回滚本身失败，可手动运行 `Recover Current Production Runtime` 工作流。
 它只会读取 `kaiyuangouwu-current` 与 `current-sha` 指向的最后一个已验证运行包，要求两者 SHA 一致，
 并通过 `deploy/recover-current-production-runtime.sh` 在同一生产锁内重建 PM2 进程；不会回退 Git、数据库或版本标记。
