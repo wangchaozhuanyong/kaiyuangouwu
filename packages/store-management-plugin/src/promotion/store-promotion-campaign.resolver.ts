@@ -196,6 +196,13 @@ export class StorePromotionCampaignShopResolver {
     @Transaction()
     @Mutation()
     @Allow(Permission.Authenticated)
+    applyBestStorefrontCoupon(@Ctx() ctx: RequestContext) {
+        return this.lifecycleService.applyBest(ctx);
+    }
+
+    @Transaction()
+    @Mutation()
+    @Allow(Permission.Authenticated)
     removeStorefrontCoupon(@Ctx() ctx: RequestContext, @Args('id') id: ID) {
         return this.lifecycleService.remove(ctx, id);
     }

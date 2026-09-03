@@ -5,7 +5,15 @@ import { describe, expect, it, vi } from 'vitest';
 import { ShopApi } from './api';
 import { CheckoutPage } from './checkout-page';
 import { checkoutPageStyles } from './tailwind/checkout-page-styles';
-import { ActiveCustomer, MarketConfig, Order, OrderLine, ProductVariant, StorefrontCart } from './types';
+import {
+    ActiveCustomer,
+    MarketConfig,
+    Order,
+    OrderLine,
+    ProductVariant,
+    StoreCustomerCoupon,
+    StorefrontCart,
+} from './types';
 
 vi.mock('@tanstack/react-router', () => ({ useNavigate: () => vi.fn() }));
 
@@ -104,7 +112,37 @@ function cartFor(order: Order): StorefrontCart {
     };
 }
 
-function renderCheckout(order: Order, customer: ActiveCustomer | null = null): string {
+function coupon(overrides: Partial<StoreCustomerCoupon> = {}): StoreCustomerCoupon {
+    return {
+        id: 'coupon-1',
+        campaignId: 'campaign-1',
+        campaignName: '新客优惠券',
+        campaignKind: 'ORDER_FIXED',
+        status: 'AVAILABLE',
+        minimumSpend: 1000,
+        currencyCode: 'MYR',
+        discountAmount: 500,
+        discountRate: null,
+        claimedAt: '2026-09-01T00:00:00.000Z',
+        validFrom: '2026-09-01T00:00:00.000Z',
+        validUntil: null,
+        lockedAt: null,
+        usedAt: null,
+        returnedAt: null,
+        expiredAt: null,
+        lockedOrderId: null,
+        usedOrderId: null,
+        returnCount: 0,
+        usable: true,
+        ...overrides,
+    };
+}
+
+function renderCheckout(
+    order: Order,
+    customer: ActiveCustomer | null = null,
+    coupons: StoreCustomerCoupon[] = [],
+): string {
     return renderToStaticMarkup(
         createElement(CheckoutPage, {
             mode: 'purchase' as const,
@@ -120,7 +158,7 @@ function renderCheckout(order: Order, customer: ActiveCustomer | null = null): s
             onSessionChange: vi.fn(),
             onCartChange: vi.fn(),
             onNotify: vi.fn(),
-            coupons: [],
+            coupons,
             onApplyCoupon: vi.fn().mockResolvedValue(null),
             onRemoveCoupon: vi.fn().mockResolvedValue(null),
         }),
@@ -215,5 +253,20 @@ describe('CheckoutPage digital delivery', () => {
             }),
         );
         expect(checkoutMarkup).toContain('提交订单（1件）需支付');
+    });
+
+    it('shows the selected coupon name and does not infer a selection from an available coupon', () => {
+        const order = orderFor('DIGITAL');
+        const unselectedMarkup = renderCheckout(order, null, [coupon()]);
+
+        expect(unselectedMarkup).toContain('选择已领取优惠券');
+        expect(unselectedMarkup).not.toContain('新客优惠券');
+
+        const selectedMarkup = renderCheckout(order, null, [
+            coupon({ status: 'LOCKED', lockedOrderId: order.id, usable: false }),
+        ]);
+
+        expect(selectedMarkup).toContain('title="新客优惠券">新客优惠券');
+        expect(selectedMarkup).not.toContain('已使用优惠券');
     });
 });

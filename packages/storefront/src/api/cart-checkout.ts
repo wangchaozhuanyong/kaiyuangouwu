@@ -266,6 +266,17 @@ export class CartCheckoutApi extends BaseDomainApi {
         return result.applyStorefrontCoupon;
     }
 
+    async applyBestCustomerCoupon(): Promise<StoreCustomerCoupon | null> {
+        const result = await this.request<{ applyBestStorefrontCoupon: StoreCustomerCoupon | null }>(
+            `
+                mutation ApplyBestOwnedStorefrontCoupon {
+                    applyBestStorefrontCoupon { ${customerCouponFields} }
+                }
+            `,
+        );
+        return result.applyBestStorefrontCoupon;
+    }
+
     async removeCustomerCoupon(id: string): Promise<StoreCustomerCoupon> {
         const result = await this.request<{ removeStorefrontCoupon: StoreCustomerCoupon }>(
             `

@@ -24,6 +24,7 @@ import { compactUiCopy } from './i18n';
 import { formatDisplayMoney } from './money-display';
 import { variantCanIncreaseQuantity } from './product-availability';
 import { acquireBodyScrollLock } from './scroll-lock';
+import { appliedCouponLabel } from './storefront-coupons';
 import { routeNavigateOptions } from './storefront-router';
 import { CouponSheet } from './storefront-ui/cart-ui';
 import { SafeImage } from './storefront-ui/product-display';
@@ -409,6 +410,8 @@ export function CheckoutPage({
             </Subpage>
         );
     }
+
+    const selectedCouponLabel = appliedCouponLabel(coupons, order.id, language);
 
     const renderCheckoutItems = () => (
         <>
@@ -854,14 +857,8 @@ export function CheckoutPage({
                     </button>
                     <button type="button" onClick={() => setCouponOpen(true)}>
                         <span>{isZh ? '优惠券' : 'Coupon'}</span>
-                        <small>
-                            {coupons.some(coupon => coupon.lockedOrderId === order.id)
-                                ? isZh
-                                    ? '已使用优惠券'
-                                    : 'Coupon applied'
-                                : isZh
-                                  ? '选择已领取优惠券'
-                                  : 'Choose a claimed coupon'}
+                        <small title={selectedCouponLabel ?? undefined}>
+                            {selectedCouponLabel ?? (isZh ? '选择已领取优惠券' : 'Choose a claimed coupon')}
                             <ChevronRight />
                         </small>
                     </button>

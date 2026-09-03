@@ -461,9 +461,12 @@ export function CouponSheet({
         const applied = coupon.lockedOrderId === orderId;
         const nextError = await (applied ? onRemove(coupon.id) : onApply(coupon.id));
         setSubmitting(false);
-        if (nextError) setError(nextError);
+        if (nextError) {
+            setError(nextError);
+            return;
+        }
+        onClose();
     };
-    const selectableCoupons = coupons.filter(coupon => coupon.usable || coupon.lockedOrderId === orderId);
     return (
         <Sheet
             title={isZh ? '选择优惠券' : 'Choose a coupon'}
@@ -474,11 +477,13 @@ export function CouponSheet({
             initialFocus="dialog"
         >
             <div className="coupon-sheet-content">
-                {selectableCoupons.length ? (
+                {coupons.length ? (
                     <section className="applied-coupons">
-                        <strong>{isZh ? '我的可用优惠券' : 'My available coupons'}</strong>
-                        {selectableCoupons.map(coupon => {
+                        <strong>{isZh ? '我的优惠券' : 'My coupons'}</strong>
+                        {coupons.map(coupon => {
                             const applied = coupon.lockedOrderId === orderId;
+                            const selectable = applied || coupon.usable;
+                            const actionLabel = couponSheetActionLabel(coupon, applied, language);
                             return (
                                 <div key={coupon.id}>
                                     <span>
@@ -488,9 +493,11 @@ export function CouponSheet({
                                     <button
                                         type="button"
                                         onClick={() => void choose(coupon)}
-                                        disabled={loading || submitting}
+                                        disabled={loading || submitting || !selectable}
+                                        aria-pressed={applied}
+                                        aria-label={`${actionLabel}: ${coupon.campaignName}`}
                                     >
-                                        {applied ? (isZh ? '取消使用' : 'Unapply') : isZh ? '使用' : 'Apply'}
+                                        {actionLabel}
                                     </button>
                                 </div>
                             );
@@ -541,4 +548,19 @@ export function CouponSheet({
             </div>
         </Sheet>
     );
+}
+
+function couponSheetActionLabel(
+    coupon: StoreCustomerCoupon,
+    applied: boolean,
+    language: StorefrontLanguage,
+): string {
+    const isZh = language === 'zh';
+    if (applied) return isZh ? '取消使用' : 'Unapply';
+    if (coupon.usable) return isZh ? '使用' : 'Apply';
+    if (coupon.status === 'LOCKED') return isZh ? '其他订单使用中' : 'In another order';
+    if (coupon.status === 'USED') return isZh ? '已使用' : 'Used';
+    if (coupon.status === 'EXPIRED') return isZh ? '已过期' : 'Expired';
+    if (coupon.status === 'REVOKED') return isZh ? '已失效' : 'Unavailable';
+    return isZh ? '暂不可用' : 'Not available';
 }
