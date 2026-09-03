@@ -14,6 +14,7 @@ import {
     OptimizeImagePromptInput,
     SaveImageGenerationConfigInput,
     SaveImageModelInput,
+    SaveImagePromptModelInput,
     SaveImagePromptRoutingConfigInput,
     SaveImageProviderCredentialInput,
     TestImagePromptRouteInput,
@@ -145,6 +146,12 @@ export class ImageGenerationAdminResolver {
     @Allow(Permission.SuperAdmin)
     imagePromptRoutingConfig(@Ctx() ctx: RequestContext) {
         return this.configService.promptRoutingConfig(ctx);
+    }
+
+    @Query()
+    @Allow(Permission.SuperAdmin)
+    imagePromptModelConfigs(@Ctx() ctx: RequestContext) {
+        return this.configService.promptModelConfigs(ctx);
     }
 
     @Query()
@@ -311,5 +318,23 @@ export class ImageGenerationAdminResolver {
         @Args('reason') reason: string,
     ) {
         return this.generations.adminRefundOutput(ctx, outputId, reason);
+    }
+
+    @Mutation()
+    @Allow(Permission.SuperAdmin)
+    saveImagePromptModel(@Ctx() ctx: RequestContext, @Args('input') input: SaveImagePromptModelInput) {
+        return this.configService.savePromptModel(ctx, input);
+    }
+
+    @Mutation()
+    @Allow(Permission.SuperAdmin)
+    testImagePromptModel(@Ctx() ctx: RequestContext, @Args('id') id: ID) {
+        return this.configService.testPromptModel(ctx, id);
+    }
+
+    @Mutation()
+    @Allow(Permission.SuperAdmin)
+    archiveImagePromptModel(@Ctx() ctx: RequestContext, @Args('id') id: ID) {
+        return this.configService.archivePromptModel(ctx, id);
     }
 }

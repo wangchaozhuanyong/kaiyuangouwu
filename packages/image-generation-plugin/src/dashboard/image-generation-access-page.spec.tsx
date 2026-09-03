@@ -91,17 +91,25 @@ vi.mock('@vendure/dashboard', async () => {
                         modelCodes: [],
                     },
                 ],
-                imagePromptRoutingConfig: {
-                    id: 'routing-1',
-                    strategy: 'FIXED',
-                    primaryCredentialCode: 'openai-primary',
-                    primaryModelId: 'gpt-5.4-mini',
-                    primaryAvailable: true,
-                    fallbackEnabled: false,
-                    fallbackCredentialCode: null,
-                    fallbackModelId: null,
-                    fallbackAvailable: false,
-                },
+                imagePromptModelConfigs: [
+                    {
+                        id: 'pm-1',
+                        code: 'gemini-flash-prompt',
+                        name: '提示词优化 - Gemini Flash',
+                        enabled: true,
+                        baseUrl: 'https://relay.example.com/v1',
+                        apiKeyLast4: '5678',
+                        modelId: 'gemini-2.0-flash',
+                        apiFormat: 'GEMINI',
+                        priority: 100,
+                        weight: 1,
+                        healthStatus: 'HEALTHY',
+                        healthMessage: '连接正常',
+                        lastTestedAt: null,
+                        cooldownUntil: null,
+                        lastUsedAt: null,
+                    },
+                ],
                 imageGenerationAdminConfig: { models: [] },
             },
             error: null,
@@ -123,9 +131,9 @@ describe('ImageGenerationAccessPage', () => {
     it('renders the unified prompt routing settings separately from the Key pool', () => {
         const markup = renderToStaticMarkup(<ImageGenerationAccessPage />);
 
-        expect(markup).toContain('提示词优化统一设置');
-        expect(markup).toContain('实际主路由');
-        expect(markup).toContain('gpt-5.4-mini');
+        expect(markup).toContain('提示词优化模型');
+        expect(markup).toContain('gemini-flash-prompt');
+        expect(markup).toContain('gemini-2.0-flash');
     });
 
     it('converts date filters from the browser local day to API timestamps', () => {

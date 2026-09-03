@@ -623,10 +623,42 @@ export const adminApiExtensions = gql`
         dailyGenerationSafetyLimit: Int!
     }
 
+    type ImagePromptModelAdminConfig implements Node {
+        id: ID!
+        code: String!
+        name: String!
+        enabled: Boolean!
+        baseUrl: String!
+        apiKeyLast4: String!
+        modelId: String!
+        apiFormat: String!
+        priority: Int!
+        weight: Int!
+        healthStatus: String!
+        healthMessage: String
+        lastTestedAt: DateTime
+        cooldownUntil: DateTime
+        lastUsedAt: DateTime
+    }
+
+    input SaveImagePromptModelInput {
+        id: ID
+        code: String!
+        name: String!
+        enabled: Boolean!
+        baseUrl: String!
+        apiKey: String
+        modelId: String!
+        apiFormat: String
+        priority: Int!
+        weight: Int!
+    }
+
     extend type Query {
         imageGenerationAdminConfig: ImageGenerationAdminConfig!
         imageProviderAdminConfigs: [ImageProviderAdminConfig!]!
         imagePromptRoutingConfig: ImagePromptRoutingConfig!
+        imagePromptModelConfigs: [ImagePromptModelAdminConfig!]!
         imageGenerationJobs(skip: Int, take: Int, state: ImageGenerationState): ImageGenerationJobList!
         imagePromptSkillReleases: [ImagePromptSkillRelease!]!
         imagePromptOptimizationAudit(skip: Int, take: Int): ImagePromptOptimizationAuditList!
@@ -652,5 +684,8 @@ export const adminApiExtensions = gql`
         retryUnknownImageOutput(outputId: ID!): ImageGenerationOutput!
         reconcileStaleImageGenerationOutputs: Int!
         refundImageOutput(outputId: ID!, reason: String!): ImageGenerationOutput!
+        saveImagePromptModel(input: SaveImagePromptModelInput!): ImagePromptModelAdminConfig!
+        testImagePromptModel(id: ID!): ImageProviderConnectionResult!
+        archiveImagePromptModel(id: ID!): Boolean!
     }
 `;

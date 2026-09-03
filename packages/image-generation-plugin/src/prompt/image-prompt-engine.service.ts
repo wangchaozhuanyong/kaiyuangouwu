@@ -108,98 +108,60 @@ export class ImagePromptEngineService {
                 referenceMode,
                 targetLanguage: outputLanguage === 'zh' ? 'Simplified Chinese' : 'English',
             });
-            const routingPlan = await this.configService.promptRoutingPlan(ctx);
-            const selected =
-                routingPlan.strategy === 'FIXED'
-                    ? await firstSuccessfulFixedPromptRoute(routingPlan.routes, async configuredRoute => {
-                          const route = await this.configService.routePromptCredentialByCode(
-                              ctx,
-                              configuredRoute.credentialCode,
-                          );
-                          const routedCredential = route.credential;
-                          optimizerModelId = configuredRoute.modelId;
-                          credentialCode = routedCredential.code;
-                          credentialName = routedCredential.name;
-                          credentialLast4 = routedCredential.apiKeyLast4;
-                          credentialSelectionReason = `统一${configuredRoute.role === 'PRIMARY' ? '主' : '备用'}路由；${route.selectionReason}`;
-                          upstreamCallCount += 1;
-                          try {
-                              const result = await this.providerClient.optimizePrompt(
-                                  routedCredential,
-                                  configuredRoute.modelId,
-                                  optimizerSystemPrompt(outputLanguage),
-                                  promptPayload,
-                              );
-                              await this.configService
-                                  .recordCredentialRuntimeSuccess(ctx, routedCredential)
-                                  .catch(() => undefined);
-                              return {
-                                  credential: routedCredential,
-                                  modelId: configuredRoute.modelId,
-                                  result,
-                              };
-                          } catch (error) {
-                              const details = providerFailureDetails(error);
-                              await this.configService
-                                  .recordCredentialRuntimeFailure(ctx, routedCredential, {
-                                      httpStatus: details.httpStatus,
-                                      retryAfterSeconds: details.retryAfterSeconds,
-                                      message: error instanceof Error ? error.message : String(error),
-                                  })
-                                  .catch(() => undefined);
-                              throw error;
-                          }
-                      })
-                    : await firstSuccessfulPromptProvider(async scope => {
-                          let lastScopeError: unknown;
-                          for (let routeAttempt = 0; routeAttempt < 2; routeAttempt += 1) {
-                              const route = await this.configService.routeCredential(
-                                  ctx,
-                                  scope,
-                                  undefined,
-                                  'PROMPT',
-                              );
-                              const routedCredential = route.credential;
-                              optimizerModelId = routedCredential.textModelId;
-                              credentialCode = routedCredential.code;
-                              credentialName = routedCredential.name;
-                              credentialLast4 = routedCredential.apiKeyLast4;
-                              credentialSelectionReason = `${providerScopeName(scope)}；${route.selectionReason}`;
-                              upstreamCallCount += 1;
-                              try {
-                                  const result = await this.providerClient.optimizePrompt(
-                                      routedCredential,
-                                      routedCredential.textModelId,
-                                      optimizerSystemPrompt(outputLanguage),
-                                      promptPayload,
-                                  );
-                                  await this.configService
-                                      .recordCredentialRuntimeSuccess(ctx, routedCredential)
-                                      .catch(() => undefined);
-                                  return {
-                                      credential: routedCredential,
-                                      modelId: routedCredential.textModelId,
-                                      result,
-                                  };
-                              } catch (error) {
-                                  lastScopeError = error;
-                                  const details = providerFailureDetails(error);
-                                  await this.configService
-                                      .recordCredentialRuntimeFailure(ctx, routedCredential, {
-                                          httpStatus: details.httpStatus,
-                                          retryAfterSeconds: details.retryAfterSeconds,
-                                          message: error instanceof Error ? error.message : String(error),
-                                      })
-                                      .catch(() => undefined);
-                                  const safelyRejected = [401, 403, 429].includes(details.httpStatus ?? 0);
-                                  if (!safelyRejected || routeAttempt === 1) break;
-                              }
-                          }
-                          throw errorFromUnknown(
-                              lastScopeError,
-                              `${providerScopeName(scope)} 没有可用的提示词 Key`,
-                          );
-                      });
+            // ── New unified prompt model selection ──
+            const maxAttempts = 3;
+            let selected:
+                | {
+                      credential: any;
+                      modelId: string;
+                      result: any;
+                  }
+                | undefined;
+            const triedConfigIds = new Set<string>();
+            for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+                const { config: promptModelConfig, selectionReason } =
+                    await this.configService.selectPromptModel(ctx);
+                if (triedConfigIds.has(String(promptModelConfig.id))) break;
+                triedConfigIds.add(String(promptModelConfig.id));
+                const routedCredential = this.configService.promptModelAsCredential(promptModelConfig);
+                optimizerModelId = promptModelConfig.modelId;
+                credentialCode = promptModelConfig.code;
+                credentialName = promptModelConfig.name;
+                credentialLast4 = promptModelConfig.apiKeyLast4;
+                credentialSelectionReason = selectionReason;
+                upstreamCallCount += 1;
+                try {
+                    const result = await this.providerClient.optimizePrompt(
+                        routedCredential,
+                        promptModelConfig.modelId,
+                        optimizerSystemPrompt(outputLanguage),
+                        promptPayload,
+                    );
+                    await this.configService
+                        .recordPromptModelSuccess(ctx, promptModelConfig)
+                        .catch(() => undefined);
+                    selected = {
+                        credential: routedCredential,
+                        modelId: promptModelConfig.modelId,
+                        result,
+                    };
+                    break;
+                } catch (error) {
+                    const details = providerFailureDetails(error);
+                    await this.configService
+                        .recordPromptModelFailure(ctx, promptModelConfig, {
+                            httpStatus: details.httpStatus,
+                            retryAfterSeconds: details.retryAfterSeconds,
+                            message: error instanceof Error ? error.message : String(error),
+                        })
+                        .catch(() => undefined);
+                    const safelyRejected = [401, 403, 429].includes(details.httpStatus ?? 0);
+                    if (!safelyRejected) throw error;
+                }
+            }
+            if (!selected) {
+                throw new Error('所有提示词优化模型均不可用');
+            }
             const {
                 credential: selectedCredential,
                 modelId: selectedModelId,

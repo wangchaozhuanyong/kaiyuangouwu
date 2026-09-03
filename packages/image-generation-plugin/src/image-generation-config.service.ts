@@ -2,12 +2,13 @@ import { Inject, Injectable, OnApplicationBootstrap } from '@nestjs/common';
 import { ID } from '@vendure/common/lib/shared-types';
 import { RequestContext, TransactionalConnection, UserInputError } from '@vendure/core';
 import { createHash, randomUUID } from 'node:crypto';
-import { In, MoreThanOrEqual } from 'typeorm';
+import { In, IsNull, MoreThanOrEqual } from 'typeorm';
 
 import { IMAGE_GENERATION_OPTIONS, launchModelDefinitions, retiredLaunchModelCodes } from './constants';
 import { ImageGenerationConfig } from './entities/image-generation-config.entity';
 import { ImageGenerationCostEvent } from './entities/image-generation-cost-event.entity';
 import { ImageModelConfig } from './entities/image-model-config.entity';
+import { ImagePromptModelConfig } from './entities/image-prompt-model-config.entity';
 import { ImagePromptRoutingConfig } from './entities/image-prompt-routing-config.entity';
 import { ImagePromptSkillRelease } from './entities/image-prompt-skill-release.entity';
 import { ImageProviderCredentialModel } from './entities/image-provider-credential-model.entity';
@@ -26,6 +27,7 @@ import {
     ImageProviderScope,
     SaveImageGenerationConfigInput,
     SaveImageModelInput,
+    SaveImagePromptModelInput,
     SaveImagePromptRoutingConfigInput,
     SaveImageProviderCredentialInput,
     TestImagePromptRouteInput,
@@ -247,21 +249,11 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
             })),
         );
         const availableModels = readiness.filter(item => item.available).map(item => item.model);
-        const routing = await this.getOrCreatePromptRoutingConfig(ctx);
-        const promptOptimizerModelIds =
-            promptRoutingStrategy(routing.strategy) === 'FIXED'
-                ? await this.fixedPromptOptimizerModelIds(ctx, routing)
-                : [
-                      ...new Set(
-                          (
-                              await Promise.all(
-                                  PROVIDER_SCOPES.map(scope =>
-                                      this.providerRouter.availablePromptModelIds(ctx, scope),
-                                  ),
-                              )
-                          ).flat(),
-                      ),
-                  ];
+        const promptModels = await this.connection.getRepository(ctx, ImagePromptModelConfig).find({
+            where: { enabled: true, healthStatus: 'HEALTHY', archivedAt: IsNull() },
+            order: { priority: 'ASC' },
+        });
+        const promptOptimizerModelIds = [...new Set(promptModels.map(m => m.modelId.trim()).filter(Boolean))];
         const optimizerAvailable = promptOptimizerModelIds.length > 0;
         const promptPrice = quoteImageMoney(
             ctx,
@@ -814,6 +806,201 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
         return release;
     }
 
+    // ── Prompt Model Config CRUD ──────────────────────────────────────
+
+    async promptModelConfigs(ctx: RequestContext): Promise<ImagePromptModelConfig[]> {
+        const repository = this.connection.getRepository(ctx, ImagePromptModelConfig);
+        return repository.find({
+            where: { archivedAt: IsNull() },
+            order: { priority: 'ASC', id: 'ASC' },
+        });
+    }
+
+    async savePromptModel(
+        ctx: RequestContext,
+        input: SaveImagePromptModelInput,
+    ): Promise<ImagePromptModelConfig> {
+        const baseUrl = await this.safeUrls.validate(input.baseUrl.trim());
+        const repository = this.connection.getRepository(ctx, ImagePromptModelConfig);
+        const code = requiredPromptModelCode(input.code);
+        if (!Number.isSafeInteger(input.priority) || input.priority < 0 || input.priority > 10_000)
+            throw new UserInputError('提示词模型优先级必须是 0 到 10000 的整数');
+        if (!Number.isSafeInteger(input.weight) || input.weight < 1 || input.weight > 1_000)
+            throw new UserInputError('提示词模型轮询权重必须是 1 到 1000 的整数');
+        const modelId = requiredText(input.modelId, 160, '提示词模型 ID');
+        const existing = input.id
+            ? await repository.findOne({ where: { id: input.id } })
+            : await repository.findOne({ where: { code } });
+        if (input.id && !existing) throw new UserInputError('找不到提示词模型配置');
+        if (existing?.archivedAt) throw new UserInputError('已归档的提示词模型不能编辑');
+        if (existing && existing.code !== code)
+            throw new UserInputError('稳定编码创建后不能修改，请新建提示词模型');
+        const apiKey = input.apiKey?.trim();
+        if (!existing && !apiKey) throw new UserInputError('首次配置必须填写 API Key');
+        const normalizedBaseUrl = baseUrl.toString().replace(/\/$/u, '');
+        const connectionChanged =
+            !existing ||
+            Boolean(apiKey) ||
+            existing.baseUrl !== normalizedBaseUrl ||
+            existing.modelId !== modelId;
+        const encryptedApiKey = apiKey ? this.cipher.encrypt(apiKey) : existing?.encryptedApiKey;
+        if (!encryptedApiKey) throw new UserInputError('首次配置必须填写 API Key');
+        const healthStatus = connectionChanged ? 'UNTESTED' : (existing?.healthStatus ?? 'UNTESTED');
+        const apiFormat = normalizeApiFormat(input.apiFormat, modelId);
+        const values = {
+            code,
+            name: requiredText(input.name, 120, '提示词模型名称'),
+            enabled: Boolean(input.enabled && healthStatus === 'HEALTHY'),
+            baseUrl: normalizedBaseUrl,
+            encryptedApiKey,
+            apiKeyLast4: apiKey ? apiKey.slice(-4) : (existing?.apiKeyLast4 ?? ''),
+            modelId,
+            apiFormat,
+            priority: input.priority,
+            weight: input.weight,
+            currentWeight: connectionChanged ? 0 : (existing?.currentWeight ?? 0),
+            healthStatus,
+            healthMessage: connectionChanged ? null : (existing?.healthMessage ?? null),
+            lastTestedAt: connectionChanged ? null : (existing?.lastTestedAt ?? null),
+            consecutiveFailures: connectionChanged ? 0 : (existing?.consecutiveFailures ?? 0),
+            cooldownUntil: connectionChanged ? null : (existing?.cooldownUntil ?? null),
+            lastUsedAt: existing?.lastUsedAt ?? null,
+            archivedAt: null,
+        };
+        return repository.save(
+            existing ? Object.assign(existing, values) : new ImagePromptModelConfig(values),
+        );
+    }
+
+    async testPromptModel(
+        ctx: RequestContext,
+        id: ID,
+    ): Promise<{ ok: boolean; message: string; testedAt: Date }> {
+        const repository = this.connection.getRepository(ctx, ImagePromptModelConfig);
+        const config = await repository.findOne({ where: { id } });
+        if (!config || config.archivedAt) throw new UserInputError('找不到提示词模型配置');
+        const result = await this.providerClient.testModel(
+            this.promptModelAsCredential(config),
+            config.modelId,
+        );
+        config.lastTestedAt = new Date();
+        config.healthStatus = result.ok ? 'HEALTHY' : 'UNHEALTHY';
+        config.healthMessage = result.message.slice(0, 500);
+        config.consecutiveFailures = result.ok ? 0 : config.consecutiveFailures + 1;
+        config.cooldownUntil = null;
+        if (result.ok && !config.enabled) config.enabled = true;
+        if (!result.ok) config.enabled = false;
+        await repository.save(config, { reload: false });
+        return { ...result, testedAt: config.lastTestedAt };
+    }
+
+    async archivePromptModel(ctx: RequestContext, id: ID): Promise<boolean> {
+        const repository = this.connection.getRepository(ctx, ImagePromptModelConfig);
+        const config = await repository.findOne({ where: { id } });
+        if (!config || config.archivedAt) return false;
+        const result = await repository.update(
+            { id },
+            { enabled: false, archivedAt: new Date(), healthMessage: '已归档' },
+        );
+        return result.affected === 1;
+    }
+
+    async selectPromptModel(
+        ctx: RequestContext,
+    ): Promise<{ config: ImagePromptModelConfig; selectionReason: string }> {
+        return this.connection.withTransaction(ctx, async txCtx => {
+            const repository = this.connection.getRepository(txCtx, ImagePromptModelConfig);
+            const candidates = await repository
+                .createQueryBuilder('config')
+                .where('config.enabled = :enabled', { enabled: true })
+                .andWhere('config.archivedAt IS NULL')
+                .andWhere('config.healthStatus = :health', { health: 'HEALTHY' })
+                .andWhere('(config.cooldownUntil IS NULL OR config.cooldownUntil <= :now)', {
+                    now: new Date(),
+                })
+                .orderBy('config.priority', 'ASC')
+                .addOrderBy('config.id', 'ASC')
+                .getMany();
+            if (!candidates.length) {
+                throw new UserInputError(
+                    '没有可用的提示词优化模型，请在「提示词优化模型」中添加并启用至少一个',
+                );
+            }
+            const priority = Math.min(...candidates.map(item => item.priority));
+            const group = candidates.filter(item => item.priority === priority);
+            const { selected, totalWeight } = selectSmoothWeightedPromptModel(group);
+            selected.lastUsedAt = new Date();
+            await repository.save(group, { reload: false });
+            return {
+                config: selected,
+                selectionReason: `优先级 ${priority}；同级平滑加权轮询（权重 ${selected.weight}/${totalWeight}）`,
+            };
+        });
+    }
+
+    /** Wraps an ImagePromptModelConfig into a shape compatible with ImageProviderClient methods. */
+    promptModelAsCredential(config: ImagePromptModelConfig): ImageProviderCredential {
+        const credential = new ImageProviderCredential();
+        credential.scope = inferPromptModelScope(config);
+        credential.code = config.code;
+        credential.name = config.name;
+        credential.enabled = config.enabled;
+        credential.baseUrl = config.baseUrl;
+        credential.encryptedApiKey = config.encryptedApiKey;
+        credential.apiKeyLast4 = config.apiKeyLast4;
+        credential.textModelId = config.modelId;
+        credential.orchestrationModelId = '';
+        credential.purpose = 'PROMPT';
+        credential.priority = config.priority;
+        credential.weight = config.weight;
+        credential.currentWeight = config.currentWeight;
+        credential.healthStatus = config.healthStatus;
+        credential.healthMessage = config.healthMessage;
+        credential.lastTestedAt = config.lastTestedAt;
+        credential.consecutiveFailures = config.consecutiveFailures;
+        credential.cooldownUntil = config.cooldownUntil;
+        credential.lastUsedAt = config.lastUsedAt;
+        credential.archivedAt = config.archivedAt;
+        return credential;
+    }
+
+    async recordPromptModelFailure(
+        ctx: RequestContext,
+        config: ImagePromptModelConfig,
+        input: { httpStatus?: number; retryAfterSeconds?: number; message: string },
+    ): Promise<void> {
+        const repository = this.connection.getRepository(ctx, ImagePromptModelConfig);
+        await repository.increment({ id: config.id }, 'consecutiveFailures', 1);
+        const refreshed = await repository.findOne({ where: { id: config.id } });
+        if (!refreshed) return;
+        const cooldownSeconds = input.retryAfterSeconds ?? (input.httpStatus === 429 ? 60 : 30);
+        if (refreshed.consecutiveFailures >= 3) {
+            await repository.update(
+                { id: config.id },
+                {
+                    enabled: false,
+                    healthStatus: 'UNHEALTHY',
+                    healthMessage: `连续 ${refreshed.consecutiveFailures} 次失败：${input.message}`.slice(
+                        0,
+                        500,
+                    ),
+                    cooldownUntil: new Date(Date.now() + cooldownSeconds * 1_000),
+                },
+            );
+        } else {
+            await repository.update(
+                { id: config.id },
+                { cooldownUntil: new Date(Date.now() + cooldownSeconds * 1_000) },
+            );
+        }
+    }
+
+    async recordPromptModelSuccess(ctx: RequestContext, config: ImagePromptModelConfig): Promise<void> {
+        await this.connection
+            .getRepository(ctx, ImagePromptModelConfig)
+            .update({ id: config.id }, { consecutiveFailures: 0, cooldownUntil: null });
+    }
+
     getModel(ctx: RequestContext, code: string): Promise<ImageModelConfig | null> {
         return this.connection
             .getRepository(ctx, ImageModelConfig)
@@ -1253,4 +1440,40 @@ function errorTelemetry(error: unknown): { actualCostMicrounits?: number; costCu
     if (!error || typeof error !== 'object' || !('details' in error)) return {};
     const details = (error as { details?: unknown }).details;
     return details && typeof details === 'object' ? details : {};
+}
+
+function requiredPromptModelCode(value: string): string {
+    const normalized = value.trim().toLowerCase();
+    if (!/^[a-z0-9][a-z0-9_-]{2,63}$/u.test(normalized)) {
+        throw new UserInputError('提示词模型编码只能包含小写字母、数字、下划线和连字符，长度 3 到 64 位');
+    }
+    return normalized;
+}
+
+function normalizeApiFormat(value: string | null | undefined, modelId: string): string {
+    if (value === 'OPENAI' || value === 'GEMINI') return value;
+    // Infer from model ID
+    if (/^(?:models\/)?(?:gemini|imagen)-/iu.test(modelId.trim())) return 'GEMINI';
+    return 'OPENAI';
+}
+
+function inferPromptModelScope(config: ImagePromptModelConfig): string {
+    if (config.apiFormat === 'GEMINI') return 'GEMINI';
+    if (config.apiFormat === 'OPENAI') return 'OPENAI';
+    if (/^(?:models\/)?(?:gemini|imagen)-/iu.test(config.modelId.trim())) return 'GEMINI';
+    return 'OPENAI';
+}
+
+function selectSmoothWeightedPromptModel(group: ImagePromptModelConfig[]): {
+    selected: ImagePromptModelConfig;
+    totalWeight: number;
+} {
+    const totalWeight = group.reduce((sum, item) => sum + item.weight, 0);
+    for (const item of group) item.currentWeight += item.weight;
+    let selected = group[0];
+    for (const item of group) {
+        if (item.currentWeight > selected.currentWeight) selected = item;
+    }
+    selected.currentWeight -= totalWeight;
+    return { selected, totalWeight };
 }
