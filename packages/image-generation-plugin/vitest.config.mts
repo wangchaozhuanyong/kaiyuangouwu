@@ -8,6 +8,8 @@ export default defineConfig({
                 __dirname,
                 '../store-management-plugin/src/store-currency-price-selection-strategy.ts',
             ),
+            react: path.resolve(__dirname, '../../node_modules/react'),
+            'react-dom': path.resolve(__dirname, '../../node_modules/react-dom'),
         },
     },
 });

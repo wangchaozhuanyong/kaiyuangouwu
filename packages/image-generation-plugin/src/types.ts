@@ -90,6 +90,19 @@ export interface TestImagePromptRouteInput {
     modelId: string;
 }
 
+export interface SaveImagePromptModelInput {
+    id?: ID | null;
+    code: string;
+    name: string;
+    enabled: boolean;
+    baseUrl: string;
+    apiKey?: string | null;
+    modelId: string;
+    apiFormat?: string | null;
+    priority: number;
+    weight: number;
+}
+
 export interface SaveImageModelInput {
     code: string;
     enabled: boolean;

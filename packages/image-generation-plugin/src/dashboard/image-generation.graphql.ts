@@ -88,29 +88,35 @@ const providerConfigFields = gql`
     }
 `;
 
-const promptRoutingConfigFields = gql`
-    fragment ImagePromptRoutingConfigFields on ImagePromptRoutingConfig {
+const promptModelConfigFields = gql`
+    fragment ImagePromptModelAdminConfigFields on ImagePromptModelAdminConfig {
         id
-        strategy
-        primaryCredentialCode
-        primaryModelId
-        primaryAvailable
-        fallbackEnabled
-        fallbackCredentialCode
-        fallbackModelId
-        fallbackAvailable
+        code
+        name
+        enabled
+        baseUrl
+        apiKeyLast4
+        modelId
+        apiFormat
+        priority
+        weight
+        healthStatus
+        healthMessage
+        lastTestedAt
+        cooldownUntil
+        lastUsedAt
     }
 `;
 
 export const imageProviderAdminQuery = gql`
     ${providerConfigFields}
-    ${promptRoutingConfigFields}
+    ${promptModelConfigFields}
     query ImageProviderAdmin {
         imageProviderAdminConfigs {
             ...ImageProviderAdminConfigFields
         }
-        imagePromptRoutingConfig {
-            ...ImagePromptRoutingConfigFields
+        imagePromptModelConfigs {
+            ...ImagePromptModelAdminConfigFields
         }
         imageGenerationAdminConfig {
             models {
@@ -383,25 +389,6 @@ export const saveImageCredentialMutation = gql`
     }
 `;
 
-export const saveImagePromptRoutingMutation = gql`
-    ${promptRoutingConfigFields}
-    mutation SaveImagePromptRouting($input: SaveImagePromptRoutingConfigInput!) {
-        saveImagePromptRoutingConfig(input: $input) {
-            ...ImagePromptRoutingConfigFields
-        }
-    }
-`;
-
-export const testImagePromptRouteMutation = gql`
-    mutation TestImagePromptRoute($input: TestImagePromptRouteInput!) {
-        testImagePromptRoute(input: $input) {
-            ok
-            message
-            testedAt
-        }
-    }
-`;
-
 export const testImageProviderMutation = gql`
     mutation TestImageProvider($id: ID!, $enableOnSuccess: Boolean) {
         testImageProviderCredential(id: $id, enableOnSuccess: $enableOnSuccess) {
@@ -415,6 +402,31 @@ export const testImageProviderMutation = gql`
 export const archiveImageProviderMutation = gql`
     mutation ArchiveImageProvider($id: ID!) {
         archiveImageProviderCredential(id: $id)
+    }
+`;
+
+export const saveImagePromptModelMutation = gql`
+    ${promptModelConfigFields}
+    mutation SaveImagePromptModel($input: SaveImagePromptModelInput!) {
+        saveImagePromptModel(input: $input) {
+            ...ImagePromptModelAdminConfigFields
+        }
+    }
+`;
+
+export const testImagePromptModelMutation = gql`
+    mutation TestImagePromptModel($id: ID!) {
+        testImagePromptModel(id: $id) {
+            ok
+            message
+            testedAt
+        }
+    }
+`;
+
+export const archiveImagePromptModelMutation = gql`
+    mutation ArchiveImagePromptModel($id: ID!) {
+        archiveImagePromptModel(id: $id)
     }
 `;
 
@@ -558,18 +570,6 @@ export interface ImageProviderAdminConfigRecord {
     cooldownUntil?: string | null;
     lastUsedAt?: string | null;
     modelCodes: string[];
-}
-
-export interface ImagePromptRoutingConfigRecord {
-    id: string;
-    strategy: 'AUTO' | 'FIXED';
-    primaryCredentialCode?: string | null;
-    primaryModelId?: string | null;
-    primaryAvailable: boolean;
-    fallbackEnabled: boolean;
-    fallbackCredentialCode?: string | null;
-    fallbackModelId?: string | null;
-    fallbackAvailable: boolean;
 }
 
 export interface ImageAdminJobRecord {
@@ -756,6 +756,24 @@ export interface ImageAdminOperationsQueryResult {
 
 export interface ImageProviderAdminQueryResult {
     imageProviderAdminConfigs: ImageProviderAdminConfigRecord[];
-    imagePromptRoutingConfig: ImagePromptRoutingConfigRecord;
+    imagePromptModelConfigs: ImagePromptModelConfigRecord[];
     imageGenerationAdminConfig: { models: Array<{ code: string; displayNameZh: string }> };
+}
+
+export interface ImagePromptModelConfigRecord {
+    id: string;
+    code: string;
+    name: string;
+    enabled: boolean;
+    baseUrl: string;
+    apiKeyLast4: string;
+    modelId: string;
+    apiFormat: string;
+    priority: number;
+    weight: number;
+    healthStatus: string;
+    healthMessage?: string | null;
+    lastTestedAt?: string | null;
+    cooldownUntil?: string | null;
+    lastUsedAt?: string | null;
 }

@@ -53,16 +53,30 @@ import {
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import {
+    errorMessage,
+    majorToMinor,
+    minorToMajor,
+    modelInput,
+    modelSupportsResolution,
+    protocolChange,
+    reconcileImageAdminConfig,
+    replaceAdminModel,
+    sameAdminConfig,
+    toLocalDayBoundary,
+} from '../image-generation-dashboard.helpers';
+
+import {
     ImageAdminConfigRecord,
     ImageAdminModelRecord,
     ImageAdminOperationsQueryResult,
     ImageAdminQueryResult,
     ImageAiUsageRecordDetailQueryResult,
     ImageAiUsageRecordsQueryResult,
-    ImagePromptRoutingConfigRecord,
+    ImagePromptModelConfigRecord,
     ImageProviderAdminConfigRecord,
     ImageProviderAdminQueryResult,
     activateImageSkillMutation,
+    archiveImagePromptModelMutation,
     archiveImageProviderMutation,
     imageAiUsageRecordDetailQuery,
     imageAiUsageRecordsQuery,
@@ -75,13 +89,14 @@ import {
     saveImageCredentialMutation,
     saveImageGenerationConfigMutation,
     saveImageModelMutation,
-    saveImagePromptRoutingMutation,
+    saveImagePromptModelMutation,
     smokeTestImageModelMutation,
     testImageModelMutation,
-    testImagePromptRouteMutation,
+    testImagePromptModelMutation,
     testImageProviderMutation,
 } from './image-generation.graphql';
 import { imageProtocolOption, imageProtocolOptionsForModel } from './image-protocol-options';
+export { reconcileImageAdminConfig, toLocalDayBoundary } from '../image-generation-dashboard.helpers';
 
 export const imageGenerationSettingsRoute: DashboardRouteDefinition = {
     navMenuItem: {
@@ -2129,13 +2144,12 @@ export function ImageGenerationAccessPage() {
             <PageLayout>
                 <PageBlock
                     column="full"
-                    blockId="image-prompt-routing"
-                    title="提示词优化统一设置"
-                    description="平台统一决定提示词优化使用哪个 Key 和模型；店铺只控制是否开启及计费规则。"
+                    blockId="image-prompt-models"
+                    title="提示词优化模型"
+                    description="统一管理提示词优化使用的模型和 Key。可添加多个，按优先级和权重自动轮询。每个模型有独立的 API Key，与生图 Key 无关。"
                 >
-                    <PromptRoutingSettings
-                        config={query.data.imagePromptRoutingConfig}
-                        credentials={configs}
+                    <PromptModelManager
+                        configs={query.data?.imagePromptModelConfigs ?? []}
                         onChanged={() => void query.refetch()}
                     />
                 </PageBlock>
@@ -2277,257 +2291,340 @@ export function ImageGenerationAccessPage() {
     );
 }
 
-interface PromptRoutingDraft {
-    strategy: 'AUTO' | 'FIXED';
-    primaryCredentialCode: string;
-    primaryModelId: string;
-    fallbackEnabled: boolean;
-    fallbackCredentialCode: string;
-    fallbackModelId: string;
+interface PromptModelDraft {
+    id?: string | null;
+    code: string;
+    name: string;
+    enabled: boolean;
+    baseUrl: string;
+    apiKey: string;
+    modelId: string;
+    apiFormat: string;
+    priority: number;
+    weight: number;
 }
 
-function PromptRoutingSettings({
-    config,
-    credentials,
+const emptyPromptModelDraft = (): PromptModelDraft => ({
+    id: null,
+    code: '',
+    name: '',
+    enabled: true,
+    baseUrl: '',
+    apiKey: '',
+    modelId: '',
+    apiFormat: '',
+    priority: 100,
+    weight: 1,
+});
+
+function PromptModelManager({
+    configs,
     onChanged,
 }: Readonly<{
-    config: ImagePromptRoutingConfigRecord;
-    credentials: ImageProviderAdminConfigRecord[];
+    configs: ImagePromptModelConfigRecord[];
     onChanged: () => void;
 }>) {
-    const [draft, setDraft] = useState<PromptRoutingDraft>(() => promptRoutingDraft(config));
-    useEffect(() => {
-        setDraft(promptRoutingDraft(config));
-    }, [
-        config.strategy,
-        config.primaryCredentialCode,
-        config.primaryModelId,
-        config.fallbackEnabled,
-        config.fallbackCredentialCode,
-        config.fallbackModelId,
-    ]);
-    const promptCredentials = credentials.filter(credential =>
-        ['PROMPT', 'BOTH'].includes(credential.purpose),
-    );
-    const primary = credentials.find(credential => credential.code === draft.primaryCredentialCode);
-    const fallback = credentials.find(credential => credential.code === draft.fallbackCredentialCode);
-    const update = <K extends keyof PromptRoutingDraft>(key: K, value: PromptRoutingDraft[K]) =>
-        setDraft(current => ({ ...current, [key]: value }));
+    const [editing, setEditing] = useState<PromptModelDraft | null>(null);
+    const [archiveTarget, setArchiveTarget] = useState<ImagePromptModelConfigRecord | null>(null);
+
     const save = useMutation({
-        mutationFn: () =>
-            api.mutate(saveImagePromptRoutingMutation, {
+        mutationFn: (draft: PromptModelDraft) =>
+            api.mutate(saveImagePromptModelMutation, {
                 input: {
-                    strategy: draft.strategy,
-                    primaryCredentialCode: draft.primaryCredentialCode || null,
-                    primaryModelId: draft.primaryModelId || null,
-                    fallbackEnabled: draft.strategy === 'FIXED' && draft.fallbackEnabled,
-                    fallbackCredentialCode: draft.fallbackCredentialCode || null,
-                    fallbackModelId: draft.fallbackModelId || null,
+                    id: draft.id ?? undefined,
+                    code: draft.code,
+                    name: draft.name,
+                    enabled: draft.enabled,
+                    baseUrl: draft.baseUrl,
+                    apiKey: draft.apiKey || undefined,
+                    modelId: draft.modelId,
+                    apiFormat: draft.apiFormat || undefined,
+                    priority: draft.priority,
+                    weight: draft.weight,
                 },
             }),
         onSuccess: () => {
-            toast.success('统一提示词路由已保存');
+            toast.success('提示词模型已保存');
+            setEditing(null);
             onChanged();
         },
         onError: error => toast.error(errorMessage(error)),
     });
+
     const test = useMutation({
-        mutationFn: ({ credentialCode, modelId }: { credentialCode: string; modelId: string }) =>
-            api.mutate<{ testImagePromptRoute: { ok: boolean; message: string } }>(
-                testImagePromptRouteMutation,
-                { input: { credentialCode, modelId } },
+        mutationFn: (id: string) =>
+            api.mutate<{ testImagePromptModel: { ok: boolean; message: string } }>(
+                testImagePromptModelMutation,
+                { id },
             ),
-        onSuccess: result =>
-            (result.testImagePromptRoute.ok ? toast.success : toast.error)(
-                result.testImagePromptRoute.message,
-            ),
+        onSuccess: res =>
+            (res.testImagePromptModel.ok ? toast.success : toast.error)(res.testImagePromptModel.message),
         onError: error => toast.error(errorMessage(error)),
     });
-    const fixedDraftValid = Boolean(
-        draft.primaryCredentialCode.trim() &&
-        draft.primaryModelId.trim() &&
-        (!draft.fallbackEnabled ||
-            (draft.fallbackCredentialCode.trim() &&
-                draft.fallbackModelId.trim() &&
-                draft.fallbackCredentialCode !== draft.primaryCredentialCode)),
-    );
+
+    const archive = useMutation({
+        mutationFn: (id: string) => api.mutate(archiveImagePromptModelMutation, { id }),
+        onSuccess: () => {
+            toast.success('已归档');
+            setArchiveTarget(null);
+            onChanged();
+        },
+        onError: error => toast.error(errorMessage(error)),
+    });
+
     return (
-        <div className="space-y-5">
-            <div className="grid gap-4 lg:grid-cols-[12rem_1fr_auto] lg:items-end">
-                <Field label="路由策略" htmlFor="prompt-routing-strategy">
-                    <select
-                        id="prompt-routing-strategy"
-                        className="h-9 w-full rounded-md border bg-background px-3 text-sm"
-                        value={draft.strategy}
-                        onChange={event => update('strategy', event.target.value as 'AUTO' | 'FIXED')}
-                    >
-                        <option value="AUTO">AUTO 兼容模式</option>
-                        <option value="FIXED">统一固定路由</option>
-                    </select>
-                </Field>
-                <div className="rounded-md border bg-muted/20 px-3 py-2 text-sm">
-                    {draft.strategy === 'AUTO' ? (
-                        <span className="text-muted-foreground">
-                            按 OpenAI → Gemini、Key 优先级和权重自动选择，并读取各 Key 的兼容模型 ID。
-                        </span>
-                    ) : (
-                        <span>
-                            实际主路由：
-                            {primary ? `${primary.name}（${providerName(primary.scope)}）` : '未选择'}
-                            {' · '}
-                            {draft.primaryModelId || '未填写模型'}
-                        </span>
-                    )}
+        <div className="space-y-4">
+            <div className="flex items-center justify-between">
+                <div className="text-sm text-muted-foreground">
+                    {configs.length} 个模型 ·{' '}
+                    {configs.filter(c => c.enabled && c.healthStatus === 'HEALTHY').length} 个可用
                 </div>
-                <Button
-                    type="button"
-                    onClick={() => save.mutate()}
-                    disabled={save.isPending || (draft.strategy === 'FIXED' && !fixedDraftValid)}
-                >
-                    {save.isPending ? (
-                        <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                        <Save className="mr-2 h-4 w-4" />
-                    )}
-                    保存统一设置
+                <Button size="sm" onClick={() => setEditing(emptyPromptModelDraft())}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    添加提示词模型
                 </Button>
             </div>
-            {draft.strategy === 'FIXED' ? (
-                <div className="space-y-4 border-t pt-5">
-                    <PromptRouteRow
-                        label="主路由"
-                        credentialCode={draft.primaryCredentialCode}
-                        modelId={draft.primaryModelId}
-                        credentials={promptCredentials}
-                        available={
-                            config.strategy === 'FIXED' &&
-                            config.primaryCredentialCode === draft.primaryCredentialCode &&
-                            config.primaryModelId === draft.primaryModelId &&
-                            config.primaryAvailable
-                        }
-                        testing={test.isPending}
-                        onCredentialChange={value => update('primaryCredentialCode', value)}
-                        onModelChange={value => update('primaryModelId', value)}
-                        onTest={() =>
-                            test.mutate({
-                                credentialCode: draft.primaryCredentialCode,
-                                modelId: draft.primaryModelId,
-                            })
-                        }
-                    />
-                    <div className="flex items-center justify-between rounded-md border px-3 py-2">
-                        <div>
-                            <div className="text-sm font-medium">启用备用路由</div>
-                            <div className="text-xs text-muted-foreground">
-                                主路由失败后只尝试这里指定的备用 Key。
+            {configs.length === 0 ? (
+                <Alert>
+                    <AlertDescription>尚未配置提示词模型。点击「添加提示词模型」创建。</AlertDescription>
+                </Alert>
+            ) : (
+                <div className="grid gap-3 xl:grid-cols-2">
+                    {configs.map(config => (
+                        <div key={config.id} className="space-y-2 rounded-lg border p-4">
+                            <div className="flex items-center justify-between gap-2">
+                                <div>
+                                    <div className="flex items-center gap-2">
+                                        <strong>{config.name}</strong>
+                                        <Badge
+                                            variant={
+                                                config.enabled && config.healthStatus === 'HEALTHY'
+                                                    ? 'success'
+                                                    : 'secondary'
+                                            }
+                                        >
+                                            {statusZh(config.healthStatus)}
+                                        </Badge>
+                                    </div>
+                                    <div className="text-xs text-muted-foreground">
+                                        编码：{config.code} · 模型：{config.modelId}
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                    <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => setEditing({ ...config, apiKey: '' })}
+                                    >
+                                        <Pencil className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        disabled={test.isPending}
+                                        onClick={() => {
+                                            test.mutate(config.id);
+                                            onChanged();
+                                        }}
+                                    >
+                                        <RefreshCw
+                                            className={`h-4 w-4 ${test.isPending ? 'animate-spin' : ''}`}
+                                        />
+                                    </Button>
+                                    <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => setArchiveTarget(config)}
+                                    >
+                                        <Archive className="h-4 w-4" />
+                                    </Button>
+                                </div>
                             </div>
+                            <div className="grid grid-cols-4 gap-2 text-center text-xs">
+                                {[
+                                    ['Base URL', config.baseUrl.replace(/^https?:\/\//u, '').slice(0, 24)],
+                                    ['Key', config.apiKeyLast4 ? `****${config.apiKeyLast4}` : '未配置'],
+                                    ['优先级', config.priority],
+                                    ['权重', config.weight],
+                                ].map(([label, val]) => (
+                                    <div key={label} className="rounded-md bg-muted/20 px-2 py-1.5">
+                                        <div className="font-medium tabular-nums">{val}</div>
+                                        <div className="text-[11px] text-muted-foreground">{label}</div>
+                                    </div>
+                                ))}
+                            </div>
+                            {config.healthMessage ? (
+                                <div className="text-xs text-muted-foreground">
+                                    {config.healthMessage}
+                                    {config.lastTestedAt
+                                        ? ` · ${new Date(config.lastTestedAt).toLocaleString()}`
+                                        : ''}
+                                </div>
+                            ) : null}
                         </div>
-                        <Switch
-                            aria-label="启用备用提示词路由"
-                            checked={draft.fallbackEnabled}
-                            onCheckedChange={checked => update('fallbackEnabled', checked)}
-                        />
-                    </div>
-                    {draft.fallbackEnabled ? (
-                        <PromptRouteRow
-                            label="备用路由"
-                            credentialCode={draft.fallbackCredentialCode}
-                            modelId={draft.fallbackModelId}
-                            credentials={promptCredentials.filter(
-                                credential => credential.code !== draft.primaryCredentialCode,
-                            )}
-                            available={
-                                config.strategy === 'FIXED' &&
-                                config.fallbackEnabled &&
-                                config.fallbackCredentialCode === draft.fallbackCredentialCode &&
-                                config.fallbackModelId === draft.fallbackModelId &&
-                                config.fallbackAvailable
-                            }
-                            testing={test.isPending}
-                            onCredentialChange={value => update('fallbackCredentialCode', value)}
-                            onModelChange={value => update('fallbackModelId', value)}
-                            onTest={() =>
-                                test.mutate({
-                                    credentialCode: draft.fallbackCredentialCode,
-                                    modelId: draft.fallbackModelId,
-                                })
-                            }
-                        />
-                    ) : null}
-                </div>
-            ) : null}
-            {draft.strategy === 'FIXED' && fallback ? (
-                <p className="text-xs text-muted-foreground">
-                    备用路由：{fallback.name}（{providerName(fallback.scope)}） ·{' '}
-                    {draft.fallbackModelId || '未填写模型'}
-                </p>
-            ) : null}
-        </div>
-    );
-}
-
-function PromptRouteRow({
-    label,
-    credentialCode,
-    modelId,
-    credentials,
-    available,
-    testing,
-    onCredentialChange,
-    onModelChange,
-    onTest,
-}: Readonly<{
-    label: string;
-    credentialCode: string;
-    modelId: string;
-    credentials: ImageProviderAdminConfigRecord[];
-    available: boolean;
-    testing: boolean;
-    onCredentialChange: (value: string) => void;
-    onModelChange: (value: string) => void;
-    onTest: () => void;
-}>) {
-    return (
-        <div className="grid gap-3 rounded-lg border p-4 lg:grid-cols-[10rem_minmax(14rem,1fr)_minmax(14rem,1fr)_auto] lg:items-end">
-            <div>
-                <div className="text-sm font-medium">{label}</div>
-                <Badge className="mt-2" variant={available ? 'success' : 'secondary'}>
-                    {available ? '当前可用' : '当前不可用'}
-                </Badge>
-            </div>
-            <Field label="调用 Key" htmlFor={`prompt-route-key-${label}`}>
-                <select
-                    id={`prompt-route-key-${label}`}
-                    className="h-9 w-full rounded-md border bg-background px-3 text-sm"
-                    value={credentialCode}
-                    onChange={event => onCredentialChange(event.target.value)}
-                >
-                    <option value="">请选择提示词 Key</option>
-                    {credentials.map(credential => (
-                        <option key={credential.code} value={credential.code}>
-                            {credential.name} · {providerName(credential.scope)} · {credential.code}
-                        </option>
                     ))}
-                </select>
-            </Field>
-            <Field label="提示词调用模型 ID" htmlFor={`prompt-route-model-${label}`}>
-                <Input
-                    id={`prompt-route-model-${label}`}
-                    maxLength={160}
-                    placeholder="填写该 Key 实际可调用的模型"
-                    value={modelId}
-                    onChange={event => onModelChange(event.target.value)}
-                />
-            </Field>
-            <Button
-                type="button"
-                variant="outline"
-                disabled={testing || !credentialCode.trim() || !modelId.trim()}
-                onClick={onTest}
+                </div>
+            )}
+            <Sheet
+                open={editing !== null}
+                onOpenChange={open => {
+                    if (!open) setEditing(null);
+                }}
             >
-                {testing ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : null}
-                测试路由
-            </Button>
+                <SheetContent className="overflow-y-auto sm:max-w-lg">
+                    <SheetHeader>
+                        <SheetTitle>{editing?.id ? '编辑提示词模型' : '添加提示词模型'}</SheetTitle>
+                        <SheetDescription>配置独立的提示词优化模型，与生图 Key 完全分开。</SheetDescription>
+                    </SheetHeader>
+                    {editing ? (
+                        <div className="mt-6 space-y-4">
+                            {[
+                                {
+                                    label: '稳定编码',
+                                    key: 'code' as const,
+                                    ph: '例：gemini-flash-prompt',
+                                    max: 64,
+                                },
+                                {
+                                    label: '友好名称',
+                                    key: 'name' as const,
+                                    ph: '例：提示词优化 - Gemini Flash',
+                                    max: 120,
+                                },
+                                {
+                                    label: '中转站 / API Base URL',
+                                    key: 'baseUrl' as const,
+                                    ph: 'https://relay.example.com/v1',
+                                    max: 500,
+                                },
+                                {
+                                    label: 'API Key',
+                                    key: 'apiKey' as const,
+                                    type: 'password',
+                                    ph: '填写 API Key',
+                                },
+                                {
+                                    label: '模型 ID',
+                                    key: 'modelId' as const,
+                                    ph: '例：gemini-2.0-flash 或 gpt-4o-mini',
+                                    max: 160,
+                                },
+                            ].map(f => (
+                                <Field
+                                    key={f.key}
+                                    label={
+                                        f.key === 'apiKey' && editing.id ? 'API Key（留空保持不变）' : f.label
+                                    }
+                                    htmlFor={`pm-${f.key}`}
+                                >
+                                    <Input
+                                        id={`pm-${f.key}`}
+                                        type={f.type ?? 'text'}
+                                        maxLength={f.max}
+                                        placeholder={
+                                            f.key === 'apiKey' && editing.id ? '留空保持现有 Key' : f.ph
+                                        }
+                                        disabled={f.key === 'code' && Boolean(editing.id)}
+                                        value={String(editing[f.key])}
+                                        onChange={e => setEditing({ ...editing, [f.key]: e.target.value })}
+                                    />
+                                    {f.key === 'code' ? (
+                                        <span className="text-xs text-muted-foreground">
+                                            小写字母、数字、下划线和连字符，创建后不可修改。
+                                        </span>
+                                    ) : null}
+                                </Field>
+                            ))}
+                            <Field label="API 调用格式" htmlFor="pm-api-format">
+                                <select
+                                    id="pm-api-format"
+                                    className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+                                    value={editing.apiFormat}
+                                    onChange={e => setEditing({ ...editing, apiFormat: e.target.value })}
+                                >
+                                    <option value="">自动推断（根据模型 ID）</option>
+                                    <option value="OPENAI">OpenAI 兼容（chat/completions）</option>
+                                    <option value="GEMINI">Gemini（generateContent）</option>
+                                </select>
+                            </Field>
+                            <div className="grid grid-cols-2 gap-4">
+                                {(['priority', 'weight'] as const).map(k => (
+                                    <Field
+                                        key={k}
+                                        label={k === 'priority' ? '优先级（小的优先）' : '轮询权重'}
+                                        htmlFor={`pm-${k}`}
+                                    >
+                                        <Input
+                                            id={`pm-${k}`}
+                                            type="number"
+                                            value={editing[k]}
+                                            onChange={e =>
+                                                setEditing({ ...editing, [k]: Number(e.target.value) })
+                                            }
+                                        />
+                                    </Field>
+                                ))}
+                            </div>
+                            <Toggle
+                                label="启用"
+                                checked={editing.enabled}
+                                onChange={enabled => setEditing({ ...editing, enabled })}
+                            />
+                        </div>
+                    ) : null}
+                    <SheetFooter className="mt-6">
+                        <Button variant="outline" onClick={() => setEditing(null)}>
+                            取消
+                        </Button>
+                        <Button
+                            disabled={
+                                save.isPending ||
+                                !editing?.code.trim() ||
+                                !editing?.name.trim() ||
+                                !editing?.baseUrl.trim() ||
+                                !editing?.modelId.trim() ||
+                                (!editing?.id && !editing?.apiKey.trim())
+                            }
+                            onClick={() => editing && save.mutate(editing)}
+                        >
+                            {save.isPending ? (
+                                <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                                <Save className="mr-2 h-4 w-4" />
+                            )}
+                            保存
+                        </Button>
+                    </SheetFooter>
+                </SheetContent>
+            </Sheet>
+            <Dialog
+                open={archiveTarget !== null}
+                onOpenChange={open => {
+                    if (!open) setArchiveTarget(null);
+                }}
+            >
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>归档提示词模型</DialogTitle>
+                        <DialogDescription>
+                            确定归档「{archiveTarget?.name}」（{archiveTarget?.code}
+                            ）？归档后模型将停用且不再参与轮询。
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setArchiveTarget(null)}>
+                            取消
+                        </Button>
+                        <Button
+                            variant="destructive"
+                            disabled={archive.isPending}
+                            onClick={() => archiveTarget && archive.mutate(archiveTarget.id)}
+                        >
+                            确认归档
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
@@ -3060,22 +3157,10 @@ export function ProviderCredentialEditorSheet({
                                         onChange={event => update('apiKey', event.target.value)}
                                     />
                                 </Field>
-                                <Field
-                                    label="AUTO 兼容模式提示词模型 ID（可选）"
-                                    htmlFor="provider-key-text-model"
-                                >
-                                    <Input
-                                        id="provider-key-text-model"
-                                        maxLength={160}
-                                        placeholder={
-                                            draft.scope === 'OPENAI'
-                                                ? 'AUTO 模式下使用的 GPT 文本模型'
-                                                : 'AUTO 模式下使用的 Gemini 文本模型'
-                                        }
-                                        value={draft.textModelId}
-                                        onChange={event => update('textModelId', event.target.value)}
-                                    />
-                                </Field>
+                                <div className="rounded-md border bg-muted/20 px-3 py-2 text-sm text-muted-foreground">
+                                    提示词优化模型已移至独立的「提示词优化模型」区域统一管理，不再在 Key
+                                    中单独设置。
+                                </div>
                                 {draft.scope === 'OPENAI' ? (
                                     <Field
                                         label="Responses 生图编排模型 ID（可选）"
@@ -3332,17 +3417,6 @@ interface ProviderCredentialDraft {
     modelCodes: string[];
 }
 
-function promptRoutingDraft(config: ImagePromptRoutingConfigRecord): PromptRoutingDraft {
-    return {
-        strategy: config.strategy,
-        primaryCredentialCode: config.primaryCredentialCode ?? '',
-        primaryModelId: config.primaryModelId ?? '',
-        fallbackEnabled: config.fallbackEnabled,
-        fallbackCredentialCode: config.fallbackCredentialCode ?? '',
-        fallbackModelId: config.fallbackModelId ?? '',
-    };
-}
-
 function credentialDraft(config: ImageProviderAdminConfigRecord): ProviderCredentialDraft {
     return {
         code: config.code,
@@ -3595,123 +3669,4 @@ function ErrorPage({ title, retry, error }: Readonly<{ title: string; retry(): v
             </PageLayout>
         </Page>
     );
-}
-export function toLocalDayBoundary(value: string, endOfDay: boolean): string | null {
-    if (!/^\d{4}-\d{2}-\d{2}$/u.test(value)) return null;
-    const [year, month, day] = value.split('-').map(Number);
-    const boundary = new Date(
-        year,
-        month - 1,
-        day,
-        endOfDay ? 23 : 0,
-        endOfDay ? 59 : 0,
-        endOfDay ? 59 : 0,
-        endOfDay ? 999 : 0,
-    );
-    if (boundary.getFullYear() !== year || boundary.getMonth() !== month - 1 || boundary.getDate() !== day) {
-        return null;
-    }
-    return boundary.toISOString();
-}
-
-export function reconcileImageAdminConfig(
-    current: ImageAdminConfigRecord | null,
-    baseline: ImageAdminConfigRecord | null,
-    incoming: ImageAdminConfigRecord,
-): ImageAdminConfigRecord {
-    if (!current || !baseline) return structuredClone(incoming);
-    const next = reconcileRecord(current, baseline, incoming);
-    const currentModels = new Map(current.models.map(model => [model.code, model]));
-    const baselineModels = new Map(baseline.models.map(model => [model.code, model]));
-    next.models = incoming.models.map(model => {
-        const currentModel = currentModels.get(model.code);
-        const baselineModel = baselineModels.get(model.code);
-        return currentModel && baselineModel
-            ? reconcileRecord(currentModel, baselineModel, model)
-            : structuredClone(model);
-    });
-    return next;
-}
-
-function reconcileRecord<T extends object>(current: T, baseline: T, incoming: T): T {
-    const result = structuredClone(incoming) as Record<string, unknown>;
-    for (const key of Object.keys(incoming)) {
-        if (key === 'models') continue;
-        const currentValue = (current as Record<string, unknown>)[key];
-        const baselineValue = (baseline as Record<string, unknown>)[key];
-        if (!sameValue(currentValue, baselineValue)) result[key] = structuredClone(currentValue);
-    }
-    return result as T;
-}
-
-function replaceAdminModel(
-    config: ImageAdminConfigRecord,
-    savedModel: ImageAdminModelRecord,
-): ImageAdminConfigRecord {
-    return {
-        ...config,
-        models: config.models.map(model =>
-            model.code === savedModel.code ? structuredClone(savedModel) : model,
-        ),
-    };
-}
-
-function sameAdminConfig(left: ImageAdminConfigRecord | null, right: ImageAdminConfigRecord | null): boolean {
-    return sameValue(left, right);
-}
-
-function sameValue(left: unknown, right: unknown): boolean {
-    return JSON.stringify(left) === JSON.stringify(right);
-}
-function modelInput(model: ImageAdminModelRecord) {
-    const {
-        id: _id,
-        officialModelId: _official,
-        healthStatus: _health,
-        healthMessage: _healthMessage,
-        lastTestedAt: _lastTestedAt,
-        resolutionOptions: _resolutionOptions,
-        ...input
-    } = model;
-    return input;
-}
-function protocolChange(model: ImageAdminModelRecord, value: string): Partial<ImageAdminModelRecord> {
-    const protocol = value as ImageAdminModelRecord['protocol'];
-    const changed = { ...model, protocol };
-    return {
-        protocol,
-        unitPrice2K: modelSupportsResolution(changed, '2K') ? model.unitPrice2K : 0,
-        unitPrice4K: modelSupportsResolution(changed, '4K') ? model.unitPrice4K : 0,
-    };
-}
-function modelSupportsResolution(
-    model: Pick<ImageAdminModelRecord, 'officialModelId' | 'providerModelId' | 'protocol'>,
-    resolution: '1K' | '2K' | '4K',
-) {
-    if (resolution === '1K') return true;
-    const official = model.officialModelId.replace(/^models\//iu, '').toLowerCase();
-    const provider = model.providerModelId.replace(/^models\//iu, '').toLowerCase();
-    const geminiNative = ['GEMINI_INTERACTIONS', 'GEMINI_NATIVE', 'GEMINI_NATIVE_STREAM'].includes(
-        model.protocol,
-    );
-    if (geminiNative && /^(?:gemini-3(?:\.\d+)?-(?:pro|flash)-image)(?:-|$)/u.test(official)) {
-        return true;
-    }
-    return (
-        ['OPENAI_IMAGES', 'OPENAI_RESPONSES_IMAGE'].includes(model.protocol) &&
-        (official === 'gpt-image-2' || provider === 'gpt-image-2')
-    );
-}
-function currencyFactor(currency: string) {
-    return ['JPY', 'KRW', 'VND'].includes(currency) ? 1 : 100;
-}
-function minorToMajor(value: number, currency: string) {
-    return String(value / currencyFactor(currency));
-}
-function majorToMinor(value: string, currency: string) {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? Math.round(parsed * currencyFactor(currency)) : 0;
-}
-function errorMessage(error: unknown) {
-    return error instanceof Error ? error.message : String(error);
 }
