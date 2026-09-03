@@ -88,7 +88,7 @@ test('目标路由未解析时底部导航保持当前页高亮', async ({ page 
     const servicesNavigation = page.locator('nav[aria-label] a[href="/services"]');
     await expect(categoryNavigation).toHaveAttribute('aria-current', 'page');
 
-    await servicesNavigation.click();
+    await servicesNavigation.evaluate(element => (element as HTMLAnchorElement).click());
     await expect(page).toHaveURL(/\/services(?:\?|$)/u);
     await delayedChunk.waitUntilRequested();
     try {

@@ -182,7 +182,7 @@ describe('referral poster template channel isolation', () => {
                     channel: { defaultCurrencyCode: 'CNY' },
                 } as any,
                 {
-                    expectedUpdatedAt: configRecord.updatedAt.toISOString(),
+                    expectedUpdatedAt: configRecord.updatedAt,
                     enabled: true,
                     rewardRate: 5,
                     releaseDelayDays: 7,
@@ -199,7 +199,7 @@ describe('referral poster template channel isolation', () => {
         const result = await service.updateProgram(
             { channelId: 'channel-1', currencyCode: 'CNY', channel: { defaultCurrencyCode: 'CNY' } } as any,
             {
-                expectedUpdatedAt: configRecord.updatedAt.toISOString(),
+                expectedUpdatedAt: configRecord.updatedAt,
                 enabled: true,
                 rewardRate: 5,
                 releaseDelayDays: 7,
