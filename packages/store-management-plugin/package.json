@@ -33,6 +33,7 @@
         "@vendure/common": "3.7.2",
         "@vendure/content-translation-plugin": "0.1.0",
         "@vendure/core": "3.7.2",
+        "@vendure/operations-dashboard-plugin": "0.1.0",
         "@vendure/store-domain-plugin": "0.1.0",
         "@vendure/storefront-content-plugin": "0.1.0",
         "cheerio": "1.0.0",

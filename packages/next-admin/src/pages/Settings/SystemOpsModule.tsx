@@ -17,6 +17,7 @@ import {
     Plus,
     RefreshCw,
     Search,
+    Send,
     Server,
     Settings2,
     Terminal,
@@ -57,14 +58,16 @@ import { useUrlTab } from '../../hooks/use-url-tab';
 import { getRoleCodeLabel, getRoleLabel, getStatusLabel } from '../../utils/status-labels';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatDateTime } from '../Sales/sales-utils';
+import { TelegramNotificationsPanel } from './TelegramNotificationsPanel';
 
-type Tab = 'HEALTH' | 'JOBS' | 'SCHEDULES' | 'SETTINGS' | 'API_KEYS';
+type Tab = 'HEALTH' | 'JOBS' | 'SCHEDULES' | 'SETTINGS' | 'API_KEYS' | 'TELEGRAM';
 const SYSTEM_OPS_TABS = {
     health: 'HEALTH',
     jobs: 'JOBS',
     schedules: 'SCHEDULES',
     settings: 'SETTINGS',
     'api-keys': 'API_KEYS',
+    telegram: 'TELEGRAM',
 } as const;
 const API_KEY_PAGE_SIZE = 50;
 
@@ -113,7 +116,7 @@ export function SystemOpsModule() {
                             系统运维
                         </h1>
                         <p className="mt-1 text-xs text-slate-500">
-                            查看服务健康、任务队列、定时调度、配置仓库和 API 密钥
+                            查看服务健康、任务队列、Telegram 通知、定时调度、配置仓库和 API 密钥
                         </p>
                     </div>
                     <button
@@ -161,6 +164,13 @@ export function SystemOpsModule() {
                         定时任务 {data?.scheduledTasks.length ?? 0}
                     </TabButton>
                     <TabButton
+                        active={tab === 'TELEGRAM'}
+                        onClick={() => setTab('TELEGRAM')}
+                        icon={<Send className="h-3.5 w-3.5" />}
+                    >
+                        Telegram 通知
+                    </TabButton>
+                    <TabButton
                         active={tab === 'SETTINGS'}
                         onClick={() => setTab('SETTINGS')}
                         icon={<Settings2 className="h-3.5 w-3.5" />}
@@ -175,7 +185,9 @@ export function SystemOpsModule() {
                         API 密钥 {data?.apiKeys.totalItems ?? 0}
                     </TabButton>
                 </div>
-                {tab === 'HEALTH' ? (
+                {tab === 'TELEGRAM' ? (
+                    <TelegramNotificationsPanel />
+                ) : tab === 'HEALTH' ? (
                     <HealthPanel data={data} graphQLError={query.error?.message} />
                 ) : query.loading && !data ? (
                     <LoadingState />

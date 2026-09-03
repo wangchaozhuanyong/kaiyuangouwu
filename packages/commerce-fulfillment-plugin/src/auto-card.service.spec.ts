@@ -1,3 +1,4 @@
+import { AdminNotificationRequestedEvent } from '@vendure/operations-dashboard-plugin';
 import { describe, expect, it, vi } from 'vitest';
 
 import { AutoCardService } from './auto-card.service';
@@ -142,6 +143,66 @@ describe('AutoCardService allocation invariants', () => {
         expect(test.poolBuilder.take).toHaveBeenCalledWith(1);
         expect(result.poolItems.map((item: any) => item.id)).toEqual(['pool-1', 'pool-2']);
         expect(result.state).toBe('ALLOCATED');
+    });
+
+    it('raises a P0 incident when the card pool cannot cover a paid order', async () => {
+        const test = createHarness({
+            delivery: {
+                id: 'delivery-1',
+                state: 'WAITING_STOCK',
+                quantity: 2,
+                configId: 'config-1',
+                channelId: 'channel-1',
+                orderId: 'order-1',
+                sku: 'GOOGLE-1',
+                poolItems: [],
+                events: [],
+            },
+            candidates: [],
+        });
+
+        const result = await (test.service as any).allocateExistingDelivery(test.ctx, test.delivery);
+
+        expect(result.state).toBe('WAITING_STOCK');
+        const notification = test.eventBus.publish.mock.calls
+            .map(call => call[0])
+            .find(event => event instanceof AdminNotificationRequestedEvent);
+        expect(notification?.notification).toMatchObject({
+            mode: 'INCIDENT_FIRING',
+            eventType: 'inventory.auto_card.empty',
+            severity: 'P0',
+            fingerprint: 'inventory.auto_card.empty:channel-1:config-1',
+        });
+    });
+
+    it('raises a P1 incident after the final email attempt fails', async () => {
+        const delivery = {
+            id: 'delivery-1',
+            state: 'RETRYING',
+            quantity: 1,
+            attemptCount: 4,
+            channelId: 'channel-1',
+            orderId: 'order-1',
+            sku: 'GOOGLE-1',
+            poolItems: [{ id: 'pool-1' }],
+            config: { id: 'config-1' },
+            order: { id: 'order-1', code: 'ORDER-1' },
+            orderLine: autoCardLine(1),
+            events: [],
+        };
+        const test = createHarness({ delivery });
+
+        await test.service.recordEmailResult(test.ctx, delivery.id, false, new Error('SMTP down'));
+
+        expect(delivery.state).toBe('MANUAL_REVIEW');
+        const notification = test.eventBus.publish.mock.calls
+            .map(call => call[0])
+            .find(event => event instanceof AdminNotificationRequestedEvent);
+        expect(notification?.notification).toMatchObject({
+            mode: 'INCIDENT_FIRING',
+            eventType: 'commerce.fulfillment.auto_card_failed',
+            severity: 'P1',
+        });
     });
 
     it('does not dispatch the same allocated delivery again within the retry window', async () => {

@@ -1,3 +1,4 @@
+import { AdminNotificationRequestedEvent } from '@vendure/operations-dashboard-plugin';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ManualDigitalDeliveryEvent } from './entities/manual-digital-delivery-event.entity';
@@ -132,5 +133,23 @@ describe('ManualDigitalDeliveryService invariants', () => {
         expect(test.orderService.createFulfillment).toHaveBeenCalledOnce();
         expect(test.delivery.fulfillmentId).toBe('fulfillment-1');
         expect(test.events.at(-1)).toMatchObject({ type: 'EMAIL_SENT' });
+    });
+
+    it('raises a P1 incident after repeated email failures require manual review', async () => {
+        const test = createHarness('EMAIL_FAILED');
+        test.delivery.attemptCount = 4;
+
+        await test.service.recordEmailResult(test.ctx, test.delivery.id, false, new Error('SMTP down'));
+
+        expect(test.delivery.state).toBe('MANUAL_REVIEW');
+        const notification = test.eventBus.publish.mock.calls
+            .map(call => call[0])
+            .find(event => event instanceof AdminNotificationRequestedEvent);
+        expect(notification?.notification).toMatchObject({
+            mode: 'INCIDENT_FIRING',
+            eventType: 'commerce.fulfillment.manual_delivery_failed',
+            severity: 'P1',
+        });
+        expect(notification?.notification.payload).not.toHaveProperty('recipientEmail');
     });
 });

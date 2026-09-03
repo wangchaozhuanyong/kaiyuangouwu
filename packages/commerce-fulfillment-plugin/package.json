@@ -17,6 +17,7 @@
         "@vendure/content-translation-plugin": "0.1.0",
         "@vendure/core": "3.7.2",
         "@vendure/email-plugin": "3.7.2",
+        "@vendure/operations-dashboard-plugin": "0.1.0",
         "@vendure/store-management-plugin": "0.1.0",
         "graphql-tag": "^2.12.6"
     },

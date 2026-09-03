@@ -17,6 +17,7 @@ import {
     TransactionalConnection,
     UserInputError,
 } from '@vendure/core';
+import { AdminNotificationRequestedEvent } from '@vendure/operations-dashboard-plugin';
 import { In, IsNull, LockNotSupportedOnGivenDriverError } from 'typeorm';
 
 import { AutoCardCipherService } from './auto-card-cipher.service';
@@ -114,7 +115,7 @@ export class AutoCardService {
         });
     }
 
-    async publicDeliveriesForOrder(ctx: RequestContext, orderId: ID): Promise<AutoCardDelivery[]> {
+    publicDeliveriesForOrder(ctx: RequestContext, orderId: ID): Promise<AutoCardDelivery[]> {
         return this.connection.getRepository(ctx, AutoCardDelivery).find({
             where: { channelId: ctx.channelId, orderId },
             select: {
@@ -539,6 +540,7 @@ export class AutoCardService {
             delivery.lastError = `发卡数量异常：订单需要 ${delivery.quantity} 份，实际绑定 ${delivery.poolItems.length} 份`;
             await this.connection.getRepository(ctx, AutoCardDelivery).save(delivery);
             await this.addEvent(ctx, delivery, 'MANUAL_REVIEW', delivery.lastError);
+            await this.publishDeliveryFailure(ctx, delivery, delivery.lastError);
             throw new Error(delivery.lastError);
         }
         const fields = parseAutoCardFieldsJson(delivery.schemaSnapshot);
@@ -578,6 +580,7 @@ export class AutoCardService {
         error?: Error,
     ): Promise<void> {
         const delivery = await this.deliveryOrThrow(ctx, deliveryId);
+        const wasManualReview = delivery.state === 'MANUAL_REVIEW';
         if (!success && delivery.state === 'SENT') {
             await this.addEvent(ctx, delivery, 'EMAIL_FAILED', '重复投递失败，原发卡成功状态保持不变');
             return;
@@ -589,6 +592,7 @@ export class AutoCardService {
             delivery.lastError = null;
             await this.connection.getRepository(ctx, AutoCardDelivery).save(delivery);
             await this.addEvent(ctx, delivery, 'EMAIL_SENT', '自动发卡邮件已发送');
+            if (wasManualReview) await this.resolveDeliveryFailure(ctx, delivery);
             await this.completeFulfillment(ctx, delivery);
             return;
         }
@@ -603,6 +607,9 @@ export class AutoCardService {
                 ? '邮件多次发送失败，已转人工处理'
                 : '邮件发送失败，系统将继续重试',
         );
+        if (delivery.state === 'MANUAL_REVIEW') {
+            await this.publishDeliveryFailure(ctx, delivery, delivery.lastError);
+        }
     }
 
     async retryDelivery(ctx: RequestContext, id: ID): Promise<AutoCardDelivery> {
@@ -755,6 +762,7 @@ export class AutoCardService {
             delivery.lastError = '已分配卡密数量超过订单数量，需要人工核查';
             await this.connection.getRepository(ctx, AutoCardDelivery).save(delivery);
             await this.addEvent(ctx, delivery, 'MANUAL_REVIEW', delivery.lastError);
+            await this.publishDeliveryFailure(ctx, delivery, delivery.lastError);
             return delivery;
         }
         const remainingQuantity = delivery.quantity - delivery.poolItems.length;
@@ -785,6 +793,7 @@ export class AutoCardService {
             if (!delivery.events.some(event => event.type === 'WAITING_STOCK')) {
                 await this.addEvent(ctx, delivery, 'WAITING_STOCK', delivery.lastError);
             }
+            await this.publishStockShortage(ctx, delivery, candidates.length, remainingQuantity);
             return delivery;
         }
         const ids = candidates.map(item => item.id);
@@ -802,6 +811,7 @@ export class AutoCardService {
             await this.addEvent(ctx, delivery, 'WAITING_STOCK', delivery.lastError);
             return delivery;
         }
+        const wasWaitingForStock = delivery.events.some(event => event.type === 'WAITING_STOCK');
         delivery.state = 'ALLOCATED';
         delivery.lastError = null;
         delivery.poolItems = [
@@ -816,6 +826,7 @@ export class AutoCardService {
         ];
         await this.connection.getRepository(ctx, AutoCardDelivery).save(delivery);
         await this.addEvent(ctx, delivery, 'ALLOCATED', `已按号池顺序分配 ${delivery.quantity} 份卡密`);
+        if (wasWaitingForStock) await this.resolveStockShortage(ctx, delivery);
         return delivery;
     }
 
@@ -978,6 +989,94 @@ export class AutoCardService {
             }),
         );
     }
+
+    private publishDeliveryFailure(
+        ctx: RequestContext,
+        delivery: AutoCardDelivery,
+        reason: string,
+    ): Promise<void> {
+        return this.eventBus.publish(
+            new AdminNotificationRequestedEvent(ctx, {
+                mode: 'INCIDENT_FIRING',
+                eventType: 'commerce.fulfillment.auto_card_failed',
+                category: 'FULFILLMENT',
+                severity: 'P1',
+                sourceType: 'AutoCardDelivery',
+                sourceId: String(delivery.id),
+                fingerprint: `commerce.fulfillment.auto_card_failed:${delivery.id}`,
+                title: `自动发卡需要人工处理 · 订单 ${delivery.order?.code ?? delivery.orderId}`,
+                payload: {
+                    channelId: String(delivery.channelId),
+                    deliveryId: String(delivery.id),
+                    orderId: String(delivery.orderId),
+                    orderCode: delivery.order?.code ?? null,
+                    sku: delivery.sku,
+                    quantity: delivery.quantity,
+                    attemptCount: delivery.attemptCount,
+                    reason: safeOperationalError(reason),
+                    adminPath: '/catalog/card-pool',
+                },
+            }),
+        );
+    }
+
+    private resolveDeliveryFailure(ctx: RequestContext, delivery: AutoCardDelivery): Promise<void> {
+        return this.eventBus.publish(
+            new AdminNotificationRequestedEvent(ctx, {
+                mode: 'INCIDENT_RESOLVED',
+                eventType: 'commerce.fulfillment.auto_card_failed',
+                category: 'FULFILLMENT',
+                severity: 'P2',
+                fingerprint: `commerce.fulfillment.auto_card_failed:${delivery.id}`,
+                title: '自动发卡异常已恢复',
+                payload: { deliveryId: String(delivery.id), state: delivery.state },
+            }),
+        );
+    }
+
+    private publishStockShortage(
+        ctx: RequestContext,
+        delivery: AutoCardDelivery,
+        availableCount: number,
+        requiredCount: number,
+    ): Promise<void> {
+        return this.eventBus.publish(
+            new AdminNotificationRequestedEvent(ctx, {
+                mode: 'INCIDENT_FIRING',
+                eventType: 'inventory.auto_card.empty',
+                category: 'INVENTORY',
+                severity: 'P0',
+                sourceType: 'AutoCardConfig',
+                sourceId: String(delivery.configId),
+                fingerprint: `inventory.auto_card.empty:${delivery.channelId}:${delivery.configId}`,
+                title: `自动发卡号池不足 · ${delivery.sku}`,
+                payload: {
+                    channelId: String(delivery.channelId),
+                    configId: String(delivery.configId),
+                    deliveryId: String(delivery.id),
+                    orderId: String(delivery.orderId),
+                    sku: delivery.sku,
+                    availableCount,
+                    requiredCount,
+                    adminPath: '/catalog/card-pool',
+                },
+            }),
+        );
+    }
+
+    private resolveStockShortage(ctx: RequestContext, delivery: AutoCardDelivery): Promise<void> {
+        return this.eventBus.publish(
+            new AdminNotificationRequestedEvent(ctx, {
+                mode: 'INCIDENT_RESOLVED',
+                eventType: 'inventory.auto_card.empty',
+                category: 'INVENTORY',
+                severity: 'P2',
+                fingerprint: `inventory.auto_card.empty:${delivery.channelId}:${delivery.configId}`,
+                title: '自动发卡号池已恢复',
+                payload: { configId: String(delivery.configId), sku: delivery.sku },
+            }),
+        );
+    }
 }
 
 function isLockNotSupportedError(error: unknown): boolean {
@@ -987,6 +1086,14 @@ function isLockNotSupportedError(error: unknown): boolean {
             (error.name === 'LockNotSupportedOnGivenDriverError' ||
                 error.message.toLowerCase().includes('locking not supported')))
     );
+}
+
+function safeOperationalError(value: unknown): string {
+    return String(value)
+        .replace(/[\u0000-\u001f\u007f]+/gu, ' ')
+        .replace(/\s+/gu, ' ')
+        .trim()
+        .slice(0, 500);
 }
 
 function boundedInteger(
