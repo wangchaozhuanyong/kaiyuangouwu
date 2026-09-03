@@ -362,6 +362,10 @@ void test('scheduled production monitor checks memory, processes, and health thr
     assert.match(script, /vendure-mysql-restore-drill\.timer/u);
     assert.match(script, /vendure-mysql-restore-drill\.service/u);
     assert.match(script, /ExecMainExitTimestamp/u);
+    assert.match(script, /ActiveState/u);
+    assert.match(script, /systemd_completion_wait_attempts=46/u);
+    assert.match(script, /systemd_completion_wait_interval_seconds=2/u);
+    assert.match(script, /sleep "\$\{systemd_completion_wait_interval_seconds\}"/u);
     assert.match(script, /restore_drill_maximum_age_seconds=777600/u);
     assert.match(script, /pm2 jlist/u);
     assert.match(script, /vendure-api/u);
