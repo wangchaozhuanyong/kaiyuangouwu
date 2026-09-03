@@ -13,8 +13,14 @@ import {
     type PlatformFinanceData,
     type UsdtWalletRecord,
 } from '../../graphql/store-finance.graphql';
+import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
-import { formatDateTime, formatMoney } from '../Sales/sales-utils';
+import { formatDateTime, formatMoney, getPaymentStateLabel } from '../Sales/sales-utils';
+import {
+    storePaymentMethodLabel,
+    storeUsdtPaymentIntentStatusLabel,
+    storeUsdtWalletStatusLabel,
+} from './store-usdt-utils';
 
 const PAGE_SIZE = 50;
 type ProtectedAction =
@@ -137,7 +143,7 @@ export function UsdtPaymentManagementModule() {
                         <section className={sectionClass}>
                             <Heading
                                 title="网店 USDT 收款地址审核"
-                                detail="仅待审地址可以通过或驳回；通过后只影响该 Channel 新生成的付款意向。"
+                                detail="仅待审地址可以通过或驳回；通过后只影响该网店新生成的付款意向。"
                             />
                             <div className="mt-4 grid gap-3 lg:grid-cols-2">
                                 {wallets.map(wallet => (
@@ -169,7 +175,7 @@ export function UsdtPaymentManagementModule() {
                         <section className={sectionClass}>
                             <Heading
                                 title="支付与退款报表"
-                                detail="按网店和 UTC 日期筛选，已结算支付计入实收，退款计入净收。"
+                                detail="按网店和统一时间（UTC）日期筛选，已结算支付计入实收，退款计入净收。"
                             />
                             <div className="mt-4 grid gap-3 md:grid-cols-3">
                                 <label className={labelClass}>
@@ -186,7 +192,7 @@ export function UsdtPaymentManagementModule() {
                                         <option value="ALL">全部网店</option>
                                         {wallets.map(wallet => (
                                             <option key={wallet.channelId} value={wallet.channelId}>
-                                                {wallet.channelCode}
+                                                {getChannelDisplayName(wallet.channelCode)}
                                             </option>
                                         ))}
                                     </select>
@@ -227,9 +233,12 @@ export function UsdtPaymentManagementModule() {
                                         className="rounded-lg border border-slate-200 p-4 text-xs"
                                     >
                                         <div>
-                                            <strong>{item.channelCode}</strong>
-                                            <span className="ml-2 rounded bg-slate-100 px-2 py-0.5">
-                                                {item.paymentMethodCode}
+                                            <strong>{getChannelDisplayName(item.channelCode)}</strong>
+                                            <span
+                                                className="ml-2 rounded bg-slate-100 px-2 py-0.5"
+                                                title={`系统标识：${item.paymentMethodCode}`}
+                                            >
+                                                {storePaymentMethodLabel(item.paymentMethodCode)}
                                             </span>
                                         </div>
                                         <b className="mt-3 block text-xl">
@@ -272,11 +281,27 @@ export function UsdtPaymentManagementModule() {
                                         {(query.data?.storePaymentDetails.items ?? []).map(payment => (
                                             <tr key={`${payment.channelId}:${payment.id}`}>
                                                 <td className="px-3 py-3">
-                                                    <strong>{payment.channelCode}</strong>
-                                                    <span className="block">{payment.orderCode}</span>
+                                                    <strong>
+                                                        {getChannelDisplayName(payment.channelCode)}
+                                                    </strong>
+                                                    <span className="block text-slate-500">
+                                                        订单 {payment.orderCode}
+                                                    </span>
                                                 </td>
-                                                <td className="px-3 py-3">{payment.paymentMethodCode}</td>
-                                                <td className="px-3 py-3">{payment.paymentState}</td>
+                                                <td
+                                                    className="px-3 py-3"
+                                                    title={`系统标识：${payment.paymentMethodCode}`}
+                                                >
+                                                    {storePaymentMethodLabel(payment.paymentMethodCode)}
+                                                </td>
+                                                <td className="px-3 py-3">
+                                                    <span
+                                                        className="rounded bg-slate-100 px-2 py-1 font-medium text-slate-700"
+                                                        title={`系统状态：${payment.paymentState}`}
+                                                    >
+                                                        {getPaymentStateLabel(payment.paymentState)}
+                                                    </span>
+                                                </td>
                                                 <td className="px-3 py-3">
                                                     {formatMoney(payment.amount, payment.currencyCode)}
                                                 </td>
@@ -331,7 +356,8 @@ export function UsdtPaymentManagementModule() {
                                     >
                                         <div className="flex flex-wrap justify-between gap-2">
                                             <strong>
-                                                {refund.channelCode} · 订单 {refund.orderCode}
+                                                {getChannelDisplayName(refund.channelCode)} · 订单{' '}
+                                                {refund.orderCode}
                                             </strong>
                                             <b>
                                                 {formatMoney(refund.amount, refund.currencyCode)} /{' '}
@@ -369,7 +395,7 @@ export function UsdtPaymentManagementModule() {
                                         key={item.channelId}
                                         className="rounded-lg border border-slate-200 p-4 text-xs"
                                     >
-                                        <strong>{item.channelCode}</strong>
+                                        <strong>{getChannelDisplayName(item.channelCode)}</strong>
                                         <b className="mt-2 block text-xl">
                                             {item.receivedUsdtTotal.toFixed(6)} USDT
                                         </b>
@@ -388,9 +414,15 @@ export function UsdtPaymentManagementModule() {
                                     >
                                         <span>
                                             <strong>
-                                                {intent.channelCode} · {intent.orderCode}
+                                                {getChannelDisplayName(intent.channelCode)} · 订单{' '}
+                                                {intent.orderCode}
                                             </strong>
-                                            <small className="ml-2 text-slate-500">{intent.status}</small>
+                                            <small
+                                                className="ml-2 text-slate-500"
+                                                title={`系统状态：${intent.status}`}
+                                            >
+                                                {storeUsdtPaymentIntentStatusLabel(intent.status)}
+                                            </small>
                                             <span className="mt-1 block font-mono text-[10px] text-slate-500">
                                                 {intent.transactionId ?? '尚无交易号'}
                                             </span>
@@ -445,19 +477,19 @@ function WalletReview({
     return (
         <article className="rounded-xl border border-slate-200 p-4 text-xs">
             <div className="flex items-center justify-between gap-2">
-                <strong>{wallet.channelCode}</strong>
+                <strong>{getChannelDisplayName(wallet.channelCode)}</strong>
                 <span
                     className={`rounded px-2 py-1 font-bold ${wallet.reviewStatus === 'ACTIVE' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}
                 >
-                    {wallet.reviewStatus}
+                    {storeUsdtWalletStatusLabel(wallet.reviewStatus)}
                 </span>
             </div>
             <p className="mt-3 break-all text-slate-500">
-                当前：{wallet.activeReceivingAddressMasked ?? '无'}
+                当前收款地址：{wallet.activeReceivingAddressMasked ?? '无'}
                 <br />
-                待审：{wallet.pendingReceivingAddress ?? '无'}
+                待审核地址：{wallet.pendingReceivingAddress ?? '无'}
                 <br />
-                指纹：{wallet.pendingReceivingAddressFingerprint ?? '无'}
+                地址校验码：{wallet.pendingReceivingAddressFingerprint ?? '无'}
             </p>
             {wallet.reviewStatus === 'PENDING' && (
                 <div className="mt-3 border-t pt-3">

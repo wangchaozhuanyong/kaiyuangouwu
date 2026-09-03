@@ -16,7 +16,13 @@ import {
 } from '../../graphql/store-finance.graphql';
 import { useUnsavedChangesWarning } from '../../hooks/use-unsaved-changes-warning';
 import { toUserFacingError } from '../../utils/user-facing-error';
+import { resolveVersionedDraft } from '../../utils/versioned-draft';
 import { formatDateTime, formatMoney } from '../Sales/sales-utils';
+import {
+    storePaymentMethodLabel,
+    storeUsdtPaymentIntentStatusLabel,
+    storeUsdtWalletStatusLabel,
+} from './store-usdt-utils';
 
 interface CurrencyDraft {
     expectedUpdatedAt: string;
@@ -39,7 +45,16 @@ type ProtectedAction = 'save' | 'refresh-fiat' | 'refresh-usdt' | 'submit-wallet
 export function CurrencyAndRatesPanel() {
     const query = useQuery<FinanceData>(MY_STORE_FINANCE_QUERY, { fetchPolicy: 'cache-and-network' });
     const configuration = query.data?.myStoreCurrencyConfiguration;
-    const [draft, setDraft] = useState<CurrencyDraft | null>(null);
+    const [storedDraft, setDraft] = useState<CurrencyDraft | null>(() =>
+        configuration ? toDraft(configuration) : null,
+    );
+    const [draftSignature, setDraftSignature] = useState(configuration?.updatedAt ?? '');
+    const draft = resolveVersionedDraft(
+        configuration?.updatedAt ?? '',
+        draftSignature,
+        configuration ? toDraft(configuration) : null,
+        storedDraft,
+    );
     const [protectedAction, setProtectedAction] = useState<ProtectedAction | null>(null);
     const [notice, setNotice] = useState('');
     const [error, setError] = useState('');
@@ -55,8 +70,10 @@ export function CurrencyAndRatesPanel() {
 
     /* oxlint-disable react/set-state-in-effect -- the versioned finance response initializes the edit draft. */
     useEffect(() => {
-        if (configuration) setDraft(toDraft(configuration));
-    }, [configuration]);
+        if (!configuration || configuration.updatedAt === draftSignature) return;
+        setDraft(toDraft(configuration));
+        setDraftSignature(configuration.updatedAt);
+    }, [configuration, draftSignature]);
     /* oxlint-enable react/set-state-in-effect */
     const dirty = Boolean(
         configuration && draft && JSON.stringify(draft) !== JSON.stringify(toDraft(configuration)),
@@ -343,9 +360,9 @@ export function StoreUsdtPanel() {
                     description="新地址提交后须经超级管理员审核；激活前不会影响现有收款。"
                 />
                 <div className="grid gap-3 md:grid-cols-3">
-                    <Metric label="审核状态" value={walletStatus(wallet.reviewStatus)} />
+                    <Metric label="审核状态" value={storeUsdtWalletStatusLabel(wallet.reviewStatus)} />
                     <Metric label="当前地址" value={wallet.activeReceivingAddressMasked ?? '未配置'} mono />
-                    <Metric label="地址指纹" value={wallet.activeReceivingAddressFingerprint ?? '—'} mono />
+                    <Metric label="地址校验码" value={wallet.activeReceivingAddressFingerprint ?? '—'} mono />
                 </div>
                 {wallet.rejectionReason && (
                     <Notice tone="error" message={`驳回原因：${wallet.rejectionReason}`} />
@@ -385,7 +402,9 @@ export function StoreUsdtPanel() {
                             key={`${item.paymentMethodCode}:${item.currencyCode}`}
                             className="rounded-lg border border-slate-200 p-3 text-xs"
                         >
-                            <strong>{item.paymentMethodCode}</strong>
+                            <strong title={`系统标识：${item.paymentMethodCode}`}>
+                                {storePaymentMethodLabel(item.paymentMethodCode)}
+                            </strong>
                             <span className="ml-2 text-slate-500">{item.currencyCode}</span>
                             <b className="mt-2 block text-lg">
                                 {formatMoney(item.netAmount, item.currencyCode)}
@@ -410,7 +429,10 @@ export function StoreUsdtPanel() {
                             <span>
                                 <strong>订单 {intent.orderCode}</strong>
                                 <small className="ml-2 text-slate-500">
-                                    {intent.status} · {formatDateTime(intent.createdAt)}
+                                    <span title={`系统状态：${intent.status}`}>
+                                        {storeUsdtPaymentIntentStatusLabel(intent.status)}
+                                    </span>{' '}
+                                    · {formatDateTime(intent.createdAt)}
                                 </small>
                                 <span className="mt-1 block font-mono text-[10px] text-slate-500">
                                     {intent.transactionId ?? '尚无交易号'}
@@ -478,18 +500,6 @@ function validateTronAddress(value: string) {
     if (!/^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(clean))
         throw new Error('请输入有效的 TRC20 地址（34 位，T 开头）');
     return clean;
-}
-function walletStatus(value: string) {
-    return (
-        (
-            {
-                UNCONFIGURED: '未配置',
-                PENDING: '待平台审核',
-                ACTIVE: '已审核启用',
-                REJECTED: '已驳回',
-            } as Record<string, string>
-        )[value] ?? value
-    );
 }
 function date(value: string | null) {
     return value ? formatDateTime(value) : '尚未执行';
