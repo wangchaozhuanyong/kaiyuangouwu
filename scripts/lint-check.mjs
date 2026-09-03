@@ -7,6 +7,7 @@ const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url))
 const eslintBin = path.join(repositoryRoot, 'node_modules', 'eslint', 'bin', 'eslint.js');
 const supportedExtensions = new Set(['.cts', '.mjs', '.mts', '.ts', '.tsx']);
 const maxFilesPerProcess = 200;
+const packageWarningBudgets = new Map([['packages/next-admin', 23]]);
 
 function groupName(file) {
     const [topLevel, packageName] = file.split('/');
@@ -54,8 +55,12 @@ for (const [name, files] of groups) {
         : undefined;
     const usesPackageOxlint = packageManifest?.scripts?.lint === 'oxlint';
     if (usesPackageOxlint) {
-        process.stdout.write(`Linting ${name}: files 1-${files.length}/${files.length} (package oxlint)\n`);
-        const result = spawnSync('bun', ['run', 'lint'], {
+        const warningBudget = packageWarningBudgets.get(name) ?? 0;
+        process.stdout.write(
+            `Linting ${name}: files 1-${files.length}/${files.length}` +
+                ` (package oxlint, warning budget ${warningBudget})\n`,
+        );
+        const result = spawnSync('bun', ['run', 'lint', `--max-warnings=${warningBudget}`], {
             cwd: packageDirectory,
             stdio: 'inherit',
         });
@@ -80,7 +85,7 @@ for (const [name, files] of groups) {
             `Linting ${name}: files ${offset + 1}-${offset + shard.length}/${lintFiles.length}` +
                 `${usesPackageFlatConfig ? ' (package config)' : ''}\n`,
         );
-        const result = spawnSync(process.execPath, [eslintBin, ...shard], {
+        const result = spawnSync(process.execPath, [eslintBin, '--max-warnings=0', ...shard], {
             cwd: lintWorkingDirectory,
             stdio: 'inherit',
         });
