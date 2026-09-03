@@ -9,6 +9,8 @@ readonly memory_guard="${repository}/deploy/production-memory-guard.cjs"
 readonly environment_file="${repository}/packages/dev-server/.env"
 readonly healthcheck_maximum_age_seconds=1200
 readonly restore_drill_maximum_age_seconds=777600
+readonly systemd_completion_wait_attempts=46
+readonly systemd_completion_wait_interval_seconds=2
 readonly audit_storefront_realtime_capacity="${AUDIT_STOREFRONT_REALTIME_CAPACITY:-false}"
 
 fail() {
@@ -22,6 +24,8 @@ require_recent_systemd_success() {
     local maximum_age_seconds="$3"
     local result
     local completed_at
+    local active_state
+    local wait_attempt
     local completed_epoch
     local current_epoch
     local age_seconds
@@ -31,12 +35,24 @@ require_recent_systemd_success() {
     [[ "$(systemctl is-active "${timer_name}")" == "active" ]] ||
         fail "${timer_name} is not active"
 
-    result="$(systemctl show "${service_name}" -p Result --value)"
-    [[ "${result}" == "success" ]] || fail "${service_name} last result is ${result:-missing}"
+    for wait_attempt in $(seq 1 "${systemd_completion_wait_attempts}"); do
+        result="$(systemctl show "${service_name}" -p Result --value)"
+        completed_at="$(systemctl show "${service_name}" -p ExecMainExitTimestamp --value)"
+        if [[ "${result}" == "success" && -n "${completed_at}" && "${completed_at}" != "n/a" ]]; then
+            break
+        fi
 
-    completed_at="$(systemctl show "${service_name}" -p ExecMainExitTimestamp --value)"
-    [[ -n "${completed_at}" && "${completed_at}" != "n/a" ]] ||
+        active_state="$(systemctl show "${service_name}" -p ActiveState --value)"
+        if [[ "${active_state}" =~ ^(activating|active|deactivating)$ &&
+            "${wait_attempt}" -lt "${systemd_completion_wait_attempts}" ]]; then
+            sleep "${systemd_completion_wait_interval_seconds}"
+            continue
+        fi
+
+        [[ "${result}" == "success" ]] || fail "${service_name} last result is ${result:-missing}"
         fail "${service_name} has no completion timestamp"
+    done
+
     completed_epoch="$(date -u --date="${completed_at}" +%s 2>/dev/null)" ||
         fail "${service_name} completion timestamp is invalid"
     current_epoch="$(date -u +%s)"
