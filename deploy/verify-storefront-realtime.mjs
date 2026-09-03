@@ -596,16 +596,20 @@ async function waitForFullCapacityRecovery({
                         await boundedDelay(Math.min(openIntervalMs, remainingBeforeOpen), signal);
                     }
                     const remainingMs = Math.max(1, Math.ceil(deadline - performance.now()));
+                    const readyTimeoutForAttemptMs = Math.min(connectionOptions.readyTimeoutMs, remainingMs);
                     let connection;
                     try {
                         connection = await openStorefrontRealtimeConnection({
                             ...connectionOptions,
                             probeId: `release-reopen-${attempts}-${index + 1}`,
-                            readyTimeoutMs: Math.min(connectionOptions.readyTimeoutMs, remainingMs),
+                            readyTimeoutMs: readyTimeoutForAttemptMs,
                             signal,
                         });
                     } catch (error) {
-                        if (performance.now() >= deadline && error instanceof ReadyTimeoutError) {
+                        if (
+                            error instanceof ReadyTimeoutError &&
+                            readyTimeoutForAttemptMs < connectionOptions.readyTimeoutMs
+                        ) {
                             return { state: 'deadline' };
                         }
                         throw error;
