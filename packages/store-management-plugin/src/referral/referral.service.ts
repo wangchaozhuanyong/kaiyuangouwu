@@ -63,6 +63,7 @@ export interface UpdateReferralProgramInput {
     allowBalanceSpend: boolean;
     attributionWindowDays: number;
     defaultPosterTemplate: string;
+    posterTemplates?: string[] | null;
 }
 
 export interface SaveReferralPosterTemplateInput {
@@ -203,7 +204,11 @@ export class ReferralService implements OnApplicationBootstrap {
 
     async updateProgram(ctx: RequestContext, input: UpdateReferralProgramInput) {
         this.validateProgramInput(input);
-        await this.validateDefaultPosterTemplate(ctx, input.defaultPosterTemplate);
+        const enabledDefaultTemplates =
+            input.posterTemplates != null
+                ? input.posterTemplates.filter(id => referralPosterTemplates.includes(id as never))
+                : undefined;
+        await this.validateDefaultPosterTemplate(ctx, input.defaultPosterTemplate, enabledDefaultTemplates);
         const existing = await this.getOrCreateConfig(ctx);
         const config = await this.lockConfigOrThrow(ctx, existing.id);
         this.assertExpectedUpdatedAt(config.updatedAt, input.expectedUpdatedAt);
@@ -216,6 +221,9 @@ export class ReferralService implements OnApplicationBootstrap {
         config.allowBalanceSpend = input.allowBalanceSpend;
         config.attributionWindowDays = input.attributionWindowDays;
         config.defaultPosterTemplate = input.defaultPosterTemplate;
+        if (enabledDefaultTemplates != null) {
+            config.posterTemplates = enabledDefaultTemplates;
+        }
         await this.connection.getRepository(ctx, ReferralProgramConfig).save(config, { reload: false });
         return this.configView(ctx, config, true);
     }
@@ -1449,6 +1457,10 @@ export class ReferralService implements OnApplicationBootstrap {
             config.maxRewardPerOrder == null
                 ? null
                 : convertChannelAmount(ctx, config.maxRewardPerOrder, config.currencyCode, ctx.currencyCode);
+        const posterTemplates =
+            config.posterTemplates == null
+                ? [...referralPosterTemplates]
+                : config.posterTemplates.filter(id => referralPosterTemplates.includes(id as never));
         return {
             channelId: config.channelId,
             updatedAt: config.updatedAt,
@@ -1461,7 +1473,7 @@ export class ReferralService implements OnApplicationBootstrap {
             allowBalanceSpend: config.allowBalanceSpend,
             attributionWindowDays: config.attributionWindowDays,
             defaultPosterTemplate: config.defaultPosterTemplate,
-            posterTemplates: [...referralPosterTemplates],
+            posterTemplates,
             posterTemplateConfigs,
         };
     }
@@ -1495,8 +1507,13 @@ export class ReferralService implements OnApplicationBootstrap {
         }
     }
 
-    private async validateDefaultPosterTemplate(ctx: RequestContext, id: string): Promise<void> {
-        if (referralPosterTemplates.includes(id as never)) return;
+    private async validateDefaultPosterTemplate(
+        ctx: RequestContext,
+        id: string,
+        enabledDefaultTemplates?: string[],
+    ): Promise<void> {
+        const allowedDefaults = enabledDefaultTemplates ?? referralPosterTemplates;
+        if (allowedDefaults.includes(id as never)) return;
         const template = await this.connection.getRepository(ctx, ReferralPosterTemplate).findOne({
             where: { id, channelId: ctx.channelId, enabled: true },
         });

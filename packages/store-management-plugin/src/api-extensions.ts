@@ -848,6 +848,7 @@ export const adminApiExtensions = gql`
         allowBalanceSpend: Boolean!
         attributionWindowDays: Int!
         defaultPosterTemplate: String!
+        posterTemplates: [String!]
     }
 
     input CreateReferralPosterTemplateInput {
@@ -1323,11 +1324,7 @@ export const shopApiExtensions = gql`
         claimStorefrontCoupon(campaignId: ID!): StoreCustomerCoupon!
         applyStorefrontCoupon(id: ID!): StoreCustomerCoupon!
         removeStorefrontCoupon(id: ID!): StoreCustomerCoupon!
-        registerCustomerWithReferral(
-            input: RegisterCustomerInput!
-            inviteCode: String
-            source: String
-        ): RegisterCustomerAccountResult!
+        registerCustomerWithReferral(input: RegisterCustomerInput!, inviteCode: String, source: String): RegisterCustomerAccountResult!
         useMyReferralBalance(amount: Money!): ReferralBalancePaymentResult!
         recordStorefrontVisit(visitorId: String): StorefrontVisitResult!
     }

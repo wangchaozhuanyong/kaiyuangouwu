@@ -134,4 +134,81 @@ describe('referral poster template channel isolation', () => {
             where: { id: 'template-from-another-channel', channelId: 'channel-1' },
         });
     });
+
+    it('persists enabled default poster templates and rejects disabled template as default', async () => {
+        const configRecord = {
+            id: 'config-1',
+            channelId: 'channel-1',
+            enabled: true,
+            rewardRateBps: 500,
+            releaseDelayDays: 7,
+            minimumOrderAmount: 0,
+            maxRewardPerOrder: null,
+            currencyCode: 'CNY',
+            allowBalanceSpend: true,
+            attributionWindowDays: 30,
+            defaultPosterTemplate: 'BRAND_MINIMAL',
+            posterTemplates: ['BRAND_MINIMAL', 'BENEFIT_RED_GOLD'],
+            updatedAt: new Date('2026-01-01T00:00:00Z'),
+        };
+        const save = vi.fn().mockResolvedValue(configRecord);
+        const find = vi.fn().mockResolvedValue([]);
+        const findOne = vi.fn().mockResolvedValue(null);
+        const connection = {
+            getRepository: vi.fn().mockImplementation((_ctx: any, entity: any) => {
+                if (entity.name === 'ReferralPosterTemplate') {
+                    return { find, findOne };
+                }
+                return { save, findOne: vi.fn().mockResolvedValue(configRecord) };
+            }),
+        };
+        const service = new ReferralService(
+            connection as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            { signingSecret: 'test-storefront-visitor-hash-secret' } as any,
+        );
+        (service as any).getOrCreateConfig = vi.fn().mockResolvedValue(configRecord);
+        (service as any).lockConfigOrThrow = vi.fn().mockResolvedValue(configRecord);
+
+        // Updating with disabled template as default should reject
+        await expect(
+            service.updateProgram(
+                { channelId: 'channel-1', currencyCode: 'CNY', channel: { defaultCurrencyCode: 'CNY' } } as any,
+                {
+                    expectedUpdatedAt: configRecord.updatedAt.toISOString(),
+                    enabled: true,
+                    rewardRate: 5,
+                    releaseDelayDays: 7,
+                    minimumOrderAmount: 0,
+                    allowBalanceSpend: true,
+                    attributionWindowDays: 30,
+                    defaultPosterTemplate: 'CLOUD_BRIDGE_ORBIT',
+                    posterTemplates: ['BRAND_MINIMAL', 'BENEFIT_RED_GOLD'],
+                },
+            ),
+        ).rejects.toThrow('默认海报模板无效或已停用');
+
+        // Updating with enabled template as default should succeed and save posterTemplates
+        const result = await service.updateProgram(
+            { channelId: 'channel-1', currencyCode: 'CNY', channel: { defaultCurrencyCode: 'CNY' } } as any,
+            {
+                expectedUpdatedAt: configRecord.updatedAt.toISOString(),
+                enabled: true,
+                rewardRate: 5,
+                releaseDelayDays: 7,
+                minimumOrderAmount: 0,
+                allowBalanceSpend: true,
+                attributionWindowDays: 30,
+                defaultPosterTemplate: 'BENEFIT_RED_GOLD',
+                posterTemplates: ['BRAND_MINIMAL', 'BENEFIT_RED_GOLD'],
+            },
+        );
+
+        expect(configRecord.defaultPosterTemplate).toBe('BENEFIT_RED_GOLD');
+        expect(configRecord.posterTemplates).toEqual(['BRAND_MINIMAL', 'BENEFIT_RED_GOLD']);
+        expect(result.posterTemplates).toEqual(['BRAND_MINIMAL', 'BENEFIT_RED_GOLD']);
+    });
 });

@@ -92,6 +92,7 @@ interface ProgramDraft {
     allowBalanceSpend: boolean;
     attributionWindowDays: number;
     defaultPosterTemplate: string;
+    posterTemplates: string[];
 }
 
 interface CustomerLookupResult {
@@ -176,6 +177,7 @@ function ReferralAdminPage() {
                     maxRewardPerOrder: value.maxRewardPerOrder.trim()
                         ? toMinorAmount(value.maxRewardPerOrder)
                         : null,
+                    posterTemplates: value.posterTemplates,
                 },
             }),
         onSuccess: result => {
@@ -282,6 +284,31 @@ function ReferralAdminPage() {
                                             onMakeDefault={id =>
                                                 setDraft({ ...draft, defaultPosterTemplate: id })
                                             }
+                                            enabledDefaultTemplates={draft.posterTemplates ?? []}
+                                            onToggleDefaultTemplate={(id, enabled) => {
+                                                const current = draft.posterTemplates ?? [];
+                                                const next = enabled
+                                                    ? [...new Set([...current, id])]
+                                                    : current.filter(item => item !== id);
+                                                let nextDefault = draft.defaultPosterTemplate;
+                                                if (!enabled && draft.defaultPosterTemplate === id) {
+                                                    const customEnabled = (
+                                                        program.data?.referralProgram.posterTemplateConfigs ?? []
+                                                    )
+                                                        .filter(t => t.enabled)
+                                                        .map(t => t.id);
+                                                    const allRemaining = [...next, ...customEnabled];
+                                                    if (allRemaining.length > 0) {
+                                                        nextDefault = allRemaining[0];
+                                                        toast.info(`默认模板已顺延调整为「${posterLabel(nextDefault)}」`);
+                                                    }
+                                                }
+                                                setDraft({
+                                                    ...draft,
+                                                    posterTemplates: next,
+                                                    defaultPosterTemplate: nextDefault,
+                                                });
+                                            }}
                                             onChanged={() => void program.refetch()}
                                         />
                                     </div>
@@ -391,6 +418,44 @@ function TodayMetrics({ query }: { query: ReturnType<typeof useQuery<ReferralTod
     );
 }
 
+export const SYSTEM_POSTER_TEMPLATES = [
+    {
+        id: 'BRAND_MINIMAL',
+        nameZh: '云桥简约',
+        nameEn: 'CloudBridge minimal',
+        desc: '经典白蓝极简科技版式，通用度最高，适合各类数字化产品。',
+        gradient: 'linear-gradient(135deg, #1d4ed8, #60a5fa)',
+    },
+    {
+        id: 'BENEFIT_RED_GOLD',
+        nameZh: '冰川蓝光',
+        nameEn: 'Glacier blue',
+        desc: '冷光科技冰川蓝渐变，视觉聚焦，适合 SaaS 与 AI 服务。',
+        gradient: 'linear-gradient(135deg, #0284c7, #38bdf8)',
+    },
+    {
+        id: 'PRODUCT_STORY',
+        nameZh: '青空流线',
+        nameEn: 'Skyline flow',
+        desc: '青空流线清新风格，视觉轻盈舒适，适合生活化与创作工具。',
+        gradient: 'linear-gradient(135deg, #0369a1, #06b6d4)',
+    },
+    {
+        id: 'PREMIUM_DARK',
+        nameZh: '深海科技',
+        nameEn: 'Deep-sea tech',
+        desc: '深邃极客暗黑风，对比度鲜明，适合高阶开发者与 AI 工具。',
+        gradient: 'linear-gradient(135deg, #020b1d, #0f2b5c)',
+    },
+    {
+        id: 'CLOUD_BRIDGE_ORBIT',
+        nameZh: '云桥轨道',
+        nameEn: 'CloudBridge orbit',
+        desc: '紫蓝科技轨道渐变，未来感与营销冲击力强。',
+        gradient: 'linear-gradient(135deg, #4338ca, #7c3aed)',
+    },
+] as const;
+
 function ProgramSettings({
     draft,
     setDraft,
@@ -427,14 +492,14 @@ function ProgramSettings({
                     type="number"
                     min={0}
                     max={100}
-                    step="0.01"
+                    step="0.1"
                     value={draft.rewardRate}
                     disabled={disabled}
                     onChange={event => update('rewardRate', Number(event.target.value))}
                 />
-                <Help>按受邀客户成功订单的有效商品实付金额计算，不含运费和返利余额支付部分。</Help>
+                <Help>受邀人每次成功支付后，按该比例换算为等值邀请奖励。</Help>
             </Field>
-            <Field label="奖励等待生效（天）">
+            <Field label="结算等待天数">
                 <Input
                     type="number"
                     min={0}
@@ -456,17 +521,19 @@ function ProgramSettings({
                     onChange={event => update('minimumOrderAmount', event.target.value)}
                 />
             </Field>
-            <Field label="单笔返利上限（留空不限）">
+            <Field label="单笔最高返利金额">
                 <Input
                     type="number"
-                    min={0.01}
+                    min={0}
                     step="0.01"
                     value={draft.maxRewardPerOrder}
                     disabled={disabled}
+                    placeholder="不设上限"
                     onChange={event => update('maxRewardPerOrder', event.target.value)}
                 />
+                <Help>留空表示单笔订单不限制最大返利金额。</Help>
             </Field>
-            <Field label="邀请归因有效期（天）">
+            <Field label="邀请来源有效期（天）">
                 <Input
                     type="number"
                     min={1}
@@ -488,9 +555,11 @@ function ProgramSettings({
                         <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                        {templates.map(template => (
-                            <SelectItem key={template} value={template}>
-                                {posterLabel(template)}
+                        {SYSTEM_POSTER_TEMPLATES.filter(t =>
+                            (draft.posterTemplates ?? []).includes(t.id),
+                        ).map(template => (
+                            <SelectItem key={template.id} value={template.id}>
+                                {template.nameZh}（系统预置）
                             </SelectItem>
                         ))}
                         {customTemplates
@@ -575,12 +644,16 @@ function PosterTemplateManager({
     disabled,
     defaultTemplate,
     onMakeDefault,
+    enabledDefaultTemplates,
+    onToggleDefaultTemplate,
     onChanged,
 }: {
     templates: ReferralPosterTemplateRecord[];
     disabled: boolean;
     defaultTemplate: string;
     onMakeDefault: (id: string) => void;
+    enabledDefaultTemplates: string[];
+    onToggleDefaultTemplate: (id: string, enabled: boolean) => void;
     onChanged: () => void;
 }) {
     const [draft, setDraft] = useState<PosterTemplateDraft | null>(null);
@@ -639,124 +712,215 @@ function PosterTemplateManager({
     };
 
     return (
-        <section className="border-t pt-6">
-            <div className="flex flex-wrap items-start justify-between gap-3">
+        <section className="border-t pt-6 space-y-8">
+            {/* 系统预置海报模板 */}
+            <div>
                 <div>
-                    <h3 className="m-0 text-base font-semibold">店铺邀请海报模板</h3>
+                    <h3 className="m-0 text-base font-semibold">系统预置海报模板</h3>
                     <p className="mb-0 mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">
-                        按移动端分享图的六个区块编辑内容，保存后会同时用于前台海报、邀请落地页和链接预览；二维码、邀请码、网址由系统自动生成。
+                        系统内置 5 款全屏移动端海报模板（1080×1920）。您可以通过“在客户端显示”开关控制是否在客户端展示，只有开启的模板会出现在买家前台列表中。
                     </p>
                 </div>
-                <Button
-                    type="button"
-                    variant="outline"
-                    disabled={disabled}
-                    onClick={() => setDraft(emptyPosterTemplateDraft(templates.length))}
-                >
-                    <Plus className="size-4" />
-                    新增模板
-                </Button>
-            </div>
-            <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                {templates.map(template => (
-                    <article key={template.id} className="overflow-hidden rounded-xl border bg-card">
-                        <div className="relative aspect-[9/16] overflow-hidden bg-slate-900">
-                            {template.posterBackgroundAsset ? (
-                                <img
-                                    src={template.posterBackgroundAsset.preview}
-                                    alt=""
-                                    className="size-full object-cover"
-                                />
-                            ) : (
-                                <div className="grid size-full place-items-center bg-[linear-gradient(145deg,#172554,#7c3aed,#db2777)] text-sm font-semibold text-white/80">
-                                    待上传竖版背景
-                                </div>
-                            )}
-                            <div className="absolute inset-0 bg-black/25" />
-                            <div className="absolute inset-x-5 top-5 text-white">
-                                <small className="font-bold">{template.titleZh}</small>
-                                <strong className="mt-3 block text-xl leading-tight">
-                                    {template.headlineZh}
-                                </strong>
-                            </div>
-                            <div className="absolute inset-x-5 top-[38%] space-y-2">
-                                {[
-                                    template.featureOneTitleZh,
-                                    template.featureTwoTitleZh,
-                                    template.featureThreeTitleZh,
-                                ].map(title => (
+                <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                    {SYSTEM_POSTER_TEMPLATES.map(sys => {
+                        const isEnabled = enabledDefaultTemplates.includes(sys.id);
+                        const isDefault = defaultTemplate === sys.id;
+                        return (
+                            <article
+                                key={sys.id}
+                                className="flex flex-col justify-between overflow-hidden rounded-xl border bg-card"
+                            >
+                                <div>
                                     <div
-                                        key={title}
-                                        className="rounded-lg bg-white/95 px-3 py-2 text-xs font-bold text-slate-800 shadow"
+                                        className="relative aspect-[16/9] w-full overflow-hidden p-4 text-white flex flex-col justify-between"
+                                        style={{ background: sys.gradient }}
                                     >
-                                        {title}
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-xs font-bold uppercase tracking-wider opacity-90">
+                                                预置海报
+                                            </span>
+                                            {isDefault && (
+                                                <Badge className="bg-white/90 text-slate-900 hover:bg-white text-[11px]">
+                                                    当前默认
+                                                </Badge>
+                                            )}
+                                        </div>
+                                        <div>
+                                            <div className="text-base font-bold drop-shadow-sm">{sys.nameZh}</div>
+                                            <div className="text-xs opacity-80">{sys.nameEn}</div>
+                                        </div>
                                     </div>
-                                ))}
-                            </div>
-                            <div className="absolute inset-x-5 bottom-[15%] rounded-lg bg-white/95 p-3 text-center text-xs font-bold text-slate-800 shadow">
-                                {template.qrTitleZh || '二维码信息区'}
-                            </div>
-                            <div className="absolute inset-x-5 bottom-5 rounded-lg border border-white/25 bg-black/30 px-3 py-2 text-[11px] text-white backdrop-blur">
-                                {template.serviceTextZh || '店铺服务说明'}
-                            </div>
-                        </div>
-                        <div className="space-y-3 p-4">
-                            <div className="flex items-center justify-between gap-2">
-                                <strong className="truncate">{template.name}</strong>
-                                <div className="flex gap-1">
-                                    <Badge variant={template.enabled ? 'secondary' : 'outline'}>
-                                        {template.enabled ? '已启用' : '已停用'}
-                                    </Badge>
-                                    {defaultTemplate === template.id && <Badge>默认</Badge>}
+                                    <div className="p-4 space-y-2">
+                                        <div className="flex items-center justify-between">
+                                            <strong className="text-sm font-semibold">{sys.nameZh}</strong>
+                                            <Badge variant={isEnabled ? 'secondary' : 'outline'}>
+                                                {isEnabled ? '已启用显示' : '已隐藏'}
+                                            </Badge>
+                                        </div>
+                                        <p className="m-0 text-xs leading-relaxed text-muted-foreground">
+                                            {sys.desc}
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="p-4 pt-0 space-y-3">
+                                    <div className="flex items-center justify-between rounded-lg border bg-muted/40 px-3 py-2">
+                                        <span className="text-xs font-medium">在客户端显示</span>
+                                        <Switch
+                                            checked={isEnabled}
+                                            disabled={disabled}
+                                            onCheckedChange={checked => onToggleDefaultTemplate(sys.id, checked)}
+                                        />
+                                    </div>
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        className="w-full"
+                                        disabled={disabled || !isEnabled || isDefault}
+                                        onClick={() => onMakeDefault(sys.id)}
+                                    >
+                                        {isDefault ? '当前为默认海报' : '设为默认海报'}
+                                    </Button>
+                                </div>
+                            </article>
+                        );
+                    })}
+                </div>
+            </div>
+
+            {/* 店铺自定义海报模板 */}
+            <div className="border-t pt-6">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                        <h3 className="m-0 text-base font-semibold">店铺自定义海报模板</h3>
+                        <p className="mb-0 mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">
+                            按移动端分享图的六个区块编辑内容，上传自定义背景图；保存后会同时用于前台海报、邀请落地页和链接预览。
+                        </p>
+                    </div>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        disabled={disabled}
+                        onClick={() => setDraft(emptyPosterTemplateDraft(templates.length))}
+                    >
+                        <Plus className="size-4" />
+                        新增模板
+                    </Button>
+                </div>
+                <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                    {templates.map(template => (
+                        <article key={template.id} className="overflow-hidden rounded-xl border bg-card">
+                            <div className="relative aspect-[9/16] overflow-hidden bg-slate-900">
+                                {template.posterBackgroundAsset ? (
+                                    <img
+                                        src={template.posterBackgroundAsset.preview}
+                                        alt=""
+                                        className="size-full object-cover"
+                                    />
+                                ) : (
+                                    <div className="grid size-full place-items-center bg-[linear-gradient(145deg,#172554,#7c3aed,#db2777)] text-sm font-semibold text-white/80">
+                                        待上传竖版背景
+                                    </div>
+                                )}
+                                <div className="absolute inset-0 bg-black/25" />
+                                <div className="absolute inset-x-5 top-5 text-white">
+                                    <small className="font-bold">{template.titleZh}</small>
+                                    <strong className="mt-3 block text-xl leading-tight">
+                                        {template.headlineZh}
+                                    </strong>
+                                </div>
+                                <div className="absolute inset-x-5 top-[38%] space-y-2">
+                                    {[
+                                        template.featureOneTitleZh,
+                                        template.featureTwoTitleZh,
+                                        template.featureThreeTitleZh,
+                                    ].map(title => (
+                                        <div
+                                            key={title}
+                                            className="rounded-lg bg-white/95 px-3 py-2 text-xs font-bold text-slate-800 shadow"
+                                        >
+                                            {title}
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="absolute inset-x-5 bottom-[15%] rounded-lg bg-white/95 p-3 text-center text-xs font-bold text-slate-800 shadow">
+                                    {template.qrTitleZh || '二维码信息区'}
+                                </div>
+                                <div className="absolute inset-x-5 bottom-5 rounded-lg border border-white/25 bg-black/30 px-3 py-2 text-[11px] text-white backdrop-blur">
+                                    {template.serviceTextZh || '店铺服务说明'}
                                 </div>
                             </div>
-                            <p className="m-0 text-xs text-muted-foreground">
-                                移动端 1080×1920 · 横版 1200×630 · 排序 {template.position}
-                            </p>
-                            <div className="grid grid-cols-2 gap-2">
-                                <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="outline"
-                                    disabled={disabled}
-                                    onClick={() => setDraft(posterTemplateDraft(template))}
-                                >
-                                    <Pencil className="size-3.5" />
-                                    编辑
-                                </Button>
-                                <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="outline"
-                                    disabled={disabled || !template.enabled}
-                                    onClick={() => onMakeDefault(template.id)}
-                                >
-                                    设为默认
-                                </Button>
-                                <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="ghost"
-                                    className="col-span-2 text-destructive hover:text-destructive"
-                                    disabled={disabled || deleteTemplate.isPending}
-                                    onClick={() => {
-                                        if (window.confirm(`确定删除模板“${template.name}”？`)) {
-                                            deleteTemplate.mutate(template.id);
+                            <div className="space-y-3 p-4">
+                                <div className="flex items-center justify-between gap-2">
+                                    <strong className="truncate">{template.name}</strong>
+                                    <div className="flex gap-1">
+                                        <Badge variant={template.enabled ? 'secondary' : 'outline'}>
+                                            {template.enabled ? '已启用' : '已停用'}
+                                        </Badge>
+                                        {defaultTemplate === template.id && <Badge>默认</Badge>}
+                                    </div>
+                                </div>
+                                <p className="m-0 text-xs text-muted-foreground">
+                                    移动端 1080×1920 · 横版 1200×630 · 排序 {template.position}
+                                </p>
+                                <div className="flex items-center justify-between rounded-lg border bg-muted/40 px-3 py-2">
+                                    <span className="text-xs font-medium">在客户端显示</span>
+                                    <Switch
+                                        checked={template.enabled}
+                                        disabled={disabled || updateTemplate.isPending}
+                                        onCheckedChange={checked =>
+                                            updateTemplate.mutate({
+                                                ...posterTemplateDraft(template),
+                                                enabled: checked,
+                                            } as PosterTemplateDraft & { id: string })
                                         }
-                                    }}
-                                >
-                                    <Trash2 className="size-3.5" />
-                                    删除模板
-                                </Button>
+                                    />
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        disabled={disabled}
+                                        onClick={() => setDraft(posterTemplateDraft(template))}
+                                    >
+                                        <Pencil className="size-3.5" />
+                                        编辑
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        disabled={disabled || !template.enabled || defaultTemplate === template.id}
+                                        onClick={() => onMakeDefault(template.id)}
+                                    >
+                                        设为默认
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="ghost"
+                                        className="col-span-2 text-destructive hover:text-destructive"
+                                        disabled={disabled || deleteTemplate.isPending}
+                                        onClick={() => {
+                                            if (window.confirm(`确定删除模板“${template.name}”？`)) {
+                                                deleteTemplate.mutate(template.id);
+                                            }
+                                        }}
+                                    >
+                                        <Trash2 className="size-3.5" />
+                                        删除模板
+                                    </Button>
+                                </div>
                             </div>
+                        </article>
+                    ))}
+                    {!templates.length && (
+                        <div className="rounded-xl border border-dashed p-6 text-sm leading-6 text-muted-foreground md:col-span-2 xl:col-span-3">
+                            暂无店铺自定义模板。您可以点击右上角“新增模板”上传专属背景设计图。已启用的系统模板和自定义模板都会在客户端展示。
                         </div>
-                    </article>
-                ))}
-                {!templates.length && (
-                    <div className="rounded-xl border border-dashed p-6 text-sm leading-6 text-muted-foreground md:col-span-2 xl:col-span-3">
-                        暂无店铺自定义模板。客户端会继续使用内置通用样式；创建并启用第一个模板后，将自动切换为店铺模板。
-                    </div>
-                )}
+                    )}
+                </div>
             </div>
 
             <Dialog open={Boolean(draft)} onOpenChange={open => !open && !pending && setDraft(null)}>
@@ -2364,6 +2528,7 @@ function programDraft(program: ReferralProgramRecord): ProgramDraft {
         allowBalanceSpend: program.allowBalanceSpend,
         attributionWindowDays: program.attributionWindowDays,
         defaultPosterTemplate: program.defaultPosterTemplate,
+        posterTemplates: [...(program.posterTemplates ?? [])],
     };
 }
 function validProgramDraft(draft: ProgramDraft): boolean {
