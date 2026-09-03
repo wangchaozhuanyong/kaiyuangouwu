@@ -59,11 +59,24 @@ export function couponCampaignActionState(
     };
 }
 
+export function claimableCouponCampaigns(campaigns: StorefrontCouponCampaign[]): StorefrontCouponCampaign[] {
+    return campaigns.filter(campaign => !campaign.claimed && campaign.claimable);
+}
+
+export function markCouponCampaignClaimed(
+    campaigns: StorefrontCouponCampaign[],
+    campaignId: string,
+): StorefrontCouponCampaign[] {
+    return campaigns.map(campaign =>
+        campaign.id === campaignId ? { ...campaign, claimed: true, claimable: false } : campaign,
+    );
+}
+
 export function couponCampaignsForTab(
     campaigns: StorefrontCouponCampaign[],
     tab: CouponCenterTab,
 ): StorefrontCouponCampaign[] {
-    if (tab === 'UNCLAIMED') return campaigns.filter(campaign => !campaign.claimed && campaign.claimable);
+    if (tab === 'UNCLAIMED') return claimableCouponCampaigns(campaigns);
     if (tab === 'ACTIVITIES') {
         return campaigns.filter(campaign => campaign.claimed || campaign.claimable);
     }

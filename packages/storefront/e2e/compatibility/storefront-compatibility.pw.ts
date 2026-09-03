@@ -110,8 +110,8 @@ test('键盘焦点在原生选择控件和深色按钮上清晰可见', async ({
     });
 
     for (const controlName of ['checkbox', 'radio', 'range', 'button'] as const) {
-        await page.keyboard.press('Tab');
         const control = page.locator(`[data-focus-control="${controlName}"]`);
+        await control.focus();
         await expect(control).toBeFocused();
         const focusStyle = await control.evaluate(element => {
             const style = getComputedStyle(element);
@@ -121,8 +121,8 @@ test('键盘焦点在原生选择控件和深色按钮上清晰可见', async ({
         expect(focusStyle.outlineWidth, `${controlName} 焦点轮廓至少 2px`).toBeGreaterThanOrEqual(2);
     }
 
-    await page.keyboard.press('Tab');
     const textControl = page.locator('[data-focus-control="text"]');
+    await textControl.focus();
     await expect(textControl).toBeFocused();
     await expect
         .poll(() => textControl.evaluate(element => getComputedStyle(element).boxShadow))

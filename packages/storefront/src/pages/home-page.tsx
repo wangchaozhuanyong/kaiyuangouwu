@@ -35,7 +35,7 @@ import {
 } from 'react';
 
 import { ProductCard } from '../components/common/product-card';
-import { couponCampaignsForTab } from '../coupon-center-state';
+import { claimableCouponCampaigns } from '../coupon-center-state';
 import { heroIndexAfterManualMove, isCompletedHeroSwipe } from '../hero-carousel';
 import {
     builtInHeroFallbackImage,
@@ -46,6 +46,7 @@ import {
 import { selectCategoryPromotionProducts, selectManagedProducts } from '../home-merchandising';
 import { desktopIntroModuleOrder, homepageModuleEntries } from '../homepage-module-order';
 import { compactUiCopy } from '../i18n';
+import { resolveManagedContentCopy } from '../managed-content-copy';
 import { PageSkeleton } from '../route-loading';
 import { couponCardsFromCampaigns, StorefrontCouponCard } from '../storefront-coupons';
 import { DEFAULT_HERO_FALLBACK_IMAGE } from '../storefront-images';
@@ -591,7 +592,7 @@ export function HomePage() {
             : noticeItems.find(item => item.id === openNoticeId);
     const showFooter = Boolean(legalBlock) || !configuredBlockTypes.includes('LEGAL');
     const campaignCouponCards = couponCardsFromCampaigns(
-        couponCampaignsForTab(coupons, 'ACTIVITIES'),
+        claimableCouponCampaigns(coupons),
         language,
         market.currencyCode,
         displayCurrencyCode,
@@ -1273,14 +1274,16 @@ export function HomePage() {
                                 style={{ order: homepageModuleOrder('RECOMMENDATIONS') }}
                             >
                                 <ProductSection
-                                    title={
-                                        recommendationsBlock?.title ||
-                                        (isZh ? '猜你喜欢' : 'You may also like')
-                                    }
-                                    subtitle={
-                                        recommendationsBlock?.subtitle ||
-                                        (isZh ? '继续发现合适的好物' : 'Keep discovering')
-                                    }
+                                    title={resolveManagedContentCopy(
+                                        recommendationsBlock,
+                                        'title',
+                                        isZh ? '猜你喜欢' : 'You may also like',
+                                    )}
+                                    subtitle={resolveManagedContentCopy(
+                                        recommendationsBlock,
+                                        'subtitle',
+                                        isZh ? '继续发现合适的好物' : 'Keep discovering',
+                                    )}
                                     action={isZh ? '更多' : 'More'}
                                     onAction={() => navigateTo({ name: 'recommendations' })}
                                     products={recommendationProducts}
@@ -1455,18 +1458,19 @@ function RecommendationPage({
     const isZh = language === 'zh';
     return (
         <Subpage
-            title={block?.title || (isZh ? '猜你喜欢' : 'You may also like')}
+            title={resolveManagedContentCopy(block, 'title', isZh ? '猜你喜欢' : 'You may also like')}
             language={language}
             onBack={onBack}
         >
             {products.length ? (
                 <ProductSection
-                    subtitle={
-                        block?.subtitle ||
-                        (isZh
+                    subtitle={resolveManagedContentCopy(
+                        block,
+                        'subtitle',
+                        isZh
                             ? '结合你的购买品类和浏览记录推荐'
-                            : 'Based on your purchase categories and browsing history')
-                    }
+                            : 'Based on your purchase categories and browsing history',
+                    )}
                     products={products}
                     market={market}
                     locale={locale}

@@ -1,9 +1,11 @@
 import { useNavigate } from '@tanstack/react-router';
 import {
     ArrowLeft,
+    ChevronDown,
     ChevronRight,
     CircleCheck,
     ClipboardCheck,
+    Mail,
     MapPin,
     Minus,
     Package,
@@ -153,11 +155,13 @@ export function CheckoutPage({
     const hasDigitalProducts = digitalLines.length > 0;
     const [deliveryEmails, setDeliveryEmails] = useState<CustomerDeliveryEmail[]>([]);
     const [selectedDeliveryEmailId, setSelectedDeliveryEmailId] = useState('');
+    const [deliveryEmailPickerOpen, setDeliveryEmailPickerOpen] = useState(false);
 
     useEffect(() => {
         if (!customer || !hasDigitalProducts) {
             setDeliveryEmails([]);
             setSelectedDeliveryEmailId('');
+            setDeliveryEmailPickerOpen(false);
             return;
         }
         const controller = new AbortController();
@@ -264,7 +268,7 @@ export function CheckoutPage({
             };
 
             if (hasDigitalProducts) {
-                const selectedContactId = getString('deliveryEmailContactId');
+                const selectedContactId = selectedDeliveryEmailId;
                 if (selectedContactId) {
                     await api.setDeliveryEmail({ contactId: selectedContactId });
                 } else {
@@ -510,23 +514,14 @@ export function CheckoutPage({
                             <span>{isZh ? '邮箱交付' : 'Email delivery'}</span>
                         </header>
                         {deliveryEmails.length > 0 && (
-                            <label className={checkoutPageClassName('digital-delivery-email-field')}>
-                                <span>{isZh ? '选择已保存邮箱' : 'Saved delivery email'}</span>
-                                <select
-                                    name="deliveryEmailContactId"
-                                    value={selectedDeliveryEmailId}
-                                    onChange={event => setSelectedDeliveryEmailId(event.target.value)}
-                                >
-                                    {deliveryEmails.map(item => (
-                                        <option key={item.id} value={item.id}>
-                                            {item.label ? `${item.label} · ` : ''}
-                                            {item.emailAddress}
-                                            {item.isDefault ? (isZh ? '（默认）' : ' (default)') : ''}
-                                        </option>
-                                    ))}
-                                    <option value="">{isZh ? '使用新邮箱' : 'Use a new email'}</option>
-                                </select>
-                            </label>
+                            <DeliveryEmailPicker
+                                deliveryEmails={deliveryEmails}
+                                selectedId={selectedDeliveryEmailId}
+                                open={deliveryEmailPickerOpen}
+                                language={language}
+                                onOpenChange={setDeliveryEmailPickerOpen}
+                                onSelect={setSelectedDeliveryEmailId}
+                            />
                         )}
                         {!selectedDeliveryEmailId && (
                             <>
@@ -1202,16 +1197,156 @@ function shippingMethodDetails(
     }
     return details.join(' · ');
 }
+
+export function DeliveryEmailPicker({
+    deliveryEmails,
+    selectedId,
+    open,
+    language,
+    onOpenChange,
+    onSelect,
+}: {
+    deliveryEmails: CustomerDeliveryEmail[];
+    selectedId: string;
+    open: boolean;
+    language: StorefrontLanguage;
+    onOpenChange: (open: boolean) => void;
+    onSelect: (id: string) => void;
+}) {
+    const isZh = language === 'zh';
+    const selectedEmail = deliveryEmails.find(item => item.id === selectedId) ?? null;
+    const selectedMeta = selectedEmail
+        ? [selectedEmail.label, selectedEmail.isDefault ? (isZh ? '默认邮箱' : 'Default email') : '']
+              .filter(Boolean)
+              .join(' · ')
+        : isZh
+          ? '手动填写并再次确认'
+          : 'Enter and confirm the address manually';
+    const selectEmail = (id: string) => {
+        onSelect(id);
+        onOpenChange(false);
+    };
+
+    return (
+        <>
+            <div className={checkoutPageClassName('digital-delivery-email-field')}>
+                <span>{isZh ? '选择已保存邮箱' : 'Saved delivery email'}</span>
+                <button
+                    type="button"
+                    className={checkoutPageClassName(
+                        `digital-delivery-email-trigger${open ? ' is-open' : ''}`,
+                    )}
+                    aria-label={
+                        isZh
+                            ? `选择交付邮箱，当前为${selectedEmail?.emailAddress ?? '使用新邮箱'}`
+                            : `Choose delivery email, currently ${selectedEmail?.emailAddress ?? 'using a new email'}`
+                    }
+                    aria-haspopup="dialog"
+                    aria-expanded={open}
+                    onClick={() => onOpenChange(true)}
+                >
+                    <span>
+                        <strong>
+                            {selectedEmail?.emailAddress ?? (isZh ? '使用新邮箱' : 'Use a new email')}
+                        </strong>
+                        <small>{selectedMeta}</small>
+                    </span>
+                    <ChevronDown aria-hidden="true" />
+                </button>
+            </div>
+            {open && (
+                <Sheet
+                    title={isZh ? '选择交付邮箱' : 'Choose delivery email'}
+                    language={language}
+                    className="delivery-email-picker-sheet"
+                    showHandle
+                    onClose={() => onOpenChange(false)}
+                >
+                    <div className={checkoutPageClassName('delivery-email-picker-content')}>
+                        <p>
+                            {isZh
+                                ? '选中的邮箱将用于接收订单和数字内容领取入口。'
+                                : 'We will send order updates and digital delivery instructions to this address.'}
+                        </p>
+                        <div
+                            className={checkoutPageClassName('delivery-email-picker-list')}
+                            role="radiogroup"
+                            aria-label={isZh ? '已保存的交付邮箱' : 'Saved delivery emails'}
+                        >
+                            {deliveryEmails.map(item => {
+                                const selected = item.id === selectedId;
+                                const meta = [
+                                    item.label,
+                                    item.isDefault ? (isZh ? '默认邮箱' : 'Default email') : '',
+                                ]
+                                    .filter(Boolean)
+                                    .join(' · ');
+                                return (
+                                    <button
+                                        key={item.id}
+                                        type="button"
+                                        role="radio"
+                                        aria-checked={selected}
+                                        className={checkoutPageClassName(
+                                            `delivery-email-picker-option${selected ? ' is-selected' : ''}`,
+                                        )}
+                                        onClick={() => selectEmail(item.id)}
+                                    >
+                                        <span className="delivery-email-picker-icon">
+                                            <Mail aria-hidden="true" />
+                                        </span>
+                                        <span>
+                                            <strong>{item.emailAddress}</strong>
+                                            {meta && <small>{meta}</small>}
+                                        </span>
+                                        {selected ? <CircleCheck aria-hidden="true" /> : <span />}
+                                    </button>
+                                );
+                            })}
+                            <button
+                                type="button"
+                                role="radio"
+                                aria-checked={!selectedId}
+                                className={checkoutPageClassName(
+                                    `delivery-email-picker-option${selectedId ? '' : ' is-selected'}`,
+                                )}
+                                onClick={() => selectEmail('')}
+                            >
+                                <span className="delivery-email-picker-icon">
+                                    <Plus aria-hidden="true" />
+                                </span>
+                                <span>
+                                    <strong>{isZh ? '使用新邮箱' : 'Use a new email'}</strong>
+                                    <small>
+                                        {isZh
+                                            ? '手动填写并确认本次交付邮箱'
+                                            : 'Enter and confirm an address for this order'}
+                                    </small>
+                                </span>
+                                {!selectedId ? <CircleCheck aria-hidden="true" /> : <span />}
+                            </button>
+                        </div>
+                    </div>
+                </Sheet>
+            )}
+        </>
+    );
+}
+
 function Sheet({
     title,
     language,
     onClose,
     children,
+    className,
+    showHandle = false,
 }: {
     title: string;
     language: StorefrontLanguage;
     onClose: () => void;
     children: ReactNode;
+    className?: string;
+    showHandle?: boolean;
 }) {
     const dialogRef = useRef<HTMLElement>(null);
     const previousFocus = useRef<HTMLElement | null>(null);
@@ -1265,7 +1400,10 @@ function Sheet({
         };
     }, []);
     return (
-        <div className={checkoutPageClassName('sheet-layer')} role="presentation">
+        <div
+            className={checkoutPageClassName(`sheet-layer${className ? ` ${className}-layer` : ''}`)}
+            role="presentation"
+        >
             <button
                 className={checkoutPageClassName('sheet-mask')}
                 type="button"
@@ -1274,12 +1412,18 @@ function Sheet({
             />
             <section
                 ref={dialogRef}
-                className={checkoutPageClassName('sheet')}
+                className={checkoutPageClassName(`sheet${className ? ` ${className}` : ''}`)}
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby={titleId}
                 tabIndex={-1}
             >
+                {showHandle ? (
+                    <span
+                        className={checkoutPageClassName('delivery-email-picker-handle')}
+                        aria-hidden="true"
+                    />
+                ) : null}
                 <header>
                     <strong id={titleId}>{title}</strong>
                     <button type="button" onClick={onClose} aria-label={language === 'zh' ? '关闭' : 'Close'}>

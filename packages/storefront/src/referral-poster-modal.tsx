@@ -292,14 +292,18 @@ export function ReferralPosterModal({
 
     return (
         <div
-            className="fixed inset-0 z-[100] grid place-items-center overflow-x-hidden overflow-y-auto bg-slate-950/65 p-4 backdrop-blur-sm"
+            className={
+                'fixed inset-0 z-[100] flex items-start justify-center overflow-x-hidden overflow-y-auto ' +
+                'bg-slate-950/65 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] ' +
+                'pt-[max(1rem,env(safe-area-inset-top))] backdrop-blur-sm'
+            }
             role="dialog"
             aria-modal="true"
             aria-label={isZh ? '选择邀请海报' : 'Choose referral poster'}
             onClick={onClose}
         >
             <div
-                className="relative w-full max-w-sm min-w-0 overflow-hidden rounded-3xl bg-white p-4 shadow-2xl"
+                className="relative my-auto w-full max-w-sm min-w-0 overflow-hidden rounded-3xl bg-white px-4 pb-4 pt-14 shadow-2xl"
                 onClick={event => event.stopPropagation()}
             >
                 <button
@@ -319,7 +323,7 @@ export function ReferralPosterModal({
                     )}{' '}
                     {isZh ? '我的邀请码' : 'My invitation code'} {inviteCode}
                 </p>
-                <div className="relative mx-auto aspect-[9/16] max-h-[54vh] w-auto max-w-full shrink-0 overflow-hidden rounded-[20px] bg-slate-100 shadow-inner">
+                <div className="relative mx-auto aspect-[9/16] max-h-[54dvh] w-auto max-w-full shrink-0 overflow-hidden rounded-[20px] bg-slate-100 shadow-inner">
                     {posterDataUrl ? (
                         <img
                             className={`size-full object-cover transition-opacity duration-150 ${generating ? 'opacity-70' : 'opacity-100'}`}

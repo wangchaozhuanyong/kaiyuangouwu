@@ -61,7 +61,7 @@ describe('referral poster templates', () => {
         expect(markup).toContain('data-template-id="BENEFIT_RED_GOLD" data-active="false"');
     });
 
-    it('constrains container width and template scrolling when language is English', () => {
+    it('keeps the poster reachable and unobscured on short mobile viewports', () => {
         vi.stubGlobal('window', { location: { origin: 'https://shop.example.com' } });
         const markup = renderToStaticMarkup(
             createElement(ReferralPosterModal, {
@@ -81,7 +81,11 @@ describe('referral poster templates', () => {
         expect(markup).toContain('overflow-x-hidden');
         expect(markup).toContain('min-w-0');
         expect(markup).toContain('max-w-sm');
-        expect(markup).toContain('max-h-[54vh]');
+        expect(markup).toContain('flex items-start justify-center');
+        expect(markup).toContain('my-auto');
+        expect(markup).toContain('pt-14');
+        expect(markup).toContain('max-h-[54dvh]');
+        expect(markup).not.toContain('grid place-items-center');
     });
 
     it('combines custom templates with enabled default templates and omits disabled default templates', () => {
