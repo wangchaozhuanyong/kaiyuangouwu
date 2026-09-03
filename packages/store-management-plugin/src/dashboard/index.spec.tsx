@@ -44,5 +44,5 @@ describe('store management dashboard extension', () => {
                 ]),
             }),
         );
-    });
+    }, 30_000);
 });

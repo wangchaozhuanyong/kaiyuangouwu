@@ -426,6 +426,10 @@ export class ShopApi {
         return this.cartCheckoutApi.applyCustomerCoupon(id);
     }
 
+    async applyBestCustomerCoupon(): Promise<StoreCustomerCoupon | null> {
+        return this.cartCheckoutApi.applyBestCustomerCoupon();
+    }
+
     async removeCustomerCoupon(id: string): Promise<StoreCustomerCoupon> {
         return this.cartCheckoutApi.removeCustomerCoupon(id);
     }

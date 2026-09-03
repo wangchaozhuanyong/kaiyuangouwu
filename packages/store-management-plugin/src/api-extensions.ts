@@ -1325,6 +1325,7 @@ export const shopApiExtensions = gql`
         createStorefrontUsdtCheckoutQuote: StorefrontUsdtCheckoutQuote!
         claimStorefrontCoupon(campaignId: ID!): StoreCustomerCoupon!
         applyStorefrontCoupon(id: ID!): StoreCustomerCoupon!
+        applyBestStorefrontCoupon: StoreCustomerCoupon
         removeStorefrontCoupon(id: ID!): StoreCustomerCoupon!
         registerCustomerWithReferral(
             input: RegisterCustomerInput!

@@ -625,6 +625,40 @@ describe('ShopApi storefront mutations', () => {
         expect(`${claimRequest.query}${applyRequest.query}`).not.toContain('couponCode');
     });
 
+    it('asks the server to apply the best owned coupon without exposing coupon codes', async () => {
+        const customerCoupon = {
+            id: 'customer-coupon-2',
+            campaignId: 'campaign-2',
+            campaignName: '当前最优券',
+            campaignKind: 'ORDER_PERCENTAGE',
+            status: 'LOCKED',
+            minimumSpend: 0,
+            discountAmount: null,
+            discountRate: 8,
+            claimedAt: '2026-08-25T00:00:00.000Z',
+            validFrom: '2026-08-25T00:00:00.000Z',
+            validUntil: null,
+            lockedAt: '2026-09-04T00:00:00.000Z',
+            usedAt: null,
+            returnedAt: null,
+            expiredAt: null,
+            lockedOrderId: 'order-1',
+            usedOrderId: null,
+            returnCount: 0,
+            usable: false,
+        };
+        const fetchMock = mockGraphQlResponse({ applyBestStorefrontCoupon: customerCoupon });
+
+        await expect(new ShopApi(market).applyBestCustomerCoupon()).resolves.toMatchObject({
+            id: 'customer-coupon-2',
+            campaignName: '当前最优券',
+        });
+
+        const request = JSON.parse(jsonRequestBody(fetchMock.mock.calls[0][1])) as { query: string };
+        expect(request.query).toContain('applyBestStorefrontCoupon');
+        expect(request.query).not.toContain('couponCode');
+    });
+
     it('loads immutable coupon usage records separately from current coupon status', async () => {
         const fetchMock = mockGraphQlResponse({
             myStorefrontCouponUsageRecords: [

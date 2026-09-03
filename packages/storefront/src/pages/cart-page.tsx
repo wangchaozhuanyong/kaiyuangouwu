@@ -2,6 +2,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { Check, ChevronRight, Minus, Package, ShoppingBag, TicketPercent } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { appliedCouponLabel } from '../storefront-coupons';
 import { routeHref, routeNavigateOptions, type RouteState } from '../storefront-router';
 import { CartGroup, CouponSheet } from '../storefront-ui/cart-ui';
 import { EmptyState, InlineError, ListSkeleton } from '../storefront-ui/page-shell';
@@ -89,6 +90,7 @@ export function CartPage() {
     );
     const digitalOnly = digital.length > 0 && physical.length === 0;
     const order = cart?.checkoutOrder;
+    const selectedCouponLabel = order ? appliedCouponLabel(coupons, order.id, language) : null;
     const locked = cart?.state === 'PAYMENT_PENDING';
     const discount = Math.abs(order?.discounts.reduce((sum, item) => sum + item.amountWithTax, 0) ?? 0);
     const amount = locked && order ? order.totalWithTax : (order?.subTotalWithTax ?? 0);
@@ -336,14 +338,9 @@ export function CartPage() {
                             <strong>{isZh ? '优惠信息' : 'Offers'}</strong>
                         </span>
                         <span>
-                            <small>
-                                {discount
-                                    ? isZh
-                                        ? `已优惠 ${formatMoney(discount, order?.currencyCode ?? market.currencyCode, locale)}`
-                                        : `${formatMoney(discount, order?.currencyCode ?? market.currencyCode, locale)} saved`
-                                    : isZh
-                                      ? '选择已领取优惠券'
-                                      : 'Choose a claimed coupon'}
+                            <small title={selectedCouponLabel ?? undefined}>
+                                {selectedCouponLabel ??
+                                    (isZh ? '选择已领取优惠券' : 'Choose a claimed coupon')}
                             </small>
                             <ChevronRight />
                         </span>

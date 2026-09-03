@@ -1096,6 +1096,13 @@
     font-weight: var(--font-weight-semibold);
 }
 
+.applied-coupons > div button:disabled {
+    cursor: not-allowed;
+    border-color: var(--line);
+    background: var(--soft);
+    color: var(--muted);
+}
+
 .coupon-sheet-content > .form-error {
     margin-top: 12px;
     display: block;
