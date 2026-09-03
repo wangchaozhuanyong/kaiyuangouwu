@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 
 const routes = ['/', '/login', '/register', '/support', '/legal?id=privacy'];
 
@@ -50,23 +50,32 @@ async function mockActiveCoupons(page: Page, campaigns: Array<Record<string, unk
     });
 }
 
-async function waitForHomepageActions(page: Page) {
-    const actions = page.locator('.section-header-action-btn');
-
+async function waitForHomepageContent(page: Page, content: Locator) {
     for (let attempt = 0; attempt < 3; attempt += 1) {
         const retryButton = page.getByRole('button', { name: /^(?:重新加载|Try again)$/u });
         if (await retryButton.isVisible()) await retryButton.click();
 
         try {
-            await actions.first().waitFor({ state: 'visible', timeout: 10_000 });
-            return actions;
+            await content.first().waitFor({ state: 'visible', timeout: 10_000 });
+            return content;
         } catch (error) {
             if (attempt === 2) throw error;
             await page.reload({ waitUntil: 'domcontentloaded' });
         }
     }
 
-    return actions;
+    return content;
+}
+
+async function waitForHomepageActions(page: Page) {
+    return waitForHomepageContent(page, page.locator('.section-header-action-btn'));
+}
+
+async function openFirstProduct(page: Page) {
+    const productEntry = page.getByRole('button', { name: /^查看 / }).first();
+    await waitForHomepageContent(page, productEntry);
+    await productEntry.click();
+    await expect(page).toHaveURL(/\/product\?id=/);
 }
 
 test('核心公开页面在目标浏览器中正常渲染', async ({ page }) => {
@@ -127,10 +136,7 @@ test('核心公开页面在目标浏览器中正常渲染', async ({ page }) => 
 test('商品详情头部在页面滚动时保持可见', async ({ page }) => {
     await enterStorefront(page);
 
-    const productEntry = page.getByRole('button', { name: /^查看 / }).first();
-    await expect(productEntry).toBeVisible();
-    await productEntry.click();
-    await expect(page).toHaveURL(/\/product\?id=/);
+    await openFirstProduct(page);
 
     const header = page.locator('.product-detail-header');
     await expect(header).toBeVisible();
@@ -167,6 +173,8 @@ test('商品详情头部在页面滚动时保持可见', async ({ page }) => {
 });
 
 test('商品详情显示匹配优惠券的券后价并可进入优惠券中心', async ({ page }) => {
+    // The compatibility suite reads the live catalog, whose first product can use any channel currency.
+    // Leaving the optional legacy field unset keeps this test focused on product applicability.
     await mockActiveCoupons(page, [
         {
             id: 'e2e-order-coupon',
@@ -178,7 +186,6 @@ test('商品详情显示匹配优惠券的券后价并可进入优惠券中心',
             claimEndsAt: null,
             validityDays: null,
             minimumSpend: 0,
-            currencyCode: 'CNY',
             discountAmount: null,
             discountRate: 8,
             collectionIds: [],
@@ -190,11 +197,7 @@ test('商品详情显示匹配优惠券的券后价并可进入优惠券中心',
     ]);
 
     await enterStorefront(page);
-    await page
-        .getByRole('button', { name: /^查看 / })
-        .first()
-        .click();
-    await expect(page).toHaveURL(/\/product\?id=/);
+    await openFirstProduct(page);
 
     const couponPrice = page.locator('.detail-coupon-price');
     await expect(couponPrice).toBeVisible();
@@ -215,7 +218,6 @@ test('商品详情在优惠券不匹配时保持原价展示', async ({ page }) 
             claimEndsAt: null,
             validityDays: null,
             minimumSpend: 0,
-            currencyCode: 'CNY',
             discountAmount: null,
             discountRate: 8,
             collectionIds: [],
@@ -227,11 +229,7 @@ test('商品详情在优惠券不匹配时保持原价展示', async ({ page }) 
     ]);
 
     await enterStorefront(page);
-    await page
-        .getByRole('button', { name: /^查看 / })
-        .first()
-        .click();
-    await expect(page).toHaveURL(/\/product\?id=/);
+    await openFirstProduct(page);
 
     await expect(page.locator('.detail-price')).toBeVisible();
     await expect(page.locator('.detail-coupon-price')).toHaveCount(0);
