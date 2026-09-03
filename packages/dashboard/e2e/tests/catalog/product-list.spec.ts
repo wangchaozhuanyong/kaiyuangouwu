@@ -262,9 +262,11 @@ test.describe('Product List', () => {
             expect(url.searchParams.get('page')).toBe('2');
 
             // Page 2 rows should be different from page 1
+            await expect
+                .poll(async () => (await lp.getRows().allTextContents())[0], { timeout: 10_000 })
+                .not.toBe(page1Rows[0]);
             const page2Rows = await lp.getRows().allTextContents();
             expect(page2Rows.length).toBeGreaterThan(0);
-            expect(page2Rows[0]).not.toBe(page1Rows[0]);
         });
 
         test('should change rows per page', async ({ page }) => {
