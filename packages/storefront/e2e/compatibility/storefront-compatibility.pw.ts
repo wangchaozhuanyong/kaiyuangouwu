@@ -91,6 +91,44 @@ test('核心公开页面在目标浏览器中正常渲染', async ({ page }) => 
     expect(badResources).toEqual([]);
 });
 
+test('键盘焦点在原生选择控件和深色按钮上清晰可见', async ({ page }) => {
+    await enterStorefront(page);
+    await page.evaluate(() => {
+        const fixture = document.createElement('div');
+        fixture.dataset.focusFixture = 'true';
+        fixture.style.cssText =
+            'position:fixed;inset:8px auto auto 8px;z-index:99999;display:flex;gap:12px;padding:12px;background:white';
+        fixture.innerHTML = [
+            '<input data-focus-control="checkbox" type="checkbox" aria-label="测试复选框">',
+            '<input data-focus-control="radio" type="radio" aria-label="测试单选框">',
+            '<input data-focus-control="range" type="range" aria-label="测试范围">',
+            '<button data-focus-control="button" style="background:#0f172a;color:white">测试按钮</button>',
+            '<input data-focus-control="text" type="text" aria-label="测试文本框">',
+        ].join('');
+        document.body.prepend(fixture);
+        (document.activeElement as HTMLElement | null)?.blur();
+    });
+
+    for (const controlName of ['checkbox', 'radio', 'range', 'button'] as const) {
+        await page.keyboard.press('Tab');
+        const control = page.locator(`[data-focus-control="${controlName}"]`);
+        await expect(control).toBeFocused();
+        const focusStyle = await control.evaluate(element => {
+            const style = getComputedStyle(element);
+            return { outlineStyle: style.outlineStyle, outlineWidth: Number.parseFloat(style.outlineWidth) };
+        });
+        expect(focusStyle.outlineStyle, `${controlName} 应显示焦点轮廓`).not.toBe('none');
+        expect(focusStyle.outlineWidth, `${controlName} 焦点轮廓至少 2px`).toBeGreaterThanOrEqual(2);
+    }
+
+    await page.keyboard.press('Tab');
+    const textControl = page.locator('[data-focus-control="text"]');
+    await expect(textControl).toBeFocused();
+    await expect
+        .poll(() => textControl.evaluate(element => getComputedStyle(element).boxShadow))
+        .not.toBe('none');
+});
+
 test('旧版浏览器降级页可独立渲染', async ({ page }) => {
     const response = await page.goto('/unsupported-browser.html', { waitUntil: 'domcontentloaded' });
 

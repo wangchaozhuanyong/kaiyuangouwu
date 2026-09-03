@@ -217,17 +217,8 @@ button:disabled {
 }
 
 button:focus-visible {
-    outline: 2px solid rgba(15, 23, 42, 0.28);
+    outline: 2px solid #3b82f6;
     outline-offset: 2px;
-}
-
-input:focus,
-input:focus-visible,
-textarea:focus,
-textarea:focus-visible,
-select:focus,
-select:focus-visible {
-    outline: none !important;
 }
 
 :where(
@@ -236,9 +227,22 @@ select:focus-visible {
         ):not([type='reset']):not([type='hidden']),
     textarea,
     select
-):focus {
+):focus,
+:where(
+    input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='button']):not(
+            [type='submit']
+        ):not([type='reset']):not([type='hidden']),
+    textarea,
+    select
+):focus-visible {
+    outline: none !important;
     border-color: #3b82f6;
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
+:where(input[type='checkbox'], input[type='radio'], input[type='range']):focus-visible {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
 }
 
 button:active:not(:disabled) {
