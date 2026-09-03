@@ -1,7 +1,21 @@
 /* eslint-disable max-len -- Tailwind utility strings must remain intact for static extraction. */
 import { useQuery } from '@tanstack/react-query';
-import { Check, Copy, Gift, Image, Info, Share2, ShoppingBag, Users, WalletCards } from 'lucide-react';
+import {
+    Check,
+    ChevronLeft,
+    ChevronRight,
+    Copy,
+    Gift,
+    Image,
+    Info,
+    Share2,
+    ShoppingBag,
+    Users,
+    WalletCards,
+} from 'lucide-react';
 import { useMemo, useState } from 'react';
+
+const REFERRAL_LIST_PAGE_SIZE = 10;
 
 import { ShopApi } from '../api';
 import { languageCodeFor } from '../i18n';
@@ -61,6 +75,23 @@ export function ReferralPage() {
         () => overview?.ledger.filter(entry => entry.currencyCode === market.currencyCode) ?? [],
         [market.currencyCode, overview?.ledger],
     );
+    const [inviteePage, setInviteePage] = useState(1);
+    const [ledgerPage, setLedgerPage] = useState(1);
+
+    const invitees = useMemo(() => overview?.invitees ?? [], [overview?.invitees]);
+    const inviteeTotalPages = Math.max(1, Math.ceil(invitees.length / REFERRAL_LIST_PAGE_SIZE));
+    const safeInviteePage = Math.min(Math.max(1, inviteePage), inviteeTotalPages);
+    const paginatedInvitees = useMemo(() => {
+        const start = (safeInviteePage - 1) * REFERRAL_LIST_PAGE_SIZE;
+        return invitees.slice(start, start + REFERRAL_LIST_PAGE_SIZE);
+    }, [invitees, safeInviteePage]);
+
+    const ledgerTotalPages = Math.max(1, Math.ceil(displayLedger.length / REFERRAL_LIST_PAGE_SIZE));
+    const safeLedgerPage = Math.min(Math.max(1, ledgerPage), ledgerTotalPages);
+    const paginatedLedger = useMemo(() => {
+        const start = (safeLedgerPage - 1) * REFERRAL_LIST_PAGE_SIZE;
+        return displayLedger.slice(start, start + REFERRAL_LIST_PAGE_SIZE);
+    }, [displayLedger, safeLedgerPage]);
 
     const copyInvite = async () => {
         if (!overview) return;
@@ -138,47 +169,54 @@ export function ReferralPage() {
                     onAction={() => void overviewQuery.refetch()}
                 />
             ) : (
-                <div className="mx-auto grid w-full max-w-5xl gap-4 px-3 pb-10 pt-3 lg:grid-cols-[1.15fr_0.85fr] lg:px-6">
-                    <section className="overflow-hidden rounded-3xl bg-[radial-gradient(circle_at_88%_0%,rgba(251,191,36,0.5),transparent_28%),linear-gradient(145deg,#991b1b,#dc2626_58%,#be123c)] p-5 text-white shadow-[0_18px_50px_-24px_rgba(153,27,27,0.7)] lg:p-7">
-                        <h1 className="m-0 text-3xl font-black tracking-tight">
-                            {isZh ? '邀请好友，获得奖励' : 'Invite friends, earn rewards'}
+                <div className="mx-auto grid w-full min-w-0 max-w-5xl overflow-hidden gap-4 px-3 pb-10 pt-3 lg:grid-cols-[1.15fr_0.85fr] lg:px-6">
+                    <section className="relative overflow-hidden rounded-3xl border border-amber-500/20 bg-[radial-gradient(circle_at_90%_0%,rgba(245,158,11,0.38)_0%,transparent_50%),radial-gradient(circle_at_10%_95%,rgba(59,130,246,0.12)_0%,transparent_45%),linear-gradient(145deg,#090d16_0%,#111827_52%,#1e293b_100%)] p-5 text-white shadow-[0_22px_55px_-16px_rgba(0,0,0,0.75),0_0_30px_-8px_rgba(245,158,11,0.15)] before:pointer-events-none before:absolute before:inset-0 before:bg-[linear-gradient(120deg,rgba(255,255,255,0.06)_0%,transparent_40%)] lg:p-7">
+                        <h1 className="m-0 text-2xl font-black tracking-tight sm:text-3xl">
+                            <span className="bg-gradient-to-r from-amber-100 via-amber-200 to-yellow-300 bg-clip-text text-transparent">
+                                {isZh ? '邀请好友，获得奖励' : 'Invite friends, earn rewards'}
+                            </span>
                         </h1>
-                        <p className="mb-0 mt-3 max-w-xl text-sm leading-6 text-red-50/90">
+                        <p className="mb-0 mt-3 max-w-xl text-sm leading-6 text-slate-300">
                             {isZh
                                 ? `好友成功消费，你可获得 ${overview.rewardRate}% 奖励用于消费抵扣。`
                                 : `Earn ${overview.rewardRate}% in rewards when a friend makes a purchase.`}
                         </p>
-                        <div className="mt-6 rounded-2xl border border-white/25 bg-white/12 p-4 backdrop-blur">
-                            <small className="font-bold text-red-100">
-                                {isZh ? '我的邀请码' : 'MY INVITATION CODE'}
-                            </small>
+                        <div className="relative mt-6 rounded-2xl border border-amber-500/25 bg-black/40 p-4 shadow-[inset_0_1px_1px_rgba(255,255,255,0.08)] backdrop-blur-md">
+                            <div className="flex items-center justify-between">
+                                <small className="font-extrabold tracking-wider text-amber-400">
+                                    {isZh ? '我的邀请码' : 'MY INVITATION CODE'}
+                                </small>
+                                <span className="inline-flex items-center rounded-full border border-amber-500/30 bg-amber-400/10 px-2 py-0.5 text-[10px] font-bold text-amber-300">
+                                    {isZh ? '返现专享' : 'Exclusive'}
+                                </span>
+                            </div>
                             <div className="mt-2 flex items-center gap-3">
-                                <strong className="min-w-0 flex-1 break-all font-mono text-2xl tracking-[0.18em]">
+                                <strong className="min-w-0 flex-1 break-all font-mono text-2xl font-bold tracking-[0.18em] text-amber-300 drop-shadow-[0_2px_8px_rgba(245,158,11,0.25)]">
                                     {overview.inviteCode}
                                 </strong>
                                 <button
                                     type="button"
-                                    className="grid size-10 shrink-0 place-items-center rounded-xl bg-white text-red-700"
+                                    className="grid size-10 shrink-0 place-items-center rounded-xl border border-amber-400/30 bg-amber-400/15 text-amber-200 shadow-sm transition-all duration-150 hover:bg-amber-400/25 hover:text-white active:scale-95"
                                     onClick={() => void copyInvite()}
                                     aria-label={isZh ? '复制邀请码' : 'Copy invitation code'}
                                 >
-                                    {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
+                                    {copied ? <Check className="size-4 text-emerald-400" /> : <Copy className="size-4" />}
                                 </button>
                             </div>
-                            <p className="mb-0 mt-2 truncate text-xs text-red-100/80">{shareUrl}</p>
+                            <p className="mb-0 mt-2 truncate font-mono text-xs text-slate-400">{shareUrl}</p>
                         </div>
                         <div className="mt-4 grid grid-cols-2 gap-3">
                             <button
                                 type="button"
-                                className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-white px-3 font-extrabold text-red-700"
+                                className="flex min-h-11 items-center justify-center gap-2 rounded-xl border-0 bg-[linear-gradient(135deg,#fde047_0%,#eab308_55%,#ca8a04_100%)] px-3 text-sm font-black text-slate-950 shadow-[0_6px_20px_-4px_rgba(234,179,8,0.45)] transition-all duration-150 hover:brightness-105 active:scale-98"
                                 onClick={() => void share()}
                             >
-                                <Share2 className="size-4" />
+                                <Share2 className="size-4 stroke-[2.5]" />
                                 {isZh ? '立即分享' : 'Share now'}
                             </button>
                             <button
                                 type="button"
-                                className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-white/30 bg-white/10 px-3 font-extrabold text-white"
+                                className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/10 px-3 text-sm font-extrabold text-white backdrop-blur-sm transition-all duration-150 hover:border-white/35 hover:bg-white/15 active:scale-98"
                                 onClick={() => setShowPoster(true)}
                             >
                                 <Image className="size-4" />
@@ -259,36 +297,45 @@ export function ReferralPage() {
                             </span>
                         </div>
                         {overview.invitees.length ? (
-                            <div className="divide-y divide-slate-100">
-                                {overview.invitees.map(invitee => (
-                                    <div key={invitee.id} className="flex items-center gap-3 py-3">
-                                        <span className="grid size-10 place-items-center rounded-full bg-red-50 font-black text-red-600">
-                                            {invitee.displayName.slice(0, 1)}
-                                        </span>
-                                        <div className="min-w-0 flex-1">
-                                            <strong className="block truncate text-sm text-slate-900">
-                                                {invitee.displayName}
-                                            </strong>
-                                            <small className="text-slate-500">
-                                                {new Intl.DateTimeFormat(locale, {
-                                                    dateStyle: 'medium',
-                                                }).format(new Date(invitee.boundAt))}
-                                            </small>
+                            <>
+                                <div className="divide-y divide-slate-100">
+                                    {paginatedInvitees.map(invitee => (
+                                        <div key={invitee.id} className="flex items-center gap-3 py-3">
+                                            <span className="grid size-10 place-items-center rounded-full bg-amber-50/80 font-bold text-amber-800">
+                                                {invitee.displayName.slice(0, 1)}
+                                            </span>
+                                            <div className="min-w-0 flex-1">
+                                                <strong className="block truncate text-sm text-slate-900">
+                                                    {invitee.displayName}
+                                                </strong>
+                                                <small className="text-slate-500">
+                                                    {new Intl.DateTimeFormat(locale, {
+                                                        dateStyle: 'medium',
+                                                    }).format(new Date(invitee.boundAt))}
+                                                </small>
+                                            </div>
+                                            <span
+                                                className={`rounded-full px-2 py-1 text-[11px] font-bold ${invitee.firstPaidOrderAt ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}
+                                            >
+                                                {invitee.firstPaidOrderAt
+                                                    ? isZh
+                                                        ? '已消费'
+                                                        : 'Purchased'
+                                                    : isZh
+                                                      ? '未消费'
+                                                      : 'No purchase'}
+                                            </span>
                                         </div>
-                                        <span
-                                            className={`rounded-full px-2 py-1 text-[11px] font-bold ${invitee.firstPaidOrderAt ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}
-                                        >
-                                            {invitee.firstPaidOrderAt
-                                                ? isZh
-                                                    ? '已消费'
-                                                    : 'Purchased'
-                                                : isZh
-                                                  ? '未消费'
-                                                  : 'No purchase'}
-                                        </span>
-                                    </div>
-                                ))}
-                            </div>
+                                    ))}
+                                </div>
+                                <ListPagination
+                                    currentPage={safeInviteePage}
+                                    totalPages={inviteeTotalPages}
+                                    totalItems={overview.invitees.length}
+                                    onPageChange={setInviteePage}
+                                    isZh={isZh}
+                                />
+                            </>
                         ) : (
                             <p className="py-8 text-center text-sm text-slate-500">
                                 {isZh
@@ -308,16 +355,25 @@ export function ReferralPage() {
                             </span>
                         </div>
                         {displayLedger.length ? (
-                            <div className="divide-y divide-slate-100">
-                                {displayLedger.slice(0, 30).map(entry => (
-                                    <LedgerRow
-                                        key={entry.id}
-                                        entry={entry}
-                                        locale={locale}
-                                        language={language}
-                                    />
-                                ))}
-                            </div>
+                            <>
+                                <div className="divide-y divide-slate-100">
+                                    {paginatedLedger.map(entry => (
+                                        <LedgerRow
+                                            key={entry.id}
+                                            entry={entry}
+                                            locale={locale}
+                                            language={language}
+                                        />
+                                    ))}
+                                </div>
+                                <ListPagination
+                                    currentPage={safeLedgerPage}
+                                    totalPages={ledgerTotalPages}
+                                    totalItems={displayLedger.length}
+                                    onPageChange={setLedgerPage}
+                                    isZh={isZh}
+                                />
+                            </>
                         ) : (
                             <p className="py-8 text-center text-sm text-slate-500">
                                 {isZh ? '暂无奖励流水' : 'No reward activity yet'}
@@ -436,6 +492,53 @@ function LedgerRow({
                 {delta > 0 ? '+' : ''}
                 {formatMoney(delta, entry.currencyCode, locale)}
             </strong>
+        </div>
+    );
+}
+
+function ListPagination({
+    currentPage,
+    totalPages,
+    totalItems,
+    onPageChange,
+    isZh,
+}: {
+    currentPage: number;
+    totalPages: number;
+    totalItems: number;
+    onPageChange: (page: number) => void;
+    isZh: boolean;
+}) {
+    if (totalItems <= 0) return null;
+    return (
+        <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3 text-xs text-slate-500">
+            <span>
+                {isZh
+                    ? `共 ${totalItems} 条 · 第 ${currentPage}/${totalPages} 页`
+                    : `${totalItems} items · Page ${currentPage}/${totalPages}`}
+            </span>
+            <div className="flex items-center gap-1.5">
+                <button
+                    type="button"
+                    disabled={currentPage <= 1}
+                    onClick={() => onPageChange(currentPage - 1)}
+                    aria-label={isZh ? '上一页' : 'Previous page'}
+                    className="flex h-7 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                    <ChevronLeft className="size-3.5" aria-hidden="true" />
+                    <span>{isZh ? '上一页' : 'Prev'}</span>
+                </button>
+                <button
+                    type="button"
+                    disabled={currentPage >= totalPages}
+                    onClick={() => onPageChange(currentPage + 1)}
+                    aria-label={isZh ? '下一页' : 'Next page'}
+                    className="flex h-7 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                    <span>{isZh ? '下一页' : 'Next'}</span>
+                    <ChevronRight className="size-3.5" aria-hidden="true" />
+                </button>
+            </div>
         </div>
     );
 }

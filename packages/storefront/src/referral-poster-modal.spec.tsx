@@ -55,5 +55,115 @@ describe('referral poster templates', () => {
         expect(markup).toContain('云桥轨道');
         expect(markup).toContain('INVITE88');
         expect(markup).toContain('好友成功消费，可获得 10% 奖励用于消费抵扣');
+        expect(markup).toContain('poster-templates-scroll');
+        expect(markup).toContain('scrollbar-width:none');
+        expect(markup).toContain('data-template-id="BRAND_MINIMAL" data-active="true"');
+        expect(markup).toContain('data-template-id="BENEFIT_RED_GOLD" data-active="false"');
+    });
+
+    it('constrains container width and template scrolling when language is English', () => {
+        vi.stubGlobal('window', { location: { origin: 'https://shop.example.com' } });
+        const markup = renderToStaticMarkup(
+            createElement(ReferralPosterModal, {
+                inviteCode: 'INVITE88',
+                storefrontName: 'Test Shop',
+                logoUrl: null,
+                language: 'en',
+                rewardRate: 10,
+                templates: expectedTemplateIds,
+                defaultTemplate: 'BRAND_MINIMAL',
+                onClose: vi.fn(),
+                onNotify: vi.fn(),
+            }),
+        );
+
+        expect(markup).toContain('CloudBridge minimal');
+        expect(markup).toContain('overflow-x-hidden');
+        expect(markup).toContain('min-w-0');
+        expect(markup).toContain('max-w-sm');
+        expect(markup).toContain('max-h-[54vh]');
+    });
+
+    it('combines custom templates with enabled default templates and omits disabled default templates', () => {
+        vi.stubGlobal('window', { location: { origin: 'https://shop.example.com' } });
+        const markup = renderToStaticMarkup(
+            createElement(ReferralPosterModal, {
+                inviteCode: 'INVITE88',
+                storefrontName: '测试商城',
+                logoUrl: null,
+                language: 'zh',
+                rewardRate: 10,
+                templates: ['BRAND_MINIMAL', 'BENEFIT_RED_GOLD'], // Only 2 default templates enabled
+                templateConfigs: [
+                    {
+                        id: 'custom-poster-1',
+                        name: '极客定制海报',
+                        enabled: true,
+                        position: 0,
+                        layoutVariant: 'STANDARD_CENTER',
+                        posterBackgroundAsset: null,
+                        shareBackgroundAsset: null,
+                        titleZh: '专属邀请',
+                        titleEn: 'Exclusive Invite',
+                        headlineZh: '邀请有礼',
+                        headlineEn: 'Invite & Earn',
+                        rewardTextZh: '得 10% 奖励',
+                        rewardTextEn: 'Earn 10%',
+                        siteIntroZh: '介绍',
+                        siteIntroEn: 'Intro',
+                        serviceTextZh: '服务',
+                        serviceTextEn: 'Service',
+                        featureOneTitleZh: '特色1',
+                        featureOneTitleEn: 'Feature 1',
+                        featureOneTextZh: '说明1',
+                        featureOneTextEn: 'Desc 1',
+                        featureTwoTitleZh: '特色2',
+                        featureTwoTitleEn: 'Feature 2',
+                        featureTwoTextZh: '说明2',
+                        featureTwoTextEn: 'Desc 2',
+                        featureThreeTitleZh: '特色3',
+                        featureThreeTitleEn: 'Feature 3',
+                        featureThreeTextZh: '说明3',
+                        featureThreeTextEn: 'Desc 3',
+                        qrEyebrowZh: '扫码',
+                        qrEyebrowEn: 'Scan',
+                        qrTitleZh: '标题',
+                        qrTitleEn: 'Title',
+                        qrDescriptionZh: '详情',
+                        qrDescriptionEn: 'Detail',
+                        sceneOneZh: '场景1',
+                        sceneOneEn: 'S1',
+                        sceneTwoZh: '场景2',
+                        sceneTwoEn: 'S2',
+                        sceneThreeZh: '场景3',
+                        sceneThreeEn: 'S3',
+                        sceneFourZh: '场景4',
+                        sceneFourEn: 'S4',
+                        ctaTextZh: '行动',
+                        ctaTextEn: 'CTA',
+                        footerTitleZh: '尾款',
+                        footerTitleEn: 'Footer',
+                        footerTextZh: '文案',
+                        footerTextEn: 'Copy',
+                        foregroundColor: '#ffffff',
+                        accentColor: '#3b82f6',
+                        overlayOpacity: 0,
+                    },
+                ],
+                defaultTemplate: 'custom-poster-1',
+                onClose: vi.fn(),
+                onNotify: vi.fn(),
+            }),
+        );
+
+        // Custom template is rendered
+        expect(markup).toContain('极客定制海报');
+        // Enabled default templates are rendered
+        expect(markup).toContain('云桥简约');
+        expect(markup).toContain('冰川蓝光');
+        // Disabled default templates are NOT rendered
+        expect(markup).not.toContain('青空流线');
+        expect(markup).not.toContain('深海科技');
+        expect(markup).not.toContain('云桥轨道');
     });
 });

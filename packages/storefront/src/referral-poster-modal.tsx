@@ -1,5 +1,5 @@
 import { Check, Copy, Download, X } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { referralShareUrl } from './referral-attribution';
 import { acquireBodyScrollLock } from './scroll-lock';
@@ -104,11 +104,12 @@ export function ReferralPosterModal({
     const effectiveLogoUrl = logoUrl || '/storefront/cloudbridge-logo.png';
     const styles = useMemo(() => {
         const custom = templateConfigs.filter(template => template.enabled);
-        if (custom.length) return custom;
         const enabledLegacy = referralPosterStyles.filter(legacy => templates.includes(legacy.id));
-        return (enabledLegacy.length ? enabledLegacy : referralPosterStyles).map(legacy =>
-            legacyPosterTemplate(legacy, isZh),
-        );
+        const legacy = enabledLegacy.map(item => legacyPosterTemplate(item, isZh));
+        const combined = [...custom, ...legacy];
+        return combined.length > 0
+            ? combined
+            : referralPosterStyles.map(item => legacyPosterTemplate(item, isZh));
     }, [isZh, templateConfigs, templates]);
     const [selectedId, setSelectedId] = useState(
         styles.some(candidate => candidate.id === defaultTemplate) ? defaultTemplate : (styles[0]?.id ?? ''),
@@ -119,6 +120,10 @@ export function ReferralPosterModal({
     const [copied, setCopied] = useState(false);
     const style = styles.find(item => item.id === selectedId) ?? styles[0];
     const shareUrl = referralShareUrl(inviteCode, 'POSTER');
+
+    const posterCacheRef = useRef<Map<string, string>>(new Map());
+    const navRef = useRef<HTMLDivElement>(null);
+    const itemRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
 
     useEffect(() => {
         const releaseBodyScrollLock = acquireBodyScrollLock();
@@ -139,33 +144,105 @@ export function ReferralPosterModal({
         };
     }, [shareUrl]);
 
+    // 1. 模版海报渲染与极速缓存切换 (消除点击卡顿)
     useEffect(() => {
         if (!style || !qrCodeUrl) return;
+
+        // 若已有缓存直接秒切，0ms 极速呈现，主线程完全无阻断
+        const cached = posterCacheRef.current.get(style.id);
+        if (cached) {
+            setPosterDataUrl(cached);
+            setGenerating(false);
+            return;
+        }
+
         let cancelled = false;
         setGenerating(true);
-        void renderReferralPoster({
-            template: style,
-            isZh,
-            inviteCode,
-            storefrontName,
-            logoUrl: effectiveLogoUrl,
-            rewardRate,
-            qrCodeUrl,
-            shareUrl,
-        })
-            .then(value => {
-                if (!cancelled) setPosterDataUrl(value);
+
+        // 延后一帧执行重度 Canvas 生成，确保选态高亮与自动左右滚动动画先行流畅响应
+        const timer = setTimeout(() => {
+            void renderReferralPoster({
+                template: style,
+                isZh,
+                inviteCode,
+                storefrontName,
+                logoUrl: effectiveLogoUrl,
+                rewardRate,
+                qrCodeUrl,
+                shareUrl,
             })
-            .catch(() => {
-                if (!cancelled) setPosterDataUrl('');
-            })
-            .finally(() => {
-                if (!cancelled) setGenerating(false);
-            });
+                .then(value => {
+                    if (!cancelled) {
+                        posterCacheRef.current.set(style.id, value);
+                        setPosterDataUrl(value);
+                    }
+                })
+                .catch(() => {
+                    if (!cancelled) setPosterDataUrl('');
+                })
+                .finally(() => {
+                    if (!cancelled) setGenerating(false);
+                });
+        }, 16);
+
         return () => {
             cancelled = true;
+            clearTimeout(timer);
         };
-    }, [inviteCode, isZh, logoUrl, qrCodeUrl, rewardRate, storefrontName, style]);
+    }, [effectiveLogoUrl, inviteCode, isZh, qrCodeUrl, rewardRate, shareUrl, storefrontName, style]);
+
+    // 2. 空闲后台静默预渲染其余模版，使后续点击瞬间秒切
+    useEffect(() => {
+        if (!qrCodeUrl || generating) return;
+        const uncached = styles.filter(item => !posterCacheRef.current.has(item.id));
+        if (!uncached.length) return;
+
+        let cancelled = false;
+        const idleTimer = setTimeout(async () => {
+            for (const item of uncached) {
+                if (cancelled) break;
+                try {
+                    const value = await renderReferralPoster({
+                        template: item,
+                        isZh,
+                        inviteCode,
+                        storefrontName,
+                        logoUrl: effectiveLogoUrl,
+                        rewardRate,
+                        qrCodeUrl,
+                        shareUrl,
+                    });
+                    if (!cancelled) {
+                        posterCacheRef.current.set(item.id, value);
+                    }
+                } catch {
+                    // 预渲染失败静默忽略，点击时按需重试
+                }
+            }
+        }, 120);
+
+        return () => {
+            cancelled = true;
+            clearTimeout(idleTimer);
+        };
+    }, [effectiveLogoUrl, generating, inviteCode, isZh, qrCodeUrl, rewardRate, shareUrl, storefrontName, styles]);
+
+    // 3. 切换模版导航时自动平滑左右居中滚动
+    useEffect(() => {
+        const container = navRef.current;
+        const button = itemRefs.current.get(selectedId);
+        if (!container || !button) return;
+
+        const containerWidth = container.clientWidth;
+        const buttonLeft = button.offsetLeft;
+        const buttonWidth = button.offsetWidth;
+        const targetScrollLeft = buttonLeft - (containerWidth - buttonWidth) / 2;
+
+        container.scrollTo({
+            left: Math.max(0, targetScrollLeft),
+            behavior: 'smooth',
+        });
+    }, [selectedId]);
 
     if (!style) return null;
 
@@ -203,14 +280,14 @@ export function ReferralPosterModal({
 
     return (
         <div
-            className="fixed inset-0 z-[100] grid place-items-center overflow-y-auto bg-slate-950/65 p-4 backdrop-blur-sm"
+            className="fixed inset-0 z-[100] grid place-items-center overflow-x-hidden overflow-y-auto bg-slate-950/65 p-4 backdrop-blur-sm"
             role="dialog"
             aria-modal="true"
             aria-label={isZh ? '选择邀请海报' : 'Choose referral poster'}
             onClick={onClose}
         >
             <div
-                className="relative w-full max-w-md rounded-3xl bg-white p-4 shadow-2xl"
+                className="relative w-full max-w-sm min-w-0 overflow-hidden rounded-3xl bg-white p-4 shadow-2xl"
                 onClick={event => event.stopPropagation()}
             >
                 <button
@@ -230,10 +307,10 @@ export function ReferralPosterModal({
                     )}{' '}
                     {isZh ? '我的邀请码' : 'My invitation code'} {inviteCode}
                 </p>
-                <div className="aspect-[9/16] overflow-hidden rounded-[24px] bg-slate-100 shadow-inner">
-                    {posterDataUrl && !generating ? (
+                <div className="relative mx-auto aspect-[9/16] max-h-[54vh] w-auto max-w-full shrink-0 overflow-hidden rounded-[20px] bg-slate-100 shadow-inner">
+                    {posterDataUrl ? (
                         <img
-                            className="size-full object-cover"
+                            className={`size-full object-cover transition-opacity duration-150 ${generating ? 'opacity-70' : 'opacity-100'}`}
                             src={posterDataUrl}
                             alt={isZh ? `${style.name}邀请海报预览` : `${style.name} referral poster preview`}
                         />
@@ -242,21 +319,37 @@ export function ReferralPosterModal({
                             {isZh ? '正在生成海报…' : 'Generating poster…'}
                         </div>
                     )}
+                    {generating && posterDataUrl && (
+                        <div className="pointer-events-none absolute inset-0 grid place-items-center bg-slate-900/15 backdrop-blur-[1px] transition-opacity">
+                            <div className="flex items-center gap-2 rounded-full bg-black/60 px-3.5 py-1.5 text-xs font-semibold text-white shadow-lg backdrop-blur-sm">
+                                <div className="size-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                                <span>{isZh ? '正在生成…' : 'Generating…'}</span>
+                            </div>
+                        </div>
+                    )}
                 </div>
                 {styles.length > 1 && (
                     <div
-                        className="mt-4 flex gap-2 overflow-x-auto pb-1"
+                        ref={navRef}
+                        className="poster-templates-scroll mt-4 flex w-full min-w-0 max-w-full gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
                         role="list"
                         aria-label={isZh ? '海报模板' : 'Poster templates'}
+                        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
                     >
                         {styles.map(item => (
                             <button
                                 key={item.id}
+                                ref={el => {
+                                    if (el) itemRefs.current.set(item.id, el);
+                                    else itemRefs.current.delete(item.id);
+                                }}
                                 type="button"
-                                className={`shrink-0 rounded-xl border px-3 py-2 text-xs font-bold ${
+                                data-template-id={item.id}
+                                data-active={selectedId === item.id}
+                                className={`shrink-0 rounded-xl border px-3 py-2 text-xs font-bold transition-all ${
                                     selectedId === item.id
-                                        ? 'border-blue-500 bg-blue-50 text-blue-700'
-                                        : 'border-slate-200 text-slate-600'
+                                        ? 'border-blue-500 bg-blue-50 text-blue-700 shadow-sm'
+                                        : 'border-slate-200 text-slate-600 hover:border-slate-300'
                                 }`}
                                 onClick={() => setSelectedId(item.id)}
                             >
@@ -265,7 +358,7 @@ export function ReferralPosterModal({
                         ))}
                     </div>
                 )}
-                <div className="mt-4 grid grid-cols-2 gap-3">
+                <div className="mt-4 grid w-full min-w-0 grid-cols-2 gap-3">
                     <button
                         type="button"
                         className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-3 font-bold text-white disabled:opacity-60"
@@ -379,7 +472,7 @@ async function renderReferralPoster({
     drawMobileHeroOrnament(context, palette);
     if (backgroundUrl) {
         try {
-            const background = await loadImage(backgroundUrl, true);
+            const background = await getCachedImage(backgroundUrl, true);
             context.save();
             context.globalAlpha = Math.max(0.06, Math.min(0.18, (100 - template.overlayOpacity) / 700));
             drawImageCover(context, background, 700, 760, 340, 520);
@@ -402,7 +495,7 @@ async function renderReferralPoster({
 
     // 01. Brand block
     try {
-        const logo = await loadImage(logoUrl || '/storefront/cloudbridge-logo.png', true);
+        const logo = await getCachedImage(logoUrl || '/storefront/cloudbridge-logo.png', true);
         context.save();
         roundedRect(context, 74, 72, 106, 106, 28);
         context.clip();
@@ -500,7 +593,7 @@ async function renderReferralPoster({
     context.strokeStyle = isDarkSkin ? 'rgba(89,213,255,0.5)' : 'rgba(126,180,247,0.55)';
     context.lineWidth = 2;
     context.stroke();
-    const qrImage = await loadImage(qrCodeUrl);
+    const qrImage = await getCachedImage(qrCodeUrl);
     if (isDarkSkin) {
         roundedRect(context, 100, 1142, 286, 286, 20);
         context.fillStyle = '#ffffff';
@@ -1180,6 +1273,20 @@ function localized(zh: string, en: string, isZh: boolean): string {
 
 function replacePosterTokens(text: string, rewardRate: number, storefrontName: string): string {
     return text.replaceAll('{rewardRate}', String(rewardRate)).replaceAll('{storeName}', storefrontName);
+}
+
+const imageElementCache = new Map<string, Promise<HTMLImageElement>>();
+
+export function getCachedImage(src: string, crossOrigin = false): Promise<HTMLImageElement> {
+    const key = `${crossOrigin ? 'cors:' : ''}${src}`;
+    const cached = imageElementCache.get(key);
+    if (cached) return cached;
+    const promise = loadImage(src, crossOrigin).catch(err => {
+        imageElementCache.delete(key);
+        throw err;
+    });
+    imageElementCache.set(key, promise);
+    return promise;
 }
 
 function loadImage(src: string, crossOrigin = false): Promise<HTMLImageElement> {

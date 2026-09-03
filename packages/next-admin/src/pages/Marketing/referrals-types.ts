@@ -21,6 +21,7 @@ export interface ProgramDraft {
     allowBalanceSpend: boolean;
     attributionWindowDays: number;
     defaultPosterTemplate: string;
+    posterTemplates: string[];
 }
 
 export interface PosterDraft {
