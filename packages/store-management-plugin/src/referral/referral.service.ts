@@ -34,6 +34,10 @@ import { ReferralWithdrawal } from '../entities/referral-withdrawal.entity';
 import { StorefrontDailyVisitor } from '../entities/storefront-daily-visitor.entity';
 import { convertChannelAmount } from '../store-currency-price-selection-strategy';
 import { StorefrontPromotionPluginOptions } from '../types';
+import {
+    normalizePosterTemplateInput,
+    validateDefaultPosterTemplate,
+} from './referral-poster.helper';
 
 import {
     calculateEligibleReferralRefund,
@@ -208,7 +212,7 @@ export class ReferralService implements OnApplicationBootstrap {
             input.posterTemplates != null
                 ? input.posterTemplates.filter(id => referralPosterTemplates.includes(id as never))
                 : undefined;
-        await this.validateDefaultPosterTemplate(ctx, input.defaultPosterTemplate, enabledDefaultTemplates);
+        await validateDefaultPosterTemplate(ctx, this.connection, input.defaultPosterTemplate, enabledDefaultTemplates);
         const existing = await this.getOrCreateConfig(ctx);
         const config = await this.lockConfigOrThrow(ctx, existing.id);
         this.assertExpectedUpdatedAt(config.updatedAt, input.expectedUpdatedAt);
@@ -231,7 +235,7 @@ export class ReferralService implements OnApplicationBootstrap {
     async createPosterTemplate(ctx: RequestContext, input: SaveReferralPosterTemplateInput) {
         const repository = this.connection.getRepository(ctx, ReferralPosterTemplate);
         const existingTemplateCount = await repository.count({ where: { channelId: ctx.channelId } });
-        const values = await this.normalizePosterTemplateInput(ctx, input);
+        const values = await normalizePosterTemplateInput(ctx, (c, id) => this.assetForChannel(c, id), input);
         const saved = await repository.save(
             repository.create({
                 ...values,
@@ -252,7 +256,7 @@ export class ReferralService implements OnApplicationBootstrap {
             where: { id: input.id, channelId: ctx.channelId },
         });
         if (!template) throw new UserInputError('找不到该邀请海报模板');
-        Object.assign(template, await this.normalizePosterTemplateInput(ctx, input));
+        Object.assign(template, await normalizePosterTemplateInput(ctx, (c, id) => this.assetForChannel(c, id), input));
         await repository.save(template, { reload: false });
         if (!template.enabled) {
             const config = await this.getOrCreateConfig(ctx);
@@ -1505,99 +1509,6 @@ export class ReferralService implements OnApplicationBootstrap {
         ) {
             throw new UserInputError('邀请来源有效期必须在1至365天之间');
         }
-    }
-
-    private async validateDefaultPosterTemplate(
-        ctx: RequestContext,
-        id: string,
-        enabledDefaultTemplates?: string[],
-    ): Promise<void> {
-        const allowedDefaults = enabledDefaultTemplates ?? referralPosterTemplates;
-        if (allowedDefaults.includes(id as never)) return;
-        const template = await this.connection.getRepository(ctx, ReferralPosterTemplate).findOne({
-            where: { id, channelId: ctx.channelId, enabled: true },
-        });
-        if (!template) throw new UserInputError('默认海报模板无效或已停用');
-    }
-
-    private async normalizePosterTemplateInput(ctx: RequestContext, input: SaveReferralPosterTemplateInput) {
-        if (!Number.isInteger(input.position) || input.position < 0 || input.position > 100_000) {
-            throw new UserInputError('模板排序必须是0至100000之间的整数');
-        }
-        if (input.layoutVariant !== 'STANDARD_CENTER') {
-            throw new UserInputError('海报版式无效');
-        }
-        if (
-            !Number.isInteger(input.overlayOpacity) ||
-            input.overlayOpacity < 0 ||
-            input.overlayOpacity > 80
-        ) {
-            throw new UserInputError('遮罩透明度必须在0至80之间');
-        }
-        const posterBackgroundAsset = await this.assetForChannel(ctx, input.posterBackgroundAssetId);
-        const shareBackgroundAsset = await this.assetForChannel(ctx, input.shareBackgroundAssetId);
-        return {
-            name: requiredText(input.name, '模板名称', 128),
-            enabled: input.enabled,
-            position: input.position,
-            layoutVariant: input.layoutVariant,
-            posterBackgroundAssetId: posterBackgroundAsset?.id ?? null,
-            shareBackgroundAssetId: shareBackgroundAsset?.id ?? null,
-            titleZh: requiredText(input.titleZh, '中文小标题', 80),
-            titleEn: requiredText(input.titleEn, '英文小标题', 80),
-            headlineZh: requiredText(input.headlineZh, '中文主标题', 180),
-            headlineEn: requiredText(input.headlineEn, '英文主标题', 180),
-            rewardTextZh: requiredText(input.rewardTextZh, '中文奖励文案', 220),
-            rewardTextEn: requiredText(input.rewardTextEn, '英文奖励文案', 220),
-            siteIntroZh: clippedText(input.siteIntroZh, 260),
-            siteIntroEn: clippedText(input.siteIntroEn, 260),
-            serviceTextZh: clippedText(input.serviceTextZh, 260),
-            serviceTextEn: clippedText(input.serviceTextEn, 260),
-            featureOneTitleZh: clippedText(input.featureOneTitleZh ?? '热门工具汇集', 100),
-            featureOneTitleEn: clippedText(input.featureOneTitleEn ?? '精选 AI tools', 100),
-            featureOneTextZh: clippedText(input.featureOneTextZh ?? '多种 AI 工具任你选', 160),
-            featureOneTextEn: clippedText(input.featureOneTextEn ?? 'A curated set of AI tools', 160),
-            featureTwoTitleZh: clippedText(input.featureTwoTitleZh ?? '便捷开通服务', 100),
-            featureTwoTitleEn: clippedText(input.featureTwoTitleEn ?? 'Fast activation', 100),
-            featureTwoTextZh: clippedText(input.featureTwoTextZh ?? '快速开通 省时省心', 160),
-            featureTwoTextEn: clippedText(input.featureTwoTextEn ?? 'Get started in a few clicks', 160),
-            featureThreeTitleZh: clippedText(input.featureThreeTitleZh ?? '专属售后支持', 100),
-            featureThreeTitleEn: clippedText(input.featureThreeTitleEn ?? 'Dedicated support', 100),
-            featureThreeTextZh: clippedText(input.featureThreeTextZh ?? '专业客服 贴心服务', 160),
-            featureThreeTextEn: clippedText(
-                input.featureThreeTextEn ?? 'Friendly help when you need it',
-                160,
-            ),
-            qrEyebrowZh: clippedText(input.qrEyebrowZh ?? '扫码访问云桥 AI', 100),
-            qrEyebrowEn: clippedText(input.qrEyebrowEn ?? 'Scan CloudBridge AI', 100),
-            qrTitleZh: clippedText(input.qrTitleZh ?? '发现更多实用 AI 服务', 140),
-            qrTitleEn: clippedText(input.qrTitleEn ?? 'Discover practical AI services', 140),
-            qrDescriptionZh: clippedText(input.qrDescriptionZh ?? '满足多种 AI 使用场景', 140),
-            qrDescriptionEn: clippedText(
-                input.qrDescriptionEn ?? 'Tools for work, creativity, learning and code',
-                140,
-            ),
-            sceneOneZh: clippedText(input.sceneOneZh ?? '办公提效', 48),
-            sceneOneEn: clippedText(input.sceneOneEn ?? 'Work', 48),
-            sceneTwoZh: clippedText(input.sceneTwoZh ?? '内容创作', 48),
-            sceneTwoEn: clippedText(input.sceneTwoEn ?? 'Create', 48),
-            sceneThreeZh: clippedText(input.sceneThreeZh ?? '学习辅助', 48),
-            sceneThreeEn: clippedText(input.sceneThreeEn ?? 'Learn', 48),
-            sceneFourZh: clippedText(input.sceneFourZh ?? '智能编程', 48),
-            sceneFourEn: clippedText(input.sceneFourEn ?? 'Code', 48),
-            ctaTextZh: clippedText(input.ctaTextZh ?? '长按识别二维码，立即进入云桥 AI', 140),
-            ctaTextEn: clippedText(input.ctaTextEn ?? 'Press and hold to enter CloudBridge AI', 140),
-            footerTitleZh: clippedText(input.footerTitleZh ?? '让好用的 AI，真正为你所用', 160),
-            footerTitleEn: clippedText(input.footerTitleEn ?? 'AI that works for you', 160),
-            footerTextZh: clippedText(input.footerTextZh ?? '热门 AI 工具与数字服务一站式平台', 220),
-            footerTextEn: clippedText(
-                input.footerTextEn ?? 'One-stop platform for AI tools and digital services',
-                220,
-            ),
-            foregroundColor: posterColor(input.foregroundColor, '主文字颜色'),
-            accentColor: posterColor(input.accentColor, '强调颜色'),
-            overlayOpacity: input.overlayOpacity,
-        };
     }
 
     private async assetForChannel(ctx: RequestContext, id?: ID | null): Promise<Asset | null> {
