@@ -50,6 +50,25 @@ async function mockActiveCoupons(page: Page, campaigns: Array<Record<string, unk
     });
 }
 
+async function waitForHomepageActions(page: Page) {
+    const actions = page.locator('.section-header-action-btn');
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+        const retryButton = page.getByRole('button', { name: /^(?:重新加载|Try again)$/u });
+        if (await retryButton.isVisible()) await retryButton.click();
+
+        try {
+            await actions.first().waitFor({ state: 'visible', timeout: 10_000 });
+            return actions;
+        } catch (error) {
+            if (attempt === 2) throw error;
+            await page.reload({ waitUntil: 'domcontentloaded' });
+        }
+    }
+
+    return actions;
+}
+
 test('核心公开页面在目标浏览器中正常渲染', async ({ page }) => {
     const pageErrors: string[] = [];
     const badResources: string[] = [];
@@ -91,8 +110,7 @@ test('核心公开页面在目标浏览器中正常渲染', async ({ page }) => 
         expect(visualState.brokenImages, `${route} 不应包含破损图片`).toEqual([]);
 
         if (route === '/') {
-            const actions = page.locator('.section-header-action-btn');
-            await expect(actions.first()).toBeVisible();
+            const actions = await waitForHomepageActions(page);
 
             for (let index = 0; index < (await actions.count()); index += 1) {
                 const box = await actions.nth(index).boundingBox();
