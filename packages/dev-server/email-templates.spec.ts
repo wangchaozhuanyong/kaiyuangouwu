@@ -108,6 +108,7 @@ describe('localized email templates', () => {
                 credentials: [
                     {
                         number: 1,
+                        rawPayload: 'buyer@example.com----example-secret',
                         fields: [
                             { key: 'account', label: '账号', value: 'buyer@example.com', secret: false },
                             { key: 'password', label: '密码', value: 'example-secret', secret: true },

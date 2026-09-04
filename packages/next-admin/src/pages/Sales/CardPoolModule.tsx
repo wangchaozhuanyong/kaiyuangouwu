@@ -9,33 +9,25 @@ import {
     KeyRound,
     LoaderCircle,
     PackageCheck,
-    Plus,
     RefreshCw,
     RotateCcw,
     Search,
-    Settings2,
     ShieldOff,
-    UploadCloud,
     X,
 } from 'lucide-react';
 import { useDeferredValue, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
 import {
     AUTO_CARD_VARIANTS_QUERY,
     AUTO_CARD_WORKSPACE_QUERY,
-    IMPORT_AUTO_CARD_ITEMS_MUTATION,
-    PREVIEW_AUTO_CARD_IMPORT_MUTATION,
     RETRY_AUTO_CARD_DELIVERY_MUTATION,
     REVEAL_AUTO_CARD_ITEM_MUTATION,
     SET_AUTO_CARD_ITEM_ENABLED_MUTATION,
-    UPDATE_AUTO_CARD_CONFIG_MUTATION,
-    type AutoCardConfigRecord,
     type AutoCardDeliveryRecord,
     type AutoCardFieldRecord,
-    type AutoCardImportPreviewResult,
     type AutoCardPoolItemRecord,
-    type AutoCardVariantRecord,
     type AutoCardVariantsResult,
     type AutoCardWorkspaceResult,
 } from '../../graphql/fulfillment.graphql';
@@ -59,8 +51,6 @@ export function CardPoolModule() {
     const [deliveryPage, setDeliveryPage] = useState(0);
     const [notice, setNotice] = useState('');
     const [actionError, setActionError] = useState('');
-    const [importOpen, setImportOpen] = useState(false);
-    const [configOpen, setConfigOpen] = useState(false);
     const deferredVariantSearch = useDeferredValue(variantSearch.trim());
     const variantsQuery = useQuery<AutoCardVariantsResult>(AUTO_CARD_VARIANTS_QUERY, {
         variables: {
@@ -121,10 +111,10 @@ export function CardPoolModule() {
                     <div>
                         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                             <KeyRound className="h-5 w-5 text-blue-600" />
-                            虚拟卡密库
+                            发卡记录与异常
                         </h1>
                         <p className="mt-1 text-xs text-slate-500">
-                            按 SKU 管理加密卡密库存、批量导入和自动交付异常
+                            跨商品查看卡密库存、交付结果和需要人工处理的问题
                         </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -141,24 +131,15 @@ export function CardPoolModule() {
                             />
                             刷新
                         </button>
-                        <button
-                            type="button"
-                            onClick={() => setConfigOpen(true)}
-                            disabled={!selectedVariant}
-                            className={secondaryButton}
-                        >
-                            <Settings2 className="h-4 w-4" />
-                            卡密格式
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setImportOpen(true)}
-                            disabled={!selectedVariant || !config?.enabled}
-                            className={primaryButton}
-                        >
-                            <UploadCloud className="h-4 w-4" />
-                            批量导入
-                        </button>
+                        {selectedVariant && (
+                            <Link
+                                to={`/catalog/products/${selectedVariant.product.id}?tab=variants`}
+                                className={primaryButton}
+                            >
+                                <PackageCheck className="h-4 w-4" />
+                                回到商品页管理
+                            </Link>
+                        )}
                     </div>
                 </div>
             </header>
@@ -246,8 +227,14 @@ export function CardPoolModule() {
                                     </span>
                                 </div>
                             ) : (
-                                <div className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                                    该 SKU 尚未配置卡密格式，请先点击“卡密格式”。
+                                <div className="flex flex-wrap items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                                    <span>该 SKU 尚未完成自动发卡设置。</span>
+                                    <Link
+                                        to={`/catalog/products/${selectedVariant.product.id}?tab=variants`}
+                                        className="font-semibold underline underline-offset-2"
+                                    >
+                                        回到商品页继续设置
+                                    </Link>
                                 </div>
                             )}
                         </section>
@@ -357,30 +344,6 @@ export function CardPoolModule() {
                     </>
                 )}
             </main>
-            {configOpen && selectedVariant && (
-                <ConfigDialog
-                    variant={selectedVariant}
-                    config={config}
-                    onClose={() => setConfigOpen(false)}
-                    onCompleted={async message => {
-                        setConfigOpen(false);
-                        await completed(message);
-                    }}
-                    onError={setActionError}
-                />
-            )}
-            {importOpen && selectedVariant && config && (
-                <ImportDialog
-                    variant={selectedVariant}
-                    config={config}
-                    onClose={() => setImportOpen(false)}
-                    onCompleted={async message => {
-                        setImportOpen(false);
-                        await completed(message);
-                    }}
-                    onError={setActionError}
-                />
-            )}
         </div>
     );
 }
@@ -725,338 +688,6 @@ function DeliveriesTable({
     );
 }
 
-function ConfigDialog({
-    variant,
-    config,
-    onClose,
-    onCompleted,
-    onError,
-}: {
-    variant: AutoCardVariantRecord;
-    config: AutoCardConfigRecord | null;
-    onClose: () => void;
-    onCompleted: (message: string) => Promise<void>;
-    onError: (message: string) => void;
-}) {
-    const [enabled, setEnabled] = useState(config?.enabled ?? true);
-    const [formatName, setFormatName] = useState(config?.formatName ?? '账号与密码');
-    const [delimiter, setDelimiter] = useState(config?.delimiter ?? '----');
-    const [fields, setFields] = useState(
-        config?.fields ?? [
-            { key: 'account', label: '账号', labelEn: 'Account', secret: false },
-            { key: 'password', label: '密码', labelEn: 'Password', secret: true },
-        ],
-    );
-    const [instructionsZh, setInstructionsZh] = useState(
-        config?.instructionsZh ?? '请妥善保管卡密，并按商品说明完成兑换。',
-    );
-    const [instructionsEn, setInstructionsEn] = useState(
-        config?.instructionsEn ?? 'Keep your credentials safe and follow the product instructions.',
-    );
-    const [threshold, setThreshold] = useState(config?.lowStockThreshold ?? 10);
-    const [save, state] = useMutation(UPDATE_AUTO_CARD_CONFIG_MUTATION);
-    const updateField = (index: number, patch: Partial<(typeof fields)[number]>) =>
-        setFields(current => current.map((item, i) => (i === index ? { ...item, ...patch } : item)));
-    const submit = async () => {
-        if (
-            !formatName.trim() ||
-            !delimiter ||
-            !fields.length ||
-            fields.some(field => !field.key.trim() || !field.label.trim())
-        )
-            return onError('请填写格式名称、分隔符及完整字段定义');
-        if (new Set(fields.map(field => field.key.trim())).size !== fields.length)
-            return onError('字段 key 不能重复');
-        try {
-            await save({
-                variables: {
-                    input: {
-                        productVariantId: variant.id,
-                        enabled,
-                        formatName: formatName.trim(),
-                        delimiter,
-                        fields: fields.map(field => ({
-                            key: field.key.trim(),
-                            label: field.label.trim(),
-                            labelEn: field.labelEn.trim() || null,
-                            secret: field.secret,
-                        })),
-                        instructionsZh: instructionsZh.trim() || null,
-                        instructionsEn: instructionsEn.trim() || null,
-                        lowStockThreshold: threshold,
-                    },
-                },
-            });
-            await onCompleted('卡密格式与预警阈值已保存');
-        } catch (error) {
-            onError(errorText(error));
-        }
-    };
-    return (
-        <Modal
-            title="卡密格式与自动交付"
-            description={`${variant.product.name} / ${variant.name} · ${variant.sku}`}
-            onClose={onClose}
-        >
-            <label className="mb-5 flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs">
-                <span>
-                    <strong className="block text-slate-800">启用卡密自动交付</strong>
-                    <span className="mt-1 block text-[10px] text-slate-400">
-                        停用后新订单不会从该 SKU 自动取卡
-                    </span>
-                </span>
-                <input
-                    type="checkbox"
-                    checked={enabled}
-                    onChange={event => setEnabled(event.target.checked)}
-                />
-            </label>
-            <div className="grid gap-4 sm:grid-cols-3">
-                <Field label="格式名称 *">
-                    <input
-                        value={formatName}
-                        onChange={event => setFormatName(event.target.value)}
-                        className={inputClass}
-                    />
-                </Field>
-                <Field label="字段分隔符 *">
-                    <input
-                        value={delimiter}
-                        onChange={event => setDelimiter(event.target.value)}
-                        className={`${inputClass} font-mono`}
-                    />
-                </Field>
-                <Field label="低库存阈值">
-                    <input
-                        type="number"
-                        min={0}
-                        value={threshold}
-                        onChange={event => setThreshold(Math.max(0, Number(event.target.value) || 0))}
-                        className={inputClass}
-                    />
-                </Field>
-            </div>
-            <div className="mt-5">
-                <div className="mb-2 flex items-center justify-between">
-                    <strong className="text-xs text-slate-700">卡密字段</strong>
-                    <button
-                        type="button"
-                        onClick={() =>
-                            setFields(current => [
-                                ...current,
-                                { key: '', label: '', labelEn: '', secret: true },
-                            ])
-                        }
-                        className="text-[10px] font-bold text-blue-600"
-                    >
-                        <Plus className="mr-1 inline h-3 w-3" />
-                        添加字段
-                    </button>
-                </div>
-                <div className="space-y-2">
-                    {fields.map((field, index) => (
-                        <div
-                            key={index}
-                            className="grid gap-2 rounded-lg border border-slate-200 p-3 sm:grid-cols-[1fr_1fr_1fr_auto_auto]"
-                        >
-                            <input
-                                value={field.key}
-                                onChange={event => updateField(index, { key: event.target.value })}
-                                placeholder="key"
-                                className={`${inputClass} font-mono`}
-                            />
-                            <input
-                                value={field.label}
-                                onChange={event => updateField(index, { label: event.target.value })}
-                                placeholder="中文标签"
-                                className={inputClass}
-                            />
-                            <input
-                                value={field.labelEn}
-                                onChange={event => updateField(index, { labelEn: event.target.value })}
-                                placeholder="English label"
-                                className={inputClass}
-                            />
-                            <label className="flex items-center gap-1 text-[10px] text-slate-600">
-                                <input
-                                    type="checkbox"
-                                    checked={field.secret}
-                                    onChange={event => updateField(index, { secret: event.target.checked })}
-                                />
-                                敏感
-                            </label>
-                            <button
-                                type="button"
-                                onClick={() => setFields(current => current.filter((_, i) => i !== index))}
-                                disabled={fields.length === 1}
-                                className="text-rose-600 disabled:opacity-30"
-                            >
-                                移除
-                            </button>
-                        </div>
-                    ))}
-                </div>
-            </div>
-            <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                <Field label="中文交付说明">
-                    <textarea
-                        rows={4}
-                        value={instructionsZh}
-                        onChange={event => setInstructionsZh(event.target.value)}
-                        className={inputClass}
-                    />
-                </Field>
-                <Field label="English instructions">
-                    <textarea
-                        rows={4}
-                        value={instructionsEn}
-                        onChange={event => setInstructionsEn(event.target.value)}
-                        className={inputClass}
-                    />
-                </Field>
-            </div>
-            <ModalActions
-                onClose={onClose}
-                onSave={() => void submit()}
-                saving={state.loading}
-                saveLabel="保存卡密配置"
-            />
-        </Modal>
-    );
-}
-
-function ImportDialog({
-    variant,
-    config,
-    onClose,
-    onCompleted,
-    onError,
-}: {
-    variant: AutoCardVariantRecord;
-    config: AutoCardConfigRecord;
-    onClose: () => void;
-    onCompleted: (message: string) => Promise<void>;
-    onError: (message: string) => void;
-}) {
-    const [rawText, setRawText] = useState('');
-    const [previewResult, setPreviewResult] = useState<
-        AutoCardImportPreviewResult['previewAutoCardPoolImport'] | null
-    >(null);
-    const [preview, previewState] = useMutation<AutoCardImportPreviewResult>(
-        PREVIEW_AUTO_CARD_IMPORT_MUTATION,
-    );
-    const [importItems, importState] = useMutation<{
-        importAutoCardPoolItems: { importedCount: number; duplicateCount: number; availableCount: number };
-    }>(IMPORT_AUTO_CARD_ITEMS_MUTATION);
-    const runPreview = async () => {
-        if (!rawText.trim()) return onError('请输入需要导入的卡密内容');
-        try {
-            const response = await preview({
-                variables: { input: { productVariantId: variant.id, rawText } },
-            });
-            const result = response.data?.previewAutoCardPoolImport;
-            if (!result) throw new Error('后端未返回导入预览');
-            setPreviewResult(result);
-        } catch (error) {
-            onError(errorText(error));
-        }
-    };
-    const commit = async () => {
-        if (!previewResult?.validCount || previewResult.invalidCount) return;
-        try {
-            const response = await importItems({
-                variables: { input: { productVariantId: variant.id, rawText } },
-            });
-            const result = response.data?.importAutoCardPoolItems;
-            if (!result) throw new Error('后端未返回导入结果');
-            await onCompleted(
-                `卡密导入完成：新增 ${result.importedCount} 条，重复 ${result.duplicateCount} 条，当前可用 ${result.availableCount} 条`,
-            );
-        } catch (error) {
-            onError(errorText(error));
-        }
-    };
-    return (
-        <Modal
-            title="批量导入卡密"
-            description={`${variant.product.name} / ${variant.name} · 每行一条，字段按“${config.delimiter}”分隔`}
-            onClose={onClose}
-        >
-            <div className="rounded-lg bg-blue-50 p-3 text-[10px] leading-5 text-blue-800">
-                字段顺序：{config.fields.map(field => field.label).join(` ${config.delimiter} `)}
-                。预览只返回脱敏结果，导入后密文存储。
-            </div>
-            <textarea
-                rows={10}
-                value={rawText}
-                onChange={event => {
-                    setRawText(event.target.value);
-                    setPreviewResult(null);
-                }}
-                placeholder={config.fields.map(field => field.label).join(config.delimiter)}
-                className={`${inputClass} mt-4 font-mono leading-5`}
-                spellCheck={false}
-            />
-            {previewResult && (
-                <div
-                    className={`mt-4 rounded-xl border p-4 text-xs ${previewResult.invalidCount ? 'border-rose-200 bg-rose-50' : 'border-emerald-200 bg-emerald-50'}`}
-                >
-                    <div className="flex gap-4 font-bold">
-                        <span className="text-emerald-700">有效 {previewResult.validCount}</span>
-                        <span className="text-rose-700">错误 {previewResult.invalidCount}</span>
-                    </div>
-                    {previewResult.rows.slice(0, 3).map(row => (
-                        <div key={row.lineNumber} className="mt-2 font-mono text-[9px] text-slate-600">
-                            第 {row.lineNumber} 行：
-                            {row.fields.map(field => `${field.label}=${field.value}`).join('；')}
-                        </div>
-                    ))}
-                    {previewResult.errors.map(error => (
-                        <div key={error.lineNumber} className="mt-2 text-[10px] text-rose-700">
-                            第 {error.lineNumber} 行：{error.message}
-                        </div>
-                    ))}
-                </div>
-            )}
-            <div className="mt-6 flex justify-end gap-2 border-t border-slate-100 pt-4">
-                <button
-                    type="button"
-                    onClick={onClose}
-                    disabled={previewState.loading || importState.loading}
-                    className={secondaryButton}
-                >
-                    取消
-                </button>
-                {!previewResult ? (
-                    <button
-                        type="button"
-                        onClick={() => void runPreview()}
-                        disabled={previewState.loading || !rawText.trim()}
-                        className={primaryButton}
-                    >
-                        {previewState.loading && <LoaderCircle className="h-3.5 w-3.5 animate-spin" />}
-                        校验并预览
-                    </button>
-                ) : (
-                    <button
-                        type="button"
-                        onClick={() => void commit()}
-                        disabled={
-                            importState.loading ||
-                            previewResult.invalidCount > 0 ||
-                            previewResult.validCount === 0
-                        }
-                        className={primaryButton}
-                    >
-                        {importState.loading && <LoaderCircle className="h-3.5 w-3.5 animate-spin" />}确认导入{' '}
-                        {previewResult.validCount} 条
-                    </button>
-                )}
-            </div>
-        </Modal>
-    );
-}
-
 function RevealDialog({
     value,
     onClose,
@@ -1345,7 +976,7 @@ function EmptyState() {
             <PackageCheck className="h-9 w-9 text-slate-300" />
             <h2 className="mt-3 text-sm font-bold text-slate-700">没有自动发卡 SKU</h2>
             <p className="mt-1 max-w-lg text-xs leading-5 text-slate-400">
-                先在商品编辑页将 SKU 设置为“数字商品 / 卡密自动交付”，之后再回来配置卡密格式并导入库存。
+                请到商品编辑页的“销售与自动发货”完成设置；此页只处理跨商品库存记录和发货异常。
             </p>
         </div>
     );

@@ -266,6 +266,14 @@
     gap: 14px;
 }
 
+.support-page-intro {
+    margin: 0;
+    padding: 0 2px;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.6;
+}
+
 .support-hours-card {
     min-width: 0;
     overflow: hidden;

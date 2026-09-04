@@ -2,7 +2,12 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
 import { SupportContent } from './pages/support-page';
-import { storefrontSupportChannels, supportChannelDetail, supportServiceDetails } from './support-content';
+import {
+    storefrontSupportChannels,
+    supportChannelDetail,
+    supportPageTitle,
+    supportServiceDetails,
+} from './support-content';
 import { StorefrontContentBlock } from './types';
 
 const supportBlock: StorefrontContentBlock = {
@@ -25,7 +30,7 @@ const supportBlock: StorefrontContentBlock = {
         serviceEndTime: '19:00',
     },
     title: '客服配置',
-    subtitle: '',
+    subtitle: '客服副标题',
     body: '非工作时间可留言，我们会尽快回复',
     ctaLabel: '',
     items: [
@@ -56,6 +61,8 @@ const supportBlock: StorefrontContentBlock = {
 
 describe('support content', () => {
     it('reads service hours from settings and preserves channel order', () => {
+        expect(supportPageTitle(supportBlock, 'zh')).toBe('客服配置');
+        expect(supportPageTitle(undefined, 'en')).toBe('Customer support');
         expect(supportServiceDetails(supportBlock, 'zh')).toEqual({
             days: '工作日',
             time: '08:30–19:00',
@@ -88,6 +95,7 @@ describe('support content', () => {
         const markup = renderToStaticMarkup(<SupportContent content={supportBlock} language="zh" />);
 
         expect(markup).toContain('support-hours-rail');
+        expect(markup).toContain('客服副标题');
         expect(markup).toContain('客服服务时间');
         expect(markup).toContain('08:30–19:00');
         expect(markup).toContain('微信客服');

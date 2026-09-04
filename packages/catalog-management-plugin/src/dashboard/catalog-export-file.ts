@@ -29,7 +29,7 @@ export async function exportCatalogRowsLocally(
         const close = () => worker.terminate();
         worker.onmessage = (event: MessageEvent<CatalogExportWorkerResponse>) => {
             close();
-            if (!event.data.ok) {
+            if ('message' in event.data) {
                 reject(new Error(event.data.message));
                 return;
             }
