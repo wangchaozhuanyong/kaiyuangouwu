@@ -16,6 +16,7 @@ import {
 import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatDateTime, formatMoney, getPaymentStateLabel } from '../Sales/sales-utils';
+import { SettingsContentSkeleton } from './settings-ui';
 import {
     storePaymentMethodLabel,
     storeUsdtPaymentIntentStatusLabel,
@@ -110,7 +111,7 @@ export function UsdtPaymentManagementModule() {
     return (
         <div className="flex h-full flex-col bg-slate-50">
             <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-4 sm:px-8">
-                <div className="mx-auto flex w-full max-w-[1500px] items-center justify-between gap-4">
+                <div className="mx-auto flex w-full max-w-none items-center justify-between gap-4">
                     <div>
                         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                             <WalletCards className="h-5 w-5 text-emerald-600" />
@@ -131,13 +132,13 @@ export function UsdtPaymentManagementModule() {
                     </button>
                 </div>
             </header>
-            <main className="mx-auto w-full max-w-[1500px] flex-1 space-y-4 overflow-y-auto p-5 sm:p-8">
+            <main className="mx-auto min-h-0 w-full max-w-none flex-1 space-y-4 overflow-y-auto p-5 sm:p-8">
                 {notice && <Notice tone="success" message={notice} />}
                 {error && !action && <Notice tone="error" message={error} />}
-                {query.loading && !query.data ? (
-                    <State label="正在读取平台支付数据…" />
-                ) : query.error ? (
+                {query.error && !query.data ? (
                     <State tone="error" label="平台支付数据加载失败" action={() => void query.refetch()} />
+                ) : !query.data ? (
+                    <SettingsContentSkeleton label="正在读取平台支付数据" sections={4} />
                 ) : (
                     <>
                         <section className={sectionClass}>

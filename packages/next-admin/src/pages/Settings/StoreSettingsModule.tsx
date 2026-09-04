@@ -35,8 +35,8 @@ import { CurrencyAndRatesPanel, StoreUsdtPanel } from './StoreFinancePanel';
 import { CommerceModePanel, DomainsPanel, SellersPanel, StoresPanel } from './StorePanels';
 import {
     ErrorState,
-    LoadingState,
     Message,
+    SettingsContentSkeleton,
     TabButton,
     inputClass,
     mergeById,
@@ -77,6 +77,7 @@ export function StoreSettingsModule() {
     const [sellerOpen, setSellerOpen] = useState(false);
     const [notice, setNotice] = useState('');
     const [actionError, setActionError] = useState('');
+    const [initialSupplementSettled, setInitialSupplementSettled] = useState(false);
     const loadingAllStoreSettingsRef = useRef(false);
     const query = useQuery<StoreManagementResult>(storeManagementDocument, {
         variables: {
@@ -92,6 +93,15 @@ export function StoreSettingsModule() {
         fetchMore: fetchMoreStoreSettings,
         loading: storeSettingsLoading,
     } = query;
+    const needsSupplementaryStoreSettings = Boolean(
+        storeSettingsData &&
+        (storeSettingsData.sellers.items.length < storeSettingsData.sellers.totalItems ||
+            storeSettingsData.paymentMethods.items.length < storeSettingsData.paymentMethods.totalItems ||
+            storeSettingsData.shippingMethods.items.length < storeSettingsData.shippingMethods.totalItems),
+    );
+    const isStoreSettingsInitializing =
+        !storeSettingsError &&
+        (!storeSettingsData || (needsSupplementaryStoreSettings && !initialSupplementSettled));
 
     useEffect(() => {
         const data = storeSettingsData;
@@ -133,6 +143,7 @@ export function StoreSettingsModule() {
             })
             .finally(() => {
                 loadingAllStoreSettingsRef.current = false;
+                setInitialSupplementSettled(true);
             });
     }, [fetchMoreStoreSettings, storeSettingsData, storeSettingsError, storeSettingsLoading]);
     const profiles = useMemo(
@@ -192,7 +203,7 @@ export function StoreSettingsModule() {
                     </div>
                 </div>
             </header>
-            <main className="mx-auto w-full max-w-none flex-1 space-y-4 overflow-y-auto p-5 sm:p-8">
+            <main className="mx-auto min-h-0 w-full max-w-none flex-1 space-y-4 overflow-y-auto p-5 sm:p-8">
                 {notice && (
                     <Message kind="success" onClose={() => setNotice('')}>
                         {notice}
@@ -281,10 +292,10 @@ export function StoreSettingsModule() {
                         </button>
                     )}
                 </div>
-                {query.loading && !query.data ? (
-                    <LoadingState />
-                ) : query.error ? (
+                {query.error && !query.data ? (
                     <ErrorState message={query.error.message} onRetry={() => void query.refetch()} />
+                ) : isStoreSettingsInitializing ? (
+                    <SettingsContentSkeleton label="正在读取店铺综合设置" sections={2} />
                 ) : (
                     <>
                         {tab === 'STORES' && (

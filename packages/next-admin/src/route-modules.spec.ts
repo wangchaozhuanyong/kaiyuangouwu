@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getRouteModuleKey } from './route-modules';
+import { SETTINGS_ROUTE_PRELOAD_TARGETS, getRouteModuleKey } from './route-modules';
 
 describe('getRouteModuleKey', () => {
     it('resolves list routes with query parameters', () => {
@@ -20,5 +20,20 @@ describe('getRouteModuleKey', () => {
 
     it('ignores routes without a lazy module', () => {
         expect(getRouteModuleKey('/login')).toBeNull();
+    });
+
+    it('preloads all settings navigation entries after the app shell starts', () => {
+        expect(SETTINGS_ROUTE_PRELOAD_TARGETS).toEqual([
+            '/settings/store-profile',
+            '/settings/team',
+            '/settings/system-ops',
+            '/settings/usdt-payments',
+        ]);
+        expect(SETTINGS_ROUTE_PRELOAD_TARGETS.map(getRouteModuleKey)).toEqual([
+            'storeSettings',
+            'roles',
+            'systemOps',
+            'usdtPayments',
+        ]);
     });
 });
