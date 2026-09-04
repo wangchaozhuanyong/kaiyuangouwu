@@ -253,6 +253,7 @@ export const STORE_MANAGEMENT_QUERY = gql`
         }
         activeChannel {
             id
+            code
             defaultLanguageCode
             defaultCurrencyCode
         }
@@ -1126,7 +1127,7 @@ export interface StoreManagementResult {
         id: string;
         user: { roles: Array<{ id: string; code: string }> };
     } | null;
-    activeChannel: { id: string; defaultLanguageCode: string; defaultCurrencyCode: string };
+    activeChannel: { id: string; code: string; defaultLanguageCode: string; defaultCurrencyCode: string };
     storeProfiles: StoreProfileRecord[];
     storeProvisioningTemplates: Array<{
         id: string;

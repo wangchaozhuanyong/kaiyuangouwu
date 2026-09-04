@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const testContentPattern =
-    /(?:^|[-_\s])(audit|demo|dummy|test|crud|sample|staging|qa)(?:$|[-_\s])|测试|临时演示/iu;
+    /(?:^|[-_\s])(audit|demo|dummy|simulated?|simulation|test|crud|sample|staging|qa)(?:$|[-_\s])|模拟|测试|临时演示/iu;
 const placeholderShippingLabels = new Set([
     'standard-shipping',
     'standard shipping',

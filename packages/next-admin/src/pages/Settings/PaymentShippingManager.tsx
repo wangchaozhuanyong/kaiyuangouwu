@@ -28,6 +28,13 @@ import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { UsdtPaymentSetupPanel } from './UsdtPaymentSetupPanel';
 import {
+    SIMULATED_PAYMENT_HANDLER_CODE,
+    createSimulatedPaymentInput,
+    isSimulatedPaymentMethod,
+    settlesSimulatedPaymentImmediately,
+    simulatedPaymentHandlerInput,
+} from './simulated-payment-utils';
+import {
     USDT_PAYMENT_HANDLER_CODE,
     USDT_PAYMENT_METHOD_CODE,
     isSystemManagedUsdtPaymentMethod,
@@ -73,6 +80,7 @@ export function PaymentShippingManager({
     const canDeleteShipping = hasAnyPermission(['DeleteSettings', 'DeleteShippingMethod']);
     const [editor, setEditor] = useState<EditorState | null>(null);
     const [togglePayment, toggleState] = useMutation(UPDATE_PAYMENT_METHOD_MUTATION);
+    const [createSimulatedPayment, createSimulatedPaymentState] = useMutation(CREATE_PAYMENT_METHOD_MUTATION);
     const [deletePayment, deletePaymentState] = useMutation<{
         deletePaymentMethod: { result: string; message?: string | null };
     }>(DELETE_PAYMENT_METHOD_MUTATION);
@@ -86,6 +94,43 @@ export function PaymentShippingManager({
             await onChanged(`支付方式已${enabled ? '启用' : '停用'}`);
         } catch (error) {
             onError(toUserFacingError(error, '支付方式状态更新失败'));
+        }
+    };
+
+    const simulatedPaymentHandlerAvailable = data.paymentMethodHandlers.some(
+        handler => handler.code === SIMULATED_PAYMENT_HANDLER_CODE,
+    );
+    const simulatedPaymentMethods = data.paymentMethods.items.filter(isSimulatedPaymentMethod);
+    const changeSimulatedPayment = async (item: PaymentMethodItem | undefined, enabled: boolean) => {
+        if (!simulatedPaymentHandlerAvailable) {
+            onError('后端未注册模拟支付处理器，请重启服务后再试');
+            return;
+        }
+        try {
+            if (item) {
+                await togglePayment({
+                    variables: {
+                        input: {
+                            id: item.id,
+                            enabled,
+                            handler: simulatedPaymentHandlerInput(),
+                        },
+                    },
+                });
+            } else {
+                await createSimulatedPayment({
+                    variables: {
+                        input: createSimulatedPaymentInput(enabled, data.activeChannel.code),
+                    },
+                });
+            }
+            await onChanged(
+                enabled
+                    ? '模拟支付已开启，测试订单将直接记录为付款成功'
+                    : '模拟支付已关闭，结账页将不再显示该方式',
+            );
+        } catch (error) {
+            onError(toUserFacingError(error, '模拟支付状态更新失败'));
         }
     };
 
@@ -141,8 +186,43 @@ export function PaymentShippingManager({
                         )}
                     </div>
                     <div className="divide-y divide-slate-100">
+                        {simulatedPaymentMethods.length === 0 && (
+                            <div className="flex flex-col gap-3 bg-amber-50/70 p-5 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="flex min-w-0 items-start gap-3">
+                                    <Beaker className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                                    <div>
+                                        <strong className="text-xs text-amber-950">模拟支付（测试）</strong>
+                                        <p className="mt-1 text-[10px] leading-4 text-amber-800">
+                                            开启后客户可不扣款完成订单，订单会直接进入已结算状态。仅用于测试，验收后请关闭。
+                                        </p>
+                                    </div>
+                                </div>
+                                {canCreatePayment ? (
+                                    <button
+                                        type="button"
+                                        className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-amber-600 px-3 py-2 text-xs font-bold text-white hover:bg-amber-700 disabled:opacity-50"
+                                        disabled={
+                                            createSimulatedPaymentState.loading ||
+                                            toggleState.loading ||
+                                            !simulatedPaymentHandlerAvailable
+                                        }
+                                        onClick={() => void changeSimulatedPayment(undefined, true)}
+                                    >
+                                        <Beaker className="h-3.5 w-3.5" />
+                                        {createSimulatedPaymentState.loading ? '正在开启…' : '创建并开启'}
+                                    </button>
+                                ) : (
+                                    <span className="shrink-0 text-[10px] font-bold text-amber-700">
+                                        需要支付方式创建权限
+                                    </span>
+                                )}
+                            </div>
+                        )}
                         {data.paymentMethods.items.map(item => {
                             const systemManaged = isSystemManagedUsdtPaymentMethod(item);
+                            const simulatedPayment = isSimulatedPaymentMethod(item);
+                            const simulatedPaymentNeedsRepair =
+                                simulatedPayment && item.enabled && !settlesSimulatedPaymentImmediately(item);
                             return (
                                 <div key={item.id} className="flex items-center justify-between gap-4 p-5">
                                     <div className="min-w-0">
@@ -151,6 +231,11 @@ export function PaymentShippingManager({
                                             {systemManaged && (
                                                 <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[9px] font-bold text-emerald-700">
                                                     系统管理
+                                                </span>
+                                            )}
+                                            {simulatedPayment && (
+                                                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-bold text-amber-800">
+                                                    仅限测试
                                                 </span>
                                             )}
                                         </div>
@@ -167,12 +252,53 @@ export function PaymentShippingManager({
                                                 由下方 USDT 收款地址审核状态自动启停和分配。
                                             </p>
                                         )}
+                                        {simulatedPayment && (
+                                            <p className="mt-1 text-[10px] text-amber-700">
+                                                {simulatedPaymentNeedsRepair
+                                                    ? '当前是旧的“仅授权”配置，需修复后才会直接显示付款成功。'
+                                                    : '不会真实扣款；开启后任何客户都能用它完成测试订单。'}
+                                            </p>
+                                        )}
                                     </div>
                                     <div className="flex shrink-0 items-center gap-2">
                                         {systemManaged ? (
                                             <span className="text-[10px] font-bold text-slate-500">
                                                 {item.enabled ? '已启用' : '等待系统启用'}
                                             </span>
+                                        ) : simulatedPayment ? (
+                                            canUpdatePayment ? (
+                                                simulatedPaymentNeedsRepair ? (
+                                                    <button
+                                                        type="button"
+                                                        className="rounded-lg bg-amber-600 px-3 py-2 text-[10px] font-bold text-white hover:bg-amber-700 disabled:opacity-50"
+                                                        disabled={toggleState.loading}
+                                                        onClick={() =>
+                                                            void changeSimulatedPayment(item, true)
+                                                        }
+                                                    >
+                                                        {toggleState.loading ? '修复中…' : '修复并开启'}
+                                                    </button>
+                                                ) : (
+                                                    <label className="flex items-center gap-1.5 text-[10px] font-bold text-amber-800">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={item.enabled}
+                                                            onChange={event =>
+                                                                void changeSimulatedPayment(
+                                                                    item,
+                                                                    event.target.checked,
+                                                                )
+                                                            }
+                                                            disabled={toggleState.loading}
+                                                        />
+                                                        {item.enabled ? '已开启' : '已关闭'}
+                                                    </label>
+                                                )
+                                            ) : (
+                                                <span className="text-[10px] font-bold text-slate-500">
+                                                    {item.enabled ? '已开启' : '已关闭'}
+                                                </span>
+                                            )
                                         ) : (
                                             <>
                                                 {canUpdatePayment && (

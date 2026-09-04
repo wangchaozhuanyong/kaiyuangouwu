@@ -8,28 +8,19 @@ export interface PaymentAvailability {
     eligibleMethods: PaymentMethod[];
 }
 
-const TEST_PAYMENT_PATTERN = /(?:^|[-_\s])(demo|dummy|mock|test)(?:$|[-_\s])|测试/iu;
+const TEST_PAYMENT_PATTERN =
+    /(?:^|[-_\s])(demo|dummy|mock|simulated?|simulation|test)(?:$|[-_\s])|模拟|测试/iu;
 
 export function isTestPaymentMethod(method: PaymentMethod): boolean {
     return TEST_PAYMENT_PATTERN.test([method.code, method.name, method.description].join(' '));
 }
 
-export function paymentAvailability(
-    methods: PaymentMethod[],
-    options: { allowTestMethods: boolean },
-): PaymentAvailability {
-    const visibleMethods = methods.filter(method =>
-        options.allowTestMethods ? isTestPaymentMethod(method) : !isTestPaymentMethod(method),
-    );
-    const eligibleMethods = visibleMethods.filter(method => method.isEligible);
+export function paymentAvailability(methods: PaymentMethod[]): PaymentAvailability {
+    const eligibleMethods = methods.filter(method => method.isEligible);
 
     return {
-        status: eligibleMethods.length
-            ? 'READY'
-            : visibleMethods.length
-              ? 'ORDER_INELIGIBLE'
-              : 'NOT_CONFIGURED',
-        methods: visibleMethods,
+        status: eligibleMethods.length ? 'READY' : methods.length ? 'ORDER_INELIGIBLE' : 'NOT_CONFIGURED',
+        methods,
         eligibleMethods,
     };
 }

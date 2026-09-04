@@ -21,7 +21,7 @@
 | 店铺域名      | `StoreDomainPlugin` 已接入开发配置，可将已验证域名路由到 Channel                       |
 | 实物/虚拟商品 | `CommerceFulfillmentPlugin` 已接入，可识别 physical / digital / mixed 订单             |
 | 搜索          | `DefaultSearchPlugin` 已启用；商品搜索与分类列表已接入服务端分页、排序和旧请求失效保护 |
-| 支付          | 开发环境是 `dummyPaymentHandler`；客户端只推进到 `ArrangingPayment`，没有真实支付闭环  |
+| 支付          | 已有后台受控的模拟支付闭环；真实支付服务商仍待接入                                     |
 | 评价          | 开发配置启用了测试性质的 `ReviewsPlugin`，不能直接视为生产评价系统                     |
 | 多商家订单    | 仓库内有 multivendor 示例插件，但开发配置未启用，不能视为现成功能                      |
 
@@ -153,7 +153,7 @@
 | 虚拟商品免地址/配送          | 现有插件    | `checkoutFulfillment`                                                         | 一期按后端结果决定表单，不用商品名称猜测                   |
 | 订单备注                     | 已实现      | 公开 Order `customerNote` custom field、`setOrderCustomFields`                | 已完成迁移、500 字校验、编辑/清空和会话及 Channel 隔离     |
 | 优惠码与金额明细             | 现有        | coupon mutation、Order discounts/totals                                       | 一期以后端金额为唯一准值                                   |
-| 提交到付款                   | 部分已实现  | `prepareStorefrontCartPayment`、`eligiblePaymentMethods`、`addPaymentToOrder` | 购物车快照与订单状态转换已完成，真实支付方式和错误页待接入 |
+| 提交到付款                   | 已实现      | `prepareStorefrontCartPayment`、`eligiblePaymentMethods`、`addPaymentToOrder` | 支持后台开关控制的模拟支付，可直接把测试订单结算为付款成功 |
 | 微信/支付宝/银行卡等真实支付 | 配置/扩展   | 当前仅 dummy handler                                                          | 上线阻塞项；需选支付服务商、回调、签名校验和退款策略       |
 | 防重复提交                   | 前端 + 后端 | 状态机可拒绝非法转换                                                          | 按钮锁定、请求幂等、恢复支付中订单                         |
 

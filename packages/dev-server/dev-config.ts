@@ -602,7 +602,7 @@ export const devConfig: VendureConfig = {
         ...getDbConfig(),
     },
     paymentOptions: {
-        paymentMethodHandlers: IS_PRODUCTION ? [] : [dummyPaymentHandler],
+        paymentMethodHandlers: [dummyPaymentHandler],
     },
     catalogOptions: {
         productVariantPriceSelectionStrategy: new StoreDefaultCurrencyPriceSelectionStrategy(),
