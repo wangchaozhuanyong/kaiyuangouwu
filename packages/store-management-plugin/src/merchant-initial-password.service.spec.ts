@@ -2,7 +2,11 @@ import { ForbiddenError } from '@vendure/core';
 import { describe, expect, it, vi } from 'vitest';
 
 import { StoreAdministratorAccess } from './entities/store-administrator-access.entity';
-import { MerchantInitialPasswordService } from './merchant-initial-password.service';
+import {
+    MerchantInitialPasswordService,
+    SENSITIVE_ACTION_PASSWORD_INVALID,
+    SENSITIVE_ACTION_PASSWORD_REQUIRED,
+} from './merchant-initial-password.service';
 
 function createService(access: StoreAdministratorAccess | null = null, currentPasswordMatches = false) {
     const accessRepository = {
@@ -61,9 +65,22 @@ describe('MerchantInitialPasswordService', () => {
         ).resolves.toBeUndefined();
 
         const rejected = createService(null, false);
-        await expect(
-            rejected.service.assertCurrentPassword({ activeUserId: 'user-1' } as any, 'wrong'),
-        ).rejects.toThrow('当前账号密码不正确');
+        const invalidPassword = rejected.service.assertCurrentPassword(
+            { activeUserId: 'user-1' } as any,
+            'wrong',
+        );
+        await expect(invalidPassword).rejects.toThrow('当前账号密码不正确');
+        await expect(invalidPassword).rejects.toMatchObject({
+            extensions: { code: SENSITIVE_ACTION_PASSWORD_INVALID },
+        });
+
+        const missing = createService(null, false);
+        const missingPassword = missing.service.assertCurrentPassword({ activeUserId: 'user-1' } as any, '');
+        await expect(missingPassword).rejects.toThrow('请输入当前账号密码后继续');
+        await expect(missingPassword).rejects.toMatchObject({
+            extensions: { code: SENSITIVE_ACTION_PASSWORD_REQUIRED },
+        });
+        expect(missing.passwordCipher.check).not.toHaveBeenCalled();
     });
 
     it('requires the current password for protected core admin deletions', async () => {
@@ -77,13 +94,15 @@ describe('MerchantInitialPasswordService', () => {
         ).resolves.toBeUndefined();
 
         const rejected = createService(null, false);
-        await expect(
-            rejected.service.assertSensitiveAdminMutation(
-                { activeUserId: 'user-1', apiType: 'admin' } as any,
-                'deleteProducts',
-                undefined,
-            ),
-        ).rejects.toThrow('当前账号密码不正确');
+        const missingPassword = rejected.service.assertSensitiveAdminMutation(
+            { activeUserId: 'user-1', apiType: 'admin' } as any,
+            'deleteProducts',
+            undefined,
+        );
+        await expect(missingPassword).rejects.toThrow('请输入当前账号密码后继续');
+        await expect(missingPassword).rejects.toMatchObject({
+            extensions: { code: SENSITIVE_ACTION_PASSWORD_REQUIRED },
+        });
     });
 
     it('does not require a password for ordinary edits or low-risk deletions', async () => {
@@ -108,7 +127,7 @@ describe('MerchantInitialPasswordService', () => {
                 undefined,
                 { input: { password: 'SafePassword9!' } },
             ),
-        ).rejects.toThrow('当前账号密码不正确');
+        ).rejects.toThrow('请输入当前账号密码后继续');
 
         const profileUpdate = createService(null, false);
         await expect(
@@ -149,7 +168,7 @@ describe('MerchantInitialPasswordService', () => {
                 fieldName,
                 undefined,
             ),
-        ).rejects.toThrow('当前账号密码不正确');
+        ).rejects.toThrow('请输入当前账号密码后继续');
     });
 
     it('requires the current password only when a bulk product update changes enabled state', async () => {
@@ -161,7 +180,7 @@ describe('MerchantInitialPasswordService', () => {
                 undefined,
                 { input: [{ id: 'product-1', enabled: false }] },
             ),
-        ).rejects.toThrow('当前账号密码不正确');
+        ).rejects.toThrow('请输入当前账号密码后继续');
 
         const ordinaryUpdate = createService(null, false);
         await expect(
@@ -184,7 +203,7 @@ describe('MerchantInitialPasswordService', () => {
                 undefined,
                 { input: { id: 'product-1', enabled: true } },
             ),
-        ).rejects.toThrow('当前账号密码不正确');
+        ).rejects.toThrow('请输入当前账号密码后继续');
 
         const ordinaryUpdate = createService(null, false);
         await expect(

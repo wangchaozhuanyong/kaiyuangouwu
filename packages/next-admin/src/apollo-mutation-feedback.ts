@@ -1,5 +1,6 @@
 import { ApolloLink, Observable } from '@apollo/client';
 
+import { isSensitiveActionCancelledError } from './apollo-sensitive-action';
 import { createAdminFeedbackId, publishAdminFeedback } from './utils/admin-feedback';
 import {
     extractMutationFailure,
@@ -43,6 +44,14 @@ export const adminMutationFeedbackLink = new ApolloLink((operation, forward) => 
         const finishWithError = (reason: unknown) => {
             if (completedFeedback) return;
             completedFeedback = true;
+            if (isSensitiveActionCancelledError(reason)) {
+                publishAdminFeedback({
+                    id: feedbackId,
+                    kind: 'info',
+                    title: '操作已取消',
+                });
+                return;
+            }
             publishAdminFeedback({
                 id: feedbackId,
                 kind: 'error',
