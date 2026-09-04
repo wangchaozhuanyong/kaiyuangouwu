@@ -561,6 +561,7 @@ async function rollbackCompletedAuthChannels(rollbacks) {
 async function verifyAuthVisualPlans({
     fetchImpl,
     apiOrigin,
+    shopOrigin = apiOrigin,
     authToken,
     channel,
     plans,
@@ -573,7 +574,7 @@ async function verifyAuthVisualPlans({
     for (let attempt = 1; attempt <= attempts; attempt += 1) {
         afterBlocks = await loadAdminBlocks(fetchImpl, apiOrigin, authToken, channel);
         try {
-            const afterShop = await loadShopBlocks(fetchImpl, apiOrigin, channel);
+            const afterShop = await loadShopBlocks(fetchImpl, shopOrigin, channel);
             for (const plan of plans) {
                 const block = findAuthVisualBlock(afterBlocks, plan);
                 assertAdminMatchesPlan(block, plan);
@@ -590,6 +591,7 @@ async function verifyAuthVisualPlans({
 
 export async function syncAuthVisuals({
     apiOrigin,
+    shopOrigin = apiOrigin,
     username,
     password,
     adminBearerToken,
@@ -605,6 +607,7 @@ export async function syncAuthVisuals({
     waitImpl = delayMs => new Promise(resolve => setTimeout(resolve, delayMs)),
 }) {
     assert.ok(apiOrigin, 'VENDURE_API_ORIGIN or --api-origin is required');
+    assert.ok(shopOrigin, 'VENDURE_STOREFRONT_URL or --shop-origin is required');
     assert.ok(
         adminBearerToken || (username && password),
         'VENDURE_ADMIN_BEARER_TOKEN or SUPERADMIN_USERNAME and SUPERADMIN_PASSWORD are required',
@@ -618,15 +621,21 @@ export async function syncAuthVisuals({
         assert.ok(allowRemote, 'Remote or production writes require both --apply and --allow-remote');
     }
 
-    const normalizedOrigin = apiOrigin.replace(/\/$/, '');
-    const session = await authenticate(fetchImpl, normalizedOrigin, username, password, adminBearerToken);
+    const normalizedApiOrigin = apiOrigin.replace(/\/$/, '');
+    const normalizedShopOrigin = shopOrigin.replace(/\/$/, '');
+    const session = await authenticate(fetchImpl, normalizedApiOrigin, username, password, adminBearerToken);
     const selectedChannels = selectAuthVisualChannels(session.channels, channelCodes);
 
     const results = [];
     const completedChannelRollbacks = [];
     for (const channel of selectedChannels) {
-        const beforeBlocks = await loadAdminBlocks(fetchImpl, normalizedOrigin, session.authToken, channel);
-        const beforeShop = await loadShopBlocks(fetchImpl, normalizedOrigin, channel);
+        const beforeBlocks = await loadAdminBlocks(
+            fetchImpl,
+            normalizedApiOrigin,
+            session.authToken,
+            channel,
+        );
+        const beforeShop = await loadShopBlocks(fetchImpl, normalizedShopOrigin, channel);
         const plans = manifest.map(definition => {
             const block = findAuthVisualBlock(beforeBlocks, definition);
             return {
@@ -638,7 +647,8 @@ export async function syncAuthVisuals({
         if (verify) {
             await verifyAuthVisualPlans({
                 fetchImpl,
-                apiOrigin: normalizedOrigin,
+                apiOrigin: normalizedApiOrigin,
+                shopOrigin: normalizedShopOrigin,
                 authToken: session.authToken,
                 channel,
                 plans,
@@ -656,7 +666,7 @@ export async function syncAuthVisuals({
             try {
                 appliedBlocks = await applyBlockPlans(
                     fetchImpl,
-                    normalizedOrigin,
+                    normalizedApiOrigin,
                     session.authToken,
                     channel,
                     beforeBlocks,
@@ -666,7 +676,8 @@ export async function syncAuthVisuals({
                 try {
                     afterBlocks = await verifyAuthVisualPlans({
                         fetchImpl,
-                        apiOrigin: normalizedOrigin,
+                        apiOrigin: normalizedApiOrigin,
+                        shopOrigin: normalizedShopOrigin,
                         authToken: session.authToken,
                         channel,
                         plans,
@@ -679,7 +690,7 @@ export async function syncAuthVisuals({
                     try {
                         await restoreAuthVisuals(
                             fetchImpl,
-                            normalizedOrigin,
+                            normalizedApiOrigin,
                             session.authToken,
                             channel,
                             beforeBlocks,
@@ -701,13 +712,13 @@ export async function syncAuthVisuals({
                 completedChannelRollbacks.push(async () => {
                     const currentBlocks = await loadAdminBlocks(
                         fetchImpl,
-                        normalizedOrigin,
+                        normalizedApiOrigin,
                         session.authToken,
                         channel,
                     );
                     await restoreAuthVisuals(
                         fetchImpl,
-                        normalizedOrigin,
+                        normalizedApiOrigin,
                         session.authToken,
                         channel,
                         beforeBlocks,
@@ -721,7 +732,7 @@ export async function syncAuthVisuals({
                     try {
                         await restoreAuthVisuals(
                             fetchImpl,
-                            normalizedOrigin,
+                            normalizedApiOrigin,
                             session.authToken,
                             channel,
                             beforeBlocks,
@@ -775,7 +786,8 @@ export async function syncAuthVisuals({
     return {
         applied: apply,
         verified: apply || verify,
-        apiOrigin: normalizedOrigin,
+        apiOrigin: normalizedApiOrigin,
+        shopOrigin: normalizedShopOrigin,
         channelCodes: selectedChannels.map(channel => channel.code),
         results,
     };
@@ -792,6 +804,7 @@ export function parseCliArguments(args) {
             options.apply = false;
             options.verify = false;
         } else if (argument === '--api-origin') options.apiOrigin = args[++index];
+        else if (argument === '--shop-origin') options.shopOrigin = args[++index];
         else if (argument === '--channel-codes') options.channelCodes = parseChannelCodes(args[++index]);
         else throw new Error(`Unknown argument: ${String(argument)}`);
     }
@@ -812,6 +825,7 @@ if (isMain) {
             : undefined);
     const result = await syncAuthVisuals({
         apiOrigin,
+        shopOrigin: options.shopOrigin ?? process.env.VENDURE_STOREFRONT_URL ?? apiOrigin,
         username: process.env.SUPERADMIN_USERNAME,
         password: process.env.SUPERADMIN_PASSWORD,
         adminBearerToken: process.env.VENDURE_ADMIN_BEARER_TOKEN,
@@ -826,6 +840,7 @@ if (isMain) {
                 ok: true,
                 mode: result.applied ? 'apply' : result.verified ? 'verify' : 'dry-run',
                 apiOrigin: result.apiOrigin,
+                shopOrigin: result.shopOrigin,
                 channelCodes: result.channelCodes,
                 channels: result.results,
             },

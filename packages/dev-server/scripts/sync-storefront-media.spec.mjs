@@ -96,6 +96,8 @@ test('CLI parsing deduplicates Channels and keeps writes opt-in', () => {
             '--allow-remote',
             '--api-origin',
             'https://api.example.com/',
+            '--shop-origin',
+            'https://shop.example.com/',
             '--channel-codes',
             'cn-mainland,my-malaysia',
             '--keys',
@@ -107,6 +109,7 @@ test('CLI parsing deduplicates Channels and keeps writes opt-in', () => {
             verify: false,
             validate: false,
             apiOrigin: 'https://api.example.com/',
+            shopOrigin: 'https://shop.example.com/',
             channelCodes: ['cn-mainland', 'my-malaysia'],
             mediaKeys: ['referral-poster-neon-layout-reference'],
         },
@@ -481,6 +484,7 @@ test('apply preserves galleries and verifies the same Asset through Admin and Sh
         }
         if (request.query.includes('StorefrontMediaShopProduct')) {
             assert.equal(new URL(url).pathname, '/shop-api');
+            assert.equal(new URL(url).origin, 'https://moyaoai.com');
             shopReads += 1;
             if (shopReads === 1) {
                 return Response.json({
@@ -500,6 +504,7 @@ test('apply preserves galleries and verifies the same Asset through Admin and Sh
 
     const result = await syncStorefrontMedia({
         apiOrigin: 'http://127.0.0.1:3000',
+        shopOrigin: 'https://moyaoai.com',
         username: 'admin',
         password: 'secret',
         apply: true,
@@ -511,6 +516,7 @@ test('apply preserves galleries and verifies the same Asset through Admin and Sh
     assert.deepEqual(mutationInputs[0].assetIds, ['asset-old-product', 'asset-reviewed']);
     assert.deepEqual(mutationInputs[1].assetIds, ['asset-old-variant', 'asset-reviewed']);
     assert.equal(result.verified, true);
+    assert.equal(result.shopOrigin, 'https://moyaoai.com');
     assert.equal(shopReads, 2);
     assert.deepEqual(waits, [250]);
     assert.deepEqual(result.results[0].verification, [
