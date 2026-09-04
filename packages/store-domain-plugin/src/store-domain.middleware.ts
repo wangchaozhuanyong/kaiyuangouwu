@@ -5,14 +5,14 @@ import { NextFunction, Request, Response } from 'express';
 import { STORE_DOMAIN_PLUGIN_OPTIONS } from './constants';
 import { normalizeRequestHost } from './domain-utils';
 import { StoreDomainService } from './store-domain.service';
-import { StoreDomainPluginOptions } from './types';
+import { ResolvedStoreDomainPluginOptions } from './types';
 
 @Injectable()
 export class StoreDomainMiddleware implements NestMiddleware {
     constructor(
         private readonly configService: ConfigService,
         private readonly storeDomainService: StoreDomainService,
-        @Inject(STORE_DOMAIN_PLUGIN_OPTIONS) private readonly options: Required<StoreDomainPluginOptions>,
+        @Inject(STORE_DOMAIN_PLUGIN_OPTIONS) private readonly options: ResolvedStoreDomainPluginOptions,
     ) {}
 
     async use(req: Request, res: Response, next: NextFunction): Promise<void> {

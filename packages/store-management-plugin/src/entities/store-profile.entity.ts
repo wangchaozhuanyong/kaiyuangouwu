@@ -7,6 +7,8 @@ import { StoreActivationReadiness, StoreProfileStatus } from '../types';
 @Index('IDX_store_profile_channel', ['channelId'], { unique: true })
 @Index('IDX_store_profile_public_order', ['status', 'isPublished', 'sortOrder'])
 @Index('IDX_store_profile_logo_asset', ['logoAssetId'])
+@Index('IDX_store_profile_logo_on_light_asset', ['logoOnLightAssetId'])
+@Index('IDX_store_profile_logo_on_dark_asset', ['logoOnDarkAssetId'])
 export class StoreProfile extends VendureEntity {
     constructor(input?: DeepPartial<StoreProfile>) {
         super(input);
@@ -43,6 +45,44 @@ export class StoreProfile extends VendureEntity {
 
     @EntityId({ nullable: true })
     logoAssetId: ID | null;
+
+    @ManyToOne(() => Asset, { onDelete: 'SET NULL', nullable: true })
+    @JoinColumn({
+        name: 'logoOnLightAssetId',
+        foreignKeyConstraintName: 'FK_store_profile_logo_on_light_asset',
+    })
+    logoOnLightAsset: Asset | null;
+
+    @EntityId({ nullable: true })
+    logoOnLightAssetId: ID | null;
+
+    @ManyToOne(() => Asset, { onDelete: 'SET NULL', nullable: true })
+    @JoinColumn({
+        name: 'logoOnDarkAssetId',
+        foreignKeyConstraintName: 'FK_store_profile_logo_on_dark_asset',
+    })
+    logoOnDarkAsset: Asset | null;
+
+    @EntityId({ nullable: true })
+    logoOnDarkAssetId: ID | null;
+
+    @Column('varchar', { length: 160, nullable: true })
+    taglineZh: string | null;
+
+    @Column('varchar', { length: 160, nullable: true })
+    taglineEn: string | null;
+
+    @Column('varchar', { length: 7, nullable: true })
+    brandBackgroundColor: string | null;
+
+    @Column('varchar', { length: 7, nullable: true })
+    brandPrimaryColor: string | null;
+
+    @Column('varchar', { length: 7, nullable: true })
+    brandAccentColor: string | null;
+
+    @Column('varchar', { length: 7, nullable: true })
+    brandHighlightColor: string | null;
 
     primaryDomain?: string | null;
 

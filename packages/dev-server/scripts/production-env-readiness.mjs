@@ -20,6 +20,7 @@ const operationsControls = [
     ...commonOperationsControls,
     ...profileOperationsControls['managed-services'],
     ...profileOperationsControls['single-host'],
+    ['cloudflareOriginTls', 'Cloudflare SaaS 回源 TLS/SNI 已现场验证'],
 ];
 const identifierPlaceholderPattern = /^(?:admin|administrator|changeme|example|superadmin|replace[-_].*)$/iu;
 const placeholderPattern = /^(?:abc|admin|changeme|example|password|superadmin|vendure-dev|replace[-_])/iu;
@@ -418,6 +419,38 @@ export function evaluateProductionEnvironment(env, role, controls = {}) {
                 ? 'configured'
                 : 'CNAME, routing mode, or bypass hosts are unsafe',
     });
+    const domainAutomationMode = normalized(env.STORE_DOMAIN_AUTOMATION_MODE) || 'manual';
+    const cloudflareAutomationReady =
+        domainAutomationMode === 'cloudflare-saas' &&
+        isConfiguredSecret(env.CLOUDFLARE_SAAS_API_TOKEN, 20) &&
+        /^[a-f0-9]{32}$/iu.test(normalized(env.CLOUDFLARE_SAAS_ZONE_ID)) &&
+        isPublicHostname(env.CLOUDFLARE_SAAS_FALLBACK_ORIGIN) &&
+        ['true', 'false'].includes(normalized(env.CLOUDFLARE_SAAS_AUTO_MANAGE_DNS));
+    pushCheck(checks, {
+        id: 'domain-automation',
+        title: 'Cloudflare 域名与 SSL 自动化',
+        passed: domainAutomationMode === 'manual' || cloudflareAutomationReady,
+        detail:
+            domainAutomationMode === 'manual'
+                ? 'manual onboarding enabled'
+                : cloudflareAutomationReady
+                  ? `cloudflare-saas configured; managed-dns=${normalized(env.CLOUDFLARE_SAAS_AUTO_MANAGE_DNS)}`
+                  : 'Cloudflare mode, scoped token, zone ID, fallback origin, or DNS mode is invalid',
+    });
+    if (domainAutomationMode === 'cloudflare-saas') {
+        pushCheck(checks, {
+            id: 'domain-automation-origin-tls',
+            title: 'Cloudflare SaaS 回源 TLS/SNI',
+            passed: controls.cloudflareOriginTls === true,
+            unresolved: controls.cloudflareOriginTls == null,
+            detail:
+                controls.cloudflareOriginTls === true
+                    ? 'verified with a custom hostname through Cloudflare to the production origin'
+                    : controls.cloudflareOriginTls === false
+                      ? 'origin certificate or SNI routing is explicitly not ready'
+                      : 'supply reviewed evidence before enabling one-click domains',
+        });
+    }
     pushCheck(checks, {
         id: 'storefront-entry-mode',
         title: '主站直达与可选推广页',

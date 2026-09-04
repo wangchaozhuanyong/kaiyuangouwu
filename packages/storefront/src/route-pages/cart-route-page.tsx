@@ -1,10 +1,15 @@
-import { lazy } from 'react';
+import { lazyRouteComponent } from '@tanstack/react-router';
 
 import { ProductVariant } from '../types';
 
-import { RoutePageContext as PageContext, RouteGate, useRouteRuntime as useRuntime } from './shared';
+import {
+    RoutePageContext as PageContext,
+    registerRoutePreload,
+    RouteGate,
+    useRouteRuntime as useRuntime,
+} from './shared';
 
-const CartPage = lazy(() => import('../pages/cart-page').then(module => ({ default: module.CartPage })));
+const CartPage = lazyRouteComponent(() => import('../pages/cart-page'), 'CartPage');
 
 export function CartRoutePage() {
     const runtime = useRuntime();
@@ -61,3 +66,5 @@ export function CartRoutePage() {
         </RouteGate>
     );
 }
+
+export const preloadCartRoutePage = registerRoutePreload(CartRoutePage, CartPage);

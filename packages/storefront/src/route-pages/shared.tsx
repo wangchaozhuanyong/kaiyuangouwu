@@ -6,6 +6,16 @@ import { StorefrontContext, useStorefront } from '../StorefrontContext';
 
 export type RouteRuntime = Record<string, any>;
 
+interface PreloadableComponent {
+    preload?: () => Promise<void> | undefined;
+}
+
+export function registerRoutePreload(routeComponent: object, pageComponent: PreloadableComponent) {
+    const preload = () => pageComponent.preload?.() ?? Promise.resolve();
+    Object.assign(routeComponent, { preload });
+    return preload;
+}
+
 export function useRouteRuntime(): RouteRuntime {
     return useStorefront<RouteRuntime>();
 }

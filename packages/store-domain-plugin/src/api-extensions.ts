@@ -6,6 +6,11 @@ export const adminApiExtensions = gql`
         ACTIVE
     }
 
+    enum StoreDomainProvisioningMode {
+        MANUAL
+        CLOUDFLARE_SAAS
+    }
+
     type StoreDomain implements Node {
         id: ID!
         createdAt: DateTime!
@@ -19,11 +24,17 @@ export const adminApiExtensions = gql`
         verificationRecordValue: String!
         verifiedAt: DateTime
         lastVerificationError: String
+        provisioningMode: StoreDomainProvisioningMode!
+        dnsManaged: Boolean!
+        providerHostnameStatus: String
+        providerSslStatus: String
+        lastProvisionedAt: DateTime
     }
 
     type StoreDomainConfiguration {
         cnameTarget: String!
         routingMode: String!
+        automationMode: StoreDomainProvisioningMode!
     }
 
     type StoreDomainVerificationResult {
@@ -38,9 +49,27 @@ export const adminApiExtensions = gql`
         isPrimary: Boolean
     }
 
+    type StoreDomainTransferImpact {
+        domain: StoreDomain!
+        sourceChannel: Channel!
+        targetChannel: Channel!
+        sourceReplacementDomain: String
+        targetPrimaryDomain: String
+        preservesVerification: Boolean!
+        canTransfer: Boolean!
+        blocker: String
+    }
+
+    input TransferStoreDomainInput {
+        id: ID!
+        targetChannelId: ID!
+        expectedUpdatedAt: DateTime!
+    }
+
     extend type Query {
         storeDomains(channelId: ID!): [StoreDomain!]!
         storeDomainConfiguration: StoreDomainConfiguration!
+        storeDomainTransferImpact(id: ID!, targetChannelId: ID!): StoreDomainTransferImpact!
     }
 
     extend type Mutation {
@@ -48,5 +77,6 @@ export const adminApiExtensions = gql`
         verifyStoreDomain(id: ID!): StoreDomainVerificationResult!
         setPrimaryStoreDomain(id: ID!): StoreDomain!
         deleteStoreDomain(id: ID!): DeletionResponse!
+        transferStoreDomain(input: TransferStoreDomainInput!): StoreDomain!
     }
 `;

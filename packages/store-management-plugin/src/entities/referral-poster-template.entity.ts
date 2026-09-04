@@ -126,10 +126,10 @@ export class ReferralPosterTemplate extends VendureEntity {
     @Column({ type: 'varchar', length: 160, default: 'Friendly help when you need it' })
     featureThreeTextEn: string;
 
-    @Column({ type: 'varchar', length: 100, default: '扫码访问云桥 AI' })
+    @Column({ type: 'varchar', length: 100, default: '扫码访问 AwanMesh 模钥' })
     qrEyebrowZh: string;
 
-    @Column({ type: 'varchar', length: 100, default: 'Scan CloudBridge AI' })
+    @Column({ type: 'varchar', length: 100, default: 'Scan AwanMesh' })
     qrEyebrowEn: string;
 
     @Column({ type: 'varchar', length: 140, default: '发现更多实用 AI 服务' })
@@ -168,10 +168,10 @@ export class ReferralPosterTemplate extends VendureEntity {
     @Column({ type: 'varchar', length: 48, default: 'Code' })
     sceneFourEn: string;
 
-    @Column({ type: 'varchar', length: 140, default: '长按识别二维码，立即进入云桥 AI' })
+    @Column({ type: 'varchar', length: 140, default: '长按识别二维码，立即进入 AwanMesh 模钥' })
     ctaTextZh: string;
 
-    @Column({ type: 'varchar', length: 140, default: 'Press and hold to enter CloudBridge AI' })
+    @Column({ type: 'varchar', length: 140, default: 'Press and hold to enter AwanMesh' })
     ctaTextEn: string;
 
     @Column({ type: 'varchar', length: 160, default: '让好用的 AI，真正为你所用' })

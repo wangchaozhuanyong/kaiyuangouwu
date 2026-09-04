@@ -26,9 +26,9 @@ interface StorefrontChannelFields {
 }
 
 const DEFAULT_PROMOTION_BRAND = {
-    zh: '云桥Ai',
-    en: 'Yunqiao Ai',
-    logoUrl: '/storefront/logo.svg',
+    zh: 'AwanMesh｜模钥',
+    en: 'AwanMesh',
+    logoUrl: '/storefront/awanmesh-logo.svg',
 } as const;
 
 @Injectable()

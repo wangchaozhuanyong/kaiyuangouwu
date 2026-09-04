@@ -20,7 +20,7 @@ import { useEffect, useState } from 'react';
 
 import { selectManagedProducts } from '../home-merchandising';
 import { resolveManagedContentCopy } from '../managed-content-copy';
-import { storefrontWebpUrl } from '../responsive-image';
+import { responsiveImageSources } from '../responsive-image';
 import { StorefrontCouponCard } from '../storefront-coupons';
 import { STOREFRONT_LOGO_IMAGE } from '../storefront-images';
 import { routePath } from '../storefront-router';
@@ -47,8 +47,19 @@ import {
 import { ProductSection } from './product-section';
 
 export function BrandLogo({ url, name, className }: { url: string | null; name: string; className: string }) {
-    const effectiveUrl = url ? storefrontWebpUrl(url, 'thumbnail') : STOREFRONT_LOGO_IMAGE;
-    return <img className={className} src={effectiveUrl} alt={name} />;
+    const responsiveSource = url ? responsiveImageSources(url, 'thumbnail') : null;
+    return (
+        <img
+            className={className}
+            src={responsiveSource?.fallbackSrc ?? STOREFRONT_LOGO_IMAGE}
+            srcSet={responsiveSource?.fallbackSrcSet}
+            sizes={responsiveSource ? '38px' : undefined}
+            width="38"
+            height="28"
+            decoding="async"
+            alt={name}
+        />
+    );
 }
 
 export interface HomepageCouponHubProps {

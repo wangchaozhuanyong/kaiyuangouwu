@@ -188,6 +188,13 @@ function isRetriableAuditFailure(result, detail) {
     return result.status !== 0 && RETRYABLE_AUDIT_FAILURE.test(detail);
 }
 
+function isRetriableAuditHttpResponse(report) {
+    if (!isRecord(report) || typeof report.statusCode !== 'number' || !('error' in report)) {
+        return false;
+    }
+    return [408, 425, 429].includes(report.statusCode) || report.statusCode >= 500;
+}
+
 export async function runBunAudit(
     workingDirectory,
     {
@@ -195,7 +202,7 @@ export async function runBunAudit(
         maxAttempts = DEFAULT_AUDIT_RETRY_DELAYS_MS.length + 1,
         onRetry = ({ attempt, delayMs }) => {
             process.stderr.write(
-                `bun audit transport failure on attempt ${attempt}; retrying in ${delayMs}ms\n`,
+                `bun audit request failure on attempt ${attempt}; retrying in ${delayMs}ms\n`,
             );
         },
         retryDelaysMs = DEFAULT_AUDIT_RETRY_DELAYS_MS,
@@ -229,6 +236,17 @@ export async function runBunAudit(
             const { detail, error } = bunAuditParseError(result, attempt, maxAttempts);
             if (!isRetriableAuditFailure(result, detail) || attempt === maxAttempts) {
                 throw error;
+            }
+            const delayMs = retryDelaysMs[attempt - 1] ?? retryDelaysMs.at(-1) ?? 0;
+            onRetry({ attempt, delayMs });
+            await wait(delayMs);
+            continue;
+        }
+        if (isRetriableAuditHttpResponse(report)) {
+            if (attempt === maxAttempts) {
+                throw new Error(
+                    `bun audit request returned HTTP ${report.statusCode} after ${attempt} of ${maxAttempts} attempts`,
+                );
             }
             const delayMs = retryDelaysMs[attempt - 1] ?? retryDelaysMs.at(-1) ?? 0;
             onRetry({ attempt, delayMs });

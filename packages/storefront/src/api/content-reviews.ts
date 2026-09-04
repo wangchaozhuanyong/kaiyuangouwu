@@ -20,7 +20,17 @@ export class ContentReviewsApi extends BaseDomainApi {
         const result = await this.request<{
             activeChannel: Omit<StorefrontConfig, 'availableCountries' | 'logoUrl' | 'description'>;
             availableCountries: StorefrontConfig['availableCountries'];
-            storefrontBranding: { logoUrl: string | null; description: string };
+            storefrontBranding: {
+                logoUrl: string | null;
+                logoOnLightUrl: string | null;
+                logoOnDarkUrl: string | null;
+                description: string;
+                tagline: string;
+                backgroundColor: string | null;
+                primaryColor: string | null;
+                accentColor: string | null;
+                highlightColor: string | null;
+            };
             storefrontCurrencyConfiguration: StorefrontCurrencyConfiguration;
         }>(
             `
@@ -40,7 +50,14 @@ export class ContentReviewsApi extends BaseDomainApi {
                 }
                 storefrontBranding {
                     logoUrl
+                    logoOnLightUrl
+                    logoOnDarkUrl
                     description
+                    tagline
+                    backgroundColor
+                    primaryColor
+                    accentColor
+                    highlightColor
                 }
                 storefrontCurrencyConfiguration {
                     defaultCurrencyCode
@@ -65,7 +82,14 @@ export class ContentReviewsApi extends BaseDomainApi {
             ...result.activeChannel,
             availableCountries: result.availableCountries,
             logoUrl: result.storefrontBranding?.logoUrl ?? null,
+            logoOnLightUrl: result.storefrontBranding?.logoOnLightUrl ?? null,
+            logoOnDarkUrl: result.storefrontBranding?.logoOnDarkUrl ?? null,
             description: result.storefrontBranding?.description ?? '',
+            tagline: result.storefrontBranding?.tagline ?? '',
+            brandBackgroundColor: result.storefrontBranding?.backgroundColor ?? null,
+            brandPrimaryColor: result.storefrontBranding?.primaryColor ?? null,
+            brandAccentColor: result.storefrontBranding?.accentColor ?? null,
+            brandHighlightColor: result.storefrontBranding?.highlightColor ?? null,
             currencyConfiguration: result.storefrontCurrencyConfiguration,
         };
     }

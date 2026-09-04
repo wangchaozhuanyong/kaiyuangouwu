@@ -1,3 +1,5 @@
+import awanMeshAppIcon from './assets/brand/awanmesh-moyao/app-icon.svg';
+import awanMeshLogoOnLight from './assets/brand/awanmesh-moyao/logo-on-light.svg';
 import accountRecommendationCrest from './assets/storefront/account-recommendation-crest.webp';
 import authHero1659 from './assets/storefront/auth-ai-bridge-hero-1659.webp';
 import authHero32 from './assets/storefront/auth-ai-bridge-hero-32.webp';
@@ -35,7 +37,6 @@ import heroCloudBridge32 from './assets/storefront/hero-cloudbridge-ai-hub-32.we
 import heroCloudBridge480 from './assets/storefront/hero-cloudbridge-ai-hub-480.webp';
 import heroCloudBridge960 from './assets/storefront/hero-cloudbridge-ai-hub-960.webp';
 import heroCloudBridgeFallback from './assets/storefront/hero-cloudbridge-ai-hub.jpg';
-import storefrontLogo from './assets/storefront/logo.svg';
 
 export interface StaticStorefrontImageSource {
     fallbackSrc: string;
@@ -90,7 +91,8 @@ export const HERO_VIP_IMAGE = heroVip1376;
 export const HERO_VIP_FALLBACK_IMAGE = heroVipFallback;
 export const HERO_CLOUD_BRIDGE_IMAGE = heroCloudBridge1600;
 export const HERO_CLOUD_BRIDGE_FALLBACK_IMAGE = heroCloudBridgeFallback;
-export const STOREFRONT_LOGO_IMAGE = storefrontLogo;
+export const STOREFRONT_LOGO_IMAGE = awanMeshAppIcon;
+export const STOREFRONT_WORDMARK_IMAGE = awanMeshLogoOnLight;
 export const ACCOUNT_RECOMMENDATION_CREST_IMAGE = accountRecommendationCrest;
 
 const STATIC_IMAGE_SOURCES = new Map<string, StaticStorefrontImageSource>([

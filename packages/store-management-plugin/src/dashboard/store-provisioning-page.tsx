@@ -61,7 +61,7 @@ const zhCopy = {
     description: '创建独立网店、商家后台账号和权限角色；中文店名保存时自动生成英文。',
     merchant: '商家与网店',
     merchantName: '商家名称',
-    merchantPlaceholder: '例如：云桥贸易有限公司',
+    merchantPlaceholder: '例如：模钥科技有限公司',
     code: '网店编码',
     codePlaceholder: '例如：yunqiao-store',
     chineseName: '网站名称',

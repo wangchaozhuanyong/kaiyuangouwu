@@ -11,7 +11,7 @@ import {
 import { PageSkeleton } from '../route-loading';
 import { AuthPageBoundary } from '../storefront-ui/page-shell';
 
-import { useRouteRuntime as useRuntime } from './shared';
+import { registerRoutePreload, useRouteRuntime as useRuntime } from './shared';
 
 function AuthRouteBoundary({ children }: { children: ReactNode }) {
     const runtime = useRuntime();
@@ -110,3 +110,18 @@ export function ResetPasswordRoutePage() {
         </AuthRouteBoundary>
     );
 }
+
+export const preloadLoginRoutePage = registerRoutePreload(LoginRoutePage, LazyLoginPage);
+export const preloadRegisterRoutePage = registerRoutePreload(RegisterRoutePage, LazyRegisterPage);
+export const preloadVerifyAccountRoutePage = registerRoutePreload(
+    VerifyAccountRoutePage,
+    LazyVerifyAccountPage,
+);
+export const preloadForgotPasswordRoutePage = registerRoutePreload(
+    ForgotPasswordRoutePage,
+    LazyForgotPasswordPage,
+);
+export const preloadResetPasswordRoutePage = registerRoutePreload(
+    ResetPasswordRoutePage,
+    LazyResetPasswordPage,
+);

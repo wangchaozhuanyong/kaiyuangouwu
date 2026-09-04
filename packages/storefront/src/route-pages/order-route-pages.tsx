@@ -11,7 +11,7 @@ import { PageSkeleton } from '../route-loading';
 import { AuthPageBoundary, EmptyState, Subpage } from '../storefront-ui/page-shell';
 import { ActiveCustomer } from '../types';
 
-import { RouteGate, useRouteRuntime as useRuntime } from './shared';
+import { registerRoutePreload, RouteGate, useRouteRuntime as useRuntime } from './shared';
 
 export function OrdersRoutePage() {
     const runtime = useRuntime();
@@ -180,3 +180,12 @@ export function AccountSecurityRoutePage() {
         </RouteGate>
     );
 }
+
+export const preloadOrdersRoutePage = registerRoutePreload(OrdersRoutePage, LazyOrdersPage);
+export const preloadLogisticsRoutePage = registerRoutePreload(LogisticsRoutePage, LazyLogisticsPage);
+export const preloadOrderDetailRoutePage = registerRoutePreload(OrderDetailRoutePage, LazyOrderDetailPage);
+export const preloadAddressesRoutePage = registerRoutePreload(AddressesRoutePage, LazyAddressesPage);
+export const preloadAccountSecurityRoutePage = registerRoutePreload(
+    AccountSecurityRoutePage,
+    LazyAccountSecurityPage,
+);

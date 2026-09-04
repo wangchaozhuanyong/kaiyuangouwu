@@ -433,6 +433,14 @@ export const adminApiExtensions = gql`
         descriptionEn: String!
         internalNote: String
         logoAsset: Asset
+        logoOnLightAsset: Asset
+        logoOnDarkAsset: Asset
+        taglineZh: String
+        taglineEn: String
+        brandBackgroundColor: String
+        brandPrimaryColor: String
+        brandAccentColor: String
+        brandHighlightColor: String
         primaryDomain: String
         storefrontUrl: String
         isOperational: Boolean!
@@ -466,6 +474,14 @@ export const adminApiExtensions = gql`
         descriptionEn: String
         internalNote: String
         logoAssetId: ID
+        logoOnLightAssetId: ID
+        logoOnDarkAssetId: ID
+        taglineZh: String
+        taglineEn: String
+        brandBackgroundColor: String
+        brandPrimaryColor: String
+        brandAccentColor: String
+        brandHighlightColor: String
         currentPassword: String
     }
 
@@ -511,6 +527,14 @@ export const adminApiExtensions = gql`
         descriptionZh: String
         descriptionEn: String
         logoAssetId: ID
+        logoOnLightAssetId: ID
+        logoOnDarkAssetId: ID
+        taglineZh: String
+        taglineEn: String
+        brandBackgroundColor: String
+        brandPrimaryColor: String
+        brandAccentColor: String
+        brandHighlightColor: String
     }
 
     type StoreCommerceConfiguration {
@@ -1217,9 +1241,19 @@ export const shopApiExtensions = gql`
     ${commonTypes}
 
     type StorefrontBranding {
+        logoAssetId: ID
+        logoOnLightAssetId: ID
+        logoOnDarkAssetId: ID
         logoUrl: String
+        logoOnLightUrl: String
+        logoOnDarkUrl: String
         name: String!
         description: String!
+        tagline: String!
+        backgroundColor: String
+        primaryColor: String
+        accentColor: String
+        highlightColor: String
     }
 
     type StoreFlashSaleItem {

@@ -2,6 +2,8 @@ import { useRouter } from '@tanstack/react-router';
 import { ChevronRight, Clock3, Headphones, MessageCircle, QrCode } from 'lucide-react';
 import { useState } from 'react';
 
+import '../styles/modals-and-support.css';
+
 import qqIcon from '../assets/support/qq.svg';
 import telegramIcon from '../assets/support/telegram.svg';
 import wechatIcon from '../assets/support/wechat.svg';

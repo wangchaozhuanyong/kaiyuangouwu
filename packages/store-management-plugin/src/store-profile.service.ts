@@ -45,7 +45,7 @@ export class StoreProfileService {
         const repository = this.connection.getRepository(ctx, StoreProfile);
         const existing = await repository.findOne({
             where: { channelId: channel.id },
-            relations: { channel: { seller: true }, logoAsset: true },
+            relations: this.profileRelations(),
         });
         if (existing) {
             return existing;
@@ -64,6 +64,16 @@ export class StoreProfileService {
                     internalNote: '',
                     logoAsset: null,
                     logoAssetId: null,
+                    logoOnLightAsset: null,
+                    logoOnLightAssetId: null,
+                    logoOnDarkAsset: null,
+                    logoOnDarkAssetId: null,
+                    taglineZh: null,
+                    taglineEn: null,
+                    brandBackgroundColor: null,
+                    brandPrimaryColor: null,
+                    brandAccentColor: null,
+                    brandHighlightColor: null,
                 }),
             );
         } catch (error) {
@@ -71,7 +81,7 @@ export class StoreProfileService {
             // is authoritative; return the winner instead of surfacing a transient duplicate error.
             const concurrentlyCreated = await repository.findOne({
                 where: { channelId: channel.id },
-                relations: { channel: { seller: true }, logoAsset: true },
+                relations: this.profileRelations(),
             });
             if (concurrentlyCreated) {
                 return concurrentlyCreated;
@@ -82,7 +92,7 @@ export class StoreProfileService {
 
     async findAllForAdmin(ctx: RequestContext): Promise<StoreProfile[]> {
         const profiles = await this.connection.getRepository(ctx, StoreProfile).find({
-            relations: { channel: { seller: true }, logoAsset: true },
+            relations: this.profileRelations(),
             order: { sortOrder: 'ASC', createdAt: 'ASC' },
         });
         return this.attachOperationalState(ctx, profiles);
@@ -135,6 +145,13 @@ export class StoreProfileService {
             '英文简介',
         );
         profile.internalNote = this.normalizeInternalNote(input.internalNote, profile.internalNote);
+        profile.taglineZh = this.normalizeTagline(input.taglineZh, profile.taglineZh, '中文品牌口号');
+        profile.taglineEn = this.normalizeTagline(
+            localized.get('tagline') ?? input.taglineEn,
+            profile.taglineEn,
+            '英文品牌口号',
+        );
+        this.updateBrandColors(profile, input);
         await this.updateStorefrontNames(
             ctx,
             profile,
@@ -147,6 +164,7 @@ export class StoreProfileService {
             profile.logoAsset = asset;
             profile.logoAssetId = asset?.id ?? null;
         }
+        await this.updateBrandAssets(ctx, profile, input);
 
         if (activating) {
             const readiness = await this.activationReadinessService.get(ctx, profile);
@@ -181,11 +199,19 @@ export class StoreProfileService {
             profile.descriptionEn,
             '英文简介',
         );
+        profile.taglineZh = this.normalizeTagline(input.taglineZh, profile.taglineZh, '中文品牌口号');
+        profile.taglineEn = this.normalizeTagline(
+            localized.get('tagline') ?? input.taglineEn,
+            profile.taglineEn,
+            '英文品牌口号',
+        );
+        this.updateBrandColors(profile, input);
         if (input.logoAssetId !== undefined) {
             const asset = input.logoAssetId == null ? null : await this.findAsset(ctx, input.logoAssetId);
             profile.logoAsset = asset;
             profile.logoAssetId = asset?.id ?? null;
         }
+        await this.updateBrandAssets(ctx, profile, input);
 
         await this.updateStorefrontNames(
             ctx,
@@ -237,6 +263,15 @@ export class StoreProfileService {
                 targetText: input.descriptionEn,
                 existingSourceText: profile.descriptionZh,
                 existingTargetText: profile.descriptionEn,
+            });
+        }
+        if (input.taglineZh != null || input.taglineEn != null) {
+            fields.push({
+                path: 'tagline',
+                sourceText: this.normalizeTagline(input.taglineZh, profile.taglineZh, '中文品牌口号') ?? '',
+                targetText: input.taglineEn,
+                existingSourceText: profile.taglineZh,
+                existingTargetText: profile.taglineEn,
             });
         }
         return this.translations.prepareLocalizedFields(fields);
@@ -312,7 +347,7 @@ export class StoreProfileService {
     ): Promise<StoreProfile | undefined> {
         const profile = await this.connection.getRepository(ctx, StoreProfile).findOne({
             where: { channelId },
-            relations: { channel: { seller: true }, logoAsset: true },
+            relations: this.profileRelations(),
         });
         if (!profile && required) {
             throw new EntityNotFoundError(StoreProfile.name, channelId);
@@ -324,13 +359,13 @@ export class StoreProfileService {
         await this.lockProfileRow(ctx, 'profile.id = :id', { id });
         const profile = await this.connection.getRepository(ctx, StoreProfile).findOne({
             where: { id },
-            relations: { channel: { seller: true }, logoAsset: true },
+            relations: this.profileRelations(),
         });
         if (!profile) throw new EntityNotFoundError(StoreProfile.name, id);
         await this.lockChannelRow(ctx, profile.channelId);
         return (await this.connection.getRepository(ctx, StoreProfile).findOne({
             where: { id },
-            relations: { channel: { seller: true }, logoAsset: true },
+            relations: this.profileRelations(),
         })) as StoreProfile;
     }
 
@@ -382,7 +417,7 @@ export class StoreProfileService {
     }
 
     private async findAsset(ctx: RequestContext, id: ID): Promise<Asset> {
-        const asset = await this.connection.getRepository(ctx, Asset).findOne({ where: { id } });
+        const asset = await this.connection.findOneInChannel(ctx, Asset, id, ctx.channelId);
         if (!asset) {
             throw new EntityNotFoundError(Asset.name, id);
         }
@@ -415,6 +450,89 @@ export class StoreProfileService {
             throw new UserInputError('内部备注不能超过 2000 个字符');
         }
         return normalized;
+    }
+
+    private normalizeTagline(
+        value: string | null | undefined,
+        current: string | null,
+        label: string,
+    ): string | null {
+        if (value == null) {
+            return current;
+        }
+        const normalized = value.trim();
+        if (normalized.length > 160) {
+            throw new UserInputError(`${label}不能超过 160 个字符`);
+        }
+        return normalized || null;
+    }
+
+    private updateBrandColors(
+        profile: StoreProfile,
+        input: UpdateStoreProfileInput | UpdateMyStoreProfileInput,
+    ): void {
+        profile.brandBackgroundColor = this.normalizeBrandColor(
+            input.brandBackgroundColor,
+            profile.brandBackgroundColor,
+            '品牌背景色',
+        );
+        profile.brandPrimaryColor = this.normalizeBrandColor(
+            input.brandPrimaryColor,
+            profile.brandPrimaryColor,
+            '品牌主色',
+        );
+        profile.brandAccentColor = this.normalizeBrandColor(
+            input.brandAccentColor,
+            profile.brandAccentColor,
+            '品牌强调色',
+        );
+        profile.brandHighlightColor = this.normalizeBrandColor(
+            input.brandHighlightColor,
+            profile.brandHighlightColor,
+            '品牌高亮色',
+        );
+    }
+
+    private normalizeBrandColor(
+        value: string | null | undefined,
+        current: string | null,
+        label: string,
+    ): string | null {
+        if (value === undefined) return current;
+        if (value == null || value.trim() === '') return null;
+        const normalized = value.trim().toUpperCase();
+        if (!/^#[0-9A-F]{6}$/u.test(normalized)) {
+            throw new UserInputError(`${label}必须使用 #RRGGBB 格式`);
+        }
+        return normalized;
+    }
+
+    private async updateBrandAssets(
+        ctx: RequestContext,
+        profile: StoreProfile,
+        input: UpdateStoreProfileInput | UpdateMyStoreProfileInput,
+    ): Promise<void> {
+        if (input.logoOnLightAssetId !== undefined) {
+            const asset =
+                input.logoOnLightAssetId == null ? null : await this.findAsset(ctx, input.logoOnLightAssetId);
+            profile.logoOnLightAsset = asset;
+            profile.logoOnLightAssetId = asset?.id ?? null;
+        }
+        if (input.logoOnDarkAssetId !== undefined) {
+            const asset =
+                input.logoOnDarkAssetId == null ? null : await this.findAsset(ctx, input.logoOnDarkAssetId);
+            profile.logoOnDarkAsset = asset;
+            profile.logoOnDarkAssetId = asset?.id ?? null;
+        }
+    }
+
+    private profileRelations() {
+        return {
+            channel: { seller: true },
+            logoAsset: true,
+            logoOnLightAsset: true,
+            logoOnDarkAsset: true,
+        } as const;
     }
 
     private normalizeStorefrontName(

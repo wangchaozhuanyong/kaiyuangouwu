@@ -1205,7 +1205,7 @@
     border-radius: 10px;
     background: #f8fafc;
     border: 1px solid rgba(0, 0, 0, 0.02);
-    transition: all 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
+    transition: transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .trust-item:active {
@@ -2484,7 +2484,11 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 180ms ease;
+    transition:
+        transform 180ms ease,
+        background-color 180ms ease,
+        border-color 180ms ease,
+        box-shadow 180ms ease;
 }
 
 .primary-category-image > img,
@@ -2528,7 +2532,10 @@
     text-align: center;
     text-overflow: ellipsis;
     white-space: nowrap;
-    transition: all 160ms ease;
+    transition:
+        background-color 160ms ease,
+        color 160ms ease,
+        box-shadow 160ms ease;
 }
 
 .primary-categories button.is-active {
@@ -2577,7 +2584,7 @@
     gap: 4px;
     cursor: pointer;
     box-shadow: -10px 0 16px -8px rgba(15, 23, 42, 0.06);
-    transition: all 140ms ease;
+    transition: transform 140ms ease;
 }
 
 .primary-categories-all:active {
@@ -2599,7 +2606,10 @@
     align-items: center;
     justify-content: center;
     box-shadow: 0 3px 8px rgba(99, 102, 241, 0.28);
-    transition: all 160ms ease;
+    transition:
+        transform 160ms ease,
+        box-shadow 160ms ease,
+        filter 160ms ease;
 }
 
 .primary-categories-all:hover .primary-categories-all-icon {
@@ -2855,7 +2865,12 @@
     gap: 3px;
     cursor: pointer;
     position: relative;
-    transition: all 140ms ease;
+    transition:
+        transform 140ms ease,
+        background-color 140ms ease,
+        border-color 140ms ease,
+        color 140ms ease,
+        box-shadow 140ms ease;
     border-left: 3px solid transparent;
 }
 
@@ -3178,4 +3193,3 @@
     display: block;
     border-radius: 9px;
 }
-

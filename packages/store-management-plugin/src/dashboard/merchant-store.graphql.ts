@@ -17,6 +17,32 @@ export const completeInitialPasswordChangeMutation = gql`
     }
 `;
 
+const brandAssetFields = gql`
+    fragment MyStoreProfileBrandAssetFields on Asset {
+        id
+        createdAt
+        updatedAt
+        languageCode
+        name
+        fileSize
+        mimeType
+        type
+        preview
+        source
+        width
+        height
+        focalPoint {
+            x
+            y
+        }
+        translations {
+            id
+            languageCode
+            name
+        }
+    }
+`;
+
 const myStoreProfileFields = gql`
     fragment MyStoreProfileFields on StoreProfile {
         id
@@ -25,6 +51,12 @@ const myStoreProfileFields = gql`
         isOperational
         descriptionZh
         descriptionEn
+        taglineZh
+        taglineEn
+        brandBackgroundColor
+        brandPrimaryColor
+        brandAccentColor
+        brandHighlightColor
         primaryDomain
         storefrontUrl
         activationReadiness {
@@ -37,27 +69,13 @@ const myStoreProfileFields = gql`
             }
         }
         logoAsset {
-            id
-            createdAt
-            updatedAt
-            languageCode
-            name
-            fileSize
-            mimeType
-            type
-            preview
-            source
-            width
-            height
-            focalPoint {
-                x
-                y
-            }
-            translations {
-                id
-                languageCode
-                name
-            }
+            ...MyStoreProfileBrandAssetFields
+        }
+        logoOnLightAsset {
+            ...MyStoreProfileBrandAssetFields
+        }
+        logoOnDarkAsset {
+            ...MyStoreProfileBrandAssetFields
         }
         channel {
             id
@@ -75,6 +93,7 @@ const myStoreProfileFields = gql`
 `;
 
 export const myStoreProfileQuery = gql`
+    ${brandAssetFields}
     ${myStoreProfileFields}
 
     query MyStoreProfile {
@@ -85,6 +104,7 @@ export const myStoreProfileQuery = gql`
 `;
 
 export const updateMyStoreProfileMutation = gql`
+    ${brandAssetFields}
     ${myStoreProfileFields}
 
     mutation UpdateMyStoreProfile($input: UpdateMyStoreProfileInput!) {
@@ -109,9 +129,17 @@ export interface MyStoreProfileRecord {
     isOperational: boolean;
     descriptionZh: string;
     descriptionEn: string;
+    taglineZh: string | null;
+    taglineEn: string | null;
+    brandBackgroundColor: string | null;
+    brandPrimaryColor: string | null;
+    brandAccentColor: string | null;
+    brandHighlightColor: string | null;
     primaryDomain: string | null;
     storefrontUrl: string | null;
     logoAsset: Asset | null;
+    logoOnLightAsset: Asset | null;
+    logoOnDarkAsset: Asset | null;
     activationReadiness: {
         ready: boolean;
         checks: Array<{ code: string; ready: boolean; message: string; messageEn: string }>;

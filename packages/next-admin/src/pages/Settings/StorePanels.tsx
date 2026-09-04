@@ -16,8 +16,11 @@ import {
     DELETE_STORE_DOMAIN_MUTATION,
     SET_PRIMARY_STORE_DOMAIN_MUTATION,
     STORE_DOMAINS_QUERY,
+    STORE_DOMAIN_TRANSFER_IMPACT_QUERY,
+    TRANSFER_STORE_DOMAIN_MUTATION,
     VERIFY_STORE_DOMAIN_MUTATION,
     type StoreDomainRecord,
+    type StoreDomainTransferImpactRecord,
     type StoreDomainsResult,
     type StoreManagementResult,
     type StoreProfileRecord,
@@ -270,15 +273,18 @@ export function StoresPanel({
 
 export function DomainsPanel({
     profile,
+    profiles,
     onChanged,
     onError,
 }: {
     profile: StoreProfileRecord | null;
+    profiles: StoreProfileRecord[];
     onChanged: (message: string) => Promise<void>;
     onError: (message: string) => void;
 }) {
     const requestConfirmation = useConfirmDialog();
     const [domain, setDomain] = useState('');
+    const [transferTargets, setTransferTargets] = useState<Record<string, string>>({});
     const query = useQuery<StoreDomainsResult>(STORE_DOMAINS_QUERY, {
         variables: { channelId: profile?.channel.id ?? '' },
         skip: !profile,
@@ -292,6 +298,7 @@ export function DomainsPanel({
     const [remove, removeState] = useMutation<{
         deleteStoreDomain: { result: string; message: string | null };
     }>(DELETE_STORE_DOMAIN_MUTATION);
+    const [transfer, transferState] = useMutation(TRANSFER_STORE_DOMAIN_MUTATION);
     if (!profile)
         return (
             <EmptyState
@@ -361,7 +368,61 @@ export function DomainsPanel({
             onError(errorText(error));
         }
     };
-    const busy = createState.loading || verifyState.loading || primaryState.loading || removeState.loading;
+    const transferDomain = async (item: StoreDomainRecord) => {
+        const targetChannelId = transferTargets[item.id];
+        if (!targetChannelId) return onError('请选择域名要转移到的目标店铺');
+        try {
+            const impactResponse = await client.query<{
+                storeDomainTransferImpact: StoreDomainTransferImpactRecord;
+            }>({
+                query: STORE_DOMAIN_TRANSFER_IMPACT_QUERY,
+                variables: { id: item.id, targetChannelId },
+                fetchPolicy: 'network-only',
+            });
+            const impact = impactResponse.data?.storeDomainTransferImpact;
+            if (!impact) throw new Error('未读取到域名转移影响，请刷新后重试');
+            if (!impact.canTransfer) throw new Error(impact.blocker || '当前域名不能转移');
+            const target = profiles.find(candidate => candidate.channel.id === targetChannelId);
+            const confirmed = await requestConfirmation({
+                title: `把 ${item.domain} 转移到 ${target ? storeName(target) : impact.targetChannel.code}？`,
+                description: [
+                    '验证状态与证书配置将保留，域名会立即成为目标店铺的主域名。',
+                    impact.targetPrimaryDomain
+                        ? `目标店铺现有主域名 ${impact.targetPrimaryDomain} 将降为备用域名。`
+                        : '',
+                    item.isPrimary
+                        ? impact.sourceReplacementDomain
+                            ? `原店铺将自动启用 ${impact.sourceReplacementDomain} 作为主域名。`
+                            : '原店铺转移后将暂时没有主域名。'
+                        : '',
+                ]
+                    .filter(Boolean)
+                    .join(' '),
+                confirmLabel: '确认原子转移',
+                tone: 'warning',
+            });
+            if (!confirmed) return;
+            await transfer({
+                variables: {
+                    input: {
+                        id: item.id,
+                        targetChannelId,
+                        expectedUpdatedAt: item.updatedAt,
+                    },
+                },
+            });
+            setTransferTargets(current => ({ ...current, [item.id]: '' }));
+            await refresh(`域名 ${item.domain} 已转移到目标店铺并设为主域名`);
+        } catch (error) {
+            onError(errorText(error));
+        }
+    };
+    const busy =
+        createState.loading ||
+        verifyState.loading ||
+        primaryState.loading ||
+        removeState.loading ||
+        transferState.loading;
     return (
         <div className="space-y-4">
             <section className="rounded-xl border border-slate-200 bg-white p-5">
@@ -449,6 +510,47 @@ export function DomainsPanel({
                                     )}
                                 </div>
                                 <div className="flex shrink-0 flex-wrap gap-2">
+                                    {profiles.some(
+                                        candidate => candidate.channel.id !== profile.channel.id,
+                                    ) && (
+                                        <div className="flex gap-2">
+                                            <select
+                                                value={transferTargets[item.id] ?? ''}
+                                                onChange={event =>
+                                                    setTransferTargets(current => ({
+                                                        ...current,
+                                                        [item.id]: event.target.value,
+                                                    }))
+                                                }
+                                                disabled={busy}
+                                                className={inputClass}
+                                                aria-label={`选择 ${item.domain} 的目标店铺`}
+                                            >
+                                                <option value="">转移到其他店铺…</option>
+                                                {profiles
+                                                    .filter(
+                                                        candidate =>
+                                                            candidate.channel.id !== profile.channel.id,
+                                                    )
+                                                    .map(candidate => (
+                                                        <option
+                                                            key={candidate.channel.id}
+                                                            value={candidate.channel.id}
+                                                        >
+                                                            {storeName(candidate)}
+                                                        </option>
+                                                    ))}
+                                            </select>
+                                            <button
+                                                type="button"
+                                                onClick={() => void transferDomain(item)}
+                                                disabled={busy || !transferTargets[item.id]}
+                                                className={secondaryButton}
+                                            >
+                                                原子转移
+                                            </button>
+                                        </div>
+                                    )}
                                     {item.status !== 'ACTIVE' && (
                                         <button
                                             type="button"

@@ -449,6 +449,7 @@ interface HomePageProps {
     language: StorefrontLanguage;
     storefrontName: string;
     storefrontDescription: string;
+    storefrontTagline: string;
     logoUrl: string | null;
     couponLoading: boolean;
     onCategorySelect: (collection: CollectionSummary) => void;
@@ -492,6 +493,7 @@ export function HomePage() {
         language,
         storefrontName,
         storefrontDescription,
+        storefrontTagline,
         logoUrl,
         couponLoading,
         onCategorySelect,
@@ -910,6 +912,7 @@ export function HomePage() {
                 />
             ) : null}
 
+            {storefrontTagline && <p className="storefront-tagline">{storefrontTagline}</p>}
             {storefrontDescription && <p className="storefront-description">{storefrontDescription}</p>}
 
             {contentError && (
@@ -995,7 +998,9 @@ export function HomePage() {
                                             fallbackSrc={heroFallbackImage}
                                             alt={
                                                 managedHero?.title ||
-                                                (isZh ? '云桥 AI 精选' : 'CloudBridge Featured')
+                                                (isZh
+                                                    ? `${storefrontName}精选`
+                                                    : `${storefrontName} Featured`)
                                             }
                                             className="hero-rich-backdrop"
                                             imageKind="hero"

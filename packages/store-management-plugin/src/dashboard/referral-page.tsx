@@ -424,10 +424,10 @@ function TodayMetrics({ query }: { query: ReturnType<typeof useQuery<ReferralTod
 export const SYSTEM_POSTER_TEMPLATES = [
     {
         id: 'BRAND_MINIMAL',
-        nameZh: '云桥蓝焰',
-        nameEn: 'CloudBridge blue flame',
-        desc: '深蓝底色配电光青，强调品牌、主标题、三项服务、二维码与行动按钮。',
-        gradient: 'linear-gradient(135deg, #020617, #08245a 58%, #22d3ee)',
+        nameZh: '模钥简约',
+        nameEn: 'AwanMesh minimal',
+        desc: '经典白蓝极简科技版式，通用度最高，适合各类数字化产品。',
+        gradient: 'linear-gradient(135deg, #1d4ed8, #60a5fa)',
     },
     {
         id: 'BENEFIT_RED_GOLD',
@@ -452,10 +452,10 @@ export const SYSTEM_POSTER_TEMPLATES = [
     },
     {
         id: 'CLOUD_BRIDGE_ORBIT',
-        nameZh: '云桥轨道',
-        nameEn: 'CloudBridge orbit',
-        desc: '深靛紫轨道与星环光晕，在统一版式下提供更鲜明的营销感。',
-        gradient: 'linear-gradient(135deg, #09051c, #281456 58%, #a78bfa)',
+        nameZh: '模钥轨道',
+        nameEn: 'AwanMesh orbit',
+        desc: '紫蓝科技轨道渐变，未来感与营销冲击力强。',
+        gradient: 'linear-gradient(135deg, #4338ca, #7c3aed)',
     },
 ] as const;
 
@@ -938,8 +938,8 @@ function PosterTemplateManager({
                     <DialogHeader>
                         <DialogTitle>{draft?.id ? '编辑邀请海报模板' : '新建邀请海报模板'}</DialogTitle>
                         <DialogDescription>
-                            参照云桥 AI 移动端分享图规范：推荐 1080×1920，左右安全边距 64px。中文和 English
-                            使用同一版式，前台根据用户语言自动切换。
+                            参照 AwanMesh 模钥移动端分享图规范：推荐 1080×1920，左右安全边距 64px。中文和
+                            English 使用同一版式，前台根据用户语言自动切换。
                         </DialogDescription>
                     </DialogHeader>
                     {draft && (
@@ -1465,8 +1465,8 @@ function emptyPosterTemplateDraft(position: number): PosterTemplateDraft {
         featureThreeTitleEn: 'Dedicated support',
         featureThreeTextZh: '专业客服 贴心服务',
         featureThreeTextEn: 'Friendly help when you need it',
-        qrEyebrowZh: '扫码访问云桥 AI',
-        qrEyebrowEn: 'Scan CloudBridge AI',
+        qrEyebrowZh: '扫码访问 AwanMesh 模钥',
+        qrEyebrowEn: 'Scan AwanMesh',
         qrTitleZh: '发现更多实用 AI 服务',
         qrTitleEn: 'Discover practical AI services',
         qrDescriptionZh: '满足多种 AI 使用场景',
@@ -1479,8 +1479,8 @@ function emptyPosterTemplateDraft(position: number): PosterTemplateDraft {
         sceneThreeEn: 'Learn',
         sceneFourZh: '智能编程',
         sceneFourEn: 'Code',
-        ctaTextZh: '长按识别二维码，立即进入云桥 AI',
-        ctaTextEn: 'Press and hold to enter CloudBridge AI',
+        ctaTextZh: '长按识别二维码，立即进入 AwanMesh 模钥',
+        ctaTextEn: 'Press and hold to enter AwanMesh',
         footerTitleZh: '让好用的 AI，真正为你所用',
         footerTitleEn: 'AI that works for you',
         footerTextZh: '热门 AI 工具与数字服务一站式平台',
@@ -2582,11 +2582,11 @@ function posterLabel(value: string): string {
     return (
         (
             {
-                BRAND_MINIMAL: '云桥简约',
+                BRAND_MINIMAL: '模钥简约',
                 BENEFIT_RED_GOLD: '冰川蓝光',
                 PRODUCT_STORY: '青空流线',
                 PREMIUM_DARK: '深海科技',
-                CLOUD_BRIDGE_ORBIT: '云桥轨道',
+                CLOUD_BRIDGE_ORBIT: '模钥轨道',
             } as Record<string, string>
         )[value] ?? value
     );

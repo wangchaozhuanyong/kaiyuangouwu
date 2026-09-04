@@ -8,7 +8,7 @@
 
 上线前必须解决以下阻塞项：
 
-1. 确认独立站正式域名，并绑定、验证对应的 Vendure Channel。
+1. 将已确认的 `moyaoai.com` 和 `damatong.net` 分别绑定、验证到 AwanMesh 主 Channel 与美宜佳 Channel。
 2. 确认经营主体所在地、价格是否含税，以及数字商品面向各司法辖区的税务规则。
 3. 如上架实物商品，配置真实的全球配送范围、费用、免邮门槛和无法配送规则。
 4. 选择真实支付渠道并完成服务端回调、退款、失败重试和对账测试。开发环境仅有 `dummy-payment-handler`，生产环境当前没有正式处理器。
@@ -45,7 +45,7 @@
 
 ### P0：接入正式域名和邮件
 
-- 为全球独立站提供正式域名。
+- AwanMesh 主网店使用 `moyaoai.com`，美宜佳店铺使用 `damatong.net`，统一后台使用 `console.moyaoai.com`。
 - 在 Store Domain 中创建域名记录，并完成 DNS 验证。
 - 每个 Channel 只能有一个有效主域名，账户验证和密码重置邮件将使用该主域名。
 - 生产环境使用 `STORE_DOMAIN_ROUTING_MODE=require-domain`。
@@ -64,7 +64,7 @@
 3. 将以下变量同时注入 API Server 与 Worker；`SMTP_PASSWORD` 的值由生产 Secret 管理提供。
 
 ```dotenv
-VENDURE_EMAIL_FROM="Yunqiao Ai <noreply@damatong.net>"
+VENDURE_EMAIL_FROM="AwanMesh <noreply@moyaoai.com>"
 SMTP_HOST=smtp.resend.com
 SMTP_PORT=465
 SMTP_SECURE=true
@@ -156,47 +156,53 @@ READINESS_OPERATIONS_JSON='{"persistentAssetStorage":true,"databaseBackups":true
 
 ### Vendure Server 与 Worker
 
-| 变量                                    | 生产要求                                 |
-| --------------------------------------- | ---------------------------------------- |
-| `NODE_ENV`                              | `production`                             |
-| `PRODUCTION_DEPLOYMENT_PROFILE`         | `managed-services` 或 `single-host`      |
-| `PRODUCTION_OBSERVABILITY_MODE`         | 单机系统监控使用 `system`                |
-| `VENDURE_HOSTNAME`                      | 只监听预期网络接口                       |
-| `PORT`                                  | 与反向代理 upstream 一致                 |
-| `VENDURE_TRUST_PROXY`                   | 仅在可信代理前设置正确跳数或地址         |
-| `VENDURE_SERVE_GRAPHIQL`                | `false`                                  |
-| `VENDURE_MAX_QUERY_COMPLEXITY`          | 默认 `1000`，根据真实查询测量后调整      |
-| `VENDURE_SERVE_STATIC_DASHBOARD`        | 按部署拓扑设置                           |
-| `VENDURE_DASHBOARD_URL`                 | 正式管理后台 HTTPS 地址                  |
-| `VENDURE_STOREFRONT_URL`                | 没有有效主域名时的安全兜底地址           |
-| `VENDURE_CORS_ORIGINS`                  | 逗号分隔的正式来源白名单                 |
-| `SUPERADMIN_USERNAME`                   | 非默认管理员账号                         |
-| `SUPERADMIN_PASSWORD`                   | 强随机密码，由 Secret 管理               |
-| `COOKIE_SECRET`                         | 长随机密钥，由 Secret 管理               |
-| `DB`                                    | `mysql`、`mariadb` 或 `postgres`         |
-| `DB_HOST`、`DB_PORT`                    | 生产数据库地址与端口                     |
-| `DB_USERNAME`、`DB_PASSWORD`、`DB_NAME` | 最小权限数据库账号和库名                 |
-| `DB_SCHEMA`                             | PostgreSQL 使用的 Schema，未使用时可省略 |
-| `DB_SYNCHRONIZE`                        | `false`                                  |
-| `RUN_MIGRATIONS`                        | 只在受控迁移进程中为 `true`              |
-| `VENDURE_REQUIRE_OFFSITE_BACKUP`        | 单机生产必须为 `true`                    |
-| `VENDURE_BACKUP_S3_URI`                 | 单机生产必须为可写的 `s3://` 路径        |
-| `RUN_JOB_QUEUE`                         | 独立 Worker 模式下 Server 设为 `0`       |
-| `VENDURE_ASSET_UPLOAD_DIR`              | Server 与 Worker 可访问的绝对持久目录    |
-| `VENDURE_IMPORT_ASSETS_DIR`             | 受控且持久的绝对导入目录                 |
-| `VENDURE_EMAIL_FROM`                    | 已验证发件域名下的发件人和地址           |
-| `SMTP_HOST`、`SMTP_PORT`                | SMTP 服务地址与端口                      |
-| `SMTP_SECURE`                           | 服务商要求的 TLS 模式                    |
-| `SMTP_USER`、`SMTP_PASSWORD`            | 需要 SMTP 认证时必须同时配置             |
-| `IS_INSTRUMENTED`                       | 启用监控时设置为 `true`                  |
-| `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`    | 生产 Trace 接收端点                      |
-| `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT`      | 生产日志接收端点                         |
-| `OTEL_SERVICE_NAME`                     | 区分 API Server 与 Worker 的服务名       |
-| `STORE_DOMAIN_CNAME_TARGET`             | 商家域名实际指向的公共 DNS 目标          |
-| `STORE_DOMAIN_ROUTING_MODE`             | `require-domain`                         |
-| `STORE_DOMAIN_TRUST_PROXY`              | 仅在入口层覆盖转发 Host 时启用           |
-| `STORE_DOMAIN_BYPASS_HOSTS`             | 生产默认留空                             |
-| `VENDURE_BOOTSTRAP_BASE_SCHEMA`         | 正常启动必须为 `false`                   |
+| 变量                                            | 生产要求                                          |
+| ----------------------------------------------- | ------------------------------------------------- |
+| `NODE_ENV`                                      | `production`                                      |
+| `PRODUCTION_DEPLOYMENT_PROFILE`                 | `managed-services` 或 `single-host`               |
+| `PRODUCTION_OBSERVABILITY_MODE`                 | 单机系统监控使用 `system`                         |
+| `VENDURE_HOSTNAME`                              | 只监听预期网络接口                                |
+| `PORT`                                          | 与反向代理 upstream 一致                          |
+| `VENDURE_TRUST_PROXY`                           | 仅在可信代理前设置正确跳数或地址                  |
+| `VENDURE_SERVE_GRAPHIQL`                        | `false`                                           |
+| `VENDURE_MAX_QUERY_COMPLEXITY`                  | 默认 `1000`，根据真实查询测量后调整               |
+| `VENDURE_SERVE_STATIC_DASHBOARD`                | 按部署拓扑设置                                    |
+| `VENDURE_DASHBOARD_URL`                         | 正式管理后台 HTTPS 地址                           |
+| `VENDURE_STOREFRONT_URL`                        | 没有有效主域名时的安全兜底地址                    |
+| `VENDURE_CORS_ORIGINS`                          | 逗号分隔的正式来源白名单                          |
+| `SUPERADMIN_USERNAME`                           | 非默认管理员账号                                  |
+| `SUPERADMIN_PASSWORD`                           | 强随机密码，由 Secret 管理                        |
+| `COOKIE_SECRET`                                 | 长随机密钥，由 Secret 管理                        |
+| `DB`                                            | `mysql`、`mariadb` 或 `postgres`                  |
+| `DB_HOST`、`DB_PORT`                            | 生产数据库地址与端口                              |
+| `DB_USERNAME`、`DB_PASSWORD`、`DB_NAME`         | 最小权限数据库账号和库名                          |
+| `DB_SCHEMA`                                     | PostgreSQL 使用的 Schema，未使用时可省略          |
+| `DB_SYNCHRONIZE`                                | `false`                                           |
+| `RUN_MIGRATIONS`                                | 只在受控迁移进程中为 `true`                       |
+| `VENDURE_REQUIRE_OFFSITE_BACKUP`                | 单机生产必须为 `true`                             |
+| `VENDURE_BACKUP_S3_URI`                         | 单机生产必须为可写的 `s3://` 路径                 |
+| `RUN_JOB_QUEUE`                                 | 独立 Worker 模式下 Server 设为 `0`                |
+| `VENDURE_ASSET_UPLOAD_DIR`                      | Server 与 Worker 可访问的绝对持久目录             |
+| `VENDURE_IMPORT_ASSETS_DIR`                     | 受控且持久的绝对导入目录                          |
+| `VENDURE_EMAIL_FROM`                            | 已验证发件域名下的发件人和地址                    |
+| `SMTP_HOST`、`SMTP_PORT`                        | SMTP 服务地址与端口                               |
+| `SMTP_SECURE`                                   | 服务商要求的 TLS 模式                             |
+| `SMTP_USER`、`SMTP_PASSWORD`                    | 需要 SMTP 认证时必须同时配置                      |
+| `IS_INSTRUMENTED`                               | 启用监控时设置为 `true`                           |
+| `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`            | 生产 Trace 接收端点                               |
+| `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT`              | 生产日志接收端点                                  |
+| `OTEL_SERVICE_NAME`                             | 区分 API Server 与 Worker 的服务名                |
+| `STORE_DOMAIN_CNAME_TARGET`                     | 商家域名实际指向的公共 DNS 目标                   |
+| `STORE_DOMAIN_ROUTING_MODE`                     | `require-domain`                                  |
+| `STORE_DOMAIN_TRUST_PROXY`                      | 仅在入口层覆盖转发 Host 时启用                    |
+| `STORE_DOMAIN_BYPASS_HOSTS`                     | 生产默认留空                                      |
+| `STORE_DOMAIN_AUTOMATION_MODE`                  | `manual` 或 `cloudflare-saas`                     |
+| `CLOUDFLARE_SAAS_API_TOKEN`                     | Cloudflare 限权 API Token，仅 Secret 管理         |
+| `CLOUDFLARE_SAAS_ZONE_ID`                       | Cloudflare for SaaS 平台 Zone ID                  |
+| `CLOUDFLARE_SAAS_FALLBACK_ORIGIN`               | 已代理且可访问的回源主机名                        |
+| `CLOUDFLARE_SAAS_AUTO_MANAGE_DNS`               | 仅 Token 可管理客户 Zone 时设为 `true`            |
+| `READINESS_OPERATIONS_JSON.cloudflareOriginTls` | 真实自定义域名已通过 Cloudflare 回源 TLS/SNI 验证 |
+| `VENDURE_BOOTSTRAP_BASE_SCHEMA`                 | 正常启动必须为 `false`                            |
 
 开发环境继续通过 `VENDURE_EMAIL_OUTPUT_DIR` 落盘预览邮件；生产环境自动切换到 SMTP，并在缺少必要参数时拒绝启动。
 
@@ -261,10 +267,12 @@ node packages/dev-server/dist/index.js
 
 ## 当前 Nginx 配置状态
 
-`deploy/nginx/damatong.conf` 已配置：
+`deploy/nginx/damatong.conf` 已准备以下目标配置（生产证书和 DNS 生效后才能加载）：
 
-- `damatong.net` 与 `www.damatong.net` 前台；
-- `console.damatong.net` 管理后台；
+- `moyaoai.com` 为 AwanMesh 主网店，`damatong.net` 为美宜佳网店；
+- 两个 `www` 域名分别 301 到对应根域；
+- `console.moyaoai.com` 为统一管理后台，`console.damatong.net` 301 到新后台；
+- Cloudflare for SaaS 保留店铺 `Host`；启用自动化前必须现场验证 Cloudflare 默认客户域名 SNI 或已配置的 SNI 覆盖能通过源站证书；
 - Vendure upstream `127.0.0.1:3002`；
 - `/shop-api`、`/health`、`/assets` 反向代理；
 - 公共域名禁止 `/admin-api`。
@@ -277,21 +285,22 @@ node packages/dev-server/dist/index.js
 
 仍需在每次接入真实支付、CDN 或外部资源时确认：
 
-- 全球独立站最终使用哪个域名；
+- `moyaoai.com` 与 `damatong.net` 在生产后台中对应的准确 Channel code/id；
 - 站点静态资源是本机目录还是由 CDN 分发；
 - 正式 API 监听端口是否为 `3002`；
-- TLS 证书是否覆盖全部前台与管理域名；
+- Cloudflare 自定义主机名与 SSL 状态是否均为 `active`；
 - Cloudflare 官方 IPv4/IPv6 网段是否仍与 Nginx 和 AWS 安全组白名单一致；
 - CSP 是否需放行支付服务商的脚本、连接、iframe 或图片域名；
-- 新域名加入前不可直接复用现有证书路径与跳转规则。
+- 新 SAN 证书是否已真实覆盖两个根域、两个 `www` 和两个 `console` 域名。
+- 平台外部的商家域名是否已按后台提示完成 CNAME 与 TXT 记录。
 
-新域名加入前不可直接复用现有证书路径与跳转规则。
+完整切换步骤与回滚边界见 `deploy/AWANMESH_DOMAIN_CUTOVER.md`。
 
 ## 上线放行表
 
 只有所有 P0 项都通过，才可以进入生产放量：
 
-- [ ] 全球独立站正式域名已验证并绑定正确 Channel。
+- [ ] `moyaoai.com` 与 `damatong.net` 已验证并绑定到两个不同且正确的 Channel。
 - [ ] 经营主体、默认税区、税率和价格含税规则已确认并复核。
 - [ ] 测试配送方式已删除或禁用，真实运费计算已验证。
 - [ ] 测试支付已禁用，真实支付、回调与退款已验证。
@@ -309,7 +318,7 @@ node packages/dev-server/dist/index.js
 
 开始下一轮正式配置前，需要一次性确认：
 
-1. 全球独立站正式域名。
+1. 生产后台中 AwanMesh 与美宜佳的准确 Channel code/id，以及美宜佳商品数据的真实来源与字段映射。
 2. 经营主体所在地、商品价格是否含税，以及跨境数字商品的税务规则。
 3. 如上架实物商品，提供配送公司、全球配送区域、价格和免邮规则。
 4. 面向全球客户的支付渠道、收款主体与支持币种。

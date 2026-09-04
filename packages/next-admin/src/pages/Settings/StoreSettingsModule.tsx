@@ -300,6 +300,7 @@ export function StoreSettingsModule() {
                         {tab === 'DOMAINS' && (
                             <DomainsPanel
                                 profile={selectedProfile}
+                                profiles={profiles}
                                 onChanged={message => completed(message)}
                                 onError={setActionError}
                             />

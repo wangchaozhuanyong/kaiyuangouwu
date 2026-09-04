@@ -1,3 +1,6 @@
+import { STOREFRONT_LOGO_IMAGE } from './storefront-images';
+import { DEFAULT_STOREFRONT_NAMES } from './storefront-utils';
+
 export type RouteSkeletonVariant =
     'home' | 'catalog' | 'detail' | 'services' | 'account' | 'checkout' | 'default';
 
@@ -127,6 +130,42 @@ export function PageSkeleton({
     );
 }
 
-export function RoutePageSkeleton({ pathname, language }: { pathname: string; language?: string }) {
-    return <PageSkeleton language={language} variant={pageSkeletonVariantForPathname(pathname)} root />;
+export function RouteTransitionLoader({
+    language,
+    logoUrl,
+    storefrontName,
+}: {
+    language?: string;
+    logoUrl?: string | null;
+    storefrontName?: string;
+}) {
+    const localizedStorefrontName =
+        storefrontName?.trim() || DEFAULT_STOREFRONT_NAMES[isZh(language) ? 'zh' : 'en'];
+
+    return (
+        <div
+            className="route-transition"
+            role="status"
+            aria-label={loadingPageLabel(language)}
+            aria-live="polite"
+            aria-busy="true"
+        >
+            <div className="route-transition-card" aria-hidden="true">
+                <span className="route-transition-mark">
+                    <img
+                        src={logoUrl || STOREFRONT_LOGO_IMAGE}
+                        alt=""
+                        width="160"
+                        height="120"
+                        decoding="async"
+                        fetchPriority="high"
+                    />
+                </span>
+                <strong>{localizedStorefrontName}</strong>
+                <span className="route-transition-track">
+                    <span />
+                </span>
+            </div>
+        </div>
+    );
 }

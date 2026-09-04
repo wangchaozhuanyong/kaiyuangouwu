@@ -1,9 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+
 import { readStorefrontStylesheet } from './test-stylesheet';
 
 const pageSource = readFileSync(new URL('./pages/ai-image-studio-page.tsx', import.meta.url), 'utf8');
-const stylesheet = readStorefrontStylesheet();
+const stylesheet = readStorefrontStylesheet(['./styles/modals-and-support.css', './styles/image-studio.css']);
 const apiSource =
     readFileSync(new URL('./api.ts', import.meta.url), 'utf8') +
     readFileSync(new URL('./api/fragments.ts', import.meta.url), 'utf8');

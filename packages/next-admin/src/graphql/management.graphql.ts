@@ -122,6 +122,12 @@ const STORE_PROFILE_FIELDS = gql`
         sortOrder
         descriptionZh
         descriptionEn
+        taglineZh
+        taglineEn
+        brandBackgroundColor
+        brandPrimaryColor
+        brandAccentColor
+        brandHighlightColor
         internalNote
         primaryDomain
         storefrontUrl
@@ -136,6 +142,16 @@ const STORE_PROFILE_FIELDS = gql`
             }
         }
         logoAsset {
+            id
+            preview
+            source
+        }
+        logoOnLightAsset {
+            id
+            preview
+            source
+        }
+        logoOnDarkAsset {
             id
             preview
             source
@@ -736,7 +752,12 @@ export const STORE_DOMAINS_QUERY = gql`
     query NextAdminStoreDomains($channelId: ID!) {
         storeDomains(channelId: $channelId) {
             id
+            updatedAt
             domain
+            channel {
+                id
+                code
+            }
             isPrimary
             status
             verificationRecordName
@@ -788,6 +809,42 @@ export const DELETE_STORE_DOMAIN_MUTATION = gql`
         deleteStoreDomain(id: $id) {
             result
             message
+        }
+    }
+`;
+
+export const STORE_DOMAIN_TRANSFER_IMPACT_QUERY = gql`
+    query NextAdminStoreDomainTransferImpact($id: ID!, $targetChannelId: ID!) {
+        storeDomainTransferImpact(id: $id, targetChannelId: $targetChannelId) {
+            sourceReplacementDomain
+            targetPrimaryDomain
+            preservesVerification
+            canTransfer
+            blocker
+            sourceChannel {
+                id
+                code
+            }
+            targetChannel {
+                id
+                code
+            }
+        }
+    }
+`;
+
+export const TRANSFER_STORE_DOMAIN_MUTATION = gql`
+    mutation NextAdminTransferStoreDomain($input: TransferStoreDomainInput!) {
+        transferStoreDomain(input: $input) {
+            id
+            updatedAt
+            domain
+            isPrimary
+            status
+            channel {
+                id
+                code
+            }
         }
     }
 `;
@@ -1011,6 +1068,12 @@ export interface StoreProfileRecord {
     sortOrder: number;
     descriptionZh: string;
     descriptionEn: string;
+    taglineZh: string | null;
+    taglineEn: string | null;
+    brandBackgroundColor: string | null;
+    brandPrimaryColor: string | null;
+    brandAccentColor: string | null;
+    brandHighlightColor: string | null;
     internalNote: string | null;
     primaryDomain: string | null;
     storefrontUrl: string | null;
@@ -1020,6 +1083,8 @@ export interface StoreProfileRecord {
         checks: Array<{ code: string; ready: boolean; message: string; messageEn: string }>;
     };
     logoAsset: { id: string; preview: string; source: string } | null;
+    logoOnLightAsset: { id: string; preview: string; source: string } | null;
+    logoOnDarkAsset: { id: string; preview: string; source: string } | null;
     channel: {
         id: string;
         code: string;
@@ -1164,13 +1229,25 @@ export interface BusinessSettingsResult {
 
 export interface StoreDomainRecord {
     id: string;
+    updatedAt: string;
     domain: string;
+    channel: { id: string; code: string };
     isPrimary: boolean;
     status: 'PENDING' | 'ACTIVE';
     verificationRecordName: string;
     verificationRecordValue: string;
     verifiedAt: string | null;
     lastVerificationError: string | null;
+}
+
+export interface StoreDomainTransferImpactRecord {
+    sourceReplacementDomain: string | null;
+    targetPrimaryDomain: string | null;
+    preservesVerification: boolean;
+    canTransfer: boolean;
+    blocker: string | null;
+    sourceChannel: { id: string; code: string };
+    targetChannel: { id: string; code: string };
 }
 
 export interface StoreDeprovisionImpactRecord {

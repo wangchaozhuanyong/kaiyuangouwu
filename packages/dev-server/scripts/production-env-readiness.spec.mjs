@@ -58,6 +58,11 @@ function readyEnvironment(overrides = {}) {
         STORE_DOMAIN_CNAME_TARGET: 'stores.shop.test',
         STORE_DOMAIN_ROUTING_MODE: 'require-domain',
         STORE_DOMAIN_BYPASS_HOSTS: '',
+        STORE_DOMAIN_AUTOMATION_MODE: 'manual',
+        CLOUDFLARE_SAAS_API_TOKEN: '',
+        CLOUDFLARE_SAAS_ZONE_ID: '',
+        CLOUDFLARE_SAAS_FALLBACK_ORIGIN: '',
+        CLOUDFLARE_SAAS_AUTO_MANAGE_DNS: 'false',
         VENDURE_BOOTSTRAP_BASE_SCHEMA: 'false',
         RUN_MIGRATIONS: 'false',
         RUN_JOB_QUEUE: '0',
@@ -90,7 +95,7 @@ const confirmedSingleHostControls = {
 void test('passes a complete server production environment', () => {
     const report = evaluateProductionEnvironment(readyEnvironment(), 'server', confirmedControls);
     assert.equal(report.ready, true);
-    assert.deepEqual(report.summary, { pass: 35, manual: 0, blocker: 0 });
+    assert.deepEqual(report.summary, { pass: 36, manual: 0, blocker: 0 });
 });
 
 void test('uses different migration expectations for worker and migration roles', () => {
@@ -212,7 +217,59 @@ void test('allows a verified single-host database and system monitoring profile'
     );
 
     assert.equal(report.ready, true);
-    assert.deepEqual(report.summary, { pass: 36, manual: 0, blocker: 0 });
+    assert.deepEqual(report.summary, { pass: 37, manual: 0, blocker: 0 });
+});
+
+void test('accepts complete Cloudflare for SaaS automation without exposing its token', () => {
+    const token = 'cloudflare-token-that-must-never-be-reported';
+    const report = evaluateProductionEnvironment(
+        readyEnvironment({
+            STORE_DOMAIN_AUTOMATION_MODE: 'cloudflare-saas',
+            CLOUDFLARE_SAAS_API_TOKEN: token,
+            CLOUDFLARE_SAAS_ZONE_ID: '0123456789abcdef0123456789abcdef',
+            CLOUDFLARE_SAAS_FALLBACK_ORIGIN: 'origin.shop.test',
+            CLOUDFLARE_SAAS_AUTO_MANAGE_DNS: 'true',
+        }),
+        'server',
+        { ...confirmedControls, cloudflareOriginTls: true },
+    );
+
+    assert.equal(report.ready, true);
+    assert.equal(report.checks.find(check => check.id === 'domain-automation')?.status, 'pass');
+    assert.equal(JSON.stringify(report).includes(token), false);
+});
+
+void test('requires reviewed origin TLS and SNI evidence for Cloudflare for SaaS', () => {
+    const report = evaluateProductionEnvironment(
+        readyEnvironment({
+            STORE_DOMAIN_AUTOMATION_MODE: 'cloudflare-saas',
+            CLOUDFLARE_SAAS_API_TOKEN: 'cloudflare-token-that-is-long-enough',
+            CLOUDFLARE_SAAS_ZONE_ID: '0123456789abcdef0123456789abcdef',
+            CLOUDFLARE_SAAS_FALLBACK_ORIGIN: 'origin.shop.test',
+            CLOUDFLARE_SAAS_AUTO_MANAGE_DNS: 'false',
+        }),
+        'server',
+        confirmedControls,
+    );
+
+    assert.equal(report.ready, false);
+    assert.equal(report.checks.find(check => check.id === 'domain-automation-origin-tls')?.status, 'manual');
+});
+
+void test('blocks incomplete Cloudflare for SaaS automation', () => {
+    const report = evaluateProductionEnvironment(
+        readyEnvironment({
+            STORE_DOMAIN_AUTOMATION_MODE: 'cloudflare-saas',
+            CLOUDFLARE_SAAS_API_TOKEN: 'replace-with-token',
+            CLOUDFLARE_SAAS_ZONE_ID: 'not-a-zone-id',
+            CLOUDFLARE_SAAS_FALLBACK_ORIGIN: '',
+        }),
+        'server',
+        confirmedControls,
+    );
+
+    assert.equal(report.ready, false);
+    assert.equal(report.checks.find(check => check.id === 'domain-automation')?.status, 'blocker');
 });
 
 void test('blocks a missing or placeholder auto-card encryption key', () => {

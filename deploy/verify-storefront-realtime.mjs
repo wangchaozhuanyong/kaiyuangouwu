@@ -6,7 +6,7 @@ import { performance } from 'node:perf_hooks';
 import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 
-const DEFAULT_URL = 'https://damatong.net/storefront-realtime/events?client=storefront';
+const DEFAULT_URL = 'https://moyaoai.com/storefront-realtime/events?client=storefront';
 const DEFAULT_READY_TIMEOUT_MS = 2_000;
 const DEFAULT_CLOSE_TIMEOUT_MS = 2_000;
 const DEFAULT_CONNECTION_LIMIT = 12;

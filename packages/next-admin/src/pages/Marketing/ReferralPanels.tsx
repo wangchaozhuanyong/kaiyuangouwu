@@ -68,8 +68,8 @@ export function TodayOverview({ data }: { data: ReferralProgramResult['referralT
 export const SYSTEM_POSTER_TEMPLATES = [
     {
         id: 'BRAND_MINIMAL',
-        nameZh: '云桥简约',
-        nameEn: 'CloudBridge minimal',
+        nameZh: '模钥简约',
+        nameEn: 'AwanMesh minimal',
         desc: '经典白蓝极简科技版式，通用度最高，适合各类数字化产品。',
         gradient: 'linear-gradient(135deg, #1d4ed8, #60a5fa)',
     },
@@ -96,8 +96,8 @@ export const SYSTEM_POSTER_TEMPLATES = [
     },
     {
         id: 'CLOUD_BRIDGE_ORBIT',
-        nameZh: '云桥轨道',
-        nameEn: 'CloudBridge orbit',
+        nameZh: '模钥轨道',
+        nameEn: 'AwanMesh orbit',
         desc: '紫蓝科技轨道渐变，未来感与营销冲击力强。',
         gradient: 'linear-gradient(135deg, #4338ca, #7c3aed)',
     },

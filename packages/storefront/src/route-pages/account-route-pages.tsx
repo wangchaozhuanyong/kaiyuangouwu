@@ -1,30 +1,33 @@
-import { lazy } from 'react';
+import { lazyRouteComponent } from '@tanstack/react-router';
 
 import { ProductVariant } from '../types';
 
-import { RoutePageContext as PageContext, RouteGate, useRouteRuntime as useRuntime } from './shared';
+import {
+    RoutePageContext as PageContext,
+    registerRoutePreload,
+    RouteGate,
+    useRouteRuntime as useRuntime,
+} from './shared';
 
-const AccountPage = lazy(() =>
-    import('../pages/account-page').then(module => ({ default: module.AccountPage })),
+const AccountPage = lazyRouteComponent(() => import('../pages/account-page'), 'AccountPage');
+const AnnouncementsPage = lazyRouteComponent(
+    () => import('../pages/announcements-page'),
+    'AnnouncementsPage',
 );
-const AnnouncementsPage = lazy(() =>
-    import('../pages/announcements-page').then(module => ({ default: module.AnnouncementsPage })),
+const BrowsingHistoryPage = lazyRouteComponent(
+    () => import('../pages/browsing-history-page'),
+    'BrowsingHistoryPage',
 );
-const BrowsingHistoryPage = lazy(() =>
-    import('../pages/browsing-history-page').then(module => ({ default: module.BrowsingHistoryPage })),
+const CouponCenterPage = lazyRouteComponent(() => import('../pages/coupon-center-page'), 'CouponCenterPage');
+const FavoriteProductsPage = lazyRouteComponent(
+    () => import('../pages/favorite-products-page'),
+    'FavoriteProductsPage',
 );
-const CouponCenterPage = lazy(() =>
-    import('../pages/coupon-center-page').then(module => ({ default: module.CouponCenterPage })),
+const NotificationsPage = lazyRouteComponent(
+    () => import('../pages/notifications-page'),
+    'NotificationsPage',
 );
-const FavoriteProductsPage = lazy(() =>
-    import('../pages/favorite-products-page').then(module => ({ default: module.FavoriteProductsPage })),
-);
-const NotificationsPage = lazy(() =>
-    import('../pages/notifications-page').then(module => ({ default: module.NotificationsPage })),
-);
-const ReferralPage = lazy(() =>
-    import('../pages/referral-page').then(module => ({ default: module.ReferralPage })),
-);
+const ReferralPage = lazyRouteComponent(() => import('../pages/referral-page'), 'ReferralPage');
 
 export function AccountRoutePage() {
     const runtime = useRuntime();
@@ -216,3 +219,11 @@ export function ReferralRoutePage() {
         </RouteGate>
     );
 }
+
+export const preloadAccountRoutePage = registerRoutePreload(AccountRoutePage, AccountPage);
+export const preloadAnnouncementsRoutePage = registerRoutePreload(AnnouncementsRoutePage, AnnouncementsPage);
+export const preloadFavoritesRoutePage = registerRoutePreload(FavoritesRoutePage, FavoriteProductsPage);
+export const preloadHistoryRoutePage = registerRoutePreload(HistoryRoutePage, BrowsingHistoryPage);
+export const preloadNotificationsRoutePage = registerRoutePreload(NotificationsRoutePage, NotificationsPage);
+export const preloadCouponsRoutePage = registerRoutePreload(CouponsRoutePage, CouponCenterPage);
+export const preloadReferralRoutePage = registerRoutePreload(ReferralRoutePage, ReferralPage);

@@ -304,7 +304,10 @@
         justify-content: center;
         gap: 6px;
         text-align: center;
-        transition: all 180ms ease;
+        transition:
+            transform 180ms ease,
+            background-color 180ms ease,
+            border-color 180ms ease;
     }
 
     .home-intro-grid .quick-grid-3 button:first-child,

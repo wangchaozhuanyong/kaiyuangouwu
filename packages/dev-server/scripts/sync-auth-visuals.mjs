@@ -15,7 +15,7 @@ export const authVisualManifest = [
         accentColor: '#67e8f9',
         translations: {
             zh_Hans: {
-                ctaLabel: '云桥 AI 工具精选',
+                ctaLabel: 'AwanMesh｜模钥 AI 工具精选',
                 title: '欢迎回来，继续你的 AI 工作流',
                 subtitle: '常用 AI 工具、收藏与订单，登录后统一管理',
                 body: '',

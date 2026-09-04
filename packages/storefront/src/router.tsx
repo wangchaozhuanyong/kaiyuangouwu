@@ -1,8 +1,16 @@
-import { createBrowserHistory, createRouter, useRouterState } from '@tanstack/react-router';
+import { createBrowserHistory, createRouter } from '@tanstack/react-router';
+import { useContext } from 'react';
 
-import { RoutePageSkeleton } from './route-loading';
+import { preloadStorefrontRouteComponent } from './route-component-preload';
+import { RouteTransitionLoader } from './route-loading';
 import { routeTree } from './routeTree.gen';
-import { getStorefrontScrollRestorationKey, routeFromHash, routeHref } from './storefront-router';
+import {
+    getStorefrontScrollRestorationKey,
+    routeFromHash,
+    routeFromRouterLocation,
+    routeHref,
+} from './storefront-router';
+import { StorefrontContext } from './StorefrontContext';
 
 function parseStorefrontSearch(searchString: string): Record<string, string> {
     return Object.fromEntries(new URLSearchParams(searchString.replace(/^\?/, '')));
@@ -30,16 +38,25 @@ export const router = createRouter({
     parseSearch: parseStorefrontSearch,
     stringifySearch: stringifyStorefrontSearch,
     defaultPreload: 'intent',
-    defaultPendingMs: 150,
-    defaultPendingMinMs: 250,
+    defaultPendingMs: 220,
+    defaultPendingMinMs: 320,
     defaultPendingComponent: StorefrontPendingPage,
     scrollRestoration: true,
     getScrollRestorationKey: getStorefrontScrollRestorationKey,
 });
 
+router.subscribe('onBeforeNavigate', event => {
+    const route = routeFromRouterLocation(event.toLocation.pathname, event.toLocation.search);
+    void preloadStorefrontRouteComponent(route.name);
+});
+
 function StorefrontPendingPage() {
-    const pathname = useRouterState({ select: state => state.location.pathname });
-    return <RoutePageSkeleton pathname={pathname} />;
+    const storefront = useContext(StorefrontContext);
+    const language = typeof storefront?.language === 'string' ? storefront.language : undefined;
+    const storefrontName =
+        typeof storefront?.storefrontName === 'string' ? storefront.storefrontName : undefined;
+    const logoUrl = typeof storefront?.logoUrl === 'string' ? storefront.logoUrl : null;
+    return <RouteTransitionLoader language={language} logoUrl={logoUrl} storefrontName={storefrontName} />;
 }
 
 declare module '@tanstack/react-router' {

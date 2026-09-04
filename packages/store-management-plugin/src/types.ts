@@ -350,6 +350,14 @@ export interface UpdateStoreProfileInput {
     descriptionEn?: string | null;
     internalNote?: string | null;
     logoAssetId?: ID | null;
+    logoOnLightAssetId?: ID | null;
+    logoOnDarkAssetId?: ID | null;
+    taglineZh?: string | null;
+    taglineEn?: string | null;
+    brandBackgroundColor?: string | null;
+    brandPrimaryColor?: string | null;
+    brandAccentColor?: string | null;
+    brandHighlightColor?: string | null;
     currentPassword?: string | null;
 }
 
@@ -395,6 +403,14 @@ export interface UpdateMyStoreProfileInput {
     descriptionZh?: string | null;
     descriptionEn?: string | null;
     logoAssetId?: ID | null;
+    logoOnLightAssetId?: ID | null;
+    logoOnDarkAssetId?: ID | null;
+    taglineZh?: string | null;
+    taglineEn?: string | null;
+    brandBackgroundColor?: string | null;
+    brandPrimaryColor?: string | null;
+    brandAccentColor?: string | null;
+    brandHighlightColor?: string | null;
 }
 
 export interface StoreCommerceConfiguration {

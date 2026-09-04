@@ -384,7 +384,7 @@ function SafeImageSource({
             ref={imageRef}
             src={responsiveSource?.fallbackSrc ?? currentSrc}
             srcSet={responsiveSource?.fallbackSrcSet ?? imageProps.srcSet}
-            sizes={responsiveSource?.sizes ?? imageProps.sizes}
+            sizes={imageProps.sizes ?? responsiveSource?.sizes}
             width={imageProps.width ?? responsiveSource?.width}
             height={imageProps.height ?? responsiveSource?.height}
             decoding={imageProps.decoding ?? 'async'}
@@ -425,7 +425,11 @@ function SafeImageSource({
 
     return responsiveSource ? (
         <picture className={frameClassName} style={frameStyle}>
-            <source type="image/webp" srcSet={responsiveSource.webpSrcSet} sizes={responsiveSource.sizes} />
+            <source
+                type="image/webp"
+                srcSet={responsiveSource.webpSrcSet}
+                sizes={imageProps.sizes ?? responsiveSource.sizes}
+            />
             {image}
         </picture>
     ) : (
@@ -520,7 +524,7 @@ export function renderColorfulQuickIcon(label: string, index: number, imageUrl?:
     if (managedImageUrl) {
         return (
             <span className="colorful-icon-img-wrap">
-                <SafeImage src={managedImageUrl} alt="" imageKind="thumbnail" />
+                <SafeImage src={managedImageUrl} alt="" imageKind="thumbnail" sizes="48px" />
             </span>
         );
     }

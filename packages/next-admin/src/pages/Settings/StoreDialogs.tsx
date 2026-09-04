@@ -1,6 +1,6 @@
 import { useMutation, useQuery } from '@apollo/client/react';
 import { AlertCircle, CheckCircle2, Copy, Languages, LoaderCircle, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, type Dispatch, type SetStateAction } from 'react';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
 import { DynamicCustomFieldsForm } from '../../custom-fields/DynamicCustomFieldsForm';
 import type { CustomFieldValueMap } from '../../custom-fields/custom-field-types';
@@ -50,6 +50,12 @@ export function StoreEditor({
     const [nameEn, setNameEn] = useState(profile.channel.customFields.storefrontNameEn);
     const [descriptionZh, setDescriptionZh] = useState(profile.descriptionZh);
     const [descriptionEn, setDescriptionEn] = useState(profile.descriptionEn);
+    const [taglineZh, setTaglineZh] = useState(profile.taglineZh ?? '');
+    const [taglineEn, setTaglineEn] = useState(profile.taglineEn ?? '');
+    const [brandBackgroundColor, setBrandBackgroundColor] = useState(profile.brandBackgroundColor ?? '');
+    const [brandPrimaryColor, setBrandPrimaryColor] = useState(profile.brandPrimaryColor ?? '');
+    const [brandAccentColor, setBrandAccentColor] = useState(profile.brandAccentColor ?? '');
+    const [brandHighlightColor, setBrandHighlightColor] = useState(profile.brandHighlightColor ?? '');
     const [reviewEnglish, setReviewEnglish] = useState(false);
     const [internalNote, setInternalNote] = useState(profile.internalNote ?? '');
     const [status, setStatus] = useState(profile.status);
@@ -80,6 +86,12 @@ export function StoreEditor({
                 storefrontNameEn: nameEn.trim(),
                 descriptionZh: descriptionZh.trim(),
                 descriptionEn: descriptionEn.trim(),
+                taglineZh: taglineZh.trim(),
+                taglineEn: taglineEn.trim(),
+                brandBackgroundColor: brandBackgroundColor.trim() || null,
+                brandPrimaryColor: brandPrimaryColor.trim() || null,
+                brandAccentColor: brandAccentColor.trim() || null,
+                brandHighlightColor: brandHighlightColor.trim() || null,
                 internalNote: internalNote.trim() || null,
                 sortOrder,
                 ...(statusChanged ? { status, currentPassword } : {}),
@@ -116,6 +128,15 @@ export function StoreEditor({
                         className={inputClass}
                     />
                 </Field>
+                <Field label="品牌口号">
+                    <input
+                        value={taglineZh}
+                        maxLength={160}
+                        onChange={event => setTaglineZh(event.target.value)}
+                        className={inputClass}
+                        placeholder="例如：一钥通百模"
+                    />
+                </Field>
             </div>
             <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
                 <button
@@ -147,8 +168,42 @@ export function StoreEditor({
                                 className={inputClass}
                             />
                         </Field>
+                        <Field label="英文品牌口号（人工覆盖）">
+                            <input
+                                value={taglineEn}
+                                maxLength={160}
+                                onChange={event => setTaglineEn(event.target.value)}
+                                className={inputClass}
+                                placeholder="One Key. Every Model."
+                            />
+                        </Field>
                     </div>
                 )}
+            </div>
+            <div className="mt-4">
+                <p className="mb-2 text-xs font-bold text-slate-700">品牌颜色</p>
+                <div className="grid gap-3 sm:grid-cols-4">
+                    {[
+                        ['背景色', brandBackgroundColor, setBrandBackgroundColor, '#071426'],
+                        ['主色', brandPrimaryColor, setBrandPrimaryColor, '#2F6BFF'],
+                        ['强调色', brandAccentColor, setBrandAccentColor, '#22D3EE'],
+                        ['高亮色', brandHighlightColor, setBrandHighlightColor, '#7C3AED'],
+                    ].map(([label, value, setter, placeholder]) => (
+                        <Field key={String(label)} label={String(label)}>
+                            <input
+                                value={String(value)}
+                                maxLength={7}
+                                onChange={event =>
+                                    (setter as Dispatch<SetStateAction<string>>)(
+                                        event.target.value.toUpperCase(),
+                                    )
+                                }
+                                className={inputClass}
+                                placeholder={String(placeholder)}
+                            />
+                        </Field>
+                    ))}
+                </div>
             </div>
             <div className="mt-4">
                 <Field label="内部备注（客户不可见）">
@@ -545,7 +600,7 @@ export function ProvisionStoreDialog({
                         value={draft.name}
                         onChange={event => set('name', event.target.value)}
                         className={inputClass}
-                        placeholder="例如：云桥贸易有限公司"
+                        placeholder="例如：模钥科技有限公司"
                     />
                 </Field>
                 <Field label="网店编码 *">

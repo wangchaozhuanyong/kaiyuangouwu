@@ -1,9 +1,10 @@
 import { Outlet } from '@tanstack/react-router';
 import { WifiOff } from 'lucide-react';
 import { Suspense } from 'react';
+
 import { BottomNavigation, shouldShowBottomNavigation } from './components/common/bottom-navigation';
 import { useStorefrontAppState } from './hooks/useStorefrontAppState';
-import { RoutePageSkeleton } from './route-loading';
+import { RouteTransitionLoader } from './route-loading';
 import { StorefrontContext } from './StorefrontContext';
 import { StorefrontUpdatePrompt } from './StorefrontUpdatePrompt';
 
@@ -14,14 +15,13 @@ export function App() {
         storefrontContextValue,
         online,
         isZh,
-        showGlobalProgress,
-        text,
-        routerLocation,
         displayedRoute,
         navigationBlock,
         cart,
         toast,
         language,
+        logoUrl,
+        storefrontName,
     } = useStorefrontAppState();
 
     return (
@@ -38,13 +38,14 @@ export function App() {
                             : 'You are offline. Some actions may fail.'}
                     </div>
                 )}
-                {showGlobalProgress && (
-                    <div className="navigation-progress" role="progressbar" aria-label={text.loading} />
-                )}
                 <div id="storefront-content">
                     <Suspense
                         fallback={
-                            <RoutePageSkeleton pathname={routerLocation.pathname} language={language} />
+                            <RouteTransitionLoader
+                                language={language}
+                                logoUrl={logoUrl}
+                                storefrontName={storefrontName}
+                            />
                         }
                     >
                         <Outlet />

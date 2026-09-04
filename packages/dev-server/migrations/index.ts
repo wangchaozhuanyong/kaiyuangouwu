@@ -92,6 +92,8 @@ import { AlignSqliteRuntimeSchema1788278400000 } from './1788278400000-align-sql
 import { AddReferralPosterTemplatesColumn1788410000000 } from './1788410000000-add-referral-poster-templates-column';
 import { AddAdminTelegramNotifications1788413600000 } from './1788413600000-add-admin-telegram-notifications';
 import { AddImagePromptModelConfigs1788436800000 } from './1788436800000-add-image-prompt-model-configs';
+import { AddStoreProfileBranding1788440400000 } from './1788440400000-add-store-profile-branding';
+import { AddStoreDomainAutomation1788526800000 } from './1788526800000-add-store-domain-automation';
 
 export const devServerMigrations = [
     CommerceFulfillment1786514145999,
@@ -188,4 +190,6 @@ export const devServerMigrations = [
     AddReferralPosterTemplatesColumn1788410000000,
     AddAdminTelegramNotifications1788413600000,
     AddImagePromptModelConfigs1788436800000,
+    AddStoreProfileBranding1788440400000,
+    AddStoreDomainAutomation1788526800000,
 ];

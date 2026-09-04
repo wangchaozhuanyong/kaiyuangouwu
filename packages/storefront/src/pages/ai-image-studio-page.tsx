@@ -20,6 +20,9 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
+import '../styles/image-studio.css';
+import '../styles/modals-and-support.css';
+
 import { ShopApi, ShopApiTimeoutError } from '../api';
 import { formatDisplayMoney } from '../money-display';
 import { PageSkeleton } from '../route-loading';

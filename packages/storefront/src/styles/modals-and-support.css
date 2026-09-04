@@ -203,7 +203,12 @@
     font-size: 13px;
     font-weight: 700;
     cursor: pointer;
-    transition: all 160ms ease;
+    transition:
+        transform 160ms ease,
+        background-color 160ms ease,
+        border-color 160ms ease,
+        color 160ms ease,
+        box-shadow 160ms ease;
 }
 
 .poster-action-btn.primary {

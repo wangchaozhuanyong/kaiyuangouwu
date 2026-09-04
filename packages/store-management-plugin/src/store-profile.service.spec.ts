@@ -35,6 +35,16 @@ function profile(overrides: Record<string, unknown> = {}) {
             internalNote: '',
             logoAsset: null,
             logoAssetId: null,
+            logoOnLightAsset: null,
+            logoOnLightAssetId: null,
+            logoOnDarkAsset: null,
+            logoOnDarkAssetId: null,
+            taglineZh: null,
+            taglineEn: null,
+            brandBackgroundColor: null,
+            brandPrimaryColor: null,
+            brandAccentColor: null,
+            brandHighlightColor: null,
         }),
         overrides,
     );
@@ -61,6 +71,10 @@ function createService(
         where: vi.fn().mockReturnThis(),
         getOne: vi.fn().mockResolvedValue(channel()),
     };
+    const assets = domainRepository.assets as Array<{ id: string; channelId: string }> | undefined;
+    const findOneInChannel = vi.fn((_ctx, _entity, id, channelId) =>
+        Promise.resolve(assets?.find(asset => asset.id === id && asset.channelId === channelId)),
+    );
     const connection = {
         getRepository: vi.fn((_ctx, entity) => {
             if (entity === StoreProfile) return profileRepository;
@@ -69,6 +83,7 @@ function createService(
             }
             return domainRepository;
         }),
+        findOneInChannel,
     };
     const channelService = {
         getDefaultChannel: vi.fn().mockResolvedValue({ id: 'default', sellerId: 'platform-seller' }),
@@ -95,6 +110,7 @@ function createService(
     return {
         activationReadinessService,
         channelService,
+        findOneInChannel,
         service: new StoreProfileService(
             connection as any,
             channelService as any,
@@ -280,6 +296,42 @@ describe('StoreProfileService', () => {
         expect(updated.internalNote).toBe('马来西亚团队跟进');
     });
 
+    it('normalizes channel branding and rejects invalid colors', async () => {
+        const current = profile();
+        const profileRepository = {
+            findOne: vi.fn().mockResolvedValue(current),
+            save: vi.fn(value => Promise.resolve(value)),
+        };
+        const domainRepository = { find: vi.fn().mockResolvedValue([]) };
+        const { service } = createService(profileRepository, domainRepository);
+
+        const updated = await service.updateForMerchant({ channelId: 'channel-1' } as any, {
+            expectedUpdatedAt: current.updatedAt,
+            taglineZh: ' 一钥通百模 ',
+            taglineEn: ' One Key. Every Model. ',
+            brandBackgroundColor: '#071426',
+            brandPrimaryColor: '#2f6bff',
+            brandAccentColor: '#22d3ee',
+            brandHighlightColor: '#7c3aed',
+        });
+
+        expect(updated).toMatchObject({
+            taglineZh: '一钥通百模',
+            taglineEn: 'One Key. Every Model.',
+            brandBackgroundColor: '#071426',
+            brandPrimaryColor: '#2F6BFF',
+            brandAccentColor: '#22D3EE',
+            brandHighlightColor: '#7C3AED',
+        });
+
+        await expect(
+            service.updateForMerchant({ channelId: 'channel-1' } as any, {
+                expectedUpdatedAt: current.updatedAt,
+                brandPrimaryColor: 'blue',
+            }),
+        ).rejects.toThrow('#RRGGBB');
+    });
+
     it('updates only the active Channel profile for a merchant', async () => {
         const current = profile();
         const profileRepository = {
@@ -311,6 +363,35 @@ describe('StoreProfileService', () => {
             }),
         );
         expect(updated.descriptionZh).toBe('新的中文简介');
+    });
+
+    it('only accepts branding assets assigned to the active Channel', async () => {
+        const current = profile();
+        const profileRepository = {
+            findOne: vi.fn().mockResolvedValue(current),
+            save: vi.fn(value => Promise.resolve(value)),
+        };
+        const asset = { id: 'asset-channel-1', channelId: 'channel-1' };
+        const { findOneInChannel, service } = createService(profileRepository, {
+            assets: [asset],
+            find: vi.fn().mockResolvedValue([]),
+        });
+        const ctx = { channelId: 'channel-1' } as any;
+
+        const updated = await service.updateForMerchant(ctx, {
+            expectedUpdatedAt: current.updatedAt,
+            logoOnLightAssetId: asset.id,
+        });
+
+        expect(findOneInChannel).toHaveBeenCalledWith(ctx, expect.any(Function), asset.id, 'channel-1');
+        expect(updated.logoOnLightAssetId).toBe(asset.id);
+
+        await expect(
+            service.updateForMerchant(ctx, {
+                expectedUpdatedAt: current.updatedAt,
+                logoOnDarkAssetId: 'asset-channel-2',
+            }),
+        ).rejects.toBeInstanceOf(EntityNotFoundError);
     });
 
     it('rejects an overlong storefront name before saving', async () => {

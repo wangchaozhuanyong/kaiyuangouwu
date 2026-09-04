@@ -1,26 +1,28 @@
-import { lazy } from 'react';
+import { lazyRouteComponent } from '@tanstack/react-router';
 
 import { FlashSalePage, RecommendationPage } from '../storefront-ui/content-ui';
 import { Product } from '../types';
 
-import { RoutePageContext as PageContext, RouteGate, useRouteRuntime as useRuntime } from './shared';
+import {
+    RoutePageContext as PageContext,
+    registerRoutePreload,
+    RouteGate,
+    useRouteRuntime as useRuntime,
+} from './shared';
 
-const ReviewCenterPage = lazy(() =>
-    import('../review-pages').then(module => ({ default: module.ReviewCenterPage })),
+const ReviewCenterPage = lazyRouteComponent(() => import('../review-pages'), 'ReviewCenterPage');
+const SupportPage = lazyRouteComponent(() => import('../pages/support-page'), 'SupportPage');
+const BusinessServicesPage = lazyRouteComponent(
+    () => import('../pages/business-services-page'),
+    'BusinessServicesPage',
 );
-const SupportPage = lazy(() =>
-    import('../pages/support-page').then(module => ({ default: module.SupportPage })),
+const AiImageStudioPage = lazyRouteComponent(
+    () => import('../pages/ai-image-studio-page'),
+    'AiImageStudioPage',
 );
-const BusinessServicesPage = lazy(() =>
-    import('../pages/business-services-page').then(module => ({ default: module.BusinessServicesPage })),
-);
-const AiImageStudioPage = lazy(() =>
-    import('../pages/ai-image-studio-page').then(module => ({ default: module.AiImageStudioPage })),
-);
-const TwoFactorPage = lazy(() =>
-    import('../client-plugins/two-factor/two-factor-page').then(module => ({
-        default: module.TwoFactorPage,
-    })),
+const TwoFactorPage = lazyRouteComponent(
+    () => import('../client-plugins/two-factor/two-factor-page'),
+    'TwoFactorPage',
 );
 
 export function ServicesRoutePage() {
@@ -133,3 +135,9 @@ export function SupportRoutePage() {
         </PageContext>
     );
 }
+
+export const preloadServicesRoutePage = registerRoutePreload(ServicesRoutePage, BusinessServicesPage);
+export const preloadImageStudioRoutePage = registerRoutePreload(ImageStudioRoutePage, AiImageStudioPage);
+export const preloadTwoFactorRoutePage = registerRoutePreload(TwoFactorRoutePage, TwoFactorPage);
+export const preloadReviewsRoutePage = registerRoutePreload(ReviewsRoutePage, ReviewCenterPage);
+export const preloadSupportRoutePage = registerRoutePreload(SupportRoutePage, SupportPage);
