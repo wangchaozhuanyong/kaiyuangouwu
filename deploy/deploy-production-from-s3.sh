@@ -15,6 +15,8 @@ readonly expected_s3_prefix="s3://${expected_bucket}/deployments/${target_sha}"
 readonly nginx_target="/etc/nginx/sites-available/damatong-production"
 readonly environment_file="${repository}/packages/dev-server/.env"
 readonly deployment_id="${target_sha}-github-${GITHUB_RUN_ID:-manual}-$(date -u +%Y%m%dT%H%M%SZ)"
+readonly managed_storefront_media_mode="${VENDURE_MANAGED_STOREFRONT_MEDIA_MODE:-}"
+readonly managed_storefront_media_keys="${VENDURE_MANAGED_STOREFRONT_MEDIA_KEYS:-}"
 
 fail() {
     printf 'Production deployment failed: %s\n' "$1" >&2
@@ -32,6 +34,17 @@ if [[ ! "${artifact_name}" =~ ^${target_sha}-[0-9]+-[0-9]+-linux-x64$ ]]; then
 fi
 if [[ "${artifact_s3_prefix}" != "${expected_s3_prefix}" ]]; then
     fail 'artifact S3 prefix is outside the approved production deployment prefix'
+fi
+case "${managed_storefront_media_mode}" in
+    '' | dry-run | apply)
+        ;;
+    *)
+        fail 'managed storefront media mode must be dry-run or apply'
+        ;;
+esac
+if [[ -n "${managed_storefront_media_mode}" ]]; then
+    [[ "${managed_storefront_media_keys}" =~ ^[a-z0-9][a-z0-9._-]*(,[a-z0-9][a-z0-9._-]*)*$ ]] ||
+        fail 'managed storefront media keys must be a comma-separated allowlist'
 fi
 
 umask 027
@@ -63,7 +76,21 @@ if git diff --name-only "${deployed_sha}" "${target_sha}" -- \
     packages/dev-server/scripts/sync-auth-visuals.mjs \
     packages/dev-server/scripts/repair-inventory-inheritance.mjs \
     packages/storefront/src/assets/storefront/ | grep -q .; then
-    fail 'managed storefront data changed; use the reviewed manual publisher release path'
+    [[ -n "${managed_storefront_media_mode}" ]] ||
+        fail 'managed storefront data changed; use the reviewed manual publisher release path'
+    if git diff --name-only "${deployed_sha}" "${target_sha}" -- \
+        packages/dev-server/scripts/sync-auth-visuals.mjs \
+        packages/dev-server/scripts/repair-inventory-inheritance.mjs | grep -q .; then
+        fail 'the storefront media release path cannot approve auth visual or inventory publisher changes'
+    fi
+    if git diff --name-only "${deployed_sha}" "${target_sha}" -- \
+        packages/dev-server/migrations/ | grep -q .; then
+        fail 'the storefront media release path cannot include database migrations'
+    fi
+    printf 'MANAGED_STOREFRONT_MEDIA_RELEASE mode=%s keys=%s\n' \
+        "${managed_storefront_media_mode}" "${managed_storefront_media_keys}"
+elif [[ -n "${managed_storefront_media_mode}" ]]; then
+    fail 'managed storefront media mode was requested without a managed media change'
 fi
 
 git merge --ff-only refs/remotes/origin/main
@@ -74,6 +101,8 @@ git merge --ff-only refs/remotes/origin/main
 if [[ "${VENDURE_DEPLOY_REEXECUTED:-0}" != "1" ]]; then
     VENDURE_DEPLOY_LOCK_HELD=1 \
         VENDURE_DEPLOY_REEXECUTED=1 \
+        VENDURE_MANAGED_STOREFRONT_MEDIA_MODE="${managed_storefront_media_mode}" \
+        VENDURE_MANAGED_STOREFRONT_MEDIA_KEYS="${managed_storefront_media_keys}" \
         GITHUB_RUN_ID="${GITHUB_RUN_ID:-manual}" \
         "${repository}/deploy/deploy-production-from-s3.sh" \
         "${target_sha}" "${artifact_name}" "${artifact_s3_prefix}"
@@ -214,13 +243,17 @@ set +a
 # re-enabling the retired promotion-cookie gate during readiness or migrations.
 export STOREFRONT_PROMOTION_GATE_ENABLED=false
 
-NODE_ENV=production READINESS_PROCESS_ROLE=migration RUN_MIGRATIONS=true RUN_JOB_QUEUE=0 \
-    node "${repository}/packages/dev-server/scripts/production-env-readiness.mjs"
-(
-    cd "${candidate}"
-    NODE_ENV=production RUN_MIGRATIONS=true RUN_JOB_QUEUE=0 \
-        node packages/dev-server/dist/run-migrations.js
-)
+if [[ "${managed_storefront_media_mode}" == "dry-run" ]]; then
+    printf 'DEPLOY_MIGRATION_SKIPPED reason=managed-storefront-media-dry-run\n'
+else
+    NODE_ENV=production READINESS_PROCESS_ROLE=migration RUN_MIGRATIONS=true RUN_JOB_QUEUE=0 \
+        node "${repository}/packages/dev-server/scripts/production-env-readiness.mjs"
+    (
+        cd "${candidate}"
+        NODE_ENV=production RUN_MIGRATIONS=true RUN_JOB_QUEUE=0 \
+            node packages/dev-server/dist/run-migrations.js
+    )
+fi
 NODE_ENV=production READINESS_PROCESS_ROLE=server RUN_MIGRATIONS=false RUN_JOB_QUEUE=0 \
     node "${repository}/packages/dev-server/scripts/production-env-readiness.mjs"
 NODE_ENV=production READINESS_PROCESS_ROLE=worker RUN_MIGRATIONS=false RUN_JOB_QUEUE=0 \
@@ -263,6 +296,35 @@ printf 'PRODUCTION_AI_HEALTH_READY attempts=%s\n' "${ai_health_ready_attempt}"
 node "${repository}/deploy/verify-dashboard-assets.mjs" \
     --dashboard-url http://127.0.0.1:3002/dashboard/ \
     --release-id "${target_sha}"
+if [[ -n "${managed_storefront_media_mode}" ]]; then
+    printf 'STOREFRONT_MEDIA_DRY_RUN_BEGIN keys=%s\n' "${managed_storefront_media_keys}"
+    (
+        cd "${candidate}"
+        VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
+            node packages/dev-server/scripts/sync-storefront-media.mjs \
+                --dry-run --keys "${managed_storefront_media_keys}"
+    )
+    if [[ "${managed_storefront_media_mode}" == "dry-run" ]]; then
+        printf 'STOREFRONT_MEDIA_DRY_RUN_OK keys=%s\n' "${managed_storefront_media_keys}"
+        rollback 0
+    fi
+
+    printf 'STOREFRONT_MEDIA_APPLY_BEGIN keys=%s\n' "${managed_storefront_media_keys}"
+    (
+        cd "${candidate}"
+        VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
+            node packages/dev-server/scripts/sync-storefront-media.mjs \
+                --apply --allow-remote --keys "${managed_storefront_media_keys}"
+    )
+    printf 'STOREFRONT_MEDIA_VERIFY_BEGIN keys=%s\n' "${managed_storefront_media_keys}"
+    (
+        cd "${candidate}"
+        VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
+            node packages/dev-server/scripts/sync-storefront-media.mjs \
+                --dry-run --keys "${managed_storefront_media_keys}"
+    )
+    printf 'STOREFRONT_MEDIA_RELEASE_OK keys=%s\n' "${managed_storefront_media_keys}"
+fi
 node "${memory_guard}" --stage post-switch --report
 pm2 save 9>&-
 

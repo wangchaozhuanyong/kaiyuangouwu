@@ -323,6 +323,14 @@ VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
 
 命令使用已由发布 shell 安全加载的 `SUPERADMIN_USERNAME`、`SUPERADMIN_PASSWORD` 和 `STOREFRONT_MEDIA_CHANNEL_CODES`；不得把密码写入参数或发布记录。同步失败立即停止发布，不切换 Storefront 指针。同一文件按 SHA-256 标签复用；新版文件只切换商品和内容块绑定，不删除旧素材，便于数据层单独回退。清单中标记为 `asset-library` 的设计参考图只上传并分配到目标 Channel 素材库，不会自动改动商品、内容块或前台默认海报。如只需发布某一项素材，使用 `--keys <manifest-key>` 限定范围，避免重新绑定其他素材。
 
+无法取得受控生产终端时，使用 GitHub Actions 的 `Deploy Managed Storefront Media` 双阶段工作流。它只接受当前
+`origin/main` 的完整 SHA、该 SHA 已通过的 `Production Runtime Artifact` 运行号，以及逐项审核过的媒体 manifest
+key。先以 `mode=dry-run` 执行：工作流会验证同一个不可变产物、备份数据库、启动候选 API、输出限定 key 的媒体
+预演，然后自动恢复上一运行包，不写媒体数据也不切换稳定指针。核对输出中的 Channel、商品 SKU、内容块和
+`assetOnly` 目标后，再以 `mode=apply` 运行，并把确认值严格填写为
+`APPLY:<target_sha>:<approved_media_keys>`。apply 阶段会再次预演，随后仅写入审核过的 key，再预演验证并继续完整
+生产切换。该入口拒绝登录视觉发布器、库存修复发布器或数据库迁移变更；这些变更仍需单独的人工发布方案。
+
 切换脚本会在 systemd journal 中以 `vendure-production-switch` 标记依次记录 `requested`、`succeeded` 或 `failed`。每条事件包含部署 ID、目标 SHA、候选目录、调用用户、SSH 来源 IP、进程和父进程信息，不记录命令参数、环境变量或密钥。`requested` 写入失败会中止切换，避免无审计地改动 PM2。发布后用同一部署 ID 核对完整事件链：
 
 ```bash
