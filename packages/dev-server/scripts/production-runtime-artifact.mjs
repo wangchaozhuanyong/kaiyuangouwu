@@ -65,6 +65,7 @@ export const REQUIRED_RUNTIME_FILES = Object.freeze([
     'packages/telemetry-plugin/dist/index.js',
     'packages/storefront/dist/index.html',
     'packages/dev-server/scripts/sync-storefront-media.mjs',
+    'packages/dev-server/scripts/sync-auth-visuals.mjs',
     'packages/dev-server/scripts/sync-awanmesh-brand.mjs',
     'packages/dev-server/scripts/repair-inventory-inheritance.mjs',
     'packages/image-generation-plugin/dist/index.js',
@@ -225,6 +226,7 @@ async function copyRuntimeBuildOutputs(stagingRoot) {
 export async function copyStorefrontMediaReleaseInputs(stagingRoot) {
     const releaseScripts = [
         'sync-storefront-media.mjs',
+        'sync-auth-visuals.mjs',
         'sync-awanmesh-brand.mjs',
         'repair-inventory-inheritance.mjs',
     ];
@@ -272,6 +274,7 @@ async function writeRuntimeRootFiles(stagingRoot, rootManifest, metadata) {
             'repair:inventory-inheritance':
                 'node packages/dev-server/scripts/repair-inventory-inheritance.mjs',
             'sync:storefront-media': 'node packages/dev-server/scripts/sync-storefront-media.mjs',
+            'sync:auth-visuals': 'node packages/dev-server/scripts/sync-auth-visuals.mjs',
             'sync:awanmesh-brand': 'node packages/dev-server/scripts/sync-awanmesh-brand.mjs',
             'start:server': 'node packages/dev-server/dist/index.js',
             'start:worker': 'node packages/dev-server/dist/index-worker.js',

@@ -202,6 +202,7 @@ void test('production runbook elevates only the root-owned atomic runtime switch
     assert.match(runbook, /VENDURE_DEPLOYMENT_ID/u);
     assert.match(runbook, /sync-storefront-media\.mjs --dry-run/u);
     assert.match(runbook, /sync-storefront-media\.mjs --apply --allow-remote/u);
+    assert.match(runbook, /sync-storefront-media\.mjs --verify/u);
     assert.match(runbook, /sync-awanmesh-brand\.mjs --dry-run/u);
     assert.match(runbook, /sync-awanmesh-brand\.mjs --apply --allow-remote/u);
 });
@@ -272,8 +273,10 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.match(script, /VENDURE_REVIEWED_STOREFRONT_MEDIA_KEYS/u);
     assert.match(script, /reviewed storefront media keys are invalid/u);
     assert.match(script, /VENDURE_REVIEWED_STOREFRONT_MEDIA_CHANNEL_CODES/u);
-    assert.match(script, /reviewed storefront media Channel codes are required/u);
+    assert.match(script, /reviewed Channel codes are required for managed publishers/u);
     assert.match(script, /reviewed storefront media Channel codes are invalid/u);
+    assert.match(script, /VENDURE_REVIEWED_AUTH_VISUALS/u);
+    assert.match(script, /managed auth visual publisher changed/u);
     assert.match(script, /unsupported managed data change/u);
     assert.equal(
         (
@@ -281,15 +284,28 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
                 /^\s*STOREFRONT_MEDIA_CHANNEL_CODES="\$\{reviewed_storefront_media_channel_codes\}"/gmu,
             ) ?? []
         ).length,
+        3,
+    );
+    assert.equal(
+        (
+            script.match(
+                /^\s*AUTH_VISUAL_CHANNEL_CODES="\$\{reviewed_storefront_media_channel_codes\}"/gmu,
+            ) ?? []
+        ).length,
         2,
     );
     assert.match(script, /sync-storefront-media\.mjs[\s\S]*--keys/u);
     assert.doesNotMatch(script, /sync-storefront-media\.mjs[\s\S]{0,200}--channel-codes/u);
     assert.match(script, /--apply --allow-remote/u);
+    assert.match(script, /--verify/u);
     assert.ok(script.indexOf('--dry-run') < script.indexOf('--apply --allow-remote'));
+    assert.ok(script.indexOf('--apply --allow-remote') < script.indexOf('--verify'));
     assert.match(script, /PRODUCTION_DEPLOY_ALREADY_CURRENT/u);
     assert.match(script, /STOREFRONT_MEDIA_PREFLIGHT_BEGIN/u);
     assert.match(script, /STOREFRONT_MEDIA_PREFLIGHT_OK/u);
+    assert.match(script, /STOREFRONT_MEDIA_VERIFY_OK/u);
+    assert.match(script, /AUTH_VISUAL_PREFLIGHT_BEGIN/u);
+    assert.match(script, /AUTH_VISUAL_PUBLISH_OK/u);
     assert.ok(script.indexOf('STOREFRONT_MEDIA_PREFLIGHT_BEGIN') < script.indexOf('DEPLOY_MIGRATION_BEGIN'));
     assert.ok(
         script.indexOf('STOREFRONT_MEDIA_PREFLIGHT_OK') < script.indexOf('vendure-mysql-backup.service'),
@@ -329,6 +345,7 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.match(workflow, /archiveSha256/u);
     assert.match(workflow, /VENDURE_REVIEWED_STOREFRONT_MEDIA_KEYS/u);
     assert.match(workflow, /VENDURE_REVIEWED_STOREFRONT_MEDIA_CHANNEL_CODES/u);
+    assert.match(workflow, /VENDURE_REVIEWED_AUTH_VISUALS/u);
     assert.match(workflow, /SSM_RESULT="\$RUNNER_TEMP\/ssm-result\.json"/u);
     assert.match(workflow, /grep -E '\^\(PRODUCTION_\|DEPLOY_\|STOREFRONT_MEDIA_/u);
     assert.match(workflow, /tail -n 160/u);
@@ -337,10 +354,12 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
 
     assert.match(artifactWorkflow, /media_keys:/u);
     assert.match(artifactWorkflow, /channel_codes:/u);
+    assert.match(artifactWorkflow, /auth_visuals:/u);
     assert.match(artifactWorkflow, /release-plan\.json/u);
     assert.match(artifactWorkflow, /release-plan\.json\.sha256/u);
     assert.match(artifactWorkflow, /archiveSha256/u);
     assert.match(artifactWorkflow, /mediaChannelCodes/u);
+    assert.match(artifactWorkflow, /authVisuals/u);
     await assert.rejects(
         readFile(path.join(repositoryRoot, '.github/workflows/deploy_reviewed_storefront_media.yml')),
         { code: 'ENOENT' },

@@ -137,6 +137,8 @@ GitHub 的 `main` 分支手动运行一次 `Production Runtime Artifact`，Skill
 自动发布入口为 `/usr/local/sbin/vendure-production-deploy-from-s3`，来源必须是已提交的
 `deploy/deploy-production-from-s3.sh`。脚本在同一个生产锁内完成源码快进、S3 外层校验、运行产物自验证、
 媒体权限与目标的只读预检、数据库备份和迁移、PM2 切换、已审核媒体写入、Nginx 检查、公网健康检查、版本标记与失败回滚。若目标提交改动了店铺媒体但发布计划没有审核过的 key，或改动了登录视觉、库存修复发布器等不受支持的数据路径，脚本会在备份、迁移和运行时切换前停止。已处于目标 SHA 的重复调度会返回 `PRODUCTION_DEPLOY_ALREADY_CURRENT`，不重复备份、迁移或重启。
+
+新增或修改某类受管 publisher 的生产门禁时必须拆成两次发布：第一版只上线工作流、制品清单和服务器引导门禁，确认生产入口已运行新门禁；第二版才上线 publisher/受管数据改动，并携带新门禁要求的审核范围。当前服务器会在快进并重新执行目标脚本之前先按旧门禁检查差异，因此禁止用手工复制、跳过检查或伪造媒体 key 把两阶段合成一次发布。
 单机发布会确保 `/var/lib/vendure-memory/production.swap` 提供 2 GiB 持久 Swap，并把 `vm.swappiness` 固定为
 10；创建前必须至少保留额外 1 GiB 磁盘空间，已有合规 Swap 时保持幂等。随后在下载前、迁移前和运行时切换
 前读取 Linux `MemAvailable` 与可用 Swap；物理可用内存不得低于 192 MiB，总有效余量不得低于 384 MiB 或
@@ -335,13 +337,18 @@ VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
     node packages/dev-server/scripts/sync-storefront-media.mjs --dry-run
 VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
     node packages/dev-server/scripts/sync-storefront-media.mjs --apply --allow-remote
+VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
+    node packages/dev-server/scripts/sync-storefront-media.mjs --verify
 ```
 
 命令使用已由发布 shell 安全加载的 `SUPERADMIN_USERNAME`、`SUPERADMIN_PASSWORD` 和 `STOREFRONT_MEDIA_CHANNEL_CODES`；不得把密码写入参数或发布记录。同步失败立即停止发布，不切换 Storefront 指针。同一文件按 SHA-256 标签复用；新版文件只切换商品和内容块绑定，不删除旧素材，便于数据层单独回退。清单中标记为 `asset-library` 的设计参考图只上传并分配到目标 Channel 素材库，不会自动改动商品、内容块或前台默认海报。如只需发布某一项素材，使用 `--keys <manifest-key>` 限定范围，避免重新绑定其他素材。
+发布器保留原商品/variant gallery，写入后用 Admin API 和 Shop API 反查同一 Asset ID；任一反查失败会尝试恢复原绑定。独立 `--verify` 证据缺失时不得宣布媒体发布成功。
 
-当版本包含已审核的店铺媒体变更时，直接在目标 `main` 完整 SHA 的
-`Production Runtime Artifact` 唯一入口同时填写逗号分隔的 manifest key 和已审核 Channel code，不再另行触发第二个媒体发布工作流，也不回退到服务器默认 Channel。
-下游部署会校验发布计划、制品 SHA-256 与源工作流 run ID，然后只将已验证的 key 和 Channel 范围交给持有生产锁的脚本。脚本在备份、迁移和 PM2 切换前，先通过当前健康 API 执行只读 dry-run，校验登录、Channel 权限、SKU/内容目标和现有素材；仅预检通过后才备份、迁移和启动候选 API，再执行受保护 apply。预检失败不会停止或重启 PM2。
+登录/注册页文案、色板和标签属于 Vendure 内容，不得只改客户端。在 `Production Runtime Artifact` 中勾选 `auth_visuals`，并填写已审核 Channel；发布链会先 dry-run，再以带 `expectedUpdatedAt` 的单个 Admin API 批次原子写入，最后反查中英文 Shop API。验证失败时恢复原内容并停止切换。
+
+当版本包含已审核的店铺媒体或登录/注册内容变更时，直接在目标 `main` 完整 SHA 的
+`Production Runtime Artifact` 唯一入口填写完整 manifest key/勾选 `auth_visuals`，并填写已审核 Channel code，不再另行触发第二个内容发布工作流，也不回退到服务器默认 Channel。
+下游部署会校验发布计划、制品 SHA-256 与源工作流 run ID，然后只将已审核的 publisher 范围、key 和 Channel 交给持有生产锁的脚本。脚本在备份、迁移和 PM2 切换前，先通过当前健康 API 执行只读 dry-run，校验登录、Channel 权限、SKU/内容目标和现有素材；仅预检通过后才备份、迁移和启动候选 API，再执行受保护 apply。预检失败不会停止或重启 PM2。
 
 若目标提交包含 AwanMesh 品牌迁移，先预演，再把三套官方 SVG、双语品牌名/口号和色板一次性绑定到主 Channel：
 
@@ -378,15 +385,15 @@ sudo -n systemctl reload nginx
 ## 标准发布流程
 
 1. 将来源分支更新到最新 `origin/main`，检查完整 diff 和变更文件清单，只保留本次经过审核的修改；设计验收截图、测试报告、历史快照和其他未跟踪资料不进入发布提交。
-2. 将审核后的修改合并进 `main`，使用普通快进推送，确认远端 `main` 的完整 SHA；禁止强推。若使用正式版本标签，标签必须指向这个已在 `main` 中的 SHA，且发布后不得移动或复用。
+2. 将审核后的修改合并进 `main`，使用普通快进推送，确认远端 `main` 的完整 SHA；禁止强推。若同一需求同时改变 publisher 生产门禁与被该门禁保护的 publisher/数据，必须先拆出并完成门禁引导发布，再合并第二阶段。若使用正式版本标签，标签必须指向这个已在 `main` 中的 SHA，且发布后不得移动或复用。
 3. 从该 SHA 创建隔离的干净工作树，运行测试和生产构建；必须显式执行 `@vendure/operations-dashboard-plugin` 菜单回归测试，禁止仅依赖根命令的工作区自动发现。
 4. 创建发布记录并先填写来源分支、生产引用、`TARGET_SHA`、正式标签（如使用）、上一个生产 SHA、环境和操作人；信息不完整时停止。
 5. 对该 SHA 手动运行一次 `Production Runtime Artifact` 工作流；如果本版本包含已审核店铺媒体，在同一次调度的 `media_keys` 和 `channel_codes` 中填写完整清单。成功后 `Deploy Production Runtime` 会通过 OIDC、私有 S3 和 SSM 自动完成后续部署。或在受控 `linux/x64` 构建机生成唯一的 production runtime 目录并走人工发布。两种方式都必须完成自验证并记录外层校验和。
 6. 自动路径由工作流上传归档并调用 `/usr/local/sbin/vendure-production-deploy-from-s3`；人工路径将工作流归档或整个产物目录原样传入 `/var/www/kaiyuangouwu-releases/<sha>-<唯一标识>-linux-x64`。禁止在 EC2 安装依赖或构建。
 7. 服务器校验外层清单哈希、产物内全部文件、符号链接、平台、Git SHA 和运行依赖清单。
-8. 记录当前稳定指针；如果发布计划包含媒体 key，先使用当前健康 API 完成只读 dry-run。数据库迁移只在该预检和生产环境审计明确通过且备份完成后，通过专用迁移入口执行一次。部署日志必须包含 `DEPLOY_BACKUP_OK file=<本地备份> offsite=yes invocation_id=<systemd invocation>`，缺失精确备份文件、校验文件或异地上传证据时停止迁移。
+8. 记录当前稳定指针；如果发布计划包含任一受管 publisher，先使用当前健康 API 完成只读 dry-run。数据库迁移只在该预检和生产环境审计明确通过且备份完成后，通过专用迁移入口执行一次。部署日志必须包含 `DEPLOY_BACKUP_OK file=<本地备份> offsite=yes invocation_id=<systemd invocation>`，缺失精确备份文件、校验文件或异地上传证据时停止迁移。
 9. PM2 从候选目录直接启动已编译的 Worker 和 API，不使用 Vendure CLI；等待 `127.0.0.1:3002/health` 与 `127.0.0.1:3002/image-generation/health` 成功，并递归验证候选 Dashboard 的入口、样式、主包与懒加载 JS/CSS 全部可访问。
-10. 从候选产物预演并执行本次审核过的库存继承修复、店铺图片同步和 AwanMesh 品牌同步；所有远程写入都必须使用 `--apply --allow-remote`，并且必须已通过第 8 步的只读预检。全部成功后才原子切换 `kaiyuangouwu-current`。
+10. 从候选产物预演并执行本次审核过的库存继承修复、店铺图片同步、登录/注册内容批次和 AwanMesh 品牌同步；所有远程写入都必须使用 `--apply --allow-remote`，媒体随后还必须通过 `--verify`，并且必须已通过第 8 步的只读预检。全部成功后才原子切换 `kaiyuangouwu-current`。
 11. 验收前台、后台、Shop API、Admin API、静态资源和 PM2 状态，确认线上 Git SHA。
 12. 完成发布记录中的制品名称、制品 SHA-256、制品与部署工作流编号、UTC 时间和验收结果；记录必须能够唯一定位生产运行的代码和制品。
 13. 发布与验收成功后，先用 `Cleanup Merged Production Branches` 的 dry-run 核对候选，再以 `apply=true` 删除已包含在当前生产 SHA 且不再使用的远程功能/热修复/release 分支；撤销临时 SSH 规则，仅保留原有固定规则。候选和回滚包按策略保留，不删除用户数据。

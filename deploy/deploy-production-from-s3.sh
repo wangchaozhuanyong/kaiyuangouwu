@@ -17,6 +17,7 @@ readonly environment_file="${repository}/packages/dev-server/.env"
 readonly deployment_id="${target_sha}-github-${GITHUB_RUN_ID:-manual}-$(date -u +%Y%m%dT%H%M%SZ)"
 readonly reviewed_storefront_media_keys="${VENDURE_REVIEWED_STOREFRONT_MEDIA_KEYS:-}"
 readonly reviewed_storefront_media_channel_codes="${VENDURE_REVIEWED_STOREFRONT_MEDIA_CHANNEL_CODES:-}"
+readonly reviewed_auth_visuals="${VENDURE_REVIEWED_AUTH_VISUALS:-false}"
 
 fail() {
     printf 'Production deployment failed: %s\n' "$1" >&2
@@ -43,11 +44,16 @@ if [[ -n "${reviewed_storefront_media_channel_codes}" && \
     ! "${reviewed_storefront_media_channel_codes}" =~ ^[a-z0-9_][a-z0-9_-]*(,[a-z0-9_][a-z0-9_-]*)*$ ]]; then
     fail 'reviewed storefront media Channel codes are invalid'
 fi
-if [[ -n "${reviewed_storefront_media_keys}" && -z "${reviewed_storefront_media_channel_codes}" ]]; then
-    fail 'reviewed storefront media Channel codes are required'
+if [[ "${reviewed_auth_visuals}" != "true" && "${reviewed_auth_visuals}" != "false" ]]; then
+    fail 'reviewed auth visual flag must be true or false'
 fi
-if [[ -z "${reviewed_storefront_media_keys}" && -n "${reviewed_storefront_media_channel_codes}" ]]; then
-    fail 'reviewed storefront media scope was supplied without media keys'
+if [[ ( -n "${reviewed_storefront_media_keys}" || "${reviewed_auth_visuals}" == "true" ) && \
+    -z "${reviewed_storefront_media_channel_codes}" ]]; then
+    fail 'reviewed Channel codes are required for managed publishers'
+fi
+if [[ -z "${reviewed_storefront_media_keys}" && "${reviewed_auth_visuals}" == "false" && \
+    -n "${reviewed_storefront_media_channel_codes}" ]]; then
+    fail 'reviewed Channel scope was supplied without a managed publisher'
 fi
 
 umask 027
@@ -74,6 +80,18 @@ git merge-base --is-ancestor "${deployed_sha}" "${target_sha}" ||
     fail 'the deployed runtime is not an ancestor of the requested target SHA'
 [[ -z "$(git status --porcelain --untracked-files=no)" ]] || fail 'the server repository has tracked changes'
 
+auth_visual_change=false
+if ! git diff --quiet "${deployed_sha}" "${target_sha}" -- \
+    packages/dev-server/scripts/sync-auth-visuals.mjs; then
+    auth_visual_change=true
+fi
+if [[ "${auth_visual_change}" == "true" && "${reviewed_auth_visuals}" != "true" ]]; then
+    fail 'managed auth visual publisher changed; select the reviewed auth visual release scope'
+fi
+if [[ "${auth_visual_change}" == "false" && "${reviewed_auth_visuals}" == "true" ]]; then
+    fail 'reviewed auth visual scope was supplied without an auth visual publisher change'
+fi
+
 if [[ "${deployed_sha}" == "${target_sha}" ]]; then
     printf 'PRODUCTION_DEPLOY_ALREADY_CURRENT sha=%s\n' "${target_sha}"
     exit 0
@@ -88,7 +106,6 @@ fi
 mapfile -t managed_storefront_changes < <(
     git diff --name-only "${deployed_sha}" "${target_sha}" -- \
         packages/dev-server/scripts/sync-storefront-media.mjs \
-        packages/dev-server/scripts/sync-auth-visuals.mjs \
         packages/dev-server/scripts/repair-inventory-inheritance.mjs \
         packages/storefront/src/assets/storefront/
 )
@@ -105,7 +122,7 @@ if [[ "${#managed_storefront_changes[@]}" -gt 0 ]]; then
                 ;;
         esac
     done
-elif [[ -n "${reviewed_storefront_media_keys}" || -n "${reviewed_storefront_media_channel_codes}" ]]; then
+elif [[ -n "${reviewed_storefront_media_keys}" ]]; then
     fail 'reviewed storefront media scope was supplied without a managed storefront data change'
 fi
 
@@ -120,6 +137,7 @@ if [[ "${VENDURE_DEPLOY_REEXECUTED:-0}" != "1" ]]; then
         GITHUB_RUN_ID="${GITHUB_RUN_ID:-manual}" \
         VENDURE_REVIEWED_STOREFRONT_MEDIA_KEYS="${reviewed_storefront_media_keys}" \
         VENDURE_REVIEWED_STOREFRONT_MEDIA_CHANNEL_CODES="${reviewed_storefront_media_channel_codes}" \
+        VENDURE_REVIEWED_AUTH_VISUALS="${reviewed_auth_visuals}" \
         "${repository}/deploy/deploy-production-from-s3.sh" \
         "${target_sha}" "${artifact_name}" "${artifact_s3_prefix}"
     exit $?
@@ -221,11 +239,13 @@ retain_release_file() {
 retain_release_file "${archive_path}" "${releases_dir}/${archive_name}"
 retain_release_file "${checksum_path}" "${releases_dir}/${checksum_name}"
 
-if [[ -n "${reviewed_storefront_media_keys}" ]]; then
+if [[ -n "${reviewed_storefront_media_keys}" || "${reviewed_auth_visuals}" == "true" ]]; then
     set -a
     # shellcheck disable=SC1090
     source "${environment_file}"
     set +a
+fi
+if [[ -n "${reviewed_storefront_media_keys}" ]]; then
     printf 'STOREFRONT_MEDIA_PREFLIGHT_BEGIN keys=%s channels=%s\n' \
         "${reviewed_storefront_media_keys}" "${reviewed_storefront_media_channel_codes}"
     cd "${candidate}"
@@ -236,6 +256,17 @@ if [[ -n "${reviewed_storefront_media_keys}" ]]; then
     cd "${repository}"
     printf 'STOREFRONT_MEDIA_PREFLIGHT_OK keys=%s channels=%s\n' \
         "${reviewed_storefront_media_keys}" "${reviewed_storefront_media_channel_codes}"
+fi
+if [[ "${reviewed_auth_visuals}" == "true" ]]; then
+    printf 'AUTH_VISUAL_PREFLIGHT_BEGIN channels=%s\n' \
+        "${reviewed_storefront_media_channel_codes}"
+    cd "${candidate}"
+    AUTH_VISUAL_CHANNEL_CODES="${reviewed_storefront_media_channel_codes}" \
+        VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
+        node packages/dev-server/scripts/sync-auth-visuals.mjs --dry-run
+    cd "${repository}"
+    printf 'AUTH_VISUAL_PREFLIGHT_OK channels=%s\n' \
+        "${reviewed_storefront_media_channel_codes}"
 fi
 
 node "${memory_guard}" --stage pre-migration --check
@@ -334,9 +365,26 @@ if [[ -n "${reviewed_storefront_media_keys}" ]]; then
         VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
         node packages/dev-server/scripts/sync-storefront-media.mjs \
             --keys "${reviewed_storefront_media_keys}" --apply --allow-remote
+    STOREFRONT_MEDIA_CHANNEL_CODES="${reviewed_storefront_media_channel_codes}" \
+        VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
+        node packages/dev-server/scripts/sync-storefront-media.mjs \
+            --keys "${reviewed_storefront_media_keys}" --verify
     cd "${repository}"
     printf 'STOREFRONT_MEDIA_PUBLISH_OK keys=%s channels=%s\n' \
         "${reviewed_storefront_media_keys}" "${reviewed_storefront_media_channel_codes}"
+    printf 'STOREFRONT_MEDIA_VERIFY_OK keys=%s channels=%s\n' \
+        "${reviewed_storefront_media_keys}" "${reviewed_storefront_media_channel_codes}"
+fi
+if [[ "${reviewed_auth_visuals}" == "true" ]]; then
+    printf 'AUTH_VISUAL_PUBLISH_BEGIN channels=%s\n' \
+        "${reviewed_storefront_media_channel_codes}"
+    cd "${candidate}"
+    AUTH_VISUAL_CHANNEL_CODES="${reviewed_storefront_media_channel_codes}" \
+        VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
+        node packages/dev-server/scripts/sync-auth-visuals.mjs --apply --allow-remote
+    cd "${repository}"
+    printf 'AUTH_VISUAL_PUBLISH_OK channels=%s\n' \
+        "${reviewed_storefront_media_channel_codes}"
 fi
 node "${memory_guard}" --stage post-switch --report
 pm2 save 9>&-
