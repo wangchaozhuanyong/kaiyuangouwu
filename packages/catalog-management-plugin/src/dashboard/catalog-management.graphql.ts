@@ -21,6 +21,7 @@ const importJobFields = gql`
         fieldMapping
         state
         totalRows
+        receivedRows
         createdCount
         updatedCount
         skippedCount
@@ -413,6 +414,7 @@ export interface CatalogImportJobRecord {
         | 'FAILED'
         | 'ROLLED_BACK';
     totalRows: number;
+    receivedRows: number;
     createdCount: number;
     updatedCount: number;
     skippedCount: number;
