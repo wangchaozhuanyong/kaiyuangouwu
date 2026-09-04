@@ -324,9 +324,21 @@ export class StorePromotionCampaignService {
         if (uniqueIds(input.productIds).length > 50) {
             throw new UserInputError('一个秒杀活动最多选择 50 个商品');
         }
-        const variants = await this.variantsForProducts(ctx, input.productIds);
+        const selectedProductIds = uniqueIds(input.productIds);
+        const variantsByProduct = await Promise.all(
+            selectedProductIds.map(productId => this.loadProductVariants(ctx, productId)),
+        );
+        const variants = variantsByProduct.flat();
         if (!variants.length) {
             throw new UserInputError('至少选择一个有可售规格的商品');
+        }
+        const productIdsWithoutVariants = selectedProductIds.filter(
+            (_productId, index) => !variantsByProduct[index].length,
+        );
+        if (productIdsWithoutVariants.length) {
+            throw new UserInputError(
+                `有 ${productIdsWithoutVariants.length} 个已选商品没有可售规格，请先为商品创建并上架规格`,
+            );
         }
         const overrides = new Map(
             (input.variantPrices ?? []).map(item => [String(item.productVariantId), item.salePrice]),

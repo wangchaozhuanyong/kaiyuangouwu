@@ -603,13 +603,19 @@ export function HomePage() {
         (coupon, index, items) =>
             items.findIndex(candidate => candidate.campaignId === coupon.campaignId) === index,
     );
-    const flashSaleItems = flashSales
+    const allFlashSaleItems = flashSales
         .flatMap(sale => sale.items)
         .filter(
             (item, index, items) =>
                 items.findIndex(candidate => candidate.productVariantId === item.productVariantId) === index,
-        )
-        .slice(0, Math.max(1, contentNumberSetting(flashSaleBlock?.settings?.displayCount, 4)));
+        );
+    const configuredFlashSaleDisplayCount = flashSaleBlock?.settings?.displayCount;
+    const flashSaleItems = allFlashSaleItems.slice(
+        0,
+        configuredFlashSaleDisplayCount == null
+            ? allFlashSaleItems.length
+            : Math.max(1, contentNumberSetting(configuredFlashSaleDisplayCount, allFlashSaleItems.length)),
+    );
     const noticeIntervalSeconds = Math.min(
         30,
         Math.max(3, contentNumberSetting(noticeBlock?.settings?.scrollIntervalSeconds, 5)),
