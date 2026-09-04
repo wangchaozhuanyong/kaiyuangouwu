@@ -4,8 +4,6 @@
 @import './styles/account-security.css';
 @import './styles/logistics.css';
 @import './styles/auth-flow.css';
-@import './styles/modals-and-support.css';
-@import './styles/image-studio.css';
 @import './styles/auth-overrides.css';
 
 :root {
@@ -39,10 +37,14 @@
     --text: #0f172a;
     --muted: #64748b;
     --line: #e2e8f0;
-    --accent: #d33c30;
-    --accent-hover: #b82f24;
-    --accent-ink: #bd3326;
-    --accent-soft: #fdf2f1;
+    --accent: #2f6bff;
+    --accent-hover: #2454d6;
+    --accent-ink: #2454d6;
+    --accent-soft: #eef4ff;
+    --brand-background: #071426;
+    --brand-primary: #2f6bff;
+    --brand-accent: #22d3ee;
+    --brand-highlight: #7c3aed;
     --success: #10b981;
     --warning: #f59e0b;
     --danger: #ef4444;
@@ -72,7 +74,6 @@ html {
     min-width: 0;
     min-height: 100%;
     background: var(--bg);
-    scroll-behavior: smooth;
     scrollbar-width: thin;
     scrollbar-color: #cbd3d0 transparent;
     overflow-x: clip;
@@ -289,30 +290,117 @@ img {
     transition: none;
 }
 
-.navigation-progress {
+.route-transition {
     width: min(100%, var(--app-width));
-    height: 2px;
+    min-height: 100dvh;
+    padding: 24px;
     position: fixed;
-    top: 0;
-    left: 50%;
-    z-index: 120;
+    z-index: 60;
+    inset: 0 auto auto 50%;
+    display: grid;
+    place-items: center;
     overflow: hidden;
-    background: color-mix(in srgb, var(--accent) 20%, transparent);
+    background:
+        radial-gradient(circle at 50% 42%, color-mix(in srgb, #ffffff 88%, transparent), transparent 34%),
+        color-mix(in srgb, var(--bg) 96%, white);
     transform: translateX(-50%);
+    animation: route-transition-enter 160ms ease-out both;
 }
 
-.navigation-progress::after {
+.route-transition-card {
+    width: min(100%, 210px);
+    padding: 24px 28px 22px;
+    border: 1px solid color-mix(in srgb, var(--line) 76%, white);
+    border-radius: 20px;
+    background: color-mix(in srgb, var(--paper) 98%, transparent);
+    box-shadow:
+        0 20px 50px -26px rgba(15, 23, 42, 0.34),
+        0 1px 0 rgba(255, 255, 255, 0.92) inset;
+    display: grid;
+    justify-items: center;
+    gap: 14px;
+}
+
+.route-transition-mark {
+    width: 58px;
+    height: 58px;
+    position: relative;
+    display: grid;
+    place-items: center;
+    border: 1px solid color-mix(in srgb, #00baff 20%, var(--line));
+    border-radius: 18px;
+    background:
+        radial-gradient(circle at 32% 24%, rgba(0, 240, 255, 0.16), transparent 46%),
+        linear-gradient(145deg, #ffffff, #f7fbff);
+    box-shadow: 0 12px 28px -18px rgba(0, 102, 255, 0.58);
+}
+
+.route-transition-mark::after {
     content: '';
-    width: 42%;
+    width: 8px;
+    height: 8px;
     position: absolute;
-    inset: 0 auto 0 -42%;
-    background: var(--accent);
-    animation: storefront-progress 900ms ease-in-out infinite;
+    right: -2px;
+    bottom: 8px;
+    border: 2px solid var(--paper);
+    border-radius: 50%;
+    background: #00baff;
+    box-shadow: 0 0 0 4px rgba(0, 186, 255, 0.1);
+    animation: route-transition-pulse 1.2s ease-in-out infinite;
 }
 
-@keyframes storefront-progress {
+.route-transition-mark img {
+    width: 44px;
+    height: 34px;
+    object-fit: contain;
+    filter: drop-shadow(0 3px 7px rgba(0, 102, 255, 0.2));
+}
+
+.route-transition-card strong {
+    max-width: 100%;
+    overflow: hidden;
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.route-transition-track {
+    width: 128px;
+    height: 3px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: color-mix(in srgb, #0066ff 12%, var(--line));
+}
+
+.route-transition-track > span {
+    width: 48%;
+    height: 100%;
+    display: block;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #00dff1, #0077ff);
+    transform: translateX(-112%);
+    animation: route-transition-progress 1s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes route-transition-enter {
+    from {
+        opacity: 0;
+    }
+}
+
+@keyframes route-transition-progress {
     to {
-        transform: translateX(340%);
+        transform: translateX(316%);
+    }
+}
+
+@keyframes route-transition-pulse {
+    50% {
+        transform: scale(0.72);
+        opacity: 0.68;
     }
 }
 
@@ -326,10 +414,15 @@ img {
         animation: none;
     }
 
-    .navigation-progress::after {
-        width: 100%;
-        inset: 0;
+    .route-transition,
+    .route-transition-mark::after,
+    .route-transition-track > span {
         animation: none;
+    }
+
+    .route-transition-track > span {
+        width: 100%;
+        transform: none;
     }
 }
 
@@ -352,7 +445,6 @@ img {
     left: 50%;
     transform: translate3d(-50%, 0, 0);
     -webkit-transform: translate3d(-50%, 0, 0);
-    will-change: transform;
 }
 
 @media (max-width: 1023px) {
@@ -374,10 +466,6 @@ img {
 }
 
 .storefront-app.is-offline .category-navigation-shell {
-    top: 38px;
-}
-
-.storefront-app.is-offline .navigation-progress {
     top: 38px;
 }
 
@@ -966,6 +1054,16 @@ img.fatal-error-mark {
     color: var(--muted);
     font-size: 12.5px;
     line-height: 1.55;
+    text-align: center;
+}
+
+.storefront-tagline {
+    margin: 10px 16px 4px;
+    color: var(--brand-primary);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    line-height: 1.4;
     text-align: center;
 }
 

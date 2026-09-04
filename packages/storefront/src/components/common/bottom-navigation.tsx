@@ -20,6 +20,7 @@ import {
 import { ComponentType, CSSProperties } from 'react';
 import { twMerge } from 'tailwind-merge';
 
+import { preloadStorefrontRouteComponent } from '../../route-component-preload';
 import { rootPages, RouteName } from '../../storefront-router';
 import { StorefrontContentBlock, StorefrontLanguage } from '../../types';
 
@@ -55,7 +56,7 @@ export interface BottomNavigationItem {
     activeColor: string;
 }
 
-const activeColors = ['#EF4444', '#3B82F6', '#F59E0B', '#10B981', '#8B5CF6'] as const;
+const activeColors = Array.from({ length: 5 }, () => 'var(--accent)');
 
 const targetIcons: Record<
     NavigationTargetPath,
@@ -177,6 +178,10 @@ export function BottomNavigation({
             {items.map(item => {
                 const isActive = activeItemRoute === item.routeName;
                 const Icon = targetIcons[item.target];
+                const preloadTarget = () => {
+                    void preloadStorefrontRouteComponent(item.routeName);
+                    void router.preloadRoute({ to: item.target });
+                };
                 return (
                     <a
                         key={item.key}
@@ -200,9 +205,9 @@ export function BottomNavigation({
                             event.preventDefault();
                             void navigate({ to: item.target });
                         }}
-                        onFocus={() => void router.preloadRoute({ to: item.target })}
-                        onMouseEnter={() => void router.preloadRoute({ to: item.target })}
-                        onTouchStart={() => void router.preloadRoute({ to: item.target })}
+                        onFocus={preloadTarget}
+                        onMouseEnter={preloadTarget}
+                        onTouchStart={preloadTarget}
                     >
                         <span className="relative flex h-[24px] w-[26px] items-center justify-center">
                             {item.iconUrl ? (

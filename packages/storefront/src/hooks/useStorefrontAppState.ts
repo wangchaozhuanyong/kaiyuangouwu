@@ -16,12 +16,7 @@ import {
     marketForStorefrontConfig,
     uiCopy,
 } from '../i18n';
-import {
-    offlineLoadError,
-    QueryLoadState,
-    resolveQueryLoadState,
-    shouldShowGlobalProgress,
-} from '../loading-state';
+import { offlineLoadError, QueryLoadState, resolveQueryLoadState } from '../loading-state';
 import { configureMoneyDisplay } from '../money-display';
 import { orderStatusRefreshInterval } from '../order-refresh';
 import {
@@ -121,13 +116,17 @@ export function useStorefrontAppState() {
     const [displayCurrencyCode, setDisplayCurrencyCode] = useState(() =>
         readStoredCurrency(enabledMarkets[0]),
     );
+    const [storefrontContextResolved, setStorefrontContextResolved] = useState(false);
     const [favoriteProductIds, setFavoriteProductIds] = useState<string[]>([]);
     const [recentProductIds, setRecentProductIds] = useState<string[]>([]);
     const [storefrontNames, setStorefrontNames] =
         useState<Record<StorefrontLanguage, string>>(DEFAULT_STOREFRONT_NAMES);
     const [storefrontCode, setStorefrontCode] = useState('');
     const [logoUrl, setLogoUrl] = useState<string | null>(null);
+    const [logoOnLightUrl, setLogoOnLightUrl] = useState<string | null>(null);
+    const [logoOnDarkUrl, setLogoOnDarkUrl] = useState<string | null>(null);
     const [storefrontDescription, setStorefrontDescription] = useState('');
+    const [storefrontTagline, setStorefrontTagline] = useState('');
     const [availableCountries, setAvailableCountries] = useState<StorefrontConfig['availableCountries']>([]);
     const [availableCurrencyCodes, setAvailableCurrencyCodes] = useState<string[]>([]);
     const [currencySelectorEnabled, setCurrencySelectorEnabled] = useState(false);
@@ -181,6 +180,7 @@ export function useStorefrontAppState() {
     const productsQuery = useQuery({
         queryKey: storefrontQueryKeys.products(storefrontQueryKeys.market(market), vendureLanguageCode, 16),
         queryFn: ({ signal }) => api.products(16, signal),
+        enabled: storefrontContextResolved,
         staleTime: PUBLIC_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
         meta: publicQueryMeta(),
@@ -188,6 +188,7 @@ export function useStorefrontAppState() {
     const collectionsQuery = useQuery({
         queryKey: storefrontQueryKeys.collections(storefrontQueryKeys.market(market), vendureLanguageCode),
         queryFn: ({ signal }) => api.collections(signal),
+        enabled: storefrontContextResolved,
         staleTime: PUBLIC_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
         meta: publicQueryMeta(),
@@ -209,6 +210,7 @@ export function useStorefrontAppState() {
     const contentQuery = useQuery({
         queryKey: storefrontQueryKeys.content(storefrontQueryKeys.market(market), vendureLanguageCode),
         queryFn: ({ signal }) => api.storefrontContent(signal),
+        enabled: storefrontContextResolved,
         staleTime: PUBLIC_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
         meta: publicQueryMeta(),
@@ -217,6 +219,7 @@ export function useStorefrontAppState() {
     const commerceModeQuery = useQuery({
         queryKey: storefrontQueryKeys.commerceMode(storefrontQueryKeys.market(market)),
         queryFn: ({ signal }) => api.activeStoreCommerceMode(signal),
+        enabled: storefrontContextResolved,
         staleTime: PUBLIC_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
         meta: publicQueryMeta(),
@@ -230,11 +233,13 @@ export function useStorefrontAppState() {
     const cartQuery = useQuery({
         queryKey: cartQueryKey,
         queryFn: ({ signal }) => api.cart(signal),
+        enabled: storefrontContextResolved,
         staleTime: 0,
     });
     const customerQuery = useQuery({
         queryKey: customerQueryKey,
         queryFn: ({ signal }) => api.activeCustomer(signal),
+        enabled: storefrontContextResolved,
         staleTime: 0,
     });
     const customer = customerQuery.data ?? null;
@@ -284,6 +289,7 @@ export function useStorefrontAppState() {
     const cart = cartQuery.data ?? null;
 
     useEffect(() => {
+        if (!storefrontContextResolved) return;
         const controller = new AbortController();
         void api.watchRealtime(event => {
             void invalidateStorefrontRealtimeQueries(queryClient, event, {
@@ -293,11 +299,12 @@ export function useStorefrontAppState() {
             });
         }, controller.signal);
         return () => controller.abort();
-    }, [api, customer?.id, market, queryClient, vendureLanguageCode]);
+    }, [api, customer?.id, market, queryClient, storefrontContextResolved, vendureLanguageCode]);
 
     useEffect(() => {
+        if (!storefrontContextResolved) return;
         void api.recordStorefrontVisit().catch(() => undefined);
-    }, [api]);
+    }, [api, storefrontContextResolved]);
     const customerCouponQueryKey = storefrontQueryKeys.customerCoupons(
         storefrontQueryKeys.market(market),
         vendureLanguageCode,
@@ -372,7 +379,7 @@ export function useStorefrontAppState() {
             take: 48,
         }),
         queryFn: ({ signal }) => api.catalog({ sort: 'sales', take: 48 }, signal),
-        enabled: showBestSellers,
+        enabled: storefrontContextResolved && showBestSellers,
         staleTime: PUBLIC_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
         meta: publicQueryMeta(),
@@ -385,7 +392,11 @@ export function useStorefrontAppState() {
             bestSellerCandidates.map(product => product.id),
         ],
         queryFn: () => api.productSales(bestSellerCandidates.map(product => product.id)),
-        enabled: showBestSellers && bestSellerCandidates.length > 0,
+        enabled:
+            storefrontContextResolved &&
+            showBestSellers &&
+            !bestSellerCatalogQuery.isPending &&
+            bestSellerCandidates.length > 0,
         staleTime: PUBLIC_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
         meta: publicQueryMeta(),
@@ -417,7 +428,7 @@ export function useStorefrontAppState() {
             take: 48,
         }),
         queryFn: ({ signal }) => api.catalog({ sort: 'recommended', take: 48 }, signal),
-        enabled: showRecommendations,
+        enabled: storefrontContextResolved && showRecommendations,
         staleTime: PUBLIC_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
         meta: publicQueryMeta(),
@@ -515,14 +526,6 @@ export function useStorefrontAppState() {
               : cartQuery.error
                 ? text.loadError
                 : null;
-    const showGlobalProgress = shouldShowGlobalProgress(isNavigationPending, [
-        productsQuery,
-        collectionsQuery,
-        configQuery,
-        contentQuery,
-        cartQuery,
-        customerQuery,
-    ]);
     const setCart = useCallback(
         (nextCart: StorefrontCart) => queryClient.setQueryData(cartQueryKey, nextCart),
         [market.code, market.currencyCode, queryClient, vendureLanguageCode],
@@ -569,7 +572,7 @@ export function useStorefrontAppState() {
             if (!product) throw new Error(isZh ? '商品不存在或已下架' : 'Product not found');
             return product;
         },
-        enabled: route.name === 'product' && !!route.id,
+        enabled: storefrontContextResolved && route.name === 'product' && !!route.id,
         staleTime: PUBLIC_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
         meta: publicQueryMeta(),
@@ -704,12 +707,21 @@ export function useStorefrontAppState() {
             nextMarket.currencyCode !== market.currencyCode ||
             nextMarket.countryCode !== market.countryCode
         ) {
+            const nextLanguage = readStoredLanguage(nextMarket);
+            if (nextLanguage === language) {
+                queryClient.setQueryData(
+                    storefrontQueryKeys.config(storefrontQueryKeys.market(nextMarket), vendureLanguageCode),
+                    config,
+                );
+            }
+            setStorefrontContextResolved(false);
             setStorefrontContext({
                 market: nextMarket,
-                language: readStoredLanguage(nextMarket),
+                language: nextLanguage,
             });
             return;
         }
+        setStorefrontContextResolved(true);
         setStorefrontCode(nextStorefrontCode);
         setFavoriteProductIds(
             readStoredStrings(
@@ -728,8 +740,31 @@ export function useStorefrontAppState() {
             en: normalizeStorefrontName(config.customFields.storefrontNameEn, DEFAULT_STOREFRONT_NAMES.en),
         });
         setLogoUrl(config.logoUrl ?? null);
+        setLogoOnLightUrl(config.logoOnLightUrl ?? null);
+        setLogoOnDarkUrl(config.logoOnDarkUrl ?? null);
         setStorefrontDescription(config.description?.trim() ?? '');
-    }, [configQuery.data, market]);
+        setStorefrontTagline(config.tagline?.trim() ?? '');
+    }, [configQuery.data, language, market, queryClient, vendureLanguageCode]);
+
+    useEffect(() => {
+        const root = document.documentElement;
+        const colors = {
+            '--brand-background': configQuery.data?.brandBackgroundColor,
+            '--brand-primary': configQuery.data?.brandPrimaryColor,
+            '--brand-accent': configQuery.data?.brandAccentColor,
+            '--brand-highlight': configQuery.data?.brandHighlightColor,
+            '--accent': configQuery.data?.brandPrimaryColor,
+            '--accent-hover': configQuery.data?.brandAccentColor,
+            '--accent-ink': configQuery.data?.brandPrimaryColor,
+        } as const;
+        for (const [property, value] of Object.entries(colors)) {
+            if (value && /^#[0-9A-F]{6}$/iu.test(value)) root.style.setProperty(property, value);
+            else root.style.removeProperty(property);
+        }
+        return () => {
+            for (const property of Object.keys(colors)) root.style.removeProperty(property);
+        };
+    }, [configQuery.data]);
 
     useEffect(() => {
         if (productsQuery.data) cacheProducts(productsQuery.data);
@@ -1407,6 +1442,13 @@ export function useStorefrontAppState() {
         setMetaContent('meta[name="twitter:description"]', description);
         setMetaContent('meta[name="twitter:image"]', image);
         setMetaContent('meta[name="twitter:image:alt"]', imageAlt);
+        let canonical = document.querySelector<HTMLLinkElement>('link[rel="canonical"]');
+        if (!canonical) {
+            canonical = document.createElement('link');
+            canonical.rel = 'canonical';
+            document.head.append(canonical);
+        }
+        canonical.href = window.location.href;
     }, [isZh, route, selectedProduct, storefrontDescription, storefrontName]);
 
     useEffect(() => {
@@ -1582,8 +1624,11 @@ export function useStorefrontAppState() {
         language,
         storefrontName,
         storefrontDescription,
+        storefrontTagline,
         storefrontCode,
         logoUrl,
+        logoOnLightUrl,
+        logoOnDarkUrl,
         availableCountries,
         availableCurrencyCodes,
         currencySelectorEnabled,
@@ -1664,13 +1709,12 @@ export function useStorefrontAppState() {
         storefrontContextValue,
         online,
         isZh,
-        showGlobalProgress,
-        text,
-        routerLocation,
         displayedRoute,
         navigationBlock,
         cart,
         toast,
         language,
+        logoUrl,
+        storefrontName,
     };
 }

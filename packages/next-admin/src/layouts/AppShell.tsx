@@ -86,6 +86,8 @@ import {
     resolveAppShellOpenMenu,
 } from './app-shell-navigation';
 
+const adminBrandIcon = `${import.meta.env.BASE_URL}favicon.svg`;
+
 interface OpenTab {
     path: string;
     href: string;
@@ -449,7 +451,7 @@ export function AppShell() {
         }
 
         if (currentTitle) {
-            document.title = `${currentTitle} · Vendure 商家后台`;
+            document.title = `${currentTitle} · AwanMesh｜模钥管理后台`;
             const currentHref = `${location.pathname}${location.search}`;
             setTabs(prev => {
                 const existing = prev.find(tab => tab.path === location.pathname);
@@ -697,22 +699,21 @@ export function AppShell() {
                 <div className="h-14 border-b border-white/10 flex items-center justify-center shrink-0">
                     <div className="flex items-center gap-2">
                         <div className="relative flex h-8 w-8 items-center justify-center overflow-hidden rounded-lg bg-blue-600 font-bold text-white shadow-lg shadow-blue-900/20">
-                            <span aria-hidden="true">V</span>
-                            {storeLogoUrl && (
-                                <img
-                                    key={storeLogoUrl}
-                                    src={storeLogoUrl}
-                                    alt=""
-                                    className="absolute inset-0 h-full w-full bg-white object-contain"
-                                    onError={event => {
-                                        event.currentTarget.hidden = true;
-                                    }}
-                                />
-                            )}
+                            <img
+                                key={storeLogoUrl ?? 'awanmesh'}
+                                src={storeLogoUrl ?? adminBrandIcon}
+                                alt=""
+                                className="absolute inset-0 h-full w-full bg-white object-contain"
+                                onError={event => {
+                                    if (!event.currentTarget.src.endsWith(adminBrandIcon)) {
+                                        event.currentTarget.src = adminBrandIcon;
+                                    }
+                                }}
+                            />
                         </div>
                         {isSidebarOpen && (
                             <span className="font-bold text-white text-base tracking-wide">
-                                Vendure 商家后台
+                                AwanMesh｜模钥管理后台
                             </span>
                         )}
                     </div>

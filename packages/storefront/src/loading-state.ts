@@ -1,18 +1,5 @@
 export type QueryLoadState = 'ready' | 'loading' | 'paused' | 'error';
 
-export interface GlobalProgressQueryState {
-    data?: unknown;
-    fetchStatus: 'fetching' | 'paused' | 'idle';
-}
-
-export function shouldShowGlobalProgress(
-    isNavigationPending: boolean,
-    criticalQueries: readonly GlobalProgressQueryState[],
-): boolean {
-    if (isNavigationPending) return true;
-    return criticalQueries.some(query => query.fetchStatus === 'fetching' && query.data === undefined);
-}
-
 export function resolveQueryLoadState({
     hasData,
     isLoading,

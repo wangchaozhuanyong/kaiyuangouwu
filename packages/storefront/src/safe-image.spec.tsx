@@ -25,4 +25,14 @@ describe('SafeImage', () => {
         expect(markup).toContain('<span class="responsive-picture safe-image-frame"');
         expect(markup).toContain('class="safe-image"');
     });
+
+    it('allows compact components to select a smaller responsive image candidate', () => {
+        const markup = renderToStaticMarkup(
+            <SafeImage src="/assets/preview/icon.png" alt="" imageKind="thumbnail" sizes="48px" />,
+        );
+
+        expect(markup).toContain('sizes="48px"');
+        expect(markup).toContain('storefront-thumbnail-160');
+        expect(markup).toContain('storefront-thumbnail-320');
+    });
 });

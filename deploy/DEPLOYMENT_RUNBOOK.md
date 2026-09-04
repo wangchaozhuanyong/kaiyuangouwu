@@ -10,9 +10,11 @@
 - Git 仓库：`git@github.com:wangchaozhuanyong/kaiyuangouwu.git`
 - 发布分支：`main`
 - 包管理器：Bun（仓库根目录使用 `bun.lock`）
-- 前台：`https://damatong.net`、`https://www.damatong.net`
-- 管理后台：`https://console.damatong.net/dashboard/`
-- 健康检查：`https://damatong.net/health`
+- AwanMesh 主网店：`https://moyaoai.com`（`www.moyaoai.com` 301 回主域）
+- 美宜佳网店：`https://damatong.net`（`www.damatong.net` 301 回主域）
+- 统一管理后台：`https://console.moyaoai.com/dashboard/`
+- 兼容入口：`https://console.damatong.net/*` 301 到统一管理后台
+- 主健康检查：`https://moyaoai.com/health`
 
 ## 分支、标签与发布记录硬规则
 
@@ -72,7 +74,7 @@ verification_result:
 - PM2 生产环境固定设置 `VENDURE_DISABLE_TELEMETRY=true`，防止 Vendure 的文件系统兜底在不可变运行目录内写入 `.vendure/.installation-id`
 - Storefront 静态目录：`/var/www/kaiyuangouwu-current/packages/storefront/dist`
 - Dashboard 静态目录：`/var/www/kaiyuangouwu-current/packages/next-admin/dist`（由 Vendure API 的 `DashboardPlugin` 提供）
-- Nginx 配置基线：`deploy/nginx/damatong.conf`
+- Nginx 配置基线：`deploy/nginx/damatong.conf`（保留兼容文件名，已覆盖双店域名）
 - TLS 协议只在 `deploy/nginx/damatong.conf` 的 `http` 作用域声明一次，固定为 `ssl_protocols TLSv1.2 TLSv1.3;`；生产机 `/etc/nginx/nginx.conf` 不得保留发行版默认的重复 `ssl_protocols` 声明。
 - 数据库：同一 EC2 上的 MySQL 8.0，使用 `single-host` 生产模式；每日逻辑备份与恢复演练脚本位于 `deploy/systemd/`。
 - 异地备份：`yunqiao-vendure-prod-backup-079740175286-apne1/mysql`，实例角色只能访问该前缀；存储桶已启用版本控制、SSE-S3 默认加密、阻止全部公网访问与 Bucket owner enforced。本地备份保留 14 天；S3 当前不自动删除，设置生命周期前必须单独确认保留期限。
@@ -82,6 +84,19 @@ verification_result:
 Cloudflare DNS 和 EC2 实例详情才是当前源站地址的准确信息来源。2026-08-21 核对的 EC2 公网 IPv4 是 `52.196.65.143`；不要把该 IP 当成永久地址。发布前必须重新核对。
 
 Nginx 会按 Cloudflare 官方 IPv4/IPv6 网段恢复 `CF-Connecting-IP`，按真实访客 IP 限流，并拒绝非 Cloudflare 来源直接访问 HTTPS 源站（仅放行本机回环健康检查）。每次发布 Nginx 配置前，必须对照 `https://www.cloudflare.com/ips-v4` 与 `https://www.cloudflare.com/ips-v6` 更新 `deploy/nginx/damatong.conf`，执行 `nginx -t` 后再 reload。AWS 安全组仍应把 `443/tcp` 限制到相同 Cloudflare 网段，形成网络层和 Nginx 双重限制。
+
+### Cloudflare 店铺域名自动化
+
+后台一键绑定使用 Cloudflare for SaaS。上线前需要在 Cloudflare 完成一次性平台配置：
+
+1. 在平台 Zone 启用 Cloudflare for SaaS，将已代理的生产主机设为 fallback origin。
+2. 使用只允许读写该 Zone 自定义主机名的 Token；只在公司同一账户的客户 Zone 上额外授予 Zone 读取和 DNS 编辑。
+3. 把 Token 存入生产 Secret，配置 `STORE_DOMAIN_AUTOMATION_MODE=cloudflare-saas`、`CLOUDFLARE_SAAS_ZONE_ID`、`CLOUDFLARE_SAAS_FALLBACK_ORIGIN` 和明确的 `CLOUDFLARE_SAAS_AUTO_MANAGE_DNS`。
+4. 先运行 server、worker 和 migration 三种角色的 `audit:production-env`；任何占位 Token、错误 Zone ID 或非公网 fallback origin 都是发布阻断。
+
+后台新增域名后，API 会幂等创建 Cloudflare 自定义主机名。如 Token 可访问该域名的权威 Zone，同时创建代理 CNAME 和 Vendure TXT；遇到现有 A、AAAA 或不同 CNAME 时必须停止，禁止覆盖。外部账户域名仍在后台显示需要商家添加的两条 DNS 记录。Worker 每分钟只复核待生效项，仅在 Vendure TXT、Cloudflare hostname 和 SSL 三项均通过后将域名标记为 `ACTIVE`。
+
+删除域名时会先删除对应 Cloudflare custom hostname，但不自动删除 DNS 记录，便于恢复与审计。Token 不得出现在仓库、命令参数、GraphQL 响应、日志或发布记录中。
 
 当前 EC2 已由 SSM 托管，并绑定只访问所需 AWS 资源的实例角色。正常发布使用上文固定的仓库外私钥；若 SSH 端口或密钥不可用，再回退到 Session Manager。任何临时新增的 `22/tcp` 规则都必须只允许当前管理员公网地址的 `/32`，并在发布完成后立即撤销。不要读取、上传或提交私钥。
 
@@ -326,6 +341,19 @@ VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
 `Production Runtime Artifact` 唯一入口同时填写逗号分隔的 manifest key 和已审核 Channel code，不再另行触发第二个媒体发布工作流，也不回退到服务器默认 Channel。
 下游部署会校验发布计划、制品 SHA-256 与源工作流 run ID，然后只将已验证的 key 和 Channel 范围交给持有生产锁的脚本。脚本在备份、迁移和 PM2 切换前，先通过当前健康 API 执行只读 dry-run，校验登录、Channel 权限、SKU/内容目标和现有素材；仅预检通过后才备份、迁移和启动候选 API，再执行受保护 apply。预检失败不会停止或重启 PM2。
 
+若目标提交包含 AwanMesh 品牌迁移，先预演，再把三套官方 SVG、双语品牌名/口号和色板一次性绑定到主 Channel：
+
+```bash
+cd "${CANDIDATE}"
+VENDURE_API_ORIGIN=http://127.0.0.1:3002 VENDURE_STOREFRONT_URL=https://moyaoai.com \
+    node packages/dev-server/scripts/sync-awanmesh-brand.mjs --dry-run --channel-code __default_channel__
+VENDURE_API_ORIGIN=http://127.0.0.1:3002 VENDURE_STOREFRONT_URL=https://moyaoai.com \
+    node packages/dev-server/scripts/sync-awanmesh-brand.mjs --apply --allow-remote \
+    --channel-code __default_channel__
+```
+
+该工具按 SHA-256 标签复用品牌资源，通过 Admin API 写入当前 StoreProfile，再以中文和英文分别从 Shop API 反查名称、口号、色板和三个 Asset ID。任一字段不一致都必须停止切换；密码只从已加载的生产 Secret 环境读取。
+
 切换脚本会在 systemd journal 中以 `vendure-production-switch` 标记依次记录 `requested`、`succeeded` 或 `failed`。每条事件包含部署 ID、目标 SHA、候选目录、调用用户、SSH 来源 IP、进程和父进程信息，不记录命令参数、环境变量或密钥。`requested` 写入失败会中止切换，避免无审计地改动 PM2。发布后用同一部署 ID 核对完整事件链：
 
 ```bash
@@ -356,7 +384,7 @@ sudo -n systemctl reload nginx
 7. 服务器校验外层清单哈希、产物内全部文件、符号链接、平台、Git SHA 和运行依赖清单。
 8. 记录当前稳定指针；如果发布计划包含媒体 key，先使用当前健康 API 完成只读 dry-run。数据库迁移只在该预检和生产环境审计明确通过且备份完成后，通过专用迁移入口执行一次。部署日志必须包含 `DEPLOY_BACKUP_OK file=<本地备份> offsite=yes invocation_id=<systemd invocation>`，缺失精确备份文件、校验文件或异地上传证据时停止迁移。
 9. PM2 从候选目录直接启动已编译的 Worker 和 API，不使用 Vendure CLI；等待 `127.0.0.1:3002/health` 与 `127.0.0.1:3002/image-generation/health` 成功，并递归验证候选 Dashboard 的入口、样式、主包与懒加载 JS/CSS 全部可访问。
-10. 从候选产物执行本次审核过的库存继承修复和店铺图片同步；写入必须使用 `--apply --allow-remote`，并且必须已通过第 8 步的只读预检。全部成功后才原子切换 `kaiyuangouwu-current`。
+10. 从候选产物预演并执行本次审核过的库存继承修复、店铺图片同步和 AwanMesh 品牌同步；所有远程写入都必须使用 `--apply --allow-remote`，并且必须已通过第 8 步的只读预检。全部成功后才原子切换 `kaiyuangouwu-current`。
 11. 验收前台、后台、Shop API、Admin API、静态资源和 PM2 状态，确认线上 Git SHA。
 12. 完成发布记录中的制品名称、制品 SHA-256、制品与部署工作流编号、UTC 时间和验收结果；记录必须能够唯一定位生产运行的代码和制品。
 13. 发布与验收成功后，先用 `Cleanup Merged Production Branches` 的 dry-run 核对候选，再以 `apply=true` 删除已包含在当前生产 SHA 且不再使用的远程功能/热修复/release 分支；撤销临时 SSH 规则，仅保留原有固定规则。候选和回滚包按策略保留，不删除用户数据。
@@ -366,8 +394,8 @@ sudo -n systemctl reload nginx
 ```bash
 cd /var/www/kaiyuangouwu
 node deploy/verify-production-release.mjs \
-  --storefront-url https://damatong.net \
-  --dashboard-url https://console.damatong.net/dashboard/ \
+  --storefront-url https://moyaoai.com \
+  --dashboard-url https://console.moyaoai.com/dashboard/ \
   --release-id "$(cat /var/www/kaiyuangouwu-releases/current-sha)"
 ```
 
@@ -378,7 +406,7 @@ node deploy/verify-production-release.mjs \
 ```bash
 node deploy/verify-storefront-realtime.mjs \
   --mode public-smoke \
-  --url 'https://damatong.net/storefront-realtime/events?client=storefront' \
+  --url 'https://moyaoai.com/storefront-realtime/events?client=storefront' \
   --ready-timeout-ms 2000 \
   --heartbeat-timeout-ms 18000 \
   --release-id "$(cat /var/www/kaiyuangouwu-releases/current-sha)"
@@ -389,7 +417,7 @@ node deploy/verify-storefront-realtime.mjs \
 ```bash
 node deploy/verify-storefront-realtime.mjs \
   --mode origin-full \
-  --url 'https://damatong.net/storefront-realtime/events?client=storefront' \
+  --url 'https://moyaoai.com/storefront-realtime/events?client=storefront' \
   --connect-address 127.0.0.1 \
   --connection-limit 12 \
   --safe-concurrency 8 \
@@ -410,7 +438,7 @@ node deploy/verify-storefront-realtime.mjs \
 - 边界与超限：新合成 IP 的前 12 条全部就绪，第 13 条只允许返回 HTTP 429，已接受连接必须继续收到 heartbeat；
 - 释放恢复：第三个合成 IP 关闭 12 条连接后，同 IP 在五秒内重新同时占满 12 个槽位并保持五秒，之后三轮“连接—`ready`—明确关闭”全部通过。
 
-释放窗口内短暂的 429 是有界重试的测量值，不是失败；超过五秒仍未重新同时占满 12 个槽位才失败。任何 503 或其他 5xx 都立即失败。Nginx 会将该路由的 `limit_conn_status`、`limit_req_status`、HTTP 状态、请求/上游时间、连接编号与 Cloudflare Ray ID 写入 `/var/log/nginx/damatong-storefront-realtime.log`，用于区分连接上限 429 和请求速率 429，不记录 Cookie、Authorization 或响应正文。`origin-full` 只证明本机 Nginx 到应用的槽位释放，不能代替 Cloudflare 到源站取消延迟的公网链路评估；公网 smoke 的 CF Ray ID 必须与上述专用日志关联后再定位该类延迟。
+释放窗口内短暂的 429 是有界重试的测量值，不是失败；超过五秒仍未重新同时占满 12 个槽位才失败。任何 503 或其他 5xx 都立即失败。Nginx 会将该路由的 `limit_conn_status`、`limit_req_status`、HTTP 状态、请求/上游时间、连接编号与 Cloudflare Ray ID 写入 `/var/log/nginx/awanmesh-storefront-realtime.log`，用于区分连接上限 429 和请求速率 429，不记录 Cookie、Authorization 或响应正文。`origin-full` 只证明本机 Nginx 到应用的槽位释放，不能代替 Cloudflare 到源站取消延迟的公网链路评估；公网 smoke 的 CF Ray ID 必须与上述专用日志关联后再定位该类延迟。
 
 只有未执行任何主动容量测试时，公网单连接持续无法就绪或返回 5xx，才属于实时更新可用性回滚条件。完整容量审计中的边界、超限或释放时间不符合预期时，必须先清理全部探测连接并停止发布收尾，不自动回滚到已知会恢复更低连接上限或 503 语义的旧版本。验证器未能确认自身连接已清理时，结果记为“验收无效”而不是“产品失败”，需换用新的合成 IP 重试。
 
@@ -420,7 +448,8 @@ node deploy/verify-storefront-realtime.mjs \
 - `Monitor Production Health` 输出一行不含凭据的 `AI_IMAGE_METRICS` JSON；使用其中的 24 小时成功/失败/UNKNOWN、缺失成本、失败桶和健康 Key 数定位 AI 告警；监控还会按模型、供应商、请求档位和实际像素输出脱敏的 `AI_IMAGE_RESOLUTION_MISMATCH`，并按模型、供应商和结果输出 `AI_IMAGE_MISSING_COST`，不会打印提示词、客户信息、Key、原始错误或上游响应；
 - `127.0.0.1:3002` 正常监听，公网不直接暴露 3002；
 - `/storefront-realtime/events` 不缓冲 SSE，连接断开后前端能自动重连；
-- 公网 `https://damatong.net/admin-api` 仍被 Nginx 拒绝；
+- 公网 `https://moyaoai.com/admin-api` 和 `https://damatong.net/admin-api` 均被 Nginx 拒绝；
+- 分别验收 `moyaoai.com` 返回 AwanMesh 主 Channel、`damatong.net` 返回美宜佳 Channel，商品、价格、订单和店铺品牌不得串店；
 - 管理后台能读取各店铺设置，前台按对应 Channel/店铺域名展示；
 - 实际支付、邮件、短信和物流在未配置真实供应商前不得宣称已具备正式交易能力。
 

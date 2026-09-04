@@ -163,6 +163,56 @@ void test('bun audit does not retry unrelated malformed output', async () => {
     assert.equal(calls, 1);
 });
 
+void test('bun audit retries a transient registry HTTP response and returns the next valid report', async () => {
+    const results = [
+        {
+            error: undefined,
+            status: 1,
+            stderr: '',
+            stdout: JSON.stringify({ error: 'Service Unavailable', statusCode: 503 }),
+        },
+        { error: undefined, status: 0, stderr: '', stdout: JSON.stringify({}) },
+    ];
+    const retryEvents = [];
+    let calls = 0;
+
+    const report = await runBunAudit('/repository', {
+        maxAttempts: 2,
+        onRetry: event => retryEvents.push(event),
+        retryDelaysMs: [0],
+        runCommand: () => results[calls++],
+        wait: async () => undefined,
+    });
+
+    assert.deepEqual(report, {});
+    assert.equal(calls, 2);
+    assert.deepEqual(retryEvents, [{ attempt: 1, delayMs: 0 }]);
+});
+
+void test('bun audit does not retry a non-transient HTTP error response', async () => {
+    let calls = 0;
+
+    await assert.rejects(
+        runBunAudit('/repository', {
+            maxAttempts: 3,
+            onRetry: () => undefined,
+            retryDelaysMs: [0, 0],
+            runCommand: () => {
+                calls += 1;
+                return {
+                    error: undefined,
+                    status: 1,
+                    stderr: '',
+                    stdout: JSON.stringify({ error: 'Bad Request', statusCode: 400 }),
+                };
+            },
+            wait: async () => undefined,
+        }),
+        /bun audit entry for error must be an array/u,
+    );
+    assert.equal(calls, 1);
+});
+
 void test('bun audit gate fails immediately when valid JSON reports a policy violation', async () => {
     let calls = 0;
     const highAudit = {

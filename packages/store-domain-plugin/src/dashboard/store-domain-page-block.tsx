@@ -41,9 +41,10 @@ interface StoreDomainPageBlockProps {
 const zhCopy = {
     title: '专属域名',
     description: '验证域名所有权后，访问该域名会自动进入当前店铺。',
+    automationEnabled: 'Cloudflare 一键绑定已启用：账户内域名会自动配置 DNS 和 SSL。',
     inputLabel: '添加外部域名',
     inputPlaceholder: 'shop.example.com',
-    add: '添加域名',
+    add: '一键绑定',
     empty: '还没有绑定域名',
     emptyHint: '添加后按提示配置 DNS，验证通过即可生效。',
     loadError: '域名列表加载失败',
@@ -51,12 +52,17 @@ const zhCopy = {
     pending: '待验证',
     active: '已生效',
     primary: '主域名',
+    cloudflare: 'Cloudflare 托管',
+    managedDns: 'DNS 已自动配置',
+    hostnameStatus: '路由状态',
+    sslStatus: 'SSL 证书',
     cname: '访问记录',
     txt: '所有权验证',
     recordType: '类型',
     recordName: '主机记录',
     recordValue: '记录值',
     verify: '验证 DNS',
+    refreshAutomation: '检查生效进度',
     verifying: '正在验证',
     makePrimary: '设为主域名',
     visit: '访问域名',
@@ -66,6 +72,7 @@ const zhCopy = {
     cancel: '取消',
     copied: '已复制',
     added: '域名已添加，请配置 DNS 记录',
+    automatedAdded: '已开始自动配置 DNS 和 SSL 证书',
     primaryUpdated: '主域名已更新',
     deleted: '域名已删除',
     copy: '复制',
@@ -74,9 +81,11 @@ const zhCopy = {
 const enCopy: typeof zhCopy = {
     title: 'Custom domains',
     description: 'After ownership verification, this domain will automatically open the current store.',
+    automationEnabled:
+        'Cloudflare one-click binding is enabled. Domains in this account get automatic DNS and SSL.',
     inputLabel: 'Add external domain',
     inputPlaceholder: 'shop.example.com',
-    add: 'Add domain',
+    add: 'Bind domain',
     empty: 'No domains connected',
     emptyHint: 'Add a domain, configure the DNS records, then verify it to activate routing.',
     loadError: 'Could not load domains',
@@ -84,12 +93,17 @@ const enCopy: typeof zhCopy = {
     pending: 'Pending verification',
     active: 'Active',
     primary: 'Primary',
+    cloudflare: 'Cloudflare managed',
+    managedDns: 'DNS configured automatically',
+    hostnameStatus: 'Routing status',
+    sslStatus: 'SSL certificate',
     cname: 'Traffic record',
     txt: 'Ownership verification',
     recordType: 'Type',
     recordName: 'Name',
     recordValue: 'Value',
     verify: 'Verify DNS',
+    refreshAutomation: 'Check activation',
     verifying: 'Verifying',
     makePrimary: 'Make primary',
     visit: 'Visit domain',
@@ -100,6 +114,7 @@ const enCopy: typeof zhCopy = {
     cancel: 'Cancel',
     copied: 'Copied',
     added: 'Domain added. Configure its DNS records.',
+    automatedAdded: 'Automatic DNS and SSL provisioning started.',
     primaryUpdated: 'Primary domain updated',
     deleted: 'Domain deleted',
     copy: 'Copy',
@@ -113,10 +128,11 @@ export function StoreDomainPageBlock({ context }: Readonly<StoreDomainPageBlockP
     const [newDomain, setNewDomain] = useState('');
     const [deleteTarget, setDeleteTarget] = useState<StoreDomainItem | null>(null);
     const queryKey = ['store-domains', channelId];
-    const domainQuery = useQuery({
+    const domainQuery = useQuery<StoreDomainsResult>({
         queryKey,
         queryFn: () => api.query<StoreDomainsResult>(storeDomainsQuery, { channelId }),
         enabled: Boolean(channelId),
+        refetchInterval: 15_000,
     });
     const refresh = () => queryClient.invalidateQueries({ queryKey });
 
@@ -125,7 +141,11 @@ export function StoreDomainPageBlock({ context }: Readonly<StoreDomainPageBlockP
             api.mutate(createStoreDomainMutation, { input: { channelId, domain } }),
         onSuccess: async () => {
             setNewDomain('');
-            toast.success(text.added);
+            toast.success(
+                domainQuery.data?.storeDomainConfiguration.automationMode === 'CLOUDFLARE_SAAS'
+                    ? text.automatedAdded
+                    : text.added,
+            );
             await refresh();
         },
         onError: error => toast.error(errorMessage(error)),
@@ -184,6 +204,12 @@ export function StoreDomainPageBlock({ context }: Readonly<StoreDomainPageBlockP
                 </div>
                 <p className="mt-1 text-sm text-muted-foreground">{text.description}</p>
             </div>
+
+            {domainQuery.data?.storeDomainConfiguration.automationMode === 'CLOUDFLARE_SAAS' && (
+                <Alert>
+                    <AlertDescription>{text.automationEnabled}</AlertDescription>
+                </Alert>
+            )}
 
             <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
                 <div className="min-w-0 flex-1 space-y-2">
@@ -317,7 +343,17 @@ function DomainRow({
                             {active ? text.active : text.pending}
                         </Badge>
                         {domain.isPrimary && <Badge variant="outline">{text.primary}</Badge>}
+                        {domain.provisioningMode === 'CLOUDFLARE_SAAS' && (
+                            <Badge variant="outline">{text.cloudflare}</Badge>
+                        )}
+                        {domain.dnsManaged && <Badge variant="outline">{text.managedDns}</Badge>}
                     </div>
+                    {domain.provisioningMode === 'CLOUDFLARE_SAAS' && (
+                        <p className="mt-1 text-xs text-muted-foreground">
+                            {text.hostnameStatus}：{domain.providerHostnameStatus ?? '-'} · {text.sslStatus}：
+                            {domain.providerSslStatus ?? '-'}
+                        </p>
+                    )}
                     {domain.lastVerificationError && (
                         <p className="mt-1 text-xs text-destructive">{domain.lastVerificationError}</p>
                     )}
@@ -343,7 +379,11 @@ function DomainRow({
                                 className={verifyPending ? 'size-4 animate-spin' : 'size-4'}
                                 aria-hidden="true"
                             />
-                            {verifyPending ? text.verifying : text.verify}
+                            {verifyPending
+                                ? text.verifying
+                                : domain.provisioningMode === 'CLOUDFLARE_SAAS'
+                                  ? text.refreshAutomation
+                                  : text.verify}
                         </Button>
                     )}
                     {active && !domain.isPrimary && (
@@ -372,7 +412,7 @@ function DomainRow({
                 </div>
             </div>
 
-            {!active && (
+            {!active && !domain.dnsManaged && (
                 <div className="grid gap-3 lg:grid-cols-2">
                     <DnsRecord
                         title={text.cname}

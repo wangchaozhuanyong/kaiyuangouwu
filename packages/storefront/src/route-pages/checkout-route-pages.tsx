@@ -2,7 +2,7 @@ import { LazyCheckoutPage, LazyOrderConfirmationPage, LazyPaymentPage } from '..
 import { AuthPageBoundary } from '../storefront-ui/page-shell';
 import { Order, StorefrontCart, StorefrontCheckoutSession } from '../types';
 
-import { RouteGate, useRouteRuntime as useRuntime } from './shared';
+import { registerRoutePreload, RouteGate, useRouteRuntime as useRuntime } from './shared';
 
 function CheckoutRoutePage({ mode }: { mode?: 'purchase' }) {
     const runtime = useRuntime();
@@ -104,3 +104,11 @@ export function OrderConfirmationRoutePage() {
         </RouteGate>
     );
 }
+
+export const preloadPurchaseRoutePage = registerRoutePreload(PurchaseRoutePage, LazyCheckoutPage);
+export const preloadCheckoutRoutePage = registerRoutePreload(CheckoutPageRoute, LazyCheckoutPage);
+export const preloadPaymentRoutePage = registerRoutePreload(PaymentRoutePage, LazyPaymentPage);
+export const preloadOrderConfirmationRoutePage = registerRoutePreload(
+    OrderConfirmationRoutePage,
+    LazyOrderConfirmationPage,
+);

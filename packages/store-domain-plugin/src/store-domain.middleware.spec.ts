@@ -16,6 +16,7 @@ function createMiddleware(
             trustProxyHeaders: options.trustProxyHeaders ?? false,
             bypassHosts: ['localhost', '127.0.0.1'],
             resolveTxt: vi.fn(),
+            cloudflare: null,
         },
     );
     return { middleware, resolveRoute };

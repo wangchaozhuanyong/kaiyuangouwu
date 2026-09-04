@@ -14,6 +14,7 @@ import {
     verifyRuntimeArtifact,
     writeIntegrityFiles,
 } from './production-runtime-verify.mjs';
+import { awanMeshBrandAssets } from './sync-awanmesh-brand.mjs';
 import { storefrontMediaManifest } from './sync-storefront-media.mjs';
 
 const scriptPath = fileURLToPath(import.meta.url);
@@ -47,6 +48,9 @@ export const RUNTIME_PACKAGE_ASSETS = Object.freeze({
 const STOREFRONT_MEDIA_RUNTIME_FILES = Object.freeze(
     storefrontMediaManifest.map(entry => path.relative(repositoryRoot, entry.file).split(path.sep).join('/')),
 );
+const AWANMESH_BRAND_RUNTIME_FILES = Object.freeze(
+    awanMeshBrandAssets.map(entry => path.relative(repositoryRoot, entry.file).split(path.sep).join('/')),
+);
 
 export const REQUIRED_RUNTIME_FILES = Object.freeze([
     'packages/catalog-management-plugin/dist/index.js',
@@ -61,9 +65,11 @@ export const REQUIRED_RUNTIME_FILES = Object.freeze([
     'packages/telemetry-plugin/dist/index.js',
     'packages/storefront/dist/index.html',
     'packages/dev-server/scripts/sync-storefront-media.mjs',
+    'packages/dev-server/scripts/sync-awanmesh-brand.mjs',
     'packages/dev-server/scripts/repair-inventory-inheritance.mjs',
     'packages/image-generation-plugin/dist/index.js',
     ...STOREFRONT_MEDIA_RUNTIME_FILES,
+    ...AWANMESH_BRAND_RUNTIME_FILES,
 ]);
 
 function isPathInside(parent, candidate) {
@@ -217,7 +223,11 @@ async function copyRuntimeBuildOutputs(stagingRoot) {
 }
 
 export async function copyStorefrontMediaReleaseInputs(stagingRoot) {
-    const releaseScripts = ['sync-storefront-media.mjs', 'repair-inventory-inheritance.mjs'];
+    const releaseScripts = [
+        'sync-storefront-media.mjs',
+        'sync-awanmesh-brand.mjs',
+        'repair-inventory-inheritance.mjs',
+    ];
     for (const scriptName of releaseScripts) {
         const scriptSource = path.join(repositoryRoot, 'packages/dev-server/scripts', scriptName);
         const scriptDestination = path.join(stagingRoot, 'packages/dev-server/scripts', scriptName);
@@ -229,6 +239,16 @@ export async function copyStorefrontMediaReleaseInputs(stagingRoot) {
         const relativePath = path.relative(repositoryRoot, entry.file);
         if (relativePath.startsWith(`..${path.sep}`) || path.isAbsolute(relativePath)) {
             throw new Error(`Storefront media must stay inside the repository: ${entry.file}`);
+        }
+        const destination = path.join(stagingRoot, relativePath);
+        await mkdir(path.dirname(destination), { recursive: true });
+        await cp(entry.file, destination);
+    }
+
+    for (const entry of awanMeshBrandAssets) {
+        const relativePath = path.relative(repositoryRoot, entry.file);
+        if (relativePath.startsWith(`..${path.sep}`) || path.isAbsolute(relativePath)) {
+            throw new Error(`AwanMesh brand asset must stay inside the repository: ${entry.file}`);
         }
         const destination = path.join(stagingRoot, relativePath);
         await mkdir(path.dirname(destination), { recursive: true });
@@ -252,6 +272,7 @@ async function writeRuntimeRootFiles(stagingRoot, rootManifest, metadata) {
             'repair:inventory-inheritance':
                 'node packages/dev-server/scripts/repair-inventory-inheritance.mjs',
             'sync:storefront-media': 'node packages/dev-server/scripts/sync-storefront-media.mjs',
+            'sync:awanmesh-brand': 'node packages/dev-server/scripts/sync-awanmesh-brand.mjs',
             'start:server': 'node packages/dev-server/dist/index.js',
             'start:worker': 'node packages/dev-server/dist/index-worker.js',
             verify: 'node verify-runtime.mjs',

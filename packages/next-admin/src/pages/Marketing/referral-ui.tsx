@@ -436,11 +436,11 @@ export function posterLabel(value: string) {
     return (
         (
             {
-                BRAND_MINIMAL: '云桥简约',
+                BRAND_MINIMAL: '模钥简约',
                 BENEFIT_RED_GOLD: '冰川蓝光',
                 PRODUCT_STORY: '青空流线',
                 PREMIUM_DARK: '深海科技',
-                CLOUD_BRIDGE_ORBIT: '云桥轨道',
+                CLOUD_BRIDGE_ORBIT: '模钥轨道',
             } as Record<string, string>
         )[value] ?? value
     );

@@ -8,6 +8,11 @@ import {
     fetchStorefrontAssetFingerprint,
 } from './storefront-version';
 
+// Capture the entry assets while this eagerly-loaded module is evaluated. Route-level
+// styles can be attached before React effects run and are not part of the build identity.
+const initialStorefrontAssetFingerprint =
+    typeof document === 'undefined' ? null : currentStorefrontAssetFingerprint();
+
 const storefrontUpdateCopy = {
     zh: {
         title: '发现新版本',
@@ -30,7 +35,7 @@ export function StorefrontUpdatePrompt({ language }: { language: StorefrontLangu
 
     useEffect(() => {
         if (!import.meta.env.PROD) return;
-        const currentFingerprint = currentStorefrontAssetFingerprint();
+        const currentFingerprint = initialStorefrontAssetFingerprint ?? currentStorefrontAssetFingerprint();
         if (!currentFingerprint) return;
 
         let disposed = false;

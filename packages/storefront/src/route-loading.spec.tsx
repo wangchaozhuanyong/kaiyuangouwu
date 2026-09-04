@@ -5,20 +5,23 @@ import {
     loadingPageLabel,
     PageSkeleton,
     pageSkeletonVariantForPathname,
-    RoutePageSkeleton,
+    RouteTransitionLoader,
 } from './route-loading';
 
 describe('route loading skeletons', () => {
-    it('uses a semantic route skeleton for catalog navigation', () => {
-        const markup = renderToStaticMarkup(<RoutePageSkeleton pathname="/category" language="zh" />);
+    it('uses a semantic branded transition without replacing the destination layout', () => {
+        const markup = renderToStaticMarkup(
+            <RouteTransitionLoader language="zh" storefrontName="云桥Ai" logoUrl="/brand.svg" />,
+        );
 
-        expect(markup).toContain('<main');
+        expect(markup).toContain('class="route-transition"');
         expect(markup).toContain('role="status"');
         expect(markup).toContain('aria-label="正在加载页面"');
         expect(markup).toContain('aria-busy="true"');
-        expect(markup).toContain('page-skeleton--catalog');
-        expect(markup).toContain('skeleton-catalog-list');
-        expect(markup).not.toContain('skeleton-hero');
+        expect(markup).toContain('class="route-transition-card"');
+        expect(markup).toContain('src="/brand.svg"');
+        expect(markup).toContain('云桥Ai');
+        expect(markup).not.toContain('page-skeleton--route');
     });
 
     it('keeps inline skeletons as divs to avoid nested main landmarks', () => {

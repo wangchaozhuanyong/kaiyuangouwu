@@ -1,4 +1,4 @@
-# Vendure 商家后台
+# AwanMesh｜模钥管理后台
 
 面向中文运营团队的独立管理后台。前端使用 React 19、TypeScript 6、Vite 7、Apollo Client 和 Tailwind CSS 4，数据全部来自 Vendure Admin GraphQL API。
 

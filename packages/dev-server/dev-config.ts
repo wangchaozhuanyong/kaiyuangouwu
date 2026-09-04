@@ -43,15 +43,20 @@ import {
     EmailEventHandlerWithAsyncData,
     EmailEventListener,
     EmailPlugin,
+    FileBasedTemplateLoader,
     type EmailPluginDevModeOptions,
     type EmailPluginOptions,
     type EventWithAsyncData,
-    FileBasedTemplateLoader,
 } from '@vendure/email-plugin';
 import { HardenPlugin } from '@vendure/harden-plugin';
 import { ImageGenerationPlugin } from '@vendure/image-generation-plugin';
 import { OperationsDashboardPlugin } from '@vendure/operations-dashboard-plugin';
-import { StoreDomain, StoreDomainPlugin, type StoreDomainRoutingMode } from '@vendure/store-domain-plugin';
+import {
+    StoreDomain,
+    StoreDomainPlugin,
+    type CloudflareSaasDomainAutomationOptions,
+    type StoreDomainRoutingMode,
+} from '@vendure/store-domain-plugin';
 import {
     StoreDefaultCurrencyPriceSelectionStrategy,
     StoreManagementPlugin,
@@ -281,6 +286,30 @@ function storeDomainBypassHosts(): string[] | undefined {
         .split(',')
         .map(host => host.trim())
         .filter(Boolean);
+}
+
+function storeDomainCloudflareAutomation(): CloudflareSaasDomainAutomationOptions | undefined {
+    const mode = process.env.STORE_DOMAIN_AUTOMATION_MODE?.trim() || 'manual';
+    if (mode === 'manual') {
+        return;
+    }
+    if (mode !== 'cloudflare-saas') {
+        throw new Error('STORE_DOMAIN_AUTOMATION_MODE must be manual or cloudflare-saas');
+    }
+    const apiToken = process.env.CLOUDFLARE_SAAS_API_TOKEN?.trim();
+    const saasZoneId = process.env.CLOUDFLARE_SAAS_ZONE_ID?.trim();
+    const fallbackOrigin = process.env.CLOUDFLARE_SAAS_FALLBACK_ORIGIN?.trim();
+    if (!apiToken || !saasZoneId || !fallbackOrigin) {
+        throw new Error(
+            'Cloudflare domain automation requires CLOUDFLARE_SAAS_API_TOKEN, CLOUDFLARE_SAAS_ZONE_ID, and CLOUDFLARE_SAAS_FALLBACK_ORIGIN',
+        );
+    }
+    return {
+        apiToken,
+        saasZoneId,
+        fallbackOrigin,
+        autoManageDns: process.env.CLOUDFLARE_SAAS_AUTO_MANAGE_DNS === 'true',
+    };
 }
 
 function configuredValue(name: string, developmentDefault: string): string {
@@ -974,6 +1003,7 @@ export const devConfig: VendureConfig = {
                       routingMode: storeDomainRoutingMode(),
                       trustProxyHeaders: process.env.STORE_DOMAIN_TRUST_PROXY === 'true',
                       bypassHosts: storeDomainBypassHosts(),
+                      cloudflare: storeDomainCloudflareAutomation(),
                   }),
               ]
             : []),

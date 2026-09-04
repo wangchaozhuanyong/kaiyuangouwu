@@ -70,4 +70,54 @@ describe('StorefrontBrandingShopResolver', () => {
             } as any),
         ).resolves.toMatchObject({ logoUrl: '/assets/source/logo.svg' });
     });
+
+    it('returns channel-scoped wordmarks, tagline, and colors from the same profile', async () => {
+        const resolver = createResolver({
+            logoAssetId: 'asset-icon',
+            logoOnLightAssetId: 'asset-light',
+            logoOnDarkAssetId: 'asset-dark',
+            descriptionZh: 'AI 模型商城',
+            descriptionEn: 'AI model store',
+            taglineZh: '一钥通百模',
+            taglineEn: 'One Key. Every Model.',
+            brandBackgroundColor: '#071426',
+            brandPrimaryColor: '#2F6BFF',
+            brandAccentColor: '#22D3EE',
+            brandHighlightColor: '#7C3AED',
+            logoAsset: null,
+            logoOnLightAsset: {
+                mimeType: 'image/svg+xml',
+                source: 'source/logo-light.svg',
+                preview: 'preview/logo-light.png',
+            },
+            logoOnDarkAsset: {
+                mimeType: 'image/svg+xml',
+                source: 'source/logo-dark.svg',
+                preview: 'preview/logo-dark.png',
+            },
+        });
+
+        await expect(
+            resolver.storefrontBranding({
+                channelId: 'channel-1',
+                languageCode: 'en',
+                channel: {
+                    code: 'awanmesh-main',
+                    customFields: { storefrontNameZh: '模钥', storefrontNameEn: 'AwanMesh' },
+                },
+            } as any),
+        ).resolves.toMatchObject({
+            name: 'AwanMesh',
+            tagline: 'One Key. Every Model.',
+            logoAssetId: 'asset-icon',
+            logoOnLightAssetId: 'asset-light',
+            logoOnDarkAssetId: 'asset-dark',
+            logoOnLightUrl: '/assets/source/logo-light.svg',
+            logoOnDarkUrl: '/assets/source/logo-dark.svg',
+            backgroundColor: '#071426',
+            primaryColor: '#2F6BFF',
+            accentColor: '#22D3EE',
+            highlightColor: '#7C3AED',
+        });
+    });
 });

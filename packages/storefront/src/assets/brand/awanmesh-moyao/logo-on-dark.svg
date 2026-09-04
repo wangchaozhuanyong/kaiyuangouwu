@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="520" viewBox="0 0 1800 520">
+  <defs>
+    <linearGradient id="meshGradient" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#2F6BFF"/>
+      <stop offset="62%" stop-color="#22D3EE"/>
+      <stop offset="100%" stop-color="#7C3AED"/>
+    </linearGradient>
+    <linearGradient id="meshGradientSoft" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#2F6BFF"/>
+      <stop offset="100%" stop-color="#22D3EE"/>
+    </linearGradient>
+    <mask id="keyMask">
+      <rect width="300" height="240" fill="white"/>
+      <circle cx="150" cy="127" r="12" fill="black"/>
+      <rect x="143.5" y="134" width="13" height="34" rx="6.5" fill="black"/>
+    </mask>
+  </defs>
+  <g transform="translate(40 70) scale(1.55)">
+    <path d="M32 195 L84 72 C92 53 113 52 123 72 L150 128 L177 72 C187 52 208 53 216 72 L268 195" fill="none" stroke="url(#meshGradient)" stroke-width="31" stroke-linecap="round" stroke-linejoin="round" mask="url(#keyMask)"/>
+    <path d="M43 191 C83 212 116 215 150 208 C185 201 222 196 257 191" fill="none" stroke="url(#meshGradientSoft)" stroke-width="7" stroke-linecap="round" opacity="0.78"/>
+    <circle cx="32" cy="195" r="8.5" fill="#2F6BFF"/>
+    <circle cx="84" cy="72" r="8.5" fill="#3F83FF"/>
+    <circle cx="216" cy="72" r="8.5" fill="#24CFE6"/>
+    <circle cx="268" cy="195" r="8.5" fill="#22D3EE"/>
+    <circle cx="150" cy="127" r="8" fill="none" stroke="#F8FAFC" stroke-width="3" opacity="0.95"/>
+    <path d="M150 136 L150 160" stroke="#F8FAFC" stroke-width="6" stroke-linecap="round" opacity="0.95"/>
+  </g>
+  <g font-family="Inter, Arial, 'Noto Sans CJK SC', sans-serif">
+    <text x="560" y="235" font-size="154" font-weight="750" letter-spacing="-5" fill="#F8FAFC">Awan</text>
+    <text x="1002" y="235" font-size="154" font-weight="750" letter-spacing="-5" fill="url(#meshGradientSoft)">Mesh</text>
+    <text x="570" y="355" font-size="72" font-weight="700" letter-spacing="8" fill="#F8FAFC">模钥</text>
+    <text x="760" y="352" font-size="38" font-weight="650" letter-spacing="7" fill="#8FA5C4">AI GATEWAY · AI 模型网关</text>
+  </g>
+</svg>

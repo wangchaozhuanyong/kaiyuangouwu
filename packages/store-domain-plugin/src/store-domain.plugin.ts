@@ -8,7 +8,8 @@ import { StoreDomainChangedEvent } from './store-domain.event';
 import { StoreDomainMiddleware } from './store-domain.middleware';
 import { StoreDomainAdminResolver, StoreDomainEntityResolver } from './store-domain.resolver';
 import { defaultResolveTxt, StoreDomainService } from './store-domain.service';
-import { StoreDomainPluginOptions } from './types';
+import { reconcileAutomatedStoreDomainsTask } from './store-domain.tasks';
+import { ResolvedStoreDomainPluginOptions, StoreDomainPluginOptions } from './types';
 
 @VendurePlugin({
     imports: [PluginCommonModule],
@@ -20,6 +21,7 @@ import { StoreDomainPluginOptions } from './types';
     ],
     configuration: config => {
         config.authOptions.customPermissions.push(storeDomainPermission);
+        config.schedulerOptions.tasks.push(reconcileAutomatedStoreDomainsTask);
         return config;
     },
     adminApiExtensions: {
@@ -30,12 +32,13 @@ import { StoreDomainPluginOptions } from './types';
     compatibility: '^3.7.0',
 })
 export class StoreDomainPlugin implements NestModule, OnApplicationBootstrap {
-    static options: Required<StoreDomainPluginOptions> = {
+    static options: ResolvedStoreDomainPluginOptions = {
         cnameTarget: '',
         routingMode: 'prefer-domain',
         trustProxyHeaders: false,
         bypassHosts: ['localhost', '127.0.0.1'],
         resolveTxt: defaultResolveTxt,
+        cloudflare: null,
     };
 
     constructor(
@@ -57,6 +60,25 @@ export class StoreDomainPlugin implements NestModule, OnApplicationBootstrap {
         if (production && (cnameTarget === 'localhost' || cnameTarget.endsWith('.localhost'))) {
             throw new Error('StoreDomainPlugin requires a public CNAME target in production');
         }
+        const cloudflare = options.cloudflare
+            ? {
+                  ...options.cloudflare,
+                  apiToken: options.cloudflare.apiToken.trim(),
+                  saasZoneId: options.cloudflare.saasZoneId.trim(),
+                  fallbackOrigin: options.cloudflare.fallbackOrigin.trim().toLowerCase(),
+                  autoManageDns: options.cloudflare.autoManageDns ?? false,
+                  apiBaseUrl: (
+                      options.cloudflare.apiBaseUrl ?? 'https://api.cloudflare.com/client/v4'
+                  ).replace(/\/$/u, ''),
+                  fetch: options.cloudflare.fetch ?? fetch,
+              }
+            : null;
+        if (cloudflare && (!cloudflare.apiToken || !cloudflare.saasZoneId || !cloudflare.fallbackOrigin)) {
+            throw new Error('Cloudflare domain automation requires apiToken, saasZoneId, and fallbackOrigin');
+        }
+        if (production && cloudflare && !cloudflare.apiBaseUrl.startsWith('https://')) {
+            throw new Error('Cloudflare domain automation requires an HTTPS API endpoint in production');
+        }
         this.options = {
             cnameTarget,
             routingMode,
@@ -65,6 +87,7 @@ export class StoreDomainPlugin implements NestModule, OnApplicationBootstrap {
                 host.trim().toLowerCase(),
             ),
             resolveTxt: options.resolveTxt ?? defaultResolveTxt,
+            cloudflare,
         };
         return StoreDomainPlugin;
     }

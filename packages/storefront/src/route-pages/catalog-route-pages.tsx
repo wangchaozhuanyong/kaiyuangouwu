@@ -1,22 +1,23 @@
+import { lazyRouteComponent } from '@tanstack/react-router';
 import { ShoppingBag } from 'lucide-react';
-import { lazy } from 'react';
 
 import { PageSkeleton } from '../route-loading';
 import { EmptyState, Subpage } from '../storefront-ui/page-shell';
 import { CollectionSummary, FulfillmentType, Product, ProductVariant } from '../types';
 
-import { RoutePageContext as PageContext, useRouteRuntime as useRuntime } from './shared';
+import {
+    RoutePageContext as PageContext,
+    registerRoutePreload,
+    useRouteRuntime as useRuntime,
+} from './shared';
 
-const HomePage = lazy(() => import('../pages/home-page').then(module => ({ default: module.HomePage })));
-const CategoryPage = lazy(() =>
-    import('../pages/category-page').then(module => ({ default: module.CategoryPage })),
+const HomePage = lazyRouteComponent(() => import('../pages/home-page'), 'HomePage');
+const CategoryPage = lazyRouteComponent(() => import('../pages/category-page'), 'CategoryPage');
+const ProductDetailPage = lazyRouteComponent(
+    () => import('../pages/product-detail-page'),
+    'ProductDetailPage',
 );
-const ProductDetailPage = lazy(() =>
-    import('../pages/product-detail-page').then(module => ({ default: module.ProductDetailPage })),
-);
-const SearchPage = lazy(() =>
-    import('../pages/search-page').then(module => ({ default: module.SearchPage })),
-);
+const SearchPage = lazyRouteComponent(() => import('../pages/search-page'), 'SearchPage');
 
 export function HomeRoutePage() {
     const runtime = useRuntime();
@@ -211,3 +212,8 @@ export function SearchRoutePage() {
         </PageContext>
     );
 }
+
+export const preloadHomeRoutePage = registerRoutePreload(HomeRoutePage, HomePage);
+export const preloadCategoryRoutePage = registerRoutePreload(CategoryRoutePage, CategoryPage);
+export const preloadProductRoutePage = registerRoutePreload(ProductRoutePage, ProductDetailPage);
+export const preloadSearchRoutePage = registerRoutePreload(SearchRoutePage, SearchPage);

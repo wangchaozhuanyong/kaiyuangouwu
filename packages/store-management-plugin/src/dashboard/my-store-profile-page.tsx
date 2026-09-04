@@ -56,8 +56,18 @@ interface ProfileDraft {
     originalStorefrontNameEn: string;
     descriptionZh: string;
     descriptionEn: string;
+    taglineZh: string;
+    taglineEn: string;
+    brandBackgroundColor: string;
+    brandPrimaryColor: string;
+    brandAccentColor: string;
+    brandHighlightColor: string;
     logoAsset: Asset | null;
+    logoOnLightAsset: Asset | null;
+    logoOnDarkAsset: Asset | null;
 }
+
+type BrandAssetField = 'logoAsset' | 'logoOnLightAsset' | 'logoOnDarkAsset';
 
 const zhCopy = {
     title: '店铺资料',
@@ -72,12 +82,21 @@ const zhCopy = {
     storefrontNameEn: '英文店铺名称（人工覆盖）',
     descriptionZh: '公开简介',
     descriptionEn: '公开英文简介（人工覆盖）',
+    taglineZh: '品牌口号',
+    taglineEn: '英文品牌口号（人工覆盖）',
+    colors: '品牌颜色',
+    backgroundColor: '背景色',
+    primaryColor: '主色',
+    accentColor: '强调色',
+    highlightColor: '高亮色',
     descriptionHelp:
         '中文是源内容，保存时自动生成英文。公开简介会显示在对应语言的商城首页，并用于搜索与分享摘要。',
     commonMode: '常用模式',
     englishReview: '英文校对',
     translationHelp: '通常只需填写中文；仅在需要人工修改英文译文时切换到英文校对。',
     logo: '店铺 Logo',
+    logoOnLight: '浅色背景横版 Logo',
+    logoOnDark: '深色背景横版 Logo',
     selectLogo: '选择 Logo',
     clearLogo: '移除 Logo',
     operation: '运营状态',
@@ -91,8 +110,7 @@ const zhCopy = {
     accessible: '可访问',
     suspended: '已停用',
     invalidName: '店铺名称必须是 1 至 16 个显示单位',
-    conflict:
-        '店铺资料已被其他管理员更新。请刷新页面获取最新数据，再合并并保存你的修改。',
+    conflict: '店铺资料已被其他管理员更新。请刷新页面获取最新数据，再合并并保存你的修改。',
     readiness: '上线检查',
     ready: '已满足全部上线条件',
     notReady: '仍有未完成项目，请完成后联系平台管理员启用店铺',
@@ -111,12 +129,21 @@ const enCopy: typeof zhCopy = {
     storefrontNameEn: 'English store name (manual override)',
     descriptionZh: 'Public description (Chinese source)',
     descriptionEn: 'Public English description (manual override)',
+    taglineZh: 'Brand tagline (Chinese source)',
+    taglineEn: 'English tagline (manual override)',
+    colors: 'Brand colors',
+    backgroundColor: 'Background',
+    primaryColor: 'Primary',
+    accentColor: 'Accent',
+    highlightColor: 'Highlight',
     descriptionHelp:
         'English is generated from the Chinese source when you save. Public descriptions appear on the storefront and in search/share summaries.',
     commonMode: 'Common mode',
     englishReview: 'Review English',
     translationHelp: 'Usually you only need Chinese. Open English review only to override the translation.',
     logo: 'Store logo',
+    logoOnLight: 'Wordmark for light backgrounds',
+    logoOnDark: 'Wordmark for dark backgrounds',
     selectLogo: 'Select logo',
     clearLogo: 'Remove logo',
     operation: 'Operational status',
@@ -158,7 +185,7 @@ function MyStoreProfilePage() {
     const text = isZh ? zhCopy : enCopy;
     const { activeChannel } = useChannel();
     const [draft, setDraft] = useState<ProfileDraft | null>(null);
-    const [assetPickerOpen, setAssetPickerOpen] = useState(false);
+    const [assetPickerField, setAssetPickerField] = useState<BrandAssetField | null>(null);
     const [editEnglish, setEditEnglish] = useState(false);
     const profileQuery = useQuery({
         queryKey: ['my-store-profile', activeChannel?.id],
@@ -179,7 +206,15 @@ function MyStoreProfilePage() {
                 expectedUpdatedAt: input.expectedUpdatedAt,
                 descriptionZh: input.descriptionZh,
                 descriptionEn: input.descriptionEn,
+                taglineZh: input.taglineZh,
+                taglineEn: input.taglineEn,
+                brandBackgroundColor: input.brandBackgroundColor || null,
+                brandPrimaryColor: input.brandPrimaryColor || null,
+                brandAccentColor: input.brandAccentColor || null,
+                brandHighlightColor: input.brandHighlightColor || null,
                 logoAssetId: input.logoAsset?.id ?? null,
+                logoOnLightAssetId: input.logoOnLightAsset?.id ?? null,
+                logoOnDarkAssetId: input.logoOnDarkAsset?.id ?? null,
             };
             if (input.storefrontNameZh !== input.originalStorefrontNameZh) {
                 updateInput.storefrontNameZh = input.storefrontNameZh;
@@ -195,8 +230,7 @@ function MyStoreProfilePage() {
             setDraft(toDraft(result.updateMyStoreProfile));
             toast.success(text.saved);
         },
-        onError: error =>
-            toast.error(isConcurrentModification(error) ? text.conflict : errorMessage(error)),
+        onError: error => toast.error(isConcurrentModification(error) ? text.conflict : errorMessage(error)),
     });
 
     const save = () => {
@@ -223,11 +257,7 @@ function MyStoreProfilePage() {
             <PageTitle>{text.title}</PageTitle>
             <PageActionBar>
                 <PageActionBarRight>
-                    <Button
-                        type="button"
-                        onClick={save}
-                        disabled={!draft || !isDirty || mutation.isPending}
-                    >
+                    <Button type="button" onClick={save} disabled={!draft || !isDirty || mutation.isPending}>
                         {mutation.isPending ? (
                             <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
                         ) : (
@@ -303,6 +333,26 @@ function MyStoreProfilePage() {
                                 </div>
                             ) : null}
                             <div className={`space-y-2 ${editEnglish ? '' : 'sm:col-span-2'}`}>
+                                <Label htmlFor="my-store-tagline-zh">{text.taglineZh}</Label>
+                                <Input
+                                    id="my-store-tagline-zh"
+                                    maxLength={160}
+                                    value={draft.taglineZh}
+                                    onChange={event => update('taglineZh', event.target.value)}
+                                />
+                            </div>
+                            {editEnglish ? (
+                                <div className="space-y-2">
+                                    <Label htmlFor="my-store-tagline-en">{text.taglineEn}</Label>
+                                    <Input
+                                        id="my-store-tagline-en"
+                                        maxLength={160}
+                                        value={draft.taglineEn}
+                                        onChange={event => update('taglineEn', event.target.value)}
+                                    />
+                                </div>
+                            ) : null}
+                            <div className={`space-y-2 ${editEnglish ? '' : 'sm:col-span-2'}`}>
                                 <Label htmlFor="my-store-description-zh">{text.descriptionZh}</Label>
                                 <Textarea
                                     id="my-store-description-zh"
@@ -345,7 +395,7 @@ function MyStoreProfilePage() {
                                     <Button
                                         type="button"
                                         variant="outline"
-                                        onClick={() => setAssetPickerOpen(true)}
+                                        onClick={() => setAssetPickerField('logoAsset')}
                                     >
                                         <ImagePlus className="size-4" aria-hidden="true" />
                                         {text.selectLogo}
@@ -362,6 +412,88 @@ function MyStoreProfilePage() {
                                             <X className="size-4" aria-hidden="true" />
                                         </Button>
                                     )}
+                                </div>
+                            </div>
+                            {(
+                                [
+                                    ['logoOnLightAsset', text.logoOnLight],
+                                    ['logoOnDarkAsset', text.logoOnDark],
+                                ] as const
+                            ).map(([field, label]) => (
+                                <div className="space-y-2" key={field}>
+                                    <Label>{label}</Label>
+                                    <div className="flex min-h-20 items-center gap-3 rounded-md border p-3">
+                                        {draft[field] ? (
+                                            <img
+                                                className="h-12 min-w-0 flex-1 object-contain"
+                                                src={draft[field]?.preview}
+                                                alt=""
+                                            />
+                                        ) : (
+                                            <Store
+                                                className="size-6 text-muted-foreground"
+                                                aria-hidden="true"
+                                            />
+                                        )}
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            onClick={() => setAssetPickerField(field)}
+                                        >
+                                            <ImagePlus className="size-4" aria-hidden="true" />
+                                            {text.selectLogo}
+                                        </Button>
+                                        {draft[field] ? (
+                                            <Button
+                                                type="button"
+                                                size="icon"
+                                                variant="ghost"
+                                                title={text.clearLogo}
+                                                aria-label={text.clearLogo}
+                                                onClick={() => update(field, null)}
+                                            >
+                                                <X className="size-4" aria-hidden="true" />
+                                            </Button>
+                                        ) : null}
+                                    </div>
+                                </div>
+                            ))}
+                            <div className="space-y-3 sm:col-span-2">
+                                <Label>{text.colors}</Label>
+                                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                                    {(
+                                        [
+                                            ['brandBackgroundColor', text.backgroundColor],
+                                            ['brandPrimaryColor', text.primaryColor],
+                                            ['brandAccentColor', text.accentColor],
+                                            ['brandHighlightColor', text.highlightColor],
+                                        ] as const
+                                    ).map(([field, label]) => (
+                                        <div className="space-y-1.5" key={field}>
+                                            <Label htmlFor={`my-store-${field}`} className="text-xs">
+                                                {label}
+                                            </Label>
+                                            <div className="flex gap-2">
+                                                <Input
+                                                    id={`my-store-${field}`}
+                                                    type="color"
+                                                    className="h-10 w-12 p-1"
+                                                    value={draft[field] || '#2F6BFF'}
+                                                    onChange={event =>
+                                                        update(field, event.target.value.toUpperCase())
+                                                    }
+                                                />
+                                                <Input
+                                                    value={draft[field]}
+                                                    placeholder="#2F6BFF"
+                                                    maxLength={7}
+                                                    onChange={event =>
+                                                        update(field, event.target.value.toUpperCase())
+                                                    }
+                                                />
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
                             <div className="border-t pt-4 sm:hidden">
@@ -392,10 +524,14 @@ function MyStoreProfilePage() {
             </PageLayout>
             {draft && (
                 <AssetPickerDialog
-                    open={assetPickerOpen}
-                    onClose={() => setAssetPickerOpen(false)}
-                    onSelect={assets => update('logoAsset', assets[0] ?? null)}
-                    initialSelectedAssets={draft.logoAsset ? [draft.logoAsset] : []}
+                    open={assetPickerField !== null}
+                    onClose={() => setAssetPickerField(null)}
+                    onSelect={assets => {
+                        if (assetPickerField) update(assetPickerField, assets[0] ?? null);
+                    }}
+                    initialSelectedAssets={
+                        assetPickerField && draft[assetPickerField] ? [draft[assetPickerField]] : []
+                    }
                     title={text.selectLogo}
                     imageGuidance="logo"
                 />
@@ -512,7 +648,15 @@ function toDraft(profile: MyStoreProfileRecord): ProfileDraft {
         originalStorefrontNameEn: profile.channel.customFields.storefrontNameEn,
         descriptionZh: profile.descriptionZh,
         descriptionEn: profile.descriptionEn,
+        taglineZh: profile.taglineZh ?? '',
+        taglineEn: profile.taglineEn ?? '',
+        brandBackgroundColor: profile.brandBackgroundColor ?? '',
+        brandPrimaryColor: profile.brandPrimaryColor ?? '',
+        brandAccentColor: profile.brandAccentColor ?? '',
+        brandHighlightColor: profile.brandHighlightColor ?? '',
         logoAsset: profile.logoAsset,
+        logoOnLightAsset: profile.logoOnLightAsset,
+        logoOnDarkAsset: profile.logoOnDarkAsset,
     };
 }
 

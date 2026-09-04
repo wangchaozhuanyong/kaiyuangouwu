@@ -23,6 +23,7 @@ import {
     verifyRuntimeArtifact,
     writeIntegrityFiles,
 } from './production-runtime-verify.mjs';
+import { awanMeshBrandAssets } from './sync-awanmesh-brand.mjs';
 import { storefrontMediaManifest } from './sync-storefront-media.mjs';
 
 void test('runtime artifact includes catalog management plugin build output', () => {
@@ -81,11 +82,17 @@ void test('runtime artifact includes release publishers and every media manifest
     try {
         await copyStorefrontMediaReleaseInputs(fixtureRoot);
         await access(path.join(fixtureRoot, 'packages/dev-server/scripts/sync-storefront-media.mjs'));
+        await access(path.join(fixtureRoot, 'packages/dev-server/scripts/sync-awanmesh-brand.mjs'));
         await access(path.join(fixtureRoot, 'packages/dev-server/scripts/repair-inventory-inheritance.mjs'));
         for (const entry of storefrontMediaManifest) {
             const relativePath = path.relative(repositoryRoot, entry.file);
             const copied = await readFile(path.join(fixtureRoot, relativePath));
             assert.ok(copied.byteLength > 0, `Missing copied media: ${entry.key}`);
+        }
+        for (const entry of awanMeshBrandAssets) {
+            const relativePath = path.relative(repositoryRoot, entry.file);
+            const copied = await readFile(path.join(fixtureRoot, relativePath));
+            assert.ok(copied.byteLength > 0, `Missing copied brand asset: ${entry.key}`);
         }
     } finally {
         await rm(fixtureRoot, { recursive: true, force: true });

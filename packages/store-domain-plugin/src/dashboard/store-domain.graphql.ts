@@ -11,10 +11,16 @@ export const storeDomainsQuery = gql`
             verificationRecordValue
             verifiedAt
             lastVerificationError
+            provisioningMode
+            dnsManaged
+            providerHostnameStatus
+            providerSslStatus
+            lastProvisionedAt
         }
         storeDomainConfiguration {
             cnameTarget
             routingMode
+            automationMode
         }
     }
 `;
@@ -62,6 +68,11 @@ export interface StoreDomainItem {
     verificationRecordValue: string;
     verifiedAt: string | null;
     lastVerificationError: string | null;
+    provisioningMode: 'MANUAL' | 'CLOUDFLARE_SAAS';
+    dnsManaged: boolean;
+    providerHostnameStatus: string | null;
+    providerSslStatus: string | null;
+    lastProvisionedAt: string | null;
 }
 
 export interface StoreDomainsResult {
@@ -69,5 +80,6 @@ export interface StoreDomainsResult {
     storeDomainConfiguration: {
         cnameTarget: string;
         routingMode: string;
+        automationMode: 'MANUAL' | 'CLOUDFLARE_SAAS';
     };
 }

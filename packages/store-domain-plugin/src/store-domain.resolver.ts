@@ -4,6 +4,7 @@ import { Allow, Ctx, ID, Permission, RequestContext, Transaction } from '@vendur
 import { storeDomainPermission } from './constants';
 import { StoreDomain } from './entities/store-domain.entity';
 import { StoreDomainService } from './store-domain.service';
+import { TransferStoreDomainInput } from './types';
 
 @Resolver(() => StoreDomain)
 export class StoreDomainEntityResolver {
@@ -36,6 +37,16 @@ export class StoreDomainAdminResolver {
         return this.storeDomainService.configuration();
     }
 
+    @Query()
+    @Allow(Permission.SuperAdmin)
+    storeDomainTransferImpact(
+        @Ctx() ctx: RequestContext,
+        @Args('id') id: ID,
+        @Args('targetChannelId') targetChannelId: ID,
+    ) {
+        return this.storeDomainService.transferImpact(ctx, id, targetChannelId);
+    }
+
     @Transaction()
     @Mutation()
     @Allow(Permission.SuperAdmin, Permission.UpdateChannel, storeDomainPermission.Create)
@@ -65,5 +76,12 @@ export class StoreDomainAdminResolver {
     @Allow(Permission.SuperAdmin, Permission.UpdateChannel, storeDomainPermission.Delete)
     deleteStoreDomain(@Ctx() ctx: RequestContext, @Args('id') id: ID) {
         return this.storeDomainService.delete(ctx, id);
+    }
+
+    @Transaction()
+    @Mutation()
+    @Allow(Permission.SuperAdmin)
+    transferStoreDomain(@Ctx() ctx: RequestContext, @Args('input') input: TransferStoreDomainInput) {
+        return this.storeDomainService.transfer(ctx, input);
     }
 }

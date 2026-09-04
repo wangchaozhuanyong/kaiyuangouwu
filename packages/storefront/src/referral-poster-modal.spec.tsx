@@ -28,7 +28,7 @@ describe('referral poster templates', () => {
                 ),
             ),
         ).toHaveLength(5);
-        expect(referralPosterStyles.every(style => style.dark)).toBe(true);
+        expect(referralPosterStyles.map(style => style.dark)).toEqual([false, true, true, true, false]);
         expect(referralPosterStyles.find(style => style.id === 'PREMIUM_DARK')?.colors[0]).toBe('#020b1d');
         expect(posterForegroundColor('#f3f8ff', 'deep-sea')).toBe('#f3f8ff');
         expect(posterForegroundColor('#f3f8ff', 'minimal')).toBe('#0E2A63');
@@ -51,11 +51,11 @@ describe('referral poster templates', () => {
             }),
         );
 
-        expect(markup).toContain('云桥蓝焰');
+        expect(markup).toContain('模钥简约');
         expect(markup).toContain('冰川蓝光');
         expect(markup).toContain('青空流线');
         expect(markup).toContain('深海科技');
-        expect(markup).toContain('云桥轨道');
+        expect(markup).toContain('模钥轨道');
         expect(markup).toContain('INVITE88');
         expect(markup).toContain('好友成功消费，可获得 10% 奖励用于消费抵扣');
         expect(markup).toContain('poster-templates-scroll');
@@ -80,7 +80,7 @@ describe('referral poster templates', () => {
             }),
         );
 
-        expect(markup).toContain('CloudBridge blue flame');
+        expect(markup).toContain('AwanMesh minimal');
         expect(markup).toContain('overflow-x-hidden');
         expect(markup).toContain('min-w-0');
         expect(markup).toContain('max-w-sm');
@@ -91,7 +91,7 @@ describe('referral poster templates', () => {
         expect(markup).not.toContain('max-h-[54dvh]');
         expect(markup).not.toContain('grid place-items-center');
 
-        const stylesheet = readStorefrontStylesheet();
+        const stylesheet = readStorefrontStylesheet(['./styles/modals-and-support.css']);
         expect(stylesheet).toMatch(/\.referral-poster-preview\s*\{[\s\S]*?aspect-ratio:\s*9\s*\/\s*16/);
         expect(stylesheet).toContain('width: min(100%, calc(54dvh * 9 / 16))');
     });
@@ -171,11 +171,11 @@ describe('referral poster templates', () => {
         // Custom template is rendered
         expect(markup).toContain('极客定制海报');
         // Enabled default templates are rendered
-        expect(markup).toContain('云桥蓝焰');
+        expect(markup).toContain('模钥简约');
         expect(markup).toContain('冰川蓝光');
         // Disabled default templates are NOT rendered
         expect(markup).not.toContain('青空流线');
         expect(markup).not.toContain('深海科技');
-        expect(markup).not.toContain('云桥轨道');
+        expect(markup).not.toContain('模钥轨道');
     });
 });

@@ -46,4 +46,52 @@ describe('StoreDomainPlugin production defaults', () => {
             'public CNAME target',
         );
     });
+
+    it('normalizes a complete Cloudflare for SaaS configuration', () => {
+        process.env.NODE_ENV = 'production';
+        const fetchImpl = (() => Promise.resolve(new Response())) as typeof fetch;
+
+        StoreDomainPlugin.init({
+            cnameTarget: 'domains.example.com',
+            cloudflare: {
+                apiToken: ' scoped-token ',
+                saasZoneId: ' zone-id ',
+                fallbackOrigin: 'ORIGIN.EXAMPLE.COM',
+                autoManageDns: true,
+                apiBaseUrl: 'https://api.cloudflare.test/client/v4/',
+                fetch: fetchImpl,
+            },
+        });
+
+        expect(StoreDomainPlugin.options.cloudflare).toMatchObject({
+            apiToken: 'scoped-token',
+            saasZoneId: 'zone-id',
+            fallbackOrigin: 'origin.example.com',
+            autoManageDns: true,
+            apiBaseUrl: 'https://api.cloudflare.test/client/v4',
+            fetch: fetchImpl,
+        });
+    });
+
+    it('rejects incomplete or insecure production Cloudflare configuration', () => {
+        process.env.NODE_ENV = 'production';
+
+        expect(() =>
+            StoreDomainPlugin.init({
+                cnameTarget: 'domains.example.com',
+                cloudflare: { apiToken: '', saasZoneId: 'zone-id', fallbackOrigin: 'origin.example.com' },
+            }),
+        ).toThrow('requires apiToken');
+        expect(() =>
+            StoreDomainPlugin.init({
+                cnameTarget: 'domains.example.com',
+                cloudflare: {
+                    apiToken: 'scoped-token',
+                    saasZoneId: 'zone-id',
+                    fallbackOrigin: 'origin.example.com',
+                    apiBaseUrl: 'http://api.cloudflare.test',
+                },
+            }),
+        ).toThrow('HTTPS API endpoint');
+    });
 });

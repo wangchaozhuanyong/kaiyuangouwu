@@ -1,7 +1,7 @@
 import { Channel, DeepPartial, EntityId, ID, VendureEntity } from '@vendure/core';
 import { Column, Entity, Index, ManyToOne } from 'typeorm';
 
-import { StoreDomainStatus } from '../types';
+import { StoreDomainProvisioningMode, StoreDomainStatus } from '../types';
 
 @Entity()
 export class StoreDomain extends VendureEntity {
@@ -40,4 +40,22 @@ export class StoreDomain extends VendureEntity {
 
     @Column('text', { nullable: true })
     lastVerificationError: string | null;
+
+    @Column('varchar', { length: 24, default: 'MANUAL' })
+    provisioningMode: StoreDomainProvisioningMode;
+
+    @Column('boolean', { default: false })
+    dnsManaged: boolean;
+
+    @Column('varchar', { length: 64, nullable: true })
+    providerExternalId: string | null;
+
+    @Column('varchar', { length: 40, nullable: true })
+    providerHostnameStatus: string | null;
+
+    @Column('varchar', { length: 40, nullable: true })
+    providerSslStatus: string | null;
+
+    @Column({ type: Date, nullable: true })
+    lastProvisionedAt: Date | null;
 }

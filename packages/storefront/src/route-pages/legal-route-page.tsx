@@ -1,10 +1,8 @@
-import { lazy } from 'react';
+import { lazyRouteComponent } from '@tanstack/react-router';
 
-import { useRouteRuntime as useRuntime } from './shared';
+import { registerRoutePreload, useRouteRuntime as useRuntime } from './shared';
 
-const ManagedLegalPage = lazy(() =>
-    import('../pages/legal-page').then(module => ({ default: module.ManagedLegalPage })),
-);
+const ManagedLegalPage = lazyRouteComponent(() => import('../pages/legal-page'), 'ManagedLegalPage');
 
 export function LegalRoutePage() {
     const runtime = useRuntime();
@@ -18,3 +16,5 @@ export function LegalRoutePage() {
         />
     );
 }
+
+export const preloadLegalRoutePage = registerRoutePreload(LegalRoutePage, ManagedLegalPage);

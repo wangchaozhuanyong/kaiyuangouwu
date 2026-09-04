@@ -418,6 +418,24 @@ export function evaluateProductionEnvironment(env, role, controls = {}) {
                 ? 'configured'
                 : 'CNAME, routing mode, or bypass hosts are unsafe',
     });
+    const domainAutomationMode = normalized(env.STORE_DOMAIN_AUTOMATION_MODE) || 'manual';
+    const cloudflareAutomationReady =
+        domainAutomationMode === 'cloudflare-saas' &&
+        isConfiguredSecret(env.CLOUDFLARE_SAAS_API_TOKEN, 20) &&
+        /^[a-f0-9]{32}$/iu.test(normalized(env.CLOUDFLARE_SAAS_ZONE_ID)) &&
+        isPublicHostname(env.CLOUDFLARE_SAAS_FALLBACK_ORIGIN) &&
+        ['true', 'false'].includes(normalized(env.CLOUDFLARE_SAAS_AUTO_MANAGE_DNS));
+    pushCheck(checks, {
+        id: 'domain-automation',
+        title: 'Cloudflare 域名与 SSL 自动化',
+        passed: domainAutomationMode === 'manual' || cloudflareAutomationReady,
+        detail:
+            domainAutomationMode === 'manual'
+                ? 'manual onboarding enabled'
+                : cloudflareAutomationReady
+                  ? `cloudflare-saas configured; managed-dns=${normalized(env.CLOUDFLARE_SAAS_AUTO_MANAGE_DNS)}`
+                  : 'Cloudflare mode, scoped token, zone ID, fallback origin, or DNS mode is invalid',
+    });
     pushCheck(checks, {
         id: 'storefront-entry-mode',
         title: '主站直达与可选推广页',

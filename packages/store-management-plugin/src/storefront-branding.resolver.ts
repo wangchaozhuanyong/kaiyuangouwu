@@ -30,7 +30,7 @@ export class StorefrontBrandingShopResolver {
     async storefrontBranding(@Ctx() ctx: RequestContext) {
         const profile = await this.connection.getRepository(ctx, StoreProfile).findOne({
             where: { channelId: ctx.channelId },
-            relations: { logoAsset: true },
+            relations: { logoAsset: true, logoOnLightAsset: true, logoOnDarkAsset: true },
         });
 
         const customFields = ctx.channel.customFields as StorefrontChannelFields;
@@ -45,16 +45,34 @@ export class StorefrontBrandingShopResolver {
             : isUsableEnglishTranslation(profile?.descriptionEn)
               ? profile.descriptionEn
               : '';
+        const tagline = isChinese
+            ? profile?.taglineZh || profile?.taglineEn || ''
+            : isUsableEnglishTranslation(profile?.taglineEn)
+              ? profile.taglineEn
+              : '';
 
-        let logoUrl = null;
-        if (profile?.logoAsset) {
-            logoUrl = this.assetUrl(ctx.req, profile.logoAsset);
-        }
+        const logoUrl = profile?.logoAsset ? this.assetUrl(ctx.req, profile.logoAsset) : null;
+        const logoOnLightUrl = profile?.logoOnLightAsset
+            ? this.assetUrl(ctx.req, profile.logoOnLightAsset)
+            : null;
+        const logoOnDarkUrl = profile?.logoOnDarkAsset
+            ? this.assetUrl(ctx.req, profile.logoOnDarkAsset)
+            : null;
 
         return {
+            logoAssetId: profile?.logoAssetId ?? null,
+            logoOnLightAssetId: profile?.logoOnLightAssetId ?? null,
+            logoOnDarkAssetId: profile?.logoOnDarkAssetId ?? null,
             logoUrl,
+            logoOnLightUrl,
+            logoOnDarkUrl,
             name,
             description,
+            tagline,
+            backgroundColor: profile?.brandBackgroundColor ?? null,
+            primaryColor: profile?.brandPrimaryColor ?? null,
+            accentColor: profile?.brandAccentColor ?? null,
+            highlightColor: profile?.brandHighlightColor ?? null,
         };
     }
 

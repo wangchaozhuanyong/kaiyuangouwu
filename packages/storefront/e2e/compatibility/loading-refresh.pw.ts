@@ -54,7 +54,7 @@ async function holdRouteChunk(page: Page, chunkNames: readonly string[]) {
     };
 }
 
-test('分类页硬刷新显示中文路由骨架并保留筛选参数', async ({ page }) => {
+test('分类页硬刷新显示中文品牌过渡并保留筛选参数', async ({ page }) => {
     await authorizeLocalStorefront(page);
     await isolateRouteLoadingFromShopApi(page);
     const delayedChunk = await holdRouteChunk(page, ['category', 'catalog-route-pages', 'category-page']);
@@ -65,11 +65,13 @@ test('分类页硬刷新显示中文路由骨架并保留筛选参数', async ({
     );
     await delayedChunk.waitUntilRequested();
 
-    const pendingMain = page.locator('main.page-skeleton--catalog[role="status"]');
+    const pendingTransition = page.locator('.route-transition[role="status"]');
     try {
-        await expect(pendingMain).toBeVisible();
-        await expect(pendingMain).toHaveAttribute('aria-label', '正在加载页面');
-        await expect(pendingMain).toHaveAttribute('aria-busy', 'true');
+        await expect(pendingTransition).toBeVisible();
+        await expect(pendingTransition).toHaveAttribute('aria-label', '正在加载页面');
+        await expect(pendingTransition).toHaveAttribute('aria-busy', 'true');
+        await expect(pendingTransition.locator('.route-transition-card strong')).not.toBeEmpty();
+        await expect(page.locator('.page-skeleton--route')).toHaveCount(0);
         await expect(page.getByRole('status', { name: 'Loading' })).toHaveCount(0);
     } finally {
         delayedChunk.release();
@@ -112,4 +114,38 @@ test('目标路由未解析时底部导航保持当前页高亮', async ({ page 
 
     await expect(page.locator('main.business-services-page')).toBeVisible();
     await expect(servicesNavigation).toHaveAttribute('aria-current', 'page');
+});
+
+test('导航意图会同时预取目标页面组件', async ({ page }) => {
+    await authorizeLocalStorefront(page);
+    await isolateRouteLoadingFromShopApi(page);
+    await page.goto('/category', { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('main.category-page')).toBeVisible();
+
+    const servicesNavigation = page.locator('nav[aria-label] a[href="/services"]');
+    const componentResponse = page.waitForResponse(response => {
+        const fileName = new URL(response.url()).pathname.split('/').at(-1) ?? '';
+        return fileName.startsWith('business-services-page-') && response.ok();
+    });
+
+    await servicesNavigation.hover();
+    await componentResponse;
+    await servicesNavigation.click();
+
+    await expect(page.locator('main.business-services-page')).toBeVisible();
+    await expect(page.locator('.route-transition')).toHaveCount(0);
+});
+
+test('懒加载页面样式不会被误判为新版本', async ({ page }) => {
+    await authorizeLocalStorefront(page);
+    const versionCheck = page.waitForResponse(response => {
+        const url = new URL(response.url());
+        return url.pathname.endsWith('/index.html') && url.searchParams.has('__storefront_version');
+    });
+
+    await page.goto('/support', { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('main.subpage')).toBeVisible();
+    await versionCheck;
+
+    await expect(page.locator('.storefront-update-prompt')).toHaveCount(0);
 });

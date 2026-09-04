@@ -23,14 +23,14 @@ export type ReferralPosterPattern = 'minimal' | 'glacier' | 'flow' | 'deep-sea' 
 export const referralPosterStyles: ReferralPosterStyle[] = [
     {
         id: 'BRAND_MINIMAL',
-        nameZh: '云桥蓝焰',
-        nameEn: 'CloudBridge blue flame',
-        colors: ['#020617', '#08245a', '#03132e'],
-        background: 'linear-gradient(145deg,#020617,#08245a 52%,#03132e)',
-        foreground: '#f8fbff',
-        accent: '#22d3ee',
+        nameZh: '模钥简约',
+        nameEn: 'AwanMesh minimal',
+        colors: ['#eef7ff', '#ffffff', '#eaf4ff'],
+        background: 'linear-gradient(145deg,#eef7ff,#ffffff 48%,#eaf4ff)',
+        foreground: '#0e2a63',
+        accent: '#1269e8',
         pattern: 'minimal',
-        dark: true,
+        dark: false,
     },
     {
         id: 'BENEFIT_RED_GOLD',
@@ -67,14 +67,14 @@ export const referralPosterStyles: ReferralPosterStyle[] = [
     },
     {
         id: 'CLOUD_BRIDGE_ORBIT',
-        nameZh: '云桥轨道',
-        nameEn: 'CloudBridge orbit',
-        colors: ['#09051c', '#281456', '#07142f'],
-        background: 'linear-gradient(145deg,#09051c,#281456 48%,#07142f)',
-        foreground: '#fbf8ff',
-        accent: '#a78bfa',
+        nameZh: '模钥轨道',
+        nameEn: 'AwanMesh orbit',
+        colors: ['#f1efff', '#d9e6ff', '#efe3ff'],
+        background: 'linear-gradient(145deg,#f1efff,#d9e6ff 48%,#efe3ff)',
+        foreground: '#31265f',
+        accent: '#6657dc',
         pattern: 'orbit',
-        dark: true,
+        dark: false,
     },
 ];
 
@@ -108,7 +108,7 @@ export function ReferralPosterModal({
     onNotify: (message: string) => void;
 }) {
     const isZh = language === 'zh';
-    const effectiveLogoUrl = logoUrl || '/storefront/cloudbridge-logo.png';
+    const effectiveLogoUrl = logoUrl || '/storefront/awanmesh-logo.svg';
     const styles = useMemo(() => {
         const custom = templateConfigs.filter(template => template.enabled);
         const enabledLegacy = referralPosterStyles.filter(entry => templates.includes(entry.id));
@@ -439,8 +439,8 @@ function legacyPosterTemplate(style: ReferralPosterStyle, isZh: boolean): Poster
         featureThreeTitleEn: 'Dedicated support',
         featureThreeTextZh: '专业客服 贴心服务',
         featureThreeTextEn: 'Friendly help when you need it',
-        qrEyebrowZh: '扫码访问云桥 AI',
-        qrEyebrowEn: 'Scan CloudBridge AI',
+        qrEyebrowZh: '扫码访问 AwanMesh 模钥',
+        qrEyebrowEn: 'Scan AwanMesh',
         qrTitleZh: '发现更多实用 AI 服务',
         qrTitleEn: 'Discover practical AI services',
         qrDescriptionZh: '满足多种 AI 使用场景',
@@ -453,8 +453,8 @@ function legacyPosterTemplate(style: ReferralPosterStyle, isZh: boolean): Poster
         sceneThreeEn: 'Learn',
         sceneFourZh: '智能编程',
         sceneFourEn: 'Code',
-        ctaTextZh: '长按识别二维码，立即进入云桥 AI',
-        ctaTextEn: 'Press and hold to enter CloudBridge AI',
+        ctaTextZh: '长按识别二维码，立即进入 AwanMesh 模钥',
+        ctaTextEn: 'Press and hold to enter AwanMesh',
         footerTitleZh: '让好用的 AI，真正为你所用',
         footerTitleEn: 'AI that works for you',
         footerTextZh: '热门 AI 工具与数字服务一站式平台',
@@ -522,7 +522,7 @@ async function renderReferralPoster({
 
     // 01. Brand block
     try {
-        const logo = await getCachedImage(logoUrl || '/storefront/cloudbridge-logo.png', true);
+        const logo = await getCachedImage(logoUrl || '/storefront/awanmesh-logo.svg', true);
         context.save();
         roundedRect(context, 74, 72, 106, 106, 28);
         context.clip();

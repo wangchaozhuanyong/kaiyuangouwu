@@ -2,6 +2,8 @@ import { Check, Copy, Download, Sparkles, X } from 'lucide-react';
 import QRCode from 'qrcode';
 import { useEffect, useRef, useState } from 'react';
 
+import './styles/modals-and-support.css';
+
 import { storefrontWebpUrl } from './responsive-image';
 import { acquireBodyScrollLock } from './scroll-lock';
 import { Product, StorefrontLanguage } from './types';

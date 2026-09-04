@@ -17,8 +17,8 @@ export const FAVORITE_PRODUCT_LIMIT = 100;
 export const RECENT_PRODUCT_LIMIT = 20;
 
 export const DEFAULT_STOREFRONT_NAMES: Record<StorefrontLanguage, string> = {
-    zh: '云桥Ai',
-    en: 'Yunqiao Ai',
+    zh: 'AwanMesh｜模钥',
+    en: 'AwanMesh',
 };
 
 export function storefrontNameDisplayUnits(value: string): number {

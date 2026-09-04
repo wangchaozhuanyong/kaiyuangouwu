@@ -93,8 +93,8 @@ CI=true VITE_TEST_PORT=5176 bunx playwright test --config e2e/playwright.config.
 ## Production Deployment
 
 - Canonical runbook: `deploy/DEPLOYMENT_RUNBOOK.md`. Read it before every production release and update it when the topology changes.
-- Production storefront: `https://damatong.net` (also `www.damatong.net`).
-- Production dashboard: `https://console.damatong.net/dashboard/`.
+- Production storefronts: AwanMesh at `https://moyaoai.com`; Meiyijia at `https://damatong.net`.
+- Production dashboard: `https://console.moyaoai.com/dashboard/`; the legacy Damatong console redirects here.
 - AWS region: `ap-northeast-1` (Tokyo); EC2 instance: `i-041a146558e432cbf`; security group: `sg-013cf38df187011ca`.
 - Current public IPv4 snapshot: `52.196.65.143`; SSH user: `ubuntu`. The production SSH private key is stored outside the repository at `/Users/wangchao/Desktop/yamaxunmiyao2/yunqiao-vendure-prod-key.pem`; use this exact path with `-i` and `-o IdentitiesOnly=yes` for production SSH/rsync access unless the instance or key is explicitly replaced.
 - Server repository: `/var/www/kaiyuangouwu`; branch: `main`; Vendure upstream: `127.0.0.1:3002`.

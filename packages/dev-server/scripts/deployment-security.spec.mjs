@@ -44,10 +44,17 @@ void test('production Nginx routes protected downloads and hardens both APIs', a
         4,
     );
     assert.match(config, /root \/var\/www\/kaiyuangouwu-current\/packages\/storefront\/dist;/u);
+    const httpDefaultServer = config.slice(
+        config.indexOf('listen 80 default_server;'),
+        config.indexOf('server_name moyaoai.com www.moyaoai.com console.moyaoai.com'),
+    );
+    assert.match(httpDefaultServer, /return 301 https:\/\/\$host\$request_uri;/u);
     const storefrontServer = config.slice(
-        config.indexOf('server_name damatong.net;'),
+        config.indexOf('listen 443 ssl http2 default_server;'),
         config.indexOf('server_name console.damatong.net;'),
     );
+    assert.match(storefrontServer, /listen 443 ssl http2 default_server;/u);
+    assert.match(storefrontServer, /server_name moyaoai\.com damatong\.net _;/u);
     assert.doesNotMatch(storefrontServer, /auth_request|_storefront_promotion_gate/u);
     assert.doesNotMatch(storefrontServer, /@storefront_promotion_entry/u);
     assert.match(storefrontServer, /location \/ \{[\s\S]*?try_files \$uri \$uri\/ \/index\.html;/u);
@@ -61,10 +68,21 @@ void test('production Nginx routes protected downloads and hardens both APIs', a
         assert.match(location.groups.body, /limit_conn vendure_realtime_per_ip 12;/u);
         assert.match(
             location.groups.body,
-            /access_log \/var\/log\/nginx\/damatong-storefront-realtime\.log vendure_realtime;/u,
+            /access_log \/var\/log\/nginx\/awanmesh-storefront-realtime\.log vendure_realtime;/u,
         );
         assert.match(location.groups.body, /proxy_ignore_client_abort off;/u);
     }
+});
+
+void test('production ingress keeps AwanMesh and Meiyijia on separate channel-resolved hosts', async () => {
+    const config = await readFile(path.join(repositoryRoot, 'deploy/nginx/damatong.conf'), 'utf8');
+
+    assert.match(config, /server_name moyaoai\.com damatong\.net _;/u);
+    assert.match(config, /server_name console\.moyaoai\.com;/u);
+    assert.match(config, /server_name www\.moyaoai\.com www\.damatong\.net;/u);
+    assert.match(config, /www\.damatong\.net damatong\.net;/u);
+    assert.match(config, /return 301 https:\/\/console\.moyaoai\.com\$request_uri;/u);
+    assert.match(config, /\/etc\/letsencrypt\/live\/moyaoai\.com\/fullchain\.pem/u);
 });
 
 void test('promotion route preserves backend CSP without inheriting the storefront policy', async () => {
@@ -79,7 +97,7 @@ void test('promotion route preserves backend CSP without inheriting the storefro
 
 void test('production console proxies the dashboard health check to Vendure', async () => {
     const config = await readFile(path.join(repositoryRoot, 'deploy/nginx/damatong.conf'), 'utf8');
-    const consoleServer = config.slice(config.indexOf('server_name console.damatong.net;'));
+    const consoleServer = config.slice(config.indexOf('server_name console.moyaoai.com;'));
     const healthLocation = consoleServer.match(/location = \/health \{(?<body>[\s\S]*?)\n    \}/u);
 
     assert.ok(healthLocation?.groups?.body);
@@ -122,9 +140,11 @@ void test('production PM2 config starts compiled runtime entries without the dev
     );
     assert.match(config, /max_memory_restart:\s*'768M'/u);
     assert.match(config, /restart_delay:\s*5000/u);
-    assert.match(config, /STORE_DOMAIN_CNAME_TARGET:\s*'damatong\.net'/u);
+    assert.match(config, /STORE_DOMAIN_CNAME_TARGET:\s*'stores\.moyaoai\.com'/u);
     assert.match(config, /STORE_DOMAIN_ROUTING_MODE:\s*'require-domain'/u);
     assert.match(config, /STORE_DOMAIN_BYPASS_HOSTS:\s*''/u);
+    assert.match(config, /CLOUDFLARE_SAAS_API_TOKEN:\s*process\.env\.CLOUDFLARE_SAAS_API_TOKEN/u);
+    assert.doesNotMatch(config, /CLOUDFLARE_SAAS_API_TOKEN:\s*['"][^'"]+['"]/u);
     assert.match(config, /STOREFRONT_PROMOTION_GATE_ENABLED:\s*'false'/u);
     assert.doesNotMatch(config, /cli\.js/u);
 });
@@ -181,6 +201,8 @@ void test('production runbook elevates only the root-owned atomic runtime switch
     assert.match(runbook, /VENDURE_DEPLOYMENT_ID/u);
     assert.match(runbook, /sync-storefront-media\.mjs --dry-run/u);
     assert.match(runbook, /sync-storefront-media\.mjs --apply --allow-remote/u);
+    assert.match(runbook, /sync-awanmesh-brand\.mjs --dry-run/u);
+    assert.match(runbook, /sync-awanmesh-brand\.mjs --apply --allow-remote/u);
 });
 
 void test('production runbook verifies a direct storefront with an optional promotion page', async () => {
@@ -276,6 +298,9 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     );
     assert.match(script, /rollback_needed=0\n\s+printf 'ROLLBACK_BEGIN/u);
     assert.equal(script.match(/ROLLBACK_BEGIN/gu)?.length, 1);
+    assert.match(script, /sync-awanmesh-brand\.mjs/u);
+    assert.match(script, /packages\/storefront\/src\/assets\/brand\//u);
+    assert.match(script, /AwanMesh managed brand data changed/u);
     assert.match(script, /readonly memory_guard=.*production-memory-guard\.cjs/u);
     assert.match(script, /ensure-production-swap\.sh/u);
     assert.match(script, /vendure-production-swap/u);

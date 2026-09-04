@@ -637,7 +637,14 @@ export interface StorefrontConfig {
         name: string;
     }>;
     logoUrl?: string | null;
+    logoOnLightUrl?: string | null;
+    logoOnDarkUrl?: string | null;
     description?: string | null;
+    tagline?: string | null;
+    brandBackgroundColor?: string | null;
+    brandPrimaryColor?: string | null;
+    brandAccentColor?: string | null;
+    brandHighlightColor?: string | null;
     currencyConfiguration?: StorefrontCurrencyConfiguration;
     customFields: {
         storefrontNameZh?: string | null;
