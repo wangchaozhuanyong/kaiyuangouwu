@@ -136,6 +136,15 @@ void test('bun audit does not retry unrelated malformed output', async () => {
 
 void test('bun audit gate fails immediately when valid JSON reports a policy violation', async () => {
     let calls = 0;
+    const highAudit = {
+        'vulnerable-package': [
+            {
+                severity: 'high',
+                title: 'Affected before 1.3.0',
+                url: 'https://example.com/2',
+            },
+        ],
+    };
 
     await assert.rejects(
         runBunAudit('/repository', {
@@ -145,13 +154,66 @@ void test('bun audit gate fails immediately when valid JSON reports a policy vio
             retryDelaysMs: [0, 0],
             runCommand: () => {
                 calls += 1;
-                return { error: undefined, status: 1, stderr: '', stdout: JSON.stringify(audit) };
+                return { error: undefined, status: 1, stderr: '', stdout: JSON.stringify(highAudit) };
             },
             wait: async () => undefined,
         }),
-        /bun audit policy failed \(high\+\) with exit code 1/u,
+        /bun audit policy failed \(high\+\): vulnerable-package high Affected before 1\.3\.0/u,
     );
     assert.equal(calls, 1);
+});
+
+void test('bun audit gate accepts exit status 1 when parsed findings are below the configured level', async () => {
+    const moderateAudit = {
+        'moderate-package': [
+            {
+                severity: 'moderate',
+                title: 'Moderate advisory',
+                url: 'https://example.com/moderate',
+            },
+        ],
+    };
+    const report = await runBunAudit('/repository', {
+        auditLevel: 'high',
+        runCommand: () => ({
+            error: undefined,
+            status: 1,
+            stderr: 'bun audit v1.3.14',
+            stdout: JSON.stringify(moderateAudit),
+        }),
+    });
+
+    assert.deepEqual(report, moderateAudit);
+});
+
+void test('bun audit gate rejects an unexpected non-policy exit code', async () => {
+    await assert.rejects(
+        runBunAudit('/repository', {
+            auditLevel: 'high',
+            runCommand: () => ({
+                error: undefined,
+                status: 2,
+                stderr: '',
+                stdout: JSON.stringify({}),
+            }),
+        }),
+        /bun audit exited unexpectedly with code 2/u,
+    );
+});
+
+void test('bun audit gate fails closed when parsed JSON does not contain advisory arrays', async () => {
+    await assert.rejects(
+        runBunAudit('/repository', {
+            auditLevel: 'high',
+            runCommand: () => ({
+                error: undefined,
+                status: 1,
+                stderr: '',
+                stdout: JSON.stringify({ error: 'registry unavailable' }),
+            }),
+        }),
+        /bun audit entry for error must be an array/u,
+    );
 });
 
 void test('repository and production workflows use the fail-closed retrying audit gate', async () => {

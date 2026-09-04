@@ -22,6 +22,43 @@ function severityRank(severity) {
     return rank;
 }
 
+function evaluateAuditPolicy(auditReport, failOn) {
+    if (!isRecord(auditReport)) {
+        throw new Error('bun audit JSON must be an object');
+    }
+    const failOnRank = severityRank(failOn);
+    const findings = [];
+    for (const [name, advisories] of Object.entries(auditReport)) {
+        if (!Array.isArray(advisories)) {
+            throw new Error(`bun audit entry for ${name} must be an array`);
+        }
+        for (const advisory of advisories) {
+            if (
+                !isRecord(advisory) ||
+                typeof advisory.severity !== 'string' ||
+                typeof advisory.title !== 'string' ||
+                typeof advisory.url !== 'string'
+            ) {
+                throw new Error(`bun audit advisory for ${name} is invalid`);
+            }
+            if (severityRank(advisory.severity) >= failOnRank) {
+                findings.push({
+                    name,
+                    severity: advisory.severity,
+                    title: advisory.title,
+                    url: advisory.url,
+                });
+            }
+        }
+    }
+    return findings.sort(
+        (left, right) =>
+            severityRank(right.severity) - severityRank(left.severity) ||
+            left.name.localeCompare(right.name) ||
+            left.title.localeCompare(right.title),
+    );
+}
+
 export function matchRuntimeAdvisories(runtimePackages, auditReport) {
     if (!isRecord(auditReport)) {
         throw new Error('bun audit JSON must be an object');
@@ -152,10 +189,17 @@ export async function runBunAudit(
             await wait(delayMs);
             continue;
         }
-        if (auditLevel && result.status !== 0) {
-            throw new Error(
-                `bun audit policy failed (${auditLevel}+) with exit code ${result.status ?? 'unknown'}`,
-            );
+        if (auditLevel) {
+            const blockedFindings = evaluateAuditPolicy(report, auditLevel);
+            if (blockedFindings.length > 0) {
+                const first = blockedFindings[0];
+                throw new Error(
+                    `bun audit policy failed (${auditLevel}+): ${first.name} ${first.severity} ${first.title} (${first.url})`,
+                );
+            }
+            if (result.status !== 0 && result.status !== 1) {
+                throw new Error(`bun audit exited unexpectedly with code ${result.status ?? 'unknown'}`);
+            }
         }
         return report;
     }
