@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
+import { createBunAuditEvidence } from './production-runtime-audit-evidence.mjs';
 import {
     auditRuntimePackages,
     createRuntimeAuditReport,
@@ -100,6 +101,46 @@ void test('bun audit remains fail-closed after bounded transient retries', async
     assert.equal(attempts, 3);
 });
 
+void test('bun audit retries the ConnectionClosed response returned by the registry', async () => {
+    let attempts = 0;
+    const report = await runBunAudit('/tmp/runtime-audit-fixture', {
+        commandRunner: (_command, commandArguments) => {
+            attempts += 1;
+            assert.deepEqual(commandArguments, ['audit', '--json', '--audit-level', 'high']);
+            return attempts === 1
+                ? { status: 1, stderr: 'ConnectionClosed: audit request failed', stdout: '' }
+                : { status: 0, stderr: '', stdout: JSON.stringify(audit) };
+        },
+        auditLevel: 'high',
+        maxAttempts: 3,
+        requireSuccessfulExit: true,
+        retryDelayMs: 0,
+    });
+
+    assert.equal(attempts, 2);
+    assert.deepEqual(report, audit);
+});
+
+void test('bun audit does not retry a valid report that fails the requested policy', async () => {
+    let attempts = 0;
+
+    await assert.rejects(
+        () =>
+            runBunAudit('/tmp/runtime-audit-fixture', {
+                commandRunner: () => {
+                    attempts += 1;
+                    return { status: 1, stderr: '', stdout: JSON.stringify(audit) };
+                },
+                auditLevel: 'high',
+                maxAttempts: 3,
+                requireSuccessfulExit: true,
+                retryDelayMs: 0,
+            }),
+        /bun audit failed after 1 attempt\(s\): bun audit policy failed with exit code 1/u,
+    );
+    assert.equal(attempts, 1);
+});
+
 void test('bun audit does not retry malformed non-network output', async () => {
     let attempts = 0;
 
@@ -153,4 +194,38 @@ void test('saved runtime audit evidence remains fail-closed when it is invalid',
             ),
         /does not match the source lockfile/u,
     );
+});
+
+void test('audit evidence retries transient requests and binds the report to the lockfile', async () => {
+    const fixtureRoot = await mkdtemp(path.join(tmpdir(), 'vendure-audit-evidence-'));
+    const lockfilePath = path.join(fixtureRoot, 'bun.lock');
+    const outputPath = path.join(fixtureRoot, 'audit-evidence.json');
+    let attempts = 0;
+    try {
+        await writeFile(lockfilePath, 'fixture-lockfile');
+        const evidence = await createBunAuditEvidence({
+            auditLevel: 'high',
+            commandRunner: () => {
+                attempts += 1;
+                return attempts === 1
+                    ? { status: 1, stderr: 'ConnectionClosed: audit request failed', stdout: '' }
+                    : { status: 0, stderr: '', stdout: JSON.stringify(audit) };
+            },
+            lockfilePath: 'bun.lock',
+            maxAttempts: 3,
+            outputPath,
+            repositoryRoot: fixtureRoot,
+            retryDelayMs: 0,
+        });
+
+        assert.equal(attempts, 2);
+        assert.deepEqual(JSON.parse(await readFile(outputPath, 'utf8')), evidence);
+        assert.equal((await stat(outputPath)).mode % 0o1000, 0o600);
+        assert.equal(
+            evidence.lockfileSha256,
+            '28cf8bb74277e5d7e258f409525fd7937480f253caf5278c03ddbf7f1c4223a7',
+        );
+    } finally {
+        await rm(fixtureRoot, { recursive: true, force: true });
+    }
 });

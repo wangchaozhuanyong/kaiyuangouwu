@@ -97,7 +97,7 @@ export function createRuntimeAuditReport(runtimePackages, auditReport, { failOn 
 }
 
 const RETRYABLE_AUDIT_FAILURE =
-    /Timeout: audit request failed|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|ECONNREFUSED|fetch failed|socket hang up/iu;
+    /(?:Timeout|ConnectionClosed): audit request failed|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|ECONNREFUSED|fetch failed|socket hang up/iu;
 
 export function parseBunAuditJson(output, source = 'bun audit') {
     try {
@@ -125,23 +125,33 @@ export function parseSavedBunAuditEvidence(output, expectedLockfileSha256) {
     return evidence.report;
 }
 
-function parseBunAuditResult(result) {
+function parseBunAuditResult(result, { requireSuccessfulExit = false } = {}) {
     if (result.error) {
         throw result.error;
     }
     const output = result.stdout.trim()
         ? result.stdout
         : [result.stdout, result.stderr].filter(Boolean).join('\n');
-    return parseBunAuditJson(output);
+    const report = parseBunAuditJson(output);
+    if (requireSuccessfulExit && result.status !== 0) {
+        throw new Error(`bun audit policy failed with exit code ${String(result.status)}`);
+    }
+    return report;
 }
 
 /**
  * @param {string} repositoryRoot
- * @param {{ commandRunner?: typeof spawnSync, maxAttempts?: number, retryDelayMs?: number }} [options]
+ * @param {{ auditLevel?: string, commandRunner?: typeof spawnSync, maxAttempts?: number, requireSuccessfulExit?: boolean, retryDelayMs?: number }} [options]
  */
 export async function runBunAudit(
     repositoryRoot,
-    { commandRunner = spawnSync, maxAttempts = 3, retryDelayMs = 2_000 } = {},
+    {
+        auditLevel,
+        commandRunner = spawnSync,
+        maxAttempts = 3,
+        requireSuccessfulExit = false,
+        retryDelayMs = 2_000,
+    } = {},
 ) {
     if (!Number.isInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 5) {
         throw new Error('bun audit maxAttempts must be an integer between 1 and 5');
@@ -149,14 +159,23 @@ export async function runBunAudit(
     if (!Number.isInteger(retryDelayMs) || retryDelayMs < 0 || retryDelayMs > 30_000) {
         throw new Error('bun audit retryDelayMs must be an integer between 0 and 30000');
     }
+    if (auditLevel !== undefined) {
+        severityRank(auditLevel);
+    }
+
+    const commandArguments = ['audit', '--json'];
+    if (auditLevel) {
+        commandArguments.push('--audit-level', auditLevel);
+    }
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         try {
             return parseBunAuditResult(
-                commandRunner('bun', ['audit', '--json'], {
+                commandRunner('bun', commandArguments, {
                     cwd: repositoryRoot,
                     encoding: 'utf8',
                 }),
+                { requireSuccessfulExit },
             );
         } catch (error) {
             const detail = error instanceof Error ? error.message : String(error);

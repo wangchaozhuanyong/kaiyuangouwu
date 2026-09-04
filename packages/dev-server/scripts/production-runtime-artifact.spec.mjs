@@ -93,14 +93,19 @@ void test('runtime artifact includes release publishers and every media manifest
 });
 
 void test('production artifact workflow reuses one validated high-severity audit response', async () => {
-    const workflow = await readFile(
-        path.join(repositoryRoot, '.github/workflows/build_production_runtime.yml'),
-        'utf8',
-    );
+    const [workflow, evidenceScript] = await Promise.all([
+        readFile(path.join(repositoryRoot, '.github/workflows/build_production_runtime.yml'), 'utf8'),
+        readFile(
+            path.join(repositoryRoot, 'packages/dev-server/scripts/production-runtime-audit-evidence.mjs'),
+            'utf8',
+        ),
+    ]);
 
-    assert.equal([...workflow.matchAll(/bun audit/gu)].length, 1);
-    assert.match(workflow, /bun audit --json --audit-level high > "\$BUN_AUDIT_RAW"/u);
-    assert.match(workflow, /lockfileSha256.*createHash\('sha256'\)/su);
+    assert.equal([...workflow.matchAll(/production-runtime-audit-evidence\.mjs/gu)].length, 1);
+    assert.match(workflow, /--audit-level high/u);
+    assert.match(workflow, /--lockfile bun\.lock/u);
+    assert.match(evidenceScript, /runBunAudit\(resolvedRepositoryRoot/u);
+    assert.match(evidenceScript, /lockfileSha256.*createHash\('sha256'\)/su);
     assert.match(workflow, /--audit-report "\$BUN_AUDIT_REPORT"/u);
 });
 

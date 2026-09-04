@@ -104,25 +104,11 @@ jobs:
 
             - name: Audit monorepo dependencies
               run: |
-                  BUN_AUDIT_RAW="$RUNNER_TEMP/bun-audit-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.raw.json"
                   BUN_AUDIT_REPORT="$RUNNER_TEMP/bun-audit-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.json"
-                  bun audit --json --audit-level high > "$BUN_AUDIT_RAW"
-                  node --input-type=module - "$BUN_AUDIT_RAW" "$BUN_AUDIT_REPORT" bun.lock <<'NODE'
-                  import { createHash } from 'node:crypto';
-                  import { readFileSync, writeFileSync } from 'node:fs';
-
-                  const [rawPath, evidencePath, lockfilePath] = process.argv.slice(2);
-                  const report = JSON.parse(readFileSync(rawPath, 'utf8'));
-                  const lockfileSha256 = createHash('sha256')
-                    .update(readFileSync(lockfilePath))
-                    .digest('hex');
-                  writeFileSync(
-                    evidencePath,
-                    `${JSON.stringify({ format: 1, lockfileSha256, report })}\n`,
-                    { mode: 0o600 },
-                  );
-                  NODE
-                  rm -- "$BUN_AUDIT_RAW"
+                  node packages/dev-server/scripts/production-runtime-audit-evidence.mjs \
+                    --audit-level high \
+                    --lockfile bun.lock \
+                    --output "$BUN_AUDIT_REPORT"
                   echo "BUN_AUDIT_REPORT=$BUN_AUDIT_REPORT" >> "$GITHUB_ENV"
 
             - name: Build lint prerequisites
