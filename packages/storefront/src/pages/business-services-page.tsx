@@ -1,6 +1,6 @@
-import { Puzzle, Sparkles } from 'lucide-react';
 import type { RouteState } from '../storefront-router';
-import type { StorefrontContentBlock, StorefrontLanguage } from '../types';
+import type { StorefrontContentBlock, StorefrontContentTargetType, StorefrontLanguage } from '../types';
+import { ExternalLink, Puzzle, Sparkles } from 'lucide-react';
 
 import { ClientPluginSlot, resolveClientPlugins } from '../client-plugins/client-plugin-registry';
 import { resolveBottomNavigationItems } from '../components/common/bottom-navigation';
@@ -13,10 +13,12 @@ interface BusinessServicesPageProps {
     contentBlocks: StorefrontContentBlock[];
     language: StorefrontLanguage;
     onNavigate: (route: RouteState) => void;
+    onContentTarget: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
 }
 
 export function BusinessServicesPage() {
-    const { contentBlocks, language, onNavigate } = useStorefront<BusinessServicesPageProps>();
+    const { contentBlocks, language, onNavigate, onContentTarget } =
+        useStorefront<BusinessServicesPageProps>();
     const isZh = language === 'zh';
     const clientPluginBlock = contentBlocks.find(
         block => block.type === 'CLIENT_PLUGINS' && block.code === CLIENT_PLUGIN_BLOCK_CODE,
@@ -35,6 +37,10 @@ export function BusinessServicesPage() {
         (isZh
             ? '这里展示店铺为你开放的工具、服务和专属权益。'
             : 'Explore tools, services, and benefits enabled by this store.');
+    const heroLinkTarget =
+        hasManagedCopy && clientPluginBlock?.targetType === 'URL'
+            ? clientPluginBlock.targetValue?.trim() || null
+            : null;
     const plugins = resolveClientPlugins(clientPluginBlock, 'BUSINESS_SERVICES_MAIN');
 
     return (
@@ -50,6 +56,16 @@ export function BusinessServicesPage() {
                 <div>
                     <h2 id="business-services-heading">{heroTitle}</h2>
                     <p>{heroDescription}</p>
+                    {heroLinkTarget ? (
+                        <button
+                            type="button"
+                            className="business-services-hero-link"
+                            onClick={() => onContentTarget('URL', heroLinkTarget)}
+                        >
+                            {isZh ? '访问链接' : 'Open link'}
+                            <ExternalLink aria-hidden="true" />
+                        </button>
+                    ) : null}
                 </div>
             </section>
 

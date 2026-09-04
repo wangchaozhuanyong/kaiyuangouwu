@@ -3098,6 +3098,33 @@
     line-height: 1.55;
 }
 
+.business-services-hero-link {
+    margin-top: 12px;
+    border: 0;
+    border-radius: 999px;
+    padding: 7px 11px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255, 255, 255, 0.78);
+    color: #5b21b6;
+    font: inherit;
+    font-size: 11px;
+    font-weight: 800;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(76, 29, 149, 0.08);
+}
+
+.business-services-hero-link:focus-visible {
+    outline: 2px solid #7c3aed;
+    outline-offset: 2px;
+}
+
+.business-services-hero-link svg {
+    width: 13px;
+    height: 13px;
+}
+
 .business-services-page .category-client-plugin-slot {
     --client-plugin-slot-block-space: 10px;
     --client-plugin-slot-inline-space: 12px;
