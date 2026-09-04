@@ -354,7 +354,7 @@ VENDURE_API_ORIGIN=http://127.0.0.1:3002 VENDURE_STOREFRONT_URL=https://moyaoai.
     --channel-code __default_channel__
 ```
 
-该工具按 SHA-256 标签复用品牌资源，通过 Admin API 写入当前 StoreProfile，再以中文和英文分别从 Shop API 反查名称、口号、色板和三个 Asset ID。任一字段不一致都必须停止切换；密码只从已加载的生产 Secret 环境读取。
+该工具按 SHA-256 标签复用品牌资源，通过 Admin API 写入当前 StoreProfile；素材查询和上传结果只读取稳定的 Asset ID，避免历史素材翻译元数据为空时阻断幂等发布。随后以与真实客户端一致的 `languageCode` 查询参数和语言请求头，分别从 Shop API 反查中文、英文名称、口号、色板和三个 Asset ID。任一字段不一致都必须停止切换；密码只从已加载的生产 Secret 环境读取。
 
 切换脚本会在 systemd journal 中以 `vendure-production-switch` 标记依次记录 `requested`、`succeeded` 或 `failed`。每条事件包含部署 ID、目标 SHA、候选目录、调用用户、SSH 来源 IP、进程和父进程信息，不记录命令参数、环境变量或密钥。`requested` 写入失败会中止切换，避免无审计地改动 PM2。发布后用同一部署 ID 核对完整事件链：
 

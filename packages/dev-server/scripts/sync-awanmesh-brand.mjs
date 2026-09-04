@@ -77,7 +77,7 @@ const STORE_PROFILES_QUERY = `
 const ASSET_QUERY = `
     query AwanMeshBrandAsset($tags: [String!]) {
         assets(options: { take: 1, tags: $tags, tagsOperator: AND }) {
-            items { id name source preview }
+            items { id }
         }
     }
 `;
@@ -211,7 +211,7 @@ async function uploadAsset(fetchImpl, adminEndpoint, authToken, channel, asset) 
             operationName: 'CreateAwanMeshBrandAsset',
             query: `mutation CreateAwanMeshBrandAsset($input: [CreateAssetInput!]!) {
                 createAssets(input: $input) {
-                    ... on Asset { id name source preview }
+                    ... on Asset { id }
                     ... on ErrorResult { errorCode message }
                 }
             }`,
@@ -255,6 +255,12 @@ function profileAssetId(profile, field) {
         logoOnDarkAssetId: 'logoOnDarkAsset',
     }[field];
     return profile[relation]?.id ?? null;
+}
+
+function shopEndpointForLanguage(endpoint, languageCode) {
+    const url = new URL(endpoint);
+    url.searchParams.set('languageCode', languageCode);
+    return url.toString();
 }
 
 export function buildAwanMeshBrandPlan(profile, assetsByKey, brand = awanMeshBrand) {
@@ -388,7 +394,7 @@ export async function syncAwanMeshBrand({
         for (const languageCode of ['zh_Hans', 'en']) {
             const result = await graphql(
                 fetchImpl,
-                shopEndpoint,
+                shopEndpointForLanguage(shopEndpoint, languageCode),
                 SHOP_BRANDING_QUERY,
                 undefined,
                 requestHeaders('', channel.token, languageCode),
