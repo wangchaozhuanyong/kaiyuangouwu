@@ -66,6 +66,7 @@ void test('production Nginx routes protected downloads and hardens both APIs', a
         assert.match(location.groups.body, /proxy_buffering off;/u);
         assert.match(location.groups.body, /proxy_read_timeout 1h;/u);
         assert.match(location.groups.body, /limit_conn vendure_realtime_per_ip 12;/u);
+        assert.match(location.groups.body, /proxy_set_header vendure-token "";/u);
         assert.match(
             location.groups.body,
             /access_log \/var\/log\/nginx\/awanmesh-storefront-realtime\.log vendure_realtime;/u,
@@ -210,6 +211,7 @@ void test('production runbook verifies a direct storefront with an optional prom
 
     assert.match(runbook, /node deploy\/verify-production-release\.mjs/u);
     assert.match(runbook, /node deploy\/verify-storefront-realtime\.mjs/u);
+    assert.match(runbook, /公网探针会模拟旧版客户端携带无效 `vendure-token`/u);
     assert.match(
         runbook,
         /--mode public-smoke \\\n\s+--url [^\n]+ \\\n\s+--ready-timeout-ms 2000 \\\n\s+--heartbeat-timeout-ms 18000 \\\n\s+--release-id/u,

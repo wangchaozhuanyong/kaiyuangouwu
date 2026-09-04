@@ -18,6 +18,7 @@ const DEFAULT_RELEASE_TIMEOUT_MS = 5_000;
 const DEFAULT_RECOVERY_POLL_MS = 250;
 const DEFAULT_SERIAL_CYCLES = 3;
 const DEFAULT_PROBE_IP_BASE = '198.51.100.10';
+const LEGACY_CHANNEL_TOKEN_PROBE = 'legacy-market-code-probe';
 const MAX_READY_HEARTBEAT_INTERVAL_MS = 300_000;
 
 class ReadyTimeoutError extends Error {
@@ -190,6 +191,7 @@ export async function openStorefrontRealtimeConnection({
     url: urlValue = DEFAULT_URL,
     connectAddress,
     clientIp,
+    channelToken,
     probeId = `${process.pid}-${Date.now()}`,
     readyTimeoutMs = DEFAULT_READY_TIMEOUT_MS,
     closeTimeoutMs = DEFAULT_CLOSE_TIMEOUT_MS,
@@ -201,6 +203,9 @@ export async function openStorefrontRealtimeConnection({
     closeTimeoutMs = positiveInteger(closeTimeoutMs, 'closeTimeoutMs');
     if (clientIp && !connectAddress) {
         throw new Error('clientIp is only allowed with an explicit loopback connectAddress');
+    }
+    if (channelToken != null && (typeof channelToken !== 'string' || !channelToken.trim())) {
+        throw new Error('channelToken must be a non-empty string');
     }
     if (connectAddress) assertLoopback(connectAddress);
     if (clientIp && isIP(clientIp) === 0) throw new Error('clientIp must be a valid IP address');
@@ -313,6 +318,7 @@ export async function openStorefrontRealtimeConnection({
                 connection: 'close',
                 host: requestUrl.host,
                 ...(clientIp ? { 'cf-connecting-ip': clientIp } : {}),
+                ...(channelToken ? { 'vendure-token': channelToken } : {}),
             };
             request = transport.request(
                 {
@@ -675,6 +681,7 @@ export async function verifyPublicSmoke({
         url,
         readyTimeoutMs,
         closeTimeoutMs,
+        channelToken: LEGACY_CHANNEL_TOKEN_PROBE,
         probeId: `public-smoke-${releaseId}`,
         signal,
         rejectUnauthorized,
@@ -694,6 +701,7 @@ export async function verifyPublicSmoke({
                 contentType: connection.contentType,
                 readyMs: connection.readyAtMs,
                 readyHeartbeatIntervalMs: connection.readyHeartbeatIntervalMs,
+                legacyChannelHeaderCompatible: true,
                 ...(heartbeatAtMs == null ? {} : { heartbeatMs: heartbeatAtMs }),
                 cfRay: connection.cfRay || null,
             };
