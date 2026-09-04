@@ -27,8 +27,6 @@ jobs:
               with:
                   fetch-depth: 0
             - uses: ./.github/actions/setup
-            - name: Audit dependencies at the production threshold
-              run: node packages/dev-server/scripts/production-runtime-audit.mjs --audit-level high
             - name: Check repository policies
               run: |
                   bun run check:migration-registry
@@ -53,6 +51,8 @@ jobs:
         outputs:
             packages: ${{ steps.check.outputs.packages }}
             dashboard: ${{ steps.check.outputs.dashboard }}
+            dependencies: ${{ steps.check.outputs.dependencies }}
+            e2e: ${{ steps.check.outputs.e2e }}
         steps:
             - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
               with:
@@ -63,6 +63,8 @@ jobs:
                   if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
                     echo "packages=true" >> "$GITHUB_OUTPUT"
                     echo "dashboard=true" >> "$GITHUB_OUTPUT"
+                    echo "dependencies=true" >> "$GITHUB_OUTPUT"
+                    echo "e2e=true" >> "$GITHUB_OUTPUT"
                     exit 0
                   fi
 
@@ -87,6 +89,34 @@ jobs:
                   else
                     echo "dashboard=false" >> "$GITHUB_OUTPUT"
                   fi
+
+                  if echo "$changed" | grep -qE '(^|/)package\.json$|^(bun\.lock|bunfig\.toml|patches/|\.github/actions/setup/action\.yml|packages/dev-server/scripts/production-runtime-audit(\.spec)?\.mjs)$'; then
+                    echo "dependencies=true" >> "$GITHUB_OUTPUT"
+                  else
+                    echo "dependencies=false" >> "$GITHUB_OUTPUT"
+                  fi
+
+                  # The four database suites exercise only the packages that declare an
+                  # e2e script plus their shared core/testing inputs. Frontend, media and
+                  # deployment-only changes keep their build and unit gates without paying
+                  # for four unrelated database environments.
+                  if echo "$changed" | grep -qE '^(\.github/(actions/setup/action\.yml|workflows/(build_and_test|codegen)\.yml)|e2e-common/|patches/|package\.json$|bun\.lock$|bunfig\.toml$|tsconfig[^/]*\.json$|packages/(asset-server-plugin|cli|common|core|graphiql-plugin|job-queue-plugin|testing)/)'; then
+                    echo "e2e=true" >> "$GITHUB_OUTPUT"
+                  else
+                    echo "e2e=false" >> "$GITHUB_OUTPUT"
+                  fi
+    dependency-audit:
+        name: dependency audit
+        needs: detect-changes
+        if: needs.detect-changes.outputs.dependencies == 'true'
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+        steps:
+            - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+            - uses: ./.github/actions/setup
+            - name: Audit dependencies at the production threshold
+              run: node packages/dev-server/scripts/production-runtime-audit.mjs --audit-level high
     codegen:
         needs: detect-changes
         if: needs.detect-changes.outputs.packages == 'true'
@@ -151,7 +181,7 @@ jobs:
         strategy:
             fail-fast: false
             matrix:
-                node: [20.x, 22.x, 24.x]
+                node: ${{ github.event_name == 'pull_request' && fromJSON('["22.x"]') || fromJSON('["20.x", "22.x", "24.x"]') }}
         steps:
             - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
             - uses: ./.github/actions/setup
@@ -163,6 +193,8 @@ jobs:
               run: bun run --cwd packages/dev-server build:local-plugins
             - name: Unit tests
               run: bun run test
+            - name: Operations dashboard regression tests
+              run: bun run --cwd packages/operations-dashboard-plugin test
     dashboard-i18n:
         name: dashboard i18n sync
         needs: detect-changes
@@ -274,7 +306,7 @@ jobs:
     e2e-sqljs:
         name: e2e (sqljs)
         needs: detect-changes
-        if: needs.detect-changes.outputs.packages == 'true'
+        if: needs.detect-changes.outputs.e2e == 'true'
         runs-on: ubuntu-latest
         timeout-minutes: 30
         permissions:
@@ -303,7 +335,7 @@ jobs:
     e2e-mariadb:
         name: e2e (mariadb)
         needs: detect-changes
-        if: needs.detect-changes.outputs.packages == 'true'
+        if: needs.detect-changes.outputs.e2e == 'true'
         runs-on: ubuntu-latest
         timeout-minutes: 45
         permissions:
@@ -342,7 +374,7 @@ jobs:
     e2e-mysql:
         name: e2e (mysql)
         needs: detect-changes
-        if: needs.detect-changes.outputs.packages == 'true'
+        if: needs.detect-changes.outputs.e2e == 'true'
         runs-on: ubuntu-latest
         timeout-minutes: 45
         permissions:
@@ -379,7 +411,7 @@ jobs:
     e2e-postgres:
         name: e2e (postgres)
         needs: detect-changes
-        if: needs.detect-changes.outputs.packages == 'true'
+        if: needs.detect-changes.outputs.e2e == 'true'
         runs-on: ubuntu-latest
         timeout-minutes: 30
         permissions:
@@ -422,6 +454,7 @@ jobs:
         needs:
             - quality-gates
             - detect-changes
+            - dependency-audit
             - codegen
             - build
             - unit-tests

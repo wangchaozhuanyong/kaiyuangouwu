@@ -14,8 +14,19 @@ on:
                 description: 'Full 40-character SHA currently at origin/main'
                 required: true
                 type: string
+            media_keys:
+                description: 'Optional reviewed comma-separated storefront media manifest keys'
+                required: false
+                default: ''
+                type: string
+            channel_codes:
+                description: 'Required reviewed Channel codes when media_keys is set'
+                required: false
+                default: ''
+                type: string
 
 permissions:
+    actions: read
     contents: read
 
 concurrency:
@@ -24,6 +35,8 @@ concurrency:
 
 env:
     CI: true
+    MEDIA_CHANNEL_CODES: ${{ inputs.channel_codes || '' }}
+    MEDIA_KEYS: ${{ inputs.media_keys || '' }}
     NODE_OPTIONS: --max-old-space-size=8192
 
 jobs:
@@ -38,6 +51,22 @@ jobs:
               run: |
                   if [[ ! "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]; then
                     echo "target_sha must be a lowercase 40-character Git SHA" >&2
+                    exit 1
+                  fi
+                  if [[ -n "$MEDIA_KEYS" ]] && [[ ! "$MEDIA_KEYS" =~ ^[a-z0-9][a-z0-9-]*(,[a-z0-9][a-z0-9-]*)*$ ]]; then
+                    echo "media_keys must be a comma-separated list of manifest keys" >&2
+                    exit 1
+                  fi
+                  if [[ -n "$MEDIA_CHANNEL_CODES" ]] && [[ ! "$MEDIA_CHANNEL_CODES" =~ ^[a-z0-9_][a-z0-9_-]*(,[a-z0-9_][a-z0-9_-]*)*$ ]]; then
+                    echo "channel_codes must be a comma-separated list of Channel codes" >&2
+                    exit 1
+                  fi
+                  if [[ -n "$MEDIA_KEYS" && -z "$MEDIA_CHANNEL_CODES" ]]; then
+                    echo "channel_codes is required when media_keys is set" >&2
+                    exit 1
+                  fi
+                  if [[ -z "$MEDIA_KEYS" && -n "$MEDIA_CHANNEL_CODES" ]]; then
+                    echo "channel_codes cannot be set without media_keys" >&2
                     exit 1
                   fi
 
@@ -56,6 +85,43 @@ jobs:
                   test -z "$(git status --porcelain)"
                   git fetch origin main --no-tags --prune
                   test "$(git rev-parse refs/remotes/origin/main^{commit})" = "$TARGET_SHA"
+
+            - name: Verify the exact release tree passed Build & Test
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  TARGET_SHA: ${{ inputs.target_sha || github.sha }}
+              run: |
+                  read -r -a release_commit < <(git rev-list --parents -n 1 "$TARGET_SHA")
+                  if [[ "${#release_commit[@]}" -ne 3 ]]; then
+                    echo 'Production releases require a reviewed two-parent main merge commit' >&2
+                    exit 1
+                  fi
+
+                  RELEASE_BASE_SHA="${release_commit[1]}"
+                  REVIEWED_HEAD_SHA="${release_commit[2]}"
+                  git merge-base --is-ancestor "$RELEASE_BASE_SHA" "$REVIEWED_HEAD_SHA" || {
+                    echo 'The reviewed PR head did not include the final main base' >&2
+                    exit 1
+                  }
+
+                  TARGET_TREE="$(git rev-parse "$TARGET_SHA^{tree}")"
+                  REVIEWED_TREE="$(git rev-parse "$REVIEWED_HEAD_SHA^{tree}")"
+                  if [[ "$TARGET_TREE" != "$REVIEWED_TREE" ]]; then
+                    echo 'The final main tree differs from the reviewed PR tree' >&2
+                    exit 1
+                  fi
+
+                  CI_RUN_ID="$(gh api \
+                    "/repos/${GITHUB_REPOSITORY}/actions/workflows/build_and_test.yml/runs?event=pull_request&status=success&head_sha=${REVIEWED_HEAD_SHA}&per_page=20" \
+                    --jq '.workflow_runs[0].id // empty')"
+                  if [[ ! "$CI_RUN_ID" =~ ^[0-9]+$ ]]; then
+                    echo 'No successful Build & Test run exists for the reviewed PR head' >&2
+                    exit 1
+                  fi
+
+                  echo "CI_RUN_ID=$CI_RUN_ID" >> "$GITHUB_ENV"
+                  echo "REVIEWED_HEAD_SHA=$REVIEWED_HEAD_SHA" >> "$GITHUB_ENV"
+                  echo "TARGET_TREE=$TARGET_TREE" >> "$GITHUB_ENV"
 
             - name: Restrict automatic releases to Skill-only changes
               if: github.event_name == 'push'
@@ -111,16 +177,8 @@ jobs:
                     --lockfile bun.lock
                   echo "BUN_AUDIT_REPORT=$BUN_AUDIT_REPORT" >> "$GITHUB_ENV"
 
-            - name: Build lint prerequisites
-              run: bunx lerna run ci
-
             - name: Validate prompt Skill release
               run: bun run --cwd packages/image-generation-plugin test:skill
-
-            - name: Lint without modifying sources
-              env:
-                  TARGET_SHA: ${{ inputs.target_sha || github.sha }}
-              run: bun run lint:check -- --base "${TARGET_SHA}^"
 
             - name: Build production bundles
               env:
@@ -163,11 +221,8 @@ jobs:
                   DB_SYNCHRONIZE: 'false'
               run: bun run build
 
-            - name: Run release checks
+            - name: Run release-only checks
               run: |
-                  bun run test
-                  bun run --cwd packages/operations-dashboard-plugin test
-                  bun run --cwd packages/dev-server test:dev-workflow
                   bun run check-imports
                   bun run check-core-type-defs
                   bun run check-angular-versions
@@ -200,6 +255,19 @@ jobs:
                     cd "$ARCHIVE_DIR"
                     sha256sum "$ARTIFACT_NAME.tar.gz" > "$ARTIFACT_NAME.tar.gz.sha256"
                   )
+                  jq -n \
+                    --arg archiveName "$(basename "$ARCHIVE_PATH")" \
+                    --arg archiveSha256 "$(cut -d ' ' -f 1 "$ARCHIVE_PATH.sha256")" \
+                    --arg mediaChannelCodes "$MEDIA_CHANNEL_CODES" \
+                    --arg mediaKeys "$MEDIA_KEYS" \
+                    --arg sourceRunId "$GITHUB_RUN_ID" \
+                    --arg targetSha "$TARGET_SHA" \
+                    '{archiveName: $archiveName, archiveSha256: $archiveSha256, format: 1, mediaChannelCodes: $mediaChannelCodes, mediaKeys: $mediaKeys, sourceRunId: $sourceRunId, targetSha: $targetSha}' \
+                    > "$ARCHIVE_DIR/release-plan.json"
+                  (
+                    cd "$ARCHIVE_DIR"
+                    sha256sum release-plan.json > release-plan.json.sha256
+                  )
 
                   echo "ARTIFACT_NAME=$ARTIFACT_NAME" >> "$GITHUB_ENV"
                   echo "ARTIFACT_DIR=$ARTIFACT_DIR" >> "$GITHUB_ENV"
@@ -217,8 +285,17 @@ jobs:
                     echo "- Runner: \`linux/x64\`"
                     echo "- Node: \`$(node --version)\`"
                     echo "- Bun: \`$(bun --version)\`"
+                    echo "- Validated CI run: \`$CI_RUN_ID\`"
+                    echo "- Reviewed head: \`$REVIEWED_HEAD_SHA\`"
+                    echo "- Source tree: \`$TARGET_TREE\`"
                     echo "- Archive: \`$(basename "$ARCHIVE_PATH")\`"
                     echo "- Archive SHA-256: \`$(cut -d ' ' -f 1 "$ARCHIVE_CHECKSUM_PATH")\`"
+                    if [[ -n "$MEDIA_KEYS" ]]; then
+                      echo "- Reviewed media keys: \`$MEDIA_KEYS\`"
+                      echo "- Reviewed Channel codes: \`$MEDIA_CHANNEL_CODES\`"
+                    else
+                      echo '- Reviewed media keys: `none`'
+                    fi
                   } >> "$GITHUB_STEP_SUMMARY"
                   node - "$ARTIFACT_DIR/RUNTIME-AUDIT.json" >> "$GITHUB_STEP_SUMMARY" <<'NODE'
                   const report = require(process.argv[2]);

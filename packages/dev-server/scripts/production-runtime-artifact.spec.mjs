@@ -106,6 +106,31 @@ void test('production artifact workflow reuses one validated high-severity audit
     assert.match(workflow, /--audit-report "\$BUN_AUDIT_REPORT"/u);
 });
 
+void test('production artifact reuses exact successful CI evidence instead of rerunning the suite', async () => {
+    const workflow = await readFile(
+        path.join(repositoryRoot, '.github/workflows/build_production_runtime.yml'),
+        'utf8',
+    );
+    const repositoryWorkflow = await readFile(
+        path.join(repositoryRoot, '.github/workflows/build_and_test.yml'),
+        'utf8',
+    );
+
+    assert.match(workflow, /actions: read/u);
+    assert.match(workflow, /read -r -a release_commit < <\(git rev-list --parents -n 1 "\$TARGET_SHA"\)/u);
+    assert.match(workflow, /git merge-base --is-ancestor "\$RELEASE_BASE_SHA" "\$REVIEWED_HEAD_SHA"/u);
+    assert.match(workflow, /TARGET_TREE="\$\(git rev-parse "\$TARGET_SHA\^\{tree\}"\)"/u);
+    assert.match(workflow, /REVIEWED_TREE="\$\(git rev-parse "\$REVIEWED_HEAD_SHA\^\{tree\}"\)"/u);
+    assert.match(workflow, /actions\/workflows\/build_and_test\.yml\/runs/u);
+    assert.match(workflow, /event=pull_request&status=success&head_sha=\$\{REVIEWED_HEAD_SHA\}/u);
+    assert.doesNotMatch(workflow, /bun run --cwd packages\/dev-server test:dev-workflow/u);
+    assert.doesNotMatch(workflow, /^\s+bun run test$/mu);
+    assert.match(
+        repositoryWorkflow,
+        /Operations dashboard regression tests[\s\S]+operations-dashboard-plugin test/u,
+    );
+});
+
 void test('runtime artifact output is restricted to a new child of the artifact directory', async () => {
     await assert.rejects(() => assertSafeOutputPath(repositoryRoot), /Output must be a child/u);
     await assert.rejects(() => assertSafeOutputPath(runtimeArtifactsRoot), /Output must be a child/u);

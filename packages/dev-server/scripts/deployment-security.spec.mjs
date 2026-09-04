@@ -206,8 +206,8 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
         path.join(repositoryRoot, '.github/workflows/deploy_production_runtime.yml'),
         'utf8',
     );
-    const reviewedMediaWorkflow = await readFile(
-        path.join(repositoryRoot, '.github/workflows/deploy_reviewed_storefront_media.yml'),
+    const artifactWorkflow = await readFile(
+        path.join(repositoryRoot, '.github/workflows/build_production_runtime.yml'),
         'utf8',
     );
     const migrationReadinessCommand = [
@@ -229,7 +229,7 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.match(script, /export STOREFRONT_PROMOTION_GATE_ENABLED=false/u);
     assert.ok(
         script.indexOf('initialize-production-usdt-secrets.mjs') <
-            script.indexOf('source "${environment_file}"'),
+            script.lastIndexOf('source "${environment_file}"'),
     );
     assert.ok(script.includes(migrationReadinessCommand));
     assert.match(script, /switch-production-runtime\.sh/u);
@@ -254,7 +254,7 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.equal(
         (
             script.match(
-                /STOREFRONT_MEDIA_CHANNEL_CODES="\$\{reviewed_storefront_media_channel_codes\}"/gu,
+                /^\s*STOREFRONT_MEDIA_CHANNEL_CODES="\$\{reviewed_storefront_media_channel_codes\}"/gmu,
             ) ?? []
         ).length,
         2,
@@ -263,6 +263,19 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.doesNotMatch(script, /sync-storefront-media\.mjs[\s\S]{0,200}--channel-codes/u);
     assert.match(script, /--apply --allow-remote/u);
     assert.ok(script.indexOf('--dry-run') < script.indexOf('--apply --allow-remote'));
+    assert.match(script, /PRODUCTION_DEPLOY_ALREADY_CURRENT/u);
+    assert.match(script, /STOREFRONT_MEDIA_PREFLIGHT_BEGIN/u);
+    assert.match(script, /STOREFRONT_MEDIA_PREFLIGHT_OK/u);
+    assert.ok(script.indexOf('STOREFRONT_MEDIA_PREFLIGHT_BEGIN') < script.indexOf('DEPLOY_MIGRATION_BEGIN'));
+    assert.ok(
+        script.indexOf('STOREFRONT_MEDIA_PREFLIGHT_OK') < script.indexOf('vendure-mysql-backup.service'),
+    );
+    assert.ok(
+        script.indexOf('switch-production-runtime.sh" "${candidate}') <
+            script.indexOf('STOREFRONT_MEDIA_PUBLISH_BEGIN'),
+    );
+    assert.match(script, /rollback_needed=0\n\s+printf 'ROLLBACK_BEGIN/u);
+    assert.equal(script.match(/ROLLBACK_BEGIN/gu)?.length, 1);
     assert.match(script, /readonly memory_guard=.*production-memory-guard\.cjs/u);
     assert.match(script, /ensure-production-swap\.sh/u);
     assert.match(script, /vendure-production-swap/u);
@@ -285,23 +298,26 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.match(workflow, /yunqiao-vendure-github-deploy/u);
     assert.match(workflow, /i-041a146558e432cbf/u);
     assert.match(workflow, /AWS-RunShellScript/u);
+    assert.match(workflow, /release-plan\.json/u);
+    assert.match(workflow, /archiveSha256/u);
+    assert.match(workflow, /VENDURE_REVIEWED_STOREFRONT_MEDIA_KEYS/u);
+    assert.match(workflow, /VENDURE_REVIEWED_STOREFRONT_MEDIA_CHANNEL_CODES/u);
+    assert.match(workflow, /SSM_RESULT="\$RUNNER_TEMP\/ssm-result\.json"/u);
+    assert.match(workflow, /grep -E '\^\(PRODUCTION_\|DEPLOY_\|STOREFRONT_MEDIA_/u);
+    assert.match(workflow, /tail -n 160/u);
     assert.doesNotMatch(workflow, /AWS_ACCESS_KEY_ID/u);
     assert.doesNotMatch(workflow, /AWS_SECRET_ACCESS_KEY/u);
 
-    assert.match(reviewedMediaWorkflow, /workflow_dispatch:/u);
-    assert.match(reviewedMediaWorkflow, /target_sha:/u);
-    assert.match(reviewedMediaWorkflow, /source_run_id:/u);
-    assert.match(reviewedMediaWorkflow, /media_keys:/u);
-    assert.match(reviewedMediaWorkflow, /channel_codes:/u);
-    assert.match(reviewedMediaWorkflow, /id-token: write/u);
-    assert.match(reviewedMediaWorkflow, /actions\/download-artifact@[0-9a-f]{40}/u);
-    assert.match(reviewedMediaWorkflow, /aws-actions\/configure-aws-credentials@[0-9a-f]{40}/u);
-    assert.match(reviewedMediaWorkflow, /git merge --ff-only/u);
-    assert.match(reviewedMediaWorkflow, /VENDURE_REVIEWED_STOREFRONT_MEDIA_KEYS/u);
-    assert.match(reviewedMediaWorkflow, /VENDURE_REVIEWED_STOREFRONT_MEDIA_CHANNEL_CODES/u);
-    assert.match(reviewedMediaWorkflow, /AWS-RunShellScript/u);
-    assert.doesNotMatch(reviewedMediaWorkflow, /AWS_ACCESS_KEY_ID/u);
-    assert.doesNotMatch(reviewedMediaWorkflow, /AWS_SECRET_ACCESS_KEY/u);
+    assert.match(artifactWorkflow, /media_keys:/u);
+    assert.match(artifactWorkflow, /channel_codes:/u);
+    assert.match(artifactWorkflow, /release-plan\.json/u);
+    assert.match(artifactWorkflow, /release-plan\.json\.sha256/u);
+    assert.match(artifactWorkflow, /archiveSha256/u);
+    assert.match(artifactWorkflow, /mediaChannelCodes/u);
+    await assert.rejects(
+        readFile(path.join(repositoryRoot, '.github/workflows/deploy_reviewed_storefront_media.yml')),
+        { code: 'ENOENT' },
+    );
 });
 
 void test('MySQL restore drill is isolated, hardened, and scheduled weekly', async () => {

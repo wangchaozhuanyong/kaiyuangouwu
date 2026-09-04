@@ -56,26 +56,67 @@ jobs:
                   shopt -s nullglob
                   archives=(artifacts/*.tar.gz)
                   checksums=(artifacts/*.tar.gz.sha256)
+                  release_plans=(artifacts/release-plan.json)
+                  release_plan_checksums=(artifacts/release-plan.json.sha256)
                   test "${#archives[@]}" -eq 1
                   test "${#checksums[@]}" -eq 1
+                  test "${#release_plans[@]}" -eq 1
+                  test "${#release_plan_checksums[@]}" -eq 1
 
                   ARCHIVE_PATH="${archives[0]}"
                   ARCHIVE_NAME="$(basename "$ARCHIVE_PATH")"
                   ARTIFACT_NAME="${ARCHIVE_NAME%.tar.gz}"
                   CHECKSUM_PATH="${checksums[0]}"
+                  RELEASE_PLAN_PATH="${release_plans[0]}"
+                  RELEASE_PLAN_CHECKSUM_PATH="${release_plan_checksums[0]}"
 
                   [[ "$ARTIFACT_NAME" =~ ^${TARGET_SHA}-[0-9]+-[0-9]+-linux-x64$ ]]
                   test "$(basename "$CHECKSUM_PATH")" = "${ARCHIVE_NAME}.sha256"
                   (
                     cd artifacts
                     sha256sum --check "$(basename "$CHECKSUM_PATH")"
+                    sha256sum --check "$(basename "$RELEASE_PLAN_CHECKSUM_PATH")"
                   )
+                  ARCHIVE_SHA256="$(cut -d ' ' -f 1 "$CHECKSUM_PATH")"
+                  jq -e \
+                    --arg archiveName "$ARCHIVE_NAME" \
+                    --arg archiveSha256 "$ARCHIVE_SHA256" \
+                    --arg runId "$SOURCE_RUN_ID" \
+                    --arg sha "$TARGET_SHA" '
+                    .format == 1 and
+                    .archiveName == $archiveName and
+                    .archiveSha256 == $archiveSha256 and
+                    .sourceRunId == $runId and
+                    .targetSha == $sha and
+                    (.mediaChannelCodes | type == "string") and
+                    (.mediaKeys | type == "string")
+                  ' "$RELEASE_PLAN_PATH" >/dev/null
+                  MEDIA_CHANNEL_CODES="$(jq -r '.mediaChannelCodes' "$RELEASE_PLAN_PATH")"
+                  MEDIA_KEYS="$(jq -r '.mediaKeys' "$RELEASE_PLAN_PATH")"
+                  if [[ -n "$MEDIA_KEYS" ]] && [[ ! "$MEDIA_KEYS" =~ ^[a-z0-9][a-z0-9-]*(,[a-z0-9][a-z0-9-]*)*$ ]]; then
+                    echo 'release plan contains invalid reviewed media keys' >&2
+                    exit 1
+                  fi
+                  if [[ -n "$MEDIA_CHANNEL_CODES" ]] && [[ ! "$MEDIA_CHANNEL_CODES" =~ ^[a-z0-9_][a-z0-9_-]*(,[a-z0-9_][a-z0-9_-]*)*$ ]]; then
+                    echo 'release plan contains invalid reviewed Channel codes' >&2
+                    exit 1
+                  fi
+                  if [[ -n "$MEDIA_KEYS" && -z "$MEDIA_CHANNEL_CODES" ]]; then
+                    echo 'release plan is missing reviewed Channel codes' >&2
+                    exit 1
+                  fi
+                  if [[ -z "$MEDIA_KEYS" && -n "$MEDIA_CHANNEL_CODES" ]]; then
+                    echo 'release plan contains Channel codes without media keys' >&2
+                    exit 1
+                  fi
 
                   echo "ARCHIVE_PATH=$ARCHIVE_PATH" >> "$GITHUB_ENV"
                   echo "ARCHIVE_NAME=$ARCHIVE_NAME" >> "$GITHUB_ENV"
                   echo "ARTIFACT_NAME=$ARTIFACT_NAME" >> "$GITHUB_ENV"
                   echo "CHECKSUM_PATH=$CHECKSUM_PATH" >> "$GITHUB_ENV"
                   echo "ARTIFACT_S3_PREFIX=s3://${ARTIFACT_BUCKET}/deployments/${TARGET_SHA}" >> "$GITHUB_ENV"
+                  echo "MEDIA_CHANNEL_CODES=$MEDIA_CHANNEL_CODES" >> "$GITHUB_ENV"
+                  echo "MEDIA_KEYS=$MEDIA_KEYS" >> "$GITHUB_ENV"
 
             - name: Configure short-lived AWS credentials
               uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
@@ -92,7 +133,7 @@ jobs:
 
             - name: Deploy through Systems Manager
               run: |
-                  REMOTE_COMMAND="sudo -H -u ubuntu env GITHUB_RUN_ID='${GITHUB_RUN_ID}' /usr/local/sbin/vendure-production-deploy-from-s3 '${TARGET_SHA}' '${ARTIFACT_NAME}' '${ARTIFACT_S3_PREFIX}'"
+                  REMOTE_COMMAND="sudo -H -u ubuntu env GITHUB_RUN_ID='${GITHUB_RUN_ID}' VENDURE_REVIEWED_STOREFRONT_MEDIA_KEYS='${MEDIA_KEYS}' VENDURE_REVIEWED_STOREFRONT_MEDIA_CHANNEL_CODES='${MEDIA_CHANNEL_CODES}' /usr/local/sbin/vendure-production-deploy-from-s3 '${TARGET_SHA}' '${ARTIFACT_NAME}' '${ARTIFACT_S3_PREFIX}'"
                   jq -n --arg command "$REMOTE_COMMAND" \
                     '{commands: [$command], executionTimeout: ["3600"]}' > "$RUNNER_TEMP/ssm-parameters.json"
 
@@ -126,19 +167,39 @@ jobs:
                     sleep 5
                   done
 
+                  SSM_RESULT="$RUNNER_TEMP/ssm-result.json"
                   aws ssm get-command-invocation \
                     --region "$AWS_REGION" \
                     --command-id "$COMMAND_ID" \
                     --instance-id "$INSTANCE_ID" \
-                    --query '{Status:Status,Output:StandardOutputContent,Error:StandardErrorContent}' \
-                    --output json
-                  test "$status" = Success
+                    --output json > "$SSM_RESULT"
+
+                  jq '{Status, ResponseCode}' "$SSM_RESULT"
+                  if [[ "$status" == Success ]]; then
+                    jq -r '.StandardOutputContent // ""' "$SSM_RESULT" |
+                      grep -E '^(PRODUCTION_|DEPLOY_|STOREFRONT_MEDIA_|Runtime artifact verified)' |
+                      tail -n 120 || true
+                  else
+                    {
+                      echo '--- remote output tail ---'
+                      jq -r '.StandardOutputContent // ""' "$SSM_RESULT"
+                      echo '--- remote error tail ---'
+                      jq -r '.StandardErrorContent // ""' "$SSM_RESULT"
+                    } | tail -n 160
+                  fi
 
                   {
                     echo "## Production deployment"
                     echo
                     echo "- Target SHA: \`$TARGET_SHA\`"
                     echo "- Artifact: \`$ARTIFACT_NAME\`"
+                    if [[ -n "$MEDIA_KEYS" ]]; then
+                      echo "- Reviewed media keys: \`$MEDIA_KEYS\`"
+                      echo "- Reviewed Channel codes: \`$MEDIA_CHANNEL_CODES\`"
+                    else
+                      echo '- Reviewed media keys: `none`'
+                    fi
                     echo "- SSM command: \`$COMMAND_ID\`"
                     echo "- Status: \`$status\`"
                   } >> "$GITHUB_STEP_SUMMARY"
+                  test "$status" = Success

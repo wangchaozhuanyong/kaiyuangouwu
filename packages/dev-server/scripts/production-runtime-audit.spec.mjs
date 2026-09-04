@@ -303,6 +303,15 @@ void test('repository and production workflows use the fail-closed retrying audi
         repositoryWorkflow,
         /node packages\/dev-server\/scripts\/production-runtime-audit\.mjs --audit-level high/u,
     );
+    assert.match(repositoryWorkflow, /dependencies: \$\{\{ steps\.check\.outputs\.dependencies \}\}/u);
+    assert.match(repositoryWorkflow, /e2e: \$\{\{ steps\.check\.outputs\.e2e \}\}/u);
+    assert.match(repositoryWorkflow, /dependency-audit:/u);
+    assert.match(repositoryWorkflow, /needs\.detect-changes\.outputs\.dependencies == 'true'/u);
+    assert.match(repositoryWorkflow, /github\.event_name == 'pull_request'[\s\S]+fromJSON\('\["22\.x"\]'\)/u);
+    assert.equal(
+        [...repositoryWorkflow.matchAll(/if: needs\.detect-changes\.outputs\.e2e == 'true'/gu)].length,
+        4,
+    );
     assert.match(
         productionWorkflow,
         /node packages\/dev-server\/scripts\/production-runtime-audit\.mjs[\s\\]+--audit-level high[\s\\]+--evidence-output/u,
