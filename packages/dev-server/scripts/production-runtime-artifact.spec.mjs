@@ -109,6 +109,18 @@ void test('production artifact workflow reuses one validated high-severity audit
     assert.match(workflow, /--audit-report "\$BUN_AUDIT_REPORT"/u);
 });
 
+void test('repository quality workflow retries transient dependency audit failures', async () => {
+    const workflow = await readFile(
+        path.join(repositoryRoot, '.github/workflows/build_and_test.yml'),
+        'utf8',
+    );
+
+    assert.doesNotMatch(workflow, /run: bun audit/u);
+    assert.equal([...workflow.matchAll(/production-runtime-audit-evidence\.mjs/gu)].length, 1);
+    assert.match(workflow, /--audit-level high/u);
+    assert.match(workflow, /rm -- "\$BUN_AUDIT_REPORT"/u);
+});
+
 void test('runtime artifact output is restricted to a new child of the artifact directory', async () => {
     await assert.rejects(() => assertSafeOutputPath(repositoryRoot), /Output must be a child/u);
     await assert.rejects(() => assertSafeOutputPath(runtimeArtifactsRoot), /Output must be a child/u);
