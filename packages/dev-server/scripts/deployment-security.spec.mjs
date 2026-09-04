@@ -294,7 +294,7 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
                 /^\s*AUTH_VISUAL_CHANNEL_CODES="\$\{reviewed_storefront_media_channel_codes\}"/gmu,
             ) ?? []
         ).length,
-        2,
+        3,
     );
     assert.match(script, /sync-storefront-media\.mjs[\s\S]*--keys/u);
     assert.doesNotMatch(script, /sync-storefront-media\.mjs[\s\S]{0,200}--channel-codes/u);
@@ -308,6 +308,8 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.match(script, /STOREFRONT_MEDIA_VERIFY_OK/u);
     assert.match(script, /AUTH_VISUAL_PREFLIGHT_BEGIN/u);
     assert.match(script, /AUTH_VISUAL_PUBLISH_OK/u);
+    assert.match(script, /sync-auth-visuals\.mjs --verify/u);
+    assert.match(script, /AUTH_VISUAL_VERIFY_OK/u);
     assert.ok(script.indexOf('STOREFRONT_MEDIA_PREFLIGHT_BEGIN') < script.indexOf('DEPLOY_MIGRATION_BEGIN'));
     assert.ok(
         script.indexOf('STOREFRONT_MEDIA_PREFLIGHT_OK') < script.indexOf('vendure-mysql-backup.service'),
