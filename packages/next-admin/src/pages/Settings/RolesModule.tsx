@@ -33,6 +33,7 @@ import { useUrlTab } from '../../hooks/use-url-tab';
 import { getRoleCodeLabel, getRoleLabel } from '../../utils/status-labels';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatDateTime } from '../Sales/sales-utils';
+import { SettingsContentSkeleton } from './settings-ui';
 
 type Tab = 'MEMBERS' | 'ROLES';
 const ROLE_TABS = { members: 'MEMBERS', roles: 'ROLES' } as const;
@@ -42,6 +43,7 @@ export function RolesModule() {
     const [search, setSearch] = useState('');
     const [notice, setNotice] = useState('');
     const [actionError, setActionError] = useState('');
+    const [initialSupplementSettled, setInitialSupplementSettled] = useState(false);
     const [roleEditor, setRoleEditor] = useState<RoleRecord | 'NEW' | null>(null);
     const [memberEditor, setMemberEditor] = useState<AdministratorRecord | 'NEW' | null>(null);
     const loadingAllRecordsRef = useRef(false);
@@ -54,6 +56,14 @@ export function RolesModule() {
         fetchPolicy: 'cache-and-network',
     });
     const { data: teamData, error: teamError, fetchMore: fetchMoreTeamData, loading: teamLoading } = query;
+    const needsSupplementaryTeamData = Boolean(
+        teamData &&
+        (teamData.administrators.items.length < teamData.administrators.totalItems ||
+            teamData.roles.items.length < teamData.roles.totalItems ||
+            teamData.channels.items.length < teamData.channels.totalItems),
+    );
+    const isTeamInitializing =
+        !teamError && (!teamData || (needsSupplementaryTeamData && !initialSupplementSettled));
 
     useEffect(() => {
         const data = teamData;
@@ -98,6 +108,7 @@ export function RolesModule() {
             })
             .finally(() => {
                 loadingAllRecordsRef.current = false;
+                setInitialSupplementSettled(true);
             });
     }, [fetchMoreTeamData, teamData, teamError, teamLoading]);
 
@@ -160,7 +171,7 @@ export function RolesModule() {
                     </div>
                 </div>
             </header>
-            <main className="w-full max-w-none flex-1 space-y-4 overflow-y-auto p-5 sm:p-8">
+            <main className="min-h-0 w-full max-w-none flex-1 space-y-4 overflow-y-auto p-5 sm:p-8">
                 {notice && (
                     <Message kind="success" onClose={() => setNotice('')}>
                         {notice}
@@ -198,10 +209,10 @@ export function RolesModule() {
                         />
                     </div>
                 </div>
-                {query.loading && !query.data ? (
-                    <LoadingState />
-                ) : query.error ? (
+                {query.error && !query.data ? (
                     <ErrorState message={query.error.message} onRetry={() => void query.refetch()} />
+                ) : isTeamInitializing ? (
+                    <SettingsContentSkeleton label="正在读取员工与权限数据" sections={2} />
                 ) : tab === 'MEMBERS' ? (
                     <MembersTable
                         members={filteredMembers}
@@ -287,7 +298,7 @@ function MembersTable({
         }
     };
     return (
-        <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <section className="min-h-[620px] overflow-hidden rounded-xl border border-slate-200 bg-white">
             <div className="overflow-x-auto">
                 <table className="w-full min-w-[1500px] border-collapse text-left text-xs">
                     <thead>
@@ -453,7 +464,7 @@ function RolesTable({
         }
     };
     return (
-        <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <section className="min-h-[620px] overflow-hidden rounded-xl border border-slate-200 bg-white">
             <div className="overflow-x-auto">
                 <table className="w-full min-w-[1120px] border-collapse text-left text-xs">
                     <thead>
@@ -1062,14 +1073,6 @@ function EmptyRow({ colSpan, text }: { colSpan: number; text: string }) {
                 {text}
             </td>
         </tr>
-    );
-}
-function LoadingState() {
-    return (
-        <div className="flex min-h-96 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-xs text-slate-500">
-            <LoaderCircle className="h-4 w-4 animate-spin" />
-            正在读取员工与权限数据…
-        </div>
     );
 }
 function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {

@@ -28,7 +28,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { getServerHealthUrl, sensitiveActionContext } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
-import { DynamicCustomFieldsForm } from '../../custom-fields/DynamicCustomFieldsForm';
 import type { CustomFieldDefinition, CustomFieldValueMap } from '../../custom-fields/custom-field-types';
 import {
     addCustomFieldsToDocument,
@@ -38,6 +37,7 @@ import {
     validateCustomFieldValues,
 } from '../../custom-fields/custom-field-utils';
 import { useCustomFieldDefinitions } from '../../custom-fields/custom-fields-context';
+import { DynamicCustomFieldsForm } from '../../custom-fields/DynamicCustomFieldsForm';
 import {
     CANCEL_JOB_MUTATION,
     CREATE_API_KEY_MUTATION,
@@ -58,6 +58,7 @@ import { useUrlTab } from '../../hooks/use-url-tab';
 import { getRoleCodeLabel, getRoleLabel, getStatusLabel } from '../../utils/status-labels';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatDateTime } from '../Sales/sales-utils';
+import { SettingsContentSkeleton } from './settings-ui';
 import { TelegramNotificationsPanel } from './TelegramNotificationsPanel';
 
 type Tab = 'HEALTH' | 'JOBS' | 'SCHEDULES' | 'SETTINGS' | 'API_KEYS' | 'TELEGRAM';
@@ -130,7 +131,7 @@ export function SystemOpsModule() {
                     </button>
                 </div>
             </header>
-            <main className="mx-auto w-full max-w-none flex-1 space-y-4 overflow-y-auto p-5 sm:p-8">
+            <main className="mx-auto min-h-0 w-full max-w-none flex-1 space-y-4 overflow-y-auto p-5 sm:p-8">
                 {notice && (
                     <Message kind="success" onClose={() => setNotice('')}>
                         {notice}
@@ -187,11 +188,11 @@ export function SystemOpsModule() {
                 </div>
                 {tab === 'TELEGRAM' ? (
                     <TelegramNotificationsPanel />
+                ) : !data && !query.error ? (
+                    <SettingsContentSkeleton label="正在读取系统运维数据" sections={2} />
                 ) : tab === 'HEALTH' ? (
                     <HealthPanel data={data} graphQLError={query.error?.message} />
-                ) : query.loading && !data ? (
-                    <LoadingState />
-                ) : query.error ? (
+                ) : query.error && !data ? (
                     <ErrorState message={query.error.message} onRetry={() => void query.refetch()} />
                 ) : (
                     data && (
@@ -307,7 +308,7 @@ function HealthPanel({ data, graphQLError }: { data?: SystemOperationsResult; gr
     const graphqlHealthy = Boolean(data) && !graphQLError;
 
     return (
-        <div className="space-y-4">
+        <div className="min-h-[620px] space-y-4">
             <section className="grid overflow-hidden rounded-xl border border-slate-200 bg-white sm:grid-cols-2 xl:grid-cols-5">
                 <Metric
                     label="服务状态"
@@ -1592,14 +1593,6 @@ function EmptyRow({ colSpan, text }: { colSpan: number; text: string }) {
                 {text}
             </td>
         </tr>
-    );
-}
-function LoadingState() {
-    return (
-        <div className="flex min-h-96 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-xs text-slate-500">
-            <LoaderCircle className="h-4 w-4 animate-spin" />
-            正在读取真实系统运行数据…
-        </div>
     );
 }
 function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {

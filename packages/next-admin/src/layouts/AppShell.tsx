@@ -69,7 +69,7 @@ import {
     type AppShellStoreContextData,
 } from '../graphql/auth.graphql';
 import { requestAppNavigation } from '../hooks/use-unsaved-changes-warning';
-import { preloadCommonRoutes, preloadRoute } from '../route-modules';
+import { preloadCommonRoutes, preloadRoute, preloadSettingsRoutes } from '../route-modules';
 import { useTheme } from '../theme/theme-context';
 import {
     canAccessAdminPath,
@@ -157,6 +157,39 @@ const THEME_OPTIONS: Array<{
 // 仅在宽桌面上常驻侧栏，避免横屏平板的数据表被压缩到窄视区。
 const PERSISTENT_SIDEBAR_MEDIA_QUERY = '(min-width: 1280px)';
 const OVERLAY_SIDEBAR_MEDIA_QUERY = '(max-width: 1279px)';
+
+function RouteLoadingFallback() {
+    return (
+        <div
+            className="flex h-full min-h-0 flex-col bg-slate-50"
+            role="status"
+            aria-live="polite"
+            aria-label="正在打开页面"
+        >
+            <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-4 sm:px-8">
+                <div className="flex items-center justify-between gap-4" aria-hidden="true">
+                    <div className="space-y-2">
+                        <div className="h-5 w-40 rounded bg-slate-200" />
+                        <div className="h-3 w-64 max-w-[70vw] rounded bg-slate-100" />
+                    </div>
+                    <div className="h-9 w-24 rounded-lg bg-slate-100" />
+                </div>
+            </header>
+            <main className="min-h-0 flex-1 overflow-hidden p-5 sm:p-8">
+                <div className="h-full min-h-[32rem] space-y-4" aria-hidden="true">
+                    <div className="h-10 w-80 max-w-full rounded-lg border border-slate-200 bg-white" />
+                    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                        {[0, 1, 2].map(item => (
+                            <div key={item} className="h-28 rounded-xl border border-slate-200 bg-white" />
+                        ))}
+                    </div>
+                    <div className="h-64 rounded-xl border border-slate-200 bg-white" />
+                </div>
+            </main>
+            <span className="sr-only">正在打开页面…</span>
+        </div>
+    );
+}
 
 export function AppShell() {
     const location = useLocation();
@@ -251,6 +284,7 @@ export function AppShell() {
     const refetchProfile = refetchAppShell;
 
     useEffect(() => {
+        preloadSettingsRoutes();
         const timer = window.setTimeout(preloadCommonRoutes, 1200);
         return () => window.clearTimeout(timer);
     }, []);
@@ -1503,18 +1537,7 @@ export function AppShell() {
                             </section>
                         </div>
                     ) : (
-                        <Suspense
-                            fallback={
-                                <div
-                                    className="flex h-full items-center justify-center gap-2 text-xs font-medium text-slate-500"
-                                    role="status"
-                                    aria-live="polite"
-                                >
-                                    <RotateCcw className="h-4 w-4 animate-spin" />
-                                    正在打开页面…
-                                </div>
-                            }
-                        >
+                        <Suspense fallback={<RouteLoadingFallback />}>
                             <AdminPermissionsProvider permissions={activePermissions}>
                                 <CustomFieldsProvider>
                                     <Outlet />
