@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import semver from 'semver';
 
 const SEVERITIES = Object.freeze(['low', 'moderate', 'high', 'critical']);
+const DEFAULT_AUDIT_RETRY_DELAYS_MS = Object.freeze([15_000, 60_000]);
 
 function isRecord(value) {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -95,27 +96,65 @@ export function createRuntimeAuditReport(runtimePackages, auditReport, { failOn 
     };
 }
 
-function runBunAudit(repositoryRoot) {
-    const result = spawnSync('bun', ['audit', '--json'], {
-        cwd: repositoryRoot,
-        encoding: 'utf8',
-    });
-    if (result.error) {
-        throw result.error;
+function bunAuditParseError(result, attempt, maxAttempts) {
+    const detail = [result.stdout, result.stderr].filter(Boolean).join('\n').trim();
+    const attemptDetail = maxAttempts > 1 ? ` after ${attempt} of ${maxAttempts} attempts` : '';
+    return {
+        detail,
+        error: new Error(`Could not parse bun audit JSON${attemptDetail}${detail ? `:\n${detail}` : ''}`),
+    };
+}
+
+function isRetriableAuditTimeout(result, detail) {
+    return result.status !== 0 && /Timeout:\s*audit request failed/u.test(detail);
+}
+
+export async function runBunAudit(
+    repositoryRoot,
+    {
+        maxAttempts = DEFAULT_AUDIT_RETRY_DELAYS_MS.length + 1,
+        onRetry = ({ attempt, delayMs }) => {
+            process.stderr.write(
+                `bun audit transport timeout on attempt ${attempt}; retrying in ${delayMs}ms\n`,
+            );
+        },
+        retryDelaysMs = DEFAULT_AUDIT_RETRY_DELAYS_MS,
+        runCommand = () =>
+            spawnSync('bun', ['audit', '--json'], {
+                cwd: repositoryRoot,
+                encoding: 'utf8',
+            }),
+        wait = delayMs => new Promise(resolve => setTimeout(resolve, delayMs)),
+    } = {},
+) {
+    if (!Number.isInteger(maxAttempts) || maxAttempts < 1) {
+        throw new Error('bun audit maxAttempts must be a positive integer');
     }
-    try {
-        return JSON.parse(result.stdout);
-    } catch {
-        const detail = [result.stdout, result.stderr].filter(Boolean).join('\n').trim();
-        throw new Error(`Could not parse bun audit JSON${detail ? `:\n${detail}` : ''}`);
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        const result = runCommand();
+        if (result.error) {
+            throw result.error;
+        }
+        try {
+            return JSON.parse(result.stdout);
+        } catch {
+            const { detail, error } = bunAuditParseError(result, attempt, maxAttempts);
+            if (!isRetriableAuditTimeout(result, detail) || attempt === maxAttempts) {
+                throw error;
+            }
+            const delayMs = retryDelaysMs[attempt - 1] ?? retryDelaysMs.at(-1) ?? 0;
+            onRetry({ attempt, delayMs });
+            await wait(delayMs);
+        }
     }
+    throw new Error('bun audit retry loop exited unexpectedly');
 }
 
 export async function auditRuntimePackages(artifactRoot, runtimePackages, { failOn = 'critical' } = {}) {
     const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
     const { blockedFindings, report } = createRuntimeAuditReport(
         runtimePackages,
-        runBunAudit(repositoryRoot),
+        await runBunAudit(repositoryRoot),
         { failOn },
     );
     await writeFile(path.join(artifactRoot, 'RUNTIME-AUDIT.json'), `${JSON.stringify(report, null, 2)}\n`);
