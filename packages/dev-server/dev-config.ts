@@ -67,7 +67,6 @@ import { StorefrontContentPlugin } from '@vendure/storefront-content-plugin';
 import { StorefrontReviewPlugin } from '@vendure/storefront-review-plugin';
 import { TwoFactorDashboardPlugin } from '@vendure/two-factor-dashboard-plugin';
 import 'dotenv/config';
-import { json } from 'express';
 import { createRequire } from 'node:module';
 import path from 'path';
 import { DataSourceOptions } from 'typeorm';
@@ -79,6 +78,7 @@ import {
     buildAccountActionUrl,
     buildSignedStorefrontAccountActionUrl,
 } from './account-auth';
+import { catalogAdminApiMiddleware } from './catalog-admin-api-middleware';
 import { emailLanguageVariables, localizedEmailSubjects, localizedEmailText } from './email-localization';
 import { devServerMigrations } from './migrations';
 import {
@@ -105,9 +105,7 @@ if (IS_PRODUCTION && SERVE_GRAPHIQL) {
     throw new Error('VENDURE_SERVE_GRAPHIQL must be false in production');
 }
 const SERVE_STATIC_DASHBOARD = process.env.VENDURE_SERVE_STATIC_DASHBOARD !== 'false';
-if (IS_PRODUCTION) {
-    configuredValue('ORDER_CONFIRMATION_TOKEN_SECRET', '');
-}
+if (IS_PRODUCTION) configuredValue('ORDER_CONFIRMATION_TOKEN_SECRET', '');
 const loadPackage = createRequire(__filename);
 const serverRoot = path.basename(__dirname) === 'dist' ? path.dirname(__dirname) : __dirname;
 const dashboardUrl = configuredUrl('VENDURE_DASHBOARD_URL', 'http://localhost:3000/dashboard');
@@ -571,13 +569,7 @@ export const devConfig: VendureConfig = {
               },
         shopApiDebug: !IS_PRODUCTION,
         introspection: !IS_PRODUCTION,
-        middleware: [
-            {
-                handler: json({ limit: '1mb' }),
-                route: `/${ADMIN_API_PATH}`,
-                beforeListen: true,
-            },
-        ],
+        middleware: catalogAdminApiMiddleware,
         ...(corsOrigins?.length
             ? { cors: { origin: corsOrigins, credentials: true } }
             : IS_PRODUCTION

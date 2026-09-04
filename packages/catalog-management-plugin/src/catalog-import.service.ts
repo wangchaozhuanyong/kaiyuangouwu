@@ -3,8 +3,6 @@ import { CurrencyCode, GlobalFlag } from '@vendure/common/lib/generated-types';
 import { normalizeString } from '@vendure/common/lib/normalize-string';
 import { ID } from '@vendure/common/lib/shared-types';
 import {
-    Collection,
-    CollectionService,
     FacetService,
     FacetValue,
     FacetValueService,
@@ -28,23 +26,19 @@ import {
     catalogSourceKey,
     normalizeIdentity,
 } from './catalog-file-parser.service';
+import { CatalogImportCategoryService } from './catalog-import-category.service';
 import {
     clearsVariantIdentity,
     dateString,
     dateValue,
     effectiveVariantEnabled,
     facetNames,
-    isBlankValue,
-    manualProductFilter,
     nullableNumber,
     numberValue,
-    optionalUpdate,
-    parseIdList,
     recordValue,
     safeImportFilename,
     safeImportText,
     safeMessage,
-    sameValue,
     sanitizeCatalogRow,
     sanitizeFieldMapping,
     shortCode,
@@ -54,6 +48,30 @@ import {
     stringValue,
     validateImportSource,
 } from './catalog-import-helpers';
+import {
+    type PlannedRow,
+    changed,
+    changedOptional,
+    conflictPlan,
+    createChanges,
+    effectiveStockLocation,
+    emptyPlan,
+    firstExactRowNumbers,
+    groupProductRows,
+    groupRows,
+    importScopeError,
+    microunits,
+    money,
+    productFieldFingerprint,
+    validationWarning,
+    variantCustomFieldUpdates,
+    variantCustomFields,
+    variantDisplayName,
+    variantExecutionKey,
+    variantMatches,
+    warningPlan,
+    withRiskConfirmation,
+} from './catalog-import-planning';
 import { CatalogOperationsService } from './catalog-operations.service';
 import { catalogCreateNewSourceRecordKey, resolveImportExecutionVariantId } from './catalog-row-identity';
 import { CatalogSupplierService, normalizeSupplierName } from './catalog-supplier.service';
@@ -81,17 +99,6 @@ interface CatalogIndexProduct {
     categories: Set<string>;
 }
 
-interface PlannedRow {
-    action: CatalogImportAction;
-    targetProductId: ID | null;
-    targetVariantId: ID | null;
-    expectedProductUpdatedAt: Date | null;
-    expectedVariantUpdatedAt: Date | null;
-    beforeSnapshot: Record<string, unknown> | null;
-    plannedChanges: Record<string, unknown> | null;
-    message: string | null;
-}
-
 export { clearsVariantIdentity, shouldClear };
 
 @Injectable()
@@ -104,7 +111,7 @@ export class CatalogImportService {
         private readonly operations: CatalogOperationsService,
         private readonly productService: ProductService,
         private readonly productVariantService: ProductVariantService,
-        private readonly collectionService: CollectionService,
+        private readonly categories: CatalogImportCategoryService,
         private readonly facetService: FacetService,
         private readonly facetValueService: FacetValueService,
         private readonly searchService: SearchService,
@@ -1625,7 +1632,7 @@ export class CatalogImportService {
             lotId = lot.id;
         }
         if (replaceCategory) {
-            await this.moveImportedCategory(
+            await this.categories.moveImportedCategory(
                 ctx,
                 product.id,
                 stringValue(before.productImportCategory),
@@ -1824,7 +1831,7 @@ export class CatalogImportService {
                         : {}),
                 });
             }
-            await this.moveImportedCategory(
+            await this.categories.moveImportedCategory(
                 ctx,
                 product.id,
                 stringValue(applied.importCategory),
@@ -1962,105 +1969,11 @@ export class CatalogImportService {
         return created.id;
     }
 
-    private async categoryCollections(ctx: RequestContext): Promise<Collection[]> {
-        return this.connection
-            .getRepository(ctx, Collection)
-            .createQueryBuilder('collection')
-            .leftJoinAndSelect('collection.translations', 'translation')
-            .innerJoin('collection.channels', 'channel', 'channel.id = :channelId', {
-                channelId: ctx.channelId,
-            })
-            .where('collection.isRoot = :isRoot', { isRoot: false })
-            .getMany();
-    }
-
-    private async moveImportedCategory(
-        ctx: RequestContext,
-        productId: ID,
-        previousCategory: string,
-        nextCategory: string,
-    ): Promise<void> {
-        if (previousCategory && normalizeIdentity(previousCategory) !== normalizeIdentity(nextCategory)) {
-            await this.removeCategory(ctx, productId, previousCategory);
-        }
-        if (nextCategory) await this.assignCategory(ctx, productId, nextCategory);
-    }
-
-    private async removeCategory(ctx: RequestContext, productId: ID, category: string): Promise<void> {
-        const collection = (await this.categoryCollections(ctx)).find(item =>
-            item.translations.some(
-                translation => normalizeIdentity(translation.name) === normalizeIdentity(category),
-            ),
-        );
-        if (!collection) return;
-        const filters = collection.filters.map(filter => ({
-            code: filter.code,
-            arguments: filter.args.map(filterArgument => ({
-                name: filterArgument.name,
-                value: filterArgument.value,
-            })),
-        }));
-        const manual = filters.find(filter => filter.code === 'product-id-filter');
-        const argument = manual?.arguments.find(item => item.name === 'productIds');
-        if (!argument) return;
-        const productIds = parseIdList(argument.value);
-        if (!productIds.includes(String(productId))) return;
-        argument.value = JSON.stringify(productIds.filter(id => id !== String(productId)));
-        await this.collectionService.update(ctx, { id: collection.id, filters });
-    }
-
-    private async assignCategory(ctx: RequestContext, productId: ID, category: string): Promise<void> {
-        const collections = await this.categoryCollections(ctx);
-        let collection = collections.find(item =>
-            item.translations.some(
-                translation => normalizeIdentity(translation.name) === normalizeIdentity(category),
-            ),
-        );
-        if (!collection) {
-            collection = await this.collectionService.create(ctx, {
-                inheritFilters: true,
-                filters: [manualProductFilter([String(productId)])],
-                translations: [
-                    {
-                        languageCode: ctx.languageCode,
-                        name: category,
-                        slug: await this.uniqueCollectionSlug(ctx, category),
-                        description: '',
-                    },
-                ],
-            });
-            return;
-        }
-        const filters = collection.filters.map(filter => ({
-            code: filter.code,
-            arguments: filter.args.map(argument => ({ name: argument.name, value: argument.value })),
-        }));
-        const manual = filters.find(filter => filter.code === 'product-id-filter');
-        if (manual) {
-            const argument = manual.arguments.find(item => item.name === 'productIds');
-            const ids = parseIdList(argument?.value);
-            if (ids.includes(String(productId))) return;
-            if (argument) argument.value = JSON.stringify([...ids, String(productId)]);
-        } else {
-            filters.push(manualProductFilter([String(productId)], filters.length > 0));
-        }
-        await this.collectionService.update(ctx, { id: collection.id, filters });
-    }
-
     private async uniqueSlug(ctx: RequestContext, name: string): Promise<string> {
         const base = normalizeString(name, '-').slice(0, 100) || `product-${shortCode(name)}`;
         for (let index = 0; index < 100; index++) {
             const slug = index === 0 ? base : `${base}-${index + 1}`;
             if (!(await this.productService.findOneBySlug(ctx, slug))) return slug;
-        }
-        return `${base}-${Date.now()}`;
-    }
-
-    private async uniqueCollectionSlug(ctx: RequestContext, name: string): Promise<string> {
-        const base = normalizeString(name, '-').slice(0, 100) || `category-${shortCode(name)}`;
-        for (let index = 0; index < 100; index++) {
-            const slug = index === 0 ? base : `${base}-${index + 1}`;
-            if (!(await this.collectionService.findOneBySlug(ctx, slug))) return slug;
         }
         return `${base}-${Date.now()}`;
     }
@@ -2113,250 +2026,4 @@ export class CatalogImportService {
             throw new UserInputError('目标币种不属于当前门店');
         }
     }
-}
-
-function emptyPlan(action: CatalogImportAction): PlannedRow {
-    return {
-        action,
-        targetProductId: null,
-        targetVariantId: null,
-        expectedProductUpdatedAt: null,
-        expectedVariantUpdatedAt: null,
-        beforeSnapshot: null,
-        plannedChanges: null,
-        message: null,
-    };
-}
-
-function conflictPlan(message: string): PlannedRow {
-    return { ...emptyPlan('CONFLICT'), message };
-}
-
-function warningPlan(plan: PlannedRow, message: string): PlannedRow {
-    return {
-        ...plan,
-        action: 'WARNING',
-        plannedChanges: { ...(plan.plannedChanges ?? {}), safeAction: plan.action },
-        message,
-    };
-}
-
-function withRiskConfirmation(
-    plannedChanges: Record<string, unknown> | null,
-    ctx: RequestContext,
-): Record<string, unknown> {
-    return {
-        ...(plannedChanges ?? {}),
-        riskConfirmation: {
-            actorId: ctx.activeUserId ? String(ctx.activeUserId) : null,
-            confirmedAt: new Date().toISOString(),
-        },
-    };
-}
-
-function validationWarning(row: NormalizedCatalogRow): string | null {
-    if (row.stockOnHand != null && row.stockOnHand < 0) return '库存为负数，默认不执行';
-    if (row.purchaseCost != null && row.sellingPrice != null && row.sellingPrice < row.purchaseCost) {
-        return '销售价低于进货价，默认不执行';
-    }
-    if (row.minimumStock != null && row.maximumStock != null && row.maximumStock < row.minimumStock) {
-        return '库存上限小于库存下限，默认不执行';
-    }
-    if (row.reportedMargin != null && row.sellingPrice && row.purchaseCost != null) {
-        const calculated = (row.sellingPrice - row.purchaseCost) / row.sellingPrice;
-        if (Math.abs(calculated - row.reportedMargin) > 0.0002) return '文件毛利率与成本、售价计算结果不一致';
-    }
-    return null;
-}
-
-function importScopeError(
-    row: NormalizedCatalogRow,
-    ctx: RequestContext,
-    input: CatalogImportContextInput,
-    stockLocation: { id: ID; name: string },
-): string | null {
-    if (
-        row.channelCode &&
-        ![String(ctx.channelId), normalizeIdentity(ctx.channel.code)].includes(
-            normalizeIdentity(row.channelCode),
-        )
-    ) {
-        return '文件门店与当前选择的门店不一致，默认不执行';
-    }
-    if (
-        row.stockLocationCode &&
-        ![String(stockLocation.id), normalizeIdentity(stockLocation.name)].includes(
-            normalizeIdentity(row.stockLocationCode),
-        )
-    ) {
-        return '文件仓库与当前选择的仓库不一致，默认不执行';
-    }
-    if (row.currencyCode && row.currencyCode !== String(input.currencyCode)) {
-        return '文件币种与当前选择的币种不一致，默认不执行';
-    }
-    return null;
-}
-
-function effectiveStockLocation(
-    reference: string,
-    fallbackId: ID,
-    locations: Array<{ id: string; name: string }>,
-): { id: string; name: string } | undefined {
-    if (!reference.trim()) {
-        return locations.find(location => String(location.id) === String(fallbackId));
-    }
-    const normalized = normalizeIdentity(reference);
-    return locations.find(
-        location =>
-            normalizeIdentity(String(location.id)) === normalized ||
-            normalizeIdentity(location.name) === normalized,
-    );
-}
-
-function variantExecutionKey(row: NormalizedCatalogRow): string {
-    if (row.sku) return `sku\u001f${normalizeIdentity(row.sku)}`;
-    if (row.barcode) return `barcode\u001f${normalizeIdentity(row.barcode)}`;
-    if (row.sourceRecordKey) return `record\u001f${row.sourceRecordKey}`;
-    return [row.name, row.category, row.specification, row.primaryUnit].map(normalizeIdentity).join('\u001f');
-}
-
-function groupRows(rows: NormalizedCatalogRow[]): Map<string, NormalizedCatalogRow[]> {
-    const groups = new Map<string, NormalizedCatalogRow[]>();
-    for (const row of rows)
-        groups.set(catalogSourceKey(row), [...(groups.get(catalogSourceKey(row)) ?? []), row]);
-    return groups;
-}
-
-function groupProductRows(rows: NormalizedCatalogRow[]): Map<string, NormalizedCatalogRow[]> {
-    const groups = new Map<string, NormalizedCatalogRow[]>();
-    for (const row of rows) {
-        const key = catalogProductKey(row);
-        groups.set(key, [...(groups.get(key) ?? []), row]);
-    }
-    return groups;
-}
-
-function firstExactRowNumbers(rows: NormalizedCatalogRow[]): Map<string, number> {
-    const firstRows = new Map<string, number>();
-    for (const row of rows) {
-        const fingerprint = catalogExactRowFingerprint(row);
-        if (!firstRows.has(fingerprint)) firstRows.set(fingerprint, row.rowNumber);
-    }
-    return firstRows;
-}
-
-function productFieldFingerprint(row: NormalizedCatalogRow): string {
-    return JSON.stringify({
-        name: row.name,
-        category: row.category,
-        enabled: row.enabled,
-        description: row.description,
-        tags: row.tags,
-    });
-}
-
-function variantMatches(variant: ProductVariant, row: NormalizedCatalogRow): boolean {
-    const fields = (variant.customFields ?? {}) as Record<string, unknown>;
-    const specification = normalizeIdentity(stringValue(fields.specification));
-    const unit = normalizeIdentity(stringValue(fields.saleUnit));
-    if (!row.specification && !row.primaryUnit) return specification === '' && unit === '';
-    return (
-        specification === normalizeIdentity(row.specification) && unit === normalizeIdentity(row.primaryUnit)
-    );
-}
-
-function createChanges(row: NormalizedCatalogRow, currencyCode: CurrencyCode): Record<string, unknown> {
-    return {
-        name: row.name,
-        category: row.category,
-        specification: row.specification,
-        saleUnit: row.primaryUnit,
-        purchaseUnit: row.purchaseUnit || row.primaryUnit,
-        packageQuantity: row.packageQuantity ?? 1,
-        sku: row.sku || '系统自动生成',
-        sellingPrice: money(row.sellingPrice),
-        purchaseCostMicrounits: microunits(row.purchaseCost),
-        stockOnHand: row.stockOnHand,
-        sourceCreatedAt: row.sourceCreatedAt,
-        productEnabled: row.enabled ?? true,
-        variantEnabled: effectiveVariantEnabled(row) ?? true,
-        supplier: row.supplier || null,
-        currencyCode,
-    };
-}
-
-function changed(target: Record<string, unknown>, key: string, next: unknown, previous: unknown): void {
-    if (next === null || next === undefined || next === '') return;
-    if (!sameValue(next, previous)) target[key] = { from: previous ?? null, to: next };
-}
-
-function changedOptional(
-    target: Record<string, unknown>,
-    key: string,
-    next: unknown,
-    previous: unknown,
-    clear: boolean,
-    clearedValue: unknown = null,
-): void {
-    if (!isBlankValue(next)) {
-        if (!sameValue(next, previous)) target[key] = { from: previous ?? null, to: next };
-        return;
-    }
-    if (clear && !isBlankValue(previous)) {
-        target[key] = { from: previous, to: clearedValue };
-    }
-}
-
-function money(value: number | null): number {
-    return Math.round((value ?? 0) * 100);
-}
-
-function microunits(value: number | null): number {
-    return Math.round((value ?? 0) * 1_000);
-}
-
-function variantDisplayName(row: NormalizedCatalogRow): string {
-    const detail = [row.specification, row.primaryUnit].filter(Boolean).join(' / ');
-    return detail ? `${row.name} · ${detail}` : row.name;
-}
-
-function variantCustomFields(row: NormalizedCatalogRow): Record<string, unknown> {
-    return {
-        barcode: row.barcode || null,
-        specification: row.specification || null,
-        saleUnit: row.primaryUnit || null,
-        purchaseUnit: row.purchaseUnit || row.primaryUnit || null,
-        packageQuantity: row.packageQuantity ?? 1,
-        shelfLifeDays: row.shelfLifeDays,
-    };
-}
-
-function variantCustomFieldUpdates(
-    row: NormalizedCatalogRow,
-    clearBlankFields: boolean,
-): Record<string, unknown> {
-    const updates: Record<string, unknown> = {};
-    optionalUpdate(updates, 'barcode', row.barcode, shouldClear(row, 'barcode', clearBlankFields));
-    optionalUpdate(
-        updates,
-        'specification',
-        row.specification,
-        shouldClear(row, 'specification', clearBlankFields),
-    );
-    const clearUnit = shouldClear(row, 'primaryUnit', clearBlankFields);
-    optionalUpdate(updates, 'saleUnit', row.primaryUnit, clearUnit);
-    optionalUpdate(
-        updates,
-        'purchaseUnit',
-        row.purchaseUnit,
-        shouldClear(row, 'purchaseUnit', clearBlankFields),
-    );
-    if (row.packageQuantity != null) updates.packageQuantity = row.packageQuantity;
-    optionalUpdate(
-        updates,
-        'shelfLifeDays',
-        row.shelfLifeDays,
-        shouldClear(row, 'shelfLifeDays', clearBlankFields),
-    );
-    return updates;
 }
