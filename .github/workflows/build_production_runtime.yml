@@ -177,9 +177,6 @@ jobs:
                     --lockfile bun.lock
                   echo "BUN_AUDIT_REPORT=$BUN_AUDIT_REPORT" >> "$GITHUB_ENV"
 
-            - name: Validate prompt Skill release
-              run: bun run --cwd packages/image-generation-plugin test:skill
-
             - name: Build production bundles
               env:
                   NODE_ENV: production
@@ -220,6 +217,9 @@ jobs:
                   DB_NAME: build-check
                   DB_SYNCHRONIZE: 'false'
               run: bun run build
+
+            - name: Validate prompt Skill release
+              run: bun run --cwd packages/image-generation-plugin test:skill
 
             - name: Run release-only checks
               run: |

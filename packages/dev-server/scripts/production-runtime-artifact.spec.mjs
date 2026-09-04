@@ -125,6 +125,10 @@ void test('production artifact reuses exact successful CI evidence instead of re
     assert.match(workflow, /event=pull_request&status=success&head_sha=\$\{REVIEWED_HEAD_SHA\}/u);
     assert.doesNotMatch(workflow, /bun run --cwd packages\/dev-server test:dev-workflow/u);
     assert.doesNotMatch(workflow, /^\s+bun run test$/mu);
+    assert.ok(
+        workflow.indexOf('Build production bundles') < workflow.indexOf('Validate prompt Skill release'),
+        'Prompt Skill validation must reuse the production build outputs',
+    );
     assert.match(
         repositoryWorkflow,
         /Operations dashboard regression tests[\s\S]+operations-dashboard-plugin test/u,
