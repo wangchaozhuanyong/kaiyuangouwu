@@ -65,6 +65,7 @@ export function LoginModule() {
     const [loginError, setLoginError] = useState('');
 
     const [login, { loading }] = useMutation<LoginMutationData, LoginMutationVariables>(LOGIN_MUTATION, {
+        context: { adminFeedback: false },
         onCompleted: data => {
             const result = data.login;
             if (result.__typename === 'CurrentUser') {

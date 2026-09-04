@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client';
 
 import { client } from './apollo';
 import App from './App.tsx';
+import { AdminFeedbackCenter } from './components/AdminFeedbackCenter';
 import { AppErrorBoundary } from './components/AppErrorBoundary';
 import './index.css';
 import { ThemeProvider } from './theme/ThemeProvider';
@@ -19,6 +20,7 @@ createRoot(rootElement).render(
         <AppErrorBoundary>
             <ThemeProvider>
                 <ApolloProvider client={client}>
+                    <AdminFeedbackCenter />
                     <App />
                 </ApolloProvider>
             </ThemeProvider>
