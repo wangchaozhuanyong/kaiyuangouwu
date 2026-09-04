@@ -323,6 +323,13 @@ VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
 
 命令使用已由发布 shell 安全加载的 `SUPERADMIN_USERNAME`、`SUPERADMIN_PASSWORD` 和 `STOREFRONT_MEDIA_CHANNEL_CODES`；不得把密码写入参数或发布记录。同步失败立即停止发布，不切换 Storefront 指针。同一文件按 SHA-256 标签复用；新版文件只切换商品和内容块绑定，不删除旧素材，便于数据层单独回退。清单中标记为 `asset-library` 的设计参考图只上传并分配到目标 Channel 素材库，不会自动改动商品、内容块或前台默认海报。如只需发布某一项素材，使用 `--keys <manifest-key>` 限定范围，避免重新绑定其他素材。
 
+当版本只包含已审核的店铺媒体变更时，在目标 `main` 完整 SHA 的
+`Production Runtime Artifact` 工作流成功后，使用 `Deploy Reviewed Storefront Media`
+工作流。输入完整 SHA、制品工作流 run ID 以及逗号分隔的已审核 manifest key。
+工作流会确认 `origin/main` 仍精确等于目标 SHA，下载并验证该次不可变制品，
+且只将验证后的 key 交给持有生产锁的发布脚本。脚本会拒绝夹带登录视觉或库存修复变更，
+候选 API 健康后依次执行所选媒体的 dry-run 和受保护 apply；发布失败时不提升 Storefront 指针。
+
 切换脚本会在 systemd journal 中以 `vendure-production-switch` 标记依次记录 `requested`、`succeeded` 或 `failed`。每条事件包含部署 ID、目标 SHA、候选目录、调用用户、SSH 来源 IP、进程和父进程信息，不记录命令参数、环境变量或密钥。`requested` 写入失败会中止切换，避免无审计地改动 PM2。发布后用同一部署 ID 核对完整事件链：
 
 ```bash
