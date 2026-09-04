@@ -20,10 +20,15 @@ on:
                 default: ''
                 type: string
             channel_codes:
-                description: 'Required reviewed Channel codes when media_keys is set'
+                description: 'Required reviewed Channel codes when any managed publisher is selected'
                 required: false
                 default: ''
                 type: string
+            auth_visuals:
+                description: 'Publish the reviewed auth visual manifest through Admin API'
+                required: false
+                default: false
+                type: boolean
 
 permissions:
     actions: read
@@ -37,6 +42,7 @@ env:
     CI: true
     MEDIA_CHANNEL_CODES: ${{ inputs.channel_codes || '' }}
     MEDIA_KEYS: ${{ inputs.media_keys || '' }}
+    AUTH_VISUALS: ${{ inputs.auth_visuals && 'true' || 'false' }}
     NODE_OPTIONS: --max-old-space-size=8192
 
 jobs:
@@ -61,12 +67,16 @@ jobs:
                     echo "channel_codes must be a comma-separated list of Channel codes" >&2
                     exit 1
                   fi
-                  if [[ -n "$MEDIA_KEYS" && -z "$MEDIA_CHANNEL_CODES" ]]; then
-                    echo "channel_codes is required when media_keys is set" >&2
+                  if [[ "$AUTH_VISUALS" != "true" && "$AUTH_VISUALS" != "false" ]]; then
+                    echo "auth_visuals must be true or false" >&2
                     exit 1
                   fi
-                  if [[ -z "$MEDIA_KEYS" && -n "$MEDIA_CHANNEL_CODES" ]]; then
-                    echo "channel_codes cannot be set without media_keys" >&2
+                  if [[ ( -n "$MEDIA_KEYS" || "$AUTH_VISUALS" == "true" ) && -z "$MEDIA_CHANNEL_CODES" ]]; then
+                    echo "channel_codes is required when a managed publisher is selected" >&2
+                    exit 1
+                  fi
+                  if [[ -z "$MEDIA_KEYS" && "$AUTH_VISUALS" == "false" && -n "$MEDIA_CHANNEL_CODES" ]]; then
+                    echo "channel_codes cannot be set without a managed publisher" >&2
                     exit 1
                   fi
 
@@ -258,11 +268,12 @@ jobs:
                   jq -n \
                     --arg archiveName "$(basename "$ARCHIVE_PATH")" \
                     --arg archiveSha256 "$(cut -d ' ' -f 1 "$ARCHIVE_PATH.sha256")" \
+                    --argjson authVisuals "$AUTH_VISUALS" \
                     --arg mediaChannelCodes "$MEDIA_CHANNEL_CODES" \
                     --arg mediaKeys "$MEDIA_KEYS" \
                     --arg sourceRunId "$GITHUB_RUN_ID" \
                     --arg targetSha "$TARGET_SHA" \
-                    '{archiveName: $archiveName, archiveSha256: $archiveSha256, format: 1, mediaChannelCodes: $mediaChannelCodes, mediaKeys: $mediaKeys, sourceRunId: $sourceRunId, targetSha: $targetSha}' \
+                    '{archiveName: $archiveName, archiveSha256: $archiveSha256, authVisuals: $authVisuals, format: 1, mediaChannelCodes: $mediaChannelCodes, mediaKeys: $mediaKeys, sourceRunId: $sourceRunId, targetSha: $targetSha}' \
                     > "$ARCHIVE_DIR/release-plan.json"
                   (
                     cd "$ARCHIVE_DIR"
@@ -292,9 +303,12 @@ jobs:
                     echo "- Archive SHA-256: \`$(cut -d ' ' -f 1 "$ARCHIVE_CHECKSUM_PATH")\`"
                     if [[ -n "$MEDIA_KEYS" ]]; then
                       echo "- Reviewed media keys: \`$MEDIA_KEYS\`"
-                      echo "- Reviewed Channel codes: \`$MEDIA_CHANNEL_CODES\`"
                     else
                       echo '- Reviewed media keys: `none`'
+                    fi
+                    echo "- Reviewed auth visuals: \`$AUTH_VISUALS\`"
+                    if [[ -n "$MEDIA_CHANNEL_CODES" ]]; then
+                      echo "- Reviewed Channel codes: \`$MEDIA_CHANNEL_CODES\`"
                     fi
                   } >> "$GITHUB_STEP_SUMMARY"
                   node - "$ARTIFACT_DIR/RUNTIME-AUDIT.json" >> "$GITHUB_STEP_SUMMARY" <<'NODE'

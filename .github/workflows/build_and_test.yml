@@ -31,6 +31,7 @@ jobs:
               run: |
                   bun run check:migration-registry
                   bun run check:architecture-debt
+                  bun run check:storefront-publishing
                   bun run test:repository-checks
             - name: Build lint prerequisites
               run: bun run build:core-common

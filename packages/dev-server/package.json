@@ -26,6 +26,7 @@
         "typecheck": "tsc --project tsconfig.server.json --noEmit && tsc --project tsconfig.worker.json --noEmit",
         "seed:storefront-demo": "node ./scripts/seed-storefront-demo.mjs --apply",
         "sync:storefront-media": "node ./scripts/sync-storefront-media.mjs",
+        "sync:auth-visuals": "node ./scripts/sync-auth-visuals.mjs",
         "sync:awanmesh-brand": "node ./scripts/sync-awanmesh-brand.mjs",
         "repair:inventory-inheritance": "node ./scripts/repair-inventory-inheritance.mjs",
         "repair:sqlite-foreign-keys": "node ./scripts/repair-sqlite-foreign-keys.mjs",

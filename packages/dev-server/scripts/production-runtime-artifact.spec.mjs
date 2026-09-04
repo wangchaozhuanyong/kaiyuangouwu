@@ -82,6 +82,7 @@ void test('runtime artifact includes release publishers and every media manifest
     try {
         await copyStorefrontMediaReleaseInputs(fixtureRoot);
         await access(path.join(fixtureRoot, 'packages/dev-server/scripts/sync-storefront-media.mjs'));
+        await access(path.join(fixtureRoot, 'packages/dev-server/scripts/sync-auth-visuals.mjs'));
         await access(path.join(fixtureRoot, 'packages/dev-server/scripts/sync-awanmesh-brand.mjs'));
         await access(path.join(fixtureRoot, 'packages/dev-server/scripts/repair-inventory-inheritance.mjs'));
         for (const entry of storefrontMediaManifest) {
