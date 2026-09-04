@@ -46,7 +46,7 @@ export const contentModuleDescriptors: StorefrontModuleDescriptor[] = [
     {
         type: 'SUPPORT',
         name: '客服与帮助',
-        description: '服务时间、联系方式和常见问题',
+        description: '服务时间、微信二维码和联系方式',
         defaultEnabled: true,
     },
     {
@@ -68,6 +68,15 @@ export const contentModuleDescriptors: StorefrontModuleDescriptor[] = [
         defaultEnabled: true,
     },
 ];
+
+const defaultSupportSettings = {
+    serviceDaysZh: '每日',
+    serviceDaysEn: 'Daily',
+    serviceStartTime: '09:00',
+    serviceEndTime: '18:00',
+} as const;
+
+const generatedSupportLinkChannels = new Set(['QQ', 'WHATSAPP', 'TELEGRAM']);
 
 export const navigationTargets = [
     ['/', '首页'],
@@ -179,12 +188,7 @@ export function newContentBlock(
         block.settings = { authVisualVersion: 1, accentColor: type === 'AUTH_LOGIN' ? '#22D3EE' : '#8B5CF6' };
     }
     if (type === 'SUPPORT') {
-        block.settings = {
-            serviceDaysZh: '每日',
-            serviceDaysEn: 'Daily',
-            serviceStartTime: '09:00',
-            serviceEndTime: '18:00',
-        };
+        block.settings = { ...defaultSupportSettings };
         block.items = [
             supportItem(0, 'WECHAT', '微信客服', 'WeChat support', false),
             supportItem(1, 'QQ', 'QQ 客服', 'QQ support', false),
@@ -260,22 +264,56 @@ function englishDefaultTitle(type: StorefrontBlockType): string {
 export function cloneContentBlock(block: StorefrontContentBlock): StorefrontContentBlock {
     return {
         ...block,
-        settings: block.settings ? structuredClone(block.settings) : null,
+        settings:
+            block.type === 'SUPPORT'
+                ? structuredClone({ ...defaultSupportSettings, ...(block.settings ?? {}) })
+                : block.settings
+                  ? structuredClone(block.settings)
+                  : null,
         translations: (['zh_Hans', 'en'] as const).map(languageCode => ({
             ...emptyBlockTranslation(languageCode),
             ...block.translations.find(translation => translation.languageCode === languageCode),
             languageCode,
         })),
-        items: block.items.map((item, position) => ({
-            ...item,
-            position,
-            settings: item.settings ? structuredClone(item.settings) : null,
-            translations: (['zh_Hans', 'en'] as const).map(languageCode => ({
-                ...emptyItemTranslation(languageCode),
-                ...item.translations.find(translation => translation.languageCode === languageCode),
-                languageCode,
-            })),
-        })),
+        items: block.items.map((item, position) => {
+            const clonedItem: StorefrontContentItem = {
+                ...item,
+                position,
+                settings: item.settings ? structuredClone(item.settings) : null,
+                translations: (['zh_Hans', 'en'] as const).map(languageCode => ({
+                    ...emptyItemTranslation(languageCode),
+                    ...item.translations.find(translation => translation.languageCode === languageCode),
+                    languageCode,
+                })),
+            };
+            if (block.type !== 'SUPPORT') return clonedItem;
+            const channel =
+                typeof clonedItem.settings?.supportChannel === 'string'
+                    ? clonedItem.settings.supportChannel
+                    : '';
+            const configuredAccount =
+                typeof clonedItem.settings?.supportAccount === 'string'
+                    ? clonedItem.settings.supportAccount
+                    : '';
+            const supportAccount = normalizeSupportAccount(
+                channel,
+                configuredAccount || supportAccountFromTarget(channel, clonedItem.targetValue),
+            );
+            const generatedTarget = supportLinkFromAccount(channel, supportAccount);
+            return {
+                ...clonedItem,
+                settings: supportAccount
+                    ? { ...(clonedItem.settings ?? {}), supportAccount }
+                    : clonedItem.settings,
+                targetType:
+                    channel === 'WECHAT'
+                        ? 'NONE'
+                        : generatedTarget || clonedItem.targetValue?.trim()
+                          ? 'URL'
+                          : clonedItem.targetType,
+                targetValue: channel === 'WECHAT' ? null : (generatedTarget ?? clonedItem.targetValue),
+            };
+        }),
     };
 }
 
@@ -319,23 +357,33 @@ export function storefrontBlockInput(block: StorefrontContentBlock) {
                 ctaLabel: ctaLabel.trim(),
             }))
             .filter(translation => Boolean(translation.title)),
-        items: block.items.map((item, position) => ({
-            ...(item.id ? { id: item.id } : {}),
-            enabled: item.enabled,
-            position,
-            imageAssetId: item.imageAsset?.id ?? item.imageAssetId ?? null,
-            imageUrl: item.imageUrl?.trim() || null,
-            targetType: item.targetType,
-            targetValue: item.targetType === 'NONE' ? null : item.targetValue?.trim() || null,
-            settings: item.settings,
-            translations: item.translations
-                .map(({ languageCode, label, description }) => ({
-                    languageCode,
-                    label: label.trim(),
-                    description: description.trim(),
-                }))
-                .filter(translation => Boolean(translation.label)),
-        })),
+        items: block.items.map((item, position) => {
+            const channel =
+                typeof item.settings?.supportChannel === 'string' ? item.settings.supportChannel : '';
+            const generatedTarget =
+                block.type === 'SUPPORT'
+                    ? supportLinkFromAccount(channel, item.settings?.supportAccount)
+                    : null;
+            const targetType = generatedTarget ? 'URL' : item.targetType;
+            return {
+                ...(item.id ? { id: item.id } : {}),
+                enabled: item.enabled,
+                position,
+                imageAssetId: item.imageAsset?.id ?? item.imageAssetId ?? null,
+                imageUrl: item.imageUrl?.trim() || null,
+                targetType,
+                targetValue:
+                    targetType === 'NONE' ? null : (generatedTarget ?? (item.targetValue?.trim() || null)),
+                settings: item.settings,
+                translations: item.translations
+                    .map(({ languageCode, label, description }) => ({
+                        languageCode,
+                        label: label.trim(),
+                        description: description.trim(),
+                    }))
+                    .filter(translation => Boolean(translation.label)),
+            };
+        }),
     };
 }
 
@@ -347,34 +395,115 @@ export function storefrontBlockValidation(block: StorefrontContentBlock): string
         return '启用首页主视觉前必须选择图片';
     }
     if (block.targetType !== 'NONE' && !block.targetValue?.trim()) return '请填写跳转目标';
+    const startsAt = block.startsAt ? new Date(block.startsAt).getTime() : null;
+    const endsAt = block.endsAt ? new Date(block.endsAt).getTime() : null;
+    if (startsAt !== null && Number.isNaN(startsAt)) return '开始展示时间无效';
+    if (endsAt !== null && Number.isNaN(endsAt)) return '结束展示时间无效';
+    if (startsAt !== null && endsAt !== null && startsAt >= endsAt) return '结束展示时间必须晚于开始展示时间';
     if (block.type === 'NAVIGATION' && (block.items.length < 1 || block.items.length > 5)) {
         return '客户端导航必须保留 1 至 5 项';
     }
     if (block.type === 'SUPPORT') {
-        const startTime =
-            typeof block.settings?.serviceStartTime === 'string' ? block.settings.serviceStartTime : '';
-        const endTime =
-            typeof block.settings?.serviceEndTime === 'string' ? block.settings.serviceEndTime : '';
+        const startTime = supportSetting(
+            block.settings?.serviceStartTime,
+            defaultSupportSettings.serviceStartTime,
+        );
+        const endTime = supportSetting(block.settings?.serviceEndTime, defaultSupportSettings.serviceEndTime);
         if (!/^\d{2}:\d{2}$/.test(startTime) || !/^\d{2}:\d{2}$/.test(endTime) || startTime >= endTime) {
             return '请填写有效的客服服务时间';
         }
         if (!block.items.some(item => item.enabled)) return '请至少启用一种客服联系方式';
     }
     for (const [index, item] of block.items.entries()) {
-        if (!itemTranslation(item, 'zh_Hans').label.trim()) return `请填写第 ${index + 1} 个子项的中文名称`;
-        if (item.targetType !== 'NONE' && !item.targetValue?.trim())
+        if (!(block.type === 'SUPPORT' && !item.enabled) && !itemTranslation(item, 'zh_Hans').label.trim()) {
+            return `请填写第 ${index + 1} 个子项的中文名称`;
+        }
+        if (block.type !== 'SUPPORT' && item.targetType !== 'NONE' && !item.targetValue?.trim()) {
             return `请填写第 ${index + 1} 个子项的跳转目标`;
+        }
         if (block.type === 'SUPPORT' && item.enabled) {
             const channel =
                 typeof item.settings?.supportChannel === 'string' ? item.settings.supportChannel : '';
             if (!channel) return `请选择第 ${index + 1} 个客服项的渠道`;
             if (channel === 'WECHAT' && !item.imageAsset && !item.imageUrl?.trim())
                 return '启用微信客服前请选择二维码素材';
-            if (channel !== 'WECHAT' && (item.targetType !== 'URL' || !item.targetValue?.trim()))
-                return `请为${itemTranslation(item, 'zh_Hans').label}配置跳转网址`;
+            if (
+                generatedSupportLinkChannels.has(channel) &&
+                !supportLinkFromAccount(channel, item.settings?.supportAccount)
+            ) {
+                return channel === 'QQ'
+                    ? '请填写有效的 QQ 号'
+                    : channel === 'WHATSAPP'
+                      ? '请填写带国家码的 WhatsApp 手机号'
+                      : '请填写有效的 Telegram 用户名';
+            }
+            if (
+                channel !== 'WECHAT' &&
+                !generatedSupportLinkChannels.has(channel) &&
+                (item.targetType !== 'URL' || !isHttpUrl(item.targetValue))
+            ) {
+                return `请为${itemTranslation(item, 'zh_Hans').label}配置有效的 http(s) 网址`;
+            }
         }
     }
     return null;
+}
+
+export function normalizeSupportAccount(channel: string, value: unknown): string {
+    if (typeof value !== 'string') return '';
+    const trimmed = value.trim();
+    if (channel === 'QQ' || channel === 'WHATSAPP') return trimmed.replace(/\D/g, '');
+    if (channel === 'TELEGRAM') {
+        return trimmed
+            .replace(/^https?:\/\/(?:www\.)?t\.me\//i, '')
+            .replace(/^@/, '')
+            .split(/[/?#]/, 1)[0];
+    }
+    return trimmed;
+}
+
+export function supportLinkFromAccount(channel: string, value: unknown): string | null {
+    const account = normalizeSupportAccount(channel, value);
+    if (!account) return null;
+    if (channel === 'QQ' && /^\d{5,20}$/.test(account)) {
+        return `https://wpa.qq.com/msgrd?v=3&uin=${account}&site=qq&menu=yes`;
+    }
+    if (channel === 'WHATSAPP' && /^\d{7,15}$/.test(account)) {
+        return `https://wa.me/${account}`;
+    }
+    if (channel === 'TELEGRAM' && /^[a-zA-Z][a-zA-Z0-9_]{4,31}$/.test(account)) {
+        return `https://t.me/${account}`;
+    }
+    return null;
+}
+
+function supportAccountFromTarget(channel: string, value: string | null): string {
+    if (!value?.trim()) return '';
+    try {
+        const url = new URL(value.trim());
+        if (channel === 'QQ' && url.hostname === 'wpa.qq.com') return url.searchParams.get('uin') ?? '';
+        if (channel === 'WHATSAPP' && url.hostname === 'wa.me') return url.pathname.slice(1);
+        if (channel === 'TELEGRAM' && ['t.me', 'telegram.me'].includes(url.hostname)) {
+            return url.pathname.split('/').filter(Boolean)[0] ?? '';
+        }
+    } catch {
+        return '';
+    }
+    return '';
+}
+
+function supportSetting(value: unknown, fallback: string): string {
+    return typeof value === 'string' && value.trim() ? value.trim() : fallback;
+}
+
+function isHttpUrl(value: string | null): boolean {
+    if (!value?.trim()) return false;
+    try {
+        const url = new URL(value.trim());
+        return url.protocol === 'http:' || url.protocol === 'https:';
+    } catch {
+        return false;
+    }
 }
 
 export function toLocalDateTime(value: string | null): string {

@@ -15,6 +15,7 @@ import {
     SupportChannelKey,
     storefrontSupportChannels,
     supportChannelDetail,
+    supportPageTitle,
     supportServiceDetails,
 } from '../support-content';
 import { StorefrontContentBlock, StorefrontLanguage } from '../types';
@@ -41,7 +42,7 @@ export function SupportPage() {
     const isZh = language === 'zh';
     return (
         <Subpage
-            title={isZh ? '客服中心' : 'Customer support'}
+            title={supportPageTitle(content, language)}
             language={language}
             onBack={goBack}
             surfaceColor={content?.backgroundColor}
@@ -97,6 +98,7 @@ export function SupportContent({
 
     return (
         <div className="support-center-content">
+            {content.subtitle.trim() ? <p className="support-page-intro">{content.subtitle.trim()}</p> : null}
             <section className="support-hours-card" aria-labelledby="support-hours-title">
                 <div className="support-hours-rail" aria-hidden="true">
                     <Clock3 />

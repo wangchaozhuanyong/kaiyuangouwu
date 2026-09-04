@@ -9,6 +9,13 @@ export interface StorefrontSupportChannel {
     item: StorefrontContentItem;
 }
 
+export function supportPageTitle(
+    block: StorefrontContentBlock | undefined,
+    language: StorefrontLanguage,
+): string {
+    return block?.title.trim() || (language === 'zh' ? '客服中心' : 'Customer support');
+}
+
 export function storefrontSupportChannels(block: StorefrontContentBlock): StorefrontSupportChannel[] {
     return block.items
         .flatMap(item => {
