@@ -15,6 +15,7 @@ readonly expected_s3_prefix="s3://${expected_bucket}/deployments/${target_sha}"
 readonly nginx_target="/etc/nginx/sites-available/damatong-production"
 readonly environment_file="${repository}/packages/dev-server/.env"
 readonly deployment_id="${target_sha}-github-${GITHUB_RUN_ID:-manual}-$(date -u +%Y%m%dT%H%M%SZ)"
+readonly reviewed_storefront_media_keys="${VENDURE_REVIEWED_STOREFRONT_MEDIA_KEYS:-}"
 
 fail() {
     printf 'Production deployment failed: %s\n' "$1" >&2
@@ -58,12 +59,30 @@ git merge-base --is-ancestor "${deployed_sha}" "${target_sha}" ||
     fail 'the deployed runtime is not an ancestor of the requested target SHA'
 [[ -z "$(git status --porcelain --untracked-files=no)" ]] || fail 'the server repository has tracked changes'
 
-if git diff --name-only "${deployed_sha}" "${target_sha}" -- \
-    packages/dev-server/scripts/sync-storefront-media.mjs \
-    packages/dev-server/scripts/sync-auth-visuals.mjs \
-    packages/dev-server/scripts/repair-inventory-inheritance.mjs \
-    packages/storefront/src/assets/storefront/ | grep -q .; then
-    fail 'managed storefront data changed; use the reviewed manual publisher release path'
+mapfile -t managed_storefront_changes < <(
+    git diff --name-only "${deployed_sha}" "${target_sha}" -- \
+        packages/dev-server/scripts/sync-storefront-media.mjs \
+        packages/dev-server/scripts/sync-auth-visuals.mjs \
+        packages/dev-server/scripts/repair-inventory-inheritance.mjs \
+        packages/storefront/src/assets/storefront/
+)
+if [[ "${#managed_storefront_changes[@]}" -gt 0 ]]; then
+    [[ -n "${reviewed_storefront_media_keys}" ]] ||
+        fail 'managed storefront data changed; use the reviewed manual publisher release path'
+    [[ "${reviewed_storefront_media_keys}" =~ ^[a-z0-9][a-z0-9-]*(,[a-z0-9][a-z0-9-]*)*$ ]] ||
+        fail 'reviewed storefront media keys are invalid'
+    for managed_storefront_change in "${managed_storefront_changes[@]}"; do
+        case "${managed_storefront_change}" in
+            packages/dev-server/scripts/sync-storefront-media.mjs | \
+                packages/storefront/src/assets/storefront/*)
+                ;;
+            *)
+                fail 'reviewed storefront media release contains an unsupported managed data change'
+                ;;
+        esac
+    done
+elif [[ -n "${reviewed_storefront_media_keys}" ]]; then
+    fail 'reviewed storefront media keys were supplied without a managed storefront data change'
 fi
 
 git merge --ff-only refs/remotes/origin/main
@@ -263,6 +282,19 @@ printf 'PRODUCTION_AI_HEALTH_READY attempts=%s\n' "${ai_health_ready_attempt}"
 node "${repository}/deploy/verify-dashboard-assets.mjs" \
     --dashboard-url http://127.0.0.1:3002/dashboard/ \
     --release-id "${target_sha}"
+if [[ -n "${reviewed_storefront_media_keys}" ]]; then
+    printf 'STOREFRONT_MEDIA_PUBLISH_BEGIN keys=%s\n' "${reviewed_storefront_media_keys}"
+    (
+        cd "${candidate}"
+        VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
+            node packages/dev-server/scripts/sync-storefront-media.mjs \
+                --keys "${reviewed_storefront_media_keys}" --dry-run
+        VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
+            node packages/dev-server/scripts/sync-storefront-media.mjs \
+                --keys "${reviewed_storefront_media_keys}" --apply --allow-remote
+    )
+    printf 'STOREFRONT_MEDIA_PUBLISH_OK keys=%s\n' "${reviewed_storefront_media_keys}"
+fi
 node "${memory_guard}" --stage post-switch --report
 pm2 save 9>&-
 

@@ -206,6 +206,10 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
         path.join(repositoryRoot, '.github/workflows/deploy_production_runtime.yml'),
         'utf8',
     );
+    const reviewedMediaWorkflow = await readFile(
+        path.join(repositoryRoot, '.github/workflows/deploy_reviewed_storefront_media.yml'),
+        'utf8',
+    );
     const migrationReadinessCommand = [
         'NODE_ENV=production READINESS_PROCESS_ROLE=migration RUN_MIGRATIONS=true RUN_JOB_QUEUE=0 \\',
         '    node "${repository}/packages/dev-server/scripts/production-env-readiness.mjs"',
@@ -241,6 +245,12 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.match(script, /verify-dashboard-assets\.mjs/u);
     assert.match(script, /--release-id "\$\{target_sha\}"/u);
     assert.match(script, /managed storefront data changed/u);
+    assert.match(script, /VENDURE_REVIEWED_STOREFRONT_MEDIA_KEYS/u);
+    assert.match(script, /reviewed storefront media keys are invalid/u);
+    assert.match(script, /unsupported managed data change/u);
+    assert.match(script, /sync-storefront-media\.mjs[\s\S]*--keys/u);
+    assert.match(script, /--apply --allow-remote/u);
+    assert.ok(script.indexOf('--dry-run') < script.indexOf('--apply --allow-remote'));
     assert.match(script, /readonly memory_guard=.*production-memory-guard\.cjs/u);
     assert.match(script, /ensure-production-swap\.sh/u);
     assert.match(script, /vendure-production-swap/u);
@@ -265,6 +275,19 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.match(workflow, /AWS-RunShellScript/u);
     assert.doesNotMatch(workflow, /AWS_ACCESS_KEY_ID/u);
     assert.doesNotMatch(workflow, /AWS_SECRET_ACCESS_KEY/u);
+
+    assert.match(reviewedMediaWorkflow, /workflow_dispatch:/u);
+    assert.match(reviewedMediaWorkflow, /target_sha:/u);
+    assert.match(reviewedMediaWorkflow, /source_run_id:/u);
+    assert.match(reviewedMediaWorkflow, /media_keys:/u);
+    assert.match(reviewedMediaWorkflow, /id-token: write/u);
+    assert.match(reviewedMediaWorkflow, /actions\/download-artifact@[0-9a-f]{40}/u);
+    assert.match(reviewedMediaWorkflow, /aws-actions\/configure-aws-credentials@[0-9a-f]{40}/u);
+    assert.match(reviewedMediaWorkflow, /git merge --ff-only/u);
+    assert.match(reviewedMediaWorkflow, /VENDURE_REVIEWED_STOREFRONT_MEDIA_KEYS/u);
+    assert.match(reviewedMediaWorkflow, /AWS-RunShellScript/u);
+    assert.doesNotMatch(reviewedMediaWorkflow, /AWS_ACCESS_KEY_ID/u);
+    assert.doesNotMatch(reviewedMediaWorkflow, /AWS_SECRET_ACCESS_KEY/u);
 });
 
 void test('MySQL restore drill is isolated, hardened, and scheduled weekly', async () => {
