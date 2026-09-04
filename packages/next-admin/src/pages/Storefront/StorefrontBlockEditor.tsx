@@ -9,10 +9,13 @@ import {
     Plus,
     Search,
     Trash2,
+    UploadCloud,
     X,
 } from 'lucide-react';
-import { useDeferredValue, useState } from 'react';
+import { useDeferredValue, useRef, useState } from 'react';
+import { uploadAdminFiles } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
+import { CREATE_ASSETS_MULTIPART } from '../../graphql/catalog-admin.graphql';
 import { GET_ASSETS, GET_COLLECTIONS, GET_PRODUCTS } from '../../graphql/catalog.graphql';
 import {
     STOREFRONT_EDITOR_OPTIONS_QUERY,
@@ -30,7 +33,9 @@ import {
     itemTranslation,
     navigationTargets,
     newContentItem,
+    normalizeSupportAccount,
     storefrontBlockValidation,
+    supportLinkFromAccount,
     toLocalDateTime,
 } from './storefront-content-utils';
 
@@ -49,6 +54,18 @@ interface EditorOptionsResult {
 interface AssetQueryResult {
     assets: { items: Array<StorefrontAssetRef & { type: string; mimeType: string }>; totalItems: number };
 }
+
+interface CreateAssetResult extends Partial<StorefrontAssetRef> {
+    __typename: 'Asset' | 'MimeTypeError';
+    message?: string;
+}
+
+interface CreateAssetsData {
+    createAssets: CreateAssetResult[];
+}
+
+const MAX_IMAGE_SIZE_BYTES = 20 * 1024 * 1024;
+const supportedImageTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
 const targetOptions: Array<[StorefrontTargetType, string]> = [
     ['NONE', '无跳转'],
@@ -92,6 +109,7 @@ export function StorefrontBlockEditor({
     });
     const translation = blockTranslation(draft, language);
     const validation = storefrontBlockValidation(draft);
+    const isSupport = draft.type === 'SUPPORT';
     const productSettingKey = ['CATEGORY_AD', 'FEATURED_COLLECTION'].includes(draft.type)
         ? 'selectedProductIds'
         : draft.type === 'BEST_SELLERS'
@@ -245,6 +263,9 @@ export function StorefrontBlockEditor({
                                         />
                                     </Field>
                                 </div>
+                                <p className="mt-3 text-[11px] leading-5 text-slate-500">
+                                    开始和结束时间都不填写时，将永久展示；只填写一项时，按该时间单边生效。
+                                </p>
                             </section>
 
                             <section className="rounded-xl border border-slate-200 bg-white p-5">
@@ -278,7 +299,7 @@ export function StorefrontBlockEditor({
                                             className={inputClass}
                                         />
                                     </Field>
-                                    <Field label="正文">
+                                    <Field label={isSupport ? '客服说明' : '正文'}>
                                         <textarea
                                             rows={5}
                                             value={translation.body}
@@ -288,85 +309,105 @@ export function StorefrontBlockEditor({
                                             className={`${inputClass} resize-y leading-6`}
                                         />
                                     </Field>
-                                    <Field label="按钮文案">
-                                        <input
-                                            value={translation.ctaLabel}
-                                            onChange={event =>
-                                                updateTranslation({ ctaLabel: event.target.value })
-                                            }
-                                            className={inputClass}
-                                        />
-                                    </Field>
+                                    {!isSupport && (
+                                        <Field label="按钮文案">
+                                            <input
+                                                value={translation.ctaLabel}
+                                                onChange={event =>
+                                                    updateTranslation({ ctaLabel: event.target.value })
+                                                }
+                                                className={inputClass}
+                                            />
+                                        </Field>
+                                    )}
                                 </div>
                             </section>
 
                             <section className="rounded-xl border border-slate-200 bg-white p-5">
-                                <h3 className="text-sm font-bold text-slate-900">图片、配色与跳转</h3>
+                                <h3 className="text-sm font-bold text-slate-900">
+                                    {isSupport ? '客服页配色' : '图片、配色与跳转'}
+                                </h3>
+                                {isSupport && (
+                                    <p className="mt-1 text-[11px] text-slate-400">
+                                        客服页当前仅使用背景色；二维码请在下方微信客服渠道中上传
+                                    </p>
+                                )}
                                 <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                                    <div className="sm:col-span-2">
-                                        <AssetPicker
-                                            label="主图素材"
-                                            value={draft.imageAsset}
-                                            fallbackUrl={draft.imageUrl}
-                                            onChange={asset =>
-                                                setDraft({
-                                                    ...draft,
-                                                    imageAsset: asset,
-                                                    imageAssetId: asset?.id ?? null,
-                                                    imageUrl: asset?.preview ?? null,
-                                                })
-                                            }
-                                        />
-                                    </div>
+                                    {!isSupport && (
+                                        <div className="sm:col-span-2">
+                                            <AssetPicker
+                                                label="主图素材"
+                                                value={draft.imageAsset}
+                                                fallbackUrl={draft.imageUrl}
+                                                onChange={asset =>
+                                                    setDraft({
+                                                        ...draft,
+                                                        imageAsset: asset,
+                                                        imageAssetId: asset?.id ?? null,
+                                                        imageUrl: asset?.preview ?? null,
+                                                    })
+                                                }
+                                            />
+                                        </div>
+                                    )}
                                     <Field label="背景色">
                                         <ColorInput
                                             value={draft.backgroundColor ?? '#ffffff'}
                                             onChange={value => setDraft({ ...draft, backgroundColor: value })}
                                         />
                                     </Field>
-                                    <Field label="文字色">
-                                        <ColorInput
-                                            value={draft.textColor ?? '#0f172a'}
-                                            onChange={value => setDraft({ ...draft, textColor: value })}
-                                        />
-                                    </Field>
-                                    <Field label="跳转类型">
-                                        <select
-                                            value={draft.targetType}
-                                            onChange={event =>
-                                                setDraft({
-                                                    ...draft,
-                                                    targetType: event.target.value as StorefrontTargetType,
-                                                    targetValue:
-                                                        event.target.value === 'NONE'
-                                                            ? null
-                                                            : draft.targetValue,
-                                                })
-                                            }
-                                            className={inputClass}
-                                        >
-                                            {targetOptions.map(([value, label]) => (
-                                                <option key={value} value={value}>
-                                                    {label}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </Field>
-                                    <Field label="跳转目标">
-                                        <TargetValueInput
-                                            type={draft.targetType}
-                                            value={draft.targetValue ?? ''}
-                                            onChange={value =>
-                                                setDraft({ ...draft, targetValue: value || null })
-                                            }
-                                        />
-                                    </Field>
+                                    {!isSupport && (
+                                        <>
+                                            <Field label="文字色">
+                                                <ColorInput
+                                                    value={draft.textColor ?? '#0f172a'}
+                                                    onChange={value =>
+                                                        setDraft({ ...draft, textColor: value })
+                                                    }
+                                                />
+                                            </Field>
+                                            <Field label="跳转类型">
+                                                <select
+                                                    value={draft.targetType}
+                                                    onChange={event =>
+                                                        setDraft({
+                                                            ...draft,
+                                                            targetType: event.target
+                                                                .value as StorefrontTargetType,
+                                                            targetValue:
+                                                                event.target.value === 'NONE'
+                                                                    ? null
+                                                                    : draft.targetValue,
+                                                        })
+                                                    }
+                                                    className={inputClass}
+                                                >
+                                                    {targetOptions.map(([value, label]) => (
+                                                        <option key={value} value={value}>
+                                                            {label}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </Field>
+                                            <Field label="跳转目标">
+                                                <TargetValueInput
+                                                    type={draft.targetType}
+                                                    value={draft.targetValue ?? ''}
+                                                    onChange={value =>
+                                                        setDraft({ ...draft, targetValue: value || null })
+                                                    }
+                                                />
+                                            </Field>
+                                        </>
+                                    )}
                                 </div>
                             </section>
 
                             {moduleHasSettings(draft.type) && (
                                 <section className="rounded-xl border border-slate-200 bg-white p-5">
-                                    <h3 className="text-sm font-bold text-slate-900">展示规则</h3>
+                                    <h3 className="text-sm font-bold text-slate-900">
+                                        {isSupport ? '客服服务时间' : '展示规则'}
+                                    </h3>
                                     <div className="mt-4 grid gap-4 sm:grid-cols-2">
                                         {draft.type === 'SUPPORT' ? (
                                             <>
@@ -428,6 +469,10 @@ export function StorefrontBlockEditor({
                                                         className={inputClass}
                                                     />
                                                 </Field>
+                                                <p className="sm:col-span-2 text-[11px] leading-5 text-slate-500">
+                                                    客服服务时间用于前台提示；旧配置未保存时间时按每日
+                                                    09:00–18:00 显示。
+                                                </p>
                                             </>
                                         ) : draft.type === 'NOTICE' ? (
                                             <Field label="公告轮播间隔（秒）">
@@ -543,9 +588,13 @@ export function StorefrontBlockEditor({
                                 <section className="rounded-xl border border-slate-200 bg-white p-5">
                                     <div className="flex items-center justify-between">
                                         <div>
-                                            <h3 className="text-sm font-bold text-slate-900">子项内容</h3>
+                                            <h3 className="text-sm font-bold text-slate-900">
+                                                {isSupport ? '客服渠道' : '子项内容'}
+                                            </h3>
                                             <p className="mt-1 text-[11px] text-slate-400">
-                                                用于轮播、入口、保障项、法律页或导航项
+                                                {isSupport
+                                                    ? '启用需要展示的联系方式；微信客服需上传二维码'
+                                                    : '用于轮播、入口、保障项、法律页或导航项'}
                                             </p>
                                         </div>
                                         <button
@@ -563,7 +612,7 @@ export function StorefrontBlockEditor({
                                             className="flex items-center gap-1 rounded-lg bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 disabled:opacity-40"
                                         >
                                             <Plus className="h-3.5 w-3.5" />
-                                            添加子项
+                                            {isSupport ? '添加渠道' : '添加子项'}
                                         </button>
                                     </div>
                                     <div className="mt-4 space-y-3">
@@ -623,7 +672,7 @@ export function StorefrontBlockEditor({
                             <div className="rounded-xl border border-slate-200 bg-white p-4 text-xs text-slate-600">
                                 <div className="font-bold text-slate-900">生效方式</div>
                                 <p className="mt-2 leading-5">
-                                    保存后直接更新当前店铺的前台配置。排期未到或已过期的内容不会展示。
+                                    保存后直接更新当前店铺的前台配置。展示时间都留空时永久展示；排期未到或已过期的内容不会展示。
                                 </p>
                             </div>
                         </aside>
@@ -688,6 +737,13 @@ function ItemEditor({
         });
     const navigation = blockType === 'NAVIGATION';
     const support = blockType === 'SUPPORT';
+    const supportChannel =
+        typeof item.settings?.supportChannel === 'string' ? item.settings.supportChannel : '';
+    const wechatSupport = support && supportChannel === 'WECHAT';
+    const automaticSupportLink = ['QQ', 'WHATSAPP', 'TELEGRAM'].includes(supportChannel);
+    const supportAccount = stringSetting(item.settings?.supportAccount, '');
+    const generatedSupportLink = supportLinkFromAccount(supportChannel, supportAccount);
+    const accountCopy = supportAccountCopy(supportChannel, automaticSupportLink);
     const coreCategories = blockType === 'CORE_CATEGORIES';
     const updateLocalizedSetting = (field: 'badgeLabel' | 'ctaLabel', value: string) =>
         onChange({
@@ -706,7 +762,7 @@ function ItemEditor({
                         checked={item.enabled}
                         onChange={event => onChange({ ...item, enabled: event.target.checked })}
                     />
-                    子项 {index + 1}
+                    {support ? '客服渠道' : '子项'} {index + 1}
                 </label>
                 <div className="flex gap-1">
                     <IconButton
@@ -772,20 +828,25 @@ function ItemEditor({
                 {support && (
                     <Field label="客服渠道">
                         <select
-                            value={
-                                typeof item.settings?.supportChannel === 'string'
-                                    ? item.settings.supportChannel
-                                    : ''
-                            }
-                            onChange={event =>
+                            value={supportChannel}
+                            onChange={event => {
+                                const nextChannel = event.target.value;
+                                const nextAccount = nextChannel === supportChannel ? supportAccount : '';
+                                const generatedTarget = supportLinkFromAccount(nextChannel, nextAccount);
                                 onChange({
                                     ...item,
+                                    targetType: nextChannel === 'WECHAT' ? 'NONE' : 'URL',
+                                    targetValue:
+                                        nextChannel === 'WECHAT'
+                                            ? null
+                                            : (generatedTarget ?? item.targetValue),
                                     settings: {
                                         ...(item.settings ?? {}),
-                                        supportChannel: event.target.value,
+                                        supportChannel: nextChannel,
+                                        supportAccount: nextAccount,
                                     },
-                                })
-                            }
+                                });
+                            }}
                             className={inputClass}
                         >
                             <option value="">请选择</option>
@@ -797,40 +858,115 @@ function ItemEditor({
                         </select>
                     </Field>
                 )}
-                <Field label="跳转类型">
-                    <select
-                        value={navigation ? 'PAGE' : item.targetType}
-                        disabled={navigation}
-                        onChange={event =>
-                            onChange({
-                                ...item,
-                                targetType: event.target.value as StorefrontTargetType,
-                                targetValue: event.target.value === 'NONE' ? null : item.targetValue,
-                            })
-                        }
-                        className={`${inputClass} disabled:bg-slate-100`}
-                    >
-                        {targetOptions.map(([value, label]) => (
-                            <option key={value} value={value}>
-                                {label}
-                            </option>
-                        ))}
-                    </select>
-                </Field>
-                <Field label="跳转目标">
-                    <TargetValueInput
-                        type={navigation ? 'PAGE' : item.targetType}
-                        value={item.targetValue ?? ''}
-                        onChange={value =>
-                            onChange({
-                                ...item,
-                                targetType: navigation ? 'PAGE' : item.targetType,
-                                targetValue: value || null,
-                            })
-                        }
-                    />
-                </Field>
-                {!navigation && (
+                {support && supportChannel && (
+                    <Field label={accountCopy.label}>
+                        <input
+                            value={supportAccount}
+                            onChange={event => {
+                                const nextAccount = normalizeSupportAccount(
+                                    supportChannel,
+                                    event.target.value,
+                                );
+                                const generatedTarget = supportLinkFromAccount(supportChannel, nextAccount);
+                                onChange({
+                                    ...item,
+                                    targetType: wechatSupport ? 'NONE' : 'URL',
+                                    targetValue: automaticSupportLink ? generatedTarget : item.targetValue,
+                                    settings: {
+                                        ...(item.settings ?? {}),
+                                        supportAccount: nextAccount,
+                                    },
+                                });
+                            }}
+                            className={inputClass}
+                            placeholder={accountCopy.placeholder}
+                        />
+                    </Field>
+                )}
+                {support && automaticSupportLink && (
+                    <Field label="系统生成跳转地址">
+                        <input
+                            value={generatedSupportLink ?? ''}
+                            readOnly
+                            className={`${inputClass} bg-slate-100 text-slate-500`}
+                            placeholder="填写账号后自动生成"
+                        />
+                    </Field>
+                )}
+                {!support && (
+                    <Field label="跳转类型">
+                        <select
+                            value={navigation ? 'PAGE' : item.targetType}
+                            disabled={navigation}
+                            onChange={event =>
+                                onChange({
+                                    ...item,
+                                    targetType: event.target.value as StorefrontTargetType,
+                                    targetValue: event.target.value === 'NONE' ? null : item.targetValue,
+                                })
+                            }
+                            className={`${inputClass} disabled:bg-slate-100`}
+                        >
+                            {targetOptions.map(([value, label]) => (
+                                <option key={value} value={value}>
+                                    {label}
+                                </option>
+                            ))}
+                        </select>
+                    </Field>
+                )}
+                {!support && (
+                    <Field label="跳转目标">
+                        <TargetValueInput
+                            type={navigation ? 'PAGE' : item.targetType}
+                            value={item.targetValue ?? ''}
+                            onChange={value =>
+                                onChange({
+                                    ...item,
+                                    targetType: navigation ? 'PAGE' : item.targetType,
+                                    targetValue: value || null,
+                                })
+                            }
+                        />
+                    </Field>
+                )}
+                {support && supportChannel && !wechatSupport && !automaticSupportLink && (
+                    <Field label={supportChannel === 'QQ_GROUP' ? 'QQ群邀请链接 *' : '客服链接 *'}>
+                        <input
+                            value={item.targetValue ?? ''}
+                            onChange={event =>
+                                onChange({
+                                    ...item,
+                                    targetType: 'URL',
+                                    targetValue: event.target.value || null,
+                                })
+                            }
+                            className={inputClass}
+                            placeholder="https://..."
+                        />
+                    </Field>
+                )}
+                {wechatSupport && (
+                    <div className="sm:col-span-2">
+                        <AssetPicker
+                            label="微信客服二维码 *"
+                            value={item.imageAsset}
+                            fallbackUrl={item.imageUrl}
+                            onChange={asset =>
+                                onChange({
+                                    ...item,
+                                    imageAsset: asset,
+                                    imageAssetId: asset?.id ?? null,
+                                    imageUrl: asset?.preview ?? null,
+                                    targetType: 'NONE',
+                                    targetValue: null,
+                                })
+                            }
+                            compact
+                        />
+                    </div>
+                )}
+                {!navigation && !support && (
                     <div className="sm:col-span-2">
                         <AssetPicker
                             label="子项图片"
@@ -851,6 +987,25 @@ function ItemEditor({
             </div>
         </article>
     );
+}
+
+function supportAccountCopy(channel: string, required: boolean): { label: string; placeholder: string } {
+    const suffix = required ? ' *' : '（选填）';
+    if (channel === 'QQ') return { label: `QQ 号${suffix}`, placeholder: '例如 123456789' };
+    if (channel === 'WHATSAPP') {
+        return {
+            label: `WhatsApp 手机号${suffix}`,
+            placeholder: '例如 60123456789（国际格式，不含 +）',
+        };
+    }
+    if (channel === 'TELEGRAM') {
+        return {
+            label: `Telegram 用户名${suffix}`,
+            placeholder: '例如 flashcast_support（不含 @）',
+        };
+    }
+    if (channel === 'QQ_GROUP') return { label: `QQ群号${suffix}`, placeholder: '用于前台显示群号' };
+    return { label: `微信号${suffix}`, placeholder: '用于前台显示微信号' };
 }
 
 function InlinePager({
@@ -910,6 +1065,9 @@ function AssetPicker({
     const [open, setOpen] = useState(false);
     const [search, setSearch] = useState('');
     const [page, setPage] = useState(0);
+    const [uploading, setUploading] = useState(false);
+    const [uploadError, setUploadError] = useState('');
+    const uploadInputRef = useRef<HTMLInputElement>(null);
     const deferredSearch = useDeferredValue(search.trim());
     const assets = useQuery<AssetQueryResult>(GET_ASSETS, {
         variables: {
@@ -930,6 +1088,51 @@ function AssetPicker({
     const totalItems = assets.data?.assets.totalItems ?? 0;
     const totalPages = Math.max(1, Math.ceil(totalItems / 40));
     const preview = value?.preview ?? fallbackUrl;
+    const uploadImage = async (file: File) => {
+        if (!supportedImageTypes.has(file.type)) {
+            setUploadError('仅支持 JPG、PNG 或 WebP 图片');
+            return;
+        }
+        if (file.size > MAX_IMAGE_SIZE_BYTES) {
+            setUploadError('图片不能超过 20 MB');
+            return;
+        }
+
+        setUploading(true);
+        setUploadError('');
+        try {
+            const result = await uploadAdminFiles<CreateAssetsData>(
+                CREATE_ASSETS_MULTIPART,
+                [file],
+                ([filePlaceholder]) => ({
+                    input: [{ file: filePlaceholder, tags: ['后台上传'] }],
+                }),
+            );
+            const uploaded = result.createAssets[0];
+            if (
+                uploaded?.__typename !== 'Asset' ||
+                !uploaded.id ||
+                !uploaded.name ||
+                !uploaded.preview ||
+                !uploaded.source
+            ) {
+                throw new Error(uploaded?.message || 'Vendure 未返回有效的图片素材');
+            }
+            onChange({
+                id: uploaded.id,
+                name: uploaded.name,
+                preview: uploaded.preview,
+                source: uploaded.source,
+            });
+            setSearch('');
+            setPage(0);
+            void assets.refetch().catch(() => undefined);
+        } catch (error) {
+            setUploadError(toUserFacingError(error, '图片上传失败，请稍后重试'));
+        } finally {
+            setUploading(false);
+        }
+    };
     return (
         <div>
             <div className="mb-1 text-xs font-bold text-slate-700">{label}</div>
@@ -952,6 +1155,28 @@ function AssetPicker({
                         {value?.name ?? (preview ? '外部图片' : '未选择素材')}
                     </div>
                     <div className="mt-2 flex gap-2">
+                        <input
+                            ref={uploadInputRef}
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp"
+                            disabled={uploading}
+                            className="sr-only"
+                            aria-label={`上传${label}`}
+                            onChange={event => {
+                                const file = event.currentTarget.files?.[0];
+                                event.currentTarget.value = '';
+                                if (file) void uploadImage(file);
+                            }}
+                        />
+                        <button
+                            type="button"
+                            onClick={() => uploadInputRef.current?.click()}
+                            disabled={uploading}
+                            className="flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+                        >
+                            <UploadCloud className={`h-3.5 w-3.5 ${uploading ? 'animate-pulse' : ''}`} />
+                            {uploading ? '上传中…' : '上传图片'}
+                        </button>
                         <button
                             type="button"
                             onClick={() => setOpen(true)}
@@ -971,6 +1196,11 @@ function AssetPicker({
                     </div>
                 </div>
             </div>
+            {uploadError && (
+                <p className="mt-1.5 text-[11px] text-rose-600" role="alert">
+                    {uploadError}
+                </p>
+            )}
             {open && (
                 <div
                     className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/50 p-4"
@@ -1188,6 +1418,90 @@ function BlockPreview({
 }) {
     const translation = blockTranslation(block, language);
     const image = block.imageAsset?.preview ?? block.imageUrl;
+    if (block.type === 'SUPPORT') {
+        const isZh = language === 'zh_Hans';
+        const days = stringSetting(
+            isZh ? block.settings?.serviceDaysZh : block.settings?.serviceDaysEn,
+            isZh ? '每日' : 'Daily',
+        );
+        const startTime = stringSetting(block.settings?.serviceStartTime, '09:00');
+        const endTime = stringSetting(block.settings?.serviceEndTime, '18:00');
+        const channels = block.items.filter(item => item.enabled);
+        return (
+            <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+                    <h3 className="text-xs font-bold text-slate-900">简易前台预览</h3>
+                    <span className="rounded bg-slate-100 px-2 py-1 font-mono text-[10px] text-slate-500">
+                        SUPPORT
+                    </span>
+                </div>
+                <div className="p-4" style={{ backgroundColor: block.backgroundColor ?? '#f8fafc' }}>
+                    <h4 className="text-base font-bold text-slate-900">
+                        {translation.title || (isZh ? '客服中心' : 'Customer support')}
+                    </h4>
+                    {translation.subtitle && (
+                        <p className="mt-1 text-xs leading-5 text-slate-500">{translation.subtitle}</p>
+                    )}
+                    <div className="mt-3 rounded-lg border border-slate-200 bg-white p-3">
+                        <div className="flex items-center justify-between gap-3 text-[11px]">
+                            <strong className="text-slate-800">
+                                {isZh ? '客服服务时间' : 'Customer-service hours'}
+                            </strong>
+                            <span className="rounded bg-blue-50 px-2 py-1 font-bold text-blue-700">
+                                {days}
+                            </span>
+                        </div>
+                        <div className="mt-2 font-mono text-xl font-bold text-slate-900">
+                            {startTime}–{endTime}
+                        </div>
+                        {translation.body && (
+                            <p className="mt-2 whitespace-pre-wrap text-[10px] leading-4 text-slate-500">
+                                {translation.body}
+                            </p>
+                        )}
+                    </div>
+                    <div className="mt-3 space-y-2">
+                        {channels.map((item, index) => {
+                            const channel = stringSetting(item.settings?.supportChannel, '');
+                            const qrImage = item.imageAsset?.preview ?? item.imageUrl;
+                            return (
+                                <div
+                                    key={item.id ?? index}
+                                    className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white p-2"
+                                >
+                                    {channel === 'WECHAT' && qrImage ? (
+                                        <img src={qrImage} alt="" className="h-8 w-8 rounded object-cover" />
+                                    ) : (
+                                        <div className="h-8 w-8 rounded bg-slate-100" />
+                                    )}
+                                    <div className="min-w-0 flex-1">
+                                        <strong className="block truncate text-[11px] text-slate-800">
+                                            {itemTranslation(item, language).label || `客服渠道 ${index + 1}`}
+                                        </strong>
+                                        <span className="block truncate text-[10px] text-slate-400">
+                                            {channel === 'WECHAT'
+                                                ? isZh
+                                                    ? '扫码联系'
+                                                    : 'Scan QR code'
+                                                : stringSetting(
+                                                      item.settings?.supportAccount,
+                                                      item.targetValue ?? '',
+                                                  )}
+                                        </span>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                        {!channels.length && (
+                            <p className="rounded-lg bg-white py-5 text-center text-[11px] text-slate-400">
+                                {isZh ? '尚未启用客服渠道' : 'No support channel enabled'}
+                            </p>
+                        )}
+                    </div>
+                </div>
+            </section>
+        );
+    }
     return (
         <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
             <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
