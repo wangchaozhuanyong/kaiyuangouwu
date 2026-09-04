@@ -56,16 +56,25 @@ export function StoreEditor({
     const [brandPrimaryColor, setBrandPrimaryColor] = useState(profile.brandPrimaryColor ?? '');
     const [brandAccentColor, setBrandAccentColor] = useState(profile.brandAccentColor ?? '');
     const [brandHighlightColor, setBrandHighlightColor] = useState(profile.brandHighlightColor ?? '');
+    const [legalEntityName, setLegalEntityName] = useState(profile.legalEntityName ?? '');
+    const [legalRegistrationCountry, setLegalRegistrationCountry] = useState(
+        profile.legalRegistrationCountry ?? '',
+    );
+    const [supportEmail, setSupportEmail] = useState(profile.supportEmail ?? '');
+    const [privacyEmail, setPrivacyEmail] = useState(profile.privacyEmail ?? '');
     const [reviewEnglish, setReviewEnglish] = useState(false);
     const [internalNote, setInternalNote] = useState(profile.internalNote ?? '');
     const [status, setStatus] = useState(profile.status);
     const [sortOrder, setSortOrder] = useState(profile.sortOrder);
     const [save, state] = useMutation(UPDATE_STORE_PROFILE_MUTATION);
     const submit = async () => {
-        if (!nameZh.trim()) return onError('请填写中文店铺名称');
-        if (status === 'ACTIVE' && !profile.activationReadiness.ready)
-            return onError('上线检查未通过，暂时不能启用店铺');
         const statusChanged = status !== profile.status;
+        if (!nameZh.trim()) return onError('请填写中文店铺名称');
+        if ([supportEmail, privacyEmail].some(value => value.trim() && !isValidEmail(value))) {
+            return onError('请填写有效的客服邮箱和隐私邮箱');
+        }
+        if (statusChanged && status === 'ACTIVE' && !profile.activationReadiness.ready)
+            return onError('上线检查未通过，暂时不能启用店铺');
         let currentPassword: string | undefined;
         if (statusChanged) {
             const confirmation = await requestConfirmation({
@@ -92,6 +101,10 @@ export function StoreEditor({
                 brandPrimaryColor: brandPrimaryColor.trim() || null,
                 brandAccentColor: brandAccentColor.trim() || null,
                 brandHighlightColor: brandHighlightColor.trim() || null,
+                legalEntityName: legalEntityName.trim() || null,
+                legalRegistrationCountry: legalRegistrationCountry.trim() || null,
+                supportEmail: supportEmail.trim() || null,
+                privacyEmail: privacyEmail.trim() || null,
                 internalNote: internalNote.trim() || null,
                 sortOrder,
                 ...(statusChanged ? { status, currentPassword } : {}),
@@ -134,7 +147,7 @@ export function StoreEditor({
                         maxLength={160}
                         onChange={event => setTaglineZh(event.target.value)}
                         className={inputClass}
-                        placeholder="例如：一钥通百模"
+                        placeholder="例如：全球模型，一钥直达"
                     />
                 </Field>
             </div>
@@ -174,7 +187,7 @@ export function StoreEditor({
                                 maxLength={160}
                                 onChange={event => setTaglineEn(event.target.value)}
                                 className={inputClass}
-                                placeholder="One Key. Every Model."
+                                placeholder="One Key to Every Model."
                             />
                         </Field>
                     </div>
@@ -184,10 +197,10 @@ export function StoreEditor({
                 <p className="mb-2 text-xs font-bold text-slate-700">品牌颜色</p>
                 <div className="grid gap-3 sm:grid-cols-4">
                     {[
-                        ['背景色', brandBackgroundColor, setBrandBackgroundColor, '#071426'],
-                        ['主色', brandPrimaryColor, setBrandPrimaryColor, '#2F6BFF'],
+                        ['背景色', brandBackgroundColor, setBrandBackgroundColor, '#070B14'],
+                        ['主色', brandPrimaryColor, setBrandPrimaryColor, '#635BFF'],
                         ['强调色', brandAccentColor, setBrandAccentColor, '#22D3EE'],
-                        ['高亮色', brandHighlightColor, setBrandHighlightColor, '#7C3AED'],
+                        ['高亮色', brandHighlightColor, setBrandHighlightColor, '#8B5CF6'],
                     ].map(([label, value, setter, placeholder]) => (
                         <Field key={String(label)} label={String(label)}>
                             <input
@@ -203,6 +216,56 @@ export function StoreEditor({
                             />
                         </Field>
                     ))}
+                </div>
+            </div>
+            <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
+                <div className="mb-3">
+                    <p className="text-xs font-bold text-slate-800">法律与联系信息</p>
+                    <p className="mt-1 text-[10px] leading-4 text-slate-500">
+                        由隐私政策和使用条款自动引用；四项填写完整后才能通过店铺上线检查。
+                    </p>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                    <Field label="法定经营主体">
+                        <input
+                            value={legalEntityName}
+                            maxLength={200}
+                            onChange={event => setLegalEntityName(event.target.value)}
+                            className={inputClass}
+                            placeholder="营业执照或注册文件上的完整名称"
+                        />
+                    </Field>
+                    <Field label="注册国家/地区">
+                        <input
+                            value={legalRegistrationCountry}
+                            maxLength={100}
+                            onChange={event => setLegalRegistrationCountry(event.target.value)}
+                            className={inputClass}
+                            placeholder="例如：中国"
+                        />
+                    </Field>
+                    <Field label="客服邮箱">
+                        <input
+                            type="email"
+                            value={supportEmail}
+                            maxLength={254}
+                            autoComplete="email"
+                            onChange={event => setSupportEmail(event.target.value)}
+                            className={inputClass}
+                            placeholder="support@moyaoai.com"
+                        />
+                    </Field>
+                    <Field label="隐私邮箱">
+                        <input
+                            type="email"
+                            value={privacyEmail}
+                            maxLength={254}
+                            autoComplete="email"
+                            onChange={event => setPrivacyEmail(event.target.value)}
+                            className={inputClass}
+                            placeholder="privacy@moyaoai.com"
+                        />
+                    </Field>
                 </div>
             </div>
             <div className="mt-4">
@@ -248,6 +311,10 @@ export function StoreEditor({
             />
         </Modal>
     );
+}
+
+function isValidEmail(value: string): boolean {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(value.trim());
 }
 
 export function StoreDeprovisionDialog({
@@ -608,7 +675,7 @@ export function ProvisionStoreDialog({
                         value={draft.code}
                         onChange={event => set('code', event.target.value)}
                         className={`${inputClass} font-mono`}
-                        placeholder="yunqiao-store"
+                        placeholder="moyao-store"
                     />
                 </Field>
                 <Field label="中文网站名称 *">

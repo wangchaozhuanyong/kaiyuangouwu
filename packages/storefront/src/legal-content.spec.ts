@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { resolveManagedLegalDocument } from './legal-content';
+import { interpolateLegalProfileTokens, resolveManagedLegalDocument } from './legal-content';
 import { StorefrontContentBlock } from './types';
 
 function legalBlock(overrides: Partial<StorefrontContentBlock> = {}): StorefrontContentBlock {
@@ -82,5 +82,30 @@ describe('resolveManagedLegalDocument', () => {
         });
 
         expect(resolveManagedLegalDocument([block], 'privacy', 'Privacy')).toBeNull();
+    });
+});
+
+describe('interpolateLegalProfileTokens', () => {
+    const identity = {
+        legalEntityName: 'MOYAO AI Example Limited',
+        legalRegistrationCountry: 'Malaysia',
+        supportEmail: 'support@moyaoai.com',
+        privacyEmail: 'privacy@moyaoai.com',
+    };
+
+    it('replaces every supported legal profile token with managed store data', () => {
+        expect(
+            interpolateLegalProfileTokens(
+                '{{legalEntityName}} / {{ legalRegistrationCountry }} / {{supportEmail}} / {{privacyEmail}}',
+                identity,
+                'en',
+            ),
+        ).toBe('MOYAO AI Example Limited / Malaysia / support@moyaoai.com / privacy@moyaoai.com');
+    });
+
+    it('does not expose unresolved supported tokens', () => {
+        expect(interpolateLegalProfileTokens('Controller: {{legalEntityName}}', undefined, 'en')).toBe(
+            'Controller: Not configured',
+        );
     });
 });

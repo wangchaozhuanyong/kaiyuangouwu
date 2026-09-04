@@ -1,5 +1,7 @@
 import { gql } from 'graphql-tag';
 
+import { storefrontBrandingSchema } from './storefront-branding.schema';
+
 const commonTypes = gql`
     enum StoreProfileStatus {
         DRAFT
@@ -441,6 +443,10 @@ export const adminApiExtensions = gql`
         brandPrimaryColor: String
         brandAccentColor: String
         brandHighlightColor: String
+        legalEntityName: String
+        legalRegistrationCountry: String
+        supportEmail: String
+        privacyEmail: String
         primaryDomain: String
         storefrontUrl: String
         isOperational: Boolean!
@@ -482,6 +488,10 @@ export const adminApiExtensions = gql`
         brandPrimaryColor: String
         brandAccentColor: String
         brandHighlightColor: String
+        legalEntityName: String
+        legalRegistrationCountry: String
+        supportEmail: String
+        privacyEmail: String
         currentPassword: String
     }
 
@@ -535,6 +545,10 @@ export const adminApiExtensions = gql`
         brandPrimaryColor: String
         brandAccentColor: String
         brandHighlightColor: String
+        legalEntityName: String
+        legalRegistrationCountry: String
+        supportEmail: String
+        privacyEmail: String
     }
 
     type StoreCommerceConfiguration {
@@ -1239,22 +1253,7 @@ export const adminApiExtensions = gql`
 
 export const shopApiExtensions = gql`
     ${commonTypes}
-
-    type StorefrontBranding {
-        logoAssetId: ID
-        logoOnLightAssetId: ID
-        logoOnDarkAssetId: ID
-        logoUrl: String
-        logoOnLightUrl: String
-        logoOnDarkUrl: String
-        name: String!
-        description: String!
-        tagline: String!
-        backgroundColor: String
-        primaryColor: String
-        accentColor: String
-        highlightColor: String
-    }
+    ${storefrontBrandingSchema}
 
     type StoreFlashSaleItem {
         productId: ID!

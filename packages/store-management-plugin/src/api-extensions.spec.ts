@@ -4,6 +4,39 @@ import { describe, expect, it } from 'vitest';
 import { adminApiExtensions, shopApiExtensions } from './api-extensions';
 
 describe('store management API extensions', () => {
+    it('exposes managed legal identity fields to admins and the storefront', () => {
+        const legalFields = ['legalEntityName', 'legalRegistrationCountry', 'supportEmail', 'privacyEmail'];
+        const adminTypeNames = ['StoreProfile', 'UpdateStoreProfileInput', 'UpdateMyStoreProfileInput'];
+
+        for (const name of adminTypeNames) {
+            const definition = adminApiExtensions.definitions.find(
+                candidate =>
+                    (candidate.kind === Kind.OBJECT_TYPE_DEFINITION ||
+                        candidate.kind === Kind.INPUT_OBJECT_TYPE_DEFINITION) &&
+                    candidate.name.value === name,
+            );
+            if (
+                definition?.kind !== Kind.OBJECT_TYPE_DEFINITION &&
+                definition?.kind !== Kind.INPUT_OBJECT_TYPE_DEFINITION
+            ) {
+                throw new Error(`${name} is missing`);
+            }
+            expect(definition.fields?.map(field => field.name.value)).toEqual(
+                expect.arrayContaining(legalFields),
+            );
+        }
+
+        const branding = shopApiExtensions.definitions.find(
+            definition =>
+                definition.kind === Kind.OBJECT_TYPE_DEFINITION &&
+                definition.name.value === 'StorefrontBranding',
+        );
+        if (branding?.kind !== Kind.OBJECT_TYPE_DEFINITION) {
+            throw new Error('StorefrontBranding is missing');
+        }
+        expect(branding.fields?.map(field => field.name.value)).toEqual(expect.arrayContaining(legalFields));
+    });
+
     it('uses Node items for every PaginatedList implementation', () => {
         const objectTypes = adminApiExtensions.definitions.filter(
             definition => definition.kind === Kind.OBJECT_TYPE_DEFINITION,

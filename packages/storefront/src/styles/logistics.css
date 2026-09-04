@@ -166,8 +166,8 @@
 
 .auth-hero {
     --auth-hero-text-color: #ffffff;
-    --auth-hero-overlay-color: #0b1e2d;
-    --auth-hero-accent-color: #35e6b0;
+    --auth-hero-overlay-color: #070b14;
+    --auth-hero-accent-color: #22d3ee;
     height: clamp(148px, 22dvh, 190px);
     position: relative;
     overflow: hidden;

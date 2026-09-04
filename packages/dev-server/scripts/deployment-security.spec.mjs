@@ -69,13 +69,13 @@ void test('production Nginx routes protected downloads and hardens both APIs', a
         assert.match(location.groups.body, /proxy_set_header vendure-token "";/u);
         assert.match(
             location.groups.body,
-            /access_log \/var\/log\/nginx\/awanmesh-storefront-realtime\.log vendure_realtime;/u,
+            /access_log \/var\/log\/nginx\/moyao-storefront-realtime\.log vendure_realtime;/u,
         );
         assert.match(location.groups.body, /proxy_ignore_client_abort off;/u);
     }
 });
 
-void test('production ingress keeps AwanMesh and Meiyijia on separate channel-resolved hosts', async () => {
+void test('production ingress keeps MOYAO AI and Meiyijia on separate channel-resolved hosts', async () => {
     const config = await readFile(path.join(repositoryRoot, 'deploy/nginx/damatong.conf'), 'utf8');
 
     assert.match(config, /server_name moyaoai\.com damatong\.net _;/u);
@@ -203,8 +203,8 @@ void test('production runbook elevates only the root-owned atomic runtime switch
     assert.match(runbook, /sync-storefront-media\.mjs --dry-run/u);
     assert.match(runbook, /sync-storefront-media\.mjs --apply --allow-remote/u);
     assert.match(runbook, /sync-storefront-media\.mjs --verify/u);
-    assert.match(runbook, /sync-awanmesh-brand\.mjs --dry-run/u);
-    assert.match(runbook, /sync-awanmesh-brand\.mjs --apply --allow-remote/u);
+    assert.match(runbook, /sync-moyao-brand\.mjs --dry-run/u);
+    assert.match(runbook, /sync-moyao-brand\.mjs --apply --allow-remote/u);
 });
 
 void test('production runbook verifies a direct storefront with an optional promotion page', async () => {
@@ -318,9 +318,9 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     );
     assert.match(script, /rollback_needed=0\n\s+printf 'ROLLBACK_BEGIN/u);
     assert.equal(script.match(/ROLLBACK_BEGIN/gu)?.length, 1);
-    assert.match(script, /sync-awanmesh-brand\.mjs/u);
+    assert.match(script, /sync-moyao-brand\.mjs/u);
     assert.match(script, /packages\/storefront\/src\/assets\/brand\//u);
-    assert.match(script, /AwanMesh managed brand data changed/u);
+    assert.match(script, /MOYAO AI managed brand data changed/u);
     assert.match(script, /readonly memory_guard=.*production-memory-guard\.cjs/u);
     assert.match(script, /ensure-production-swap\.sh/u);
     assert.match(script, /vendure-production-swap/u);

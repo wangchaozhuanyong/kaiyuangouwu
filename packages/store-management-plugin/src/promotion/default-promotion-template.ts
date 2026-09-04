@@ -1,6 +1,6 @@
-/* eslint-disable max-len -- Keep the embedded Silver Mist promotion HTML and CSS readable as source. */
+/* eslint-disable max-len -- Keep the embedded MOYAO AI promotion HTML and CSS readable as source. */
 
-export const DEFAULT_PROMOTION_TEMPLATE_VERSION = 26;
+export const DEFAULT_PROMOTION_TEMPLATE_VERSION = 27;
 
 export const DEFAULT_PROMOTION_TEMPLATE = `<!doctype html>
 <html lang="{{store.language}}">
@@ -12,10 +12,10 @@ export const DEFAULT_PROMOTION_TEMPLATE = `<!doctype html>
     <meta property="og:title" content="{{promo.metaTitle}}">
     <meta property="og:description" content="{{promo.metaDescription}}">
     <meta property="og:image" content="{{store.shareImageUrl}}">
-    <meta name="theme-color" content="#0a0c0e">
+    <meta name="theme-color" content="#070B14">
     <title>{{promo.metaTitle}}</title>
     <style>
-        :root { color-scheme:dark; --black:#090b0d; --black-soft:#0d1013; --panel:#111519; --panel-soft:#171b1f; --white:#f4f2ed; --white-soft:#c7c7c3; --muted:#92969a; --faint:#858a8f; --silver:#b7bcc0; --amber:#efa83f; --amber-bright:#ffc65f; --amber-ink:#191006; --line:rgba(214,216,216,.15); --line-strong:rgba(239,168,63,.58); --promo-focus-color:#ffc65f; --shell:min(1200px,calc(100% - 48px)); --section-top:clamp(76px,6.4vw,108px); --section-bottom:clamp(56px,4.8vw,82px); --ease:cubic-bezier(.16,1,.3,1); }
+        :root { color-scheme:dark; --black:#070B14; --black-soft:#0b1020; --panel:#10172a; --panel-soft:#161d33; --white:#ffffff; --white-soft:#d9dcf3; --muted:#9ba3c8; --faint:#7e88ad; --silver:#bdc5ea; --amber:#8B5CF6; --amber-bright:#22D3EE; --amber-ink:#070B14; --line:rgba(151,160,205,.18); --line-strong:rgba(99,91,255,.58); --promo-focus-color:#22D3EE; --shell:min(1200px,calc(100% - 48px)); --section-top:clamp(76px,6.4vw,108px); --section-bottom:clamp(56px,4.8vw,82px); --ease:cubic-bezier(.16,1,.3,1); }
         * { box-sizing:border-box; }
         html { overflow-x:hidden; overflow-x:clip; scroll-behavior:smooth; scroll-padding-top:92px; background:var(--black); }
         body { min-height:100dvh; margin:0; overflow-x:hidden; overflow-x:clip; color:var(--white); background:var(--black); font-family:"Avenir Next",Avenir,"Helvetica Neue",Helvetica,"PingFang SC","Microsoft YaHei",sans-serif; -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
@@ -40,7 +40,7 @@ export const DEFAULT_PROMOTION_TEMPLATE = `<!doctype html>
         .promo-nav a:hover::after,.promo-nav a:focus-visible::after,.promo-nav a.is-active::after { opacity:1; transform:scaleX(1); }
         .promo-entry-form,.promo-header-entry-form,.promo-footer-form { margin:0; }
         .promo-header-entry,.promo-entry-button { min-height:48px; display:inline-flex; align-items:center; justify-content:center; padding:0 22px; border:1px solid var(--line-strong); border-radius:4px; color:var(--amber-bright); background:rgba(16,17,18,.76); box-shadow:inset 0 1px rgba(255,255,255,.04); font-size:13px; font-weight:700; cursor:pointer; transition:transform 240ms var(--ease),color 220ms ease,border-color 220ms ease,background 220ms ease,box-shadow 220ms ease; }
-        .promo-header-entry:hover,.promo-entry-button:hover { color:var(--amber-ink); border-color:var(--amber-bright); background:var(--amber-bright); box-shadow:0 16px 44px rgba(242,167,75,.18); transform:translateY(-2px); }
+        .promo-header-entry:hover,.promo-entry-button:hover { color:var(--amber-ink); border-color:var(--amber-bright); background:var(--amber-bright); box-shadow:0 16px 44px rgba(139,92,246,.18); transform:translateY(-2px); }
         .promo-header-entry:active,.promo-entry-button:active { transform:scale(.985); }
         .promo-header-entry { min-height:42px; padding-inline:18px; font-size:12px; }
         .promo-hero { position:relative; min-height:680px; overflow:hidden; border-bottom:1px solid var(--line); background:#0a0c0e; }
@@ -68,9 +68,9 @@ export const DEFAULT_PROMOTION_TEMPLATE = `<!doctype html>
         .promo-description { max-width:40ch; margin:14px 0 0; color:var(--muted); font-size:clamp(14px,1.12vw,16px); line-height:1.72; text-wrap:pretty; }
         .promo-actions { display:flex; align-items:center; gap:24px; margin-top:24px; }
         .promo-actions .promo-entry-form { width:min(100%,250px); }
-        .promo-actions .promo-entry-button { width:100%; min-height:56px; color:var(--amber-ink); border-color:var(--amber-bright); background:var(--amber-bright); box-shadow:0 18px 52px rgba(239,168,63,.16),inset 0 1px rgba(255,255,255,.42); font-size:14px; }
-        .promo-actions .promo-entry-button:hover { color:var(--amber-ink); background:#ffd47d; }
-        .promo-secondary-button { min-height:44px; display:inline-flex; align-items:center; justify-content:center; padding:0 2px; border:0; border-bottom:1px solid rgba(239,168,63,.72); border-radius:0; color:var(--white-soft); background:transparent; font-size:14px; font-weight:600; text-decoration:none; transition:color 200ms ease,border-color 200ms ease,transform 220ms var(--ease); }
+        .promo-actions .promo-entry-button { width:100%; min-height:56px; color:var(--amber-ink); border-color:var(--amber-bright); background:var(--amber-bright); box-shadow:0 18px 52px rgba(99,91,255,.16),inset 0 1px rgba(255,255,255,.42); font-size:14px; }
+        .promo-actions .promo-entry-button:hover { color:var(--amber-ink); background:#67E8F9; }
+        .promo-secondary-button { min-height:44px; display:inline-flex; align-items:center; justify-content:center; padding:0 2px; border:0; border-bottom:1px solid rgba(99,91,255,.72); border-radius:0; color:var(--white-soft); background:transparent; font-size:14px; font-weight:600; text-decoration:none; transition:color 200ms ease,border-color 200ms ease,transform 220ms var(--ease); }
         .promo-secondary-button::after { margin-left:14px; color:var(--amber-bright); content:"→"; }
         .promo-secondary-button:hover { color:var(--white); border-color:var(--amber-bright); transform:translateX(3px); }
         .promo-entry-note { display:none; max-width:48ch; margin:0; color:var(--faint); font-size:11px; line-height:1.55; }
@@ -78,8 +78,8 @@ export const DEFAULT_PROMOTION_TEMPLATE = `<!doctype html>
         .promo-carousel-nav { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); overflow:hidden; border:1px solid rgba(214,216,216,.16); border-radius:5px; background:rgba(12,14,16,.82); box-shadow:inset 0 1px rgba(255,255,255,.025); }
         .promo-slide-button { min-height:58px; display:grid; place-items:center; padding:0 18px; border:0; color:var(--faint); background:transparent; text-align:center; cursor:pointer; transition:color 220ms ease,background 220ms ease,box-shadow 300ms var(--ease); }
         .promo-slide-button+.promo-slide-button { border-left:1px solid var(--line); }
-        .promo-slide-button:hover,.promo-slide-button:focus-visible { color:var(--white); background:rgba(242,167,75,.035); }
-        .promo-slide-button.is-active { color:var(--amber-bright); background:rgba(239,168,63,.045); box-shadow:inset 0 -3px var(--amber-bright); }
+        .promo-slide-button:hover,.promo-slide-button:focus-visible { color:var(--white); background:rgba(139,92,246,.035); }
+        .promo-slide-button.is-active { color:var(--amber-bright); background:rgba(99,91,255,.045); box-shadow:inset 0 -3px var(--amber-bright); }
         .promo-slide-control-label { font-size:11px; font-weight:650; letter-spacing:.04em; white-space:nowrap; }
         .promo-section { position:relative; isolation:isolate; padding:var(--section-top) 0 var(--section-bottom); background:radial-gradient(circle at 88% -10%,rgba(190,196,201,.075),transparent 31%),linear-gradient(180deg,#111519 0%,#0d1013 100%); }
         .promo-section::before { position:absolute; z-index:0; inset:0; border-top:1px solid rgba(235,224,206,.045); background:linear-gradient(112deg,transparent 0 66%,rgba(255,255,255,.018) 66.1%,transparent 78%); content:""; pointer-events:none; }
@@ -88,18 +88,18 @@ export const DEFAULT_PROMOTION_TEMPLATE = `<!doctype html>
         .promo-kicker::before { width:24px; height:2px; background:var(--amber); content:""; }
         .promo-section-title { max-width:13ch; margin:0; color:var(--white); font-size:clamp(42px,5vw,62px); font-weight:500; letter-spacing:-.03em; line-height:1.06; text-wrap:balance; }
         .promo-section-intro { max-width:60ch; margin:24px 0 0; color:var(--muted); font-size:15px; line-height:1.76; text-wrap:pretty; }
-        .promo-services { padding-top:44px; background:#111316; background-image:linear-gradient(90deg,#111316 0%,rgba(17,19,22,.99) 58%,rgba(17,19,22,.78) 100%),url("/storefront/promo/damatong-silver-stage-v23.webp"); background-position:center,right -80px top; background-size:100% 100%,760px auto; background-repeat:no-repeat; }
+        .promo-services { padding-top:44px; background:#10172a; background-image:linear-gradient(90deg,#10172a 0%,rgba(16,23,42,.99) 58%,rgba(16,23,42,.78) 100%),url("/storefront/promo/moyao-ai-network-stage-v27.webp"); background-position:center,right -80px top; background-size:100% 100%,760px auto; background-repeat:no-repeat; }
         .promo-services-layout { position:relative; z-index:1; display:grid; grid-template-columns:minmax(280px,.78fr) minmax(0,1.22fr); gap:clamp(58px,9vw,124px); align-items:start; }
         .promo-services-copy { position:sticky; top:116px; }
         .promo-capability-channels { border-top:1px solid var(--line-strong); }
         .promo-capability { position:relative; min-height:170px; display:grid; grid-template-columns:58px minmax(190px,.52fr) minmax(0,.48fr); align-items:center; gap:clamp(22px,3.5vw,48px); padding:30px 0; border-bottom:1px solid var(--line); overflow:hidden; transition:transform 300ms var(--ease),border-color 240ms ease,background 240ms ease; }
         .promo-capability::after { position:absolute; right:0; bottom:-1px; left:0; height:1px; background:var(--amber); content:""; transform:scaleX(0); transform-origin:left; transition:transform 420ms var(--ease); }
-        .promo-capability:hover { border-color:rgba(242,167,75,.32); background:rgba(242,167,75,.026); transform:translateX(4px); }
+        .promo-capability:hover { border-color:rgba(139,92,246,.32); background:rgba(139,92,246,.026); transform:translateX(4px); }
         .promo-capability:hover::after { transform:scaleX(1); }
         .promo-capability-number { color:var(--amber); font-size:11px; font-weight:720; letter-spacing:.16em; }
         .promo-capability h3 { margin:0; color:var(--white); font-size:clamp(23px,2.2vw,30px); font-weight:550; letter-spacing:-.025em; }
         .promo-capability p { max-width:42ch; margin:0; color:var(--muted); font-size:14px; line-height:1.72; }
-        .promo-scenarios { overflow:hidden; background:radial-gradient(circle at 82% 16%,rgba(239,168,63,.09),transparent 31%),linear-gradient(135deg,#0b0e11 0%,#15120f 58%,#0a0d10 100%); }
+        .promo-scenarios { overflow:hidden; background:radial-gradient(circle at 82% 16%,rgba(99,91,255,.09),transparent 31%),linear-gradient(135deg,#0b0e11 0%,#15120f 58%,#0a0d10 100%); }
         .promo-scenarios::after { position:absolute; inset:0; background:linear-gradient(90deg,rgba(255,255,255,.018) 1px,transparent 1px) 0 0/12.5% 100%; opacity:.28; content:""; pointer-events:none; }
         .promo-scenario-layout { position:relative; z-index:1; }
         .promo-scenario-copy { display:grid; grid-template-columns:minmax(0,.9fr) minmax(320px,.72fr); align-items:end; gap:64px; margin-bottom:64px; }
@@ -117,22 +117,22 @@ export const DEFAULT_PROMOTION_TEMPLATE = `<!doctype html>
         .promo-process-heading { display:grid; grid-template-columns:minmax(0,.86fr) minmax(320px,.72fr); align-items:end; gap:64px; margin-bottom:72px; }
         .promo-process-heading .promo-section-intro { margin:0; }
         .promo-process-path { position:relative; display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); margin:0; padding:0; list-style:none; }
-        .promo-process-path::before { position:absolute; top:7px; right:0; left:0; height:1px; background:linear-gradient(90deg,var(--amber),rgba(239,168,63,.5) 52%,rgba(214,216,216,.18)); content:""; }
+        .promo-process-path::before { position:absolute; top:7px; right:0; left:0; height:1px; background:linear-gradient(90deg,var(--amber),rgba(99,91,255,.5) 52%,rgba(214,216,216,.18)); content:""; }
         .promo-step { position:relative; min-height:220px; padding:43px clamp(24px,3vw,38px) 0 0; }
-        .promo-step::before { position:absolute; top:2px; left:0; width:11px; height:11px; border:2px solid var(--amber-bright); border-radius:50%; background:#111316; box-shadow:0 0 0 6px rgba(239,168,63,.07); content:""; }
+        .promo-step::before { position:absolute; top:2px; left:0; width:11px; height:11px; border:2px solid var(--amber-bright); border-radius:50%; background:#111316; box-shadow:0 0 0 6px rgba(99,91,255,.07); content:""; }
         .promo-step+.promo-step { padding-left:clamp(24px,3vw,38px); }
         .promo-step+.promo-step::before { left:clamp(24px,3vw,38px); }
         .promo-step strong { display:block; color:var(--white); font-size:21px; font-weight:560; letter-spacing:-.02em; }
         .promo-step p { max-width:26ch; margin:14px 0 0; color:var(--muted); font-size:14px; line-height:1.7; }
         .promo-trust-section { padding-bottom:48px; background:radial-gradient(circle at 80% 20%,rgba(190,196,201,.1),transparent 34%),linear-gradient(145deg,#111417 0%,#0b0e11 72%); }
-        .promo-trust-panel { position:relative; display:grid; grid-template-columns:minmax(270px,.82fr) minmax(0,1.18fr); gap:clamp(52px,8vw,108px); padding:clamp(46px,6vw,78px); border:1px solid rgba(242,167,75,.34); background:rgba(15,17,19,.94); box-shadow:0 30px 90px rgba(0,0,0,.26); overflow:hidden; }
+        .promo-trust-panel { position:relative; display:grid; grid-template-columns:minmax(270px,.82fr) minmax(0,1.18fr); gap:clamp(52px,8vw,108px); padding:clamp(46px,6vw,78px); border:1px solid rgba(139,92,246,.34); background:rgba(15,17,19,.94); box-shadow:0 30px 90px rgba(0,0,0,.26); overflow:hidden; }
         .promo-trust-panel::before { position:absolute; top:0; right:0; width:34%; height:2px; background:var(--amber); content:""; }
         .promo-trust-panel h2 { max-width:9ch; margin:0; color:var(--white); font-size:clamp(40px,4.5vw,58px); font-weight:500; letter-spacing:-.03em; line-height:1.08; }
         .promo-trust-panel>div>p { max-width:38ch; margin:22px 0 0; color:var(--white-soft); font-size:14px; line-height:1.74; }
         .promo-trust-list { display:grid; align-content:center; margin:0; padding:0; list-style:none; }
         .promo-trust-item { display:grid; grid-template-columns:14px minmax(0,1fr); gap:18px; padding:23px 0; border-bottom:1px solid var(--line); }
         .promo-trust-item:last-child { border-bottom:0; }
-        .promo-trust-mark { width:9px; height:9px; margin-top:7px; border:1px solid var(--amber-bright); transform:rotate(45deg); box-shadow:0 0 18px rgba(239,168,63,.24); }
+        .promo-trust-mark { width:9px; height:9px; margin-top:7px; border:1px solid var(--amber-bright); transform:rotate(45deg); box-shadow:0 0 18px rgba(99,91,255,.24); }
         .promo-trust-item strong { color:var(--white); font-size:18px; font-weight:560; }
         .promo-trust-item p { max-width:46ch; margin:9px 0 0; color:var(--muted); font-size:13px; line-height:1.68; }
         #faq { background:radial-gradient(circle at 12% 18%,rgba(183,188,192,.055),transparent 28%),linear-gradient(180deg,#0c0f12 0%,#0a0d10 100%); }
@@ -148,18 +148,18 @@ export const DEFAULT_PROMOTION_TEMPLATE = `<!doctype html>
         .promo-faq-item[open] summary::after { transform:rotate(0); }
         .promo-faq-item.is-faq-closing summary::after { transform:rotate(90deg); }
         .promo-faq-answer { max-width:62ch; padding:0 52px 26px 0; color:var(--muted); font-size:14px; line-height:1.75; }
-        .promo-final { position:relative; min-height:560px; display:grid; align-items:center; overflow:hidden; border:1px solid var(--line); background:#090b0d url("/storefront/promo/damatong-silver-stage-v23.webp") center center/cover no-repeat; }
+        .promo-final { position:relative; min-height:560px; display:grid; align-items:center; overflow:hidden; border:1px solid var(--line); background:#070B14 url("/storefront/promo/moyao-ai-network-stage-v27.webp") center center/cover no-repeat; }
         .promo-final::before { position:absolute; inset:0; background:rgba(7,9,11,.74); content:""; }
         .promo-final-inner { position:relative; z-index:1; max-width:660px; padding:clamp(46px,7vw,86px); }
         .promo-final h2 { max-width:10ch; margin:0; color:var(--white); font-size:clamp(48px,5.8vw,72px); font-weight:500; letter-spacing:-.035em; line-height:1.04; }
         .promo-final p { max-width:46ch; margin:25px 0 34px; color:var(--white-soft); font-size:15px; line-height:1.72; }
-        .promo-final .promo-entry-button { min-width:210px; color:var(--amber-ink); border-color:var(--amber-bright); background:var(--amber-bright); box-shadow:0 18px 52px rgba(242,167,75,.18),inset 0 1px rgba(255,255,255,.38); }
+        .promo-final .promo-entry-button { min-width:210px; color:var(--amber-ink); border-color:var(--amber-bright); background:var(--amber-bright); box-shadow:0 18px 52px rgba(139,92,246,.18),inset 0 1px rgba(255,255,255,.38); }
         #faq { padding-top:64px; }
         .promo-footer { min-height:150px; display:flex; align-items:center; justify-content:space-between; gap:32px; color:var(--faint); font-size:12px; }
         .promo-footer-meta,.promo-footer-nav { display:flex; align-items:center; gap:24px; }
         .promo-footer-link { min-height:44px; padding:0; border:0; color:var(--muted); background:transparent; font-size:12px; cursor:pointer; transition:color 180ms ease; }
         .promo-footer-link:hover { color:var(--amber-bright); }
-        .promo-mobile-entry { position:fixed; z-index:70; right:14px; bottom:max(14px,env(safe-area-inset-bottom)); left:14px; display:none; padding:7px; border:1px solid rgba(242,167,75,.38); background:rgba(8,10,12,.92); box-shadow:0 16px 48px rgba(0,0,0,.44); -webkit-backdrop-filter:blur(18px); backdrop-filter:blur(18px); opacity:0; pointer-events:none; transform:translateY(120%); transition:opacity 260ms ease,transform 320ms var(--ease); }
+        .promo-mobile-entry { position:fixed; z-index:70; right:14px; bottom:max(14px,env(safe-area-inset-bottom)); left:14px; display:none; padding:7px; border:1px solid rgba(139,92,246,.38); background:rgba(8,10,12,.92); box-shadow:0 16px 48px rgba(0,0,0,.44); -webkit-backdrop-filter:blur(18px); backdrop-filter:blur(18px); opacity:0; pointer-events:none; transform:translateY(120%); transition:opacity 260ms ease,transform 320ms var(--ease); }
         .promo-mobile-entry.is-visible { opacity:1; pointer-events:auto; transform:none; }
         .promo-mobile-entry .promo-entry-button { width:100%; min-height:50px; color:var(--amber-ink); border-color:var(--amber-bright); background:var(--amber-bright); }
         .promo-motion-ready [data-promo-reveal] { opacity:0; clip-path:inset(0 0 18% 0); transform:translateY(24px); transition:opacity 420ms ease,clip-path 520ms var(--ease),transform 520ms var(--ease); }
@@ -224,7 +224,7 @@ export const DEFAULT_PROMOTION_TEMPLATE = `<!doctype html>
             .promo-capability { min-height:0; grid-template-columns:38px minmax(0,1fr); gap:8px 14px; padding:26px 0; }
             .promo-capability p { grid-column:2; font-size:13px; }
             .promo-capability h3 { font-size:22px; }
-            .promo-services { background-image:linear-gradient(180deg,rgba(17,19,22,.98),rgba(17,19,22,.9)),url("/storefront/promo/damatong-silver-stage-mobile-v23.webp"); background-position:center,right top; background-size:100% 100%,520px auto; }
+            .promo-services { background-image:linear-gradient(180deg,rgba(16,23,42,.98),rgba(16,23,42,.9)),url("/storefront/promo/moyao-ai-network-stage-mobile-v27.webp"); background-position:center,right top; background-size:100% 100%,520px auto; }
             .promo-scenario-copy { margin-bottom:34px; }
             .promo-theater { grid-template-columns:1fr; }
             .promo-scene,.promo-scene:nth-child(n) { grid-column:1; min-height:0; padding:28px 22px; background:rgba(12,15,18,.82); }
@@ -248,7 +248,7 @@ export const DEFAULT_PROMOTION_TEMPLATE = `<!doctype html>
             .promo-faq-heading .promo-section-intro { max-width:34ch; margin:16px auto 0; text-align:center; }
             .promo-faq-item summary { min-height:76px; padding-right:42px; font-size:15px; }
             .promo-faq-answer { padding-right:34px; font-size:13px; }
-            .promo-final { min-height:470px; background-image:url("/storefront/promo/damatong-silver-stage-mobile-v23.webp"); background-position:center top; }
+            .promo-final { min-height:470px; background-image:url("/storefront/promo/moyao-ai-network-stage-mobile-v27.webp"); background-position:center top; }
             .promo-final::before { background:rgba(7,9,11,.8); }
             .promo-final-inner { max-width:100%; padding:38px 20px; text-align:center; }
             .promo-final h2 { max-width:15ch; margin-inline:auto; font-size:clamp(36px,9.1vw,38px); line-height:1.12; text-wrap:balance; }
@@ -268,7 +268,7 @@ export const DEFAULT_PROMOTION_TEMPLATE = `<!doctype html>
     </style>
 </head>
 <body>
-    <!-- DESIGN ARTIFACT: Silver Mist Stage. The background is static; motion is limited to content transitions and module reveals. -->
+    <!-- DESIGN ARTIFACT: MOYAO AI Network Stage. The background is static; motion is limited to content transitions and module reveals. -->
     <a class="promo-skip-link" href="#promo-main">{{promo.skipToContent}}</a>
     <div class="promo-page" data-promo-page data-promo-motion>
         <div class="promo-header-wrap"><header class="promo-header" data-promo-header><div class="promo-header-inner">
@@ -277,7 +277,7 @@ export const DEFAULT_PROMOTION_TEMPLATE = `<!doctype html>
             <form class="promo-header-entry-form" data-store-entry><button class="promo-header-entry" type="submit">{{promo.headerViewServices}}</button></form>
         </div></header></div>
         <main id="promo-main">
-            <section class="promo-hero" data-promo-hero data-promo-carousel role="region" aria-roledescription="{{promo.carouselRole}}" aria-label="{{promo.heroCarouselAria}}"><picture class="promo-hero-art" aria-hidden="true"><source media="(max-width:760px)" srcset="/storefront/promo/damatong-silver-stage-mobile-v23.webp"><img src="/storefront/promo/damatong-silver-stage-v23.webp" alt="" width="1536" height="1024" fetchpriority="high"></picture><div class="promo-hero-inner promo-shell">
+            <section class="promo-hero" data-promo-hero data-promo-carousel role="region" aria-roledescription="{{promo.carouselRole}}" aria-label="{{promo.heroCarouselAria}}"><picture class="promo-hero-art" aria-hidden="true"><source media="(max-width:760px)" srcset="/storefront/promo/moyao-ai-network-stage-mobile-v27.webp"><img src="/storefront/promo/moyao-ai-network-stage-v27.webp" alt="" width="1536" height="1024" fetchpriority="high"></picture><div class="promo-hero-inner promo-shell">
                 <div class="promo-hero-content" data-promo-reveal><div class="promo-hero-intro"><p class="promo-brand-line">{{promo.heroEyebrow}}</p><h1 class="promo-title"><span class="promo-title-line">{{promo.heroLead}}</span><span class="promo-title-line promo-title-highlight">{{promo.heroHighlight}}</span><span class="promo-title-line">{{promo.heroTail}}</span></h1></div><div class="promo-hero-panel"><div class="promo-hero-stage" aria-live="off">
                     <article class="promo-slide is-active" id="promo-slide-1" data-promo-slide role="group" aria-roledescription="{{promo.slideRole}}" aria-label="{{promo.heroSlideOneAria}}" aria-hidden="false"><h2 class="promo-slide-title">{{promo.heroSlideOneTitleLead}}</h2><p class="promo-slide-accent">{{promo.heroSlideOneTitleAccent}}</p><p class="promo-description">{{promo.heroSlideOneDescription}}</p></article>
                     <article class="promo-slide" id="promo-slide-2" data-promo-slide role="group" aria-roledescription="{{promo.slideRole}}" aria-label="{{promo.heroSlideTwoAria}}" aria-hidden="true"><h2 class="promo-slide-title">{{promo.heroSlideTwoTitleLead}}</h2><p class="promo-slide-accent">{{promo.heroSlideTwoTitleAccent}}</p><p class="promo-description">{{promo.heroSlideTwoDescription}}</p></article>

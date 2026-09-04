@@ -203,6 +203,7 @@ const baseProps = {
     storefrontName: '测试店铺',
     storefrontDescription: '',
     logoUrl: null,
+    logoOnLightUrl: null,
     addingVariantId: null,
     couponLoading: false,
     onCategorySelect: vi.fn(),
@@ -225,6 +226,17 @@ function renderHome(overrides: Record<string, unknown> = {}) {
 }
 
 describe('HomePage hero carousel', () => {
+    it('uses the managed light-background wordmark in the main header', () => {
+        const markup = renderHome({
+            logoUrl: '/assets/preview/icon.png',
+            logoOnLightUrl: '/assets/preview/logo.png',
+        });
+
+        expect(markup).toContain('/assets/preview/logo.png');
+        expect(markup).toContain('class="brand-wordmark"');
+        expect(markup).not.toContain('<strong>测试店铺</strong>');
+    });
+
     it('does not render a carousel from catalog products when no managed hero exists', () => {
         const markup = renderHome();
 

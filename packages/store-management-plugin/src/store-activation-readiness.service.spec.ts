@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
     evaluateStoreActivationReadiness,
+    hasCompleteStoreProfile,
     isProductionPaymentMethod,
     isUsableEnglishContent,
 } from './store-activation-readiness.service';
@@ -74,5 +75,26 @@ describe('store activation readiness', () => {
         expect(isUsableEnglishContent('ChatGPT Plus 为官方渠道服务')).toBe(false);
         expect(isUsableEnglishContent('<p>商品详情</p>')).toBe(false);
         expect(isUsableEnglishContent('')).toBe(false);
+    });
+
+    it('requires legal identity and both contact emails in the store profile check', () => {
+        const completeProfile = {
+            channel: {
+                customFields: {
+                    storefrontNameZh: 'MOYAO AI｜模钥',
+                    storefrontNameEn: 'MOYAO AI',
+                },
+            },
+            descriptionZh: 'AI 软件商城',
+            descriptionEn: 'AI software marketplace',
+            logoAssetId: 'asset-logo',
+            legalEntityName: 'MOYAO AI Example Limited',
+            legalRegistrationCountry: 'Malaysia',
+            supportEmail: 'support@moyaoai.com',
+            privacyEmail: 'privacy@moyaoai.com',
+        } as any;
+
+        expect(hasCompleteStoreProfile(completeProfile)).toBe(true);
+        expect(hasCompleteStoreProfile({ ...completeProfile, privacyEmail: null })).toBe(false);
     });
 });

@@ -18,8 +18,8 @@ const inlineScripts = [...indexHtml.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/scri
 if (!indexHtml.includes('/dashboard/assets/')) {
     throw new Error('next-admin production build must load assets from /dashboard/assets/');
 }
-if (!indexHtml.includes('/dashboard/favicon.svg')) {
-    throw new Error('next-admin production build must load the favicon from /dashboard/favicon.svg');
+if (!indexHtml.includes('/dashboard/favicon.png')) {
+    throw new Error('next-admin production build must load the favicon from /dashboard/favicon.png');
 }
 if (javascriptAssets.length === 0) {
     throw new Error('next-admin production build did not emit any JavaScript assets');

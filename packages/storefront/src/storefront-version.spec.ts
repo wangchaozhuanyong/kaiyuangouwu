@@ -13,7 +13,7 @@ describe('storefront version detection', () => {
     it('creates a stable fingerprint from versioned JavaScript and CSS assets', () => {
         expect(
             storefrontAssetFingerprint(
-                ['/assets/index-new.js', '/assets/index-new.css', '/favicon.svg', '/assets/index-new.js'],
+                ['/assets/index-new.js', '/assets/index-new.css', '/favicon.png', '/assets/index-new.js'],
                 baseUrl,
             ),
         ).toBe('https://shop.example.com/assets/index-new.css|https://shop.example.com/assets/index-new.js');
