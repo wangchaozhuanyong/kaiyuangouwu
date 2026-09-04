@@ -1,12 +1,14 @@
 import { RefreshCw } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import type { StorefrontLanguage } from './types';
 
 import {
     STOREFRONT_VERSION_CHECK_INTERVAL_MS,
     currentStorefrontAssetFingerprint,
     fetchStorefrontAssetFingerprint,
 } from './storefront-version';
+// Prettier organizes type-only imports after value imports in this file.
+// eslint-disable-next-line import/order
+import type { StorefrontLanguage } from './types';
 
 // Capture the entry assets while this eagerly-loaded module is evaluated. Route-level
 // styles can be attached before React effects run and are not part of the build identity.
