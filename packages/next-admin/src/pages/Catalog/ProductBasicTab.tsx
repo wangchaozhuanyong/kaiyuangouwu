@@ -235,125 +235,151 @@ export function ProductBasicTab() {
                 )}
             </div>
 
-            {/* 真实素材主图 */}
-            <div className="bg-white rounded-xl shadow-2xs border border-slate-200 p-6 space-y-4">
-                <div className="border-b border-slate-100 pb-3 flex justify-between items-center">
-                    <div>
-                        <h3 className="text-sm font-bold text-slate-900">商品主图 (Featured Asset)</h3>
-                        <p className="text-xs text-slate-400 mt-0.5">
-                            从后端真实素材库选择一张图片作为前台商品主图
-                        </p>
-                    </div>
-                    <button
-                        type="button"
-                        onClick={() => {
-                            setAssetPickerMode('FEATURED');
-                            setIsAssetPickerOpen(true);
-                        }}
-                        className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-bold transition-colors cursor-pointer"
-                    >
-                        {featuredAssetId ? '更换主图' : '选择素材主图'}
-                    </button>
-                </div>
-
-                {featuredAssetPreview ? (
-                    <div className="flex items-center gap-4">
-                        <div className="w-24 h-24 rounded-xl border border-slate-200 overflow-hidden bg-slate-50 relative group">
-                            <img
-                                src={featuredAssetPreview}
-                                alt="主图预览"
-                                className="w-full h-full object-cover"
-                            />
+            {/* 商品图片：桌面端左主图、右详情图，窄屏自动改为上下排列。 */}
+            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xs">
+                <div className="grid lg:grid-cols-[minmax(20rem,0.8fr)_minmax(0,1.2fr)]">
+                    <section className="p-6">
+                        <div className="flex min-h-12 items-start justify-between gap-4 border-b border-slate-100 pb-3">
+                            <div>
+                                <h3 className="text-sm font-bold text-slate-900">商品主图</h3>
+                                <p className="mt-0.5 text-xs leading-5 text-slate-400">
+                                    用于商品列表、搜索结果和详情页首屏
+                                </p>
+                            </div>
                             <button
                                 type="button"
+                                disabled={saving}
                                 onClick={() => {
-                                    setFeaturedAssetId(null);
-                                    setFeaturedAssetPreview(null);
+                                    setAssetPickerMode('FEATURED');
+                                    setIsAssetPickerOpen(true);
                                 }}
-                                className="absolute top-1 right-1 p-1 bg-black/60 hover:bg-rose-600 text-white rounded-full transition-colors opacity-0 group-hover:opacity-100"
-                                title="移除主图"
-                                aria-label="移除商品主图"
+                                className="shrink-0 cursor-pointer rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700 transition-colors hover:bg-blue-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
                             >
-                                <X className="w-3 h-3" />
+                                {featuredAssetId ? '更换主图' : '选择主图'}
                             </button>
                         </div>
-                        <div className="text-xs text-slate-500">
-                            <div className="font-mono text-slate-800 font-bold">
-                                Asset ID: {featuredAssetId}
-                            </div>
-                            <div className="text-[11px] text-slate-400 mt-1">
-                                已绑定为商品主图，将在前台列表与详情首屏展示
-                            </div>
-                        </div>
-                    </div>
-                ) : (
-                    <button
-                        type="button"
-                        onClick={() => {
-                            setAssetPickerMode('FEATURED');
-                            setIsAssetPickerOpen(true);
-                        }}
-                        className="flex w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-200 p-6 text-center transition-all hover:border-blue-400 hover:bg-blue-50/30"
-                    >
-                        <ImageIcon className="w-8 h-8 text-slate-300" />
-                        <div className="text-xs font-bold text-slate-600">暂未设置主图，点击从素材库选择</div>
-                    </button>
-                )}
 
-                <div className="border-t border-slate-100 pt-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <div className="text-xs font-bold text-slate-800">商品详情图集</div>
-                            <div className="text-[11px] text-slate-400 mt-0.5">
-                                可多选素材，保存为 Vendure 商品 Asset 关联
-                            </div>
-                        </div>
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setAssetPickerMode('GALLERY');
-                                setIsAssetPickerOpen(true);
-                            }}
-                            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold cursor-pointer"
-                        >
-                            管理图集 ({selectedAssetIds.length})
-                        </button>
-                    </div>
-                    {selectedAssetIds.length > 0 ? (
-                        <div className="flex flex-wrap gap-3">
-                            {selectedAssetIds.map(assetId => {
-                                const asset = knownAssets[assetId];
-                                return (
-                                    <div
-                                        key={assetId}
-                                        className="relative w-16 h-16 rounded-lg border border-slate-200 overflow-hidden bg-slate-50 group"
+                        {featuredAssetPreview ? (
+                            <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-center lg:flex-col lg:items-start xl:flex-row xl:items-center">
+                                <div className="group relative aspect-square w-36 shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-slate-50 xl:w-40">
+                                    <img
+                                        src={featuredAssetPreview}
+                                        alt="商品主图预览"
+                                        className="h-full w-full object-cover"
+                                    />
+                                    <button
+                                        type="button"
+                                        disabled={saving}
+                                        onClick={() => {
+                                            setFeaturedAssetId(null);
+                                            setFeaturedAssetPreview(null);
+                                        }}
+                                        className="absolute right-2 top-2 rounded-full bg-slate-950/70 p-1.5 text-white opacity-100 transition hover:bg-rose-600 focus:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-50 sm:opacity-0 sm:group-focus-within:opacity-100 sm:group-hover:opacity-100"
+                                        title="移除主图"
+                                        aria-label="移除商品主图"
                                     >
-                                        {asset?.preview ? (
-                                            <img
-                                                src={asset.preview}
-                                                alt={asset.name}
-                                                className="w-full h-full object-cover"
-                                            />
-                                        ) : (
-                                            <ImageIcon className="w-5 h-5 text-slate-300 absolute inset-0 m-auto" />
-                                        )}
-                                        <button
-                                            type="button"
-                                            onClick={() =>
-                                                setSelectedAssetIds(ids => ids.filter(id => id !== assetId))
-                                            }
-                                            aria-label={`移除素材 ${asset?.name ?? assetId}`}
-                                            className="absolute top-1 right-1 p-0.5 bg-black/60 text-white rounded opacity-0 group-hover:opacity-100"
-                                        >
-                                            <X className="w-3 h-3" />
-                                        </button>
+                                        <X className="h-3.5 w-3.5" />
+                                    </button>
+                                </div>
+                                <div className="min-w-0 text-xs text-slate-500">
+                                    <div className="font-mono font-bold text-slate-800">
+                                        Asset ID: {featuredAssetId}
                                     </div>
-                                );
-                            })}
+                                    <div className="mt-1 text-[11px] leading-5 text-slate-400">
+                                        已绑定为唯一主图，更换时不会删除素材库中的原图。
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            <button
+                                type="button"
+                                disabled={saving}
+                                onClick={() => {
+                                    setAssetPickerMode('FEATURED');
+                                    setIsAssetPickerOpen(true);
+                                }}
+                                className="mt-5 flex min-h-40 w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-200 p-6 text-center transition-all hover:border-blue-400 hover:bg-blue-50/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                                <ImageIcon className="h-8 w-8 text-slate-300" />
+                                <div className="text-xs font-bold text-slate-600">暂未设置主图</div>
+                                <div className="text-[11px] text-slate-400">点击从素材库选择一张图片</div>
+                            </button>
+                        )}
+                    </section>
+
+                    <section className="border-t border-slate-200 bg-slate-50/40 p-6 lg:border-l lg:border-t-0">
+                        <div className="flex min-h-12 items-start justify-between gap-4 border-b border-slate-200 pb-3">
+                            <div>
+                                <h3 className="text-sm font-bold text-slate-900">商品详情图</h3>
+                                <p className="mt-0.5 text-xs leading-5 text-slate-400">
+                                    可多选素材，用于展示商品细节、功能和使用说明
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                disabled={saving}
+                                onClick={() => {
+                                    setAssetPickerMode('GALLERY');
+                                    setIsAssetPickerOpen(true);
+                                }}
+                                className="shrink-0 cursor-pointer rounded-lg bg-slate-200/70 px-3 py-1.5 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                                管理详情图 ({selectedAssetIds.length})
+                            </button>
                         </div>
-                    ) : (
-                        <div className="text-[11px] text-slate-400">暂未关联详情图。</div>
-                    )}
+
+                        {selectedAssetIds.length > 0 ? (
+                            <div className="mt-5 grid grid-cols-[repeat(auto-fill,minmax(5rem,6rem))] gap-3">
+                                {selectedAssetIds.map(assetId => {
+                                    const asset = knownAssets[assetId];
+                                    return (
+                                        <div
+                                            key={assetId}
+                                            className="group relative aspect-square overflow-hidden rounded-lg border border-slate-200 bg-white"
+                                            title={asset?.name ?? `Asset ID: ${assetId}`}
+                                        >
+                                            {asset?.preview ? (
+                                                <img
+                                                    src={asset.preview}
+                                                    alt={asset.name}
+                                                    className="h-full w-full object-cover"
+                                                />
+                                            ) : (
+                                                <ImageIcon className="absolute inset-0 m-auto h-5 w-5 text-slate-300" />
+                                            )}
+                                            <button
+                                                type="button"
+                                                disabled={saving}
+                                                onClick={() =>
+                                                    setSelectedAssetIds(ids =>
+                                                        ids.filter(id => id !== assetId),
+                                                    )
+                                                }
+                                                aria-label={`移除素材 ${asset?.name ?? assetId}`}
+                                                className="absolute right-1.5 top-1.5 rounded bg-slate-950/70 p-1 text-white opacity-100 transition hover:bg-rose-600 focus:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-50 sm:opacity-0 sm:group-focus-within:opacity-100 sm:group-hover:opacity-100"
+                                            >
+                                                <X className="h-3 w-3" />
+                                            </button>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        ) : (
+                            <button
+                                type="button"
+                                disabled={saving}
+                                onClick={() => {
+                                    setAssetPickerMode('GALLERY');
+                                    setIsAssetPickerOpen(true);
+                                }}
+                                className="mt-5 flex min-h-40 w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-200 bg-white p-6 text-center transition-all hover:border-blue-400 hover:bg-blue-50/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                                <ImageIcon className="h-8 w-8 text-slate-300" />
+                                <div className="text-xs font-bold text-slate-600">暂未添加详情图</div>
+                                <div className="text-[11px] text-slate-400">点击从素材库多选图片</div>
+                            </button>
+                        )}
+                    </section>
                 </div>
             </div>
             <DynamicCustomFieldsForm
