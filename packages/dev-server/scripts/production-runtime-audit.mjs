@@ -1,4 +1,6 @@
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -7,6 +9,8 @@ import semver from 'semver';
 
 const SEVERITIES = Object.freeze(['low', 'moderate', 'high', 'critical']);
 const DEFAULT_AUDIT_RETRY_DELAYS_MS = Object.freeze([15_000, 60_000]);
+const RETRYABLE_AUDIT_FAILURE =
+    /(?:Timeout|ConnectionClosed):\s*audit request failed|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|ECONNREFUSED|fetch failed|socket hang up/iu;
 const scriptPath = fileURLToPath(import.meta.url);
 const repositoryRoot = path.resolve(path.dirname(scriptPath), '../../..');
 
@@ -136,6 +140,41 @@ export function createRuntimeAuditReport(runtimePackages, auditReport, { failOn 
     };
 }
 
+export function parseBunAuditJson(output, source = 'bun audit') {
+    try {
+        return JSON.parse(output);
+    } catch {
+        const detail = output.trim();
+        throw new Error(`Could not parse ${source} JSON${detail ? `:\n${detail}` : ''}`);
+    }
+}
+
+export function parseSavedBunAuditEvidence(output, expectedLockfileSha256) {
+    const evidence = parseBunAuditJson(output, 'saved bun audit evidence');
+    if (
+        !isRecord(evidence) ||
+        evidence.format !== 1 ||
+        !isRecord(evidence.report) ||
+        typeof evidence.lockfileSha256 !== 'string' ||
+        !/^[0-9a-f]{64}$/u.test(evidence.lockfileSha256)
+    ) {
+        throw new Error('Saved bun audit evidence is invalid');
+    }
+    if (evidence.lockfileSha256 !== expectedLockfileSha256) {
+        throw new Error('Saved bun audit evidence does not match the source lockfile');
+    }
+    evaluateAuditPolicy(evidence.report, 'critical');
+    return evidence.report;
+}
+
+export function writeBunAuditEvidence(outputPath, lockfilePath, report) {
+    evaluateAuditPolicy(report, 'critical');
+    const lockfileSha256 = createHash('sha256').update(readFileSync(lockfilePath)).digest('hex');
+    writeFileSync(outputPath, `${JSON.stringify({ format: 1, lockfileSha256, report })}\n`, {
+        mode: 0o600,
+    });
+}
+
 function bunAuditParseError(result, attempt, maxAttempts) {
     const detail = [result.stdout, result.stderr].filter(Boolean).join('\n').trim();
     const attemptDetail = maxAttempts > 1 ? ` after ${attempt} of ${maxAttempts} attempts` : '';
@@ -145,8 +184,8 @@ function bunAuditParseError(result, attempt, maxAttempts) {
     };
 }
 
-function isRetriableAuditTimeout(result, detail) {
-    return result.status !== 0 && /Timeout:\s*audit request failed/u.test(detail);
+function isRetriableAuditFailure(result, detail) {
+    return result.status !== 0 && RETRYABLE_AUDIT_FAILURE.test(detail);
 }
 
 export async function runBunAudit(
@@ -156,32 +195,39 @@ export async function runBunAudit(
         maxAttempts = DEFAULT_AUDIT_RETRY_DELAYS_MS.length + 1,
         onRetry = ({ attempt, delayMs }) => {
             process.stderr.write(
-                `bun audit transport timeout on attempt ${attempt}; retrying in ${delayMs}ms\n`,
+                `bun audit transport failure on attempt ${attempt}; retrying in ${delayMs}ms\n`,
             );
         },
         retryDelaysMs = DEFAULT_AUDIT_RETRY_DELAYS_MS,
         runCommand = () =>
-            spawnSync('bun', ['audit', '--json', ...(auditLevel ? ['--audit-level', auditLevel] : [])], {
+            spawnSync('bun', ['audit', '--json'], {
                 cwd: workingDirectory,
                 encoding: 'utf8',
             }),
         wait = delayMs => new Promise(resolve => setTimeout(resolve, delayMs)),
     } = {},
 ) {
-    if (!Number.isInteger(maxAttempts) || maxAttempts < 1) {
-        throw new Error('bun audit maxAttempts must be a positive integer');
+    if (!Number.isInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 5) {
+        throw new Error('bun audit maxAttempts must be an integer between 1 and 5');
     }
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
         const result = runCommand();
         if (result.error) {
-            throw result.error;
+            const detail = result.error instanceof Error ? result.error.message : String(result.error);
+            if (!RETRYABLE_AUDIT_FAILURE.test(detail) || attempt === maxAttempts) {
+                throw result.error;
+            }
+            const delayMs = retryDelaysMs[attempt - 1] ?? retryDelaysMs.at(-1) ?? 0;
+            onRetry({ attempt, delayMs });
+            await wait(delayMs);
+            continue;
         }
         let report;
         try {
             report = JSON.parse(result.stdout);
         } catch {
             const { detail, error } = bunAuditParseError(result, attempt, maxAttempts);
-            if (!isRetriableAuditTimeout(result, detail) || attempt === maxAttempts) {
+            if (!isRetriableAuditFailure(result, detail) || attempt === maxAttempts) {
                 throw error;
             }
             const delayMs = retryDelaysMs[attempt - 1] ?? retryDelaysMs.at(-1) ?? 0;
@@ -189,29 +235,36 @@ export async function runBunAudit(
             await wait(delayMs);
             continue;
         }
-        if (auditLevel) {
-            const blockedFindings = evaluateAuditPolicy(report, auditLevel);
-            if (blockedFindings.length > 0) {
-                const first = blockedFindings[0];
-                throw new Error(
-                    `bun audit policy failed (${auditLevel}+): ${first.name} ${first.severity} ${first.title} (${first.url})`,
-                );
-            }
-            if (result.status !== 0 && result.status !== 1) {
-                throw new Error(`bun audit exited unexpectedly with code ${result.status ?? 'unknown'}`);
-            }
+        const blockedFindings = evaluateAuditPolicy(report, auditLevel ?? 'critical');
+        if (auditLevel && blockedFindings.length > 0) {
+            const first = blockedFindings[0];
+            throw new Error(
+                `bun audit policy failed (${auditLevel}+): ${first.name} ${first.severity} ${first.title} (${first.url})`,
+            );
+        }
+        if (result.status !== 0 && result.status !== 1) {
+            throw new Error(`bun audit exited unexpectedly with code ${result.status ?? 'unknown'}`);
         }
         return report;
     }
     throw new Error('bun audit retry loop exited unexpectedly');
 }
 
-export async function auditRuntimePackages(artifactRoot, runtimePackages, { failOn = 'critical' } = {}) {
-    const { blockedFindings, report } = createRuntimeAuditReport(
-        runtimePackages,
-        await runBunAudit(repositoryRoot),
-        { failOn },
-    );
+export async function auditRuntimePackages(
+    artifactRoot,
+    runtimePackages,
+    { auditReportPath, expectedLockfileSha256, failOn = 'critical' } = {},
+) {
+    if (auditReportPath && !expectedLockfileSha256) {
+        throw new Error('Saved bun audit evidence requires the source lockfile SHA-256');
+    }
+    const auditReport = auditReportPath
+        ? parseSavedBunAuditEvidence(
+              readFileSync(path.resolve(auditReportPath), 'utf8'),
+              expectedLockfileSha256,
+          )
+        : await runBunAudit(repositoryRoot);
+    const { blockedFindings, report } = createRuntimeAuditReport(runtimePackages, auditReport, { failOn });
     await writeFile(path.join(artifactRoot, 'RUNTIME-AUDIT.json'), `${JSON.stringify(report, null, 2)}\n`);
     if (blockedFindings.length > 0) {
         const first = blockedFindings[0];
@@ -226,12 +279,18 @@ async function main() {
     const { values } = parseArgs({
         options: {
             'audit-level': { type: 'string' },
+            'evidence-output': { type: 'string' },
+            lockfile: { type: 'string' },
         },
         strict: true,
     });
     const auditLevel = values['audit-level'] ?? 'high';
     severityRank(auditLevel);
-    await runBunAudit(repositoryRoot, { auditLevel });
+    const report = await runBunAudit(repositoryRoot, { auditLevel });
+    if (values['evidence-output']) {
+        const lockfilePath = path.resolve(repositoryRoot, values.lockfile ?? 'bun.lock');
+        writeBunAuditEvidence(path.resolve(values['evidence-output']), lockfilePath, report);
+    }
     process.stdout.write(`bun audit policy passed (${auditLevel}+)\n`);
 }
 

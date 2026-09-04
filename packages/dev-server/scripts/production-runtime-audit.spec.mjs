@@ -1,13 +1,18 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import {
+    auditRuntimePackages,
     createRuntimeAuditReport,
     matchRuntimeAdvisories,
+    parseSavedBunAuditEvidence,
     runBunAudit,
+    writeBunAuditEvidence,
 } from './production-runtime-audit.mjs';
 
 const packages = [
@@ -63,7 +68,7 @@ void test('runtime audit policy can be tightened to block High findings', () => 
     assert.equal(blockedFindings.length, 1);
 });
 
-void test('bun audit retries an explicit transport timeout and returns the next valid report', async () => {
+void test('bun audit retries an explicit timeout and returns the next valid report', async () => {
     const results = [
         {
             error: undefined,
@@ -91,7 +96,31 @@ void test('bun audit retries an explicit transport timeout and returns the next 
     assert.deepEqual(waits, [15]);
 });
 
-void test('bun audit fails closed after the bounded timeout retries are exhausted', async () => {
+void test('bun audit retries the observed ConnectionClosed transport failure', async () => {
+    const results = [
+        {
+            error: undefined,
+            status: 1,
+            stderr: 'ConnectionClosed: audit request failed',
+            stdout: 'bun audit v1.3.14',
+        },
+        { error: undefined, status: 0, stderr: '', stdout: JSON.stringify({}) },
+    ];
+    let calls = 0;
+
+    const report = await runBunAudit('/repository', {
+        maxAttempts: 2,
+        onRetry: () => undefined,
+        retryDelaysMs: [0],
+        runCommand: () => results[calls++],
+        wait: async () => undefined,
+    });
+
+    assert.deepEqual(report, {});
+    assert.equal(calls, 2);
+});
+
+void test('bun audit fails closed after bounded transport retries are exhausted', async () => {
     let calls = 0;
 
     await assert.rejects(
@@ -216,17 +245,69 @@ void test('bun audit gate fails closed when parsed JSON does not contain advisor
     );
 });
 
+void test('runtime audit writes and reuses lockfile-bound audit evidence', async () => {
+    const fixtureRoot = await mkdtemp(path.join(tmpdir(), 'vendure-runtime-audit-'));
+    const auditReportPath = path.join(fixtureRoot, 'bun-audit.json');
+    const lockfilePath = path.join(fixtureRoot, 'bun.lock');
+    try {
+        await writeFile(lockfilePath, 'fixture lockfile');
+        writeBunAuditEvidence(auditReportPath, lockfilePath, audit);
+        const lockfileSha256 = createHash('sha256').update('fixture lockfile').digest('hex');
+
+        assert.deepEqual(
+            parseSavedBunAuditEvidence(await readFile(auditReportPath, 'utf8'), lockfileSha256),
+            audit,
+        );
+        const report = await auditRuntimePackages(fixtureRoot, packages, {
+            auditReportPath,
+            expectedLockfileSha256: lockfileSha256,
+            failOn: 'critical',
+        });
+
+        assert.deepEqual(report.summary, { critical: 0, high: 1, low: 0, moderate: 0, total: 1 });
+        assert.deepEqual(
+            JSON.parse(await readFile(path.join(fixtureRoot, 'RUNTIME-AUDIT.json'), 'utf8')),
+            report,
+        );
+    } finally {
+        await rm(fixtureRoot, { recursive: true, force: true });
+    }
+});
+
+void test('saved runtime audit evidence remains fail-closed when it is invalid', () => {
+    assert.throws(() => parseSavedBunAuditEvidence('Timeout: audit request failed', 'a'.repeat(64)), {
+        message: 'Could not parse saved bun audit evidence JSON:\nTimeout: audit request failed',
+    });
+    assert.throws(
+        () =>
+            parseSavedBunAuditEvidence(
+                JSON.stringify({ format: 1, lockfileSha256: 'b'.repeat(64), report: audit }),
+                'a'.repeat(64),
+            ),
+        /does not match the source lockfile/u,
+    );
+});
+
 void test('repository and production workflows use the fail-closed retrying audit gate', async () => {
     const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
-    for (const workflowPath of [
-        '.github/workflows/build_and_test.yml',
-        '.github/workflows/build_production_runtime.yml',
-    ]) {
-        const workflow = await readFile(path.join(repositoryRoot, workflowPath), 'utf8');
-        assert.match(
-            workflow,
-            /node packages\/dev-server\/scripts\/production-runtime-audit\.mjs --audit-level high/u,
-        );
-        assert.doesNotMatch(workflow, /run: bun audit --audit-level high/u);
-    }
+    const repositoryWorkflow = await readFile(
+        path.join(repositoryRoot, '.github/workflows/build_and_test.yml'),
+        'utf8',
+    );
+    const productionWorkflow = await readFile(
+        path.join(repositoryRoot, '.github/workflows/build_production_runtime.yml'),
+        'utf8',
+    );
+
+    assert.match(
+        repositoryWorkflow,
+        /node packages\/dev-server\/scripts\/production-runtime-audit\.mjs --audit-level high/u,
+    );
+    assert.match(
+        productionWorkflow,
+        /node packages\/dev-server\/scripts\/production-runtime-audit\.mjs[\s\\]+--audit-level high[\s\\]+--evidence-output/u,
+    );
+    assert.match(productionWorkflow, /--audit-report "\$BUN_AUDIT_REPORT"/u);
+    assert.doesNotMatch(repositoryWorkflow, /run: bun audit/u);
+    assert.doesNotMatch(productionWorkflow, /bun audit --json/u);
 });
