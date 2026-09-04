@@ -460,7 +460,7 @@ export function AppShell() {
             '/catalog/products/new': '发布新商品',
             '/catalog/categories': '分类与属性',
             '/catalog/inventory': '库存与仓库',
-            '/catalog/card-pool': '数字商品与卡密',
+            '/catalog/card-pool': '发卡记录与异常',
             '/catalog/assets': '素材媒体库',
             '/sales/orders': '订单列表',
             '/sales/after-sales': '售后与退款',
@@ -592,7 +592,7 @@ export function AppShell() {
                 ...(showsDigitalCatalog
                     ? [
                           {
-                              title: '虚拟卡密与自动发货库',
+                              title: '发卡记录与异常',
                               path: '/catalog/card-pool',
                               cat: '商品',
                               icon: KeyRound,
@@ -840,7 +840,7 @@ export function AppShell() {
                                 to="/catalog/card-pool"
                                 className={navItemClass}
                             >
-                                数字商品与卡密
+                                发卡记录与异常
                             </NavLink>
                             <NavLink
                                 allowed={canAccessPath('/catalog/assets')}

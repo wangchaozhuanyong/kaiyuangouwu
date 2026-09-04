@@ -118,7 +118,7 @@ export function ProductEditor() {
                         className={`py-3.5 border-b-2 transition-colors flex items-center gap-1.5 cursor-pointer ${activeTab === 'VARIANTS' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
                     >
                         <Layers className="w-3.5 h-3.5" />
-                        {effectiveFulfillmentType === 'digital' ? 'SKU 变体与交付' : 'SKU 变体与库存'} (
+                        {effectiveFulfillmentType === 'digital' ? '销售与自动发货' : 'SKU 变体与库存'} (
                         {variants.length})
                     </button>
                     <button

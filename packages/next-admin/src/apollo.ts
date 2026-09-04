@@ -2,6 +2,7 @@ import { ApolloClient, ApolloLink, InMemoryCache, createHttpLink, gql } from '@a
 import { setContext } from '@apollo/client/link/context';
 
 import { adminMutationFeedbackLink } from './apollo-mutation-feedback';
+import { CUSTOM_FIELD_POSSIBLE_TYPES } from './custom-fields/custom-fields.graphql';
 import { createAdminFeedbackId, publishAdminFeedback } from './utils/admin-feedback';
 import { toUserFacingError } from './utils/user-facing-error';
 
@@ -157,7 +158,7 @@ const authLink = setContext((_, { headers }) => {
 
 export const client = new ApolloClient({
     link: ApolloLink.from([authLink, adminMutationFeedbackLink, httpLink]),
-    cache: new InMemoryCache(),
+    cache: new InMemoryCache({ possibleTypes: CUSTOM_FIELD_POSSIBLE_TYPES }),
 });
 
 const LOGOUT_MUTATION = gql`
