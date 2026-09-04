@@ -28,6 +28,7 @@ const legacyDashboardPackages = [
     'storefront-content-plugin',
     'two-factor-dashboard-plugin',
 ];
+const migratedRouteSourceDirectories = [join(packagesRoot, 'store-management-plugin', 'src/admin')];
 
 function sourceFiles(directory: string): string[] {
     return readdirSync(directory).flatMap(name => {
@@ -39,8 +40,12 @@ function sourceFiles(directory: string): string[] {
 
 function legacyRoutePathsFromSource() {
     const pattern = /\bpath:\s*['"](\/[^'"]+)['"]/g;
-    return legacyDashboardPackages
-        .flatMap(packageName => sourceFiles(join(packagesRoot, packageName, 'src/dashboard')))
+    const sourceDirectories = [
+        ...legacyDashboardPackages.map(packageName => join(packagesRoot, packageName, 'src/dashboard')),
+        ...migratedRouteSourceDirectories,
+    ];
+    return sourceDirectories
+        .flatMap(sourceFiles)
         .flatMap(file => [...readFileSync(file, 'utf8').matchAll(pattern)].map(match => match[1]))
         .sort();
 }
