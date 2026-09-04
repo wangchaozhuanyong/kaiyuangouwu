@@ -80,3 +80,14 @@ export function preloadCommonRoutes() {
     preloadRoute('/sales/orders');
     preloadRoute('/customers/list');
 }
+
+export const SETTINGS_ROUTE_PRELOAD_TARGETS = [
+    '/settings/store-profile',
+    '/settings/team',
+    '/settings/system-ops',
+    '/settings/usdt-payments',
+] as const;
+
+export function preloadSettingsRoutes() {
+    SETTINGS_ROUTE_PRELOAD_TARGETS.forEach(preloadRoute);
+}

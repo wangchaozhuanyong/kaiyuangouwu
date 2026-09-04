@@ -154,6 +154,43 @@ export function LoadingState() {
     );
 }
 
+export function SettingsContentSkeleton({ label, sections = 2 }: { label: string; sections?: number }) {
+    return (
+        <div
+            className="min-h-[620px] space-y-4"
+            role="status"
+            aria-live="polite"
+            aria-busy="true"
+            aria-label={label}
+        >
+            <span className="sr-only">{label}</span>
+            <section className="rounded-xl border border-slate-200 bg-white p-5" aria-hidden="true">
+                <div className="h-4 w-40 rounded bg-slate-200" />
+                <div className="mt-2 h-3 w-72 max-w-full rounded bg-slate-100" />
+                <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                    {[0, 1, 2].map(item => (
+                        <div key={item} className="h-20 rounded-lg bg-slate-100" />
+                    ))}
+                </div>
+            </section>
+            {Array.from({ length: sections }, (_, section) => (
+                <section
+                    key={section}
+                    className="rounded-xl border border-slate-200 bg-white p-5"
+                    aria-hidden="true"
+                >
+                    <div className="h-4 w-48 rounded bg-slate-200" />
+                    <div className="mt-4 space-y-3">
+                        {[0, 1, 2].map(row => (
+                            <div key={row} className="h-10 rounded-lg bg-slate-100" />
+                        ))}
+                    </div>
+                </section>
+            ))}
+        </div>
+    );
+}
+
 // ─── ErrorState ──────────────────────────────────────────────────────────────
 
 export function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {

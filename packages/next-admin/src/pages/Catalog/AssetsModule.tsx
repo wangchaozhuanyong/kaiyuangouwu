@@ -512,8 +512,8 @@ export function AssetsModule() {
                         </div>
                     )}
                     {loading && !data ? (
-                        <div className="grid grid-cols-2 gap-4 p-6 sm:grid-cols-4 md:grid-cols-5">
-                            {[1, 2, 3, 4, 5].map(item => (
+                        <div className="grid grid-cols-2 gap-4 p-6 sm:grid-cols-4 md:grid-cols-8 xl:grid-cols-10">
+                            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(item => (
                                 <div
                                     key={item}
                                     className="aspect-square animate-pulse rounded-xl bg-slate-100"
@@ -526,7 +526,7 @@ export function AssetsModule() {
                             <p>当前筛选条件下暂无真实素材</p>
                         </div>
                     ) : (
-                        <div className="grid grid-cols-2 gap-4 p-6 sm:grid-cols-4 md:grid-cols-5">
+                        <div className="grid grid-cols-2 gap-4 p-6 sm:grid-cols-4 md:grid-cols-8 xl:grid-cols-10">
                             {assets.map(asset => (
                                 <div
                                     key={asset.id}

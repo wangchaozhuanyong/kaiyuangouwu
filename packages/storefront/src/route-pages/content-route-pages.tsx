@@ -33,6 +33,7 @@ export function ServicesRoutePage() {
                 contentBlocks: runtime.contentBlocks,
                 language: runtime.language,
                 onNavigate: runtime.navigate,
+                onContentTarget: runtime.openContentTarget,
             }}
         >
             <BusinessServicesPage />

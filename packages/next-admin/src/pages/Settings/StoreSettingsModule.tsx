@@ -11,19 +11,31 @@ import {
     WalletCards,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { addCustomFieldsToDocument } from '../../custom-fields/custom-field-utils';
-import { useCustomFieldDefinitions } from '../../custom-fields/custom-fields-context';
-import {
-    STORE_MANAGEMENT_QUERY,
-    type StoreManagementResult,
-    type StoreProfileRecord,
-} from '../../graphql/management.graphql';
+
+import { type StoreManagementResult, type StoreProfileRecord } from '../../graphql/management.graphql';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { useUrlTab } from '../../hooks/use-url-tab';
 import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
+
 import { BusinessBasicsPanel } from './BusinessSettingsPanels';
 import { PaymentShippingManager } from './PaymentShippingManager';
+import {
+    ErrorState,
+    Message,
+    SettingsContentSkeleton,
+    TabButton,
+    inputClass,
+    mergeById,
+    primaryButton,
+    secondaryButton,
+} from './settings-ui';
+import {
+    STORE_SETTINGS_TABS,
+    type StoreSettingsTab,
+    getInitializedStoreSettings,
+    useStoreManagementDocument,
+} from './store-settings-state';
 import {
     ProvisionStoreDialog,
     SellerDialog,
@@ -33,43 +45,12 @@ import {
 } from './StoreDialogs';
 import { CurrencyAndRatesPanel, StoreUsdtPanel } from './StoreFinancePanel';
 import { CommerceModePanel, DomainsPanel, SellersPanel, StoresPanel } from './StorePanels';
-import {
-    ErrorState,
-    LoadingState,
-    Message,
-    TabButton,
-    inputClass,
-    mergeById,
-    primaryButton,
-    secondaryButton,
-} from './settings-ui';
-
-type Tab = 'STORES' | 'DOMAINS' | 'SELLERS' | 'PAYMENT_SHIPPING' | 'BUSINESS' | 'CURRENCY' | 'USDT';
-const STORE_SETTINGS_TABS = {
-    stores: 'STORES',
-    domains: 'DOMAINS',
-    sellers: 'SELLERS',
-    'payment-shipping': 'PAYMENT_SHIPPING',
-    business: 'BUSINESS',
-    currency: 'CURRENCY',
-    usdt: 'USDT',
-} as const;
 
 export function StoreSettingsModule() {
     const { hasAnyPermission } = useAdminPermissions();
-    const sellerCustomFields = useCustomFieldDefinitions('Seller');
-    const paymentMethodCustomFields = useCustomFieldDefinitions('PaymentMethod');
-    const shippingMethodCustomFields = useCustomFieldDefinitions('ShippingMethod');
-    const storeManagementDocument = useMemo(() => {
-        const withSellers = addCustomFieldsToDocument(STORE_MANAGEMENT_QUERY, 'Seller', sellerCustomFields);
-        const withPaymentMethods = addCustomFieldsToDocument(
-            withSellers,
-            'PaymentMethod',
-            paymentMethodCustomFields,
-        );
-        return addCustomFieldsToDocument(withPaymentMethods, 'ShippingMethod', shippingMethodCustomFields);
-    }, [paymentMethodCustomFields, sellerCustomFields, shippingMethodCustomFields]);
-    const [tab, setTab] = useUrlTab<Tab>(STORE_SETTINGS_TABS, 'stores');
+    const { document, paymentMethodCustomFields, sellerCustomFields, shippingMethodCustomFields } =
+        useStoreManagementDocument();
+    const [tab, setTab] = useUrlTab<StoreSettingsTab>(STORE_SETTINGS_TABS, 'stores');
     const [selectedStoreId, setSelectedStoreId] = useState('');
     const [storeEditor, setStoreEditor] = useState<StoreProfileRecord | null>(null);
     const [deprovisionProfile, setDeprovisionProfile] = useState<StoreProfileRecord | null>(null);
@@ -77,8 +58,9 @@ export function StoreSettingsModule() {
     const [sellerOpen, setSellerOpen] = useState(false);
     const [notice, setNotice] = useState('');
     const [actionError, setActionError] = useState('');
+    const [initialSupplementSettled, setInitialSupplementSettled] = useState(false);
     const loadingAllStoreSettingsRef = useRef(false);
-    const query = useQuery<StoreManagementResult>(storeManagementDocument, {
+    const query = useQuery<StoreManagementResult>(document, {
         variables: {
             sellerOptions: { skip: 0, take: 100, sort: { createdAt: 'DESC' } },
             paymentMethodOptions: { skip: 0, take: 100, sort: { createdAt: 'DESC' } },
@@ -92,7 +74,11 @@ export function StoreSettingsModule() {
         fetchMore: fetchMoreStoreSettings,
         loading: storeSettingsLoading,
     } = query;
-
+    const initializedStoreSettings = getInitializedStoreSettings(
+        storeSettingsData,
+        Boolean(storeSettingsError),
+        initialSupplementSettled,
+    );
     useEffect(() => {
         const data = storeSettingsData;
         if (!data || storeSettingsLoading || storeSettingsError || loadingAllStoreSettingsRef.current) return;
@@ -133,6 +119,7 @@ export function StoreSettingsModule() {
             })
             .finally(() => {
                 loadingAllStoreSettingsRef.current = false;
+                setInitialSupplementSettled(true);
             });
     }, [fetchMoreStoreSettings, storeSettingsData, storeSettingsError, storeSettingsLoading]);
     const profiles = useMemo(
@@ -192,7 +179,7 @@ export function StoreSettingsModule() {
                     </div>
                 </div>
             </header>
-            <main className="mx-auto w-full max-w-none flex-1 space-y-4 overflow-y-auto p-5 sm:p-8">
+            <main className="mx-auto min-h-0 w-full max-w-none flex-1 space-y-4 overflow-y-auto p-5 sm:p-8">
                 {notice && (
                     <Message kind="success" onClose={() => setNotice('')}>
                         {notice}
@@ -281,10 +268,10 @@ export function StoreSettingsModule() {
                         </button>
                     )}
                 </div>
-                {query.loading && !query.data ? (
-                    <LoadingState />
-                ) : query.error ? (
+                {query.error && !query.data ? (
                     <ErrorState message={query.error.message} onRetry={() => void query.refetch()} />
+                ) : !initializedStoreSettings ? (
+                    <SettingsContentSkeleton label="正在读取店铺综合设置" sections={2} />
                 ) : (
                     <>
                         {tab === 'STORES' && (
@@ -315,7 +302,7 @@ export function StoreSettingsModule() {
                         )}
                         {tab === 'PAYMENT_SHIPPING' && (
                             <PaymentShippingManager
-                                data={query.data!}
+                                data={initializedStoreSettings}
                                 paymentMethodCustomFields={paymentMethodCustomFields}
                                 shippingMethodCustomFields={shippingMethodCustomFields}
                                 onChanged={completed}

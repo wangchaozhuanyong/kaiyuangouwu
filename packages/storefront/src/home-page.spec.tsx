@@ -2,9 +2,16 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { buildHomeNoticeItems, CurrencySelectionSheet, HomePage, NoticeDetailSheet } from './pages/home-page';
+import { FlashSalePage } from './storefront-ui/content-ui';
 import { StorefrontContext } from './StorefrontContext';
 import { readStorefrontStylesheet } from './test-stylesheet';
-import { MarketConfig, Product, StorefrontContentBlock, StorefrontCouponCampaign } from './types';
+import {
+    MarketConfig,
+    Product,
+    StorefrontContentBlock,
+    StorefrontCouponCampaign,
+    StorefrontFlashSale,
+} from './types';
 
 vi.mock('@tanstack/react-router', async importOriginal => ({
     ...(await importOriginal<typeof import('@tanstack/react-router')>()),
@@ -391,6 +398,69 @@ describe('HomePage account-aware coupon campaigns', () => {
         expect(markup).toContain('优惠活动读取失败');
         expect(markup).toContain('重试');
         expect(markup).toContain('coupon-hub-section');
+    });
+});
+
+describe('HomePage flash-sale product count', () => {
+    const flashSaleBlock: StorefrontContentBlock = {
+        ...heroBlock,
+        id: 'flash-sale-block-1',
+        code: 'homepage-flash-sale',
+        type: 'FLASH_SALE',
+        imageUrl: null,
+        title: '限时秒杀',
+    };
+    const flashSale: StorefrontFlashSale = {
+        id: 'flash-sale-1',
+        startsAt: null,
+        endsAt: '2026-09-30T14:06:00.000Z',
+        items: Array.from({ length: 9 }, (_, index) => ({
+            productId: `flash-product-${index + 1}`,
+            productVariantId: `flash-variant-${index + 1}`,
+            productName: `秒杀商品 ${index + 1}`,
+            variantName: `秒杀商品 ${index + 1}`,
+            originalPrice: 1_000,
+            salePrice: 800,
+            currencyCode: 'MYR',
+            imageUrl: null,
+        })),
+    };
+
+    it('shows every active item when the homepage block has no explicit display limit', () => {
+        const markup = renderHome({ contentBlocks: [flashSaleBlock], flashSales: [flashSale] });
+
+        expect(markup.match(/class="flash-sale-card"/g) ?? []).toHaveLength(9);
+        expect(markup).toContain('秒杀商品 9');
+    });
+
+    it('still honors an explicit merchant display limit', () => {
+        const markup = renderHome({
+            contentBlocks: [{ ...flashSaleBlock, settings: { displayCount: 4 } }],
+            flashSales: [flashSale],
+        });
+
+        expect(markup.match(/class="flash-sale-card"/g) ?? []).toHaveLength(4);
+        expect(markup).not.toContain('秒杀商品 5');
+    });
+
+    it('renders the more page as a wrapping grid with the total item count', () => {
+        const markup = renderToStaticMarkup(
+            <FlashSalePage
+                sales={[flashSale]}
+                language="zh"
+                locale="zh-CN"
+                onBack={vi.fn()}
+                onProduct={vi.fn()}
+            />,
+        );
+        const stylesheet = readStorefrontStylesheet();
+
+        expect(markup.match(/class="flash-sale-card"/g) ?? []).toHaveLength(9);
+        expect(markup).toContain('class="flash-sale-grid is-expanded"');
+        expect(markup).toContain('共 9 件');
+        expect(stylesheet).toMatch(
+            /\.flash-sale-grid\.is-expanded\s*\{[^}]*grid-auto-flow:\s*row;[^}]*overflow-x:\s*visible;/,
+        );
     });
 });
 
