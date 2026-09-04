@@ -168,6 +168,22 @@ test('manifest uses stable auth block codes and the approved restrained palette'
     assert.equal(authVisualManifest[0].accentColor, '#22D3EE');
     assert.equal(authVisualManifest[1].accentColor, '#8B5CF6');
     assert.match(authVisualManifest[0].translations.zh_Hans.ctaLabel, /MOYAO AI/u);
+    assert.equal(authVisualManifest[0].translations.en.ctaLabel, 'MOYAO AI TOOLS');
+});
+
+test('login brand migration explicitly changes both source and reviewed English eyebrow copy', () => {
+    const definition = authVisualManifest[0];
+    const block = createAdminBlock(definition, { desired: true });
+    const source = block.translations.find(item => item.languageCode === 'zh_Hans');
+    const target = block.translations.find(item => item.languageCode === 'en');
+    source.ctaLabel = '云桥 AI 工具精选';
+    target.ctaLabel = 'CURATED AI TOOLS';
+
+    const plan = buildAuthVisualPlan(block, definition);
+
+    assert.ok(plan.changes.includes('zh_Hans.ctaLabel'));
+    assert.ok(plan.changes.includes('en.ctaLabel'));
+    assert.equal(plan.input.translations.find(item => item.languageCode === 'en').ctaLabel, 'MOYAO AI TOOLS');
 });
 
 test('auth visual Channel selection refuses ambiguous or inaccessible targets', () => {

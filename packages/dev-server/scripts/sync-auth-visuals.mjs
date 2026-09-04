@@ -21,7 +21,7 @@ export const authVisualManifest = [
                 body: '',
             },
             en: {
-                ctaLabel: 'CURATED AI TOOLS',
+                ctaLabel: 'MOYAO AI TOOLS',
                 title: 'Welcome back to your AI workflow',
                 subtitle: 'Manage your everyday AI tools, favorites and orders in one place',
                 body: '',
