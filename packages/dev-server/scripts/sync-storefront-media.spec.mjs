@@ -172,7 +172,7 @@ test('dry-run resolves the backend targets without sending mutations', async () 
                 },
             });
         }
-        if (request.query.includes('StorefrontMediaAsset')) {
+        if (/query\s+StorefrontMediaAsset\b/.test(request.query)) {
             return Response.json({ data: { assets: { items: [] } } });
         }
         throw new Error(`Unexpected GraphQL request: ${request.query}`);
@@ -263,14 +263,13 @@ test('asset-library media is channel-scoped without mutating another managed ent
     );
 });
 
-test('asset upload only requests the stable id field from production-compatible Asset results', async () => {
-    const requests = [];
+test('apply requests only the Asset id needed for lookup and upload', async () => {
+    const assetQueries = [];
     const fetchImpl = async (_url, init) => {
         const request =
             init.body instanceof FormData
                 ? JSON.parse(String(init.body.get('operations')))
                 : JSON.parse(init.body);
-        requests.push(request);
         if (request.query.includes('StorefrontMediaLogin')) {
             return new Response(
                 JSON.stringify({
@@ -278,11 +277,7 @@ test('asset upload only requests the stable id field from production-compatible 
                         login: {
                             id: 'admin-1',
                             channels: [
-                                {
-                                    id: 'channel-1',
-                                    code: '__default_channel__',
-                                    token: 'channel-token',
-                                },
+                                { id: 'channel-1', code: '__default_channel__', token: 'channel-token' },
                             ],
                         },
                     },
@@ -293,12 +288,12 @@ test('asset upload only requests the stable id field from production-compatible 
         if (request.query.includes('StorefrontMediaContentBlocks')) {
             return Response.json({ data: { storefrontContentBlocks: [] } });
         }
-        if (request.query.includes('CreateStorefrontMediaAsset')) {
-            assert.match(request.query, /\.\.\. on Asset \{\s*id\s*\}/u);
-            assert.doesNotMatch(request.query, /\b(?:name|preview|source)\b/u);
+        if (request.operationName === 'CreateStorefrontMediaAsset') {
+            assetQueries.push(request.query);
             return Response.json({ data: { createAssets: [{ id: 'asset-1' }] } });
         }
-        if (request.query.includes('StorefrontMediaAsset')) {
+        if (/query\s+StorefrontMediaAsset\b/.test(request.query)) {
+            assetQueries.push(request.query);
             return Response.json({ data: { assets: { items: [] } } });
         }
         if (request.query.includes('AssignStorefrontMediaAsset')) {
@@ -317,13 +312,18 @@ test('asset upload only requests the stable id field from production-compatible 
         password: 'secret',
         channelCodes: ['__default_channel__'],
         apply: true,
+        allowRemote: true,
         fetchImpl,
         manifest: [reference],
     });
 
     assert.equal(result.applied, true);
     assert.equal(result.results[0].assetId, 'asset-1');
-    assert.equal(requests.filter(request => request.query.includes('CreateStorefrontMediaAsset')).length, 1);
+    assert.equal(result.results[0].assetAction, 'upload');
+    assert.equal(assetQueries.length, 2);
+    for (const query of assetQueries) {
+        assert.doesNotMatch(query, /\b(?:name|preview|source)\b/);
+    }
 });
 
 test('only localhost origins count as local writes', () => {

@@ -109,9 +109,6 @@ const ASSET_QUERY = `
         assets(options: { take: 1, tags: $tags, tagsOperator: AND }) {
             items {
                 id
-                name
-                preview
-                source
             }
         }
     }
