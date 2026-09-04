@@ -209,7 +209,7 @@ export function GenericPromotionsPanel() {
     );
 }
 
-function PromotionEditor({
+export function PromotionEditor({
     id,
     conditions,
     actions,
@@ -239,6 +239,9 @@ function PromotionEditor({
         if (detail.data?.promotion) setDraft(detailToDraft(detail.data.promotion));
     }, [detail.data?.promotion]);
     /* oxlint-enable react/set-state-in-effect */
+    const isDraftInitializing =
+        id !== 'new' &&
+        (detail.loading || Boolean(detail.data?.promotion && draft.id !== detail.data.promotion.id));
     const save = async () => {
         try {
             const input = promotionInput(draft, languageCode, conditions, actions);
@@ -270,7 +273,7 @@ function PromotionEditor({
             <AccessibleDialogSurface
                 accessibleName={id === 'new' ? '新建通用促销' : '编辑通用促销'}
                 onRequestClose={onClose}
-                className="flex max-h-[94vh] w-full max-w-5xl flex-col rounded-2xl bg-white shadow-2xl"
+                className="flex h-[94vh] max-h-[64rem] w-full max-w-5xl flex-col rounded-2xl bg-white shadow-2xl"
             >
                 <div className="flex items-center justify-between border-b p-5">
                     <div>
@@ -285,12 +288,16 @@ function PromotionEditor({
                         <X className="h-4 w-4" />
                     </button>
                 </div>
-                {detail.loading && id !== 'new' ? (
-                    <State label="正在读取促销规则…" />
-                ) : detail.error ? (
-                    <State tone="error" label="促销详情加载失败" action={() => void detail.refetch()} />
+                {detail.error ? (
+                    <div className="min-h-0 flex-1 overflow-y-auto">
+                        <State tone="error" label="促销详情加载失败" action={() => void detail.refetch()} />
+                    </div>
+                ) : isDraftInitializing ? (
+                    <div className="min-h-0 flex-1 overflow-y-auto">
+                        <State label="正在读取促销规则…" />
+                    </div>
                 ) : (
-                    <div className="flex-1 space-y-5 overflow-y-auto p-5">
+                    <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
                         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                             <TextField
                                 label="名称 *"
@@ -365,6 +372,7 @@ function PromotionEditor({
                         disabled={
                             createState.loading ||
                             updateState.loading ||
+                            isDraftInitializing ||
                             (id !== 'new' && !detail.data?.promotion)
                         }
                         className={primaryButton}
