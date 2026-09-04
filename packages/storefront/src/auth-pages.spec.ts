@@ -1,7 +1,7 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
-import { readStorefrontStylesheet } from './test-stylesheet';
+
 
 import { ShopApiError } from './api';
 import {
@@ -14,11 +14,12 @@ import {
     verificationErrorMessage,
     verificationRequiresPassword,
 } from './auth-pages';
+import { readStorefrontStylesheet } from './test-stylesheet';
 
 const authPageProps = {
     api: {} as never,
     language: 'zh' as const,
-    storefrontName: '云桥Ai',
+    storefrontName: 'MOYAO AI｜模钥',
     onBack: vi.fn(),
     onContentTarget: vi.fn(),
 };
@@ -160,13 +161,13 @@ describe('auth password visibility controls', () => {
 
         expect(markup).toContain('auth-register-ai-campaign-v2-480.webp');
         expect(markup).not.toContain('auth-login-ai-campaign-v2');
-        expect(markup).toContain('创建达码通账号');
+        expect(markup).toContain('创建 MOYAO AI 账号');
         expect(markup).toContain('验证邮箱即可开始使用');
         expect(markup).toContain('订单与售后状态清晰可查');
         expect(markup).not.toContain('新账户');
         expect(markup).toContain('auth-hero-header');
         expect(markup).toContain('class="auth-route-tabs"');
-        expect(markup).toContain('智联云端 · 桥接未来');
+        expect(markup).toContain('全球模型 · 一钥直达');
         expect(markup).toContain('aria-label="注册表单"');
         expect(markup).toContain('密码需为 8–72 个字符');
         expect(markup.match(/aria-label="显示密码"/g)).toHaveLength(2);

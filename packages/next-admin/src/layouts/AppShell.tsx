@@ -86,7 +86,7 @@ import {
     resolveAppShellOpenMenu,
 } from './app-shell-navigation';
 
-const adminBrandIcon = `${import.meta.env.BASE_URL}favicon.svg`;
+const adminBrandIcon = `${import.meta.env.BASE_URL}favicon.png`;
 
 interface OpenTab {
     path: string;
@@ -485,7 +485,7 @@ export function AppShell() {
         }
 
         if (currentTitle) {
-            document.title = `${currentTitle} · AwanMesh｜模钥管理后台`;
+            document.title = `${currentTitle} · MOYAO AI｜模钥管理后台`;
             const currentHref = `${location.pathname}${location.search}`;
             setTabs(prev => {
                 const existing = prev.find(tab => tab.path === location.pathname);
@@ -734,7 +734,7 @@ export function AppShell() {
                     <div className="flex items-center gap-2">
                         <div className="relative flex h-8 w-8 items-center justify-center overflow-hidden rounded-lg bg-blue-600 font-bold text-white shadow-lg shadow-blue-900/20">
                             <img
-                                key={storeLogoUrl ?? 'awanmesh'}
+                                key={storeLogoUrl ?? 'moyao-ai'}
                                 src={storeLogoUrl ?? adminBrandIcon}
                                 alt=""
                                 className="absolute inset-0 h-full w-full bg-white object-contain"
@@ -747,7 +747,7 @@ export function AppShell() {
                         </div>
                         {isSidebarOpen && (
                             <span className="font-bold text-white text-base tracking-wide">
-                                AwanMesh｜模钥管理后台
+                                MOYAO AI｜模钥管理后台
                             </span>
                         )}
                     </div>

@@ -62,6 +62,10 @@ interface ProfileDraft {
     brandPrimaryColor: string;
     brandAccentColor: string;
     brandHighlightColor: string;
+    legalEntityName: string;
+    legalRegistrationCountry: string;
+    supportEmail: string;
+    privacyEmail: string;
     logoAsset: Asset | null;
     logoOnLightAsset: Asset | null;
     logoOnDarkAsset: Asset | null;
@@ -89,6 +93,13 @@ const zhCopy = {
     primaryColor: '主色',
     accentColor: '强调色',
     highlightColor: '高亮色',
+    legal: '法律与联系信息',
+    legalHelp: '隐私政策和使用条款会自动引用这些信息；四项填写完整后才能通过店铺上线检查。',
+    legalEntityName: '法定经营主体',
+    legalRegistrationCountry: '注册国家/地区',
+    supportEmail: '客服邮箱',
+    privacyEmail: '隐私邮箱',
+    invalidEmail: '请填写有效的客服邮箱和隐私邮箱',
     descriptionHelp:
         '中文是源内容，保存时自动生成英文。公开简介会显示在对应语言的商城首页，并用于搜索与分享摘要。',
     commonMode: '常用模式',
@@ -136,6 +147,14 @@ const enCopy: typeof zhCopy = {
     primaryColor: 'Primary',
     accentColor: 'Accent',
     highlightColor: 'Highlight',
+    legal: 'Legal and contact information',
+    legalHelp:
+        'The privacy policy and terms automatically reference these details. Complete all four fields to pass the store launch checks.',
+    legalEntityName: 'Legal entity',
+    legalRegistrationCountry: 'Registration country/region',
+    supportEmail: 'Support email',
+    privacyEmail: 'Privacy email',
+    invalidEmail: 'Enter valid support and privacy email addresses',
     descriptionHelp:
         'English is generated from the Chinese source when you save. Public descriptions appear on the storefront and in search/share summaries.',
     commonMode: 'Common mode',
@@ -212,6 +231,10 @@ function MyStoreProfilePage() {
                 brandPrimaryColor: input.brandPrimaryColor || null,
                 brandAccentColor: input.brandAccentColor || null,
                 brandHighlightColor: input.brandHighlightColor || null,
+                legalEntityName: input.legalEntityName.trim() || null,
+                legalRegistrationCountry: input.legalRegistrationCountry.trim() || null,
+                supportEmail: input.supportEmail.trim() || null,
+                privacyEmail: input.privacyEmail.trim() || null,
                 logoAssetId: input.logoAsset?.id ?? null,
                 logoOnLightAssetId: input.logoOnLightAsset?.id ?? null,
                 logoOnDarkAssetId: input.logoOnDarkAsset?.id ?? null,
@@ -242,6 +265,13 @@ function MyStoreProfilePage() {
                 !validStorefrontName(draft.storefrontNameEn))
         ) {
             toast.error(text.invalidName);
+            return;
+        }
+        if (
+            (draft.supportEmail && !isValidEmail(draft.supportEmail)) ||
+            (draft.privacyEmail && !isValidEmail(draft.privacyEmail))
+        ) {
+            toast.error(text.invalidEmail);
             return;
         }
         mutation.mutate(draft);
@@ -478,14 +508,14 @@ function MyStoreProfilePage() {
                                                     id={`my-store-${field}`}
                                                     type="color"
                                                     className="h-10 w-12 p-1"
-                                                    value={draft[field] || '#2F6BFF'}
+                                                    value={draft[field] || '#635BFF'}
                                                     onChange={event =>
                                                         update(field, event.target.value.toUpperCase())
                                                     }
                                                 />
                                                 <Input
                                                     value={draft[field]}
-                                                    placeholder="#2F6BFF"
+                                                    placeholder="#635BFF"
                                                     maxLength={7}
                                                     onChange={event =>
                                                         update(field, event.target.value.toUpperCase())
@@ -494,6 +524,60 @@ function MyStoreProfilePage() {
                                             </div>
                                         </div>
                                     ))}
+                                </div>
+                            </div>
+                            <div className="space-y-3 border-t pt-5 sm:col-span-2">
+                                <div className="space-y-1">
+                                    <Label>{text.legal}</Label>
+                                    <p className="text-xs text-muted-foreground">{text.legalHelp}</p>
+                                </div>
+                                <div className="grid gap-3 sm:grid-cols-2">
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor="my-store-legal-entity">{text.legalEntityName}</Label>
+                                        <Input
+                                            id="my-store-legal-entity"
+                                            maxLength={200}
+                                            value={draft.legalEntityName}
+                                            onChange={event => update('legalEntityName', event.target.value)}
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor="my-store-registration-country">
+                                            {text.legalRegistrationCountry}
+                                        </Label>
+                                        <Input
+                                            id="my-store-registration-country"
+                                            maxLength={100}
+                                            value={draft.legalRegistrationCountry}
+                                            onChange={event =>
+                                                update('legalRegistrationCountry', event.target.value)
+                                            }
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor="my-store-support-email">{text.supportEmail}</Label>
+                                        <Input
+                                            id="my-store-support-email"
+                                            type="email"
+                                            autoComplete="email"
+                                            maxLength={254}
+                                            placeholder="support@moyaoai.com"
+                                            value={draft.supportEmail}
+                                            onChange={event => update('supportEmail', event.target.value)}
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor="my-store-privacy-email">{text.privacyEmail}</Label>
+                                        <Input
+                                            id="my-store-privacy-email"
+                                            type="email"
+                                            autoComplete="email"
+                                            maxLength={254}
+                                            placeholder="privacy@moyaoai.com"
+                                            value={draft.privacyEmail}
+                                            onChange={event => update('privacyEmail', event.target.value)}
+                                        />
+                                    </div>
                                 </div>
                             </div>
                             <div className="border-t pt-4 sm:hidden">
@@ -654,6 +738,10 @@ function toDraft(profile: MyStoreProfileRecord): ProfileDraft {
         brandPrimaryColor: profile.brandPrimaryColor ?? '',
         brandAccentColor: profile.brandAccentColor ?? '',
         brandHighlightColor: profile.brandHighlightColor ?? '',
+        legalEntityName: profile.legalEntityName ?? '',
+        legalRegistrationCountry: profile.legalRegistrationCountry ?? '',
+        supportEmail: profile.supportEmail ?? '',
+        privacyEmail: profile.privacyEmail ?? '',
         logoAsset: profile.logoAsset,
         logoOnLightAsset: profile.logoOnLightAsset,
         logoOnDarkAsset: profile.logoOnDarkAsset,
@@ -667,6 +755,10 @@ function validStorefrontName(value: string): boolean {
         0,
     );
     return units >= 1 && units <= 16;
+}
+
+function isValidEmail(value: string): boolean {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(value.trim());
 }
 
 function errorMessage(error: unknown): string {

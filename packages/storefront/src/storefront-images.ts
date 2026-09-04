@@ -1,5 +1,5 @@
-import awanMeshAppIcon from './assets/brand/awanmesh-moyao/app-icon.svg';
-import awanMeshLogoOnLight from './assets/brand/awanmesh-moyao/logo-on-light.svg';
+import moyaoAppIcon from './assets/brand/moyao-ai/app-icon.webp';
+import moyaoLogoOnLight from './assets/brand/moyao-ai/logo-on-light.webp';
 import accountRecommendationCrest from './assets/storefront/account-recommendation-crest.webp';
 import authHero1659 from './assets/storefront/auth-ai-bridge-hero-1659.webp';
 import authHero32 from './assets/storefront/auth-ai-bridge-hero-32.webp';
@@ -91,8 +91,9 @@ export const HERO_VIP_IMAGE = heroVip1376;
 export const HERO_VIP_FALLBACK_IMAGE = heroVipFallback;
 export const HERO_CLOUD_BRIDGE_IMAGE = heroCloudBridge1600;
 export const HERO_CLOUD_BRIDGE_FALLBACK_IMAGE = heroCloudBridgeFallback;
-export const STOREFRONT_LOGO_IMAGE = awanMeshAppIcon;
-export const STOREFRONT_WORDMARK_IMAGE = awanMeshLogoOnLight;
+export const STOREFRONT_LOGO_IMAGE = moyaoAppIcon;
+export const STOREFRONT_WORDMARK_IMAGE = moyaoLogoOnLight;
+export const STOREFRONT_SOCIAL_IMAGE = '/storefront/moyao-ai/social-card.jpg';
 export const ACCOUNT_RECOMMENDATION_CREST_IMAGE = accountRecommendationCrest;
 
 const STATIC_IMAGE_SOURCES = new Map<string, StaticStorefrontImageSource>([

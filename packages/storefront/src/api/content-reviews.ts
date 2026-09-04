@@ -30,6 +30,10 @@ export class ContentReviewsApi extends BaseDomainApi {
                 primaryColor: string | null;
                 accentColor: string | null;
                 highlightColor: string | null;
+                legalEntityName: string | null;
+                legalRegistrationCountry: string | null;
+                supportEmail: string | null;
+                privacyEmail: string | null;
             };
             storefrontCurrencyConfiguration: StorefrontCurrencyConfiguration;
         }>(
@@ -58,6 +62,10 @@ export class ContentReviewsApi extends BaseDomainApi {
                     primaryColor
                     accentColor
                     highlightColor
+                    legalEntityName
+                    legalRegistrationCountry
+                    supportEmail
+                    privacyEmail
                 }
                 storefrontCurrencyConfiguration {
                     defaultCurrencyCode
@@ -90,6 +98,10 @@ export class ContentReviewsApi extends BaseDomainApi {
             brandPrimaryColor: result.storefrontBranding?.primaryColor ?? null,
             brandAccentColor: result.storefrontBranding?.accentColor ?? null,
             brandHighlightColor: result.storefrontBranding?.highlightColor ?? null,
+            legalEntityName: result.storefrontBranding?.legalEntityName ?? null,
+            legalRegistrationCountry: result.storefrontBranding?.legalRegistrationCountry ?? null,
+            supportEmail: result.storefrontBranding?.supportEmail ?? null,
+            privacyEmail: result.storefrontBranding?.privacyEmail ?? null,
             currencyConfiguration: result.storefrontCurrencyConfiguration,
         };
     }

@@ -84,6 +84,18 @@ export class StoreProfile extends VendureEntity {
     @Column('varchar', { length: 7, nullable: true })
     brandHighlightColor: string | null;
 
+    @Column('varchar', { length: 200, nullable: true })
+    legalEntityName: string | null;
+
+    @Column('varchar', { length: 100, nullable: true })
+    legalRegistrationCountry: string | null;
+
+    @Column('varchar', { length: 254, nullable: true })
+    supportEmail: string | null;
+
+    @Column('varchar', { length: 254, nullable: true })
+    privacyEmail: string | null;
+
     primaryDomain?: string | null;
 
     storefrontUrl?: string | null;

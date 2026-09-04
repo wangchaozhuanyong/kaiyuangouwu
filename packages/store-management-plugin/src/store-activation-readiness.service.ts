@@ -28,6 +28,24 @@ export function isUsableEnglishContent(value: unknown): boolean {
     return isUsableEnglishTranslation(value);
 }
 
+export function hasCompleteStoreProfile(profile: StoreProfile): boolean {
+    const customFields = profile.channel?.customFields as
+        { storefrontNameZh?: string | null; storefrontNameEn?: string | null } | undefined;
+    return (
+        [customFields?.storefrontNameZh, profile.descriptionZh, profile.logoAssetId].every(
+            value => String(value ?? '').trim().length > 0,
+        ) &&
+        isUsableEnglishContent(customFields?.storefrontNameEn) &&
+        isUsableEnglishContent(profile.descriptionEn) &&
+        [
+            profile.legalEntityName,
+            profile.legalRegistrationCountry,
+            profile.supportEmail,
+            profile.privacyEmail,
+        ].every(value => String(value ?? '').trim().length > 0)
+    );
+}
+
 export function isProductionPaymentMethod(
     method: Pick<PaymentMethod, 'code' | 'handler' | 'translations'>,
     registeredHandlerCodes?: ReadonlySet<string>,
@@ -66,8 +84,8 @@ export interface StoreActivationSnapshot {
 
 const checkMessages: Record<StoreActivationCheckCode, { zh: string; en: string }> = {
     PROFILE: {
-        zh: '填写店铺名称、简介和 Logo（英文自动生成）',
-        en: 'Complete the store name, description, and logo (English is generated automatically)',
+        zh: '填写店铺品牌、法定经营主体、注册地及客服/隐私邮箱（英文自动生成）',
+        en: 'Complete the store brand, legal entity, registration country, and support/privacy emails',
     },
     DOMAIN: { zh: '验证并设置主域名', en: 'Verify and select a primary domain' },
     PASSWORD: {
@@ -184,7 +202,7 @@ export class StoreActivationReadinessService {
 
         return evaluateStoreActivationReadiness(
             {
-                profile: this.hasCompleteProfile(profile),
+                profile: hasCompleteStoreProfile(profile),
                 domain: Boolean(domain),
                 password: temporaryPasswordCount === 0,
                 catalog: this.hasBilingualCatalog(catalogVariants),
@@ -215,18 +233,6 @@ export class StoreActivationReadinessService {
             shipping: false,
             payment: false,
         };
-    }
-
-    private hasCompleteProfile(profile: StoreProfile): boolean {
-        const customFields = profile.channel?.customFields as
-            { storefrontNameZh?: string | null; storefrontNameEn?: string | null } | undefined;
-        return (
-            [customFields?.storefrontNameZh, profile.descriptionZh, profile.logoAssetId].every(
-                value => String(value ?? '').trim().length > 0,
-            ) &&
-            isUsableEnglishContent(customFields?.storefrontNameEn) &&
-            isUsableEnglishContent(profile.descriptionEn)
-        );
     }
 
     private hasBilingualCatalog(variants: ProductVariant[]): boolean {

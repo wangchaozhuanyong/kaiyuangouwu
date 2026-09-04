@@ -58,12 +58,14 @@ When adding a new test, **always check existing suites first** before creating a
 - `tests/regression/` — **only** for tests that genuinely don't fit any existing suite
 
 Add a comment referencing the issue number above the test, e.g.:
+
 ```ts
 // #4393 — product list should default to sorting by updatedAt descending
 test('should apply descending updatedAt sort by default', async ({ page }) => {
 ```
 
 Run dashboard e2e tests from `packages/dashboard`:
+
 ```bash
 CI=true VITE_TEST_PORT=5176 bunx playwright test --config e2e/playwright.config.ts <test-path> --reporter=list
 ```
@@ -97,8 +99,8 @@ CI=true VITE_TEST_PORT=5176 bunx playwright test --config e2e/playwright.config.
 ## Production Deployment
 
 - Canonical runbook: `deploy/DEPLOYMENT_RUNBOOK.md`. Read it before every production release and update it when the topology changes.
-- Production storefronts: AwanMesh at `https://moyaoai.com`; Meiyijia at `https://damatong.net`.
-- Production dashboard: `https://console.moyaoai.com/dashboard/`; the legacy Damatong console redirects here.
+- Production storefronts: MOYAO AI at `https://moyaoai.com`; Meiyijia at `https://damatong.net`.
+- Production dashboard: `https://console.moyaoai.com/dashboard/`; the legacy console domain redirects here.
 - AWS region: `ap-northeast-1` (Tokyo); EC2 instance: `i-041a146558e432cbf`; security group: `sg-013cf38df187011ca`.
 - Current public IPv4 snapshot: `52.196.65.143`; SSH user: `ubuntu`. The production SSH private key is stored outside the repository at `/Users/wangchao/Desktop/yamaxunmiyao2/yunqiao-vendure-prod-key.pem`; use this exact path with `-i` and `-o IdentitiesOnly=yes` for production SSH/rsync access unless the instance or key is explicitly replaced.
 - Server repository: `/var/www/kaiyuangouwu`; branch: `main`; Vendure upstream: `127.0.0.1:3002`.

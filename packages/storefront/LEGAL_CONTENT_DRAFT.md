@@ -1,14 +1,14 @@
 # 条款内容发布草案
 
-> 适用站点：`damatong.net` 对应的中英文全球独立站。<br>
+> 适用站点：`moyaoai.com` 对应的中英文全球独立站。<br>
 > 业务范围：实物商品、数字商品（自动发卡、文件下载、人工数字服务）、账户、订单、支付、配送、优惠券、评价和售后。<br>
-> 性质：可发布草案，不是法律意见。发布前应由经营主体所在地的专业人士复核。
+> 性质：待完善草案，不是法律意见。法定经营主体、注册国家/地区、客服邮箱和隐私邮箱由后台“店铺资料”统一配置，下文令牌在前台自动替换。补齐并由经营主体所在地的专业人士复核前不得发布。
 
-## 已确认的发布信息
+## 发布前必须确认的信息
 
-- 经营主体：云桥网络。
-- 注册国家/地区：中国；按经营者要求不在本文公开注册地址。
-- 客服与隐私联系邮箱：`yunqiao@codexgemini.cc`。
+- 经营主体：{{legalEntityName}}。
+- 注册国家/地区：{{legalRegistrationCountry}}；按经营者要求不在本文公开注册地址。
+- 客服邮箱：{{supportEmail}}；隐私邮箱：{{privacyEmail}}。
 - 退货地址：不设置统一公开地址，消费者应先联系客服获取适用于具体订单的退货地址。
 - 适用法律与争议管辖：中国法律及中国境内依法有管辖权的机构。
 - 真实支付服务商、物流服务商、邮件服务商及实际数据存储地。
@@ -16,13 +16,13 @@
 
 ## 后台模块基础字段
 
-| 字段 | 中文 | English |
-| --- | --- | --- |
-| 模块内部名称 | 条款与隐私政策 | Legal and privacy policies |
-| 区块编码 | `storefront-legal` | `storefront-legal` |
-| 模块标题 | 服务与政策 | Service and policies |
-| 副标题 | 请在注册或下单前阅读与您权益相关的文件 | Please review the documents relevant to your rights before registering or ordering |
-| 模块正文 | 本模块包含本站的隐私政策和使用条款。如果商品详情页、订单页或单独政策对配送、交付或售后有更具体的说明，该说明与本条款共同适用；与强制性法律规定冲突的，以法律规定为准。 | This module contains the site's Privacy Policy and Terms of Use. More specific delivery, fulfilment, or after-sales information shown on a product page, order page, or separate policy applies together with these terms. Mandatory law prevails if there is a conflict. |
+| 字段         | 中文                                                                                                                                                                   | English                                                                                                                                                                                                                                                                   |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 模块内部名称 | 条款与隐私政策                                                                                                                                                         | Legal and privacy policies                                                                                                                                                                                                                                                |
+| 区块编码     | `storefront-legal`                                                                                                                                                     | `storefront-legal`                                                                                                                                                                                                                                                        |
+| 模块标题     | 服务与政策                                                                                                                                                             | Service and policies                                                                                                                                                                                                                                                      |
+| 副标题       | 请在注册或下单前阅读与您权益相关的文件                                                                                                                                 | Please review the documents relevant to your rights before registering or ordering                                                                                                                                                                                        |
+| 模块正文     | 本模块包含本站的隐私政策和使用条款。如果商品详情页、订单页或单独政策对配送、交付或售后有更具体的说明，该说明与本条款共同适用；与强制性法律规定冲突的，以法律规定为准。 | This module contains the site's Privacy Policy and Terms of Use. More specific delivery, fulfilment, or after-sales information shown on a product page, order page, or separate policy applies together with these terms. Mandatory law prevails if there is a conflict. |
 
 ---
 
@@ -43,7 +43,7 @@
 
 1. 适用范围和责任主体
 
-本隐私政策适用于您访问 damatong.net 及其对应店铺、注册账户、浏览或购买实物商品和数字商品、使用支付、交付、售后、评价及客服功能的过程。个人信息处理者为云桥网络，注册国家/地区为中国（以下简称“我们”）。
+本隐私政策适用于您访问 moyaoai.com 及其对应店铺、注册账户、浏览或购买实物商品和数字商品、使用支付、交付、售后、评价及客服功能的过程。个人信息处理者为 {{legalEntityName}}，注册国家/地区为 {{legalRegistrationCountry}}（以下简称“我们”）。
 
 2. 我们处理的信息
 
@@ -85,9 +85,9 @@
 
 8. 您的权利
 
-根据适用法律，您可能有权知情、查阅、复制、更正、补充、删除或转移个人信息，撤回同意，限制或反对某些处理，获得处理规则解释，以及向有管辖权的监管机构投诉。您可在账户页管理部分资料、地址、收藏和浏览足迹，或通过 yunqiao@codexgemini.cc 提交请求。为保护账户安全，我们可在处理请求前验证您的身份。
+根据适用法律，您可能有权知情、查阅、复制、更正、补充、删除或转移个人信息，撤回同意，限制或反对某些处理，获得处理规则解释，以及向有管辖权的监管机构投诉。您可在账户页管理部分资料、地址、收藏和浏览足迹，或通过 {{privacyEmail}} 提交请求。为保护账户安全，我们可在处理请求前验证您的身份。
 
-如您不希望我们使用最近浏览记录进行推荐，可先清除浏览足迹；如需要完全退出基于订单的个性化推荐，请通过 yunqiao@codexgemini.cc 联系我们。
+如您不希望我们使用最近浏览记录进行推荐，可先清除浏览足迹；如需要完全退出基于订单的个性化推荐，请通过 {{privacyEmail}} 联系我们。
 
 9. 安全措施
 
@@ -95,7 +95,7 @@
 
 10. 未成年人
 
-本站不以未满 14 周岁的儿童为主要服务对象，也不会在明知的情况下未经监护人同意处理其个人信息。如您认为儿童未经适当同意向我们提供了信息，请通过 yunqiao@codexgemini.cc 联系我们。
+本站不以未满 14 周岁的儿童为主要服务对象，也不会在明知的情况下未经监护人同意处理其个人信息。如您认为儿童未经适当同意向我们提供了信息，请通过 {{privacyEmail}} 联系我们。
 
 11. 政策更新
 
@@ -103,10 +103,10 @@
 
 12. 联系我们
 
-个人信息处理者：云桥网络
-注册国家/地区：中国
-隐私联系邮箱：yunqiao@codexgemini.cc
-客服邮箱：yunqiao@codexgemini.cc
+个人信息处理者：{{legalEntityName}}
+注册国家/地区：{{legalRegistrationCountry}}
+隐私联系邮箱：{{privacyEmail}}
+客服邮箱：{{supportEmail}}
 
 ### English body
 
@@ -115,7 +115,7 @@ Last updated: August 26, 2026
 
 1. Scope and controller
 
-This Privacy Policy applies when you visit damatong.net and its associated storefronts, create an account, browse or purchase physical or digital products, or use payment, fulfilment, after-sales, review, and support features. The controller responsible for your personal data is Yunqiao Network, registered in China ("we", "us", or "our").
+This Privacy Policy applies when you visit moyaoai.com and its associated storefronts, create an account, browse or purchase physical or digital products, or use payment, fulfilment, after-sales, review, and support features. The controller responsible for your personal data is {{legalEntityName}}, registered in {{legalRegistrationCountry}} ("we", "us", or "our").
 
 2. Information we process
 
@@ -157,9 +157,9 @@ We retain information only for as long as needed for the purposes described abov
 
 8. Your rights
 
-Subject to applicable law, you may have rights to be informed; access, copy, correct, supplement, delete, or port personal data; withdraw consent; restrict or object to processing; obtain an explanation of processing rules; and complain to a competent authority. Some account information, addresses, favourites, and browsing history can be managed through the account area. Other requests may be submitted to yunqiao@codexgemini.cc. We may verify your identity before acting on a request.
+Subject to applicable law, you may have rights to be informed; access, copy, correct, supplement, delete, or port personal data; withdraw consent; restrict or object to processing; obtain an explanation of processing rules; and complain to a competent authority. Some account information, addresses, favourites, and browsing history can be managed through the account area. Other requests may be submitted to {{privacyEmail}}. We may verify your identity before acting on a request.
 
-You may clear browsing history if you do not want recent views used for recommendations. To opt out fully from recommendations based on order history, contact yunqiao@codexgemini.cc.
+You may clear browsing history if you do not want recent views used for recommendations. To opt out fully from recommendations based on order history, contact {{privacyEmail}}.
 
 9. Security
 
@@ -167,7 +167,7 @@ We use administrative, technical, and physical measures appropriate to the risk,
 
 10. Children
 
-The site is not directed primarily to children under 14, and we do not knowingly process their personal data without appropriate guardian consent. If you believe a child provided information without appropriate consent, contact yunqiao@codexgemini.cc.
+The site is not directed primarily to children under 14, and we do not knowingly process their personal data without appropriate guardian consent. If you believe a child provided information without appropriate consent, contact {{privacyEmail}}.
 
 11. Changes
 
@@ -175,10 +175,10 @@ We may update this Policy when our services, technology, or legal obligations ch
 
 12. Contact
 
-Controller: Yunqiao Network
-Country/region of registration: China
-Privacy email: yunqiao@codexgemini.cc
-Customer support email: yunqiao@codexgemini.cc
+Controller: {{legalEntityName}}
+Country/region of registration: {{legalRegistrationCountry}}
+Privacy email: {{privacyEmail}}
+Customer support email: {{supportEmail}}
 
 ---
 
@@ -199,13 +199,13 @@ Customer support email: yunqiao@codexgemini.cc
 
 1. 条款的接受和经营者信息
 
-本站由云桥网络运营，注册国家/地区为中国。您访问本站、注册账户、提交订单或使用相关服务，表示您已阅读并同意受本条款约束。如果您不同意，请不要注册或下单。任何格式条款均不排除或限制您根据适用法律不得被排除的消费者权利。
+本站由 {{legalEntityName}} 运营，注册国家/地区为 {{legalRegistrationCountry}}。您访问本站、注册账户、提交订单或使用相关服务，表示您已阅读并同意受本条款约束。如果您不同意，请不要注册或下单。任何格式条款均不排除或限制您根据适用法律不得被排除的消费者权利。
 
 您应已达到所在地签订相应合同的法定年龄和民事行为能力；未满法定年龄的用户应在监护人同意和指导下使用本站。
 
 2. 账户和安全
 
-您应提供真实、准确、完整且当前有效的资料，妥善保管密码、邮箱、验证码和数字商品领取链接。除法律另有规定外，您对在其账户下进行的操作负责。如发现未授权使用、凭证泄露或其他安全风险，请立即更改可用凭证并通过 yunqiao@codexgemini.cc 联系我们。
+您应提供真实、准确、完整且当前有效的资料，妥善保管密码、邮箱、验证码和数字商品领取链接。除法律另有规定外，您对在其账户下进行的操作负责。如发现未授权使用、凭证泄露或其他安全风险，请立即更改可用凭证并通过 {{supportEmail}} 联系我们。
 
 3. 商品和服务信息
 
@@ -271,14 +271,14 @@ Customer support email: yunqiao@codexgemini.cc
 
 14. 适用法律和争议解决
 
-本条款适用中华人民共和国法律，但该选择不会剥夺您居住地强制性消费者保护。发生争议时，请先通过 yunqiao@codexgemini.cc 与我们协商。协商不成的，可向依法有管辖权的消费者保护、监管、调解或司法机构寻求救济；如法律允许当事人约定管辖，由中国境内依法有管辖权的人民法院管辖。
+本条款适用中华人民共和国法律，但该选择不会剥夺您居住地强制性消费者保护。发生争议时，请先通过 {{supportEmail}} 与我们协商。协商不成的，可向依法有管辖权的消费者保护、监管、调解或司法机构寻求救济；如法律允许当事人约定管辖，由中国境内依法有管辖权的人民法院管辖。
 
 15. 联系我们
 
-经营主体：云桥网络
-注册国家/地区：中国
+经营主体：{{legalEntityName}}
+注册国家/地区：{{legalRegistrationCountry}}
 退货地址：请先通过客服邮箱联系我们，根据具体订单和商品类型获取适用的退货地址；未经确认请勿自行寄回。
-客服邮箱：yunqiao@codexgemini.cc
+客服邮箱：{{supportEmail}}
 
 ### English body
 
@@ -287,13 +287,13 @@ Last updated: August 26, 2026
 
 1. Acceptance and operator information
 
-This site is operated by Yunqiao Network, registered in China. By accessing the site, creating an account, placing an order, or using related services, you acknowledge that you have read and agree to these Terms. If you do not agree, do not register or place an order. Nothing in these standard terms excludes or restricts consumer rights that cannot lawfully be excluded.
+This site is operated by {{legalEntityName}}, registered in {{legalRegistrationCountry}}. By accessing the site, creating an account, placing an order, or using related services, you acknowledge that you have read and agree to these Terms. If you do not agree, do not register or place an order. Nothing in these standard terms excludes or restricts consumer rights that cannot lawfully be excluded.
 
 You must have the legal age and capacity required to enter the relevant contract where you live. Users below that age may use the site only with the consent and guidance of a parent or legal guardian.
 
 2. Accounts and security
 
-You must provide information that is truthful, accurate, complete, and current and protect your password, email account, verification codes, and digital-delivery links. Except where law provides otherwise, you are responsible for activity conducted through your account. If you discover unauthorised access, credential exposure, or another security risk, change available credentials promptly and contact us at yunqiao@codexgemini.cc.
+You must provide information that is truthful, accurate, complete, and current and protect your password, email account, verification codes, and digital-delivery links. Except where law provides otherwise, you are responsible for activity conducted through your account. If you discover unauthorised access, credential exposure, or another security risk, change available credentials promptly and contact us at {{supportEmail}}.
 
 3. Product and service information
 
@@ -359,14 +359,14 @@ We may update these Terms when features, business operations, or law change. We 
 
 14. Governing law and disputes
 
-These Terms are governed by the laws of the People's Republic of China, but that choice does not deprive you of mandatory consumer protections where you live. Contact yunqiao@codexgemini.cc first so we can attempt to resolve a dispute. If it cannot be resolved, you may seek relief from any consumer-protection, regulatory, mediation, or judicial body with lawful jurisdiction. Where a choice of forum is legally permitted, the dispute will be submitted to a court with lawful jurisdiction in China.
+These Terms are governed by the laws of the People's Republic of China, but that choice does not deprive you of mandatory consumer protections where you live. Contact {{supportEmail}} first so we can attempt to resolve a dispute. If it cannot be resolved, you may seek relief from any consumer-protection, regulatory, mediation, or judicial body with lawful jurisdiction. Where a choice of forum is legally permitted, the dispute will be submitted to a court with lawful jurisdiction in China.
 
 15. Contact
 
-Operator: Yunqiao Network
-Country/region of registration: China
+Operator: {{legalEntityName}}
+Country/region of registration: {{legalRegistrationCountry}}
 Return address: contact customer support first to obtain the return address applicable to the specific order and product type; do not send an item back without confirmation.
-Customer support email: yunqiao@codexgemini.cc
+Customer support email: {{supportEmail}}
 
 ---
 

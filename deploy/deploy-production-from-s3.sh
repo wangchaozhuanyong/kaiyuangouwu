@@ -98,9 +98,9 @@ if [[ "${deployed_sha}" == "${target_sha}" ]]; then
 fi
 
 if git diff --name-only "${deployed_sha}" "${target_sha}" -- \
-    packages/dev-server/scripts/sync-awanmesh-brand.mjs \
+    packages/dev-server/scripts/sync-moyao-brand.mjs \
     packages/storefront/src/assets/brand/ | grep -q .; then
-    fail 'AwanMesh managed brand data changed; use the reviewed manual publisher release path'
+    fail 'MOYAO AI managed brand data changed; use the reviewed manual publisher release path'
 fi
 
 mapfile -t managed_storefront_changes < <(
