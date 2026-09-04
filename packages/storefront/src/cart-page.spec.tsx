@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { CartPage } from './pages/cart-page';
 import { StorefrontContext } from './StorefrontContext';
+import { readStorefrontStylesheet } from './test-stylesheet';
 import { MarketConfig, Order, Product, StoreCustomerCoupon, StorefrontCart } from './types';
 
 vi.mock('@tanstack/react-router', async importOriginal => ({
@@ -228,6 +229,12 @@ describe('CartPage guest cart', () => {
         expect(markup).toContain('顺手带一件');
         expect(markup).toContain('class="section-header has-end-subtitle"');
         expect(markup).toContain('class="section-header-end-subtitle">从当前店铺继续挑选</p>');
+    });
+
+    it('keeps the offers row visually separate from the recommendation module', () => {
+        expect(readStorefrontStylesheet()).toMatch(
+            /\.cart-page > \.product-section\s*\{[^}]*margin-top:\s*16px;/u,
+        );
     });
 
     it('shows only the manually selected coupon name instead of matching automatic discounts', () => {

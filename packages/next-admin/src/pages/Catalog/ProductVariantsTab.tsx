@@ -3,6 +3,7 @@ import type { DigitalDeliveryMode, DigitalStockPolicy } from '../../graphql/comm
 import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { LookupPager } from './LookupPager';
+import { ProductAutoCardSetupPanel } from './ProductAutoCardSetupPanel';
 import { useProductEditor } from './ProductEditorContext';
 import { LOOKUP_PAGE_SIZE } from './product-editor-types';
 
@@ -31,6 +32,10 @@ export function ProductVariantsTab() {
         selectedChannelIds,
         setSelectedChannelIds,
         formErrors,
+        handleSave,
+        saving,
+        isDirty,
+        refetchProduct,
         isCreateMode,
         productData,
     } = useProductEditor();
@@ -107,12 +112,12 @@ export function ProductVariantsTab() {
                     <div>
                         <h3 className="text-sm font-bold text-slate-900">
                             {effectiveFulfillmentType === 'digital'
-                                ? 'SKU 规格变体与数字交付'
+                                ? '销售、SKU 与自动发货'
                                 : 'SKU 规格变体与在手库存'}
                         </h3>
                         <p className="text-xs text-slate-400 mt-0.5">
                             {effectiveFulfillmentType === 'digital'
-                                ? '为每个 SKU 配置售价、交付方式和对应的虚拟库存规则'
+                                ? '在同一页完成售价、交付方式、卡密格式和库存导入'
                                 : '为商品配置不同规格型号、条形码 SKU、售价与初始库存'}
                         </p>
                     </div>
@@ -491,6 +496,16 @@ export function ProductVariantsTab() {
                     </div>
                 )}
             </div>
+
+            {effectiveFulfillmentType === 'digital' && (
+                <ProductAutoCardSetupPanel
+                    variants={variants}
+                    productIsDirty={isDirty}
+                    productSaving={saving}
+                    onSaveProduct={handleSave}
+                    onRefreshProduct={refetchProduct}
+                />
+            )}
         </div>
     );
 }
