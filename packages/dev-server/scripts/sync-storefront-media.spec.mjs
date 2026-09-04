@@ -9,9 +9,42 @@ import {
     parseCliArguments,
     parseMediaKeys,
     prepareStorefrontMediaManifest,
+    selectStorefrontMediaChannels,
     storefrontMediaManifest,
     syncStorefrontMedia,
 } from './sync-storefront-media.mjs';
+
+const defaultChannel = {
+    id: 'channel-1',
+    code: '__default_channel__',
+    token: 'default-channel-token',
+};
+
+test('channel selection uses the sole accessible Channel when no target is configured', () => {
+    assert.deepEqual(selectStorefrontMediaChannels([defaultChannel]), [defaultChannel]);
+});
+
+test('channel selection requires an explicit target when multiple Channels are accessible', () => {
+    assert.throws(
+        () =>
+            selectStorefrontMediaChannels([
+                defaultChannel,
+                { id: 'channel-2', code: 'my-malaysia', token: 'malaysia-token' },
+            ]),
+        /STOREFRONT_MEDIA_CHANNEL_CODES is required/,
+    );
+});
+
+test('channel selection fails clearly when the admin cannot access any Channel', () => {
+    assert.throws(() => selectStorefrontMediaChannels([]), /cannot access any Channel/);
+});
+
+test('channel selection never falls back when an explicit target is inaccessible', () => {
+    assert.throws(
+        () => selectStorefrontMediaChannels([defaultChannel], ['cn-mainland']),
+        /Admin user cannot access Channel cn-mainland/,
+    );
+});
 
 test('storefront media manifest has readable, hashed and uniquely targeted files', async () => {
     const prepared = await prepareStorefrontMediaManifest();
@@ -261,6 +294,50 @@ test('asset-library media is channel-scoped without mutating another managed ent
         ),
         false,
     );
+});
+
+test('asset-library media resolves the sole accessible Channel without a configured code', async () => {
+    const requests = [];
+    const fetchImpl = async (_url, init) => {
+        const request = JSON.parse(init.body);
+        requests.push(request);
+        if (request.query.includes('StorefrontMediaLogin')) {
+            return new Response(
+                JSON.stringify({
+                    data: {
+                        login: {
+                            id: 'admin-1',
+                            channels: [defaultChannel],
+                        },
+                    },
+                }),
+                { headers: { 'content-type': 'application/json', 'vendure-auth-token': 'auth-token' } },
+            );
+        }
+        if (request.query.includes('StorefrontMediaContentBlocks')) {
+            return Response.json({ data: { storefrontContentBlocks: [] } });
+        }
+        if (request.query.includes('StorefrontMediaAsset')) {
+            return Response.json({ data: { assets: { items: [] } } });
+        }
+        throw new Error(`Unexpected GraphQL request: ${request.query}`);
+    };
+    const reference = storefrontMediaManifest.find(
+        item => item.key === 'referral-poster-neon-layout-reference',
+    );
+    assert.ok(reference);
+
+    const result = await syncStorefrontMedia({
+        apiOrigin: 'http://127.0.0.1:3000',
+        username: 'admin',
+        password: 'secret',
+        apply: false,
+        fetchImpl,
+        manifest: [reference],
+    });
+
+    assert.deepEqual(result.channelCodes, ['__default_channel__']);
+    assert.equal(result.results[0].targets[0].channelCode, '__default_channel__');
 });
 
 test('only localhost origins count as local writes', () => {

@@ -204,7 +204,8 @@ bun run sync:storefront-media -- --apply
 ```
 
 For a production release, set `VENDURE_API_ORIGIN`, `SUPERADMIN_USERNAME`,
-`SUPERADMIN_PASSWORD`, and `STOREFRONT_MEDIA_CHANNEL_CODES` in the release environment, then run
+`SUPERADMIN_PASSWORD`, and, when the account can access more than one Channel,
+`STOREFRONT_MEDIA_CHANNEL_CODES` in the release environment, then run
 the sync after the API is healthy and before the new storefront is promoted:
 
 ```bash

@@ -187,6 +187,25 @@ export function parseMediaKeys(value) {
     return keys;
 }
 
+export function selectStorefrontMediaChannels(availableChannels, channelCodes) {
+    if (channelCodes?.length) {
+        const channelsByCode = new Map(availableChannels.map(channel => [channel.code, channel]));
+        return channelCodes.map(code => {
+            const channel = channelsByCode.get(code);
+            assert.ok(channel, `Admin user cannot access Channel ${code}`);
+            return channel;
+        });
+    }
+
+    assert.ok(availableChannels.length > 0, 'Admin user cannot access any Channel');
+    assert.equal(
+        availableChannels.length,
+        1,
+        'STOREFRONT_MEDIA_CHANNEL_CODES is required when the admin user can access multiple Channels',
+    );
+    return availableChannels;
+}
+
 export function createUploadMap(variablePath) {
     return { 0: [variablePath] };
 }
@@ -445,7 +464,7 @@ export async function syncStorefrontMedia({
     apiOrigin,
     username,
     password,
-    channelCodes = ['cn-mainland'],
+    channelCodes,
     apply = false,
     allowRemote = false,
     production = process.env.NODE_ENV === 'production',
@@ -455,7 +474,9 @@ export async function syncStorefrontMedia({
 }) {
     assert.ok(apiOrigin, 'VENDURE_API_ORIGIN or --api-origin is required');
     assert.ok(username && password, 'SUPERADMIN_USERNAME and SUPERADMIN_PASSWORD are required');
-    assert.ok(channelCodes.length > 0, 'At least one storefront media Channel is required');
+    if (channelCodes) {
+        assert.ok(channelCodes.length > 0, 'At least one storefront media Channel is required');
+    }
     if (apply && (production || !isLocalApiOrigin(apiOrigin))) {
         assert.ok(allowRemote, 'Remote or production writes require both --apply and --allow-remote');
     }
@@ -470,12 +491,7 @@ export async function syncStorefrontMedia({
     const normalizedOrigin = apiOrigin.replace(/\/$/, '');
     const prepared = await prepareStorefrontMediaManifest(selectedManifest);
     const session = await login(fetchImpl, normalizedOrigin, username, password);
-    const channelsByCode = new Map(session.channels.map(channel => [channel.code, channel]));
-    const selectedChannels = channelCodes.map(code => {
-        const channel = channelsByCode.get(code);
-        assert.ok(channel, `Admin user cannot access Channel ${code}`);
-        return channel;
-    });
+    const selectedChannels = selectStorefrontMediaChannels(session.channels, channelCodes);
     const channelStates = [];
     for (const channel of selectedChannels) {
         channelStates.push(
@@ -579,7 +595,7 @@ export async function syncStorefrontMedia({
     return {
         applied: apply,
         apiOrigin: normalizedOrigin,
-        channelCodes,
+        channelCodes: selectedChannels.map(channel => channel.code),
         results,
     };
 }
@@ -617,14 +633,13 @@ if (isMain) {
             options.apiOrigin ??
             process.env.VENDURE_API_ORIGIN ??
             `http://${process.env.VENDURE_HOSTNAME || '127.0.0.1'}:${process.env.PORT || '3000'}`;
-        const channelCodes =
-            options.channelCodes ??
-            parseChannelCodes(process.env.STOREFRONT_MEDIA_CHANNEL_CODES || 'cn-mainland');
+        const configuredChannelCodes =
+            options.channelCodes ?? parseChannelCodes(process.env.STOREFRONT_MEDIA_CHANNEL_CODES);
         const result = await syncStorefrontMedia({
             apiOrigin,
             username: process.env.SUPERADMIN_USERNAME,
             password: process.env.SUPERADMIN_PASSWORD,
-            channelCodes,
+            channelCodes: configuredChannelCodes.length > 0 ? configuredChannelCodes : undefined,
             mediaKeys: options.mediaKeys,
             apply: options.apply,
             allowRemote: options.allowRemote,

@@ -321,7 +321,7 @@ VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
     node packages/dev-server/scripts/sync-storefront-media.mjs --apply --allow-remote
 ```
 
-命令使用已由发布 shell 安全加载的 `SUPERADMIN_USERNAME`、`SUPERADMIN_PASSWORD` 和 `STOREFRONT_MEDIA_CHANNEL_CODES`；不得把密码写入参数或发布记录。同步失败立即停止发布，不切换 Storefront 指针。同一文件按 SHA-256 标签复用；新版文件只切换商品和内容块绑定，不删除旧素材，便于数据层单独回退。清单中标记为 `asset-library` 的设计参考图只上传并分配到目标 Channel 素材库，不会自动改动商品、内容块或前台默认海报。如只需发布某一项素材，使用 `--keys <manifest-key>` 限定范围，避免重新绑定其他素材。
+命令使用已由发布 shell 安全加载的 `SUPERADMIN_USERNAME`、`SUPERADMIN_PASSWORD`。账号可访问多个 Channel 时必须通过 `STOREFRONT_MEDIA_CHANNEL_CODES` 明确限定目标；未配置且账号只可访问一个 Channel 时，脚本使用该唯一 Channel，不根据硬编码名称猜测。不得把密码写入参数或发布记录。同步失败立即停止发布，不切换 Storefront 指针。同一文件按 SHA-256 标签复用；新版文件只切换商品和内容块绑定，不删除旧素材，便于数据层单独回退。清单中标记为 `asset-library` 的设计参考图只上传并分配到目标 Channel 素材库，不会自动改动商品、内容块或前台默认海报。如只需发布某一项素材，使用 `--keys <manifest-key>` 限定范围，避免重新绑定其他素材。
 
 当版本只包含已审核的店铺媒体变更时，在目标 `main` 完整 SHA 的
 `Production Runtime Artifact` 工作流成功后，使用 `Deploy Reviewed Storefront Media`
