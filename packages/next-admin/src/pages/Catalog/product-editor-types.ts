@@ -71,7 +71,9 @@ export interface CollectionItem {
     id: string;
     name: string;
     slug: string;
+    position?: number;
     filters: CollectionFilterValue[];
+    children?: CollectionItem[];
 }
 
 export interface CatalogChannel {

@@ -1,9 +1,10 @@
-import { Check, FolderTree, Search, Tag } from 'lucide-react';
+import { Check, CornerDownRight, FolderTree, Search, Tag } from 'lucide-react';
 import { hasDirectProductAssignment } from '../../utils/product-collection-assignment';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { LookupPager } from './LookupPager';
+import { buildProductCollectionGroups, filterProductCollectionGroups } from './product-collection-hierarchy';
+import { LOOKUP_PAGE_SIZE, type CollectionItem } from './product-editor-types';
 import { useProductEditor } from './ProductEditorContext';
-import { LOOKUP_PAGE_SIZE } from './product-editor-types';
 
 export function ProductFacetsCollectionsTab() {
     const {
@@ -19,8 +20,6 @@ export function ProductFacetsCollectionsTab() {
         setFacetPage,
         collectionSearch,
         setCollectionSearch,
-        collectionPage,
-        setCollectionPage,
         toggleFacetValue,
         facetsData,
         facetsLoading,
@@ -36,6 +35,28 @@ export function ProductFacetsCollectionsTab() {
     } = useProductEditor();
 
     if (!isCreateMode && !productData?.product) return null;
+
+    const collectionGroups = buildProductCollectionGroups(collectionsData?.collections.items ?? []);
+    const filteredCollectionGroups = filterProductCollectionGroups(collectionGroups, collectionSearch);
+    const secondLevelCollectionCount = collectionGroups.reduce(
+        (count, group) => count + group.children.length,
+        0,
+    );
+    const toggleCollection = (collectionId: string) => {
+        setSelectedCollectionIds(ids =>
+            ids.includes(collectionId)
+                ? ids.filter(selectedId => selectedId !== collectionId)
+                : [...ids, collectionId],
+        );
+    };
+    const isAutomaticallyMatched = (collection: CollectionItem) =>
+        !isCreateMode &&
+        Boolean(
+            productData?.product?.collections.some(
+                productCollection => productCollection.id === collection.id,
+            ),
+        ) &&
+        !hasDirectProductAssignment(collection.filters, productId ?? '');
 
     return (
         <div className="space-y-6">
@@ -134,11 +155,8 @@ export function ProductFacetsCollectionsTab() {
                     <input
                         aria-label="搜索商品分类或专辑"
                         value={collectionSearch}
-                        onChange={event => {
-                            setCollectionSearch(event.target.value);
-                            setCollectionPage(0);
-                        }}
-                        placeholder="搜索分类或专辑名称"
+                        onChange={event => setCollectionSearch(event.target.value)}
+                        placeholder="搜索一级分类、二级分类或 slug"
                         className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-8 pr-3 text-xs outline-none focus:border-blue-500"
                     />
                 </div>
@@ -159,66 +177,145 @@ export function ProductFacetsCollectionsTab() {
                             重试
                         </button>
                     </div>
-                ) : collectionsData?.collections?.items && collectionsData.collections.items.length > 0 ? (
-                    <div className="grid grid-cols-1 gap-3 pt-1 sm:grid-cols-2 lg:grid-cols-3">
-                        {collectionsData.collections.items.map(col => {
-                            const isSelected = selectedCollectionIds.includes(col.id);
-                            const isAutomaticallyMatched =
-                                !isCreateMode &&
-                                productData?.product?.collections.some(
-                                    collection => collection.id === col.id,
-                                ) &&
-                                !hasDirectProductAssignment(col.filters, productId ?? '');
-                            return (
-                                <label
-                                    key={col.id}
-                                    className={`flex cursor-pointer items-center gap-3 rounded-lg border p-3 text-xs transition-colors ${isSelected ? 'border-blue-400 bg-blue-50' : 'border-slate-200 bg-slate-50 hover:border-blue-300'}`}
-                                >
-                                    <input
-                                        type="checkbox"
-                                        checked={isSelected}
-                                        onChange={() =>
-                                            setSelectedCollectionIds(ids =>
-                                                isSelected
-                                                    ? ids.filter(id => id !== col.id)
-                                                    : [...ids, col.id],
-                                            )
-                                        }
-                                        className="h-4 w-4 shrink-0 rounded border-slate-300 text-blue-600"
-                                    />
-                                    <FolderTree
-                                        className="h-4 w-4 shrink-0 text-blue-500"
-                                        aria-hidden="true"
-                                    />
-                                    <span className="min-w-0 flex-1">
-                                        <span className="block truncate font-bold text-slate-800">
-                                            {col.name}
-                                        </span>
-                                        <span className="block truncate font-mono text-[10px] text-slate-400">
-                                            {col.slug}
-                                        </span>
-                                    </span>
-                                    {isAutomaticallyMatched && (
-                                        <span className="shrink-0 rounded bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold text-emerald-700">
-                                            自动匹配
-                                        </span>
-                                    )}
-                                </label>
-                            );
-                        })}
+                ) : collectionGroups.length > 0 ? (
+                    <div className="space-y-3 pt-1">
+                        <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+                            <span className="rounded bg-blue-50 px-2 py-1 font-bold text-blue-700">
+                                一级分类 {collectionGroups.length}
+                            </span>
+                            <span className="rounded bg-slate-100 px-2 py-1 font-bold text-slate-600">
+                                二级分类 {secondLevelCollectionCount}
+                            </span>
+                            <span className="ml-auto font-medium text-slate-500">
+                                已选择 {selectedCollectionIds.length} 个分类
+                            </span>
+                        </div>
+
+                        {filteredCollectionGroups.length > 0 ? (
+                            <div className="space-y-3">
+                                {filteredCollectionGroups.map(group => {
+                                    const parentSelected = selectedCollectionIds.includes(group.parent.id);
+                                    const selectedChildCount = group.children.filter(child =>
+                                        selectedCollectionIds.includes(child.id),
+                                    ).length;
+                                    return (
+                                        <section
+                                            key={group.parent.id}
+                                            aria-labelledby={`collection-group-${group.parent.id}`}
+                                            className={`overflow-hidden rounded-xl border bg-white transition-colors ${parentSelected ? 'border-blue-300' : 'border-slate-200'}`}
+                                        >
+                                            <div className="flex flex-col gap-2.5 border-b border-slate-200 bg-slate-50/80 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+                                                <CollectionAssignmentOption
+                                                    collection={group.parent}
+                                                    level="primary"
+                                                    selected={parentSelected}
+                                                    automaticallyMatched={isAutomaticallyMatched(
+                                                        group.parent,
+                                                    )}
+                                                    onToggle={toggleCollection}
+                                                />
+                                                <span className="shrink-0 pl-9 text-[10px] font-medium text-slate-400 sm:pl-0">
+                                                    {group.children.length > 0
+                                                        ? `${group.children.length} 个二级分类${selectedChildCount > 0 ? ` · 已选 ${selectedChildCount}` : ''}`
+                                                        : '暂无二级分类'}
+                                                </span>
+                                            </div>
+
+                                            {group.children.length > 0 ? (
+                                                <div className="grid grid-cols-1 gap-2 p-3 sm:grid-cols-2 xl:grid-cols-3">
+                                                    {group.children.map(child => (
+                                                        <CollectionAssignmentOption
+                                                            key={child.id}
+                                                            collection={child}
+                                                            level="secondary"
+                                                            selected={selectedCollectionIds.includes(
+                                                                child.id,
+                                                            )}
+                                                            automaticallyMatched={isAutomaticallyMatched(
+                                                                child,
+                                                            )}
+                                                            onToggle={toggleCollection}
+                                                        />
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <div className="px-4 py-3 text-[11px] text-slate-400">
+                                                    可直接选择上方一级分类，或先到“分类与属性”中创建二级分类。
+                                                </div>
+                                            )}
+                                        </section>
+                                    );
+                                })}
+                            </div>
+                        ) : (
+                            <div className="rounded-lg bg-slate-50 p-5 text-center text-xs text-slate-500">
+                                未找到匹配的一级分类或二级分类。
+                            </div>
+                        )}
                     </div>
                 ) : (
                     <div className="p-4 bg-slate-50 rounded-lg text-xs text-slate-500">
                         当前店铺暂无分类专辑。
                     </div>
                 )}
-                <LookupPager
-                    page={collectionPage}
-                    pageSize={LOOKUP_PAGE_SIZE}
-                    totalItems={collectionsData?.collections.totalItems ?? 0}
-                    onPageChange={setCollectionPage}
-                />
             </div>
         </div>
+    );
+}
+
+function CollectionAssignmentOption({
+    collection,
+    level,
+    selected,
+    automaticallyMatched,
+    onToggle,
+}: {
+    collection: CollectionItem;
+    level: 'primary' | 'secondary';
+    selected: boolean;
+    automaticallyMatched: boolean;
+    onToggle: (collectionId: string) => void;
+}) {
+    const isPrimary = level === 'primary';
+    const Icon = isPrimary ? FolderTree : CornerDownRight;
+    return (
+        <label
+            className={`flex min-w-0 cursor-pointer items-center gap-2.5 rounded-lg text-xs transition-colors ${isPrimary ? 'flex-1 px-1 py-1' : `border p-3 ${selected ? 'border-blue-400 bg-blue-50' : 'border-slate-200 bg-white hover:border-blue-300 hover:bg-slate-50'}`}`}
+        >
+            <input
+                type="checkbox"
+                checked={selected}
+                onChange={() => onToggle(collection.id)}
+                aria-label={`${selected ? '取消选择' : '选择'}${isPrimary ? '一级分类' : '二级分类'}：${collection.name}`}
+                className="h-4 w-4 shrink-0 rounded border-slate-300 text-blue-600"
+            />
+            <Icon
+                className={`h-4 w-4 shrink-0 ${isPrimary ? 'text-blue-600' : 'text-slate-400'}`}
+                aria-hidden="true"
+            />
+            <span className="min-w-0 flex-1">
+                <span className="flex min-w-0 items-center gap-1.5">
+                    <span
+                        id={isPrimary ? `collection-group-${collection.id}` : undefined}
+                        className="truncate font-bold text-slate-800"
+                    >
+                        {collection.name}
+                    </span>
+                    <span
+                        className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold ${isPrimary ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500'}`}
+                    >
+                        {isPrimary ? '一级分类' : '二级分类'}
+                    </span>
+                </span>
+                <span className="mt-0.5 block truncate font-mono text-[10px] text-slate-400">
+                    {collection.slug}
+                </span>
+            </span>
+            {automaticallyMatched && (
+                <span className="shrink-0 rounded bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold text-emerald-700">
+                    自动匹配
+                </span>
+            )}
+        </label>
     );
 }
