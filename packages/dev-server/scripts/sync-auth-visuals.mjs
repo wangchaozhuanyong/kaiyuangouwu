@@ -460,7 +460,8 @@ async function loadAdminBlocks(fetchImpl, apiOrigin, authToken, channel) {
 async function loadShopBlocks(fetchImpl, apiOrigin, channel) {
     const blocksByLanguage = {};
     for (const languageCode of LANGUAGE_CODES) {
-        const result = await graphql(fetchImpl, apiOrigin, 'shop-api', SHOP_BLOCKS_QUERY, undefined, {
+        const apiPath = `shop-api?languageCode=${encodeURIComponent(languageCode)}`;
+        const result = await graphql(fetchImpl, apiOrigin, apiPath, SHOP_BLOCKS_QUERY, undefined, {
             'vendure-token': String(channel.token),
             'language-code': languageCode,
         });
