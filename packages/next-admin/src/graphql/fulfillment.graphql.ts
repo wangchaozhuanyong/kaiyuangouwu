@@ -105,6 +105,66 @@ export const AUTO_CARD_WORKSPACE_QUERY = gql`
     }
 `;
 
+export const PRODUCT_AUTO_CARD_SETUP_QUERY = gql`
+    query NextAdminProductAutoCardSetup($productVariantId: ID!) {
+        autoCardConfig(productVariantId: $productVariantId) {
+            id
+            updatedAt
+            enabled
+            formatName
+            delimiter
+            fields {
+                key
+                label
+                labelEn
+                secret
+            }
+            instructions
+            instructionsZh
+            instructionsEn
+            lowStockThreshold
+            availableCount
+            assignedCount
+            disabledCount
+            waitingDeliveryCount
+        }
+    }
+`;
+
+export const PRODUCT_AUTO_CARD_DELIVERIES_QUERY = gql`
+    query NextAdminProductAutoCardDeliveries($options: AutoCardDeliveryListOptions) {
+        autoCardDeliveries(options: $options) {
+            totalItems
+            items {
+                id
+                createdAt
+                updatedAt
+                state
+                recipientEmail
+                productName
+                sku
+                quantity
+                attemptCount
+                lastError
+                lastDispatchedAt
+                sentAt
+                order {
+                    id
+                    code
+                    state
+                }
+                events {
+                    id
+                    createdAt
+                    type
+                    actorType
+                    note
+                }
+            }
+        }
+    }
+`;
+
 export const UPDATE_AUTO_CARD_CONFIG_MUTATION = gql`
     mutation NextAdminUpdateAutoCardConfig($input: UpdateAutoCardConfigInput!) {
         updateAutoCardConfig(input: $input) {
@@ -265,6 +325,14 @@ export interface AutoCardDeliveryRecord {
 export interface AutoCardWorkspaceResult {
     autoCardConfig: AutoCardConfigRecord | null;
     autoCardPoolItems: { totalItems: number; items: AutoCardPoolItemRecord[] };
+    autoCardDeliveries: { totalItems: number; items: AutoCardDeliveryRecord[] };
+}
+
+export interface ProductAutoCardSetupResult {
+    autoCardConfig: AutoCardConfigRecord | null;
+}
+
+export interface ProductAutoCardDeliveriesResult {
     autoCardDeliveries: { totalItems: number; items: AutoCardDeliveryRecord[] };
 }
 

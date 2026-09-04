@@ -1,7 +1,8 @@
-import { gql } from '@apollo/client';
+import { InMemoryCache, gql } from '@apollo/client';
 import { print } from 'graphql';
 import { describe, expect, it } from 'vitest';
-import type { CustomFieldDefinition } from './custom-field-types';
+import type { CustomFieldDefinition, CustomFieldServerConfigData } from './custom-field-types';
+import { CUSTOM_FIELD_POSSIBLE_TYPES, CUSTOM_FIELD_SERVER_CONFIG_QUERY } from './custom-fields.graphql';
 
 import {
     addCustomFieldsToDocument,
@@ -119,6 +120,69 @@ describe('next-admin dynamic custom fields', () => {
         expect(transformed).toMatch(/owner \{\s+id/u);
         expect(transformed).toMatch(/metadata \{\s+source/u);
         expect(transformed).not.toContain('undefined');
+    });
+
+    it('never reads or writes an invalid cached field name', () => {
+        const malformedFields: CustomFieldDefinition[] = [
+            { name: undefined as unknown as string, type: 'string', list: false },
+            { name: 'priority', type: 'int', list: false },
+            { name: '' as unknown as string, type: 'localeString', list: false },
+        ];
+
+        expect(customFieldValuesFromEntity(malformedFields, { priority: 3 })).toEqual({ priority: 3 });
+        expect(customFieldInputFromValues(malformedFields, { undefined: null, priority: 3 })).toEqual({
+            priority: 3,
+        });
+        expect(localizedCustomFieldInputFromValues(malformedFields, { '': { en: 'invalid' } }, 'en')).toEqual(
+            {},
+        );
+    });
+
+    it('preserves CustomField interface properties in the Apollo cache', () => {
+        const cache = new InMemoryCache({ possibleTypes: CUSTOM_FIELD_POSSIBLE_TYPES });
+        cache.writeQuery({
+            query: CUSTOM_FIELD_SERVER_CONFIG_QUERY,
+            data: {
+                globalSettings: {
+                    __typename: 'GlobalSettings',
+                    availableLanguages: ['zh_Hans', 'en'],
+                    serverConfig: {
+                        __typename: 'ServerConfig',
+                        entityCustomFields: [
+                            {
+                                __typename: 'EntityCustomFields',
+                                entityName: 'ProductVariant',
+                                customFields: [
+                                    {
+                                        __typename: 'StringCustomFieldConfig',
+                                        name: 'merchantNote',
+                                        type: 'string',
+                                        list: false,
+                                        label: [],
+                                        description: [],
+                                        readonly: false,
+                                        internal: false,
+                                        nullable: true,
+                                        requiresPermission: [],
+                                        deprecated: false,
+                                        deprecationReason: null,
+                                        ui: {},
+                                        pattern: null,
+                                        options: [],
+                                    },
+                                ],
+                            },
+                        ],
+                    },
+                },
+            },
+        });
+
+        const result = cache.readQuery<CustomFieldServerConfigData>({
+            query: CUSTOM_FIELD_SERVER_CONFIG_QUERY,
+        });
+        const field = result?.globalSettings.serverConfig.entityCustomFields[0].customFields[0];
+        expect(field).toMatchObject({ name: 'merchantNote', type: 'string', list: false });
     });
 
     it('reads and writes localized values through translation custom fields', () => {
