@@ -15,6 +15,10 @@ on:
                 description: 'Reviewed comma-separated storefront media manifest keys'
                 required: true
                 type: string
+            channel_codes:
+                description: 'Reviewed comma-separated Vendure Channel codes'
+                required: true
+                type: string
 
 permissions:
     actions: read
@@ -39,6 +43,7 @@ jobs:
             TARGET_SHA: ${{ inputs.target_sha }}
             SOURCE_RUN_ID: ${{ inputs.source_run_id }}
             MEDIA_KEYS: ${{ inputs.media_keys }}
+            CHANNEL_CODES: ${{ inputs.channel_codes }}
 
         steps:
             - name: Validate reviewed release identity
@@ -46,6 +51,7 @@ jobs:
                   [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]
                   [[ "$SOURCE_RUN_ID" =~ ^[0-9]+$ ]]
                   [[ "$MEDIA_KEYS" =~ ^[a-z0-9][a-z0-9-]*(,[a-z0-9][a-z0-9-]*)*$ ]]
+                  [[ "$CHANNEL_CODES" =~ ^[a-z0-9_][a-z0-9_-]*(,[a-z0-9_][a-z0-9_-]*)*$ ]]
 
             - name: Checkout target commit
               uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
@@ -109,7 +115,7 @@ jobs:
 
             - name: Deploy reviewed media through Systems Manager
               run: |
-                  REMOTE_COMMAND="sudo -H -u ubuntu env GITHUB_RUN_ID='${GITHUB_RUN_ID}' VENDURE_REVIEWED_STOREFRONT_MEDIA_KEYS='${MEDIA_KEYS}' /bin/bash -c 'set -Eeuo pipefail; cd /var/www/kaiyuangouwu; git fetch origin main --no-tags --prune; test -z \"\$(git status --porcelain --untracked-files=no)\"; git cat-file -e \"${TARGET_SHA}^{commit}\"; git merge-base --is-ancestor HEAD \"${TARGET_SHA}\"; git merge --ff-only \"${TARGET_SHA}\"; test \"\$(git rev-parse HEAD^{commit})\" = \"${TARGET_SHA}\"; exec ./deploy/deploy-production-from-s3.sh \"${TARGET_SHA}\" \"${ARTIFACT_NAME}\" \"${ARTIFACT_S3_PREFIX}\"'"
+                  REMOTE_COMMAND="sudo -H -u ubuntu env GITHUB_RUN_ID='${GITHUB_RUN_ID}' VENDURE_REVIEWED_STOREFRONT_MEDIA_KEYS='${MEDIA_KEYS}' VENDURE_REVIEWED_STOREFRONT_MEDIA_CHANNEL_CODES='${CHANNEL_CODES}' /bin/bash -c 'set -Eeuo pipefail; cd /var/www/kaiyuangouwu; git fetch origin main --no-tags --prune; test -z \"\$(git status --porcelain --untracked-files=no)\"; git cat-file -e \"${TARGET_SHA}^{commit}\"; git merge-base --is-ancestor HEAD \"${TARGET_SHA}\"; git merge --ff-only \"${TARGET_SHA}\"; test \"\$(git rev-parse HEAD^{commit})\" = \"${TARGET_SHA}\"; exec ./deploy/deploy-production-from-s3.sh \"${TARGET_SHA}\" \"${ARTIFACT_NAME}\" \"${ARTIFACT_S3_PREFIX}\"'"
                   jq -n --arg command "$REMOTE_COMMAND" \
                     '{commands: [$command], executionTimeout: ["3600"]}' > "$RUNNER_TEMP/ssm-parameters.json"
 
@@ -154,6 +160,7 @@ jobs:
                     echo "- Target SHA: \`$TARGET_SHA\`"
                     echo "- Artifact: \`$ARTIFACT_NAME\`"
                     echo "- Media keys: \`$MEDIA_KEYS\`"
+                    echo "- Channel codes: \`$CHANNEL_CODES\`"
                     echo "- SSM command: \`$COMMAND_ID\`"
                     echo "- Status: \`$status\`"
                   } >> "$GITHUB_STEP_SUMMARY"

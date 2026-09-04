@@ -16,6 +16,7 @@ readonly nginx_target="/etc/nginx/sites-available/damatong-production"
 readonly environment_file="${repository}/packages/dev-server/.env"
 readonly deployment_id="${target_sha}-github-${GITHUB_RUN_ID:-manual}-$(date -u +%Y%m%dT%H%M%SZ)"
 readonly reviewed_storefront_media_keys="${VENDURE_REVIEWED_STOREFRONT_MEDIA_KEYS:-}"
+readonly reviewed_storefront_media_channel_codes="${VENDURE_REVIEWED_STOREFRONT_MEDIA_CHANNEL_CODES:-}"
 
 fail() {
     printf 'Production deployment failed: %s\n' "$1" >&2
@@ -71,6 +72,10 @@ if [[ "${#managed_storefront_changes[@]}" -gt 0 ]]; then
         fail 'managed storefront data changed; use the reviewed manual publisher release path'
     [[ "${reviewed_storefront_media_keys}" =~ ^[a-z0-9][a-z0-9-]*(,[a-z0-9][a-z0-9-]*)*$ ]] ||
         fail 'reviewed storefront media keys are invalid'
+    [[ -n "${reviewed_storefront_media_channel_codes}" ]] ||
+        fail 'reviewed storefront media Channel codes are required'
+    [[ "${reviewed_storefront_media_channel_codes}" =~ ^[a-z0-9_][a-z0-9_-]*(,[a-z0-9_][a-z0-9_-]*)*$ ]] ||
+        fail 'reviewed storefront media Channel codes are invalid'
     for managed_storefront_change in "${managed_storefront_changes[@]}"; do
         case "${managed_storefront_change}" in
             packages/dev-server/scripts/sync-storefront-media.mjs | \
@@ -81,8 +86,8 @@ if [[ "${#managed_storefront_changes[@]}" -gt 0 ]]; then
                 ;;
         esac
     done
-elif [[ -n "${reviewed_storefront_media_keys}" ]]; then
-    fail 'reviewed storefront media keys were supplied without a managed storefront data change'
+elif [[ -n "${reviewed_storefront_media_keys}" || -n "${reviewed_storefront_media_channel_codes}" ]]; then
+    fail 'reviewed storefront media scope was supplied without a managed storefront data change'
 fi
 
 git merge --ff-only refs/remotes/origin/main
@@ -283,17 +288,21 @@ node "${repository}/deploy/verify-dashboard-assets.mjs" \
     --dashboard-url http://127.0.0.1:3002/dashboard/ \
     --release-id "${target_sha}"
 if [[ -n "${reviewed_storefront_media_keys}" ]]; then
-    printf 'STOREFRONT_MEDIA_PUBLISH_BEGIN keys=%s\n' "${reviewed_storefront_media_keys}"
+    printf 'STOREFRONT_MEDIA_PUBLISH_BEGIN keys=%s channels=%s\n' \
+        "${reviewed_storefront_media_keys}" "${reviewed_storefront_media_channel_codes}"
     (
         cd "${candidate}"
-        VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
+        STOREFRONT_MEDIA_CHANNEL_CODES="${reviewed_storefront_media_channel_codes}" \
+            VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
             node packages/dev-server/scripts/sync-storefront-media.mjs \
                 --keys "${reviewed_storefront_media_keys}" --dry-run
-        VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
+        STOREFRONT_MEDIA_CHANNEL_CODES="${reviewed_storefront_media_channel_codes}" \
+            VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
             node packages/dev-server/scripts/sync-storefront-media.mjs \
                 --keys "${reviewed_storefront_media_keys}" --apply --allow-remote
     )
-    printf 'STOREFRONT_MEDIA_PUBLISH_OK keys=%s\n' "${reviewed_storefront_media_keys}"
+    printf 'STOREFRONT_MEDIA_PUBLISH_OK keys=%s channels=%s\n' \
+        "${reviewed_storefront_media_keys}" "${reviewed_storefront_media_channel_codes}"
 fi
 node "${memory_guard}" --stage post-switch --report
 pm2 save 9>&-
