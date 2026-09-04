@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 import {
     createRuntimeAuditReport,
@@ -62,7 +65,12 @@ void test('runtime audit policy can be tightened to block High findings', () => 
 
 void test('bun audit retries an explicit transport timeout and returns the next valid report', async () => {
     const results = [
-        { error: undefined, status: 1, stderr: 'Timeout: audit request failed', stdout: '' },
+        {
+            error: undefined,
+            status: 1,
+            stderr: 'Timeout: audit request failed',
+            stdout: 'bun audit v1.3.14',
+        },
         { error: undefined, status: 0, stderr: '', stdout: JSON.stringify(audit) },
     ];
     const retryEvents = [];
@@ -124,4 +132,39 @@ void test('bun audit does not retry unrelated malformed output', async () => {
         /Could not parse bun audit JSON after 1 of 3 attempts/u,
     );
     assert.equal(calls, 1);
+});
+
+void test('bun audit gate fails immediately when valid JSON reports a policy violation', async () => {
+    let calls = 0;
+
+    await assert.rejects(
+        runBunAudit('/repository', {
+            auditLevel: 'high',
+            maxAttempts: 3,
+            onRetry: () => undefined,
+            retryDelaysMs: [0, 0],
+            runCommand: () => {
+                calls += 1;
+                return { error: undefined, status: 1, stderr: '', stdout: JSON.stringify(audit) };
+            },
+            wait: async () => undefined,
+        }),
+        /bun audit policy failed \(high\+\) with exit code 1/u,
+    );
+    assert.equal(calls, 1);
+});
+
+void test('repository and production workflows use the fail-closed retrying audit gate', async () => {
+    const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
+    for (const workflowPath of [
+        '.github/workflows/build_and_test.yml',
+        '.github/workflows/build_production_runtime.yml',
+    ]) {
+        const workflow = await readFile(path.join(repositoryRoot, workflowPath), 'utf8');
+        assert.match(
+            workflow,
+            /node packages\/dev-server\/scripts\/production-runtime-audit\.mjs --audit-level high/u,
+        );
+        assert.doesNotMatch(workflow, /run: bun audit --audit-level high/u);
+    }
 });

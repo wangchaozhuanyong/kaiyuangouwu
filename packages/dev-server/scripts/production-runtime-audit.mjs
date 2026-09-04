@@ -2,10 +2,13 @@ import { spawnSync } from 'node:child_process';
 import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parseArgs } from 'node:util';
 import semver from 'semver';
 
 const SEVERITIES = Object.freeze(['low', 'moderate', 'high', 'critical']);
 const DEFAULT_AUDIT_RETRY_DELAYS_MS = Object.freeze([15_000, 60_000]);
+const scriptPath = fileURLToPath(import.meta.url);
+const repositoryRoot = path.resolve(path.dirname(scriptPath), '../../..');
 
 function isRecord(value) {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -110,8 +113,9 @@ function isRetriableAuditTimeout(result, detail) {
 }
 
 export async function runBunAudit(
-    repositoryRoot,
+    workingDirectory,
     {
+        auditLevel,
         maxAttempts = DEFAULT_AUDIT_RETRY_DELAYS_MS.length + 1,
         onRetry = ({ attempt, delayMs }) => {
             process.stderr.write(
@@ -120,8 +124,8 @@ export async function runBunAudit(
         },
         retryDelaysMs = DEFAULT_AUDIT_RETRY_DELAYS_MS,
         runCommand = () =>
-            spawnSync('bun', ['audit', '--json'], {
-                cwd: repositoryRoot,
+            spawnSync('bun', ['audit', '--json', ...(auditLevel ? ['--audit-level', auditLevel] : [])], {
+                cwd: workingDirectory,
                 encoding: 'utf8',
             }),
         wait = delayMs => new Promise(resolve => setTimeout(resolve, delayMs)),
@@ -135,8 +139,9 @@ export async function runBunAudit(
         if (result.error) {
             throw result.error;
         }
+        let report;
         try {
-            return JSON.parse(result.stdout);
+            report = JSON.parse(result.stdout);
         } catch {
             const { detail, error } = bunAuditParseError(result, attempt, maxAttempts);
             if (!isRetriableAuditTimeout(result, detail) || attempt === maxAttempts) {
@@ -145,13 +150,19 @@ export async function runBunAudit(
             const delayMs = retryDelaysMs[attempt - 1] ?? retryDelaysMs.at(-1) ?? 0;
             onRetry({ attempt, delayMs });
             await wait(delayMs);
+            continue;
         }
+        if (auditLevel && result.status !== 0) {
+            throw new Error(
+                `bun audit policy failed (${auditLevel}+) with exit code ${result.status ?? 'unknown'}`,
+            );
+        }
+        return report;
     }
     throw new Error('bun audit retry loop exited unexpectedly');
 }
 
 export async function auditRuntimePackages(artifactRoot, runtimePackages, { failOn = 'critical' } = {}) {
-    const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
     const { blockedFindings, report } = createRuntimeAuditReport(
         runtimePackages,
         await runBunAudit(repositoryRoot),
@@ -165,4 +176,24 @@ export async function auditRuntimePackages(artifactRoot, runtimePackages, { fail
         );
     }
     return report;
+}
+
+async function main() {
+    const { values } = parseArgs({
+        options: {
+            'audit-level': { type: 'string' },
+        },
+        strict: true,
+    });
+    const auditLevel = values['audit-level'] ?? 'high';
+    severityRank(auditLevel);
+    await runBunAudit(repositoryRoot, { auditLevel });
+    process.stdout.write(`bun audit policy passed (${auditLevel}+)\n`);
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === scriptPath) {
+    main().catch(error => {
+        process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+        process.exitCode = 1;
+    });
 }

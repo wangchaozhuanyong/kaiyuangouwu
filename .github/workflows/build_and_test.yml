@@ -28,7 +28,7 @@ jobs:
                   fetch-depth: 0
             - uses: ./.github/actions/setup
             - name: Audit dependencies at the production threshold
-              run: bun audit --audit-level high
+              run: node packages/dev-server/scripts/production-runtime-audit.mjs --audit-level high
             - name: Check repository policies
               run: |
                   bun run check:migration-registry

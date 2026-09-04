@@ -103,7 +103,7 @@ jobs:
               run: bun install --frozen-lockfile --linker=hoisted
 
             - name: Audit monorepo dependencies
-              run: bun audit --audit-level high
+              run: node packages/dev-server/scripts/production-runtime-audit.mjs --audit-level high
 
             - name: Build lint prerequisites
               run: bunx lerna run ci
