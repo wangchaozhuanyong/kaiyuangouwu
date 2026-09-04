@@ -42,6 +42,7 @@ async function startRealtimeFixture({
     const activeByIp = new Map();
     const acceptedProbeIds = [];
     const capacityReachedByIp = new Map();
+    const receivedChannelTokens = [];
     const sockets = new Set();
     const server = createServer((request, response) => {
         const requestUrl = new URL(request.url ?? '/', 'http://fixture.invalid');
@@ -51,6 +52,7 @@ async function startRealtimeFixture({
         }
         const clientIp = String(request.headers['cf-connecting-ip'] ?? request.socket.remoteAddress);
         const probeId = requestUrl.searchParams.get('__sse_probe') ?? '';
+        receivedChannelTokens.push(request.headers['vendure-token']);
         const active = activeByIp.get(clientIp) ?? 0;
         if (active >= limit) {
             response.writeHead(rejectionStatus, { connection: 'close', 'content-type': 'text/plain' });
@@ -100,6 +102,7 @@ async function startRealtimeFixture({
         acceptedProbeIds,
         activeByIp,
         capacityReachedByIp,
+        receivedChannelTokens,
         url: `http://127.0.0.1:${address.port}/storefront-realtime/events?client=storefront`,
         async close() {
             for (const socket of sockets) socket.destroy();
@@ -128,7 +131,9 @@ test('public smoke verifies ready and heartbeat before deterministically closing
     assert.match(result.contentType, /^text\/event-stream/iu);
     assert.ok(result.readyMs <= 200);
     assert.equal(result.readyHeartbeatIntervalMs, 10);
+    assert.equal(result.legacyChannelHeaderCompatible, true);
     assert.ok(result.heartbeatMs <= 100);
+    assert.deepEqual(fixture.receivedChannelTokens, ['legacy-market-code-probe']);
     await waitUntil(() => fixture.activeByIp.size === 0);
 });
 

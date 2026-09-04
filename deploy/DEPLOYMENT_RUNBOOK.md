@@ -403,7 +403,7 @@ node deploy/verify-production-release.mjs \
 
 验收脚本会确认主域名首页和 Shop API 无推广 Cookie 也能直接访问，同时单独验证 `/promo` 推广页与签名进入按钮仍然有效。然后继续检查带哈希的实际前台 JS/CSS 资源、Dashboard 和公网 Admin API 拒绝策略。Dashboard 验证会以发布 SHA 追加缓存穿透参数，并递归检查入口 HTML 引用及 JS 中声明的所有懒加载 JS/CSS；任一资源 404、状态码或 MIME 类型异常均视为发布失败并回滚。`/assets/` 目录本身不是有效静态资源验收地址。
 
-实时更新端点必须返回 `text/event-stream`，在两秒内输出有效 `ready` 事件，并在 18 秒内输出 heartbeat。使用会在读到目标帧后主动关闭并等待 socket 释放的验证器，不使用依赖 `curl --max-time` 强制中断的连续探测：
+实时更新端点必须返回 `text/event-stream`，在两秒内输出有效 `ready` 事件，并在 18 秒内输出 heartbeat。公网探针会模拟旧版客户端携带无效 `vendure-token` 的请求；生产入口必须丢弃这个不可信渠道头，继续按已验证域名解析店铺。使用会在读到目标帧后主动关闭并等待 socket 释放的验证器，不使用依赖 `curl --max-time` 强制中断的连续探测：
 
 ```bash
 node deploy/verify-storefront-realtime.mjs \
