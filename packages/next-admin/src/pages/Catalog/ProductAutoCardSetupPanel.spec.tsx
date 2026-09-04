@@ -260,7 +260,9 @@ function setInputValue(element: HTMLInputElement | HTMLTextAreaElement | HTMLSel
 }
 
 function buttonWithText(container: HTMLElement, text: string) {
-    const button = [...container.querySelectorAll('button')].find(item => item.textContent?.includes(text));
+    const button = Array.from(container.querySelectorAll('button')).find(item =>
+        item.textContent?.includes(text),
+    );
     if (!button) throw new Error(`Button not found: ${text}`);
     return button;
 }
