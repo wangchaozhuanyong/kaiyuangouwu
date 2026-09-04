@@ -92,10 +92,11 @@ function createFetchState(block, { shopDrift = false, shopAlwaysDrifts = false }
         blocks: [structuredClone(block)],
         mutations: [],
         batchInputs: [],
+        shopUrls: [],
         shopDrift,
         shopAlwaysDrifts,
     };
-    const fetchImpl = async (_url, init) => {
+    const fetchImpl = async (url, init) => {
         const request = JSON.parse(init.body);
         if (request.query.includes('AuthVisualCurrentUser')) {
             return Response.json({
@@ -111,6 +112,7 @@ function createFetchState(block, { shopDrift = false, shopAlwaysDrifts = false }
             return Response.json({ data: { storefrontContentBlocks: structuredClone(state.blocks) } });
         }
         if (request.query.includes('AuthVisualShopBlocks')) {
+            state.shopUrls.push(String(url));
             const languageCode = init.headers['language-code'];
             const blocks = state.blocks.map(item => shopBlockFromAdmin(item, languageCode));
             if (state.shopDrift) blocks[0].title = 'stale client title';
@@ -214,6 +216,7 @@ test('dry-run verifies Admin and Shop targets without sending mutations', async 
     const { fetchImpl, state } = createFetchState(createAdminBlock(definition));
     const result = await syncAuthVisuals({
         apiOrigin: 'http://127.0.0.1:3000',
+        shopOrigin: 'https://moyaoai.com',
         adminBearerToken: 'admin-session',
         channelCodes: ['cn-mainland'],
         fetchImpl,
@@ -231,6 +234,7 @@ test('read-only verification requires the reviewed Admin values and Shop parity'
     const matching = createFetchState(createAdminBlock(definition, { desired: true }));
     const result = await syncAuthVisuals({
         apiOrigin: 'http://127.0.0.1:3000',
+        shopOrigin: 'https://moyaoai.com',
         adminBearerToken: 'admin-session',
         channelCodes: ['cn-mainland'],
         verify: true,
@@ -241,7 +245,9 @@ test('read-only verification requires the reviewed Admin values and Shop parity'
 
     assert.equal(result.applied, false);
     assert.equal(result.verified, true);
+    assert.equal(result.shopOrigin, 'https://moyaoai.com');
     assert.equal(matching.state.mutations.length, 0);
+    assert.ok(matching.state.shopUrls.every(url => url.startsWith('https://moyaoai.com/shop-api')));
 
     const drifted = createFetchState(createAdminBlock(definition, { desired: true }), {
         shopDrift: true,
@@ -250,6 +256,7 @@ test('read-only verification requires the reviewed Admin values and Shop parity'
     await assert.rejects(
         syncAuthVisuals({
             apiOrigin: 'http://127.0.0.1:3000',
+            shopOrigin: 'https://moyaoai.com',
             adminBearerToken: 'admin-session',
             channelCodes: ['cn-mainland'],
             verify: true,
@@ -447,6 +454,8 @@ test('CLI parsing deduplicates Channels and keeps writes opt-in', () => {
             '--allow-remote',
             '--api-origin',
             'https://api.example.com',
+            '--shop-origin',
+            'https://shop.example.com',
             '--channel-codes',
             'cn-mainland,my-malaysia',
         ]),
@@ -455,6 +464,7 @@ test('CLI parsing deduplicates Channels and keeps writes opt-in', () => {
             allowRemote: true,
             verify: false,
             apiOrigin: 'https://api.example.com',
+            shopOrigin: 'https://shop.example.com',
             channelCodes: ['cn-mainland', 'my-malaysia'],
         },
     );

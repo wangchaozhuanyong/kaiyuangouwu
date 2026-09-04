@@ -310,6 +310,7 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.match(script, /AUTH_VISUAL_PUBLISH_OK/u);
     assert.match(script, /sync-auth-visuals\.mjs --verify/u);
     assert.match(script, /AUTH_VISUAL_VERIFY_OK/u);
+    assert.equal((script.match(/^\s*VENDURE_STOREFRONT_URL=https:\/\/moyaoai\.com/gmu) ?? []).length, 6);
     assert.ok(script.indexOf('STOREFRONT_MEDIA_PREFLIGHT_BEGIN') < script.indexOf('DEPLOY_MIGRATION_BEGIN'));
     assert.ok(
         script.indexOf('STOREFRONT_MEDIA_PREFLIGHT_OK') < script.indexOf('vendure-mysql-backup.service'),

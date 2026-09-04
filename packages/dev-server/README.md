@@ -207,9 +207,11 @@ Apply to a local Vendure instance:
 bun run sync:storefront-media -- --apply
 ```
 
-For a production release, set `VENDURE_API_ORIGIN`, `SUPERADMIN_USERNAME`,
-`SUPERADMIN_PASSWORD`, and `STOREFRONT_MEDIA_CHANNEL_CODES` in the release environment, then run
-the sync after the API is healthy and before the new storefront is promoted:
+For a production release, set `VENDURE_API_ORIGIN`, `VENDURE_STOREFRONT_URL`,
+`SUPERADMIN_USERNAME`, `SUPERADMIN_PASSWORD`, and `STOREFRONT_MEDIA_CHANNEL_CODES` in the release
+environment, then run the sync after the API is healthy and before the new storefront is promoted.
+The Admin origin may point at the loopback candidate, but the Shop origin must be the reviewed public
+store domain so domain-to-Channel routing is exercised:
 
 ```bash
 bun run sync:storefront-media -- --apply --allow-remote
@@ -231,7 +233,8 @@ are reported as such instead of claiming client parity.
 
 Auth page copy, palette and tags use the separate atomic content publisher. It applies all reviewed
 blocks in one version-checked Admin API batch and verifies both Shop API languages. Set explicit
-`AUTH_VISUAL_CHANNEL_CODES` whenever the Admin user has more than one accessible Channel:
+`AUTH_VISUAL_CHANNEL_CODES` whenever the Admin user has more than one accessible Channel, and set
+`VENDURE_STOREFRONT_URL` to the public domain for that reviewed Channel:
 
 ```bash
 bun run sync:auth-visuals -- --dry-run

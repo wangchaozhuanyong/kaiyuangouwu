@@ -660,7 +660,14 @@ function assertEntityUsesAsset(entity, assetId, owner) {
     );
 }
 
-async function verifyMediaAcrossChannels({ fetchImpl, apiOrigin, authToken, channels, media }) {
+async function verifyMediaAcrossChannels({
+    fetchImpl,
+    apiOrigin,
+    shopOrigin = apiOrigin,
+    authToken,
+    channels,
+    media,
+}) {
     let expectedAssetId;
     const verification = [];
     for (const channel of channels) {
@@ -674,7 +681,7 @@ async function verifyMediaAcrossChannels({ fetchImpl, apiOrigin, authToken, chan
         );
 
         const adminState = await loadChannelState(fetchImpl, apiOrigin, authToken, channel, [media]);
-        const shopState = await loadShopChannelState(fetchImpl, apiOrigin, channel, adminState, [media]);
+        const shopState = await loadShopChannelState(fetchImpl, shopOrigin, channel, adminState, [media]);
         for (const sku of media.productSkus ?? []) {
             const adminVariant = adminState.variants.get(sku);
             assert.ok(adminVariant, `Admin API cannot read SKU ${sku} in Channel ${channel.code}`);
@@ -778,6 +785,7 @@ async function rollbackBindings(rollbacks, mediaKey) {
 
 export async function syncStorefrontMedia({
     apiOrigin,
+    shopOrigin = apiOrigin,
     username,
     password,
     channelCodes,
@@ -793,6 +801,7 @@ export async function syncStorefrontMedia({
     waitImpl = delayMs => new Promise(resolve => setTimeout(resolve, delayMs)),
 }) {
     assert.ok(apiOrigin, 'VENDURE_API_ORIGIN or --api-origin is required');
+    assert.ok(shopOrigin, 'VENDURE_STOREFRONT_URL or --shop-origin is required');
     assert.ok(username && password, 'SUPERADMIN_USERNAME and SUPERADMIN_PASSWORD are required');
     if (channelCodes) {
         assert.ok(channelCodes.length > 0, 'At least one storefront media Channel is required');
@@ -810,14 +819,15 @@ export async function syncStorefrontMedia({
               return entry;
           })
         : manifest;
-    const normalizedOrigin = apiOrigin.replace(/\/$/, '');
+    const normalizedApiOrigin = apiOrigin.replace(/\/$/, '');
+    const normalizedShopOrigin = shopOrigin.replace(/\/$/, '');
     const prepared = await prepareStorefrontMediaManifest(selectedManifest);
-    const session = await login(fetchImpl, normalizedOrigin, username, password);
+    const session = await login(fetchImpl, normalizedApiOrigin, username, password);
     const selectedChannels = selectStorefrontMediaChannels(session.channels, channelCodes);
     const channelStates = [];
     for (const channel of selectedChannels) {
         channelStates.push(
-            await loadChannelState(fetchImpl, normalizedOrigin, session.authToken, channel, prepared),
+            await loadChannelState(fetchImpl, normalizedApiOrigin, session.authToken, channel, prepared),
         );
     }
 
@@ -825,7 +835,13 @@ export async function syncStorefrontMedia({
     const results = [];
     const completedRollbacks = [];
     for (const media of prepared) {
-        let asset = await findAsset(fetchImpl, normalizedOrigin, session.authToken, assetChannel, media.tags);
+        let asset = await findAsset(
+            fetchImpl,
+            normalizedApiOrigin,
+            session.authToken,
+            assetChannel,
+            media.tags,
+        );
         const action = asset ? 'reuse' : 'upload';
         const targets = [];
 
@@ -865,11 +881,17 @@ export async function syncStorefrontMedia({
             try {
                 asset =
                     asset ??
-                    (await uploadAsset(fetchImpl, normalizedOrigin, session.authToken, assetChannel, media));
+                    (await uploadAsset(
+                        fetchImpl,
+                        normalizedApiOrigin,
+                        session.authToken,
+                        assetChannel,
+                        media,
+                    ));
                 for (const channel of selectedChannels) {
                     await assignAsset(
                         fetchImpl,
-                        normalizedOrigin,
+                        normalizedApiOrigin,
                         session.authToken,
                         assetChannel,
                         channel,
@@ -885,7 +907,7 @@ export async function syncStorefrontMedia({
                         rollbacks.push(
                             await bindProductAsset(
                                 fetchImpl,
-                                normalizedOrigin,
+                                normalizedApiOrigin,
                                 session.authToken,
                                 state.channel,
                                 variant,
@@ -899,7 +921,7 @@ export async function syncStorefrontMedia({
                         rollbacks.push(
                             await bindContentAsset(
                                 fetchImpl,
-                                normalizedOrigin,
+                                normalizedApiOrigin,
                                 session.authToken,
                                 state.channel,
                                 block,
@@ -912,7 +934,8 @@ export async function syncStorefrontMedia({
                 const verified = await verifyMediaWithRetry(
                     {
                         fetchImpl,
-                        apiOrigin: normalizedOrigin,
+                        apiOrigin: normalizedApiOrigin,
+                        shopOrigin: normalizedShopOrigin,
                         authToken: session.authToken,
                         channels: selectedChannels,
                         media,
@@ -946,7 +969,8 @@ export async function syncStorefrontMedia({
             const verified = await verifyMediaWithRetry(
                 {
                     fetchImpl,
-                    apiOrigin: normalizedOrigin,
+                    apiOrigin: normalizedApiOrigin,
+                    shopOrigin: normalizedShopOrigin,
                     authToken: session.authToken,
                     channels: selectedChannels,
                     media,
@@ -973,7 +997,8 @@ export async function syncStorefrontMedia({
     return {
         applied: apply,
         verified: apply || verify,
-        apiOrigin: normalizedOrigin,
+        apiOrigin: normalizedApiOrigin,
+        shopOrigin: normalizedShopOrigin,
         channelCodes: selectedChannels.map(channel => channel.code),
         results,
     };
@@ -996,6 +1021,7 @@ export function parseCliArguments(args) {
             options.apply = false;
             options.verify = false;
         } else if (argument === '--api-origin') options.apiOrigin = args[++index];
+        else if (argument === '--shop-origin') options.shopOrigin = args[++index];
         else if (argument === '--channel-codes') options.channelCodes = parseChannelCodes(args[++index]);
         else if (argument === '--keys') options.mediaKeys = parseMediaKeys(args[++index]);
         else throw new Error(`Unknown argument: ${String(argument)}`);
@@ -1023,6 +1049,7 @@ if (isMain) {
                 : undefined);
         const result = await syncStorefrontMedia({
             apiOrigin,
+            shopOrigin: options.shopOrigin ?? process.env.VENDURE_STOREFRONT_URL ?? apiOrigin,
             username: process.env.SUPERADMIN_USERNAME,
             password: process.env.SUPERADMIN_PASSWORD,
             channelCodes,
@@ -1037,6 +1064,7 @@ if (isMain) {
                     ok: true,
                     mode: result.applied ? 'apply' : options.verify ? 'verify' : 'dry-run',
                     apiOrigin: result.apiOrigin,
+                    shopOrigin: result.shopOrigin,
                     channelCodes: result.channelCodes,
                     media: result.results.map(item => ({
                         key: item.key,

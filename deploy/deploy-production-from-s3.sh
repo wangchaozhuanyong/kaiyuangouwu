@@ -251,6 +251,7 @@ if [[ -n "${reviewed_storefront_media_keys}" ]]; then
     cd "${candidate}"
     STOREFRONT_MEDIA_CHANNEL_CODES="${reviewed_storefront_media_channel_codes}" \
         VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
+        VENDURE_STOREFRONT_URL=https://moyaoai.com \
         node packages/dev-server/scripts/sync-storefront-media.mjs \
             --keys "${reviewed_storefront_media_keys}" --dry-run
     cd "${repository}"
@@ -263,6 +264,7 @@ if [[ "${reviewed_auth_visuals}" == "true" ]]; then
     cd "${candidate}"
     AUTH_VISUAL_CHANNEL_CODES="${reviewed_storefront_media_channel_codes}" \
         VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
+        VENDURE_STOREFRONT_URL=https://moyaoai.com \
         node packages/dev-server/scripts/sync-auth-visuals.mjs --dry-run
     cd "${repository}"
     printf 'AUTH_VISUAL_PREFLIGHT_OK channels=%s\n' \
@@ -363,10 +365,12 @@ if [[ -n "${reviewed_storefront_media_keys}" ]]; then
     cd "${candidate}"
     STOREFRONT_MEDIA_CHANNEL_CODES="${reviewed_storefront_media_channel_codes}" \
         VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
+        VENDURE_STOREFRONT_URL=https://moyaoai.com \
         node packages/dev-server/scripts/sync-storefront-media.mjs \
             --keys "${reviewed_storefront_media_keys}" --apply --allow-remote
     STOREFRONT_MEDIA_CHANNEL_CODES="${reviewed_storefront_media_channel_codes}" \
         VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
+        VENDURE_STOREFRONT_URL=https://moyaoai.com \
         node packages/dev-server/scripts/sync-storefront-media.mjs \
             --keys "${reviewed_storefront_media_keys}" --verify
     cd "${repository}"
@@ -381,9 +385,11 @@ if [[ "${reviewed_auth_visuals}" == "true" ]]; then
     cd "${candidate}"
     AUTH_VISUAL_CHANNEL_CODES="${reviewed_storefront_media_channel_codes}" \
         VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
+        VENDURE_STOREFRONT_URL=https://moyaoai.com \
         node packages/dev-server/scripts/sync-auth-visuals.mjs --apply --allow-remote
     AUTH_VISUAL_CHANNEL_CODES="${reviewed_storefront_media_channel_codes}" \
         VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
+        VENDURE_STOREFRONT_URL=https://moyaoai.com \
         node packages/dev-server/scripts/sync-auth-visuals.mjs --verify
     cd "${repository}"
     printf 'AUTH_VISUAL_PUBLISH_OK channels=%s\n' \
