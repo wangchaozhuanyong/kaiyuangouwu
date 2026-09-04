@@ -15,6 +15,7 @@ export interface ReferralPosterStyle {
     foreground: string;
     accent: string;
     pattern: ReferralPosterPattern;
+    dark: boolean;
 }
 
 export type ReferralPosterPattern = 'minimal' | 'glacier' | 'flow' | 'deep-sea' | 'orbit';
@@ -22,33 +23,36 @@ export type ReferralPosterPattern = 'minimal' | 'glacier' | 'flow' | 'deep-sea' 
 export const referralPosterStyles: ReferralPosterStyle[] = [
     {
         id: 'BRAND_MINIMAL',
-        nameZh: '云桥简约',
-        nameEn: 'CloudBridge minimal',
-        colors: ['#eef7ff', '#ffffff', '#eaf4ff'],
-        background: 'linear-gradient(145deg,#eef7ff,#ffffff 48%,#eaf4ff)',
-        foreground: '#0e2a63',
-        accent: '#1269e8',
+        nameZh: '云桥蓝焰',
+        nameEn: 'CloudBridge blue flame',
+        colors: ['#020617', '#08245a', '#03132e'],
+        background: 'linear-gradient(145deg,#020617,#08245a 52%,#03132e)',
+        foreground: '#f8fbff',
+        accent: '#22d3ee',
         pattern: 'minimal',
+        dark: true,
     },
     {
         id: 'BENEFIT_RED_GOLD',
         nameZh: '冰川蓝光',
         nameEn: 'Glacier blue',
-        colors: ['#d9f3ff', '#79c9f4', '#effcff'],
-        background: 'linear-gradient(145deg,#d9f3ff,#79c9f4 55%,#effcff)',
-        foreground: '#073b66',
-        accent: '#008ec4',
+        colors: ['#02131f', '#064a66', '#031827'],
+        background: 'linear-gradient(145deg,#02131f,#064a66 55%,#031827)',
+        foreground: '#f2fdff',
+        accent: '#67e8f9',
         pattern: 'glacier',
+        dark: true,
     },
     {
         id: 'PRODUCT_STORY',
         nameZh: '青空流线',
         nameEn: 'Skyline flow',
-        colors: ['#e7fff9', '#b8f1e5', '#dff4ff'],
-        background: 'linear-gradient(155deg,#e7fff9,#b8f1e5 48%,#dff4ff)',
-        foreground: '#0b4f5c',
-        accent: '#0797a5',
+        colors: ['#011813', '#075548', '#041c27'],
+        background: 'linear-gradient(155deg,#011813,#075548 48%,#041c27)',
+        foreground: '#f3fffb',
+        accent: '#34d399',
         pattern: 'flow',
+        dark: true,
     },
     {
         id: 'PREMIUM_DARK',
@@ -57,24 +61,27 @@ export const referralPosterStyles: ReferralPosterStyle[] = [
         colors: ['#020b1d', '#0b2857', '#07152f'],
         background: 'linear-gradient(145deg,#020b1d,#0b2857 55%,#07152f)',
         foreground: '#f3f8ff',
-        accent: '#59d5ff',
+        accent: '#38bdf8',
         pattern: 'deep-sea',
+        dark: true,
     },
     {
         id: 'CLOUD_BRIDGE_ORBIT',
         nameZh: '云桥轨道',
         nameEn: 'CloudBridge orbit',
-        colors: ['#f1efff', '#d9e6ff', '#efe3ff'],
-        background: 'linear-gradient(145deg,#f1efff,#d9e6ff 48%,#efe3ff)',
-        foreground: '#31265f',
-        accent: '#6657dc',
+        colors: ['#09051c', '#281456', '#07142f'],
+        background: 'linear-gradient(145deg,#09051c,#281456 48%,#07142f)',
+        foreground: '#fbf8ff',
+        accent: '#a78bfa',
         pattern: 'orbit',
+        dark: true,
     },
 ];
 
 interface PosterView extends ReferralPosterTemplate {
     legacyColors?: [string, string, string];
     legacyPattern?: ReferralPosterPattern;
+    legacyDark?: boolean;
 }
 
 export function ReferralPosterModal({
@@ -323,10 +330,10 @@ export function ReferralPosterModal({
                     )}{' '}
                     {isZh ? '我的邀请码' : 'My invitation code'} {inviteCode}
                 </p>
-                <div className="relative mx-auto aspect-[9/16] max-h-[54dvh] w-auto max-w-full shrink-0 overflow-hidden rounded-[20px] bg-slate-100 shadow-inner">
+                <div className="referral-poster-preview relative mx-auto shrink-0 overflow-hidden rounded-[20px] bg-slate-100 shadow-inner">
                     {posterDataUrl ? (
                         <img
-                            className={`size-full object-cover transition-opacity duration-150 ${generating ? 'opacity-70' : 'opacity-100'}`}
+                            className={`size-full object-contain transition-opacity duration-150 ${generating ? 'opacity-70' : 'opacity-100'}`}
                             src={posterDataUrl}
                             alt={isZh ? `${style.name}邀请海报预览` : `${style.name} referral poster preview`}
                         />
@@ -457,6 +464,7 @@ function legacyPosterTemplate(style: ReferralPosterStyle, isZh: boolean): Poster
         overlayOpacity: style.id === 'BRAND_MINIMAL' || style.id === 'PRODUCT_STORY' ? 0 : 20,
         legacyColors: style.colors,
         legacyPattern: style.pattern,
+        legacyDark: style.dark,
     };
 }
 
@@ -501,8 +509,8 @@ async function renderReferralPoster({
         }
     }
 
-    const isDarkSkin = palette.pattern === 'deep-sea';
-    const foreground = posterForegroundColor(template.foregroundColor, palette.pattern);
+    const isDarkSkin = template.legacyDark === true || palette.pattern === 'deep-sea';
+    const foreground = posterForegroundColor(template.foregroundColor, palette.pattern, isDarkSkin);
     const accent = palette.accent;
     const cardSurface = isDarkSkin ? 'rgba(8,28,62,0.88)' : 'rgba(255,255,255,0.9)';
     const cardBorder = isDarkSkin ? 'rgba(89,213,255,0.42)' : 'rgba(126,180,247,0.45)';
@@ -1053,8 +1061,12 @@ function readableForeground(value: string): string {
     return red + green + blue > 630 ? '#0E2A63' : value;
 }
 
-export function posterForegroundColor(value: string, pattern: ReferralPosterPattern): string {
-    return pattern === 'deep-sea' ? validHexColor(value, '#f3f8ff') : readableForeground(value);
+export function posterForegroundColor(
+    value: string,
+    pattern: ReferralPosterPattern,
+    darkSkin = pattern === 'deep-sea',
+): string {
+    return darkSkin ? validHexColor(value, '#f3f8ff') : readableForeground(value);
 }
 
 function validHexColor(value: string, fallback: string): string {

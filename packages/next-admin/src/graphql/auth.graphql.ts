@@ -65,16 +65,6 @@ export const ACTIVE_ADMINISTRATOR_PROFILE_QUERY = gql`
 
 export const APP_SHELL_BOOTSTRAP_QUERY = gql`
     query NextAdminAppShellBootstrap($options: ChannelListOptions) {
-        myStoreCommerceMode {
-            mode
-        }
-        myStoreProfile {
-            id
-            logoAsset {
-                id
-                preview
-            }
-        }
         me {
             id
             identifier
@@ -129,6 +119,23 @@ export const APP_SHELL_BOOTSTRAP_QUERY = gql`
                 defaultLanguageCode
             }
             totalItems
+        }
+    }
+`;
+
+// Store presentation data must not prevent permission/bootstrap data from loading when a legacy
+// Channel is temporarily missing one of its managed records.
+export const APP_SHELL_STORE_CONTEXT_QUERY = gql`
+    query NextAdminAppShellStoreContext {
+        myStoreCommerceMode {
+            mode
+        }
+        myStoreProfile {
+            id
+            logoAsset {
+                id
+                preview
+            }
         }
     }
 `;
@@ -214,11 +221,14 @@ export interface CurrentAdministratorUser {
 export type AppShellBootstrapData = ActiveAdministratorProfileData &
     ChannelSwitcherData & {
         me: CurrentAdministratorUser | null;
-        myStoreCommerceMode: {
-            mode: 'DIGITAL_ONLY' | 'PHYSICAL_ONLY' | 'HYBRID';
-        };
-        myStoreProfile: {
-            id: string;
-            logoAsset: { id: string; preview: string } | null;
-        };
     };
+
+export interface AppShellStoreContextData {
+    myStoreCommerceMode?: {
+        mode: 'DIGITAL_ONLY' | 'PHYSICAL_ONLY' | 'HYBRID';
+    } | null;
+    myStoreProfile?: {
+        id: string;
+        logoAsset: { id: string; preview: string } | null;
+    } | null;
+}

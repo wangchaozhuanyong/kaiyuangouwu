@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 
-import { Channel } from '@vendure/core';
+import { Channel, EntityNotFoundError } from '@vendure/core';
 import { describe, expect, it, vi } from 'vitest';
 
 import { StoreProfile } from './entities/store-profile.entity';
@@ -72,6 +72,7 @@ function createService(
     };
     const channelService = {
         getDefaultChannel: vi.fn().mockResolvedValue({ id: 'default', sellerId: 'platform-seller' }),
+        findOne: vi.fn((_ctx, id) => Promise.resolve(channel(String(id)))),
         update: vi.fn((_ctx, input) => Promise.resolve({ ...channel(), ...input })),
     };
     const activationReadinessService = { get: vi.fn().mockResolvedValue(readiness) };
@@ -82,9 +83,7 @@ function createService(
                     path: field.path,
                     sourceText: field.sourceText,
                     translatedText:
-                        field.targetText?.trim() ||
-                        field.existingTargetText ||
-                        `translated-${field.path}`,
+                        field.targetText?.trim() || field.existingTargetText || `translated-${field.path}`,
                     status: 'AUTO_TRANSLATED',
                     origin: 'AUTO',
                     locked: false,
@@ -125,6 +124,54 @@ describe('StoreProfileService', () => {
         });
         expect(save).toHaveBeenCalledOnce();
         expect(repository.find).toHaveBeenCalledWith({ order: { sortOrder: 'DESC' }, take: 1 });
+    });
+
+    it('self-heals a missing profile for a legacy merchant Channel', async () => {
+        const created = profile({ channelId: 'legacy-store', channel: channel('legacy-store') });
+        const profileRepository = {
+            findOne: vi.fn().mockResolvedValueOnce(null).mockResolvedValueOnce(null),
+            find: vi.fn().mockResolvedValue([]),
+            save: vi.fn().mockResolvedValue(created),
+        };
+        const domainRepository = { find: vi.fn().mockResolvedValue([]) };
+        const { channelService, service } = createService(profileRepository, domainRepository);
+
+        const result = await service.findForMerchant({ channelId: 'legacy-store' } as any);
+
+        expect(channelService.findOne).toHaveBeenCalledWith(expect.anything(), 'legacy-store');
+        expect(profileRepository.save).toHaveBeenCalledOnce();
+        expect(result).toMatchObject({ channelId: 'legacy-store', status: 'DRAFT', isPublished: false });
+    });
+
+    it('reuses a concurrently-created profile when legacy repair races', async () => {
+        const winner = profile({ channelId: 'legacy-store', channel: channel('legacy-store') });
+        const profileRepository = {
+            findOne: vi.fn().mockResolvedValueOnce(null).mockResolvedValueOnce(winner),
+            find: vi.fn().mockResolvedValue([]),
+            save: vi.fn().mockRejectedValue(new Error('duplicate Channel profile')),
+        };
+        const domainRepository = { find: vi.fn().mockResolvedValue([]) };
+        const { service } = createService(profileRepository, domainRepository);
+
+        await expect(service.createDraft({} as any, channel('legacy-store') as any)).resolves.toBe(winner);
+    });
+
+    it('does not create merchant profiles for provisioning template Channels', async () => {
+        const profileRepository = {
+            findOne: vi.fn().mockResolvedValue(null),
+            find: vi.fn().mockResolvedValue([]),
+            save: vi.fn(),
+        };
+        const { channelService, service } = createService(profileRepository, {});
+        channelService.findOne.mockResolvedValue({
+            ...channel('template'),
+            customFields: { isStoreProvisioningTemplate: true },
+        } as any);
+
+        await expect(service.findForMerchant({ channelId: 'template' } as any)).rejects.toBeInstanceOf(
+            EntityNotFoundError,
+        );
+        expect(profileRepository.save).not.toHaveBeenCalled();
     });
 
     it('keeps legacy directory publication disabled when a store is updated', async () => {

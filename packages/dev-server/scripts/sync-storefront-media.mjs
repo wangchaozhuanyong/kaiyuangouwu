@@ -40,6 +40,17 @@ export const storefrontMediaManifest = [
             type: 'CATEGORY_AD',
         },
     },
+    {
+        key: 'referral-poster-neon-layout-reference',
+        file: path.join(storefrontAssets, 'referral/cloudbridge-neon-service-poster-reference.png'),
+        names: {
+            en: 'CloudBridge neon referral poster layout reference',
+            zh: '云桥 AI 霓虹邀请海报排版参考',
+        },
+        assetOnly: {
+            purpose: 'referral-poster-layout-reference',
+        },
+    },
 ];
 
 const LOGIN_MUTATION = `
@@ -170,6 +181,12 @@ export function parseChannelCodes(value) {
     );
 }
 
+export function parseMediaKeys(value) {
+    const keys = parseChannelCodes(value);
+    assert.ok(keys.length > 0, '--keys requires at least one media key');
+    return keys;
+}
+
 export function createUploadMap(variablePath) {
     return { 0: [variablePath] };
 }
@@ -207,7 +224,17 @@ export async function prepareStorefrontMediaManifest(manifest = storefrontMediaM
     for (const entry of manifest) {
         assert.match(entry.key, /^[a-z0-9][a-z0-9-]+$/, `Invalid media key: ${String(entry.key)}`);
         assert.ok(!keys.has(entry.key), `Duplicate media key: ${entry.key}`);
-        assert.ok(entry.productSkus?.length || entry.content, `Media ${entry.key} has no publish target`);
+        assert.ok(
+            entry.productSkus?.length || entry.content || entry.assetOnly,
+            `Media ${entry.key} has no publish target`,
+        );
+        if (entry.assetOnly) {
+            assert.match(
+                entry.assetOnly.purpose,
+                /^[a-z0-9][a-z0-9-]+$/,
+                `Media ${entry.key} requires a stable asset-library purpose`,
+            );
+        }
         assert.ok(entry.names?.en && entry.names?.zh, `Media ${entry.key} requires bilingual names`);
         keys.add(entry.key);
 
@@ -424,6 +451,7 @@ export async function syncStorefrontMedia({
     production = process.env.NODE_ENV === 'production',
     fetchImpl = fetch,
     manifest = storefrontMediaManifest,
+    mediaKeys,
 }) {
     assert.ok(apiOrigin, 'VENDURE_API_ORIGIN or --api-origin is required');
     assert.ok(username && password, 'SUPERADMIN_USERNAME and SUPERADMIN_PASSWORD are required');
@@ -432,8 +460,15 @@ export async function syncStorefrontMedia({
         assert.ok(allowRemote, 'Remote or production writes require both --apply and --allow-remote');
     }
 
+    const selectedManifest = mediaKeys
+        ? mediaKeys.map(key => {
+              const entry = manifest.find(item => item.key === key);
+              assert.ok(entry, `Unknown storefront media key: ${key}`);
+              return entry;
+          })
+        : manifest;
     const normalizedOrigin = apiOrigin.replace(/\/$/, '');
-    const prepared = await prepareStorefrontMediaManifest(manifest);
+    const prepared = await prepareStorefrontMediaManifest(selectedManifest);
     const session = await login(fetchImpl, normalizedOrigin, username, password);
     const channelsByCode = new Map(session.channels.map(channel => [channel.code, channel]));
     const selectedChannels = channelCodes.map(code => {
@@ -474,6 +509,13 @@ export async function syncStorefrontMedia({
                     kind: 'content',
                     code: block.code,
                     blockId: block.id,
+                });
+            }
+            if (media.assetOnly) {
+                targets.push({
+                    channelCode: state.channel.code,
+                    kind: 'asset-library',
+                    purpose: media.assetOnly.purpose,
                 });
             }
         }
@@ -556,6 +598,7 @@ export function parseCliArguments(args) {
         else if (argument === '--dry-run') options.apply = false;
         else if (argument === '--api-origin') options.apiOrigin = args[++index];
         else if (argument === '--channel-codes') options.channelCodes = parseChannelCodes(args[++index]);
+        else if (argument === '--keys') options.mediaKeys = parseMediaKeys(args[++index]);
         else throw new Error(`Unknown argument: ${String(argument)}`);
     }
     return options;
@@ -582,6 +625,7 @@ if (isMain) {
             username: process.env.SUPERADMIN_USERNAME,
             password: process.env.SUPERADMIN_PASSWORD,
             channelCodes,
+            mediaKeys: options.mediaKeys,
             apply: options.apply,
             allowRemote: options.allowRemote,
         });
