@@ -325,9 +325,10 @@ VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
 
 当版本只包含已审核的店铺媒体变更时，在目标 `main` 完整 SHA 的
 `Production Runtime Artifact` 工作流成功后，使用 `Deploy Reviewed Storefront Media`
-工作流。输入完整 SHA、制品工作流 run ID 以及逗号分隔的已审核 manifest key。
+工作流。输入完整 SHA、制品工作流 run ID、逗号分隔的已审核 manifest key，以及
+逗号分隔的已审核 Channel code。Channel 范围必须显式填写，发布脚本不会回退到服务器默认值。
 工作流会确认 `origin/main` 仍精确等于目标 SHA，下载并验证该次不可变制品，
-且只将验证后的 key 交给持有生产锁的发布脚本。脚本会拒绝夹带登录视觉或库存修复变更，
+且只将验证后的 key 与 Channel 范围交给持有生产锁的发布脚本。脚本会拒绝夹带登录视觉或库存修复变更，
 候选 API 健康后依次执行所选媒体的 dry-run 和受保护 apply；发布失败时不提升 Storefront 指针。
 
 切换脚本会在 systemd journal 中以 `vendure-production-switch` 标记依次记录 `requested`、`succeeded` 或 `failed`。每条事件包含部署 ID、目标 SHA、候选目录、调用用户、SSH 来源 IP、进程和父进程信息，不记录命令参数、环境变量或密钥。`requested` 写入失败会中止切换，避免无审计地改动 PM2。发布后用同一部署 ID 核对完整事件链：

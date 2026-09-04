@@ -247,8 +247,20 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.match(script, /managed storefront data changed/u);
     assert.match(script, /VENDURE_REVIEWED_STOREFRONT_MEDIA_KEYS/u);
     assert.match(script, /reviewed storefront media keys are invalid/u);
+    assert.match(script, /VENDURE_REVIEWED_STOREFRONT_MEDIA_CHANNEL_CODES/u);
+    assert.match(script, /reviewed storefront media Channel codes are required/u);
+    assert.match(script, /reviewed storefront media Channel codes are invalid/u);
     assert.match(script, /unsupported managed data change/u);
+    assert.equal(
+        (
+            script.match(
+                /STOREFRONT_MEDIA_CHANNEL_CODES="\$\{reviewed_storefront_media_channel_codes\}"/gu,
+            ) ?? []
+        ).length,
+        2,
+    );
     assert.match(script, /sync-storefront-media\.mjs[\s\S]*--keys/u);
+    assert.doesNotMatch(script, /sync-storefront-media\.mjs[\s\S]{0,200}--channel-codes/u);
     assert.match(script, /--apply --allow-remote/u);
     assert.ok(script.indexOf('--dry-run') < script.indexOf('--apply --allow-remote'));
     assert.match(script, /readonly memory_guard=.*production-memory-guard\.cjs/u);
@@ -280,11 +292,13 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.match(reviewedMediaWorkflow, /target_sha:/u);
     assert.match(reviewedMediaWorkflow, /source_run_id:/u);
     assert.match(reviewedMediaWorkflow, /media_keys:/u);
+    assert.match(reviewedMediaWorkflow, /channel_codes:/u);
     assert.match(reviewedMediaWorkflow, /id-token: write/u);
     assert.match(reviewedMediaWorkflow, /actions\/download-artifact@[0-9a-f]{40}/u);
     assert.match(reviewedMediaWorkflow, /aws-actions\/configure-aws-credentials@[0-9a-f]{40}/u);
     assert.match(reviewedMediaWorkflow, /git merge --ff-only/u);
     assert.match(reviewedMediaWorkflow, /VENDURE_REVIEWED_STOREFRONT_MEDIA_KEYS/u);
+    assert.match(reviewedMediaWorkflow, /VENDURE_REVIEWED_STOREFRONT_MEDIA_CHANNEL_CODES/u);
     assert.match(reviewedMediaWorkflow, /AWS-RunShellScript/u);
     assert.doesNotMatch(reviewedMediaWorkflow, /AWS_ACCESS_KEY_ID/u);
     assert.doesNotMatch(reviewedMediaWorkflow, /AWS_SECRET_ACCESS_KEY/u);
