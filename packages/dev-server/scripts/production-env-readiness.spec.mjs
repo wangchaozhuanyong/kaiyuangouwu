@@ -231,12 +231,29 @@ void test('accepts complete Cloudflare for SaaS automation without exposing its 
             CLOUDFLARE_SAAS_AUTO_MANAGE_DNS: 'true',
         }),
         'server',
-        confirmedControls,
+        { ...confirmedControls, cloudflareOriginTls: true },
     );
 
     assert.equal(report.ready, true);
     assert.equal(report.checks.find(check => check.id === 'domain-automation')?.status, 'pass');
     assert.equal(JSON.stringify(report).includes(token), false);
+});
+
+void test('requires reviewed origin TLS and SNI evidence for Cloudflare for SaaS', () => {
+    const report = evaluateProductionEnvironment(
+        readyEnvironment({
+            STORE_DOMAIN_AUTOMATION_MODE: 'cloudflare-saas',
+            CLOUDFLARE_SAAS_API_TOKEN: 'cloudflare-token-that-is-long-enough',
+            CLOUDFLARE_SAAS_ZONE_ID: '0123456789abcdef0123456789abcdef',
+            CLOUDFLARE_SAAS_FALLBACK_ORIGIN: 'origin.shop.test',
+            CLOUDFLARE_SAAS_AUTO_MANAGE_DNS: 'false',
+        }),
+        'server',
+        confirmedControls,
+    );
+
+    assert.equal(report.ready, false);
+    assert.equal(report.checks.find(check => check.id === 'domain-automation-origin-tls')?.status, 'manual');
 });
 
 void test('blocks incomplete Cloudflare for SaaS automation', () => {

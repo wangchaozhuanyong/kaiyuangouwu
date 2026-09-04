@@ -31,6 +31,7 @@
 - 对美宜佳商品源做字段级确认：SKU、名称、价格、库存、上下架、图片、删除策略和冲突优先级。现有外部美宜佳/Pospal 自动化不是 Vendure 数据源，未完成映射与一次 dry-run 对账前不得开启写入。
 - 备份 MySQL，并保存 StoreDomain、StoreProfile、Channel、商品/价格/库存数量及当前主域快照。
 - 证书 `/etc/letsencrypt/live/moyaoai.com/` 必须实际覆盖 `moyaoai.com`、`www.moyaoai.com`、`console.moyaoai.com`、`damatong.net`、`www.damatong.net`、`console.damatong.net`；证书未覆盖时禁止加载新 Nginx 配置。
+- 上述六域名证书只覆盖本次固定切换，不会自动覆盖以后新增的客户域名。启用 Cloudflare 一键绑定前，必须用真实自定义域名验证当前套餐的回源 SNI 覆盖或其他可支持的源站证书方案。
 - Cloudflare 先创建 `stores.moyaoai.com` 源站目标；两个根域和 `www`/`console` 记录保持代理开启，并按 Store Domain 提供的 TXT 值完成所有权验证。实时 DNS 与源站 IP必须在切换当日重查。
 
 ## 无串店切换顺序

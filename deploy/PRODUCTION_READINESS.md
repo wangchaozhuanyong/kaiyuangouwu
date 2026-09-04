@@ -156,52 +156,53 @@ READINESS_OPERATIONS_JSON='{"persistentAssetStorage":true,"databaseBackups":true
 
 ### Vendure Server 与 Worker
 
-| 变量                                    | 生产要求                                  |
-| --------------------------------------- | ----------------------------------------- |
-| `NODE_ENV`                              | `production`                              |
-| `PRODUCTION_DEPLOYMENT_PROFILE`         | `managed-services` 或 `single-host`       |
-| `PRODUCTION_OBSERVABILITY_MODE`         | 单机系统监控使用 `system`                 |
-| `VENDURE_HOSTNAME`                      | 只监听预期网络接口                        |
-| `PORT`                                  | 与反向代理 upstream 一致                  |
-| `VENDURE_TRUST_PROXY`                   | 仅在可信代理前设置正确跳数或地址          |
-| `VENDURE_SERVE_GRAPHIQL`                | `false`                                   |
-| `VENDURE_MAX_QUERY_COMPLEXITY`          | 默认 `1000`，根据真实查询测量后调整       |
-| `VENDURE_SERVE_STATIC_DASHBOARD`        | 按部署拓扑设置                            |
-| `VENDURE_DASHBOARD_URL`                 | 正式管理后台 HTTPS 地址                   |
-| `VENDURE_STOREFRONT_URL`                | 没有有效主域名时的安全兜底地址            |
-| `VENDURE_CORS_ORIGINS`                  | 逗号分隔的正式来源白名单                  |
-| `SUPERADMIN_USERNAME`                   | 非默认管理员账号                          |
-| `SUPERADMIN_PASSWORD`                   | 强随机密码，由 Secret 管理                |
-| `COOKIE_SECRET`                         | 长随机密钥，由 Secret 管理                |
-| `DB`                                    | `mysql`、`mariadb` 或 `postgres`          |
-| `DB_HOST`、`DB_PORT`                    | 生产数据库地址与端口                      |
-| `DB_USERNAME`、`DB_PASSWORD`、`DB_NAME` | 最小权限数据库账号和库名                  |
-| `DB_SCHEMA`                             | PostgreSQL 使用的 Schema，未使用时可省略  |
-| `DB_SYNCHRONIZE`                        | `false`                                   |
-| `RUN_MIGRATIONS`                        | 只在受控迁移进程中为 `true`               |
-| `VENDURE_REQUIRE_OFFSITE_BACKUP`        | 单机生产必须为 `true`                     |
-| `VENDURE_BACKUP_S3_URI`                 | 单机生产必须为可写的 `s3://` 路径         |
-| `RUN_JOB_QUEUE`                         | 独立 Worker 模式下 Server 设为 `0`        |
-| `VENDURE_ASSET_UPLOAD_DIR`              | Server 与 Worker 可访问的绝对持久目录     |
-| `VENDURE_IMPORT_ASSETS_DIR`             | 受控且持久的绝对导入目录                  |
-| `VENDURE_EMAIL_FROM`                    | 已验证发件域名下的发件人和地址            |
-| `SMTP_HOST`、`SMTP_PORT`                | SMTP 服务地址与端口                       |
-| `SMTP_SECURE`                           | 服务商要求的 TLS 模式                     |
-| `SMTP_USER`、`SMTP_PASSWORD`            | 需要 SMTP 认证时必须同时配置              |
-| `IS_INSTRUMENTED`                       | 启用监控时设置为 `true`                   |
-| `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`    | 生产 Trace 接收端点                       |
-| `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT`      | 生产日志接收端点                          |
-| `OTEL_SERVICE_NAME`                     | 区分 API Server 与 Worker 的服务名        |
-| `STORE_DOMAIN_CNAME_TARGET`             | 商家域名实际指向的公共 DNS 目标           |
-| `STORE_DOMAIN_ROUTING_MODE`             | `require-domain`                          |
-| `STORE_DOMAIN_TRUST_PROXY`              | 仅在入口层覆盖转发 Host 时启用            |
-| `STORE_DOMAIN_BYPASS_HOSTS`             | 生产默认留空                              |
-| `STORE_DOMAIN_AUTOMATION_MODE`          | `manual` 或 `cloudflare-saas`             |
-| `CLOUDFLARE_SAAS_API_TOKEN`             | Cloudflare 限权 API Token，仅 Secret 管理 |
-| `CLOUDFLARE_SAAS_ZONE_ID`               | Cloudflare for SaaS 平台 Zone ID          |
-| `CLOUDFLARE_SAAS_FALLBACK_ORIGIN`       | 已代理且可访问的回源主机名                |
-| `CLOUDFLARE_SAAS_AUTO_MANAGE_DNS`       | 仅 Token 可管理客户 Zone 时设为 `true`    |
-| `VENDURE_BOOTSTRAP_BASE_SCHEMA`         | 正常启动必须为 `false`                    |
+| 变量                                            | 生产要求                                          |
+| ----------------------------------------------- | ------------------------------------------------- |
+| `NODE_ENV`                                      | `production`                                      |
+| `PRODUCTION_DEPLOYMENT_PROFILE`                 | `managed-services` 或 `single-host`               |
+| `PRODUCTION_OBSERVABILITY_MODE`                 | 单机系统监控使用 `system`                         |
+| `VENDURE_HOSTNAME`                              | 只监听预期网络接口                                |
+| `PORT`                                          | 与反向代理 upstream 一致                          |
+| `VENDURE_TRUST_PROXY`                           | 仅在可信代理前设置正确跳数或地址                  |
+| `VENDURE_SERVE_GRAPHIQL`                        | `false`                                           |
+| `VENDURE_MAX_QUERY_COMPLEXITY`                  | 默认 `1000`，根据真实查询测量后调整               |
+| `VENDURE_SERVE_STATIC_DASHBOARD`                | 按部署拓扑设置                                    |
+| `VENDURE_DASHBOARD_URL`                         | 正式管理后台 HTTPS 地址                           |
+| `VENDURE_STOREFRONT_URL`                        | 没有有效主域名时的安全兜底地址                    |
+| `VENDURE_CORS_ORIGINS`                          | 逗号分隔的正式来源白名单                          |
+| `SUPERADMIN_USERNAME`                           | 非默认管理员账号                                  |
+| `SUPERADMIN_PASSWORD`                           | 强随机密码，由 Secret 管理                        |
+| `COOKIE_SECRET`                                 | 长随机密钥，由 Secret 管理                        |
+| `DB`                                            | `mysql`、`mariadb` 或 `postgres`                  |
+| `DB_HOST`、`DB_PORT`                            | 生产数据库地址与端口                              |
+| `DB_USERNAME`、`DB_PASSWORD`、`DB_NAME`         | 最小权限数据库账号和库名                          |
+| `DB_SCHEMA`                                     | PostgreSQL 使用的 Schema，未使用时可省略          |
+| `DB_SYNCHRONIZE`                                | `false`                                           |
+| `RUN_MIGRATIONS`                                | 只在受控迁移进程中为 `true`                       |
+| `VENDURE_REQUIRE_OFFSITE_BACKUP`                | 单机生产必须为 `true`                             |
+| `VENDURE_BACKUP_S3_URI`                         | 单机生产必须为可写的 `s3://` 路径                 |
+| `RUN_JOB_QUEUE`                                 | 独立 Worker 模式下 Server 设为 `0`                |
+| `VENDURE_ASSET_UPLOAD_DIR`                      | Server 与 Worker 可访问的绝对持久目录             |
+| `VENDURE_IMPORT_ASSETS_DIR`                     | 受控且持久的绝对导入目录                          |
+| `VENDURE_EMAIL_FROM`                            | 已验证发件域名下的发件人和地址                    |
+| `SMTP_HOST`、`SMTP_PORT`                        | SMTP 服务地址与端口                               |
+| `SMTP_SECURE`                                   | 服务商要求的 TLS 模式                             |
+| `SMTP_USER`、`SMTP_PASSWORD`                    | 需要 SMTP 认证时必须同时配置                      |
+| `IS_INSTRUMENTED`                               | 启用监控时设置为 `true`                           |
+| `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`            | 生产 Trace 接收端点                               |
+| `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT`              | 生产日志接收端点                                  |
+| `OTEL_SERVICE_NAME`                             | 区分 API Server 与 Worker 的服务名                |
+| `STORE_DOMAIN_CNAME_TARGET`                     | 商家域名实际指向的公共 DNS 目标                   |
+| `STORE_DOMAIN_ROUTING_MODE`                     | `require-domain`                                  |
+| `STORE_DOMAIN_TRUST_PROXY`                      | 仅在入口层覆盖转发 Host 时启用                    |
+| `STORE_DOMAIN_BYPASS_HOSTS`                     | 生产默认留空                                      |
+| `STORE_DOMAIN_AUTOMATION_MODE`                  | `manual` 或 `cloudflare-saas`                     |
+| `CLOUDFLARE_SAAS_API_TOKEN`                     | Cloudflare 限权 API Token，仅 Secret 管理         |
+| `CLOUDFLARE_SAAS_ZONE_ID`                       | Cloudflare for SaaS 平台 Zone ID                  |
+| `CLOUDFLARE_SAAS_FALLBACK_ORIGIN`               | 已代理且可访问的回源主机名                        |
+| `CLOUDFLARE_SAAS_AUTO_MANAGE_DNS`               | 仅 Token 可管理客户 Zone 时设为 `true`            |
+| `READINESS_OPERATIONS_JSON.cloudflareOriginTls` | 真实自定义域名已通过 Cloudflare 回源 TLS/SNI 验证 |
+| `VENDURE_BOOTSTRAP_BASE_SCHEMA`                 | 正常启动必须为 `false`                            |
 
 开发环境继续通过 `VENDURE_EMAIL_OUTPUT_DIR` 落盘预览邮件；生产环境自动切换到 SMTP，并在缺少必要参数时拒绝启动。
 
@@ -271,7 +272,7 @@ node packages/dev-server/dist/index.js
 - `moyaoai.com` 为 AwanMesh 主网店，`damatong.net` 为美宜佳网店；
 - 两个 `www` 域名分别 301 到对应根域；
 - `console.moyaoai.com` 为统一管理后台，`console.damatong.net` 301 到新后台；
-- Cloudflare for SaaS 通过 fallback-origin SNI 接入已验证的店铺域名；
+- Cloudflare for SaaS 保留店铺 `Host`；启用自动化前必须现场验证 Cloudflare 默认客户域名 SNI 或已配置的 SNI 覆盖能通过源站证书；
 - Vendure upstream `127.0.0.1:3002`；
 - `/shop-api`、`/health`、`/assets` 反向代理；
 - 公共域名禁止 `/admin-api`。

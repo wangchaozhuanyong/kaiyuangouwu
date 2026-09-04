@@ -417,7 +417,7 @@ export class StoreProfileService {
     }
 
     private async findAsset(ctx: RequestContext, id: ID): Promise<Asset> {
-        const asset = await this.connection.getRepository(ctx, Asset).findOne({ where: { id } });
+        const asset = await this.connection.findOneInChannel(ctx, Asset, id, ctx.channelId);
         if (!asset) {
             throw new EntityNotFoundError(Asset.name, id);
         }

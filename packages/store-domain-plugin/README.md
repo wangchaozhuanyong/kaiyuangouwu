@@ -58,9 +58,14 @@ The token must be narrowly scoped to custom-hostname read/write on the SaaS zone
 also requires zone read and DNS edit for only the customer zones the platform is allowed to manage.
 Never put the token in source control, GraphQL responses, logs, or command-line arguments.
 
-The production ingress uses the SaaS fallback-origin SNI and preserves the merchant `Host`. Its HTTPS
-default storefront therefore serves the shared client, while strict Shop API host routing continues
-to reject unregistered and pending domains.
+Cloudflare sends the custom hostname as both the HTTP `Host` and the default origin SNI, even when a
+fallback origin selects the destination. Before enabling automation, the production account must use
+a reviewed origin-SNI strategy supported by its Cloudflare plan (for example, an Origin Rule SNI
+override) or an origin certificate which covers the custom hostname. Verify one real custom hostname
+end to end, including Cloudflare-to-origin TLS, then record `cloudflareOriginTls: true` in
+`READINESS_OPERATIONS_JSON`. The production readiness audit remains blocked when this evidence is
+missing. The ingress still preserves the merchant `Host`, and strict Shop API host routing rejects
+unregistered and pending domains.
 
 In production, do not send the public Channel token from the storefront. The storefront defaults to
 that behavior; `VITE_CLIENT_CHANNEL_SWITCHING=true` is intended only for explicit compatibility

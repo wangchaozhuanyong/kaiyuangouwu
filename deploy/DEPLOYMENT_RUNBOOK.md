@@ -90,9 +90,11 @@ Nginx 会按 Cloudflare 官方 IPv4/IPv6 网段恢复 `CF-Connecting-IP`，按�
 后台一键绑定使用 Cloudflare for SaaS。上线前需要在 Cloudflare 完成一次性平台配置：
 
 1. 在平台 Zone 启用 Cloudflare for SaaS，将已代理的生产主机设为 fallback origin。
-2. 使用只允许读写该 Zone 自定义主机名的 Token；只在公司同一账户的客户 Zone 上额外授予 Zone 读取和 DNS 编辑。
-3. 把 Token 存入生产 Secret，配置 `STORE_DOMAIN_AUTOMATION_MODE=cloudflare-saas`、`CLOUDFLARE_SAAS_ZONE_ID`、`CLOUDFLARE_SAAS_FALLBACK_ORIGIN` 和明确的 `CLOUDFLARE_SAAS_AUTO_MANAGE_DNS`。
-4. 先运行 server、worker 和 migration 三种角色的 `audit:production-env`；任何占位 Token、错误 Zone ID 或非公网 fallback origin 都是发布阻断。
+2. Cloudflare 默认使用客户自定义域名作为回源 `Host` 和 SNI；为当前套餐配置可用的回源 SNI 方案（例如 Origin Rule 的 SNI 覆盖），或确保源站证书覆盖客户域名。
+3. 使用只允许读写该 Zone 自定义主机名的 Token；只在公司同一账户的客户 Zone 上额外授予 Zone 读取和 DNS 编辑。
+4. 把 Token 存入生产 Secret，配置 `STORE_DOMAIN_AUTOMATION_MODE=cloudflare-saas`、`CLOUDFLARE_SAAS_ZONE_ID`、`CLOUDFLARE_SAAS_FALLBACK_ORIGIN` 和明确的 `CLOUDFLARE_SAAS_AUTO_MANAGE_DNS`。
+5. 用一个真实测试域名验证边缘证书、Cloudflare 回源 TLS/SNI、前台和 Shop API；证据通过后才在 `READINESS_OPERATIONS_JSON` 中设置 `"cloudflareOriginTls":true`。
+6. 先运行 server、worker 和 migration 三种角色的 `audit:production-env`；任何占位 Token、错误 Zone ID、非公网 fallback origin 或缺少回源 TLS/SNI 证据都是发布阻断。
 
 后台新增域名后，API 会幂等创建 Cloudflare 自定义主机名。如 Token 可访问该域名的权威 Zone，同时创建代理 CNAME 和 Vendure TXT；遇到现有 A、AAAA 或不同 CNAME 时必须停止，禁止覆盖。外部账户域名仍在后台显示需要商家添加的两条 DNS 记录。Worker 每分钟只复核待生效项，仅在 Vendure TXT、Cloudflare hostname 和 SSL 三项均通过后将域名标记为 `ACTIVE`。
 
