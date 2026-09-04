@@ -480,6 +480,7 @@ export function ProductDetailPage() {
             <ProductSection
                 title={isZh ? '相似商品' : 'Similar products'}
                 subtitle={isZh ? '继续看看同店好物' : 'More from this store'}
+                subtitlePlacement="end"
                 products={similarProducts}
                 market={market}
                 locale={locale}
