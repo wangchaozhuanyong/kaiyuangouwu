@@ -35,6 +35,20 @@ fi
 if [[ "${artifact_s3_prefix}" != "${expected_s3_prefix}" ]]; then
     fail 'artifact S3 prefix is outside the approved production deployment prefix'
 fi
+if [[ -n "${reviewed_storefront_media_keys}" && \
+    ! "${reviewed_storefront_media_keys}" =~ ^[a-z0-9][a-z0-9-]*(,[a-z0-9][a-z0-9-]*)*$ ]]; then
+    fail 'reviewed storefront media keys are invalid'
+fi
+if [[ -n "${reviewed_storefront_media_channel_codes}" && \
+    ! "${reviewed_storefront_media_channel_codes}" =~ ^[a-z0-9_][a-z0-9_-]*(,[a-z0-9_][a-z0-9_-]*)*$ ]]; then
+    fail 'reviewed storefront media Channel codes are invalid'
+fi
+if [[ -n "${reviewed_storefront_media_keys}" && -z "${reviewed_storefront_media_channel_codes}" ]]; then
+    fail 'reviewed storefront media Channel codes are required'
+fi
+if [[ -z "${reviewed_storefront_media_keys}" && -n "${reviewed_storefront_media_channel_codes}" ]]; then
+    fail 'reviewed storefront media scope was supplied without media keys'
+fi
 
 umask 027
 
@@ -60,6 +74,11 @@ git merge-base --is-ancestor "${deployed_sha}" "${target_sha}" ||
     fail 'the deployed runtime is not an ancestor of the requested target SHA'
 [[ -z "$(git status --porcelain --untracked-files=no)" ]] || fail 'the server repository has tracked changes'
 
+if [[ "${deployed_sha}" == "${target_sha}" ]]; then
+    printf 'PRODUCTION_DEPLOY_ALREADY_CURRENT sha=%s\n' "${target_sha}"
+    exit 0
+fi
+
 mapfile -t managed_storefront_changes < <(
     git diff --name-only "${deployed_sha}" "${target_sha}" -- \
         packages/dev-server/scripts/sync-storefront-media.mjs \
@@ -69,13 +88,7 @@ mapfile -t managed_storefront_changes < <(
 )
 if [[ "${#managed_storefront_changes[@]}" -gt 0 ]]; then
     [[ -n "${reviewed_storefront_media_keys}" ]] ||
-        fail 'managed storefront data changed; use the reviewed manual publisher release path'
-    [[ "${reviewed_storefront_media_keys}" =~ ^[a-z0-9][a-z0-9-]*(,[a-z0-9][a-z0-9-]*)*$ ]] ||
-        fail 'reviewed storefront media keys are invalid'
-    [[ -n "${reviewed_storefront_media_channel_codes}" ]] ||
-        fail 'reviewed storefront media Channel codes are required'
-    [[ "${reviewed_storefront_media_channel_codes}" =~ ^[a-z0-9_][a-z0-9_-]*(,[a-z0-9_][a-z0-9_-]*)*$ ]] ||
-        fail 'reviewed storefront media Channel codes are invalid'
+        fail 'managed storefront data changed; provide reviewed media keys in the production release plan'
     for managed_storefront_change in "${managed_storefront_changes[@]}"; do
         case "${managed_storefront_change}" in
             packages/dev-server/scripts/sync-storefront-media.mjs | \
@@ -99,6 +112,8 @@ if [[ "${VENDURE_DEPLOY_REEXECUTED:-0}" != "1" ]]; then
     VENDURE_DEPLOY_LOCK_HELD=1 \
         VENDURE_DEPLOY_REEXECUTED=1 \
         GITHUB_RUN_ID="${GITHUB_RUN_ID:-manual}" \
+        VENDURE_REVIEWED_STOREFRONT_MEDIA_KEYS="${reviewed_storefront_media_keys}" \
+        VENDURE_REVIEWED_STOREFRONT_MEDIA_CHANNEL_CODES="${reviewed_storefront_media_channel_codes}" \
         "${repository}/deploy/deploy-production-from-s3.sh" \
         "${target_sha}" "${artifact_name}" "${artifact_s3_prefix}"
     exit $?
@@ -131,6 +146,7 @@ rollback() {
     trap - ERR
 
     if [[ "${rollback_needed}" == "1" ]]; then
+        rollback_needed=0
         printf 'ROLLBACK_BEGIN\n'
         VENDURE_DEPLOYMENT_ID="${deployment_id}-rollback" \
             "${repository}/deploy/switch-production-runtime.sh" "${previous_runtime}" 9>&- || true
@@ -198,6 +214,23 @@ retain_release_file() {
 # Avoiding a second full archive copy prevents avoidable disk I/O and page-cache pressure.
 retain_release_file "${archive_path}" "${releases_dir}/${archive_name}"
 retain_release_file "${checksum_path}" "${releases_dir}/${checksum_name}"
+
+if [[ -n "${reviewed_storefront_media_keys}" ]]; then
+    set -a
+    # shellcheck disable=SC1090
+    source "${environment_file}"
+    set +a
+    printf 'STOREFRONT_MEDIA_PREFLIGHT_BEGIN keys=%s channels=%s\n' \
+        "${reviewed_storefront_media_keys}" "${reviewed_storefront_media_channel_codes}"
+    cd "${candidate}"
+    STOREFRONT_MEDIA_CHANNEL_CODES="${reviewed_storefront_media_channel_codes}" \
+        VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
+        node packages/dev-server/scripts/sync-storefront-media.mjs \
+            --keys "${reviewed_storefront_media_keys}" --dry-run
+    cd "${repository}"
+    printf 'STOREFRONT_MEDIA_PREFLIGHT_OK keys=%s channels=%s\n' \
+        "${reviewed_storefront_media_keys}" "${reviewed_storefront_media_channel_codes}"
+fi
 
 node "${memory_guard}" --stage pre-migration --check
 printf 'DEPLOY_MIGRATION_BEGIN\n'
@@ -290,17 +323,12 @@ node "${repository}/deploy/verify-dashboard-assets.mjs" \
 if [[ -n "${reviewed_storefront_media_keys}" ]]; then
     printf 'STOREFRONT_MEDIA_PUBLISH_BEGIN keys=%s channels=%s\n' \
         "${reviewed_storefront_media_keys}" "${reviewed_storefront_media_channel_codes}"
-    (
-        cd "${candidate}"
-        STOREFRONT_MEDIA_CHANNEL_CODES="${reviewed_storefront_media_channel_codes}" \
-            VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
-            node packages/dev-server/scripts/sync-storefront-media.mjs \
-                --keys "${reviewed_storefront_media_keys}" --dry-run
-        STOREFRONT_MEDIA_CHANNEL_CODES="${reviewed_storefront_media_channel_codes}" \
-            VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
-            node packages/dev-server/scripts/sync-storefront-media.mjs \
-                --keys "${reviewed_storefront_media_keys}" --apply --allow-remote
-    )
+    cd "${candidate}"
+    STOREFRONT_MEDIA_CHANNEL_CODES="${reviewed_storefront_media_channel_codes}" \
+        VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
+        node packages/dev-server/scripts/sync-storefront-media.mjs \
+            --keys "${reviewed_storefront_media_keys}" --apply --allow-remote
+    cd "${repository}"
     printf 'STOREFRONT_MEDIA_PUBLISH_OK keys=%s channels=%s\n' \
         "${reviewed_storefront_media_keys}" "${reviewed_storefront_media_channel_codes}"
 fi
