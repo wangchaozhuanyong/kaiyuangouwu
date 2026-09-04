@@ -382,8 +382,13 @@ if [[ "${reviewed_auth_visuals}" == "true" ]]; then
     AUTH_VISUAL_CHANNEL_CODES="${reviewed_storefront_media_channel_codes}" \
         VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
         node packages/dev-server/scripts/sync-auth-visuals.mjs --apply --allow-remote
+    AUTH_VISUAL_CHANNEL_CODES="${reviewed_storefront_media_channel_codes}" \
+        VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
+        node packages/dev-server/scripts/sync-auth-visuals.mjs --verify
     cd "${repository}"
     printf 'AUTH_VISUAL_PUBLISH_OK channels=%s\n' \
+        "${reviewed_storefront_media_channel_codes}"
+    printf 'AUTH_VISUAL_VERIFY_OK channels=%s\n' \
         "${reviewed_storefront_media_channel_codes}"
 fi
 node "${memory_guard}" --stage post-switch --report

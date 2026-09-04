@@ -344,7 +344,7 @@ VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
 命令使用已由发布 shell 安全加载的 `SUPERADMIN_USERNAME`、`SUPERADMIN_PASSWORD` 和 `STOREFRONT_MEDIA_CHANNEL_CODES`；不得把密码写入参数或发布记录。同步失败立即停止发布，不切换 Storefront 指针。同一文件按 SHA-256 标签复用；新版文件只切换商品和内容块绑定，不删除旧素材，便于数据层单独回退。清单中标记为 `asset-library` 的设计参考图只上传并分配到目标 Channel 素材库，不会自动改动商品、内容块或前台默认海报。如只需发布某一项素材，使用 `--keys <manifest-key>` 限定范围，避免重新绑定其他素材。
 发布器保留原商品/variant gallery，写入后用 Admin API 和 Shop API 反查同一 Asset ID；任一反查失败会尝试恢复原绑定。独立 `--verify` 证据缺失时不得宣布媒体发布成功。
 
-登录/注册页文案、色板和标签属于 Vendure 内容，不得只改客户端。在 `Production Runtime Artifact` 中勾选 `auth_visuals`，并填写已审核 Channel；发布链会先 dry-run，再以带 `expectedUpdatedAt` 的单个 Admin API 批次原子写入，最后反查中英文 Shop API。验证失败时恢复原内容并停止切换。
+登录/注册页文案、色板和标签属于 Vendure 内容，不得只改客户端。在 `Production Runtime Artifact` 中勾选 `auth_visuals`，并填写已审核 Channel；发布链会先 dry-run，再以带 `expectedUpdatedAt` 的单个 Admin API 批次原子写入，随后运行独立只读 `--verify` 反查 Admin 与中英文 Shop API，并记录 `AUTH_VISUAL_VERIFY_OK`。验证失败时恢复原内容并停止切换。
 
 当版本包含已审核的店铺媒体或登录/注册内容变更时，直接在目标 `main` 完整 SHA 的
 `Production Runtime Artifact` 唯一入口填写完整 manifest key/勾选 `auth_visuals`，并填写已审核 Channel code，不再另行触发第二个内容发布工作流，也不回退到服务器默认 Channel。
@@ -359,9 +359,12 @@ VENDURE_API_ORIGIN=http://127.0.0.1:3002 VENDURE_STOREFRONT_URL=https://moyaoai.
 VENDURE_API_ORIGIN=http://127.0.0.1:3002 VENDURE_STOREFRONT_URL=https://moyaoai.com \
     node packages/dev-server/scripts/sync-moyao-brand.mjs --apply --allow-remote \
     --channel-code __default_channel__
+VENDURE_API_ORIGIN=http://127.0.0.1:3002 VENDURE_STOREFRONT_URL=https://moyaoai.com \
+    node packages/dev-server/scripts/sync-moyao-brand.mjs --verify \
+    --channel-code __default_channel__
 ```
 
-该工具按 SHA-256 标签复用品牌资源，通过 Admin API 写入当前 StoreProfile；素材查询和上传结果只读取稳定的 Asset ID，避免历史素材翻译元数据为空时阻断幂等发布。随后以与真实客户端一致的 `languageCode` 查询参数和语言请求头，分别从 Shop API 反查中文、英文名称、口号、色板和三个 Asset ID。任一字段不一致都必须停止切换；密码只从已加载的生产 Secret 环境读取。
+该工具按 SHA-256 标签复用品牌资源，通过 Admin API 写入当前 StoreProfile；素材查询和上传结果只读取稳定的 Asset ID，避免历史素材翻译元数据为空时阻断幂等发布。写入后先核对 Admin 返回的完整品牌字段，再以与真实客户端一致的 `languageCode` 查询参数和语言请求头，分别从 Shop API 反查中文、英文名称、口号、色板和三个 Asset ID。若写入后的任一反查失败，发布器必须使用写入后 `updatedAt` 恢复原 StoreProfile（包括原三组 Asset ID），并再次验证恢复结果；恢复失败按生产事故处理。独立 `--verify` 未通过时不得切换 Storefront 指针或宣布品牌发布成功；密码只从已加载的生产 Secret 环境读取。
 
 切换脚本会在 systemd journal 中以 `vendure-production-switch` 标记依次记录 `requested`、`succeeded` 或 `failed`。每条事件包含部署 ID、目标 SHA、候选目录、调用用户、SSH 来源 IP、进程和父进程信息，不记录命令参数、环境变量或密钥。`requested` 写入失败会中止切换，避免无审计地改动 PM2。发布后用同一部署 ID 核对完整事件链：
 

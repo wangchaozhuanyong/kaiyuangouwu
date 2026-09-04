@@ -260,6 +260,45 @@ function profileAssetId(profile, field) {
     return profile[relation]?.id ?? null;
 }
 
+function profileBrandingSnapshot(profile) {
+    return {
+        storefrontNameZh: profile.channel.customFields?.storefrontNameZh ?? '',
+        storefrontNameEn: profile.channel.customFields?.storefrontNameEn ?? '',
+        descriptionZh: profile.descriptionZh ?? '',
+        descriptionEn: profile.descriptionEn ?? '',
+        taglineZh: profile.taglineZh,
+        taglineEn: profile.taglineEn,
+        brandBackgroundColor: profile.brandBackgroundColor,
+        brandPrimaryColor: profile.brandPrimaryColor,
+        brandAccentColor: profile.brandAccentColor,
+        brandHighlightColor: profile.brandHighlightColor,
+        logoAssetId: profileAssetId(profile, 'logoAssetId'),
+        logoOnLightAssetId: profileAssetId(profile, 'logoOnLightAssetId'),
+        logoOnDarkAssetId: profileAssetId(profile, 'logoOnDarkAssetId'),
+    };
+}
+
+export function buildMoyaoBrandRestoreInput(beforeProfile, currentProfile) {
+    const before = profileBrandingSnapshot(beforeProfile);
+    return {
+        id: beforeProfile.id,
+        expectedUpdatedAt: currentProfile.updatedAt,
+        storefrontNameZh: before.storefrontNameZh,
+        storefrontNameEn: before.storefrontNameEn,
+        descriptionZh: before.descriptionZh,
+        descriptionEn: before.descriptionEn,
+        taglineZh: before.taglineZh ?? '',
+        taglineEn: before.taglineEn ?? '',
+        brandBackgroundColor: before.brandBackgroundColor,
+        brandPrimaryColor: before.brandPrimaryColor,
+        brandAccentColor: before.brandAccentColor,
+        brandHighlightColor: before.brandHighlightColor,
+        logoAssetId: before.logoAssetId,
+        logoOnLightAssetId: before.logoOnLightAssetId,
+        logoOnDarkAssetId: before.logoOnDarkAssetId,
+    };
+}
+
 function shopEndpointForLanguage(endpoint, languageCode) {
     const url = new URL(endpoint);
     url.searchParams.set('languageCode', languageCode);
@@ -307,20 +346,53 @@ export function buildMoyaoBrandPlan(profile, assetsByKey, brand = moyaoBrand, ma
     return { action: changes.length ? 'update' : 'noop', changes, input };
 }
 
-function assertShopBranding(branding, languageCode, assetIds, brand) {
-    assert.equal(branding.name, languageCode === 'zh_Hans' ? brand.storefrontNameZh : brand.storefrontNameEn);
+function assertProfileBranding(profile, expected) {
+    const actual = profileBrandingSnapshot(profile);
+    for (const [field, value] of Object.entries(expected)) {
+        assert.equal(actual[field], value, `Admin StoreProfile ${field} does not match the published value`);
+    }
+}
+
+function assertShopBranding(branding, languageCode, expected) {
+    assert.equal(
+        branding.name,
+        languageCode === 'zh_Hans' ? expected.storefrontNameZh : expected.storefrontNameEn,
+    );
     assert.equal(
         branding.description,
-        languageCode === 'zh_Hans' ? brand.descriptionZh : brand.descriptionEn,
+        languageCode === 'zh_Hans' ? expected.descriptionZh : expected.descriptionEn,
     );
-    assert.equal(branding.tagline, languageCode === 'zh_Hans' ? brand.taglineZh : brand.taglineEn);
-    assert.equal(String(branding.logoAssetId), String(assetIds['app-icon']));
-    assert.equal(String(branding.logoOnLightAssetId), String(assetIds['logo-on-light']));
-    assert.equal(String(branding.logoOnDarkAssetId), String(assetIds['logo-on-dark']));
-    assert.equal(branding.backgroundColor, brand.brandBackgroundColor);
-    assert.equal(branding.primaryColor, brand.brandPrimaryColor);
-    assert.equal(branding.accentColor, brand.brandAccentColor);
-    assert.equal(branding.highlightColor, brand.brandHighlightColor);
+    assert.equal(branding.tagline, languageCode === 'zh_Hans' ? expected.taglineZh : expected.taglineEn);
+    assert.equal(String(branding.logoAssetId), String(expected.logoAssetId));
+    assert.equal(String(branding.logoOnLightAssetId), String(expected.logoOnLightAssetId));
+    assert.equal(String(branding.logoOnDarkAssetId), String(expected.logoOnDarkAssetId));
+    assert.equal(branding.backgroundColor, expected.brandBackgroundColor);
+    assert.equal(branding.primaryColor, expected.brandPrimaryColor);
+    assert.equal(branding.accentColor, expected.brandAccentColor);
+    assert.equal(branding.highlightColor, expected.brandHighlightColor);
+}
+
+async function verifyBranding({ fetchImpl, shopEndpoint, channel, expected, attempts, delayMs, waitImpl }) {
+    let verificationError;
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+        try {
+            for (const languageCode of ['zh_Hans', 'en']) {
+                const result = await graphql(
+                    fetchImpl,
+                    shopEndpointForLanguage(shopEndpoint, languageCode),
+                    SHOP_BRANDING_QUERY,
+                    undefined,
+                    requestHeaders('', channel.token, languageCode),
+                );
+                assertShopBranding(result.data.storefrontBranding, languageCode, expected);
+            }
+            return;
+        } catch (error) {
+            verificationError = error;
+            if (attempt < attempts) await waitImpl(delayMs);
+        }
+    }
+    throw verificationError;
 }
 
 export async function syncMoyaoBrand({
@@ -330,17 +402,23 @@ export async function syncMoyaoBrand({
     password,
     channelCode = moyaoBrand.channelCode,
     apply = false,
+    verify = false,
     allowRemote = false,
     production = process.env.NODE_ENV === 'production',
     fetchImpl = fetch,
     assetManifest = moyaoBrandAssets,
     brand = moyaoBrand,
+    verificationAttempts = 5,
+    verificationDelayMs = 250,
+    waitImpl = delayMs => new Promise(resolve => setTimeout(resolve, delayMs)),
 }) {
     assert.ok(apiOrigin, 'VENDURE_API_ORIGIN or --api-origin is required');
     assert.ok(username && password, 'SUPERADMIN_USERNAME and SUPERADMIN_PASSWORD are required');
+    assert.ok(!(apply && verify), '--apply and --verify are mutually exclusive');
     if (apply && (production || !isLocalApiOrigin(apiOrigin))) {
         assert.ok(allowRemote, 'Remote or production writes require both --apply and --allow-remote');
     }
+    assert.ok(Number.isInteger(verificationAttempts) && verificationAttempts > 0);
     const normalizedApiOrigin = apiOrigin.replace(/\/$/u, '');
     const normalizedShopOrigin = shopOrigin.replace(/\/$/u, '');
     const adminEndpoint = `${normalizedApiOrigin}/admin-api`;
@@ -359,6 +437,7 @@ export async function syncMoyaoBrand({
     const profiles = profilesResult.data.storeProfiles.filter(item => item.channel.code === channelCode);
     assert.equal(profiles.length, 1, `Expected one StoreProfile for Channel ${channelCode}`);
     let profile = profiles[0];
+    const beforeProfile = structuredClone(profile);
     const assetsByKey = new Map();
     const assetActions = [];
     for (const definition of preparedAssets) {
@@ -380,33 +459,84 @@ export async function syncMoyaoBrand({
         assetActions.push({ key: definition.key, action, assetId: asset?.id ?? null, hash: definition.hash });
     }
     let plan = buildMoyaoBrandPlan(profile, assetsByKey, brand, preparedAssets);
-    if (apply) {
+    if (apply || verify) {
         assert.equal(assetsByKey.size, preparedAssets.length, 'All three brand assets are required');
         plan = buildMoyaoBrandPlan(profile, assetsByKey, brand, preparedAssets);
-        if (plan.action === 'update') {
-            const updated = await graphql(
+        const desired = {
+            storefrontNameZh: brand.storefrontNameZh,
+            storefrontNameEn: brand.storefrontNameEn,
+            descriptionZh: brand.descriptionZh,
+            descriptionEn: brand.descriptionEn,
+            taglineZh: brand.taglineZh,
+            taglineEn: brand.taglineEn,
+            brandBackgroundColor: brand.brandBackgroundColor,
+            brandPrimaryColor: brand.brandPrimaryColor,
+            brandAccentColor: brand.brandAccentColor,
+            brandHighlightColor: brand.brandHighlightColor,
+            logoAssetId: assetsByKey.get('app-icon').id,
+            logoOnLightAssetId: assetsByKey.get('logo-on-light').id,
+            logoOnDarkAssetId: assetsByKey.get('logo-on-dark').id,
+        };
+        let updatedProfile;
+        try {
+            if (apply && plan.action === 'update') {
+                const updated = await graphql(
+                    fetchImpl,
+                    adminEndpoint,
+                    UPDATE_PROFILE_MUTATION,
+                    { input: plan.input },
+                    requestHeaders(session.authToken, channel.token),
+                );
+                profile = updated.data.updateStoreProfile;
+                updatedProfile = profile;
+            }
+            assertProfileBranding(profile, desired);
+            await verifyBranding({
                 fetchImpl,
-                adminEndpoint,
-                UPDATE_PROFILE_MUTATION,
-                { input: plan.input },
-                requestHeaders(session.authToken, channel.token),
+                shopEndpoint,
+                channel,
+                expected: desired,
+                attempts: verificationAttempts,
+                delayMs: verificationDelayMs,
+                waitImpl,
+            });
+        } catch (verificationError) {
+            if (!apply || !updatedProfile) throw verificationError;
+            try {
+                const restored = await graphql(
+                    fetchImpl,
+                    adminEndpoint,
+                    UPDATE_PROFILE_MUTATION,
+                    { input: buildMoyaoBrandRestoreInput(beforeProfile, updatedProfile) },
+                    requestHeaders(session.authToken, channel.token),
+                );
+                profile = restored.data.updateStoreProfile;
+                const previous = profileBrandingSnapshot(beforeProfile);
+                assertProfileBranding(profile, previous);
+                await verifyBranding({
+                    fetchImpl,
+                    shopEndpoint,
+                    channel,
+                    expected: previous,
+                    attempts: verificationAttempts,
+                    delayMs: verificationDelayMs,
+                    waitImpl,
+                });
+            } catch (rollbackError) {
+                throw new AggregateError(
+                    [verificationError, rollbackError],
+                    `MOYAO brand verification failed and StoreProfile rollback also failed in Channel ${channel.code}`,
+                );
+            }
+            throw new Error(
+                `MOYAO brand verification failed; the previous StoreProfile was restored in Channel ${channel.code}`,
+                { cause: verificationError },
             );
-            profile = updated.data.updateStoreProfile;
-        }
-        const assetIds = Object.fromEntries([...assetsByKey].map(([key, asset]) => [key, asset.id]));
-        for (const languageCode of ['zh_Hans', 'en']) {
-            const result = await graphql(
-                fetchImpl,
-                shopEndpointForLanguage(shopEndpoint, languageCode),
-                SHOP_BRANDING_QUERY,
-                undefined,
-                requestHeaders('', channel.token, languageCode),
-            );
-            assertShopBranding(result.data.storefrontBranding, languageCode, assetIds, brand);
         }
     }
     return {
         applied: apply,
+        verified: apply || verify,
         apiOrigin: normalizedApiOrigin,
         shopOrigin: normalizedShopOrigin,
         channelCode,
@@ -417,12 +547,15 @@ export async function syncMoyaoBrand({
 }
 
 export function parseCliArguments(args) {
-    const options = { apply: false, allowRemote: false, validate: false };
+    const options = { apply: false, verify: false, allowRemote: false, validate: false };
     for (let index = 0; index < args.length; index += 1) {
         const argument = args[index];
         if (argument === '--apply') options.apply = true;
-        else if (argument === '--dry-run') options.apply = false;
-        else if (argument === '--allow-remote') options.allowRemote = true;
+        else if (argument === '--verify') options.verify = true;
+        else if (argument === '--dry-run') {
+            options.apply = false;
+            options.verify = false;
+        } else if (argument === '--allow-remote') options.allowRemote = true;
         else if (argument === '--validate') options.validate = true;
         else if (argument === '--api-origin') options.apiOrigin = args[++index];
         else if (argument === '--shop-origin') options.shopOrigin = args[++index];
@@ -452,6 +585,7 @@ if (isMain) {
             password: process.env.SUPERADMIN_PASSWORD,
             channelCode: options.channelCode ?? process.env.MOYAO_CHANNEL_CODE ?? moyaoBrand.channelCode,
             apply: options.apply,
+            verify: options.verify,
             allowRemote: options.allowRemote,
         });
         process.stdout.write(`${JSON.stringify({ ok: true, ...result }, null, 2)}\n`);
