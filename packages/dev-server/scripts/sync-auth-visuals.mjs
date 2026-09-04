@@ -10,12 +10,12 @@ export const authVisualManifest = [
     {
         code: 'auth-login-visual',
         type: 'AUTH_LOGIN',
-        backgroundColor: '#020718',
+        backgroundColor: '#070B14',
         textColor: '#ffffff',
-        accentColor: '#67e8f9',
+        accentColor: '#22D3EE',
         translations: {
             zh_Hans: {
-                ctaLabel: 'AwanMesh｜模钥 AI 工具精选',
+                ctaLabel: 'MOYAO AI｜模钥 AI 工具精选',
                 title: '欢迎回来，继续你的 AI 工作流',
                 subtitle: '常用 AI 工具、收藏与订单，登录后统一管理',
                 body: '',
@@ -35,9 +35,9 @@ export const authVisualManifest = [
     {
         code: 'auth-register-visual',
         type: 'AUTH_REGISTER',
-        backgroundColor: '#16051f',
+        backgroundColor: '#070B14',
         textColor: '#ffffff',
-        accentColor: '#fdba74',
+        accentColor: '#8B5CF6',
         translations: {
             zh_Hans: {
                 ctaLabel: '建立你的 AI 工具账户',

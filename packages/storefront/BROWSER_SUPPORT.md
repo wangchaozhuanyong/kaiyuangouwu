@@ -29,7 +29,7 @@ Run the local production build against Chromium, Firefox, WebKit, WeChat Android
 bun run --cwd packages/storefront test:compat
 ```
 
-The local preview proxies Shop API requests to `https://damatong.net`. To check another deployed environment instead, skip the local preview by setting:
+The local preview proxies Shop API requests to `https://moyaoai.com`. To check another deployed environment instead, skip the local preview by setting:
 
 ```bash
 COMPAT_BASE_URL=https://example.com bun run --cwd packages/storefront test:compat

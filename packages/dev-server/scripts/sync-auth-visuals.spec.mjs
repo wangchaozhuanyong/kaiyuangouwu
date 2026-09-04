@@ -155,6 +155,10 @@ test('manifest uses stable auth block codes and the approved restrained palette'
     );
     assert.deepEqual(authVisualManifest[0].tags.zh_Hans, ['精选工具', '订单可查', '售后支持']);
     assert.deepEqual(authVisualManifest[1].tags.zh_Hans, ['快速注册', '统一管理', '专属服务']);
+    assert.equal(authVisualManifest[0].backgroundColor, '#070B14');
+    assert.equal(authVisualManifest[0].accentColor, '#22D3EE');
+    assert.equal(authVisualManifest[1].accentColor, '#8B5CF6');
+    assert.match(authVisualManifest[0].translations.zh_Hans.ctaLabel, /MOYAO AI/u);
 });
 
 test('target lookup fails when a stable code is missing or has the wrong type', () => {

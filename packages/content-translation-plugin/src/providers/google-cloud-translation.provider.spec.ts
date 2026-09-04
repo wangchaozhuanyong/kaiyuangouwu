@@ -10,14 +10,14 @@ describe('GoogleCloudTranslationProvider', () => {
 
     it('protects glossary terms, variables and URLs', () => {
         const protectedValue = googleTranslationInternals.protectText(
-            '大马通优惠 {discount}，访问 https://example.com',
-            { 大马通: 'Damatong' },
+            '模钥 优惠 {discount}，访问 https://example.com',
+            { 模钥: 'MOYAO AI' },
         );
 
-        expect(protectedValue.text).not.toContain('大马通');
+        expect(protectedValue.text).not.toContain('模钥');
         expect(protectedValue.text).not.toContain('{discount}');
         expect(protectedValue.restore(protectedValue.text)).toBe(
-            'Damatong优惠 {discount}，访问 https://example.com',
+            'MOYAO AI 优惠 {discount}，访问 https://example.com',
         );
     });
 
@@ -70,6 +70,6 @@ function response(body: unknown, ok = true): Pick<Response, 'ok' | 'status' | 'j
     return {
         ok,
         status: ok ? 200 : 400,
-        json: async () => body,
+        json: () => Promise.resolve(body),
     };
 }

@@ -1148,7 +1148,7 @@ function AuthLayout({
                                 </div>
                                 <small>
                                     {language === 'zh'
-                                        ? '智联云端 · 桥接未来'
+                                        ? '全球模型 · 一钥直达'
                                         : 'Cloud intelligence · Bridging tomorrow'}
                                 </small>
                             </div>

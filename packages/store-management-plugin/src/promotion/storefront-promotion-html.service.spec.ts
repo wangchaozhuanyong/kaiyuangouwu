@@ -91,7 +91,6 @@ describe('StorefrontPromotionHtmlService', () => {
         expect(service.defaultTemplate).toContain('min-height:100dvh');
         expect(service.defaultTemplate).toContain('data-bind-src="store.logoUrl"');
         expect(service.defaultTemplate).toContain('data-bind-text="store.name"');
-        expect(service.defaultTemplate).not.toContain('Damatong');
         expect(service.defaultTemplate).toContain('data-promo-header');
         expect(service.defaultTemplate).toContain('data-promo-motion');
         expect(service.defaultTemplate).toContain('data-promo-reveal');
@@ -109,11 +108,11 @@ describe('StorefrontPromotionHtmlService', () => {
         expect(service.defaultTemplate).toContain('data-promo-carousel-status');
         expect(service.defaultTemplate).toContain('{{promo.metaTitle}}');
         expect(service.defaultTemplate).toContain('{{promo.finalTitle}}');
-        expect(service.defaultTemplate).toContain('--amber:#efa83f');
-        expect(service.defaultTemplate).toContain('Silver Mist');
-        expect(service.defaultTemplate).toContain('damatong-silver-stage-v23.webp');
-        expect(service.defaultTemplate).toContain('damatong-silver-stage-mobile-v23.webp');
-        expect(service.defaultTemplate).not.toContain('damatong-amber-mark-v15.webp');
+        expect(service.defaultTemplate).toContain('--amber:#8B5CF6');
+        expect(service.defaultTemplate).toContain('--amber-bright:#22D3EE');
+        expect(service.defaultTemplate).toContain('MOYAO AI Network Stage');
+        expect(service.defaultTemplate).toContain('moyao-ai-network-stage-v27.webp');
+        expect(service.defaultTemplate).toContain('moyao-ai-network-stage-mobile-v27.webp');
         expect(service.defaultTemplate).not.toContain('damatong-obsidian-field-v15.webp');
         expect(service.defaultTemplate).not.toContain('damatong-lunar-amber-v15.webp');
         expect(service.defaultTemplate).toContain('data-store-entry');
@@ -155,27 +154,27 @@ describe('StorefrontPromotionHtmlService', () => {
         expect(service.defaultTemplate).not.toContain('promo-step-number');
         expect(service.defaultTemplate).not.toContain('promo-trust-number');
         expect(service.defaultTemplate).toContain('promo-trust-mark');
-        expect(service.defaultTemplateVersion).toBe(26);
+        expect(service.defaultTemplateVersion).toBe(27);
         expect(Buffer.byteLength(service.defaultTemplate, 'utf8')).toBeLessThan(MAX_PROMOTION_SOURCE_BYTES);
         expect(Buffer.byteLength(service.defaultTemplate, 'utf8')).toBeLessThanOrEqual(58 * 1024);
     });
 
-    it('renders the Yunqiao brand name and storefront logo', () => {
+    it('renders the configured MOYAO AI brand name and storefront logo', () => {
         const html = service.render({
             contentType: 'HTML',
             source: service.defaultTemplate,
             bindings: {
                 ...bindings,
-                'store.name': '云桥Ai',
+                'store.name': 'MOYAO AI｜模钥',
                 'store.logoUrl': '/storefront/logo.svg',
             },
             entryTicket: 'signed-ticket',
         });
 
-        expect(html).toContain('aria-label="云桥Ai"');
+        expect(html).toContain('aria-label="MOYAO AI｜模钥"');
         expect(html).toContain('class="promo-brand-mark"');
         expect(html).toContain('src="/storefront/logo.svg"');
-        expect(html).toContain('data-bind-text="store.name">云桥Ai</span>');
+        expect(html).toContain('data-bind-text="store.name">MOYAO AI｜模钥</span>');
         expect(html).toContain('<link rel="icon" href="/storefront/logo.svg">');
     });
 
@@ -197,7 +196,7 @@ describe('StorefrontPromotionHtmlService', () => {
         expect(html).toContain('可以直接在这里完成购买或交易吗');
         expect(html.match(/推广页只用于介绍服务方向/gu)).toHaveLength(1);
         expect(html).toContain('content="index,nofollow,max-image-preview:large"');
-        expect(html).not.toContain('云桥');
+        expect(html).not.toContain('旧品牌');
         expect(html).not.toContain('CloudBridge');
         expect(html).not.toContain('推广介绍层');
         expect(html).not.toContain('主站业务层');
@@ -213,7 +212,7 @@ describe('StorefrontPromotionHtmlService', () => {
             source: service.defaultTemplate,
             bindings: {
                 ...bindings,
-                'store.name': 'Yunqiao Ai',
+                'store.name': 'MOYAO AI',
                 'store.description': 'AI digital services',
                 'store.shareTitle': 'Explore AI services',
                 'store.shareDescription': 'Clear AI digital services for every workflow',
@@ -324,12 +323,10 @@ describe('StorefrontPromotionHtmlService', () => {
         expect(withoutLogo).not.toContain('class="promo-brand-mark"');
         expect(withoutLogo).toContain('data-bind-text="store.name">测试商店 &lt;b&gt;</span>');
         expect(withoutLogo).toContain('data-promo-motion');
-        expect(withoutLogo).toContain('/storefront/promo/damatong-silver-stage-v23.webp');
-        expect(withoutLogo).toContain('/storefront/promo/damatong-silver-stage-mobile-v23.webp');
-        expect(withoutLogo).not.toContain('/storefront/promo/damatong-amber-mark-v15.webp');
+        expect(withoutLogo).toContain('/storefront/promo/moyao-ai-network-stage-v27.webp');
+        expect(withoutLogo).toContain('/storefront/promo/moyao-ai-network-stage-mobile-v27.webp');
         expect(withoutLogo).not.toContain('<canvas');
         expect(withoutLogo).toContain('<picture class="promo-hero-art"');
-        expect(withoutLogo).not.toContain('Damatong');
     });
 
     it('normalizes custom page zoom and keyboard focus accessibility', () => {

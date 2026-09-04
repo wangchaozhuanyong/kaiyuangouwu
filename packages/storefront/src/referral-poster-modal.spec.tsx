@@ -80,7 +80,7 @@ describe('referral poster templates', () => {
             }),
         );
 
-        expect(markup).toContain('AwanMesh minimal');
+        expect(markup).toContain('MOYAO AI minimal');
         expect(markup).toContain('overflow-x-hidden');
         expect(markup).toContain('min-w-0');
         expect(markup).toContain('max-w-sm');

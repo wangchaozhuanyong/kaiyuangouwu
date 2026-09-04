@@ -15,7 +15,7 @@ import { useNavigate } from 'react-router-dom';
 import { prepareAuthSession, setInitialActiveChannel } from '../../apollo';
 import { ThemeToggleButton } from '../../components/ThemeToggleButton';
 
-const adminBrandIcon = `${import.meta.env.BASE_URL}favicon.svg`;
+const adminBrandIcon = `${import.meta.env.BASE_URL}favicon.png`;
 
 const LOGIN_MUTATION = gql`
     mutation Login($username: String!, $password: String!, $rememberMe: Boolean) {
@@ -109,7 +109,7 @@ export function LoginModule() {
                         <div className="flex items-center gap-3">
                             <img className="h-10 w-10 rounded-xl" src={adminBrandIcon} alt="" />
                             <div>
-                                <p className="text-lg font-bold tracking-tight">AwanMesh｜模钥管理后台</p>
+                                <p className="text-lg font-bold tracking-tight">MOYAO AI｜模钥管理后台</p>
                                 <p className="text-xs text-slate-400">Merchant Administration</p>
                             </div>
                         </div>

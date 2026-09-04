@@ -22,7 +22,7 @@ import { selectManagedProducts } from '../home-merchandising';
 import { resolveManagedContentCopy } from '../managed-content-copy';
 import { responsiveImageSources } from '../responsive-image';
 import { StorefrontCouponCard } from '../storefront-coupons';
-import { STOREFRONT_LOGO_IMAGE } from '../storefront-images';
+import { STOREFRONT_LOGO_IMAGE, STOREFRONT_WORDMARK_IMAGE } from '../storefront-images';
 import { routePath } from '../storefront-router';
 import {
     MarketConfig,
@@ -46,16 +46,30 @@ import {
 } from './product-display';
 import { ProductSection } from './product-section';
 
-export function BrandLogo({ url, name, className }: { url: string | null; name: string; className: string }) {
+export function BrandLogo({
+    url,
+    name,
+    className,
+    variant = 'icon',
+}: {
+    url: string | null;
+    name: string;
+    className: string;
+    variant?: 'icon' | 'wordmark';
+}) {
     const responsiveSource = url ? responsiveImageSources(url, 'thumbnail') : null;
+    const isWordmark = variant === 'wordmark';
     return (
         <img
             className={className}
-            src={responsiveSource?.fallbackSrc ?? STOREFRONT_LOGO_IMAGE}
+            src={
+                responsiveSource?.fallbackSrc ??
+                (isWordmark ? STOREFRONT_WORDMARK_IMAGE : STOREFRONT_LOGO_IMAGE)
+            }
             srcSet={responsiveSource?.fallbackSrcSet}
-            sizes={responsiveSource ? '38px' : undefined}
-            width="38"
-            height="28"
+            sizes={responsiveSource ? (isWordmark ? '200px' : '38px') : undefined}
+            width={isWordmark ? 200 : 38}
+            height={isWordmark ? 56 : 28}
             decoding="async"
             alt={name}
         />

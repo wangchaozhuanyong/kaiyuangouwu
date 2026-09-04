@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="2048" height="2048" viewBox="0 0 2048 2048" role="img" aria-label="MOYAO AI monochrome icon">
+  <title>MOYAO AI 模钥 monochrome icon</title>
+  <defs>
+    <mask id="key-cut" maskUnits="userSpaceOnUse" x="0" y="0" width="360" height="220">
+      <rect width="360" height="220" fill="#fff"/>
+      <circle cx="180" cy="139" r="19" fill="#000"/>
+      <rect x="174" y="139" width="12" height="58" fill="#000"/>
+    </mask>
+  </defs>
+  <g transform="translate(82 474) scale(5.23)" fill="#000000" stroke="#000000" stroke-linecap="round" stroke-linejoin="round">
+    <g mask="url(#key-cut)">
+      <path d="M35 186 L95 45 L117 45 L180 122 L243 45 L265 45 L325 186" fill="none" stroke-width="45"/>
+      <circle cx="180" cy="139" r="31" stroke="none"/>
+      <rect x="160" y="139" width="14" height="62" rx="2" stroke="none"/>
+      <rect x="186" y="139" width="14" height="62" rx="2" stroke="none"/>
+    </g>
+    <path d="M35 186 L102 131 L144 194 L161 181 M325 186 L258 131 L216 194 L199 181" fill="none" stroke-width="3.2"/>
+    <g stroke="none">
+      <circle cx="35" cy="186" r="7.5"/><circle cx="102" cy="131" r="7"/><circle cx="144" cy="194" r="7"/>
+      <circle cx="325" cy="186" r="7.5"/><circle cx="258" cy="131" r="7"/><circle cx="216" cy="194" r="7"/>
+    </g>
+  </g>
+</svg>

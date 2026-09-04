@@ -721,10 +721,10 @@
 }
 
 .showcase-card {
-    --showcase-accent-rgb: 53 230 176;
-    --showcase-accent-text: #83edca;
-    --showcase-card-background: linear-gradient(145deg, #0b1e2d, #102838 52%, #0d2634);
-    --showcase-muted-text: #a9bbc6;
+    --showcase-accent-rgb: 99 91 255;
+    --showcase-accent-text: #8cebf7;
+    --showcase-card-background: linear-gradient(145deg, #070b14, #171634 52%, #101a31);
+    --showcase-muted-text: #b9c0df;
 
     min-height: 142px;
     padding: 14px 12px 12px;
@@ -1242,7 +1242,7 @@
 
 .trust-item.item-support .trust-icon-box {
     background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
-    color: #7c3aed;
+    color: #635bff;
     box-shadow: 0 2px 5px rgba(124, 58, 237, 0.15);
 }
 
@@ -1988,8 +1988,8 @@
     width: 22px;
     height: 22px;
     border-radius: 6px;
-    background: #e8f5f1;
-    color: #087e6b;
+    background: #eeefff;
+    color: #635bff;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -3162,7 +3162,7 @@
     display: grid;
     place-items: center;
     background: #f1f5f9;
-    color: #7c3aed;
+    color: #635bff;
 }
 
 .business-services-empty svg {

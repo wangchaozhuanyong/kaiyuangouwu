@@ -84,7 +84,7 @@ describe('StoreDomainService channel isolation', () => {
 });
 describe('StoreDomainService atomic transfer', () => {
     function setupTransfer() {
-        const sourceChannel = { id: 'source', code: 'awanmesh' };
+        const sourceChannel = { id: 'source', code: 'primary-store' };
         const targetChannel = { id: 'target', code: 'meiyijia' };
         const transferred = Object.assign(new StoreDomain(), {
             id: 'domain-1',

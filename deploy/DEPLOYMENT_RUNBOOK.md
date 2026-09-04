@@ -10,7 +10,7 @@
 - Git 仓库：`git@github.com:wangchaozhuanyong/kaiyuangouwu.git`
 - 发布分支：`main`
 - 包管理器：Bun（仓库根目录使用 `bun.lock`）
-- AwanMesh 主网店：`https://moyaoai.com`（`www.moyaoai.com` 301 回主域）
+- MOYAO AI 主网店：`https://moyaoai.com`（`www.moyaoai.com` 301 回主域）
 - 美宜佳网店：`https://damatong.net`（`www.damatong.net` 301 回主域）
 - 统一管理后台：`https://console.moyaoai.com/dashboard/`
 - 兼容入口：`https://console.damatong.net/*` 301 到统一管理后台
@@ -343,14 +343,14 @@ VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
 `Production Runtime Artifact` 唯一入口同时填写逗号分隔的 manifest key 和已审核 Channel code，不再另行触发第二个媒体发布工作流，也不回退到服务器默认 Channel。
 下游部署会校验发布计划、制品 SHA-256 与源工作流 run ID，然后只将已验证的 key 和 Channel 范围交给持有生产锁的脚本。脚本在备份、迁移和 PM2 切换前，先通过当前健康 API 执行只读 dry-run，校验登录、Channel 权限、SKU/内容目标和现有素材；仅预检通过后才备份、迁移和启动候选 API，再执行受保护 apply。预检失败不会停止或重启 PM2。
 
-若目标提交包含 AwanMesh 品牌迁移，先预演，再把三套官方 SVG、双语品牌名/口号和色板一次性绑定到主 Channel：
+若目标提交包含 MOYAO AI 品牌更新，先预演，再把三套官方品牌素材、双语品牌名/口号和色板一次性绑定到主 Channel：
 
 ```bash
 cd "${CANDIDATE}"
 VENDURE_API_ORIGIN=http://127.0.0.1:3002 VENDURE_STOREFRONT_URL=https://moyaoai.com \
-    node packages/dev-server/scripts/sync-awanmesh-brand.mjs --dry-run --channel-code __default_channel__
+    node packages/dev-server/scripts/sync-moyao-brand.mjs --dry-run --channel-code __default_channel__
 VENDURE_API_ORIGIN=http://127.0.0.1:3002 VENDURE_STOREFRONT_URL=https://moyaoai.com \
-    node packages/dev-server/scripts/sync-awanmesh-brand.mjs --apply --allow-remote \
+    node packages/dev-server/scripts/sync-moyao-brand.mjs --apply --allow-remote \
     --channel-code __default_channel__
 ```
 
@@ -386,7 +386,7 @@ sudo -n systemctl reload nginx
 7. 服务器校验外层清单哈希、产物内全部文件、符号链接、平台、Git SHA 和运行依赖清单。
 8. 记录当前稳定指针；如果发布计划包含媒体 key，先使用当前健康 API 完成只读 dry-run。数据库迁移只在该预检和生产环境审计明确通过且备份完成后，通过专用迁移入口执行一次。部署日志必须包含 `DEPLOY_BACKUP_OK file=<本地备份> offsite=yes invocation_id=<systemd invocation>`，缺失精确备份文件、校验文件或异地上传证据时停止迁移。
 9. PM2 从候选目录直接启动已编译的 Worker 和 API，不使用 Vendure CLI；等待 `127.0.0.1:3002/health` 与 `127.0.0.1:3002/image-generation/health` 成功，并递归验证候选 Dashboard 的入口、样式、主包与懒加载 JS/CSS 全部可访问。
-10. 从候选产物预演并执行本次审核过的库存继承修复、店铺图片同步和 AwanMesh 品牌同步；所有远程写入都必须使用 `--apply --allow-remote`，并且必须已通过第 8 步的只读预检。全部成功后才原子切换 `kaiyuangouwu-current`。
+10. 从候选产物预演并执行本次审核过的库存继承修复、店铺图片同步和 MOYAO AI 品牌同步；所有远程写入都必须使用 `--apply --allow-remote`，并且必须已通过第 8 步的只读预检。全部成功后才原子切换 `kaiyuangouwu-current`。
 11. 验收前台、后台、Shop API、Admin API、静态资源和 PM2 状态，确认线上 Git SHA。
 12. 完成发布记录中的制品名称、制品 SHA-256、制品与部署工作流编号、UTC 时间和验收结果；记录必须能够唯一定位生产运行的代码和制品。
 13. 发布与验收成功后，先用 `Cleanup Merged Production Branches` 的 dry-run 核对候选，再以 `apply=true` 删除已包含在当前生产 SHA 且不再使用的远程功能/热修复/release 分支；撤销临时 SSH 规则，仅保留原有固定规则。候选和回滚包按策略保留，不删除用户数据。
@@ -440,7 +440,7 @@ node deploy/verify-storefront-realtime.mjs \
 - 边界与超限：新合成 IP 的前 12 条全部就绪，第 13 条只允许返回 HTTP 429，已接受连接必须继续收到 heartbeat；
 - 释放恢复：第三个合成 IP 关闭 12 条连接后，同 IP 在五秒内重新同时占满 12 个槽位并保持五秒，之后三轮“连接—`ready`—明确关闭”全部通过。
 
-释放窗口内短暂的 429 是有界重试的测量值，不是失败；超过五秒仍未重新同时占满 12 个槽位才失败。任何 503 或其他 5xx 都立即失败。Nginx 会将该路由的 `limit_conn_status`、`limit_req_status`、HTTP 状态、请求/上游时间、连接编号与 Cloudflare Ray ID 写入 `/var/log/nginx/awanmesh-storefront-realtime.log`，用于区分连接上限 429 和请求速率 429，不记录 Cookie、Authorization 或响应正文。`origin-full` 只证明本机 Nginx 到应用的槽位释放，不能代替 Cloudflare 到源站取消延迟的公网链路评估；公网 smoke 的 CF Ray ID 必须与上述专用日志关联后再定位该类延迟。
+释放窗口内短暂的 429 是有界重试的测量值，不是失败；超过五秒仍未重新同时占满 12 个槽位才失败。任何 503 或其他 5xx 都立即失败。Nginx 会将该路由的 `limit_conn_status`、`limit_req_status`、HTTP 状态、请求/上游时间、连接编号与 Cloudflare Ray ID 写入 `/var/log/nginx/moyao-storefront-realtime.log`，用于区分连接上限 429 和请求速率 429，不记录 Cookie、Authorization 或响应正文。`origin-full` 只证明本机 Nginx 到应用的槽位释放，不能代替 Cloudflare 到源站取消延迟的公网链路评估；公网 smoke 的 CF Ray ID 必须与上述专用日志关联后再定位该类延迟。
 
 只有未执行任何主动容量测试时，公网单连接持续无法就绪或返回 5xx，才属于实时更新可用性回滚条件。完整容量审计中的边界、超限或释放时间不符合预期时，必须先清理全部探测连接并停止发布收尾，不自动回滚到已知会恢复更低连接上限或 503 语义的旧版本。验证器未能确认自身连接已清理时，结果记为“验收无效”而不是“产品失败”，需换用新的合成 IP 重试。
 
@@ -451,7 +451,7 @@ node deploy/verify-storefront-realtime.mjs \
 - `127.0.0.1:3002` 正常监听，公网不直接暴露 3002；
 - `/storefront-realtime/events` 不缓冲 SSE，连接断开后前端能自动重连；
 - 公网 `https://moyaoai.com/admin-api` 和 `https://damatong.net/admin-api` 均被 Nginx 拒绝；
-- 分别验收 `moyaoai.com` 返回 AwanMesh 主 Channel、`damatong.net` 返回美宜佳 Channel，商品、价格、订单和店铺品牌不得串店；
+- 分别验收 `moyaoai.com` 返回 MOYAO AI 主 Channel、`damatong.net` 返回美宜佳 Channel，商品、价格、订单和店铺品牌不得串店；
 - 管理后台能读取各店铺设置，前台按对应 Channel/店铺域名展示；
 - 实际支付、邮件、短信和物流在未配置真实供应商前不得宣称已具备正式交易能力。
 

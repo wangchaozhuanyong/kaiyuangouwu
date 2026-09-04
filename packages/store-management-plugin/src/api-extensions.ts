@@ -441,6 +441,10 @@ export const adminApiExtensions = gql`
         brandPrimaryColor: String
         brandAccentColor: String
         brandHighlightColor: String
+        legalEntityName: String
+        legalRegistrationCountry: String
+        supportEmail: String
+        privacyEmail: String
         primaryDomain: String
         storefrontUrl: String
         isOperational: Boolean!
@@ -482,6 +486,10 @@ export const adminApiExtensions = gql`
         brandPrimaryColor: String
         brandAccentColor: String
         brandHighlightColor: String
+        legalEntityName: String
+        legalRegistrationCountry: String
+        supportEmail: String
+        privacyEmail: String
         currentPassword: String
     }
 
@@ -535,6 +543,10 @@ export const adminApiExtensions = gql`
         brandPrimaryColor: String
         brandAccentColor: String
         brandHighlightColor: String
+        legalEntityName: String
+        legalRegistrationCountry: String
+        supportEmail: String
+        privacyEmail: String
     }
 
     type StoreCommerceConfiguration {
@@ -1254,6 +1266,10 @@ export const shopApiExtensions = gql`
         primaryColor: String
         accentColor: String
         highlightColor: String
+        legalEntityName: String
+        legalRegistrationCountry: String
+        supportEmail: String
+        privacyEmail: String
     }
 
     type StoreFlashSaleItem {

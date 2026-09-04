@@ -74,6 +74,10 @@ export class StoreProfileService {
                     brandPrimaryColor: null,
                     brandAccentColor: null,
                     brandHighlightColor: null,
+                    legalEntityName: null,
+                    legalRegistrationCountry: null,
+                    supportEmail: null,
+                    privacyEmail: null,
                 }),
             );
         } catch (error) {
@@ -152,6 +156,7 @@ export class StoreProfileService {
             '英文品牌口号',
         );
         this.updateBrandColors(profile, input);
+        this.updateLegalIdentity(profile, input);
         await this.updateStorefrontNames(
             ctx,
             profile,
@@ -206,6 +211,7 @@ export class StoreProfileService {
             '英文品牌口号',
         );
         this.updateBrandColors(profile, input);
+        this.updateLegalIdentity(profile, input);
         if (input.logoAssetId !== undefined) {
             const asset = input.logoAssetId == null ? null : await this.findAsset(ctx, input.logoAssetId);
             profile.logoAsset = asset;
@@ -503,6 +509,63 @@ export class StoreProfileService {
         const normalized = value.trim().toUpperCase();
         if (!/^#[0-9A-F]{6}$/u.test(normalized)) {
             throw new UserInputError(`${label}必须使用 #RRGGBB 格式`);
+        }
+        return normalized;
+    }
+
+    private updateLegalIdentity(
+        profile: StoreProfile,
+        input: UpdateStoreProfileInput | UpdateMyStoreProfileInput,
+    ): void {
+        profile.legalEntityName = this.normalizeLegalText(
+            input.legalEntityName,
+            profile.legalEntityName,
+            '法定经营主体',
+            200,
+        );
+        profile.legalRegistrationCountry = this.normalizeLegalText(
+            input.legalRegistrationCountry,
+            profile.legalRegistrationCountry,
+            '注册国家或地区',
+            100,
+        );
+        profile.supportEmail = this.normalizeContactEmail(
+            input.supportEmail,
+            profile.supportEmail,
+            '客服邮箱',
+        );
+        profile.privacyEmail = this.normalizeContactEmail(
+            input.privacyEmail,
+            profile.privacyEmail,
+            '隐私邮箱',
+        );
+    }
+
+    private normalizeLegalText(
+        value: string | null | undefined,
+        current: string | null,
+        label: string,
+        maxLength: number,
+    ): string | null {
+        if (value === undefined) return current;
+        if (value == null || value.trim() === '') return null;
+        const normalized = value.trim();
+        if (normalized.length > maxLength) {
+            throw new UserInputError(`${label}不能超过 ${maxLength} 个字符`);
+        }
+        return normalized;
+    }
+
+    private normalizeContactEmail(
+        value: string | null | undefined,
+        current: string | null,
+        label: string,
+    ): string | null {
+        if (value === undefined) return current;
+        if (value == null || value.trim() === '') return null;
+        const normalized = value.trim().toLowerCase();
+        if (normalized.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(normalized)) {
+            throw new UserInputError(`${label}格式无效`);
         }
         return normalized;
     }
