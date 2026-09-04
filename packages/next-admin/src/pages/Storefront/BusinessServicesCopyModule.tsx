@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from '@apollo/client/react';
-import { RefreshCw, RotateCcw, Save, Sparkles } from 'lucide-react';
+import { ExternalLink, RefreshCw, RotateCcw, Save, Sparkles } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 
 import {
@@ -13,6 +13,11 @@ import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { resolveVersionedDraft } from '../../utils/versioned-draft';
+import {
+    businessServicesLinkIsValid,
+    businessServicesLinkValue,
+    updateBusinessServicesLink,
+} from './business-services-link';
 import { storefrontBlockInput } from './storefront-content-utils';
 
 const BLOCK_CODE = 'storefront-client-plugins';
@@ -50,6 +55,8 @@ export function BusinessServicesCopyModule() {
     const [create, createState] = useMutation(CREATE_STOREFRONT_BLOCK_MUTATION);
     const [update, updateState] = useMutation(UPDATE_STOREFRONT_BLOCK_MUTATION);
     const draft = resolveVersionedDraft(sourceSignature, signature, copyDraft(source), storedDraft);
+    const linkValue = draft ? businessServicesLinkValue(draft) : '';
+    const linkIsValid = businessServicesLinkIsValid(linkValue);
 
     /* oxlint-disable react/set-state-in-effect -- GraphQL result is the versioned draft source. */
     useEffect(() => {
@@ -62,6 +69,7 @@ export function BusinessServicesCopyModule() {
     const dirty = Boolean(draft && JSON.stringify(draft) !== JSON.stringify(copyDraft(source)));
     const valid = Boolean(
         draft &&
+        linkIsValid &&
         (['zh_Hans', 'en'] as const).every(language => {
             const translation = getTranslation(draft, language);
             return translation.title.trim() && translation.body.trim();
@@ -84,6 +92,22 @@ export function BusinessServicesCopyModule() {
                               : translation,
                       ),
                   }
+                : current,
+        );
+
+    const changeLink = (value: string) =>
+        setDraft(current =>
+            current
+                ? updateBusinessServicesLink(
+                      {
+                          ...current,
+                          settings: {
+                              ...(current.settings ?? {}),
+                              businessServicesCopyVersion: COPY_VERSION,
+                          },
+                      },
+                      value,
+                  )
                 : current,
         );
 
@@ -124,7 +148,7 @@ export function BusinessServicesCopyModule() {
                             商业服务页文案
                         </h1>
                         <p className="mt-1 text-xs text-slate-500">
-                            编辑商业服务页顶部卡片的中英文标题与说明 · 当前店铺{' '}
+                            编辑商业服务页顶部卡片的中英文标题、说明与跳转链接 · 当前店铺{' '}
                             {query.data ? getChannelDisplayName(query.data.activeChannel.code) : '读取中'}
                         </p>
                     </div>
@@ -166,7 +190,7 @@ export function BusinessServicesCopyModule() {
                                 <div>
                                     <h2 className="text-sm font-bold">页面顶部文案</h2>
                                     <p className="mt-1 text-xs text-slate-500">
-                                        保留同一配置块中的客户端插件与排序，只更新页面文案。
+                                        保留同一配置块中的客户端插件与排序，只更新页面文案与跳转链接。
                                     </p>
                                 </div>
                                 {canEdit && (
@@ -175,7 +199,12 @@ export function BusinessServicesCopyModule() {
                                         onClick={() =>
                                             setDraft(current =>
                                                 current
-                                                    ? { ...current, translations: normalizedTranslations([]) }
+                                                    ? {
+                                                          ...current,
+                                                          targetType: 'NONE',
+                                                          targetValue: null,
+                                                          translations: normalizedTranslations([]),
+                                                      }
                                                     : current,
                                             )
                                         }
@@ -221,6 +250,31 @@ export function BusinessServicesCopyModule() {
                                     </div>
                                 );
                             })}
+                            <div className="space-y-2 rounded-lg border border-slate-200 p-4">
+                                <Field label="跳转链接地址（可选）">
+                                    <input
+                                        type="url"
+                                        inputMode="url"
+                                        autoComplete="url"
+                                        value={linkValue}
+                                        maxLength={2048}
+                                        disabled={!canEdit}
+                                        placeholder="https://example.com/services"
+                                        aria-invalid={!linkIsValid}
+                                        onChange={event => changeLink(event.target.value)}
+                                        className={inputClass}
+                                    />
+                                </Field>
+                                <p className="text-xs leading-5 text-slate-500">
+                                    支持站内路径（如 /promotions）或完整的 HTTP(S)
+                                    网址；填写后前台卡片会显示访问入口。
+                                </p>
+                                {!linkIsValid && (
+                                    <p role="alert" className="text-xs font-medium text-rose-700">
+                                        请输入有效的站内路径或 HTTP(S) 网址。
+                                    </p>
+                                )}
+                            </div>
                         </section>
                         <section className="rounded-xl border border-slate-200 bg-white p-5">
                             <div className="flex items-center justify-between">
@@ -242,6 +296,12 @@ export function BusinessServicesCopyModule() {
                                     {preview.title || '—'}
                                 </h3>
                                 <p className="mt-3 text-sm leading-6 text-slate-300">{preview.body || '—'}</p>
+                                {linkValue.trim() && linkIsValid ? (
+                                    <span className="mt-5 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-xs font-bold text-white">
+                                        {previewLanguage === 'zh_Hans' ? '访问链接' : 'Open link'}
+                                        <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+                                    </span>
+                                ) : null}
                             </div>
                         </section>
                     </div>

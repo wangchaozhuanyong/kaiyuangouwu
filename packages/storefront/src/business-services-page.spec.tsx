@@ -1,6 +1,6 @@
-import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
 import type { StorefrontContentBlock, StorefrontContentItem } from './types';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { describe, expect, it, vi } from 'vitest';
 
 import { BusinessServicesPage } from './pages/business-services-page';
 import { StorefrontContext } from './StorefrontContext';
@@ -82,7 +82,14 @@ function navigationBlock(servicesLabel: string): StorefrontContentBlock {
 
 function renderPage(contentBlocks: StorefrontContentBlock[], language: 'zh' | 'en' = 'zh') {
     return renderToStaticMarkup(
-        <StorefrontContext.Provider value={{ contentBlocks, language, onNavigate: () => undefined }}>
+        <StorefrontContext.Provider
+            value={{
+                contentBlocks,
+                language,
+                onNavigate: () => undefined,
+                onContentTarget: vi.fn(),
+            }}
+        >
             <BusinessServicesPage />
         </StorefrontContext.Provider>,
     );
@@ -126,6 +133,25 @@ describe('business services page', () => {
         expect(renderPage([chineseBlock])).toContain('从这里开始使用店铺工具。');
         expect(renderPage([englishBlock], 'en')).toContain('Services for your business');
         expect(renderPage([englishBlock], 'en')).toContain('Start using store tools here.');
+    });
+
+    it('renders a localized jump action when the managed hero has a URL target', () => {
+        const linkedBlock = businessPluginBlock();
+        linkedBlock.settings = { businessServicesCopyVersion: 1 };
+        linkedBlock.targetType = 'URL';
+        linkedBlock.targetValue = 'https://example.com/services';
+
+        expect(renderPage([linkedBlock])).toContain('business-services-hero-link');
+        expect(renderPage([linkedBlock])).toContain('访问链接');
+        expect(renderPage([linkedBlock], 'en')).toContain('Open link');
+    });
+
+    it('does not render the jump action without a managed URL target', () => {
+        const unmanagedBlock = businessPluginBlock();
+        unmanagedBlock.targetType = 'URL';
+        unmanagedBlock.targetValue = 'https://example.com/services';
+
+        expect(renderPage([unmanagedBlock])).not.toContain('business-services-hero-link');
     });
 
     it('keeps the built-in copy until the existing plugin block is saved from the new editor', () => {
