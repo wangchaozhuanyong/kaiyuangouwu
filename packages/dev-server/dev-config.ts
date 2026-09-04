@@ -67,6 +67,7 @@ import { StorefrontContentPlugin } from '@vendure/storefront-content-plugin';
 import { StorefrontReviewPlugin } from '@vendure/storefront-review-plugin';
 import { TwoFactorDashboardPlugin } from '@vendure/two-factor-dashboard-plugin';
 import 'dotenv/config';
+import { json } from 'express';
 import { createRequire } from 'node:module';
 import path from 'path';
 import { DataSourceOptions } from 'typeorm';
@@ -570,6 +571,13 @@ export const devConfig: VendureConfig = {
               },
         shopApiDebug: !IS_PRODUCTION,
         introspection: !IS_PRODUCTION,
+        middleware: [
+            {
+                handler: json({ limit: '1mb' }),
+                route: `/${ADMIN_API_PATH}`,
+                beforeListen: true,
+            },
+        ],
         ...(corsOrigins?.length
             ? { cors: { origin: corsOrigins, credentials: true } }
             : IS_PRODUCTION

@@ -88,6 +88,7 @@ export const adminApiExtensions = gql`
         state: CatalogImportState!
         actorId: String
         totalRows: Int!
+        receivedRows: Int!
         createdCount: Int!
         updatedCount: Int!
         skippedCount: Int!
@@ -289,6 +290,7 @@ export const adminApiExtensions = gql`
 
     input CatalogNormalizedRowInput {
         rowNumber: Int!
+        sourceRecordKey: String
         name: String!
         category: String!
         channelCode: String!
@@ -297,10 +299,10 @@ export const adminApiExtensions = gql`
         specification: String!
         primaryUnit: String!
         purchaseUnit: String!
-        packageQuantity: Float!
+        packageQuantity: Float
         stockOnHand: Int
         purchaseCost: Float
-        sellingPrice: Float!
+        sellingPrice: Float
         reportedMargin: Float
         maximumStock: Int
         minimumStock: Int

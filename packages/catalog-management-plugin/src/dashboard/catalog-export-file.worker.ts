@@ -7,7 +7,7 @@ import { buildCatalogExport } from './catalog-export-workbook';
 self.onmessage = (event: MessageEvent<CatalogExportWorkerRequest>) => {
     let response: CatalogExportWorkerResponse;
     try {
-        const result = buildCatalogExport(event.data.rows, event.data.format);
+        const result = buildCatalogExport(event.data.rows, event.data.format, event.data.stockLocationId);
         response = { ok: true, ...result };
         self.postMessage(response, { transfer: [result.buffer] });
         return;

@@ -7,57 +7,76 @@ import { type CatalogExportRowRecord } from './catalog-management.graphql';
 
 describe('browser-local catalog export', () => {
     it('creates the four standard worksheets with typed source and system dates', () => {
-        const output = buildCatalogExport([exportRow()], 'xlsx');
+        const output = buildCatalogExport([exportRow()], 'xlsx', 's1');
         const workbook = XLSX.read(output.buffer, { type: 'array', cellDates: true });
 
         expect(workbook.SheetNames).toEqual(['商品与SKU', '库存策略', '批次效期', '字段说明']);
         const productRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(workbook.Sheets['商品与SKU']);
         expect(productRows[0]).toMatchObject({
-            '名称（必填）': '匿名商品',
-            '分类（必填）': '匿名分类',
+            名称: '匿名商品',
+            分类: '匿名分类',
             SKU: "'=FORMULA",
-            '进货价（必填）': 1.255,
-            '销售价（必填）': 2.5,
+            仓库: '主仓',
+            库存量: 10,
+            进货价: 1.255,
+            销售价: 2.5,
+            库存上限: 50,
+            库存下限: 3,
             商品状态: '启用',
             SKU状态: '禁用',
         });
-        expect(workbook.Sheets['商品与SKU'].S2.t).toBe('d');
-        expect(workbook.Sheets['商品与SKU'].T2.t).toBe('d');
+        expect(workbook.Sheets['商品与SKU'].W2.t).toBe('d');
+        expect(workbook.Sheets['商品与SKU'].X2.t).toBe('d');
         expect(productRows[0].供货商).toBe('匿名供货商');
     });
 
     it('creates UTF-8 CSV locally without exposing workbook internals', () => {
-        const output = buildCatalogExport([exportRow()], 'csv');
+        const output = buildCatalogExport([exportRow()], 'csv', 's1');
         const bytes = new Uint8Array(output.buffer);
         const csv = new TextDecoder().decode(output.buffer);
         expect([...bytes.slice(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
-        expect(csv).toContain('名称（必填）');
+        expect(csv).toContain(
+            '名称,分类,SKU,仓库,库存量,进货价,销售价,毛利率,库存上限,库存下限,商品状态,商品描述,标签',
+        );
         expect(csv).toContain('匿名商品');
+        expect(csv).toContain('主仓,10,1.255,2.5');
     });
 
     it('round-trips standard product, stock policy and lot data through the browser parser', async () => {
         const row = exportRow();
-        row.sku = 'SKU-ROUNDTRIP';
-        row.lots[0].lotCode = 'LOT-ROUNDTRIP';
+        row.sku = '=SKU-ROUNDTRIP';
+        row.lots[0].lotCode = '@LOT-ROUNDTRIP-A';
         row.lots[0].quantityOnHand = 4;
-        const output = buildCatalogExport([row], 'xlsx');
+        row.lots.push({
+            ...row.lots[0],
+            id: 'l2',
+            lotCode: '-LOT-ROUNDTRIP-B',
+            quantityOnHand: 6,
+        });
+        const output = buildCatalogExport([row], 'xlsx', 's1');
 
         const parsed = await parseCatalogArrayBuffer(output.buffer, '商品标准报表.xlsx');
 
         expect(parsed.errors).toEqual([]);
-        expect(parsed.rows).toHaveLength(1);
+        expect(parsed.rows).toHaveLength(2);
         expect(parsed.rows[0]).toMatchObject({
-            sku: 'SKU-ROUNDTRIP',
+            sku: '=SKU-ROUNDTRIP',
             stockLocationCode: '主仓',
             stockOnHand: 10,
             minimumStock: 3,
             maximumStock: 50,
-            lotCode: 'LOT-ROUNDTRIP',
+            lotCode: '@LOT-ROUNDTRIP-A',
             lotQuantity: 4,
             manufacturedAt: '2026-08-01T00:00:00.000Z',
             shelfLifeDays: 365,
             supplier: '匿名供货商',
             variantEnabled: false,
+        });
+        expect(parsed.rows[1]).toMatchObject({
+            sku: '=SKU-ROUNDTRIP',
+            stockOnHand: 10,
+            lotCode: '-LOT-ROUNDTRIP-B',
+            lotQuantity: 6,
         });
         expect(parsed.unknownHeaders).toEqual([]);
     });
@@ -67,7 +86,7 @@ describe('browser-local catalog export', () => {
         row.sku = 'SKU-LEGACY-INCOMPLETE';
         row.categories = [];
         row.purchaseCostMicrounits = null;
-        const output = buildCatalogExport([row], 'xlsx');
+        const output = buildCatalogExport([row], 'xlsx', 's1');
 
         const parsed = await parseCatalogArrayBuffer(output.buffer, '历史商品报表.xlsx');
 

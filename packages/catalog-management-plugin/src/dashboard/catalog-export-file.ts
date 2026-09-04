@@ -10,6 +10,7 @@ export type CatalogExportFormat = 'xlsx' | 'csv';
 export interface CatalogExportWorkerRequest {
     rows: CatalogExportRowRecord[];
     format: CatalogExportFormat;
+    stockLocationId?: string;
 }
 
 export type CatalogExportWorkerResponse =
@@ -19,9 +20,10 @@ export type CatalogExportWorkerResponse =
 export async function exportCatalogRowsLocally(
     rows: CatalogExportRowRecord[],
     format: CatalogExportFormat,
+    stockLocationId?: string,
 ): Promise<{ blob: Blob; extension: CatalogExportFormat }> {
     if (typeof Worker === 'undefined') {
-        const result = buildCatalogExport(rows, format);
+        const result = buildCatalogExport(rows, format, stockLocationId);
         return { blob: new Blob([result.buffer], { type: result.mimeType }), extension: result.extension };
     }
     return new Promise((resolve, reject) => {
@@ -42,7 +44,7 @@ export async function exportCatalogRowsLocally(
             close();
             reject(new Error(event.message || '浏览器本地生成报表失败'));
         };
-        worker.postMessage({ rows, format } satisfies CatalogExportWorkerRequest);
+        worker.postMessage({ rows, format, stockLocationId } satisfies CatalogExportWorkerRequest);
     });
 }
 

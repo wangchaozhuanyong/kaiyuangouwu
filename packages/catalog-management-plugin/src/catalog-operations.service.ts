@@ -456,8 +456,9 @@ export class CatalogOperationsService {
                         variantId: String(variant.id),
                         productName: translation?.name ?? variant.name,
                         description: translation?.description ?? '',
-                        categories: uniqueNames(
-                            data.collections.map(
+                        categories: uniqueNames([
+                            ...facetValueNames(product, 'catalog-import-category', ctx.languageCode),
+                            ...data.collections.map(
                                 collection =>
                                     collection.translations.find(
                                         item => item.languageCode === ctx.languageCode,
@@ -465,7 +466,7 @@ export class CatalogOperationsService {
                                     collection.translations[0]?.name ??
                                     '',
                             ),
-                        ),
+                        ]),
                         brand: facetValueNames(product, 'catalog-brand', ctx.languageCode)[0] ?? null,
                         tags: facetValueNames(product, 'catalog-tag', ctx.languageCode),
                         productEnabled: product.enabled,

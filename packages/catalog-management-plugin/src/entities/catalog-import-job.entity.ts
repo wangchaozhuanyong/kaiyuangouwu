@@ -65,6 +65,9 @@ export class CatalogImportJob extends VendureEntity {
     @Column('int', { default: 0 })
     totalRows: number;
 
+    /** Runtime-only count exposed by GraphQL; intentionally not persisted. */
+    receivedRows = 0;
+
     @Column('int', { default: 0 })
     createdCount: number;
 

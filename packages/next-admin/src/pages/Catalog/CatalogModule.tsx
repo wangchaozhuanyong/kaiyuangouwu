@@ -276,7 +276,7 @@ export function CatalogModule() {
             <div className="flex shrink-0 flex-col gap-4 border-b border-slate-200 bg-white px-5 py-5 shadow-2xs sm:flex-row sm:items-center sm:justify-between sm:px-8">
                 <div>
                     <h1 className="text-xl font-bold text-slate-900">商品管理</h1>
-                    <p className="text-xs text-slate-500 mt-1">管理商品上下架、规格库存和销售价格</p>
+                    <p className="text-xs text-slate-500 mt-1">管理商品状态、规格、库存量和销售价</p>
                 </div>
 
                 <div className="flex items-center gap-3">
@@ -398,7 +398,7 @@ export function CatalogModule() {
                                         setSearchTerm(e.target.value);
                                     }}
                                     aria-label="搜索商品"
-                                    placeholder="搜索商品名称"
+                                    placeholder="搜索名称"
                                     className="pl-9 pr-8 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 w-64 bg-white"
                                 />
                                 {searchTerm && (
@@ -486,7 +486,7 @@ export function CatalogModule() {
                                             scope="col"
                                             className="sticky left-14 z-20 w-60 bg-slate-50 px-3 py-3"
                                         >
-                                            商品名称
+                                            名称
                                         </th>
                                         <th scope="col" className="w-56 px-3 py-3">
                                             SPU Slug
@@ -498,7 +498,7 @@ export function CatalogModule() {
                                             商品类型
                                         </th>
                                         <th scope="col" className="w-28 px-3 py-3">
-                                            上架状态
+                                            商品状态
                                         </th>
                                         <th scope="col" className="w-28 px-3 py-3">
                                             规格数量
@@ -511,7 +511,7 @@ export function CatalogModule() {
                                                   : '库存状态'}
                                         </th>
                                         <th scope="col" className="w-36 px-3 py-3">
-                                            起售价
+                                            销售价（起）
                                         </th>
                                         <th
                                             scope="col"

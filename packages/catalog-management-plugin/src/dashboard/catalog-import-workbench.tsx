@@ -36,6 +36,7 @@ import {
     useQuery,
     useQueryClient,
 } from '@vendure/dashboard';
+import { print } from 'graphql';
 import {
     AlertTriangle,
     CheckCircle2,
@@ -50,6 +51,7 @@ import {
 } from 'lucide-react';
 import { ChangeEvent, useEffect, useRef, useState } from 'react';
 
+import { createCatalogImportBatches } from './catalog-import-batches';
 import {
     CATALOG_BROWSER_PARSER_VERSION,
     CATALOG_FIELD_OPTIONS,
@@ -102,6 +104,8 @@ function CatalogImportWorkbench({
     const [fieldMapping, setFieldMapping] = useState<Record<string, string>>({});
     const [mappingDirty, setMappingDirty] = useState(false);
     const [transferProgress, setTransferProgress] = useState(0);
+    const [transferStage, setTransferStage] = useState('');
+    const [receivedRows, setReceivedRows] = useState(0);
     const [stockLocationId, setStockLocationId] = useState('');
     const [currencyCode, setCurrencyCode] = useState('');
     const [clearBlankFields, setClearBlankFields] = useState(false);
@@ -182,45 +186,75 @@ function CatalogImportWorkbench({
                 throw new Error(`存在 ${localPreview.unknownHeaders.length} 个未解决列，请先映射或明确排除`);
             }
             setTransferProgress(0);
-            const started = await api.mutate<{ beginCatalogImport: CatalogImportJobRecord }>(
-                beginCatalogImportMutation,
-                {
-                    input: {
-                        context: {
-                            channelId: activeChannel.id,
-                            stockLocationId,
-                            currencyCode,
-                            clearBlankFields,
+            setTransferStage('创建导入任务');
+            setReceivedRows(0);
+            let started: { beginCatalogImport: CatalogImportJobRecord };
+            try {
+                started = await api.mutate<{ beginCatalogImport: CatalogImportJobRecord }>(
+                    beginCatalogImportMutation,
+                    {
+                        input: {
+                            context: {
+                                channelId: activeChannel.id,
+                                stockLocationId,
+                                currencyCode,
+                                clearBlankFields,
+                            },
+                            source: {
+                                filename: localPreview.filename,
+                                mimetype: localPreview.mimetype,
+                                byteSize: localPreview.byteSize,
+                                fileHash: localPreview.fileHash,
+                                sheetName: localPreview.sheetName,
+                                detectedHeaders: localPreview.headers,
+                                fieldMapping: localPreview.fieldMapping,
+                                parserVersion: CATALOG_BROWSER_PARSER_VERSION,
+                            },
+                            totalRows: localPreview.rows.length,
                         },
-                        source: {
-                            filename: localPreview.filename,
-                            mimetype: localPreview.mimetype,
-                            byteSize: localPreview.byteSize,
-                            fileHash: localPreview.fileHash,
-                            sheetName: localPreview.sheetName,
-                            detectedHeaders: localPreview.headers,
-                            fieldMapping: localPreview.fieldMapping,
-                            parserVersion: CATALOG_BROWSER_PARSER_VERSION,
-                        },
-                        totalRows: localPreview.rows.length,
                     },
-                },
-            );
+                );
+            } catch (error) {
+                throw new Error(`创建任务阶段：${errorMessage(error)}`);
+            }
             let receivingJob = started.beginCatalogImport;
             if (receivingJob.state !== 'RECEIVING') return receivingJob;
             const transportRows = rowsForCatalogTransport(localPreview.rows);
-            for (let index = 0; index < transportRows.length; index += 500) {
-                const batch = transportRows.slice(index, index + 500);
-                const appended = await api.mutate<{ appendCatalogImportRows: CatalogImportJobRecord }>(
-                    appendCatalogImportRowsMutation,
-                    { input: { jobId: receivingJob.id, rows: batch } },
-                );
-                receivingJob = appended.appendCatalogImportRows;
-                setTransferProgress(Math.round(((index + batch.length) / transportRows.length) * 100));
+            const batches = createCatalogImportBatches(receivingJob.id, transportRows, {
+                operationName: 'AppendCatalogImportRows',
+                query: print(appendCatalogImportRowsMutation),
+            });
+            setTransferStage('接收数据');
+            setReceivedRows(receivingJob.receivedRows);
+            for (let index = 0; index < batches.length; index++) {
+                try {
+                    const appended = await api.mutate<{
+                        appendCatalogImportRows: CatalogImportJobRecord;
+                    }>(appendCatalogImportRowsMutation, {
+                        input: { jobId: receivingJob.id, rows: batches[index] },
+                    });
+                    receivingJob = appended.appendCatalogImportRows;
+                    setReceivedRows(receivingJob.receivedRows);
+                    setTransferProgress(
+                        Math.round((receivingJob.receivedRows / Math.max(transportRows.length, 1)) * 100),
+                    );
+                } catch (error) {
+                    throw new Error(
+                        `接收阶段：第 ${index + 1}/${batches.length} 批失败；已接收 ${receivingJob.receivedRows}/${transportRows.length}。可重新选择同一文件继续。${errorMessage(error)}`,
+                    );
+                }
             }
-            const finalized = await api.mutate<{
-                finalizeCatalogImportPreview: CatalogImportJobRecord;
-            }>(finalizeCatalogImportPreviewMutation, { id: receivingJob.id });
+            setTransferStage('生成数据库差异预览');
+            let finalized: { finalizeCatalogImportPreview: CatalogImportJobRecord };
+            try {
+                finalized = await api.mutate<{
+                    finalizeCatalogImportPreview: CatalogImportJobRecord;
+                }>(finalizeCatalogImportPreviewMutation, { id: receivingJob.id });
+            } catch (error) {
+                throw new Error(
+                    `生成预览阶段：已接收 ${receivingJob.receivedRows}/${localPreview.rows.length}。${errorMessage(error)}`,
+                );
+            }
             return finalized.finalizeCatalogImportPreview;
         },
         onSuccess: async result => {
@@ -292,6 +326,8 @@ function CatalogImportWorkbench({
         setFieldMapping({});
         setMappingDirty(false);
         setTransferProgress(0);
+        setTransferStage('');
+        setReceivedRows(0);
         setJobId(null);
         setActionFilter('ALL');
         setTargetVariantByRow({});
@@ -340,6 +376,8 @@ function CatalogImportWorkbench({
                                 localPending={localParseMutation.isPending}
                                 submitPending={previewMutation.isPending}
                                 transferProgress={transferProgress}
+                                transferStage={transferStage}
+                                receivedRows={receivedRows}
                                 fileInputRef={fileInputRef}
                                 onFileChange={event => {
                                     setFile(event.target.files?.[0] ?? null);
@@ -347,6 +385,8 @@ function CatalogImportWorkbench({
                                     setFieldMapping({});
                                     setMappingDirty(false);
                                     setTransferProgress(0);
+                                    setTransferStage('');
+                                    setReceivedRows(0);
                                 }}
                                 onStockLocationChange={setStockLocationId}
                                 onCurrencyCodeChange={setCurrencyCode}
@@ -360,7 +400,7 @@ function CatalogImportWorkbench({
                                     if (
                                         clearBlankFields &&
                                         !window.confirm(
-                                            '已启用空白清除模式。文件中已提供但留空的描述、品牌、标签、条码、规格、单位、保质期和库存预警值将在执行时清除。确认创建预览吗？',
+                                            '已启用空白清除模式。文件中已提供但留空的商品描述、品牌、标签、条码、规格、单位、保质期和库存预警值将在执行时清除。确认创建预览吗？',
                                         )
                                     ) {
                                         return;
@@ -427,6 +467,17 @@ function CatalogImportWorkbench({
                                 </div>
 
                                 <ImportSummary job={job} />
+                                {job.state === 'RECEIVING' && (
+                                    <div className="space-y-2 rounded-lg border p-4" role="status">
+                                        <div className="flex justify-between text-sm">
+                                            <span>
+                                                接收数据 · 已接收 {job.receivedRows}/{job.totalRows}
+                                            </span>
+                                            <span>{job.progress}%</span>
+                                        </div>
+                                        <Progress value={job.progress} />
+                                    </div>
+                                )}
                                 {running && (
                                     <div className="space-y-2 rounded-lg border p-4" role="status">
                                         <div className="flex justify-between text-sm">
@@ -533,10 +584,10 @@ function CatalogImportWorkbench({
                                             <TableRow>
                                                 <TableHead>行</TableHead>
                                                 <TableHead>结果</TableHead>
-                                                <TableHead>商品</TableHead>
+                                                <TableHead>名称</TableHead>
                                                 <TableHead>分类</TableHead>
                                                 <TableHead>规格 / 单位</TableHead>
-                                                <TableHead>价格 / 库存</TableHead>
+                                                <TableHead>销售价 / 进货价 / 库存量</TableHead>
                                                 <TableHead>说明与处理</TableHead>
                                             </TableRow>
                                         </TableHeader>
@@ -607,6 +658,8 @@ function UploadPanel({
     localPending,
     submitPending,
     transferProgress,
+    transferStage,
+    receivedRows,
     fileInputRef,
     onFileChange,
     onStockLocationChange,
@@ -630,6 +683,8 @@ function UploadPanel({
     localPending: boolean;
     submitPending: boolean;
     transferProgress: number;
+    transferStage: string;
+    receivedRows: number;
     fileInputRef: React.RefObject<HTMLInputElement | null>;
     onFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
     onStockLocationChange: (value: string) => void;
@@ -707,7 +762,7 @@ function UploadPanel({
                             空白字段清除模式（高风险）
                         </Label>
                         <p className="text-xs leading-5 text-muted-foreground">
-                            默认关闭。开启后，仅对文件中实际存在的列生效；留空的描述、品牌、标签、条码、规格、单位、保质期、库存预警值和供货商会被清除。SKU、价格、成本和库存数不会被空值清除。
+                            默认关闭。开启后，仅对文件中实际存在的列生效；留空的商品描述、品牌、标签、条码、规格、单位、保质期、库存预警值和供货商会被清除。SKU、销售价、进货价和库存量不会被空值清除。
                         </p>
                     </div>
                     <Switch
@@ -731,10 +786,14 @@ function UploadPanel({
                         onChange={onFieldMappingChange}
                     />
                 )}
-                {submitPending && transferProgress > 0 && (
+                {(localPending || submitPending) && (
                     <div className="space-y-2 md:col-span-3" role="status">
                         <div className="flex justify-between text-xs text-muted-foreground">
-                            <span>正在分批提交标准化商品字段</span>
+                            <span>
+                                {localPending
+                                    ? '本地解析'
+                                    : `${transferStage || '准备接收'} · 已接收 ${receivedRows}/${localPreview?.rows.length ?? 0}`}
+                            </span>
                             <span>{transferProgress}%</span>
                         </div>
                         <Progress value={transferProgress} />
@@ -855,7 +914,7 @@ function LocalPreviewSummary({ preview }: Readonly<{ preview: LocalCatalogFile }
                 destructive={preview.errors.length > 0}
             />
             <LocalMetric
-                label="重复冲突组"
+                label="标识冲突组"
                 value={preview.duplicateGroups}
                 destructive={preview.duplicateGroups > 0}
             />
@@ -864,6 +923,9 @@ function LocalPreviewSummary({ preview }: Readonly<{ preview: LocalCatalogFile }
                 value={preview.duplicateRows}
                 destructive={preview.duplicateRows > 0}
             />
+            <LocalMetric label="同名多 SKU 组" value={preview.multiSkuGroups} />
+            <LocalMetric label="独立 SKU 行" value={preview.multiSkuRows} />
+            <LocalMetric label="完全重复将跳过" value={preview.exactDuplicateRows} />
             <LocalMetric label="风险警告" value={preview.warningRows} destructive={preview.warningRows > 0} />
             <LocalMetric label="已映射列" value={preview.mappedHeaders} />
             <LocalMetric label="明确排除列" value={preview.excludedHeaders.length} />
@@ -924,6 +986,7 @@ function LocalMetric({
 function ImportSummary({ job }: Readonly<{ job: CatalogImportJobRecord }>) {
     const cards = [
         ['总行数', job.totalRows, 'outline'],
+        ['已接收', job.receivedRows, 'outline'],
         ['新增', job.createdCount, 'default'],
         ['修改', job.updatedCount, 'secondary'],
         ['跳过', job.skippedCount, 'outline'],
@@ -932,7 +995,7 @@ function ImportSummary({ job }: Readonly<{ job: CatalogImportJobRecord }>) {
         ['错误', job.errorCount, job.errorCount ? 'destructive' : 'outline'],
     ] as const;
     return (
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-7">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-8">
             {cards.map(([label, value, variant]) => (
                 <div key={label} className="rounded-lg border p-3">
                     <div className="text-xs text-muted-foreground">{label}</div>
@@ -972,9 +1035,9 @@ function ImportRow({
             <TableCell>{category}</TableCell>
             <TableCell>{[specification, unit].filter(Boolean).join(' / ') || '—'}</TableCell>
             <TableCell className="whitespace-nowrap text-sm">
-                售 {displayValue(data.sellingPrice, '—')} · 成本 {displayValue(data.purchaseCost, '—')}
+                销售价 {displayValue(data.sellingPrice, '—')} · 进货价 {displayValue(data.purchaseCost, '—')}
                 <br />
-                库存 {displayValue(data.stockOnHand, '—')}
+                库存量 {displayValue(data.stockOnHand, '—')}
             </TableCell>
             <TableCell className="min-w-72">
                 <p className="mb-2 text-sm text-muted-foreground">{row.message || '—'}</p>
@@ -1053,9 +1116,16 @@ function ImportHistory({
                             <TableCell className="font-medium">{job.originalFilename}</TableCell>
                             <TableCell>{job.stockLocation.name}</TableCell>
                             <TableCell>
-                                <Badge variant={job.state === 'FAILED' ? 'destructive' : 'outline'}>
-                                    {stateLabel(job.state)}
-                                </Badge>
+                                <div className="space-y-1">
+                                    <Badge variant={job.state === 'FAILED' ? 'destructive' : 'outline'}>
+                                        {stateLabel(job.state)}
+                                    </Badge>
+                                    {job.state === 'RECEIVING' && (
+                                        <div className="text-xs text-muted-foreground">
+                                            已接收 {job.receivedRows}/{job.totalRows}
+                                        </div>
+                                    )}
+                                </div>
                             </TableCell>
                             <TableCell>
                                 新增 {job.createdCount} · 修改 {job.updatedCount} · 跳过 {job.skippedCount}
@@ -1087,10 +1157,10 @@ function LoadingPreview() {
 function downloadTemplate(): void {
     const rows = [
         [
-            '名称（必填）',
-            '分类（必填）',
-            '门店编码',
-            '仓库编码',
+            '名称',
+            '分类',
+            '门店',
+            '仓库',
             '币种',
             'SKU',
             '条码',
@@ -1099,8 +1169,8 @@ function downloadTemplate(): void {
             '采购单位',
             '包装换算',
             '库存量',
-            '进货价（必填）',
-            '销售价（必填）',
+            '进货价',
+            '销售价',
             '库存上限',
             '库存下限',
             '品牌',
@@ -1166,7 +1236,7 @@ async function downloadReport(job: CatalogImportJobRecord): Promise<void> {
             ['原始表头', '处理状态', '系统字段'],
             ...headerAudit,
             [],
-            ['行号', '结果', '处理选择', '商品名称', '分类', 'SKU', '说明', '应用时间'],
+            ['行号', '结果', '处理选择', '名称', '分类', 'SKU', '说明', '应用时间'],
             ...result.catalogImportRows.map(row => [
                 String(row.rowNumber),
                 row.action,
