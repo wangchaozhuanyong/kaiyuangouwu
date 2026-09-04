@@ -263,6 +263,69 @@ test('asset-library media is channel-scoped without mutating another managed ent
     );
 });
 
+test('asset upload only requests the stable id field from production-compatible Asset results', async () => {
+    const requests = [];
+    const fetchImpl = async (_url, init) => {
+        const request =
+            init.body instanceof FormData
+                ? JSON.parse(String(init.body.get('operations')))
+                : JSON.parse(init.body);
+        requests.push(request);
+        if (request.query.includes('StorefrontMediaLogin')) {
+            return new Response(
+                JSON.stringify({
+                    data: {
+                        login: {
+                            id: 'admin-1',
+                            channels: [
+                                {
+                                    id: 'channel-1',
+                                    code: '__default_channel__',
+                                    token: 'channel-token',
+                                },
+                            ],
+                        },
+                    },
+                }),
+                { headers: { 'content-type': 'application/json', 'vendure-auth-token': 'auth-token' } },
+            );
+        }
+        if (request.query.includes('StorefrontMediaContentBlocks')) {
+            return Response.json({ data: { storefrontContentBlocks: [] } });
+        }
+        if (request.query.includes('CreateStorefrontMediaAsset')) {
+            assert.match(request.query, /\.\.\. on Asset \{\s*id\s*\}/u);
+            assert.doesNotMatch(request.query, /\b(?:name|preview|source)\b/u);
+            return Response.json({ data: { createAssets: [{ id: 'asset-1' }] } });
+        }
+        if (request.query.includes('StorefrontMediaAsset')) {
+            return Response.json({ data: { assets: { items: [] } } });
+        }
+        if (request.query.includes('AssignStorefrontMediaAsset')) {
+            return Response.json({ data: { assignAssetsToChannel: [{ id: 'asset-1' }] } });
+        }
+        throw new Error(`Unexpected GraphQL request: ${request.query}`);
+    };
+    const reference = storefrontMediaManifest.find(
+        item => item.key === 'referral-poster-neon-layout-reference',
+    );
+    assert.ok(reference);
+
+    const result = await syncStorefrontMedia({
+        apiOrigin: 'http://127.0.0.1:3000',
+        username: 'admin',
+        password: 'secret',
+        channelCodes: ['__default_channel__'],
+        apply: true,
+        fetchImpl,
+        manifest: [reference],
+    });
+
+    assert.equal(result.applied, true);
+    assert.equal(result.results[0].assetId, 'asset-1');
+    assert.equal(requests.filter(request => request.query.includes('CreateStorefrontMediaAsset')).length, 1);
+});
+
 test('only localhost origins count as local writes', () => {
     assert.equal(isLocalApiOrigin('http://127.0.0.1:3000'), true);
     assert.equal(isLocalApiOrigin('https://vendure.localhost'), true);

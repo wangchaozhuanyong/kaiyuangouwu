@@ -317,9 +317,6 @@ async function uploadAsset(fetchImpl, apiOrigin, authToken, channel, media) {
                 createAssets(input: $input) {
                     ... on Asset {
                         id
-                        name
-                        preview
-                        source
                     }
                     ... on ErrorResult {
                         errorCode
