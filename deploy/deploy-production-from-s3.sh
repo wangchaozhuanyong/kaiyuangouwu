@@ -403,7 +403,7 @@ curl --fail --silent --show-error --max-time 10 http://127.0.0.1:3002/health >/d
 curl --fail --silent --show-error --max-time 10 http://127.0.0.1:3002/image-generation/health >/dev/null
 curl --fail --silent --show-error --max-time 15 https://damatong.net/health >/dev/null
 node "${repository}/deploy/verify-dashboard-assets.mjs" \
-    --dashboard-url https://console.damatong.net/dashboard/ \
+    --dashboard-url https://console.moyaoai.com/dashboard/ \
     --release-id "${target_sha}"
 
 sudo -n install -o root -g root -m 0755 \

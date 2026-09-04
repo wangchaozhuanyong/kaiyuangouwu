@@ -65,19 +65,21 @@ export function customFieldValuesFromEntity(
     }> = [],
 ): CustomFieldValueMap {
     return Object.fromEntries(
-        fields.map(field => [
-            field.name,
-            field.type === 'localeString' || field.type === 'localeText'
-                ? Object.fromEntries(
-                      translations.map(translation => [
-                          translation.languageCode,
-                          translation.customFields?.[field.name] ?? null,
-                      ]),
-                  )
-                : field.type === 'relation'
-                  ? relationValue(customFields?.[field.name], field.list)
-                  : (customFields?.[field.name] ?? (field.list ? [] : null)),
-        ]),
+        fields
+            .filter(field => isGraphQlName(field.name))
+            .map(field => [
+                field.name,
+                field.type === 'localeString' || field.type === 'localeText'
+                    ? Object.fromEntries(
+                          translations.map(translation => [
+                              translation.languageCode,
+                              translation.customFields?.[field.name] ?? null,
+                          ]),
+                      )
+                    : field.type === 'relation'
+                      ? relationValue(customFields?.[field.name], field.list)
+                      : (customFields?.[field.name] ?? (field.list ? [] : null)),
+            ]),
     );
 }
 
@@ -91,6 +93,7 @@ export function localizedCustomFieldInputFromValues(
     const input: Record<string, unknown> = {};
     for (const field of fields) {
         if (
+            !isGraphQlName(field.name) ||
             excluded.has(field.name) ||
             field.readonly ||
             (field.type !== 'localeString' && field.type !== 'localeText')
@@ -114,6 +117,7 @@ export function customFieldInputFromValues(
     const input: Record<string, unknown> = {};
     for (const field of fields) {
         if (
+            !isGraphQlName(field.name) ||
             excluded.has(field.name) ||
             field.readonly ||
             field.type === 'localeString' ||

@@ -1332,6 +1332,10 @@
     opacity: 0.55;
 }
 
+.cart-page > .product-section {
+    margin-top: 16px;
+}
+
 .coupon-center-tabs {
     margin: 12px 14px 0;
     padding: 4px;

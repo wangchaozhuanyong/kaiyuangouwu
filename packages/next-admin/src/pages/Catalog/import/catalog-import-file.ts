@@ -21,7 +21,7 @@ export async function parseCatalogFile(
         const close = () => worker.terminate();
         worker.onmessage = (event: MessageEvent<CatalogWorkerResponse>) => {
             close();
-            if (event.data.ok) resolve(event.data.result);
+            if ('result' in event.data) resolve(event.data.result);
             else reject(new Error(event.data.message));
         };
         worker.onerror = event => {
