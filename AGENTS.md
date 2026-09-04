@@ -16,16 +16,17 @@ Headless e-commerce framework. Lerna monorepo with fixed versioning.
 - Never simulate synchronization with client-only filename matching, hidden URL replacement maps, hard-coded asset overrides, or duplicated managed content. Bundled client assets are allowed only as explicit empty-state or unavailable-backend fallbacks.
 - `bun run check:storefront-publishing` is a required repository gate. All managed storefront/brand media must be classified by an Admin API publisher, the central `packages/storefront/src/storefront-images.ts` fallback registry, or the explicit design-only inventory. Runtime components must not import managed media directly or hard-code remote media URLs.
 - Every Admin API publisher must:
-  - default to read-only validation or `--dry-run`, with writes requiring an explicit `--apply` flag;
-  - require an additional explicit production/remote-write guard such as `--allow-remote`;
-  - read credentials and target Channels from environment variables, never command arguments, source files, or logs;
-  - resolve products by stable SKU and managed content by stable code/type, and fail before writes when a target is missing or ambiguous;
-  - upload assets with deterministic logical tags plus a content hash, reuse unchanged assets, and remain safe to repeat;
-  - bind the same Vendure asset IDs/settings to the Dashboard-managed entity consumed by the Shop API;
-  - preserve existing asset galleries, use optimistic `expectedUpdatedAt` versions for managed content, and batch related content changes atomically where the API supports it;
-  - hard-verify the written values through both Admin API and Shop API before returning success, and restore the previous bindings if post-write verification fails;
-  - avoid deleting historical assets or user data during a normal publish so rollback remains possible;
-  - report a reviewable summary of planned/applied targets without exposing secrets.
+    - default to read-only validation or `--dry-run`, with writes requiring an explicit `--apply` flag;
+    - require an additional explicit production/remote-write guard such as `--allow-remote`;
+    - read credentials and target Channels from environment variables, never command arguments, source files, or logs;
+    - resolve products by stable SKU and managed content by stable code/type, and fail before writes when a target is missing or ambiguous;
+    - upload assets with deterministic logical tags plus a content hash, reuse unchanged assets, and remain safe to repeat;
+    - bind the same Vendure asset IDs/settings to the Dashboard-managed entity consumed by the Shop API;
+    - preserve existing asset galleries, use optimistic `expectedUpdatedAt` versions for managed content, and batch related content changes atomically where the API supports it;
+    - hard-verify the written values through both Admin API and Shop API before returning success, and restore the previous bindings if post-write verification fails;
+    - model the production source/English translation pair in tests. Changing Simplified Chinese while resubmitting byte-identical English can be treated as stale automatic translation; use a reviewed new English value or an explicit supported manual lock, then verify the persisted English value rather than assuming the submitted text was preserved;
+    - avoid deleting historical assets or user data during a normal publish so rollback remains possible;
+    - report a reviewable summary of planned/applied targets without exposing secrets.
 - Production release order is mandatory: start the candidate API, wait for health, run the publisher in dry-run mode, review exact Channel/SKU/content targets, run `--apply --allow-remote`, run the publisher's read-only verification mode, verify Admin API/Dashboard and Shop API/client resolve the same asset IDs and values, and only then promote the storefront candidate. A sync or verification failure stops the release.
 - When a release introduces or changes the production guard for a managed publisher, deploy that guard/bootstrap in a separate first release before releasing the guarded publisher or managed data. The second release must use the new reviewed scope and verification path; never bypass the currently deployed guard to combine both stages.
 - Pure presentation changes such as CSS spacing may ship with the client build. If the value is editable or represents catalog/content data, it belongs in Vendure and must use the Admin API publishing path above.
