@@ -5,6 +5,7 @@
 @import './styles/logistics.css';
 @import './styles/auth-flow.css';
 @import './styles/auth-overrides.css';
+@import './styles/brand-shell.css';
 
 :root {
     color: #0f172a;
@@ -29,7 +30,7 @@
     -moz-osx-font-smoothing: grayscale;
     font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
     --app-width: 430px;
-    --bg: #f1f5f9;
+    --bg: #f3f6fb;
     --paper: #ffffff;
     --soft: #f8fafc;
     --product-media-bg: #f8fafc;
@@ -37,14 +38,14 @@
     --text: #0f172a;
     --muted: #64748b;
     --line: #e2e8f0;
-    --accent: #2f6bff;
-    --accent-hover: #2454d6;
-    --accent-ink: #2454d6;
-    --accent-soft: #eef4ff;
-    --brand-background: #071426;
-    --brand-primary: #2f6bff;
+    --accent: #635bff;
+    --accent-hover: #5149e6;
+    --accent-ink: #5149e6;
+    --accent-soft: #eeefff;
+    --brand-background: #070b14;
+    --brand-primary: #635bff;
     --brand-accent: #22d3ee;
-    --brand-highlight: #7c3aed;
+    --brand-highlight: #8b5cf6;
     --success: #10b981;
     --warning: #f59e0b;
     --danger: #ef4444;
@@ -327,12 +328,12 @@ img {
     position: relative;
     display: grid;
     place-items: center;
-    border: 1px solid color-mix(in srgb, #00baff 20%, var(--line));
+    border: 1px solid color-mix(in srgb, var(--brand-primary) 20%, var(--line));
     border-radius: 18px;
     background:
-        radial-gradient(circle at 32% 24%, rgba(0, 240, 255, 0.16), transparent 46%),
-        linear-gradient(145deg, #ffffff, #f7fbff);
-    box-shadow: 0 12px 28px -18px rgba(0, 102, 255, 0.58);
+        radial-gradient(circle at 32% 24%, rgba(34, 211, 238, 0.16), transparent 46%),
+        linear-gradient(145deg, #ffffff, #f7f5ff);
+    box-shadow: 0 12px 28px -18px rgba(99, 91, 255, 0.58);
 }
 
 .route-transition-mark::after {
@@ -344,8 +345,8 @@ img {
     bottom: 8px;
     border: 2px solid var(--paper);
     border-radius: 50%;
-    background: #00baff;
-    box-shadow: 0 0 0 4px rgba(0, 186, 255, 0.1);
+    background: var(--brand-accent);
+    box-shadow: 0 0 0 4px rgba(34, 211, 238, 0.12);
     animation: route-transition-pulse 1.2s ease-in-out infinite;
 }
 
@@ -665,62 +666,6 @@ img {
     background: transparent;
     display: grid;
     place-items: center;
-}
-
-.brand {
-    width: max-content;
-    min-width: 0;
-    max-width: calc(36px + 8px + 8em);
-    height: 44px;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    overflow: hidden;
-    text-align: left;
-    cursor: pointer;
-}
-
-.brand-mark {
-    width: 36px;
-    height: 28px;
-    flex: none;
-    background: transparent;
-    color: var(--accent);
-    display: grid;
-    place-items: center;
-    font-size: 14px;
-    font-weight: 700;
-}
-
-img.brand-mark,
-img.auth-brand-mark,
-img.fatal-error-mark {
-    width: auto;
-    max-width: 38px;
-    height: 28px;
-    flex: none;
-    object-fit: contain;
-    background: transparent;
-    border: 0;
-    border-radius: 0;
-    box-shadow: none;
-    filter: drop-shadow(0 2px 5px rgba(0, 186, 255, 0.25));
-}
-
-.brand strong {
-    min-width: 0;
-    flex: 1;
-    overflow: hidden;
-    font-size: 18px;
-    font-weight: 800;
-    line-height: 1.2;
-    color: #0f172a;
-    letter-spacing: -0.02em;
-    white-space: nowrap;
-    text-overflow: ellipsis;
 }
 
 .search-trigger {

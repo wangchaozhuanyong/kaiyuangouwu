@@ -27,7 +27,7 @@
         "seed:storefront-demo": "node ./scripts/seed-storefront-demo.mjs --apply",
         "sync:storefront-media": "node ./scripts/sync-storefront-media.mjs",
         "sync:auth-visuals": "node ./scripts/sync-auth-visuals.mjs",
-        "sync:awanmesh-brand": "node ./scripts/sync-awanmesh-brand.mjs",
+        "sync:moyao-brand": "node ./scripts/sync-moyao-brand.mjs",
         "repair:inventory-inheritance": "node ./scripts/repair-inventory-inheritance.mjs",
         "repair:sqlite-foreign-keys": "node ./scripts/repair-sqlite-foreign-keys.mjs",
         "migrate:commerce-mode": "node ./scripts/migrate-commerce-mode.mjs",

@@ -1,10 +1,18 @@
-# Damatong
+# MOYAO AI｜模钥
 
 <!-- impeccable:product-schema 1 -->
 
 ## Platform
 
 web
+
+## Default site
+
+- Canonical domain: `https://moyaoai.com/`.
+- Brand name: Chinese surfaces use `MOYAO AI｜模钥`; English surfaces use `MOYAO AI`.
+- Tagline: `全球模型，一钥直达` / `One Key to Every Model.`
+- The old default brand and old default-domain wording must not appear in public metadata, navigation, authentication, sharing, referral, promotion, email defaults, or management UI.
+- A separately configured Channel may keep its own brand and domain. Default-site fallbacks must never overwrite that Channel's managed profile.
 
 ## Users
 
@@ -13,52 +21,36 @@ web
 - 需要接入模型、API 或调用额度的开发者和程序员。
 - 希望为小团队或企业工作流选择合适 AI 服务的负责人。
 
-## Product Purpose
+## Product purpose
 
-Damatong 提供清晰易懂的 AI 数字服务入口，帮助用户理解可用服务方向、判断适合自己的使用方式，并进入服务中心继续确认和办理。推广页的成功标准是用户快速理解 Damatong 能提供什么，并愿意通过安全入口访问服务中心。
+MOYAO AI 提供清晰、可信的 AI 数字服务入口。用户应能快速理解服务方向、比较适合自己的方案、确认交付与售后条件，并安全进入购买或服务流程。
 
-## Positioning
+## Information architecture
 
-Damatong 不把用户留在复杂的技术筛选中，而是按真实工作需求组织 AI 订阅、AI API、AI 调用额度和 AI 效率工具，并提供人工服务支持。
+1. 首页先说明品牌价值、核心服务和可信承诺，不用大图重复堆叠同一信息。
+2. 分类页负责筛选与比较，商品卡只保留名称、关键差异、价格/状态和一个明确入口。
+3. 商品详情页说明适用人群、交付方式、限制、有效期和售后边界。
+4. 登录、注册、订单、推荐海报与推广页统一使用同一品牌名、图标、色板和语气。
+5. 管理后台继续作为品牌、文案和媒体资产的数据源；代码中的品牌内容只是无数据时的安全默认值。
 
-## Operating Context
+## Capabilities and constraints
 
-- 用户可能从短视频平台或其他推广渠道进入本页面。
-- 推广页负责品牌介绍、服务能力说明、使用场景说明和向服务中心导流。
-- 用户在服务中心继续查看实际可用服务、确认选项和获得支持。
-- 页面按用户设备或站点语言输出完整中文或完整英文，不在同一语言版本中混用中英文界面文案。
+- 服务可包括 AI 订阅、AI API 中转、调用额度、数字商品和人工支持，以后台实际发布内容为准。
+- 不虚构价格优势、第三方授权、销量、客户评价、客户名单或效果指标。
+- 数字商品必须写清交付介质、时间、使用条件、有效期和售后范围。
+- 推广页通过签名 `POST /promo/enter` 进入服务中心，不直接复制交易页面。
+- 中文和英文是完整的独立输出，不在同一界面混排翻译文案。
 
-## Capabilities and Constraints
+## Success criteria
 
-- 服务能力包括 AI 服务订阅、AI API 中转、AI 调用额度和 AI 效率工具。
-- 用户已确认部分 AI API 中转通道可使用“低至 0.1 倍起”的推广表达。页面必须同时说明不同模型、通道与当前价格以服务中心为准。
-- 服务场景包括个人创业、内容创作、开发接入和团队使用。
-- 服务流程包括描述需求、选择能力、进入服务中心和获得支持。
-- 推广页保留安全入口票据并通过 `POST /promo/enter` 进入服务中心。
-- 推广页不展示价格、库存、商品详情、交易控件或第三方商品链接。
-- “本页不承担交易”的服务边界只需清楚说明一次，不重复解释页面自身。
+- 用户在首屏能识别 MOYAO AI、理解主要价值并找到下一步。
+- 列表图片不会因比例不一致造成卡片跳动，桌面端不会被超大正方形图片占满。
+- 所有公开入口、社交分享和后台品牌面不再回退到旧品牌。
+- 页面在移动端、桌面端、弱网和图片加载失败时保持稳定布局。
+- 所有能力与保障陈述都可由当前业务真实兑现。
 
-## Brand Commitments
+## Accessibility
 
-- 品牌名称统一使用 Damatong。
-- AI 始终使用大写。
-- 语言务实、清楚、可信，优先说明用户价值，不使用内部术语解释站点分层。
-
-## Evidence on Hand
-
-- 可陈述的真实能力包括 Damatong 自有服务方向、使用场景、选择流程、人工服务支持，以及用户确认的部分 AI API 中转通道低至 0.1 倍起。
-- 当前没有经确认的第三方 Logo、客户评价、客户名单、商业数据或效果指标；未来工作不得虚构这些证明。
-
-## Product Principles
-
-- 先让用户理解价值，再邀请用户进入服务中心。
-- 按工作需求组织服务，减少技术筛选和理解成本。
-- 所有能力与保障陈述必须可被 Damatong 实际兑现。
-- 推广与服务办理保持边界清楚，但不反复强调页面限制。
-- 所有入口在移动端和桌面端都必须清晰、可访问并保持安全。
-
-## Accessibility & Inclusion
-
-- 支持键盘操作、可见焦点、语义化内容以及静态装饰图像的合理替代说明。
-- 支持 `prefers-reduced-motion`，在减少动态偏好下仍完整表达页面内容。
+- 支持键盘操作、可见焦点、语义化标题和减少动态偏好。
 - 正文文字目标对比度不低于 4.5:1，主要触控区域不小于 44px。
+- 品牌图片带有可理解的替代文本；装饰图片不重复朗读品牌。

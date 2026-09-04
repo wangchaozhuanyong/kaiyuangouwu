@@ -2,15 +2,15 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
-    awanMeshBrand,
-    awanMeshBrandAssets,
     brandAssetTags,
-    buildAwanMeshBrandPlan,
+    buildMoyaoBrandPlan,
     isLocalApiOrigin,
+    moyaoBrand,
+    moyaoBrandAssets,
     parseCliArguments,
-    prepareAwanMeshBrandAssets,
-    syncAwanMeshBrand,
-} from './sync-awanmesh-brand.mjs';
+    prepareMoyaoBrandAssets,
+    syncMoyaoBrand,
+} from './sync-moyao-brand.mjs';
 
 function profile(overrides = {}) {
     return {
@@ -36,8 +36,8 @@ function profile(overrides = {}) {
     };
 }
 
-test('brand kit manifest contains the three immutable SVG roles and hashes them', async () => {
-    const prepared = await prepareAwanMeshBrandAssets();
+test('brand kit manifest contains the three optimized WebP roles and hashes them', async () => {
+    const prepared = await prepareMoyaoBrandAssets();
     assert.deepEqual(
         prepared.map(item => [item.key, item.profileField]),
         [
@@ -49,43 +49,47 @@ test('brand kit manifest contains the three immutable SVG roles and hashes them'
     for (const item of prepared) {
         assert.match(item.hash, /^[a-f0-9]{64}$/u);
         assert.deepEqual(item.tags, brandAssetTags(item.key, item.hash));
+        assert.equal(item.mimeType, 'image/webp');
+        assert.match(item.file, /\.webp$/u);
     }
 });
 
 test('plan updates names, bilingual slogan, palette, and all asset bindings together', () => {
-    const assets = new Map(awanMeshBrandAssets.map((item, index) => [item.key, { id: `asset-${index}` }]));
-    const plan = buildAwanMeshBrandPlan(profile(), assets);
+    const assets = new Map(moyaoBrandAssets.map((item, index) => [item.key, { id: `asset-${index}` }]));
+    const plan = buildMoyaoBrandPlan(profile(), assets);
     assert.equal(plan.action, 'update');
-    assert.equal(plan.input.storefrontNameZh, 'AwanMesh｜模钥');
-    assert.equal(plan.input.taglineEn, 'One Key. Every Model.');
-    assert.equal(plan.input.brandBackgroundColor, '#071426');
+    assert.equal(plan.input.storefrontNameZh, 'MOYAO AI｜模钥');
+    assert.equal(plan.input.taglineZh, '全球模型，一钥直达');
+    assert.equal(plan.input.taglineEn, 'One Key to Every Model.');
+    assert.equal(plan.input.brandBackgroundColor, '#070B14');
+    assert.equal(plan.input.brandPrimaryColor, '#635BFF');
     assert.equal(plan.input.logoOnDarkAssetId, 'asset-2');
 });
 
 test('matching profile and asset IDs produce an idempotent no-op', () => {
-    const assets = new Map(awanMeshBrandAssets.map((item, index) => [item.key, { id: `asset-${index}` }]));
+    const assets = new Map(moyaoBrandAssets.map((item, index) => [item.key, { id: `asset-${index}` }]));
     const current = profile({
         channel: {
             id: 'channel-1',
-            code: awanMeshBrand.channelCode,
+            code: moyaoBrand.channelCode,
             customFields: {
-                storefrontNameZh: awanMeshBrand.storefrontNameZh,
-                storefrontNameEn: awanMeshBrand.storefrontNameEn,
+                storefrontNameZh: moyaoBrand.storefrontNameZh,
+                storefrontNameEn: moyaoBrand.storefrontNameEn,
             },
         },
-        descriptionZh: awanMeshBrand.descriptionZh,
-        descriptionEn: awanMeshBrand.descriptionEn,
-        taglineZh: awanMeshBrand.taglineZh,
-        taglineEn: awanMeshBrand.taglineEn,
-        brandBackgroundColor: awanMeshBrand.brandBackgroundColor,
-        brandPrimaryColor: awanMeshBrand.brandPrimaryColor,
-        brandAccentColor: awanMeshBrand.brandAccentColor,
-        brandHighlightColor: awanMeshBrand.brandHighlightColor,
+        descriptionZh: moyaoBrand.descriptionZh,
+        descriptionEn: moyaoBrand.descriptionEn,
+        taglineZh: moyaoBrand.taglineZh,
+        taglineEn: moyaoBrand.taglineEn,
+        brandBackgroundColor: moyaoBrand.brandBackgroundColor,
+        brandPrimaryColor: moyaoBrand.brandPrimaryColor,
+        brandAccentColor: moyaoBrand.brandAccentColor,
+        brandHighlightColor: moyaoBrand.brandHighlightColor,
         logoAsset: { id: 'asset-0' },
         logoOnLightAsset: { id: 'asset-1' },
         logoOnDarkAsset: { id: 'asset-2' },
     });
-    assert.equal(buildAwanMeshBrandPlan(current, assets).action, 'noop');
+    assert.equal(buildMoyaoBrandPlan(current, assets).action, 'noop');
 });
 
 test('CLI stays dry-run by default and remote detection is strict', () => {
@@ -102,7 +106,7 @@ test('CLI stays dry-run by default and remote detection is strict', () => {
 
 test('remote writes require the second explicit guard before any network request', async () => {
     await assert.rejects(
-        syncAwanMeshBrand({
+        syncMoyaoBrand({
             apiOrigin: 'https://console.moyaoai.com',
             username: 'admin',
             password: 'secret',
@@ -127,7 +131,7 @@ test('publisher only requests stable asset IDs and verifies each Shop API langua
             init.body instanceof FormData
                 ? JSON.parse(String(init.body.get('operations')))
                 : JSON.parse(init.body);
-        if (request.query.includes('AwanMeshBrandLogin')) {
+        if (request.query.includes('MoyaoBrandLogin')) {
             return new Response(
                 JSON.stringify({
                     data: {
@@ -136,7 +140,7 @@ test('publisher only requests stable asset IDs and verifies each Shop API langua
                             channels: [
                                 {
                                     id: 'channel-1',
-                                    code: awanMeshBrand.channelCode,
+                                    code: moyaoBrand.channelCode,
                                     token: 'channel-token',
                                 },
                             ],
@@ -146,30 +150,30 @@ test('publisher only requests stable asset IDs and verifies each Shop API langua
                 { headers: { 'content-type': 'application/json', 'vendure-auth-token': 'auth-token' } },
             );
         }
-        if (request.query.includes('AwanMeshBrandProfiles')) {
+        if (request.query.includes('MoyaoBrandProfiles')) {
             return Response.json({ data: { storeProfiles: [profile()] } });
         }
-        if (request.query.includes('CreateAwanMeshBrandAsset')) {
+        if (request.query.includes('CreateMoyaoBrandAsset')) {
             assert.match(request.query, /\.\.\. on Asset \{ id \}/u);
             assert.doesNotMatch(request.query, /\.\.\. on Asset \{[^}]*\b(?:name|preview|source)\b[^}]*\}/u);
             const logicalTag = request.variables.input[0].tags.find(tag =>
-                /^awanmesh-brand:(?!sha256:)/u.test(tag),
+                /^moyao-ai-brand:(?!sha256:)/u.test(tag),
             );
-            const key = logicalTag.replace('awanmesh-brand:', '');
+            const key = logicalTag.replace('moyao-ai-brand:', '');
             return Response.json({ data: { createAssets: [{ id: createdAssetIds[key] }] } });
         }
-        if (request.query.includes('query AwanMeshBrandAsset')) {
+        if (request.query.includes('query MoyaoBrandAsset')) {
             assert.match(request.query, /items \{ id \}/u);
             assert.doesNotMatch(request.query, /\b(?:name|preview|source)\b/u);
             return Response.json({ data: { assets: { items: [] } } });
         }
-        if (request.query.includes('AssignAwanMeshBrandAsset')) {
+        if (request.query.includes('AssignMoyaoBrandAsset')) {
             return Response.json({ data: { assignAssetsToChannel: [{ id: 'assigned' }] } });
         }
-        if (request.query.includes('UpdateAwanMeshBrand')) {
+        if (request.query.includes('UpdateMoyaoBrand')) {
             return Response.json({ data: { updateStoreProfile: { id: 'profile-1' } } });
         }
-        if (request.query.includes('VerifyAwanMeshBrand')) {
+        if (request.query.includes('VerifyMoyaoBrand')) {
             const requestUrl = new URL(url);
             const languageCode = requestUrl.searchParams.get('languageCode');
             shopRequests.push({ url: requestUrl, headers: init.headers, languageCode });
@@ -180,13 +184,13 @@ test('publisher only requests stable asset IDs and verifies each Shop API langua
                         logoAssetId: createdAssetIds['app-icon'],
                         logoOnLightAssetId: createdAssetIds['logo-on-light'],
                         logoOnDarkAssetId: createdAssetIds['logo-on-dark'],
-                        name: isChinese ? awanMeshBrand.storefrontNameZh : awanMeshBrand.storefrontNameEn,
-                        description: isChinese ? awanMeshBrand.descriptionZh : awanMeshBrand.descriptionEn,
-                        tagline: isChinese ? awanMeshBrand.taglineZh : awanMeshBrand.taglineEn,
-                        backgroundColor: awanMeshBrand.brandBackgroundColor,
-                        primaryColor: awanMeshBrand.brandPrimaryColor,
-                        accentColor: awanMeshBrand.brandAccentColor,
-                        highlightColor: awanMeshBrand.brandHighlightColor,
+                        name: isChinese ? moyaoBrand.storefrontNameZh : moyaoBrand.storefrontNameEn,
+                        description: isChinese ? moyaoBrand.descriptionZh : moyaoBrand.descriptionEn,
+                        tagline: isChinese ? moyaoBrand.taglineZh : moyaoBrand.taglineEn,
+                        backgroundColor: moyaoBrand.brandBackgroundColor,
+                        primaryColor: moyaoBrand.brandPrimaryColor,
+                        accentColor: moyaoBrand.brandAccentColor,
+                        highlightColor: moyaoBrand.brandHighlightColor,
                     },
                 },
             });
@@ -194,7 +198,7 @@ test('publisher only requests stable asset IDs and verifies each Shop API langua
         throw new Error(`Unexpected GraphQL request: ${request.query}`);
     };
 
-    const result = await syncAwanMeshBrand({
+    const result = await syncMoyaoBrand({
         apiOrigin: 'http://127.0.0.1:3000',
         shopOrigin: 'https://moyaoai.com',
         username: 'admin',

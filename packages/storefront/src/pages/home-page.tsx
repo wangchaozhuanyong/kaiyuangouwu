@@ -451,6 +451,7 @@ interface HomePageProps {
     storefrontDescription: string;
     storefrontTagline: string;
     logoUrl: string | null;
+    logoOnLightUrl: string | null;
     couponLoading: boolean;
     onCategorySelect: (collection: CollectionSummary) => void;
     onToggleLanguage: () => void;
@@ -495,6 +496,7 @@ export function HomePage() {
         storefrontDescription,
         storefrontTagline,
         logoUrl,
+        logoOnLightUrl,
         couponLoading,
         onCategorySelect,
         onToggleLanguage,
@@ -863,9 +865,16 @@ export function HomePage() {
                     className="brand"
                     type="button"
                     onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                    aria-label={
+                        isZh ? `返回 ${storefrontName} 首页顶部` : `Back to the top of ${storefrontName}`
+                    }
                 >
-                    <BrandLogo url={logoUrl} name={storefrontName} className="brand-mark" />
-                    <strong>{storefrontName}</strong>
+                    <BrandLogo
+                        url={logoOnLightUrl || logoUrl}
+                        name={storefrontName}
+                        className="brand-wordmark"
+                        variant="wordmark"
+                    />
                 </button>
                 <div className="topbar-actions">
                     {currencySelectorEnabled && availableCurrencyCodes.length > 1 ? (

@@ -29,7 +29,7 @@ import { invalidateStorefrontRealtimeQueries } from '../realtime-updates';
 import { captureReferralAttribution } from '../referral-attribution';
 import { productDescriptionText } from '../rich-text';
 import { useProductsByIdsQuery } from '../route-queries';
-import { DEFAULT_HERO_IMAGE } from '../storefront-images';
+import { STOREFRONT_SOCIAL_IMAGE } from '../storefront-images';
 import {
     routeFromHash,
     routeFromRouterLocation,
@@ -75,6 +75,7 @@ import {
     StorefrontContentTargetType,
     StorefrontCouponCampaign,
     StorefrontLanguage,
+    StorefrontLegalIdentity,
 } from '../types';
 
 export function useStorefrontAppState() {
@@ -201,6 +202,15 @@ export function useStorefrontAppState() {
         meta: publicQueryMeta(),
         refetchInterval: 60_000,
     });
+    const legalIdentity = useMemo<StorefrontLegalIdentity>(
+        () => ({
+            legalEntityName: configQuery.data?.legalEntityName?.trim() || null,
+            legalRegistrationCountry: configQuery.data?.legalRegistrationCountry?.trim() || null,
+            supportEmail: configQuery.data?.supportEmail?.trim() || null,
+            privacyEmail: configQuery.data?.privacyEmail?.trim() || null,
+        }),
+        [configQuery.data],
+    );
     configureMoneyDisplay({
         displayCurrencyCode,
         cnyPerUsdtRate: configQuery.data?.currencyConfiguration?.cnyPerUsdtRate ?? null,
@@ -754,7 +764,7 @@ export function useStorefrontAppState() {
             '--brand-accent': configQuery.data?.brandAccentColor,
             '--brand-highlight': configQuery.data?.brandHighlightColor,
             '--accent': configQuery.data?.brandPrimaryColor,
-            '--accent-hover': configQuery.data?.brandAccentColor,
+            '--accent-hover': configQuery.data?.brandHighlightColor,
             '--accent-ink': configQuery.data?.brandPrimaryColor,
         } as const;
         for (const [property, value] of Object.entries(colors)) {
@@ -1418,8 +1428,8 @@ export function useStorefrontAppState() {
                 : storeSummary;
         const imagePath =
             route.name === 'product' && selectedProduct
-                ? (productImage(selectedProduct) ?? DEFAULT_HERO_IMAGE)
-                : DEFAULT_HERO_IMAGE;
+                ? (productImage(selectedProduct) ?? STOREFRONT_SOCIAL_IMAGE)
+                : STOREFRONT_SOCIAL_IMAGE;
         const image = new URL(imagePath, window.location.origin).href;
         const imageAlt =
             route.name === 'product' && selectedProduct
@@ -1672,6 +1682,7 @@ export function useStorefrontAppState() {
         routeOrderError,
         orderQuery,
         legalContent,
+        legalIdentity,
         supportContent,
         navigate,
         goBack,

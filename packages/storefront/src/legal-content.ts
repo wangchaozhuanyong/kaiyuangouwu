@@ -1,4 +1,9 @@
-import { StorefrontContentBlock, StorefrontContentItem } from './types';
+import {
+    StorefrontContentBlock,
+    StorefrontContentItem,
+    StorefrontLanguage,
+    StorefrontLegalIdentity,
+} from './types';
 
 export type LegalDocumentKind = 'privacy' | 'terms';
 
@@ -6,6 +11,21 @@ export interface ManagedLegalDocument {
     title: string;
     subtitle: string;
     body: string;
+}
+
+const legalProfileTokenPattern =
+    /\{\{\s*(legalEntityName|legalRegistrationCountry|supportEmail|privacyEmail)\s*\}\}/gu;
+
+export function interpolateLegalProfileTokens(
+    value: string,
+    identity: StorefrontLegalIdentity | undefined,
+    language: StorefrontLanguage,
+): string {
+    const missingValue = language === 'zh' ? '待配置' : 'Not configured';
+    return value.replace(legalProfileTokenPattern, (_match, key: keyof StorefrontLegalIdentity) => {
+        const replacement = identity?.[key]?.trim();
+        return replacement || missingValue;
+    });
 }
 
 export function resolveManagedLegalDocument(

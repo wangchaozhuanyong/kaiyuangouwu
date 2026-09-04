@@ -66,4 +66,33 @@ describe('ManagedLegalPage', () => {
         expect(markup).toContain('<header class="legal-managed-intro"><p>后台隐私政策摘要</p></header>');
         expect(markup).not.toContain('<h1');
     });
+
+    it('自动展示经营主体和可点击的联系邮箱', () => {
+        const legalBlock = createLegalBlock('privacy');
+        legalBlock.body = '负责人：{{legalEntityName}}；隐私联系：{{privacyEmail}}';
+
+        const markup = renderToStaticMarkup(
+            <ManagedLegalPage
+                kind="privacy"
+                language="zh"
+                storefrontName="MOYAO AI"
+                contentBlocks={[legalBlock]}
+                legalIdentity={{
+                    legalEntityName: 'MOYAO AI Example Limited',
+                    legalRegistrationCountry: 'Malaysia',
+                    supportEmail: 'support@moyaoai.com',
+                    privacyEmail: 'privacy@moyaoai.com',
+                }}
+                onBack={vi.fn()}
+            />,
+        );
+
+        expect(markup).toContain('legal-identity-card');
+        expect(markup).toContain('MOYAO AI Example Limited');
+        expect(markup).toContain('Malaysia');
+        expect(markup).toContain('href="mailto:support@moyaoai.com"');
+        expect(markup).toContain('href="mailto:privacy@moyaoai.com"');
+        expect(markup).not.toContain('{{legalEntityName}}');
+        expect(markup).not.toContain('{{privacyEmail}}');
+    });
 });

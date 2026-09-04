@@ -560,7 +560,7 @@ export function renderColorfulQuickIcon(label: string, index: number, imageUrl?:
         return (
             <span
                 className="colorful-icon-badge"
-                style={{ background: 'linear-gradient(135deg, #7C3AED 0%, #EC4899 100%)', color: '#fff' }}
+                style={{ background: 'linear-gradient(135deg, #635BFF 0%, #8B5CF6 100%)', color: '#fff' }}
             >
                 <Smartphone
                     style={{ width: 22, height: 22, filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.18))' }}

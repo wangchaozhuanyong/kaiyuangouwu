@@ -16,7 +16,7 @@ const sharedEnvironment = {
     TZ: 'Asia/Shanghai',
     RUN_JOB_QUEUE: '0',
     RUN_MIGRATIONS: 'false',
-    // Public, non-secret routing invariants for the AwanMesh multi-store ingress.
+    // Public, non-secret routing invariants for the MOYAO AI multi-store ingress.
     // Keeping these in the PM2 definition prevents an omitted encrypted env value
     // from silently falling back to the local development hostname.
     STORE_DOMAIN_CNAME_TARGET: 'stores.moyaoai.com',

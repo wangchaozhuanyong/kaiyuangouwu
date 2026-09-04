@@ -11,7 +11,7 @@ import {
 import { isStrongAdministratorPassword, PASSWORD_REQUIREMENT } from '../../utils/password';
 import { toUserFacingError } from '../../utils/user-facing-error';
 
-const adminBrandIcon = `${import.meta.env.BASE_URL}favicon.svg`;
+const adminBrandIcon = `${import.meta.env.BASE_URL}favicon.png`;
 
 interface CompleteInitialPasswordChangeVariables {
     password: string;
@@ -82,7 +82,7 @@ export function InitialPasswordChangeModule({ onCompleted }: InitialPasswordChan
                         <div className="flex items-center gap-3">
                             <img className="h-10 w-10 rounded-xl" src={adminBrandIcon} alt="" />
                             <div>
-                                <p className="text-lg font-bold tracking-tight">AwanMesh｜模钥管理后台</p>
+                                <p className="text-lg font-bold tracking-tight">MOYAO AI｜模钥管理后台</p>
                                 <p className="text-xs text-slate-400">首次登录安全验证</p>
                             </div>
                         </div>

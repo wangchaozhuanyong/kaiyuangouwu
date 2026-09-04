@@ -94,6 +94,7 @@ import { AddAdminTelegramNotifications1788413600000 } from './1788413600000-add-
 import { AddImagePromptModelConfigs1788436800000 } from './1788436800000-add-image-prompt-model-configs';
 import { AddStoreProfileBranding1788440400000 } from './1788440400000-add-store-profile-branding';
 import { AddStoreDomainAutomation1788526800000 } from './1788526800000-add-store-domain-automation';
+import { AddStoreProfileLegalIdentity1788530400000 } from './1788530400000-add-store-profile-legal-identity';
 
 export const devServerMigrations = [
     CommerceFulfillment1786514145999,
@@ -192,4 +193,5 @@ export const devServerMigrations = [
     AddImagePromptModelConfigs1788436800000,
     AddStoreProfileBranding1788440400000,
     AddStoreDomainAutomation1788526800000,
+    AddStoreProfileLegalIdentity1788530400000,
 ];

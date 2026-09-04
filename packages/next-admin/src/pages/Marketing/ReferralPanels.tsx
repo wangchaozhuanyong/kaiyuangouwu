@@ -69,9 +69,9 @@ export const SYSTEM_POSTER_TEMPLATES = [
     {
         id: 'BRAND_MINIMAL',
         nameZh: '模钥简约',
-        nameEn: 'AwanMesh minimal',
+        nameEn: 'MOYAO AI minimal',
         desc: '经典白蓝极简科技版式，通用度最高，适合各类数字化产品。',
-        gradient: 'linear-gradient(135deg, #1d4ed8, #60a5fa)',
+        gradient: 'linear-gradient(135deg, #635BFF, #22D3EE)',
     },
     {
         id: 'BENEFIT_RED_GOLD',
@@ -97,9 +97,9 @@ export const SYSTEM_POSTER_TEMPLATES = [
     {
         id: 'CLOUD_BRIDGE_ORBIT',
         nameZh: '模钥轨道',
-        nameEn: 'AwanMesh orbit',
+        nameEn: 'MOYAO AI orbit',
         desc: '紫蓝科技轨道渐变，未来感与营销冲击力强。',
-        gradient: 'linear-gradient(135deg, #4338ca, #7c3aed)',
+        gradient: 'linear-gradient(135deg, #635BFF, #8B5CF6)',
     },
 ] as const;
 

@@ -973,7 +973,7 @@ export const devConfig: VendureConfig = {
                           apiKey: contentTranslationApiKey,
                       }),
                       glossary: {
-                          大马通: 'Damatong',
+                          模钥: 'MOYAO AI',
                           'ChatGPT- plus': 'ChatGPT Plus',
                           ChatGPT: 'ChatGPT',
                           Codex: 'Codex',
