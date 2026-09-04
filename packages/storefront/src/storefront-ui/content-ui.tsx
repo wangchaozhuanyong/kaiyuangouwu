@@ -188,6 +188,7 @@ export function FlashSaleSection({
     endsAt,
     onMore,
     onProduct,
+    layout = 'carousel',
 }: {
     title: string;
     subtitle?: string;
@@ -197,6 +198,7 @@ export function FlashSaleSection({
     endsAt: string | null;
     onMore?: () => void;
     onProduct: (productId: string) => void;
+    layout?: 'carousel' | 'grid';
 }) {
     const isZh = language === 'zh';
     const countdown = useFlashSaleCountdown(endsAt, language);
@@ -216,7 +218,12 @@ export function FlashSaleSection({
                     <strong>{countdown}</strong>
                 </div>
             ) : null}
-            <div className="flash-sale-grid">
+            <div
+                className={`flash-sale-grid${layout === 'grid' ? ' is-expanded' : ''}`}
+                aria-label={
+                    isZh ? `秒杀商品，共 ${items.length} 件` : `Flash-sale products, ${items.length} items`
+                }
+            >
                 {items.map(item => (
                     <button
                         type="button"
@@ -283,14 +290,15 @@ export function FlashSalePage({
                     title={isZh ? '限时秒杀' : 'Flash sale'}
                     subtitle={
                         isZh
-                            ? '活动价格会在购物车和结算页自动生效'
-                            : 'Sale prices apply automatically in cart and checkout'
+                            ? `共 ${items.length} 件，活动价格会在购物车和结算页自动生效`
+                            : `${items.length} items · Sale prices apply automatically in cart and checkout`
                     }
                     items={items}
                     locale={locale}
                     language={language}
                     endsAt={sales[0]?.endsAt ?? null}
                     onProduct={onProduct}
+                    layout="grid"
                 />
             ) : (
                 <EmptyState

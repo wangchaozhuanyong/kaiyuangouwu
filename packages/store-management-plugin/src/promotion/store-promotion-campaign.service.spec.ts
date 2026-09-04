@@ -90,6 +90,21 @@ describe('StorePromotionCampaignService', () => {
         );
     });
 
+    it('rejects a flash sale when any selected product has no saleable variant', async () => {
+        const harness = createHarness({ variants: [productVariant('variant-1', 10_000)] });
+
+        await expect(
+            harness.service.createFlashSale(ctx, {
+                name: '含空商品的秒杀',
+                productIds: ['product-1', 'product-without-variant'],
+                percentageOff: 20,
+                startsAt: new Date('2026-08-23T10:00:00.000Z'),
+                endsAt: new Date('2026-08-24T10:00:00.000Z'),
+            }),
+        ).rejects.toThrow('有 1 个已选商品没有可售规格');
+        expect(harness.createPromotion).not.toHaveBeenCalled();
+    });
+
     it('keeps the flash-sale image synchronized with the current product image', async () => {
         const baseVariant = productVariant('variant-1', 10_000);
         const variant = {
@@ -395,10 +410,16 @@ function createHarness({
         softDeletePromotion,
     };
     const getVariantsByProductId = vi.fn(
-        (_ctx: unknown, _productId: string, options?: { skip?: number; take?: number }) => {
+        (_ctx: unknown, productId: string, options?: { skip?: number; take?: number }) => {
             const skip = options?.skip ?? 0;
-            const take = options?.take ?? variants.length;
-            return { items: variants.slice(skip, skip + take), totalItems: variants.length };
+            const matchingVariants = variants.filter(
+                variant => String(variant.product.id) === String(productId),
+            );
+            const take = options?.take ?? matchingVariants.length;
+            return {
+                items: matchingVariants.slice(skip, skip + take),
+                totalItems: matchingVariants.length,
+            };
         },
     );
     const productVariantService = {
