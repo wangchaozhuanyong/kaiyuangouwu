@@ -5,6 +5,7 @@
 @import './styles/logistics.css';
 @import './styles/auth-flow.css';
 @import './styles/auth-overrides.css';
+@import './styles/brand-shell.css';
 
 :root {
     color: #0f172a;
@@ -665,71 +666,6 @@ img {
     background: transparent;
     display: grid;
     place-items: center;
-}
-
-.brand {
-    width: max-content;
-    min-width: 0;
-    max-width: min(55vw, 190px);
-    height: 44px;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    display: flex;
-    align-items: center;
-    gap: 0;
-    overflow: hidden;
-    text-align: left;
-    cursor: pointer;
-}
-
-.brand-wordmark {
-    width: auto;
-    max-width: 100%;
-    height: 34px;
-    display: block;
-    object-fit: contain;
-    object-position: left center;
-}
-
-.brand-mark {
-    width: 36px;
-    height: 28px;
-    flex: none;
-    background: transparent;
-    color: var(--accent);
-    display: grid;
-    place-items: center;
-    font-size: 14px;
-    font-weight: 700;
-}
-
-img.brand-mark,
-img.auth-brand-mark,
-img.fatal-error-mark {
-    width: auto;
-    max-width: 38px;
-    height: 28px;
-    flex: none;
-    object-fit: contain;
-    background: transparent;
-    border: 0;
-    border-radius: 0;
-    box-shadow: none;
-    filter: drop-shadow(0 2px 5px rgba(99, 91, 255, 0.22));
-}
-
-.brand strong {
-    min-width: 0;
-    flex: 1;
-    overflow: hidden;
-    font-size: 18px;
-    font-weight: 800;
-    line-height: 1.2;
-    color: #0f172a;
-    letter-spacing: -0.02em;
-    white-space: nowrap;
-    text-overflow: ellipsis;
 }
 
 .search-trigger {

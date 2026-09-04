@@ -974,7 +974,6 @@ export const devConfig: VendureConfig = {
                       }),
                       glossary: {
                           模钥: 'MOYAO AI',
-                          'MOYAO AI': 'MOYAO AI',
                           'ChatGPT- plus': 'ChatGPT Plus',
                           ChatGPT: 'ChatGPT',
                           Codex: 'Codex',
