@@ -109,7 +109,7 @@ bun run --cwd packages/dev-server build:production-runtime -- --require-platform
 
 最后一条命令只能在与 EC2 匹配的 `linux/x64` 干净构建机上执行。产物目录会包含平台、完整 Git SHA、`bun.lock` SHA-256、运行包清单、`RUNTIME-AUDIT.json` 和文件校验清单，并拒绝 `esbuild`、`less`、`tar`、`typescript`、`vite`、`webpack` 或达到指定审计阈值的包进入运行目录。使用 `--allow-dirty` 生成的产物只允许本地演练，不得部署。
 
-正式制品优先使用 GitHub Actions 的 `Production Runtime Artifact` 工作流生成。常规发布手动输入 `origin/main` 当前完整的 40 位小写 SHA；当 `main` 只变更 `packages/image-generation-plugin/skill/image-prompt-pro/**` 或对应的已编译 bundle 时，工作流也会使用该 push 的完整 SHA 自动运行。若同一批 push 混入任何其他路径，自动任务会停止，必须按常规发布流程人工审核。工作流固定使用 Node `24.19.0`、Bun `1.3.14` 和 `ubuntu-24.04` x64，并重复执行冻结安装、全仓审计、发布变更只读 lint、Skill 编译与回归测试、构建、运行产物 High+ 门禁和自验证。分支未推送到 `main`、SHA 不一致、源码被修改、平台不符或任一门禁失败时都不会上传制品。
+正式制品优先使用 GitHub Actions 的 `Production Runtime Artifact` 工作流生成。常规发布手动输入 `origin/main` 当前完整的 40 位小写 SHA；当 `main` 只变更 `packages/image-generation-plugin/skill/image-prompt-pro/**` 或对应的已编译 bundle 时，工作流也会使用该 push 的完整 SHA 自动运行。若同一批 push 混入任何其他路径，自动任务会停止，必须按常规发布流程人工审核。工作流固定使用 Node `24.19.0`、Bun `1.3.14` 和 `ubuntu-24.04` x64，并重复执行冻结安装、全仓审计、发布变更只读 lint、Skill 编译与回归测试、构建、运行产物 High+ 门禁和自验证。分支未推送到 `main`、SHA 不一致、源码被修改、平台不符或任一门禁失败时都不会上传制品。依赖审计将同一份绑定 `bun.lock` 的 JSON 证据用于全仓与运行时门禁，按实际 severity 阻断 High+；仅对 Bun 明确返回的网络超时、连接关闭或底层传输错误最多尝试三次，退避为 15 秒和 60 秒；漏洞、其他命令错误、无效输出或重试耗尽仍立即失败关闭。
 
 制品工作流成功后，`Deploy Production Runtime` 会自动接管手动制品任务和仅由上述 Skill 路径触发的 `main` push 发布。它使用 GitHub OIDC 临时凭证承担
 `arn:aws:iam::079740175286:role/yunqiao-vendure-github-deploy`，只把当前 SHA 的不可变归档写入

@@ -98,9 +98,11 @@ void test('production artifact workflow reuses one validated high-severity audit
         'utf8',
     );
 
-    assert.equal([...workflow.matchAll(/bun audit/gu)].length, 1);
-    assert.match(workflow, /bun audit --json --audit-level high > "\$BUN_AUDIT_RAW"/u);
-    assert.match(workflow, /lockfileSha256.*createHash\('sha256'\)/su);
+    assert.equal([...workflow.matchAll(/production-runtime-audit\.mjs/gu)].length, 1);
+    assert.doesNotMatch(workflow, /bun audit --json/u);
+    assert.match(workflow, /--audit-level high/u);
+    assert.match(workflow, /--evidence-output "\$BUN_AUDIT_REPORT"/u);
+    assert.match(workflow, /--lockfile bun\.lock/u);
     assert.match(workflow, /--audit-report "\$BUN_AUDIT_REPORT"/u);
 });
 

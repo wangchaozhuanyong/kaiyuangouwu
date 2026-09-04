@@ -1,11 +1,18 @@
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parseArgs } from 'node:util';
 import semver from 'semver';
 
 const SEVERITIES = Object.freeze(['low', 'moderate', 'high', 'critical']);
+const DEFAULT_AUDIT_RETRY_DELAYS_MS = Object.freeze([15_000, 60_000]);
+const RETRYABLE_AUDIT_FAILURE =
+    /(?:Timeout|ConnectionClosed):\s*audit request failed|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|ECONNREFUSED|fetch failed|socket hang up/iu;
+const scriptPath = fileURLToPath(import.meta.url);
+const repositoryRoot = path.resolve(path.dirname(scriptPath), '../../..');
 
 function isRecord(value) {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -17,6 +24,43 @@ function severityRank(severity) {
         throw new Error(`Unsupported audit severity: ${severity}`);
     }
     return rank;
+}
+
+function evaluateAuditPolicy(auditReport, failOn) {
+    if (!isRecord(auditReport)) {
+        throw new Error('bun audit JSON must be an object');
+    }
+    const failOnRank = severityRank(failOn);
+    const findings = [];
+    for (const [name, advisories] of Object.entries(auditReport)) {
+        if (!Array.isArray(advisories)) {
+            throw new Error(`bun audit entry for ${name} must be an array`);
+        }
+        for (const advisory of advisories) {
+            if (
+                !isRecord(advisory) ||
+                typeof advisory.severity !== 'string' ||
+                typeof advisory.title !== 'string' ||
+                typeof advisory.url !== 'string'
+            ) {
+                throw new Error(`bun audit advisory for ${name} is invalid`);
+            }
+            if (severityRank(advisory.severity) >= failOnRank) {
+                findings.push({
+                    name,
+                    severity: advisory.severity,
+                    title: advisory.title,
+                    url: advisory.url,
+                });
+            }
+        }
+    }
+    return findings.sort(
+        (left, right) =>
+            severityRank(right.severity) - severityRank(left.severity) ||
+            left.name.localeCompare(right.name) ||
+            left.title.localeCompare(right.title),
+    );
 }
 
 export function matchRuntimeAdvisories(runtimePackages, auditReport) {
@@ -96,9 +140,6 @@ export function createRuntimeAuditReport(runtimePackages, auditReport, { failOn 
     };
 }
 
-const RETRYABLE_AUDIT_FAILURE =
-    /Timeout: audit request failed|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|ECONNREFUSED|fetch failed|socket hang up/iu;
-
 export function parseBunAuditJson(output, source = 'bun audit') {
     try {
         return JSON.parse(output);
@@ -122,57 +163,91 @@ export function parseSavedBunAuditEvidence(output, expectedLockfileSha256) {
     if (evidence.lockfileSha256 !== expectedLockfileSha256) {
         throw new Error('Saved bun audit evidence does not match the source lockfile');
     }
+    evaluateAuditPolicy(evidence.report, 'critical');
     return evidence.report;
 }
 
-function parseBunAuditResult(result) {
-    if (result.error) {
-        throw result.error;
-    }
-    const output = result.stdout.trim()
-        ? result.stdout
-        : [result.stdout, result.stderr].filter(Boolean).join('\n');
-    return parseBunAuditJson(output);
+export function writeBunAuditEvidence(outputPath, lockfilePath, report) {
+    evaluateAuditPolicy(report, 'critical');
+    const lockfileSha256 = createHash('sha256').update(readFileSync(lockfilePath)).digest('hex');
+    writeFileSync(outputPath, `${JSON.stringify({ format: 1, lockfileSha256, report })}\n`, {
+        mode: 0o600,
+    });
 }
 
-/**
- * @param {string} repositoryRoot
- * @param {{ commandRunner?: typeof spawnSync, maxAttempts?: number, retryDelayMs?: number }} [options]
- */
+function bunAuditParseError(result, attempt, maxAttempts) {
+    const detail = [result.stdout, result.stderr].filter(Boolean).join('\n').trim();
+    const attemptDetail = maxAttempts > 1 ? ` after ${attempt} of ${maxAttempts} attempts` : '';
+    return {
+        detail,
+        error: new Error(`Could not parse bun audit JSON${attemptDetail}${detail ? `:\n${detail}` : ''}`),
+    };
+}
+
+function isRetriableAuditFailure(result, detail) {
+    return result.status !== 0 && RETRYABLE_AUDIT_FAILURE.test(detail);
+}
+
 export async function runBunAudit(
-    repositoryRoot,
-    { commandRunner = spawnSync, maxAttempts = 3, retryDelayMs = 2_000 } = {},
+    workingDirectory,
+    {
+        auditLevel,
+        maxAttempts = DEFAULT_AUDIT_RETRY_DELAYS_MS.length + 1,
+        onRetry = ({ attempt, delayMs }) => {
+            process.stderr.write(
+                `bun audit transport failure on attempt ${attempt}; retrying in ${delayMs}ms\n`,
+            );
+        },
+        retryDelaysMs = DEFAULT_AUDIT_RETRY_DELAYS_MS,
+        runCommand = () =>
+            spawnSync('bun', ['audit', '--json'], {
+                cwd: workingDirectory,
+                encoding: 'utf8',
+            }),
+        wait = delayMs => new Promise(resolve => setTimeout(resolve, delayMs)),
+    } = {},
 ) {
     if (!Number.isInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 5) {
         throw new Error('bun audit maxAttempts must be an integer between 1 and 5');
     }
-    if (!Number.isInteger(retryDelayMs) || retryDelayMs < 0 || retryDelayMs > 30_000) {
-        throw new Error('bun audit retryDelayMs must be an integer between 0 and 30000');
-    }
-
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-        try {
-            return parseBunAuditResult(
-                commandRunner('bun', ['audit', '--json'], {
-                    cwd: repositoryRoot,
-                    encoding: 'utf8',
-                }),
-            );
-        } catch (error) {
-            const detail = error instanceof Error ? error.message : String(error);
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        const result = runCommand();
+        if (result.error) {
+            const detail = result.error instanceof Error ? result.error.message : String(result.error);
             if (!RETRYABLE_AUDIT_FAILURE.test(detail) || attempt === maxAttempts) {
-                throw new Error(`bun audit failed after ${attempt} attempt(s): ${detail}`, {
-                    cause: error,
-                });
+                throw result.error;
             }
-            process.stderr.write(
-                `Transient bun audit request failure (${attempt}/${maxAttempts}); retrying in ${retryDelayMs}ms\n`,
-            );
-            await new Promise(resolve => setTimeout(resolve, retryDelayMs));
+            const delayMs = retryDelaysMs[attempt - 1] ?? retryDelaysMs.at(-1) ?? 0;
+            onRetry({ attempt, delayMs });
+            await wait(delayMs);
+            continue;
         }
+        let report;
+        try {
+            report = JSON.parse(result.stdout);
+        } catch {
+            const { detail, error } = bunAuditParseError(result, attempt, maxAttempts);
+            if (!isRetriableAuditFailure(result, detail) || attempt === maxAttempts) {
+                throw error;
+            }
+            const delayMs = retryDelaysMs[attempt - 1] ?? retryDelaysMs.at(-1) ?? 0;
+            onRetry({ attempt, delayMs });
+            await wait(delayMs);
+            continue;
+        }
+        const blockedFindings = evaluateAuditPolicy(report, auditLevel ?? 'critical');
+        if (auditLevel && blockedFindings.length > 0) {
+            const first = blockedFindings[0];
+            throw new Error(
+                `bun audit policy failed (${auditLevel}+): ${first.name} ${first.severity} ${first.title} (${first.url})`,
+            );
+        }
+        if (result.status !== 0 && result.status !== 1) {
+            throw new Error(`bun audit exited unexpectedly with code ${result.status ?? 'unknown'}`);
+        }
+        return report;
     }
-
-    throw new Error('bun audit failed without producing a result');
+    throw new Error('bun audit retry loop exited unexpectedly');
 }
 
 export async function auditRuntimePackages(
@@ -180,7 +255,6 @@ export async function auditRuntimePackages(
     runtimePackages,
     { auditReportPath, expectedLockfileSha256, failOn = 'critical' } = {},
 ) {
-    const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
     if (auditReportPath && !expectedLockfileSha256) {
         throw new Error('Saved bun audit evidence requires the source lockfile SHA-256');
     }
@@ -199,4 +273,30 @@ export async function auditRuntimePackages(
         );
     }
     return report;
+}
+
+async function main() {
+    const { values } = parseArgs({
+        options: {
+            'audit-level': { type: 'string' },
+            'evidence-output': { type: 'string' },
+            lockfile: { type: 'string' },
+        },
+        strict: true,
+    });
+    const auditLevel = values['audit-level'] ?? 'high';
+    severityRank(auditLevel);
+    const report = await runBunAudit(repositoryRoot, { auditLevel });
+    if (values['evidence-output']) {
+        const lockfilePath = path.resolve(repositoryRoot, values.lockfile ?? 'bun.lock');
+        writeBunAuditEvidence(path.resolve(values['evidence-output']), lockfilePath, report);
+    }
+    process.stdout.write(`bun audit policy passed (${auditLevel}+)\n`);
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === scriptPath) {
+    main().catch(error => {
+        process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+        process.exitCode = 1;
+    });
 }
