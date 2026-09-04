@@ -264,6 +264,8 @@ test('read-only verification requires the reviewed Admin values and Shop parity'
     assert.equal(result.shopOrigin, 'https://moyaoai.com');
     assert.equal(matching.state.mutations.length, 0);
     assert.ok(matching.state.shopUrls.every(url => url.startsWith('https://moyaoai.com/shop-api')));
+    assert.ok(matching.state.shopUrls.some(url => url.endsWith('/shop-api?languageCode=zh_Hans')));
+    assert.ok(matching.state.shopUrls.some(url => url.endsWith('/shop-api?languageCode=en')));
 
     const drifted = createFetchState(createAdminBlock(definition, { desired: true }), {
         shopDrift: true,

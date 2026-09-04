@@ -348,6 +348,7 @@ VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
 
 登录/注册页文案、色板和标签属于 Vendure 内容，不得只改客户端。在 `Production Runtime Artifact` 中勾选 `auth_visuals`，并填写已审核 Channel；发布链会先 dry-run，再以带 `expectedUpdatedAt` 的单个 Admin API 批次原子写入，随后运行独立只读 `--verify` 反查 Admin 与中英文 Shop API，并记录 `AUTH_VISUAL_VERIFY_OK`。验证失败时恢复原内容并停止切换。
 发布器的回归样本必须包含当前生产中文/英文配对。若修改中文源文时再次提交与线上完全相同的英文，内容翻译服务可能把该英文判定为过期自动翻译并重新生成。这种发布必须改为新的已审核英文，或使用接口明确支持的人工锁定；不得假设 GraphQL 输入会原样持久化，必须以写入后 Admin/Shop 反查值为准。
+中英文 Shop API 反查必须复制真实客户端的语言路由：同时传递 `languageCode=<locale>` 查询参数与 `language-code: <locale>` 请求头，并分别校验 `zh_Hans` 和 `en`。仅使用请求头的探针不得作为客户端语言一致性证据。
 
 当版本包含已审核的店铺媒体、登录/注册内容或 MOYAO AI 品牌变更时，直接在目标 `main` 完整 SHA 的
 `Production Runtime Artifact` 唯一入口填写完整 manifest key/勾选 `auth_visuals`/勾选 `moyao_brand`，并填写已审核 Channel code，不再另行触发第二个内容发布工作流，也不回退到服务器默认 Channel。
