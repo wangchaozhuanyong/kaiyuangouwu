@@ -20,7 +20,7 @@ import { languageCodeFor } from './i18n';
 import { offlineLoadError } from './loading-state';
 import { formatDisplayMoney } from './money-display';
 import { orderStatusRefreshInterval } from './order-refresh';
-import { paymentAvailability } from './payment-readiness';
+import { isTestPaymentMethod, paymentAvailability } from './payment-readiness';
 import { PUBLIC_QUERY_GC_TIME, ROUTE_QUERY_STALE_TIME, storefrontQueryKeys } from './query-client';
 import { PageSkeleton } from './route-loading';
 import { routeNavigateOptions } from './storefront-router';
@@ -75,7 +75,6 @@ export function PaymentPage({
     const submissionLock = useRef(false);
     const usdtCompletionLock = useRef(false);
     const confirmationTokenRef = useRef('');
-    const isTestMode = import.meta.env.DEV;
     const isPending = cart?.state === 'PAYMENT_PENDING' && order?.state === 'ArrangingPayment';
     const methodsQuery = useQuery({
         queryKey: storefrontQueryKeys.paymentMethods(
@@ -157,10 +156,10 @@ export function PaymentPage({
         staleTime: 0,
         refetchInterval: 5_000,
     });
-    const availability = paymentAvailability(isPending ? (methodsQuery.data ?? []) : [], {
-        allowTestMethods: isTestMode,
-    });
+    const availability = paymentAvailability(isPending ? (methodsQuery.data ?? []) : []);
     const methods = availability.methods;
+    const selectedPaymentMethod = methods.find(method => method.code === selectedMethod);
+    const isSimulatedPayment = selectedPaymentMethod ? isTestPaymentMethod(selectedPaymentMethod) : false;
     const loading = isPending && methodsQuery.isLoading;
     const methodLoadError =
         methodsQuery.isPaused && methodsQuery.data === undefined
@@ -408,7 +407,7 @@ export function PaymentPage({
                         </section>
                     ) : null}
                     <section
-                        className={`payment-test-notice${isTestMode ? '' : ' is-production'}`}
+                        className={`payment-test-notice${isSimulatedPayment ? '' : ' is-production'}`}
                         role="note"
                     >
                         <CircleAlert aria-hidden="true" />
@@ -418,10 +417,10 @@ export function PaymentPage({
                                     ? isZh
                                         ? '链上到账检测'
                                         : 'On-chain payment detection'
-                                    : isTestMode
+                                    : isSimulatedPayment
                                       ? isZh
-                                          ? '本地测试支付'
-                                          : 'Local test payment'
+                                          ? '模拟支付测试'
+                                          : 'Simulated payment test'
                                       : availability.status === 'READY'
                                         ? isZh
                                             ? '安全支付'
@@ -435,10 +434,10 @@ export function PaymentPage({
                                     ? isZh
                                         ? '系统每分钟补扫 TRON 链，当前页面每 5 秒检查订单状态；无需提交付款成功。'
                                         : 'TRON is reconciled every minute and this page checks the order every 5 seconds.'
-                                    : isTestMode
+                                    : isSimulatedPayment
                                       ? isZh
-                                          ? '仅用于预览结账流程，不会产生真实扣款。'
-                                          : 'For previewing checkout only. No real charge will be made.'
+                                          ? '不会产生真实扣款，但订单会按付款成功直接进入已结算状态。'
+                                          : 'No real charge is made, but the order is settled as a successful payment.'
                                       : availability.status === 'READY'
                                         ? isZh
                                             ? '请确认订单和金额后选择支付方式。'
@@ -554,10 +553,10 @@ export function PaymentPage({
                                             <small>
                                                 {method.isEligible
                                                     ? method.description ||
-                                                      (isTestMode
+                                                      (isTestPaymentMethod(method)
                                                           ? isZh
-                                                              ? '本地即时模拟支付'
-                                                              : 'Instant local payment simulation'
+                                                              ? '即时模拟付款成功'
+                                                              : 'Instant simulated payment success'
                                                           : isZh
                                                             ? '可用于当前订单'
                                                             : 'Available for this order')
@@ -575,12 +574,8 @@ export function PaymentPage({
                             <InlineError
                                 message={
                                     isZh
-                                        ? isTestMode
-                                            ? '当前没有可用的本地测试支付方式'
-                                            : '当前店铺尚未接入支付方式，订单已保留'
-                                        : isTestMode
-                                          ? 'No local test payment method is available'
-                                          : 'No payment provider is configured for this store. Your order is preserved.'
+                                        ? '当前店铺没有已开启的支付方式，订单已保留'
+                                        : 'No payment method is enabled for this store. Your order is preserved.'
                                 }
                                 action={isZh ? '重试' : 'Retry'}
                                 onAction={() => void methodsQuery.refetch()}
@@ -672,17 +667,17 @@ export function PaymentPage({
                         <button type="submit" disabled={!selectedMethod || submitting || loading}>
                             <WalletCards aria-hidden="true" />
                             {submitting
-                                ? isTestMode
+                                ? isSimulatedPayment
                                     ? isZh
-                                        ? '正在完成测试支付'
-                                        : 'Completing test payment'
+                                        ? '正在完成模拟支付'
+                                        : 'Completing simulated payment'
                                     : isZh
                                       ? '正在提交支付'
                                       : 'Submitting payment'
-                                : isTestMode
+                                : isSimulatedPayment
                                   ? isZh
-                                      ? '确认测试支付'
-                                      : 'Confirm test payment'
+                                      ? '确认模拟支付'
+                                      : 'Confirm simulated payment'
                                   : isZh
                                     ? '确认支付'
                                     : 'Confirm payment'}

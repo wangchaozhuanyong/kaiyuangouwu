@@ -4,6 +4,7 @@ import type {
     StoreUsdtConfigurationRecord,
     StoreUsdtWalletReviewStatus,
 } from '../../graphql/store-usdt.graphql';
+import { SIMULATED_PAYMENT_HANDLER_CODE } from './simulated-payment-utils';
 
 export const USDT_PAYMENT_METHOD_CODE = 'usdt-trc20';
 export const USDT_PAYMENT_HANDLER_CODE = 'usdt-trc20-chain-handler';
@@ -51,7 +52,11 @@ export function storeUsdtPaymentIntentStatusLabel(status?: string | null): strin
 }
 
 export function selectablePaymentHandlers(definitions: ConfigurableOperationDefinitionRecord[]) {
-    return definitions.filter(definition => definition.code !== USDT_PAYMENT_HANDLER_CODE);
+    return definitions.filter(
+        definition =>
+            definition.code !== USDT_PAYMENT_HANDLER_CODE &&
+            definition.code !== SIMULATED_PAYMENT_HANDLER_CODE,
+    );
 }
 
 export function toStoreUsdtConfigurationDraft(
