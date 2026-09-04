@@ -243,6 +243,13 @@
     height: 0;
 }
 
+/* Keep the 9:16 canvas intact when the mobile viewport height is the limiting axis. */
+.referral-poster-preview {
+    aspect-ratio: 9 / 16;
+    width: min(100%, calc(54vh * 9 / 16));
+    width: min(100%, calc(54dvh * 9 / 16));
+}
+
 /* ==========================================================================
    客服中心：品牌双色服务时间条与直达渠道
    ========================================================================== */

@@ -49,19 +49,25 @@ import {
     type NavigateOptions,
     type NavLinkProps,
 } from 'react-router-dom';
+// eslint-disable-next-line import/order -- Prettier keeps this type-only relative import with the external type group.
 import type { ThemePreference } from '../theme/theme';
 
 import { logoutAdministrator, switchActiveChannel } from '../apollo';
 import { AccessibleDialogSurface } from '../components/AccessibleDialogSurface';
-import { ThemeToggleButton } from '../components/ThemeToggleButton';
 import { AdminPermissionsProvider } from '../components/admin-permissions-context';
+import { ThemeToggleButton } from '../components/ThemeToggleButton';
 import { CustomFieldsProvider } from '../custom-fields/CustomFieldsProvider';
 import {
     getNextAdminExtensionNavItems,
     getNextAdminExtensionRoute,
     preloadNextAdminExtensionRoute,
 } from '../extensions/extension-api';
-import { APP_SHELL_BOOTSTRAP_QUERY, type AppShellBootstrapData } from '../graphql/auth.graphql';
+import {
+    APP_SHELL_BOOTSTRAP_QUERY,
+    APP_SHELL_STORE_CONTEXT_QUERY,
+    type AppShellBootstrapData,
+    type AppShellStoreContextData,
+} from '../graphql/auth.graphql';
 import { requestAppNavigation } from '../hooks/use-unsaved-changes-warning';
 import { preloadCommonRoutes, preloadRoute } from '../route-modules';
 import { useTheme } from '../theme/theme-context';
@@ -73,6 +79,7 @@ import {
 import { getChannelDisplayLabel } from '../utils/channel-display';
 import { commerceModeAllowsPath } from '../utils/commerce-mode';
 import { toUserFacingError } from '../utils/user-facing-error';
+
 import {
     hasAppShellPermissionSnapshot,
     isAppShellPermissionLoading,
@@ -185,6 +192,10 @@ export function AppShell() {
         variables: { options: { skip: 0, take: 100, sort: { code: 'ASC' } } },
         fetchPolicy: 'cache-first',
     });
+    const storeContextQuery = useQuery<AppShellStoreContextData>(APP_SHELL_STORE_CONTEXT_QUERY, {
+        fetchPolicy: 'cache-first',
+        errorPolicy: 'ignore',
+    });
     const {
         data: channelData,
         error: appShellError,
@@ -193,8 +204,8 @@ export function AppShell() {
         refetch: refetchAppShell,
     } = appShellQuery;
     const activeAdministrator = channelData?.activeAdministrator;
-    const storeLogoUrl = channelData?.myStoreProfile.logoAsset?.preview;
-    const commerceMode = channelData?.myStoreCommerceMode.mode ?? 'HYBRID';
+    const storeLogoUrl = storeContextQuery.data?.myStoreProfile?.logoAsset?.preview;
+    const commerceMode = storeContextQuery.data?.myStoreCommerceMode?.mode ?? 'HYBRID';
     const showsPhysicalCatalog = commerceMode !== 'DIGITAL_ONLY';
     const showsDigitalCatalog = commerceMode !== 'PHYSICAL_ONLY';
     const administratorName = activeAdministrator
@@ -243,11 +254,14 @@ export function AppShell() {
     }, []);
 
     useEffect(() => {
-        if (!channelData?.myStoreCommerceMode || commerceModeAllowsPath(commerceMode, location.pathname)) {
+        if (
+            !storeContextQuery.data?.myStoreCommerceMode ||
+            commerceModeAllowsPath(commerceMode, location.pathname)
+        ) {
             return;
         }
         void routerNavigate('/catalog/list', { replace: true });
-    }, [channelData?.myStoreCommerceMode, commerceMode, location.pathname, routerNavigate]);
+    }, [storeContextQuery.data?.myStoreCommerceMode, commerceMode, location.pathname, routerNavigate]);
 
     useEffect(() => {
         const channels = channelData?.channels;

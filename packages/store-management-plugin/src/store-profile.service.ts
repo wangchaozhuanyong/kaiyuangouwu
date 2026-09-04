@@ -43,25 +43,41 @@ export class StoreProfileService {
 
     async createDraft(ctx: RequestContext, channel: Channel): Promise<StoreProfile> {
         const repository = this.connection.getRepository(ctx, StoreProfile);
-        const existing = await repository.findOne({ where: { channelId: channel.id } });
+        const existing = await repository.findOne({
+            where: { channelId: channel.id },
+            relations: { channel: { seller: true }, logoAsset: true },
+        });
         if (existing) {
             return existing;
         }
         const [last] = await repository.find({ order: { sortOrder: 'DESC' }, take: 1 });
-        return repository.save(
-            new StoreProfile({
-                channel,
-                channelId: channel.id,
-                status: 'DRAFT',
-                isPublished: false,
-                sortOrder: (last?.sortOrder ?? -1) + 1,
-                descriptionZh: '',
-                descriptionEn: '',
-                internalNote: '',
-                logoAsset: null,
-                logoAssetId: null,
-            }),
-        );
+        try {
+            return await repository.save(
+                new StoreProfile({
+                    channel,
+                    channelId: channel.id,
+                    status: 'DRAFT',
+                    isPublished: false,
+                    sortOrder: (last?.sortOrder ?? -1) + 1,
+                    descriptionZh: '',
+                    descriptionEn: '',
+                    internalNote: '',
+                    logoAsset: null,
+                    logoAssetId: null,
+                }),
+            );
+        } catch (error) {
+            // API requests may discover the same legacy gap concurrently. The unique Channel index
+            // is authoritative; return the winner instead of surfacing a transient duplicate error.
+            const concurrentlyCreated = await repository.findOne({
+                where: { channelId: channel.id },
+                relations: { channel: { seller: true }, logoAsset: true },
+            });
+            if (concurrentlyCreated) {
+                return concurrentlyCreated;
+            }
+            throw error;
+        }
     }
 
     async findAllForAdmin(ctx: RequestContext): Promise<StoreProfile[]> {
@@ -73,7 +89,21 @@ export class StoreProfileService {
     }
 
     async findForMerchant(ctx: RequestContext): Promise<StoreProfile> {
-        const profile = await this.findByChannel(ctx, ctx.channelId);
+        let profile = await this.findByChannel(ctx, ctx.channelId, false);
+        if (!profile) {
+            const channel = await this.channelService.findOne(ctx, ctx.channelId);
+            if (!channel) {
+                throw new EntityNotFoundError(Channel.name, ctx.channelId);
+            }
+            const isProvisioningTemplate = Boolean(
+                (channel.customFields as { isStoreProvisioningTemplate?: boolean } | undefined)
+                    ?.isStoreProvisioningTemplate,
+            );
+            if (isProvisioningTemplate) {
+                throw new EntityNotFoundError(StoreProfile.name, ctx.channelId);
+            }
+            profile = await this.createDraft(ctx, channel);
+        }
         return (await this.attachOperationalState(ctx, [profile]))[0];
     }
 
@@ -269,15 +299,25 @@ export class StoreProfileService {
         return profiles;
     }
 
-    private async findByChannel(ctx: RequestContext, channelId: ID): Promise<StoreProfile> {
+    private async findByChannel(ctx: RequestContext, channelId: ID, required?: true): Promise<StoreProfile>;
+    private async findByChannel(
+        ctx: RequestContext,
+        channelId: ID,
+        required: false,
+    ): Promise<StoreProfile | undefined>;
+    private async findByChannel(
+        ctx: RequestContext,
+        channelId: ID,
+        required = true,
+    ): Promise<StoreProfile | undefined> {
         const profile = await this.connection.getRepository(ctx, StoreProfile).findOne({
             where: { channelId },
             relations: { channel: { seller: true }, logoAsset: true },
         });
-        if (!profile) {
+        if (!profile && required) {
             throw new EntityNotFoundError(StoreProfile.name, channelId);
         }
-        return profile;
+        return profile ?? undefined;
     }
 
     private async lockProfileById(ctx: RequestContext, id: ID): Promise<StoreProfile> {

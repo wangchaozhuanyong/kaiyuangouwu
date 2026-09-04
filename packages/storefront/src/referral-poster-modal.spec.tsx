@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { posterForegroundColor, ReferralPosterModal, referralPosterStyles } from './referral-poster-modal';
+import { readStorefrontStylesheet } from './test-stylesheet';
 
 const expectedTemplateIds = [
     'BRAND_MINIMAL',
@@ -27,9 +28,11 @@ describe('referral poster templates', () => {
                 ),
             ),
         ).toHaveLength(5);
+        expect(referralPosterStyles.every(style => style.dark)).toBe(true);
         expect(referralPosterStyles.find(style => style.id === 'PREMIUM_DARK')?.colors[0]).toBe('#020b1d');
         expect(posterForegroundColor('#f3f8ff', 'deep-sea')).toBe('#f3f8ff');
         expect(posterForegroundColor('#f3f8ff', 'minimal')).toBe('#0E2A63');
+        expect(posterForegroundColor('#f8fbff', 'minimal', true)).toBe('#f8fbff');
     });
 
     it('renders all enabled templates and identifies the invite code as optional sharing data', () => {
@@ -48,7 +51,7 @@ describe('referral poster templates', () => {
             }),
         );
 
-        expect(markup).toContain('云桥简约');
+        expect(markup).toContain('云桥蓝焰');
         expect(markup).toContain('冰川蓝光');
         expect(markup).toContain('青空流线');
         expect(markup).toContain('深海科技');
@@ -77,15 +80,20 @@ describe('referral poster templates', () => {
             }),
         );
 
-        expect(markup).toContain('CloudBridge minimal');
+        expect(markup).toContain('CloudBridge blue flame');
         expect(markup).toContain('overflow-x-hidden');
         expect(markup).toContain('min-w-0');
         expect(markup).toContain('max-w-sm');
         expect(markup).toContain('flex items-start justify-center');
         expect(markup).toContain('my-auto');
         expect(markup).toContain('pt-14');
-        expect(markup).toContain('max-h-[54dvh]');
+        expect(markup).toContain('referral-poster-preview');
+        expect(markup).not.toContain('max-h-[54dvh]');
         expect(markup).not.toContain('grid place-items-center');
+
+        const stylesheet = readStorefrontStylesheet();
+        expect(stylesheet).toMatch(/\.referral-poster-preview\s*\{[\s\S]*?aspect-ratio:\s*9\s*\/\s*16/);
+        expect(stylesheet).toContain('width: min(100%, calc(54dvh * 9 / 16))');
     });
 
     it('combines custom templates with enabled default templates and omits disabled default templates', () => {
@@ -163,7 +171,7 @@ describe('referral poster templates', () => {
         // Custom template is rendered
         expect(markup).toContain('极客定制海报');
         // Enabled default templates are rendered
-        expect(markup).toContain('云桥简约');
+        expect(markup).toContain('云桥蓝焰');
         expect(markup).toContain('冰川蓝光');
         // Disabled default templates are NOT rendered
         expect(markup).not.toContain('青空流线');
