@@ -244,7 +244,8 @@ bun run sync:auth-visuals -- --verify
 
 MOYAO AI 的品牌名、双语简介/口号、色板和三组 Logo 由 StoreProfile 品牌发布器管理，
 不得只在客户端写死。生产发布必须固定主 Channel，依次执行预演、受保护写入和独立只读
-验证：
+验证。正式发布必须在 `Production Runtime Artifact` 同一份经校验的发布计划中
+设置 `moyao_brand=true` 和 `channel_codes=__default_channel__`：
 
 ```bash
 bun run sync:moyao-brand -- --dry-run --channel-code __default_channel__
@@ -254,6 +255,7 @@ bun run sync:moyao-brand -- --verify --channel-code __default_channel__
 
 写入会同时校验 Admin StoreProfile 和中英文 Shop API。校验失败时发布器按写入后的版本号恢复
 原名称、文案、色板和 Logo Asset ID，并复验恢复状态；独立 `--verify` 未通过不得切换客户端。
+发布计划未显式审核品牌、审核了错误 Channel，或者在没有品牌变更时携带品牌标志，都必须在备份和切换前失败关闭。
 
 Run `bun run check:storefront-publishing` before review. It rejects unclassified storefront media,
 direct managed-media imports outside the fallback registry, and hard-coded remote media URLs in
