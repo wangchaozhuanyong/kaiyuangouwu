@@ -267,6 +267,8 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.match(script, /9>&-/u);
     assert.match(script, /PRODUCTION_DEPLOY_OK/u);
     assert.match(script, /verify-dashboard-assets\.mjs/u);
+    assert.match(script, /--dashboard-url https:\/\/console\.moyaoai\.com\/dashboard\//u);
+    assert.doesNotMatch(script, /--dashboard-url https:\/\/console\.damatong\.net/u);
     assert.match(script, /--release-id "\$\{target_sha\}"/u);
     assert.match(script, /managed storefront data changed/u);
     assert.match(script, /VENDURE_REVIEWED_STOREFRONT_MEDIA_KEYS/u);
@@ -436,6 +438,8 @@ void test('scheduled production monitor checks memory, processes, and health thr
     assert.match(script, /--safe-concurrency 8/u);
     assert.match(script, /--release-timeout-ms 5000/u);
     assert.match(script, /verify-dashboard-assets\.mjs/u);
+    assert.match(script, /--dashboard-url https:\/\/console\.moyaoai\.com\/dashboard\//u);
+    assert.doesNotMatch(script, /--dashboard-url https:\/\/console\.damatong\.net/u);
     assert.match(script, /require_recent_systemd_success/u);
     assert.match(script, /vendure-production-healthcheck\.timer/u);
     assert.match(script, /vendure-production-healthcheck\.service/u);
