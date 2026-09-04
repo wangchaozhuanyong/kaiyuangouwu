@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -95,29 +96,101 @@ export function createRuntimeAuditReport(runtimePackages, auditReport, { failOn 
     };
 }
 
-function runBunAudit(repositoryRoot) {
-    const result = spawnSync('bun', ['audit', '--json'], {
-        cwd: repositoryRoot,
-        encoding: 'utf8',
-    });
-    if (result.error) {
-        throw result.error;
-    }
+const RETRYABLE_AUDIT_FAILURE =
+    /Timeout: audit request failed|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|ECONNREFUSED|fetch failed|socket hang up/iu;
+
+export function parseBunAuditJson(output, source = 'bun audit') {
     try {
-        return JSON.parse(result.stdout);
+        return JSON.parse(output);
     } catch {
-        const detail = [result.stdout, result.stderr].filter(Boolean).join('\n').trim();
-        throw new Error(`Could not parse bun audit JSON${detail ? `:\n${detail}` : ''}`);
+        const detail = output.trim();
+        throw new Error(`Could not parse ${source} JSON${detail ? `:\n${detail}` : ''}`);
     }
 }
 
-export async function auditRuntimePackages(artifactRoot, runtimePackages, { failOn = 'critical' } = {}) {
+export function parseSavedBunAuditEvidence(output, expectedLockfileSha256) {
+    const evidence = parseBunAuditJson(output, 'saved bun audit evidence');
+    if (
+        !isRecord(evidence) ||
+        evidence.format !== 1 ||
+        !isRecord(evidence.report) ||
+        typeof evidence.lockfileSha256 !== 'string' ||
+        !/^[0-9a-f]{64}$/u.test(evidence.lockfileSha256)
+    ) {
+        throw new Error('Saved bun audit evidence is invalid');
+    }
+    if (evidence.lockfileSha256 !== expectedLockfileSha256) {
+        throw new Error('Saved bun audit evidence does not match the source lockfile');
+    }
+    return evidence.report;
+}
+
+function parseBunAuditResult(result) {
+    if (result.error) {
+        throw result.error;
+    }
+    const output = result.stdout.trim()
+        ? result.stdout
+        : [result.stdout, result.stderr].filter(Boolean).join('\n');
+    return parseBunAuditJson(output);
+}
+
+/**
+ * @param {string} repositoryRoot
+ * @param {{ commandRunner?: typeof spawnSync, maxAttempts?: number, retryDelayMs?: number }} [options]
+ */
+export async function runBunAudit(
+    repositoryRoot,
+    { commandRunner = spawnSync, maxAttempts = 3, retryDelayMs = 2_000 } = {},
+) {
+    if (!Number.isInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 5) {
+        throw new Error('bun audit maxAttempts must be an integer between 1 and 5');
+    }
+    if (!Number.isInteger(retryDelayMs) || retryDelayMs < 0 || retryDelayMs > 30_000) {
+        throw new Error('bun audit retryDelayMs must be an integer between 0 and 30000');
+    }
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+            return parseBunAuditResult(
+                commandRunner('bun', ['audit', '--json'], {
+                    cwd: repositoryRoot,
+                    encoding: 'utf8',
+                }),
+            );
+        } catch (error) {
+            const detail = error instanceof Error ? error.message : String(error);
+            if (!RETRYABLE_AUDIT_FAILURE.test(detail) || attempt === maxAttempts) {
+                throw new Error(`bun audit failed after ${attempt} attempt(s): ${detail}`, {
+                    cause: error,
+                });
+            }
+            process.stderr.write(
+                `Transient bun audit request failure (${attempt}/${maxAttempts}); retrying in ${retryDelayMs}ms\n`,
+            );
+            await new Promise(resolve => setTimeout(resolve, retryDelayMs));
+        }
+    }
+
+    throw new Error('bun audit failed without producing a result');
+}
+
+export async function auditRuntimePackages(
+    artifactRoot,
+    runtimePackages,
+    { auditReportPath, expectedLockfileSha256, failOn = 'critical' } = {},
+) {
     const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
-    const { blockedFindings, report } = createRuntimeAuditReport(
-        runtimePackages,
-        runBunAudit(repositoryRoot),
-        { failOn },
-    );
+    if (auditReportPath && !expectedLockfileSha256) {
+        throw new Error('Saved bun audit evidence requires the source lockfile SHA-256');
+    }
+    const auditReport = auditReportPath
+        ? parseSavedBunAuditEvidence(
+              readFileSync(path.resolve(auditReportPath), 'utf8'),
+              expectedLockfileSha256,
+          )
+        : await runBunAudit(repositoryRoot);
+    const { blockedFindings, report } = createRuntimeAuditReport(runtimePackages, auditReport, { failOn });
     await writeFile(path.join(artifactRoot, 'RUNTIME-AUDIT.json'), `${JSON.stringify(report, null, 2)}\n`);
     if (blockedFindings.length > 0) {
         const first = blockedFindings[0];

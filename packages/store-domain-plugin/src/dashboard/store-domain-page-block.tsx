@@ -26,6 +26,7 @@ import { KeyboardEvent, useState } from 'react';
 
 import {
     StoreDomainItem,
+    StoreDomainsResult,
     createStoreDomainMutation,
     deleteStoreDomainMutation,
     setPrimaryStoreDomainMutation,
@@ -114,7 +115,7 @@ export function StoreDomainPageBlock({ context }: Readonly<StoreDomainPageBlockP
     const queryKey = ['store-domains', channelId];
     const domainQuery = useQuery({
         queryKey,
-        queryFn: () => api.query(storeDomainsQuery, { channelId }),
+        queryFn: () => api.query<StoreDomainsResult>(storeDomainsQuery, { channelId }),
         enabled: Boolean(channelId),
     });
     const refresh = () => queryClient.invalidateQueries({ queryKey });

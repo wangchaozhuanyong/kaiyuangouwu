@@ -92,6 +92,18 @@ void test('runtime artifact includes release publishers and every media manifest
     }
 });
 
+void test('production artifact workflow reuses one validated high-severity audit response', async () => {
+    const workflow = await readFile(
+        path.join(repositoryRoot, '.github/workflows/build_production_runtime.yml'),
+        'utf8',
+    );
+
+    assert.equal([...workflow.matchAll(/bun audit/gu)].length, 1);
+    assert.match(workflow, /bun audit --json --audit-level high > "\$BUN_AUDIT_RAW"/u);
+    assert.match(workflow, /lockfileSha256.*createHash\('sha256'\)/su);
+    assert.match(workflow, /--audit-report "\$BUN_AUDIT_REPORT"/u);
+});
+
 void test('runtime artifact output is restricted to a new child of the artifact directory', async () => {
     await assert.rejects(() => assertSafeOutputPath(repositoryRoot), /Output must be a child/u);
     await assert.rejects(() => assertSafeOutputPath(runtimeArtifactsRoot), /Output must be a child/u);

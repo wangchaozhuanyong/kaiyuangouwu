@@ -282,11 +282,12 @@ async function assertRequiredFiles(stagingRoot) {
 }
 
 /**
- * @param {{ allowDirty?: boolean, auditLevel?: string, output?: string, requirePlatform?: string }} [options]
+ * @param {{ allowDirty?: boolean, auditLevel?: string, auditReportPath?: string, output?: string, requirePlatform?: string }} [options]
  */
 export async function buildRuntimeArtifact({
     allowDirty = false,
     auditLevel = 'high',
+    auditReportPath,
     output,
     requirePlatform,
 } = {}) {
@@ -307,6 +308,7 @@ export async function buildRuntimeArtifact({
     try {
         const rootManifestContents = await readFile(path.join(repositoryRoot, 'package.json'), 'utf8');
         const lockfileContents = await readFile(path.join(repositoryRoot, 'bun.lock'));
+        const lockfileSha256 = sha256(lockfileContents);
         const parsedRootManifest = JSON.parse(rootManifestContents);
         const rootManifest = {
             engines:
@@ -331,7 +333,7 @@ export async function buildRuntimeArtifact({
             bunVersion: commandVersion('bun'),
             deniedPackages: DENIED_RUNTIME_PACKAGES,
             gitSha,
-            lockfileSha256: sha256(lockfileContents),
+            lockfileSha256,
             nodeVersion: process.version,
             platform,
             sourceDirty,
@@ -353,7 +355,11 @@ export async function buildRuntimeArtifact({
             path.join(stagingRoot, 'RUNTIME-PACKAGES.json'),
             `${JSON.stringify(runtimePackages, null, 2)}\n`,
         );
-        await auditRuntimePackages(stagingRoot, runtimePackages, { failOn: auditLevel });
+        await auditRuntimePackages(stagingRoot, runtimePackages, {
+            auditReportPath,
+            expectedLockfileSha256: lockfileSha256,
+            failOn: auditLevel,
+        });
         await writeIntegrityFiles(stagingRoot);
         await verifyRuntimeArtifact(stagingRoot, { allowDirty, expectedSha: gitSha });
         await ensureRuntimeRootPermissions(stagingRoot);
@@ -370,6 +376,7 @@ async function main() {
         options: {
             'allow-dirty': { type: 'boolean' },
             'audit-level': { type: 'string' },
+            'audit-report': { type: 'string' },
             output: { type: 'string' },
             'require-platform': { type: 'string' },
         },
@@ -378,6 +385,7 @@ async function main() {
     const output = await buildRuntimeArtifact({
         allowDirty: values['allow-dirty'] ?? false,
         auditLevel: values['audit-level'],
+        auditReportPath: values['audit-report'],
         output: values.output,
         requirePlatform: values['require-platform'],
     });
