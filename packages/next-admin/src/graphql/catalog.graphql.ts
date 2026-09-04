@@ -285,19 +285,26 @@ export const GET_FACETS = gql`
 `;
 
 export const GET_COLLECTIONS = gql`
+    fragment ProductEditorCollectionLookupFields on Collection {
+        id
+        name
+        slug
+        position
+        isPrivate
+        filters {
+            code
+            args {
+                name
+                value
+            }
+        }
+    }
     query GetCollections($options: CollectionListOptions) {
         collections(options: $options) {
             items {
-                id
-                name
-                slug
-                isPrivate
-                filters {
-                    code
-                    args {
-                        name
-                        value
-                    }
+                ...ProductEditorCollectionLookupFields
+                children {
+                    ...ProductEditorCollectionLookupFields
                 }
             }
             totalItems

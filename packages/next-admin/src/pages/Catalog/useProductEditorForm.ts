@@ -122,7 +122,6 @@ export function useProductEditorForm() {
     const [facetSearch, setFacetSearch] = useState('');
     const [facetPage, setFacetPage] = useState(0);
     const [collectionSearch, setCollectionSearch] = useState('');
-    const [collectionPage, setCollectionPage] = useState(0);
 
     // 变体 SKU 矩阵 (严格无演示默认数据)
     const [variants, setVariants] = useState<ProductVariantState[]>([]);
@@ -142,9 +141,9 @@ export function useProductEditorForm() {
     const [errorMessage, setErrorMessage] = useState('');
     const [saving, setSaving] = useState(false);
     const loadingAllCatalogChannelsRef = useRef(false);
+    const loadingAllCollectionsRef = useRef(false);
     const deferredAssetSearch = useDeferredValue(assetSearch.trim());
     const deferredFacetSearch = useDeferredValue(facetSearch.trim());
-    const deferredCollectionSearch = useDeferredValue(collectionSearch.trim());
     const deferredOptionGroupSearch = useDeferredValue(optionGroupSearch.trim());
 
     const {
@@ -208,18 +207,61 @@ export function useProductEditorForm() {
         loading: collectionsLoading,
         error: collectionsError,
         refetch: refetchCollections,
+        fetchMore: fetchMoreCollections,
     } = useQuery<{ collections: { items: CollectionItem[]; totalItems: number } }>(GET_COLLECTIONS, {
         variables: {
             options: {
-                topLevelOnly: false,
-                skip: collectionPage * LOOKUP_PAGE_SIZE,
-                take: LOOKUP_PAGE_SIZE,
-                sort: { name: 'ASC' },
-                filter: deferredCollectionSearch ? { name: { contains: deferredCollectionSearch } } : {},
+                topLevelOnly: true,
+                skip: 0,
+                take: 100,
+                sort: { position: 'ASC' },
             },
         },
         fetchPolicy: 'cache-first',
     });
+
+    useEffect(() => {
+        const collections = collectionsData?.collections;
+        if (
+            !collections ||
+            collectionsLoading ||
+            collectionsError ||
+            loadingAllCollectionsRef.current ||
+            collections.items.length >= collections.totalItems
+        )
+            return;
+        const loadedCount = collections.items.length;
+        loadingAllCollectionsRef.current = true;
+        void fetchMoreCollections({
+            variables: {
+                options: {
+                    topLevelOnly: true,
+                    skip: loadedCount,
+                    take: 100,
+                    sort: { position: 'ASC' },
+                },
+            },
+            updateQuery: (previous, { fetchMoreResult }) => ({
+                ...previous,
+                collections: {
+                    ...fetchMoreResult.collections,
+                    items: [
+                        ...new Map(
+                            [...previous.collections.items, ...fetchMoreResult.collections.items].map(
+                                collection => [collection.id, collection],
+                            ),
+                        ).values(),
+                    ],
+                },
+            }),
+        })
+            .catch(fetchError => {
+                setErrorMessage(toUserFacingError(fetchError, '商品分类未能全部加载'));
+            })
+            .finally(() => {
+                loadingAllCollectionsRef.current = false;
+            });
+    }, [collectionsData, collectionsError, collectionsLoading, fetchMoreCollections]);
 
     const {
         data: catalogChannelsData,
@@ -1278,8 +1320,6 @@ export function useProductEditorForm() {
         setFacetPage,
         collectionSearch,
         setCollectionSearch,
-        collectionPage,
-        setCollectionPage,
         toggleFacetValue,
         variants,
         setVariants,
