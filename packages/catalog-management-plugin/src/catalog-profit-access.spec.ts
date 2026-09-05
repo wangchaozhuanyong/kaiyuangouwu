@@ -111,7 +111,7 @@ describe('catalog profit access and expense writes', () => {
             note: 'original note',
         });
         expect(repository.update).toHaveBeenCalledWith(
-            { id: 7, channelId: 9, updatedAt },
+            expect.objectContaining({ id: 7, channelId: 9 }),
             expect.objectContaining({
                 carrierShippingCostMicrounits: '5000',
                 paymentFeeMicrounits: '0',

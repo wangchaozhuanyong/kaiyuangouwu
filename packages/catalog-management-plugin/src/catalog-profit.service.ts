@@ -7,7 +7,7 @@ import {
     TransactionalConnection,
     UserInputError,
 } from '@vendure/core';
-import { In } from 'typeorm';
+import { And, In, LessThan, MoreThanOrEqual } from 'typeorm';
 
 import { manageCatalogOperationsPermission } from './constants';
 import { OrderProfitExpense } from './entities/order-profit-expense.entity';
@@ -161,8 +161,14 @@ export class CatalogProfitService {
             expense.sourceReference = null;
             expense.actorId = txCtx.activeUserId ? String(txCtx.activeUserId) : null;
             if (current) {
+                const nextMillisecond = new Date(current.updatedAt.getTime() + 1);
                 const result = await repository.update(
-                    { id: current.id, channelId: txCtx.channelId, updatedAt: current.updatedAt },
+                    {
+                        id: current.id,
+                        channelId: txCtx.channelId,
+                        // Database timestamps can retain microseconds that JavaScript Date truncates.
+                        updatedAt: And(MoreThanOrEqual(current.updatedAt), LessThan(nextMillisecond)),
+                    },
                     {
                         carrierShippingCostMicrounits: expense.carrierShippingCostMicrounits,
                         paymentFeeMicrounits: expense.paymentFeeMicrounits,
@@ -170,6 +176,8 @@ export class CatalogProfitService {
                         source: expense.source,
                         sourceReference: expense.sourceReference,
                         actorId: expense.actorId,
+                        // Advancing beyond the previous millisecond also rejects simultaneous writers.
+                        updatedAt: new Date(Math.max(Date.now(), nextMillisecond.getTime())),
                     },
                 );
                 if (result.affected !== 1) {
