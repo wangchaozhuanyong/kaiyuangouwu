@@ -105,8 +105,7 @@ jobs:
                       'mkdir "$operations_dir/systemd"',
                       f"printf '%s' '{operations_script}' | base64 -d > \"$operations_dir/production-operations.cjs\"",
                       f"printf '%s' '{retention_script}' | base64 -d > \"$operations_dir/systemd/vendure-production-release-retention.cjs\"",
-                      'chown -R ubuntu:ubuntu "$operations_dir"',
-                      f'sudo -H -u ubuntu env OPS_OPERATION={operation} OPS_EXPECTED_PLAN_SHA256={expected_plan} OPS_SOURCE_SHA={source_sha} /usr/bin/node "$operations_dir/production-operations.cjs"',
+                      f'env OPS_OPERATION={operation} OPS_EXPECTED_PLAN_SHA256={expected_plan} OPS_SOURCE_SHA={source_sha} /usr/bin/node "$operations_dir/production-operations.cjs"',
                   ]) + '\nVENDURE_OPERATIONS_SCRIPT'
                   Path(os.environ['RUNNER_TEMP'], 'operations-ssm-parameters.json').write_text(
                       json.dumps({'commands': [command], 'executionTimeout': ['600']})

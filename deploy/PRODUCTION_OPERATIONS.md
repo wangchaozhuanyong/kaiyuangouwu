@@ -4,6 +4,11 @@
 connection to the Vendure production instance. It does not need a local AWS login,
 an open SSH port, or a stored AWS access key. The external SSH key remains a fallback.
 
+SSM runs the fixed, reviewed script as root so retention can remove historical
+root-owned build files without changing directory ownership or permissions. PM2
+and repository reads still explicitly use the existing ubuntu account. No new
+IAM permission or interactive root access is granted.
+
 Run the default read-only operation from the current `main` revision:
 
 ```bash

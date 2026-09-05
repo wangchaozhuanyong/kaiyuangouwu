@@ -32,13 +32,18 @@ function planDigest(plan, sourceSha) {
 function inspectProductionReleases() {
     let pm2Processes;
     try {
+        const asRoot = process.getuid?.() === 0;
         pm2Processes = JSON.parse(
-            execFileSync('pm2', ['jlist'], {
-                encoding: 'utf8',
-                timeout: 30000,
-                maxBuffer: 10 * 1024 * 1024,
-                stdio: ['ignore', 'pipe', 'pipe'],
-            }),
+            execFileSync(
+                asRoot ? 'sudo' : 'pm2',
+                asRoot ? ['-n', '-H', '-u', 'ubuntu', 'pm2', 'jlist'] : ['jlist'],
+                {
+                    encoding: 'utf8',
+                    timeout: 30000,
+                    maxBuffer: 10 * 1024 * 1024,
+                    stdio: ['ignore', 'pipe', 'pipe'],
+                },
+            ),
         );
     } catch {
         throw new Error('PM2 snapshot unavailable; retention is blocked');
@@ -113,7 +118,17 @@ function diagnose(request) {
         observedAt: new Date().toISOString(),
         disk: readCommand('df', ['-Pk', '/']),
         releaseSize: readCommand('du', ['-skx', '/var/www/kaiyuangouwu-releases']),
-        repositorySha: readCommand('git', ['-C', '/var/www/kaiyuangouwu', 'rev-parse', 'HEAD']),
+        repositorySha: readCommand('sudo', [
+            '-n',
+            '-H',
+            '-u',
+            'ubuntu',
+            'git',
+            '-C',
+            '/var/www/kaiyuangouwu',
+            'rev-parse',
+            'HEAD',
+        ]),
         currentRuntime: readCommand('readlink', ['-f', '/var/www/kaiyuangouwu-current']),
         currentSha: readCommand('cat', ['/var/www/kaiyuangouwu-releases/current-sha']),
         healthService: readCommand('systemctl', [
