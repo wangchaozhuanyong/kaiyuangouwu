@@ -346,6 +346,22 @@ VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
 命令使用已由发布 shell 安全加载的 `SUPERADMIN_USERNAME`、`SUPERADMIN_PASSWORD` 和 `STOREFRONT_MEDIA_CHANNEL_CODES`；Admin API 使用候选机的 `VENDURE_API_ORIGIN`，Shop API 必须单独使用已审核公网店铺 `VENDURE_STOREFRONT_URL`，以真实触发域名到 Channel 的路由。不得把密码写入参数或发布记录。同步失败立即停止发布，不切换 Storefront 指针。同一文件按 SHA-256 标签复用；新版文件只切换商品和内容块绑定，不删除旧素材，便于数据层单独回退。清单中标记为 `asset-library` 的设计参考图只上传并分配到目标 Channel 素材库，不会自动改动商品、内容块或前台默认海报。如只需发布某一项素材，使用 `--keys <manifest-key>` 限定范围，避免重新绑定其他素材。
 发布器保留原商品/variant gallery，写入后用 Admin API 和 Shop API 反查同一 Asset ID；任一反查失败会尝试恢复原绑定。独立 `--verify` 证据缺失时不得宣布媒体发布成功。
 
+首页三张业务轮播由 `sync-homepage-carousel.mjs` 统一管理。该发布器复用媒体清单上传并分配三张图片，再以一个带全量 `expectedUpdatedAt` 的内容批次，将轮播固定为 Token 充值、Codex 档位和当前在售账号服务；分类目标通过稳定 slug 解析成各 Channel 的真实 Collection ID。默认只读，写入和独立验证命令如下：
+
+三张图片必须绑定到 Vendure 的 `HERO.imageAssetId`，图片、双语文案、主题、跳转和排序统一存储在同一组内容区块。发布后在对应 Channel 的“商城首页装修”编辑这些区块；客户端通过 Shop API 读取并通过既有内容更新事件重新加载。仅上传到素材库或仅构建客户端均不算轮播发布完成。发布器是显式审核后的初始化/更新入口，不加入服务启动或定时重置；以后在后台修改内容时不需重建客户端，重新执行本清单的 `--apply` 会覆盖这三张轮播的受管字段，必须先审核 dry-run。
+
+```bash
+cd "${CANDIDATE}"
+VENDURE_API_ORIGIN=http://127.0.0.1:3002 VENDURE_STOREFRONT_URL=https://moyaoai.com \
+    node packages/dev-server/scripts/sync-homepage-carousel.mjs --dry-run
+VENDURE_API_ORIGIN=http://127.0.0.1:3002 VENDURE_STOREFRONT_URL=https://moyaoai.com \
+    node packages/dev-server/scripts/sync-homepage-carousel.mjs --apply --allow-remote
+VENDURE_API_ORIGIN=http://127.0.0.1:3002 VENDURE_STOREFRONT_URL=https://moyaoai.com \
+    node packages/dev-server/scripts/sync-homepage-carousel.mjs --verify
+```
+
+Channel 默认复用 `STOREFRONT_MEDIA_CHANNEL_CODES`，需要独立范围时才设置 `HOMEPAGE_CAROUSEL_CHANNEL_CODES`。脚本会保留轮播以外的装修区块及排序；上传图片前先校验全部目标 Channel、轮播和分类，存在多个未登记旧 Hero 或分类缺失时直接失败。写后必须同时通过 Admin API 与中英文 Shop API 的图片 ID/地址、文案、统计标签、主题颜色、启用状态、跳转目标、轮播数量和顺序反查；Shop API 反查同时传递 `languageCode=<locale>` 查询参数和 `language-code: <locale>` 请求头。验证失败时删除本批新建 Hero 并恢复原 Hero 与顺序。正式发布必须先完成独立门禁引导版本，再使用 `homepage_carousel=true`、主 Channel 和精确三张 media keys 调度；不得通过手工 SSH 绕过。分类 slug 以 `languageCode=zh_Hans` 和同名语言头查询，避免英文翻译 slug 导致目标缺失。恢复批次返回后还必须回读 Admin API，确认原区块、字段和排序确实恢复，才可报告回滚成功。
+
 登录/注册页文案、色板和标签属于 Vendure 内容，不得只改客户端。在 `Production Runtime Artifact` 中勾选 `auth_visuals`，并填写已审核 Channel；发布链会先 dry-run，再以带 `expectedUpdatedAt` 的单个 Admin API 批次原子写入，随后运行独立只读 `--verify` 反查 Admin 与中英文 Shop API，并记录 `AUTH_VISUAL_VERIFY_OK`。验证失败时恢复原内容并停止切换。
 发布器的回归样本必须包含当前生产中文/英文配对。若修改中文源文时再次提交与线上完全相同的英文，内容翻译服务可能把该英文判定为过期自动翻译并重新生成。这种发布必须改为新的已审核英文，或使用接口明确支持的人工锁定；不得假设 GraphQL 输入会原样持久化，必须以写入后 Admin/Shop 反查值为准。
 

@@ -7,7 +7,16 @@ import {
     heroThemeStyle,
     heroUsesImageOverlay,
 } from './hero-theme';
-import { HERO_CLOUD_BRIDGE_FALLBACK_IMAGE, HERO_CLOUD_BRIDGE_IMAGE } from './storefront-images';
+import {
+    HERO_ACCOUNT_SERVICES_FALLBACK_IMAGE,
+    HERO_ACCOUNT_SERVICES_IMAGE,
+    HERO_CLOUD_BRIDGE_FALLBACK_IMAGE,
+    HERO_CLOUD_BRIDGE_IMAGE,
+    HERO_CODEX_TIERS_FALLBACK_IMAGE,
+    HERO_CODEX_TIERS_IMAGE,
+    HERO_TOKEN_TOPUP_FALLBACK_IMAGE,
+    HERO_TOKEN_TOPUP_IMAGE,
+} from './storefront-images';
 
 function hero(overrides: Partial<StorefrontContentBlock> = {}): StorefrontContentBlock {
     return {
@@ -79,6 +88,17 @@ describe('hero theme', () => {
         expect(builtInHeroFallbackImage(block, false)).toBe(HERO_CLOUD_BRIDGE_FALLBACK_IMAGE);
     });
 
+    it.each([
+        ['moyao-token-topup-v1', HERO_TOKEN_TOPUP_IMAGE, HERO_TOKEN_TOPUP_FALLBACK_IMAGE],
+        ['moyao-codex-tiers-v1', HERO_CODEX_TIERS_IMAGE, HERO_CODEX_TIERS_FALLBACK_IMAGE],
+        ['moyao-account-services-v1', HERO_ACCOUNT_SERVICES_IMAGE, HERO_ACCOUNT_SERVICES_FALLBACK_IMAGE],
+    ])('maps %s to its bundled carousel fallback', (fallbackImage, image, fallback) => {
+        const block = hero({ settings: { fallbackImage } });
+
+        expect(builtInHeroImage(block, false)).toBe(image);
+        expect(builtInHeroFallbackImage(block, false)).toBe(fallback);
+    });
+
     it('switches copy surfaces to a light treatment for the CloudBridge bright theme', () => {
         const style = heroThemeStyle(hero({ backgroundColor: '#FFF7F5' }), false);
 
@@ -86,8 +106,9 @@ describe('hero theme', () => {
         expect(style['--hero-title-shadow']).toContain('rgba(255, 255, 255, 0.86)');
     });
 
-    it('keeps CloudBridge artwork unfiltered while preserving overlays for other themes', () => {
+    it('keeps bright commerce artwork unfiltered while preserving overlays for other themes', () => {
         expect(heroUsesImageOverlay(hero({ settings: { themePreset: 'cloudbridge-bright' } }))).toBe(false);
+        expect(heroUsesImageOverlay(hero({ settings: { themePreset: 'marketplace-bright' } }))).toBe(false);
         expect(heroUsesImageOverlay(hero())).toBe(true);
     });
 });
