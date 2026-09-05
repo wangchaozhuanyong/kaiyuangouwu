@@ -140,15 +140,21 @@ const UPDATE_COLLECTION_MUTATION = `
     }
 `;
 
-const CREATE_BLOCK_MUTATION = `
-    mutation CreateDamatongContentBlock($input: CreateStorefrontContentBlockInput!) {
-        createStorefrontContentBlock(input: $input) { id code type }
+const APPLY_BLOCKS_MUTATION = `
+    mutation ApplyDamatongContentChanges($input: ApplyStorefrontContentChangesInput!) {
+        applyStorefrontContentChanges(input: $input) { id updatedAt code type }
     }
 `;
 
-const UPDATE_BLOCK_MUTATION = `
-    mutation UpdateDamatongContentBlock($input: UpdateStorefrontContentBlockInput!) {
-        updateStorefrontContentBlock(input: $input) { id code type updatedAt }
+const DELETE_BLOCK_MUTATION = `
+    mutation DeleteDamatongContentBlock($id: ID!) {
+        deleteStorefrontContentBlock(id: $id) { result message }
+    }
+`;
+
+const DELETE_COLLECTION_MUTATION = `
+    mutation DeleteDamatongCollection($id: ID!) {
+        deleteCollection(id: $id) { result message }
     }
 `;
 
@@ -310,6 +316,17 @@ async function loadCollections(fetchImpl, adminEndpoint, authToken, channel) {
         }),
     );
     return new Map(entries);
+}
+
+async function loadCollectionBySlug(fetchImpl, adminEndpoint, authToken, channel, slug) {
+    const result = await graphql(
+        fetchImpl,
+        adminEndpoint,
+        COLLECTION_QUERY,
+        { slug },
+        requestHeaders(authToken, channel.token),
+    );
+    return result.data.collection;
 }
 
 async function findAsset(fetchImpl, adminEndpoint, authToken, channel, asset) {
@@ -496,6 +513,59 @@ function reconcileBlockItems(existing, desired) {
     };
 }
 
+function contentItemInput(item) {
+    return {
+        ...(item.id ? { id: item.id } : {}),
+        enabled: item.enabled ?? true,
+        position: item.position,
+        imageAssetId: item.imageAsset?.id ?? item.imageAssetId ?? null,
+        imageUrl: item.imageUrl ?? null,
+        targetType: item.targetType ?? 'NONE',
+        targetValue: item.targetValue ?? null,
+        settings: item.settings ?? null,
+        translations: normalizedTranslations(item.translations, ['label', 'description']),
+    };
+}
+
+function hasDashboardSupportContacts(block) {
+    return (
+        block?.type === 'SUPPORT' &&
+        block.settings?.placeholderContacts !== true &&
+        block.items.some(
+            item =>
+                item.enabled !== false &&
+                item.targetType !== 'NONE' &&
+                typeof item.targetValue === 'string' &&
+                item.targetValue.trim().length > 0,
+        )
+    );
+}
+
+export function preserveDashboardSupportContacts(existingBlocks, desiredBlocks) {
+    const existing = existingBlocks.find(block => block.type === 'SUPPORT');
+    if (!hasDashboardSupportContacts(existing)) return desiredBlocks;
+    return desiredBlocks.map(block =>
+        block.type === 'SUPPORT'
+            ? {
+                  ...block,
+                  settings: {
+                      ...block.settings,
+                      ...existing.settings,
+                      placeholderContacts: false,
+                      contactOwnership: 'dashboard',
+                  },
+                  translations: normalizedTranslations(existing.translations, [
+                      'title',
+                      'subtitle',
+                      'body',
+                      'ctaLabel',
+                  ]),
+                  items: existing.items.map(contentItemInput),
+              }
+            : block,
+    );
+}
+
 function comparableItem(item) {
     return {
         enabled: item.enabled ?? true,
@@ -623,15 +693,27 @@ async function upsertCollection(fetchImpl, adminEndpoint, authToken, channel, pl
     return plan.action === 'create' ? result.data.createCollection.id : result.data.updateCollection.id;
 }
 
-async function upsertBlock(fetchImpl, adminEndpoint, authToken, channel, plan) {
-    if (plan.action === 'noop') return;
-    await graphql(
+async function applyBlockPlans(fetchImpl, adminEndpoint, authToken, channel, blocks, plans) {
+    const creates = plans.filter(plan => plan.action === 'create').map(plan => plan.input);
+    const updates = plans.filter(plan => plan.action === 'update').map(plan => plan.input);
+    if (!creates.length && !updates.length) return blocks;
+    const result = await graphql(
         fetchImpl,
         adminEndpoint,
-        plan.action === 'create' ? CREATE_BLOCK_MUTATION : UPDATE_BLOCK_MUTATION,
-        { input: plan.input },
+        APPLY_BLOCKS_MUTATION,
+        {
+            input: {
+                expectedBlocks: blocks.map(block => ({
+                    id: block.id,
+                    expectedUpdatedAt: block.updatedAt,
+                })),
+                creates,
+                updates,
+            },
+        },
         requestHeaders(authToken, channel.token),
     );
+    return result.data.applyStorefrontContentChanges;
 }
 
 function assertShopBranding(branding, languageCode, assetIdsByKey, brand) {
@@ -697,10 +779,45 @@ async function verifyShop(
             const block = result.data.storefrontContent.find(item => item.code === desired.code);
             assert.ok(block, `Shop API is missing ${desired.code} for ${languageCode}`);
             assert.equal(block.type, desired.type);
+            assert.equal(
+                String(block.imageAsset?.id ?? ''),
+                String(desired.imageAssetId ?? ''),
+                `${desired.code} has the wrong Shop API image`,
+            );
+            assert.deepEqual(block.settings ?? null, desired.settings ?? null);
             const expectedTranslation = desired.translations.find(
                 value => value.languageCode === languageCode,
             );
             assert.equal(block.title, expectedTranslation.title);
+            assert.equal(block.subtitle ?? '', expectedTranslation.subtitle ?? '');
+            assert.equal(block.body ?? '', expectedTranslation.body ?? '');
+            assert.equal(block.ctaLabel ?? '', expectedTranslation.ctaLabel ?? '');
+            const expectedItems = desired.items
+                .filter(item => item.enabled !== false)
+                .sort((left, right) => left.position - right.position);
+            const actualItems = [...block.items].sort((left, right) => left.position - right.position);
+            assert.equal(
+                actualItems.length,
+                expectedItems.length,
+                `${desired.code} has the wrong item count`,
+            );
+            for (let index = 0; index < expectedItems.length; index += 1) {
+                const expectedItem = expectedItems[index];
+                const actualItem = actualItems[index];
+                const expectedItemTranslation = expectedItem.translations.find(
+                    value => value.languageCode === languageCode,
+                );
+                assert.equal(actualItem.position, expectedItem.position);
+                assert.equal(
+                    String(actualItem.imageAsset?.id ?? ''),
+                    String(expectedItem.imageAssetId ?? ''),
+                );
+                assert.equal(actualItem.targetType, expectedItem.targetType ?? 'NONE');
+                assert.equal(actualItem.targetValue ?? null, expectedItem.targetValue ?? null);
+                assert.deepEqual(actualItem.settings ?? null, expectedItem.settings ?? null);
+                assert.equal(actualItem.label, expectedItemTranslation?.label ?? '');
+                assert.equal(actualItem.description ?? '', expectedItemTranslation?.description ?? '');
+            }
         }
         const pluginBlock = result.data.storefrontContent.find(
             item => item.code === 'storefront-client-plugins',
@@ -712,14 +829,225 @@ async function verifyShop(
     }
 }
 
+function profileRestoreInput(beforeProfile, currentProfile) {
+    return {
+        id: beforeProfile.id,
+        expectedUpdatedAt: currentProfile.updatedAt,
+        storefrontNameZh: beforeProfile.channel.customFields?.storefrontNameZh ?? '',
+        storefrontNameEn: beforeProfile.channel.customFields?.storefrontNameEn ?? '',
+        descriptionZh: beforeProfile.descriptionZh ?? '',
+        descriptionEn: beforeProfile.descriptionEn ?? '',
+        taglineZh: beforeProfile.taglineZh ?? '',
+        taglineEn: beforeProfile.taglineEn ?? '',
+        brandBackgroundColor: beforeProfile.brandBackgroundColor ?? null,
+        brandPrimaryColor: beforeProfile.brandPrimaryColor ?? null,
+        brandAccentColor: beforeProfile.brandAccentColor ?? null,
+        brandHighlightColor: beforeProfile.brandHighlightColor ?? null,
+        logoAssetId: profileAssetId(beforeProfile, 'logoAssetId'),
+        logoOnLightAssetId: profileAssetId(beforeProfile, 'logoOnLightAssetId'),
+        logoOnDarkAssetId: profileAssetId(beforeProfile, 'logoOnDarkAssetId'),
+    };
+}
+
+function comparableProfile(profile) {
+    const { id, expectedUpdatedAt, ...values } = profileRestoreInput(profile, profile);
+    return { id: String(id), ...values };
+}
+
+function collectionRestoreInput(collection) {
+    return {
+        id: collection.id,
+        featuredAssetId: collection.featuredAsset?.id ?? null,
+        assetIds: collection.assets?.map(asset => asset.id) ?? [],
+        translations: normalizedTranslations(collection.translations, ['name', 'slug', 'description']),
+    };
+}
+
+function blockRestoreInput(beforeBlock, currentBlock) {
+    const currentItemIds = new Set(currentBlock.items.map(item => String(item.id)));
+    const restoreItem = item => {
+        const input = contentItemInput(item);
+        if (!currentItemIds.has(String(item.id))) delete input.id;
+        return input;
+    };
+    return {
+        id: beforeBlock.id,
+        expectedUpdatedAt: currentBlock.updatedAt,
+        code: beforeBlock.code,
+        internalName: beforeBlock.internalName ?? null,
+        type: beforeBlock.type,
+        layoutVariant: beforeBlock.layoutVariant ?? 'AUTO',
+        enabled: beforeBlock.enabled ?? true,
+        position: beforeBlock.position,
+        startsAt: beforeBlock.startsAt ?? null,
+        endsAt: beforeBlock.endsAt ?? null,
+        imageAssetId: beforeBlock.imageAsset?.id ?? null,
+        imageUrl: beforeBlock.imageUrl ?? null,
+        backgroundColor: beforeBlock.backgroundColor ?? null,
+        textColor: beforeBlock.textColor ?? null,
+        targetType: beforeBlock.targetType ?? 'NONE',
+        targetValue: beforeBlock.targetValue ?? null,
+        settings: beforeBlock.settings ?? null,
+        translations: normalizedTranslations(beforeBlock.translations, [
+            'title',
+            'subtitle',
+            'body',
+            'ctaLabel',
+        ]),
+        items: beforeBlock.items.map(restoreItem),
+    };
+}
+
+function comparableCollection(collection) {
+    if (!collection) return null;
+    return {
+        id: String(collection.id),
+        featuredAssetId: String(collection.featuredAsset?.id ?? ''),
+        assetIds: (collection.assets ?? []).map(asset => String(asset.id)).sort(),
+        translations: normalizedTranslations(collection.translations, ['name', 'slug', 'description']),
+    };
+}
+
+function comparableBlockSet(blocks) {
+    return [...blocks].map(comparableBlock).sort((left, right) => left.code.localeCompare(right.code));
+}
+
+async function deleteEntity(fetchImpl, adminEndpoint, authToken, channel, mutation, dataKey, id) {
+    const result = await graphql(
+        fetchImpl,
+        adminEndpoint,
+        mutation,
+        { id },
+        requestHeaders(authToken, channel.token),
+    );
+    const deletion = result.data[dataKey];
+    assert.equal(deletion.result, 'DELETED', deletion.message || `Could not delete ${String(id)}`);
+}
+
+async function rollbackDamatongStorefront({
+    fetchImpl,
+    adminEndpoint,
+    authToken,
+    channel,
+    beforeProfile,
+    beforeContent,
+    beforeCollections,
+    categoryPlans,
+    contentPlans,
+}) {
+    let currentContent = await loadBlocks(fetchImpl, adminEndpoint, authToken, channel);
+    for (const plan of contentPlans.filter(candidate => candidate.action === 'create')) {
+        const created = currentContent.blocks.find(block => block.code === plan.code);
+        if (created) {
+            await deleteEntity(
+                fetchImpl,
+                adminEndpoint,
+                authToken,
+                channel,
+                DELETE_BLOCK_MUTATION,
+                'deleteStorefrontContentBlock',
+                created.id,
+            );
+        }
+    }
+    currentContent = await loadBlocks(fetchImpl, adminEndpoint, authToken, channel);
+    const changedBlockIds = new Set(
+        contentPlans.filter(plan => plan.action === 'update').map(plan => String(plan.input.id)),
+    );
+    const restorePlans = beforeContent.blocks
+        .filter(block => changedBlockIds.has(String(block.id)))
+        .map(block => {
+            const current = currentContent.blocks.find(
+                candidate => String(candidate.id) === String(block.id),
+            );
+            assert.ok(current, `Cannot restore missing Damatong block ${block.code}`);
+            return { action: 'update', input: blockRestoreInput(block, current) };
+        });
+    await applyBlockPlans(fetchImpl, adminEndpoint, authToken, channel, currentContent.blocks, restorePlans);
+    if (
+        currentContent.settings.heroAutoplayIntervalSeconds !==
+        beforeContent.settings.heroAutoplayIntervalSeconds
+    ) {
+        await graphql(
+            fetchImpl,
+            adminEndpoint,
+            UPDATE_SETTINGS_MUTATION,
+            {
+                input: {
+                    heroAutoplayIntervalSeconds: beforeContent.settings.heroAutoplayIntervalSeconds,
+                },
+            },
+            requestHeaders(authToken, channel.token),
+        );
+    }
+
+    const currentCollections = await loadCollections(fetchImpl, adminEndpoint, authToken, channel);
+    for (const plan of [...categoryPlans].reverse()) {
+        const before = beforeCollections.get(plan.code);
+        const current = currentCollections.get(plan.code);
+        if (!before && current) {
+            await deleteEntity(
+                fetchImpl,
+                adminEndpoint,
+                authToken,
+                channel,
+                DELETE_COLLECTION_MUTATION,
+                'deleteCollection',
+                current.id,
+            );
+        } else if (before && current && plan.action === 'update') {
+            await graphql(
+                fetchImpl,
+                adminEndpoint,
+                UPDATE_COLLECTION_MUTATION,
+                { input: collectionRestoreInput(before) },
+                requestHeaders(authToken, channel.token),
+            );
+        }
+    }
+
+    const currentProfile = await loadProfile(fetchImpl, adminEndpoint, authToken, channel);
+    if (
+        JSON.stringify(comparableProfile(currentProfile)) !== JSON.stringify(comparableProfile(beforeProfile))
+    ) {
+        await graphql(
+            fetchImpl,
+            adminEndpoint,
+            UPDATE_PROFILE_MUTATION,
+            { input: profileRestoreInput(beforeProfile, currentProfile) },
+            requestHeaders(authToken, channel.token),
+        );
+    }
+
+    const [restoredProfile, restoredContent] = await Promise.all([
+        loadProfile(fetchImpl, adminEndpoint, authToken, channel),
+        loadBlocks(fetchImpl, adminEndpoint, authToken, channel),
+    ]);
+    assert.deepEqual(comparableProfile(restoredProfile), comparableProfile(beforeProfile));
+    assert.deepEqual(comparableBlockSet(restoredContent.blocks), comparableBlockSet(beforeContent.blocks));
+    assert.equal(
+        restoredContent.settings.heroAutoplayIntervalSeconds,
+        beforeContent.settings.heroAutoplayIntervalSeconds,
+    );
+    for (const definition of damatongCategories) {
+        const before = beforeCollections.get(definition.code);
+        const beforeEnglish = before?.translations.find(value => value.languageCode === 'en');
+        const slug =
+            beforeEnglish?.slug ?? definition.translations.find(value => value.languageCode === 'en').slug;
+        const restored = await loadCollectionBySlug(fetchImpl, adminEndpoint, authToken, channel, slug);
+        assert.deepEqual(comparableCollection(restored), comparableCollection(before));
+    }
+}
+
 export async function syncDamatongStorefront({
     apiOrigin,
     shopOrigin = apiOrigin,
     username,
     password,
-    channelCode = damatongStorefront.channelCode,
+    channelToken = damatongStorefront.channelToken,
     sourceChannelCode = damatongStorefront.sourceChannelCode,
     apply = false,
+    verify = false,
     allowRemote = false,
     production = process.env.NODE_ENV === 'production',
     fetchImpl = fetch,
@@ -727,13 +1055,13 @@ export async function syncDamatongStorefront({
 }) {
     assert.ok(apiOrigin, 'VENDURE_API_ORIGIN or --api-origin is required');
     assert.ok(username && password, 'SUPERADMIN_USERNAME and SUPERADMIN_PASSWORD are required');
-    assert.notEqual(channelCode, sourceChannelCode, 'Damatong and default-site Channels must be different');
+    assert.ok(!(apply && verify), '--apply and --verify are mutually exclusive');
     if (apply && (production || !isLocalApiOrigin(apiOrigin))) {
         assert.ok(allowRemote, 'Remote or production writes require both --apply and --allow-remote');
         assert.equal(
-            damatongStorefront.supportContactsReadyForProduction,
+            damatongStorefront.supportPageReadyForProduction,
             true,
-            'Remote Damatong writes are blocked until real support contacts replace the placeholders',
+            'Remote Damatong writes require a production-safe support page',
         );
     }
 
@@ -743,13 +1071,21 @@ export async function syncDamatongStorefront({
     const shopEndpoint = `${normalizedShopOrigin}/shop-api`;
     const preparedAssets = await prepareDamatongAssets(assetManifest);
     const session = await authenticate(fetchImpl, adminEndpoint, username, password);
-    const channelsByCode = new Map(
-        session.channels.map(accessibleChannel => [accessibleChannel.code, accessibleChannel]),
+    const targetChannels = session.channels.filter(item => item.token === channelToken);
+    const sourceChannels = session.channels.filter(item => item.code === sourceChannelCode);
+    assert.equal(targetChannels.length, 1, `Expected one accessible Channel with token ${channelToken}`);
+    assert.equal(
+        sourceChannels.length,
+        1,
+        `Expected one accessible source Channel with code ${sourceChannelCode}`,
     );
-    const channel = channelsByCode.get(channelCode);
-    const sourceChannel = channelsByCode.get(sourceChannelCode);
-    assert.ok(channel, `Admin user cannot access Channel ${channelCode}`);
-    assert.ok(sourceChannel, `Admin user cannot access source Channel ${sourceChannelCode}`);
+    const [channel] = targetChannels;
+    const [sourceChannel] = sourceChannels;
+    assert.notEqual(
+        String(channel.id),
+        String(sourceChannel.id),
+        'Damatong and default-site Channels must be different',
+    );
 
     const [profile, currentContent, currentCollections, sourceContent] = await Promise.all([
         loadProfile(fetchImpl, adminEndpoint, session.authToken, channel),
@@ -772,38 +1108,84 @@ export async function syncDamatongStorefront({
         resolvedAssets.set(asset.key, existing);
     }
 
-    const previewAssetIds = new Map(
+    const plannedAssetIds = new Map(
         assetActions.map(item => [item.key, item.assetId ?? `pending-asset:${item.key}`]),
     );
-    const brandPlanPreview = buildDamatongBrandPlan(profile, previewAssetIds);
+    if (verify) {
+        assert.ok(
+            assetActions.every(item => item.action === 'reuse'),
+            'Damatong verification requires every immutable asset to exist',
+        );
+    }
+    const brandPlanPreview = buildDamatongBrandPlan(profile, plannedAssetIds);
     const categoryPlanPreview = damatongCategories.map(definition =>
         buildDamatongCategoryPlan(
             currentCollections.get(definition.code),
             definition,
-            previewAssetIds.get(definition.assetKey),
+            plannedAssetIds.get(definition.assetKey),
         ),
     );
-    const previewCollectionIds = new Map(
+    const plannedCollectionIds = new Map(
         categoryPlanPreview.map(plan => [plan.code, plan.id ?? `pending-collection:${plan.code}`]),
     );
-    const previewBlocks = buildDamatongContentBlocks({
-        assetIdsByKey: previewAssetIds,
-        collectionIdsByCode: previewCollectionIds,
-        sourceAiPluginItem,
-        sourceChannelCode,
-    });
+    const previewBlocks = preserveDashboardSupportContacts(
+        currentContent.blocks,
+        buildDamatongContentBlocks({
+            assetIdsByKey: plannedAssetIds,
+            collectionIdsByCode: plannedCollectionIds,
+            sourceAiPluginItem,
+            sourceChannelCode,
+        }),
+    );
     const contentPlanPreview = buildDamatongContentPlans(currentContent.blocks, previewBlocks);
     const settingsAction =
         currentContent.settings.heroAutoplayIntervalSeconds === damatongStorefront.heroAutoplayIntervalSeconds
             ? 'noop'
             : 'update';
 
+    if (verify) {
+        assert.equal(brandPlanPreview.action, 'noop', 'Damatong brand Admin API verification failed');
+        assert.ok(
+            categoryPlanPreview.every(plan => plan.action === 'noop'),
+            'Damatong category Admin API verification failed',
+        );
+        assert.ok(
+            contentPlanPreview.every(plan => plan.action === 'noop'),
+            'Damatong content Admin API verification failed',
+        );
+        assert.equal(settingsAction, 'noop', 'Damatong content settings Admin API verification failed');
+        await verifyShop(
+            fetchImpl,
+            shopEndpoint,
+            channel,
+            plannedAssetIds,
+            plannedCollectionIds,
+            previewBlocks,
+        );
+        return {
+            applied: false,
+            verified: true,
+            apiOrigin: normalizedApiOrigin,
+            shopOrigin: normalizedShopOrigin,
+            channelCode: channel.code,
+            channelToken,
+            sourceChannelCode,
+            assets: assetActions,
+            brand: { action: brandPlanPreview.action, changes: brandPlanPreview.changes },
+            categories: categoryPlanPreview.map(({ code, action }) => ({ code, action })),
+            content: contentPlanPreview.map(({ code, type, action }) => ({ code, type, action })),
+            settings: { action: settingsAction },
+        };
+    }
+
     if (!apply) {
         return {
             applied: false,
+            verified: false,
             apiOrigin: normalizedApiOrigin,
             shopOrigin: normalizedShopOrigin,
-            channelCode,
+            channelCode: channel.code,
+            channelToken,
             sourceChannelCode,
             assets: assetActions,
             brand: { action: brandPlanPreview.action, changes: brandPlanPreview.changes },
@@ -822,17 +1204,10 @@ export async function syncDamatongStorefront({
         assetIdsByKey.set(asset.key, resolved.id);
     }
 
+    const beforeProfile = structuredClone(profile);
+    const beforeContent = structuredClone(currentContent);
+    const beforeCollections = structuredClone(currentCollections);
     const brandPlan = buildDamatongBrandPlan(profile, assetIdsByKey);
-    if (brandPlan.action === 'update') {
-        await graphql(
-            fetchImpl,
-            adminEndpoint,
-            UPDATE_PROFILE_MUTATION,
-            { input: brandPlan.input },
-            requestHeaders(session.authToken, channel.token),
-        );
-    }
-
     const categoryPlans = damatongCategories.map(definition =>
         buildDamatongCategoryPlan(
             currentCollections.get(definition.code),
@@ -841,65 +1216,121 @@ export async function syncDamatongStorefront({
         ),
     );
     const collectionIdsByCode = new Map();
-    for (const plan of categoryPlans) {
-        const id = await upsertCollection(fetchImpl, adminEndpoint, session.authToken, channel, plan);
-        collectionIdsByCode.set(plan.code, id);
-    }
+    let contentPlans = [];
+    let desiredBlocks = [];
+    let writesStarted = false;
+    try {
+        if (brandPlan.action === 'update') {
+            writesStarted = true;
+            await graphql(
+                fetchImpl,
+                adminEndpoint,
+                UPDATE_PROFILE_MUTATION,
+                { input: brandPlan.input },
+                requestHeaders(session.authToken, channel.token),
+            );
+        }
 
-    const desiredBlocks = buildDamatongContentBlocks({
-        assetIdsByKey,
-        collectionIdsByCode,
-        sourceAiPluginItem,
-        sourceChannelCode,
-    });
-    const contentPlans = buildDamatongContentPlans(currentContent.blocks, desiredBlocks);
-    for (const plan of contentPlans) {
-        await upsertBlock(fetchImpl, adminEndpoint, session.authToken, channel, plan);
-    }
-    if (settingsAction === 'update') {
-        await graphql(
+        for (const plan of categoryPlans) {
+            if (plan.action !== 'noop') writesStarted = true;
+            const id = await upsertCollection(fetchImpl, adminEndpoint, session.authToken, channel, plan);
+            collectionIdsByCode.set(plan.code, id);
+        }
+
+        desiredBlocks = preserveDashboardSupportContacts(
+            currentContent.blocks,
+            buildDamatongContentBlocks({
+                assetIdsByKey,
+                collectionIdsByCode,
+                sourceAiPluginItem,
+                sourceChannelCode,
+            }),
+        );
+        contentPlans = buildDamatongContentPlans(currentContent.blocks, desiredBlocks);
+        if (contentPlans.some(plan => plan.action !== 'noop')) writesStarted = true;
+        await applyBlockPlans(
             fetchImpl,
             adminEndpoint,
-            UPDATE_SETTINGS_MUTATION,
-            { input: { heroAutoplayIntervalSeconds: damatongStorefront.heroAutoplayIntervalSeconds } },
-            requestHeaders(session.authToken, channel.token),
+            session.authToken,
+            channel,
+            currentContent.blocks,
+            contentPlans,
         );
-    }
+        if (settingsAction === 'update') {
+            writesStarted = true;
+            await graphql(
+                fetchImpl,
+                adminEndpoint,
+                UPDATE_SETTINGS_MUTATION,
+                {
+                    input: {
+                        heroAutoplayIntervalSeconds: damatongStorefront.heroAutoplayIntervalSeconds,
+                    },
+                },
+                requestHeaders(session.authToken, channel.token),
+            );
+        }
 
-    const [verifiedProfile, verifiedContent, verifiedCollections] = await Promise.all([
-        loadProfile(fetchImpl, adminEndpoint, session.authToken, channel),
-        loadBlocks(fetchImpl, adminEndpoint, session.authToken, channel),
-        loadCollections(fetchImpl, adminEndpoint, session.authToken, channel),
-    ]);
-    assert.equal(buildDamatongBrandPlan(verifiedProfile, assetIdsByKey).action, 'noop');
-    for (const definition of damatongCategories) {
+        const [verifiedProfile, verifiedContent, verifiedCollections] = await Promise.all([
+            loadProfile(fetchImpl, adminEndpoint, session.authToken, channel),
+            loadBlocks(fetchImpl, adminEndpoint, session.authToken, channel),
+            loadCollections(fetchImpl, adminEndpoint, session.authToken, channel),
+        ]);
+        assert.equal(buildDamatongBrandPlan(verifiedProfile, assetIdsByKey).action, 'noop');
+        for (const definition of damatongCategories) {
+            assert.equal(
+                buildDamatongCategoryPlan(
+                    verifiedCollections.get(definition.code),
+                    definition,
+                    assetIdsByKey.get(definition.assetKey),
+                ).action,
+                'noop',
+                `${definition.code} Admin API verification failed`,
+            );
+        }
+        assert.ok(
+            buildDamatongContentPlans(verifiedContent.blocks, desiredBlocks).every(
+                plan => plan.action === 'noop',
+            ),
+            'Damatong content Admin API verification failed',
+        );
         assert.equal(
-            buildDamatongCategoryPlan(
-                verifiedCollections.get(definition.code),
-                definition,
-                assetIdsByKey.get(definition.assetKey),
-            ).action,
-            'noop',
-            `${definition.code} Admin API verification failed`,
+            verifiedContent.settings.heroAutoplayIntervalSeconds,
+            damatongStorefront.heroAutoplayIntervalSeconds,
+        );
+        await verifyShop(fetchImpl, shopEndpoint, channel, assetIdsByKey, collectionIdsByCode, desiredBlocks);
+    } catch (verificationError) {
+        if (!writesStarted) throw verificationError;
+        try {
+            await rollbackDamatongStorefront({
+                fetchImpl,
+                adminEndpoint,
+                authToken: session.authToken,
+                channel,
+                beforeProfile,
+                beforeContent,
+                beforeCollections,
+                categoryPlans,
+                contentPlans,
+            });
+        } catch (rollbackError) {
+            throw new AggregateError(
+                [verificationError, rollbackError],
+                `Damatong verification failed and rollback also failed in Channel ${channel.code}`,
+            );
+        }
+        throw new Error(
+            `Damatong verification failed; previous Admin bindings were restored in Channel ${channel.code}`,
+            { cause: verificationError },
         );
     }
-    assert.ok(
-        buildDamatongContentPlans(verifiedContent.blocks, desiredBlocks).every(
-            plan => plan.action === 'noop',
-        ),
-        'Damatong content Admin API verification failed',
-    );
-    assert.equal(
-        verifiedContent.settings.heroAutoplayIntervalSeconds,
-        damatongStorefront.heroAutoplayIntervalSeconds,
-    );
-    await verifyShop(fetchImpl, shopEndpoint, channel, assetIdsByKey, collectionIdsByCode, desiredBlocks);
 
     return {
         applied: true,
         apiOrigin: normalizedApiOrigin,
         shopOrigin: normalizedShopOrigin,
-        channelCode,
+        channelCode: channel.code,
+        channelToken,
         sourceChannelCode,
         assets: assetActions,
         brand: { action: brandPlan.action, changes: brandPlan.changes },
@@ -911,19 +1342,21 @@ export async function syncDamatongStorefront({
 }
 
 export function parseCliArguments(args) {
-    const options = { apply: false, allowRemote: false, validate: false };
+    const options = { apply: false, verify: false, allowRemote: false, validate: false };
     for (let index = 0; index < args.length; index += 1) {
         const argument = args[index];
         if (argument === '--apply') options.apply = true;
         else if (argument === '--dry-run') options.apply = false;
+        else if (argument === '--verify') options.verify = true;
         else if (argument === '--allow-remote') options.allowRemote = true;
         else if (argument === '--validate') options.validate = true;
         else if (argument === '--api-origin') options.apiOrigin = args[++index];
         else if (argument === '--shop-origin') options.shopOrigin = args[++index];
-        else if (argument === '--channel-code') options.channelCode = args[++index];
+        else if (argument === '--channel-token') options.channelToken = args[++index];
         else if (argument === '--source-channel-code') options.sourceChannelCode = args[++index];
         else throw new Error(`Unknown argument: ${String(argument)}`);
     }
+    if (options.apply && options.verify) throw new Error('--apply and --verify are mutually exclusive');
     return options;
 }
 
@@ -937,7 +1370,7 @@ if (isMain) {
                 {
                     ok: true,
                     mode: 'validate',
-                    channelCode: options.channelCode ?? damatongStorefront.channelCode,
+                    channelToken: options.channelToken ?? damatongStorefront.channelToken,
                     sourceChannelCode: options.sourceChannelCode ?? damatongStorefront.sourceChannelCode,
                     categories: damatongCategories.map(category => category.code),
                     assets: assets.map(asset => ({ key: asset.key, hash: asset.hash })),
@@ -956,13 +1389,14 @@ if (isMain) {
             shopOrigin: options.shopOrigin ?? process.env.VENDURE_STOREFRONT_URL ?? apiOrigin,
             username: process.env.SUPERADMIN_USERNAME,
             password: process.env.SUPERADMIN_PASSWORD,
-            channelCode:
-                options.channelCode ?? process.env.DAMATONG_CHANNEL_CODE ?? damatongStorefront.channelCode,
+            channelToken:
+                options.channelToken ?? process.env.DAMATONG_CHANNEL_TOKEN ?? damatongStorefront.channelToken,
             sourceChannelCode:
                 options.sourceChannelCode ??
                 process.env.DAMATONG_AI_SOURCE_CHANNEL_CODE ??
                 damatongStorefront.sourceChannelCode,
             apply: options.apply,
+            verify: options.verify,
             allowRemote: options.allowRemote,
         });
         process.stdout.write(`${JSON.stringify({ ok: true, ...result }, null, 2)}\n`);

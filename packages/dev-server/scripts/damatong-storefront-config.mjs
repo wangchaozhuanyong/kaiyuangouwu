@@ -14,7 +14,7 @@ const brandAssetDirectory = path.resolve(
 export const DAMATONG_AI_PLUGIN_CODE = 'ai-image-studio-entry';
 
 export const damatongStorefront = Object.freeze({
-    channelCode: 'my-malaysia',
+    channelToken: 'my-malaysia',
     sourceChannelCode: '__default_channel__',
     storefrontNameZh: '大马通 DAMATONG',
     storefrontNameEn: 'DAMATONG',
@@ -27,7 +27,7 @@ export const damatongStorefront = Object.freeze({
     brandAccentColor: '#102d4a',
     brandHighlightColor: '#f28c28',
     heroAutoplayIntervalSeconds: 6,
-    supportContactsReadyForProduction: false,
+    supportPageReadyForProduction: true,
 });
 
 export const damatongAssets = Object.freeze([
@@ -713,20 +713,21 @@ export function buildDamatongContentBlocks({
                 serviceDaysEn: 'Daily',
                 serviceStartTime: '09:00',
                 serviceEndTime: '21:00',
-                placeholderContacts: true,
+                placeholderContacts: false,
+                contactOwnership: 'dashboard',
             },
             translations: [
                 translation(
                     'zh_Hans',
                     '客服中心',
                     '商品、订单与服务办理问题都可以在这里咨询',
-                    '当前联系方式为临时占位，上线前请在后台替换为正式账号。',
+                    '客服联系方式正在配置，更新后将在本页显示。',
                 ),
                 translation(
                     'en',
                     'Customer support',
                     'Ask about products, orders and service applications.',
-                    'These contact links are placeholders and must be replaced in the Dashboard before launch.',
+                    'Support contact details are being prepared and will appear here when ready.',
                 ),
             ],
             items: [
@@ -746,28 +747,25 @@ export function buildDamatongContentBlocks({
                     ],
                 },
                 {
-                    enabled: true,
+                    enabled: false,
                     position: 1,
-                    targetType: 'URL',
-                    targetValue: 'https://wa.me/00000000000',
-                    settings: { supportChannel: 'WHATSAPP', supportAccount: '00000000000' },
+                    targetType: 'NONE',
+                    targetValue: null,
+                    settings: { supportChannel: 'WHATSAPP' },
                     translations: [
-                        itemTranslation('zh_Hans', 'WhatsApp', '临时入口，上线前请替换'),
-                        itemTranslation('en', 'WhatsApp', 'Placeholder link - replace before launch'),
+                        itemTranslation('zh_Hans', 'WhatsApp', '联系方式准备中'),
+                        itemTranslation('en', 'WhatsApp', 'Contact details coming soon'),
                     ],
                 },
                 {
-                    enabled: true,
+                    enabled: false,
                     position: 2,
-                    targetType: 'URL',
-                    targetValue: 'https://t.me/damatong_placeholder_contact',
-                    settings: {
-                        supportChannel: 'TELEGRAM',
-                        supportAccount: 'damatong_placeholder_contact',
-                    },
+                    targetType: 'NONE',
+                    targetValue: null,
+                    settings: { supportChannel: 'TELEGRAM' },
                     translations: [
-                        itemTranslation('zh_Hans', 'Telegram', '临时入口，上线前请替换'),
-                        itemTranslation('en', 'Telegram', 'Placeholder link - replace before launch'),
+                        itemTranslation('zh_Hans', 'Telegram', '联系方式准备中'),
+                        itemTranslation('en', 'Telegram', 'Contact details coming soon'),
                     ],
                 },
                 {

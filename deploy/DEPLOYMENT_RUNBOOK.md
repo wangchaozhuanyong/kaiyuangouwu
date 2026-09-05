@@ -377,7 +377,7 @@ VENDURE_API_ORIGIN=http://127.0.0.1:3002 VENDURE_STOREFRONT_URL=https://moyaoai.
 
 ### 大马通店铺装修发布器
 
-`sync-damatong-storefront.mjs` 只面向 `my-malaysia` Channel，不覆盖 MOYAO AI 默认站。它统一写入大马通品牌资料、六个分类、首页三组轮播广告、其他首页内容、条款、客服、登录/注册视觉和客户端导航。已启用的旧单图轮播可安全接管为第一组；如发现未审核的多余启用广告则停止写入。`ai-image-studio-entry` 必须从 `__default_channel__` 当前启用项读取；默认站缺失、重复或中英文配置不完整时，预演和写入都会失败关闭。
+`sync-damatong-storefront.mjs` 通过公开 Channel token `my-malaysia` 唯一解析大马通的实际 Channel code，不将当前显示名“美宜佳”写死，也不覆盖 MOYAO AI 默认站。它统一写入大马通品牌资料、六个分类、首页三组轮播广告、其他首页内容、条款、客服、登录/注册视觉和客户端导航。已启用的旧单图轮播可安全接管为第一组；如发现未审核的多余启用广告则停止写入。`ai-image-studio-entry` 必须从 `__default_channel__` 当前启用项读取；默认站缺失、重复或中英文配置不完整时，预演和写入都会失败关闭。
 
 制品构建前先执行静态资源校验；生产发布只允许从已验证候选制品运行，先预演再写入：
 
@@ -387,15 +387,18 @@ node packages/dev-server/scripts/sync-damatong-storefront.mjs --validate
 cd "${CANDIDATE}"
 VENDURE_API_ORIGIN=http://127.0.0.1:3002 VENDURE_STOREFRONT_URL=https://damatong.net \
     node packages/dev-server/scripts/sync-damatong-storefront.mjs --dry-run \
-    --channel-code my-malaysia --source-channel-code __default_channel__
+    --channel-token my-malaysia --source-channel-code __default_channel__
 VENDURE_API_ORIGIN=http://127.0.0.1:3002 VENDURE_STOREFRONT_URL=https://damatong.net \
     node packages/dev-server/scripts/sync-damatong-storefront.mjs --apply --allow-remote \
-    --channel-code my-malaysia --source-channel-code __default_channel__
+    --channel-token my-malaysia --source-channel-code __default_channel__
+VENDURE_API_ORIGIN=http://127.0.0.1:3002 VENDURE_STOREFRONT_URL=https://damatong.net \
+    node packages/dev-server/scripts/sync-damatong-storefront.mjs --verify \
+    --channel-token my-malaysia --source-channel-code __default_channel__
 ```
 
-发布器按文件 SHA-256 复用资源，保留 Collection 已有 gallery，用 `expectedUpdatedAt` 防止后台并发覆盖，并在写入后从 Admin API 和中英文 Shop API 反查品牌、分类、固定内容和 AI 插件。任一验证失败都不得切换 Storefront 稳定指针。
+发布器按文件 SHA-256 复用资源，保留 Collection 已有 gallery，用 `expectedUpdatedAt` 防止后台并发覆盖，并把所有装修区块改动放入同一事务。写入后从 Admin API 和中英文 Shop API 反查品牌、分类、固定内容和 AI 插件；独立 `--verify` 不执行任何写入。写入后任一验证失败时，发布器恢复之前的品牌、分类、装修区块和轮播设置；回滚失败按生产事故处理。
 
-客服块中的 WhatsApp 和 Telegram 初始值是明确的虚拟占位账号，且 `placeholderContacts=true`。当 `supportContactsReadyForProduction=false` 时，发布器即使收到 `--apply --allow-remote` 也会在联网和写入前停止。正式上线前必须先在发布配置中替换为真实联系方式，关闭占位标记并将生产就绪值改为 `true`；未替换时必须将大马通业务验收记为阻断，不得宣布可正式接单。该 publisher 尚未接入现有生产工作流的发布计划字段；首次生产使用必须按本手册“两次发布”规则先增加并验证 publisher 门禁，不允许直接手工绕过。
+客服块首次上线是“联系方式准备中”的安全状态：WhatsApp 和 Telegram 均禁用、无可点击目标，不使用虚假号码或占位链接。后续在 Dashboard 填写并启用真实联系方式后，发布器将客服文案、条目和目标的所有权保留给 Dashboard，以后同步其他装修内容时不会把真实客服资料覆盖回占位状态。生产工作流已接入 `damatong_storefront` 和 `damatong_channel_token` 发布计划字段；只能使用已安装该保护逻辑的引导版本发布正式大马通内容。
 
 切换脚本会在 systemd journal 中以 `vendure-production-switch` 标记依次记录 `requested`、`succeeded` 或 `failed`。每条事件包含部署 ID、目标 SHA、候选目录、调用用户、SSH 来源 IP、进程和父进程信息，不记录命令参数、环境变量或密钥。`requested` 写入失败会中止切换，避免无审计地改动 PM2。发布后用同一部署 ID 核对完整事件链：
 

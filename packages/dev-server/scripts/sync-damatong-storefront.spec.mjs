@@ -16,6 +16,7 @@ import {
     isLocalApiOrigin,
     parseCliArguments,
     prepareDamatongAssets,
+    preserveDashboardSupportContacts,
     syncDamatongStorefront,
 } from './sync-damatong-storefront.mjs';
 
@@ -130,7 +131,7 @@ test('the Damatong category plan contains exactly the requested six categories',
     assert.equal(buildDamatongCategoryPlan(existing, first, 'asset-cigarettes').action, 'noop');
 });
 
-test('fixed content, navigation, support placeholders and auth visuals are fully configured', () => {
+test('fixed content, navigation, safe support holding state and auth visuals are fully configured', () => {
     const blocks = desiredBlocks();
     assert.equal(blocks.length, 14);
     assert.equal(new Set(blocks.map(block => block.code)).size, blocks.length);
@@ -192,13 +193,12 @@ test('fixed content, navigation, support placeholders and auth visuals are fully
     assert.ok(quickLinks.items.every(item => item.targetType === 'COLLECTION' && item.imageAssetId));
 
     const support = blocks.find(block => block.type === 'SUPPORT');
-    assert.equal(support.settings.placeholderContacts, true);
+    assert.equal(support.settings.placeholderContacts, false);
+    assert.equal(support.settings.contactOwnership, 'dashboard');
     const enabledSupportItems = support.items.filter(item => item.enabled);
-    assert.deepEqual(
-        enabledSupportItems.map(item => item.targetValue),
-        ['https://wa.me/00000000000', 'https://t.me/damatong_placeholder_contact'],
-    );
-    assert.ok(enabledSupportItems.every(item => item.settings.supportAccount));
+    assert.deepEqual(enabledSupportItems, []);
+    assert.ok(support.items.every(item => item.targetType === 'NONE' && item.targetValue === null));
+    assert.doesNotMatch(JSON.stringify(support), /placeholder_contact|00000000000/u);
 
     const navigation = blocks.find(block => block.type === 'NAVIGATION');
     assert.deepEqual(
@@ -299,18 +299,31 @@ test('brand planning is idempotent after the requested profile is in place', () 
 });
 
 test('publisher CLI is dry-run by default and recognizes guarded apply options', () => {
-    assert.deepEqual(parseCliArguments([]), { apply: false, allowRemote: false, validate: false });
-    assert.deepEqual(parseCliArguments(['--apply', '--allow-remote', '--channel-code', 'my-malaysia']), {
+    assert.deepEqual(parseCliArguments([]), {
+        apply: false,
+        verify: false,
+        allowRemote: false,
+        validate: false,
+    });
+    assert.deepEqual(parseCliArguments(['--apply', '--allow-remote', '--channel-token', 'my-malaysia']), {
         apply: true,
+        verify: false,
         allowRemote: true,
         validate: false,
-        channelCode: 'my-malaysia',
+        channelToken: 'my-malaysia',
     });
+    assert.deepEqual(parseCliArguments(['--verify']), {
+        apply: false,
+        verify: true,
+        allowRemote: false,
+        validate: false,
+    });
+    assert.throws(() => parseCliArguments(['--apply', '--verify']), /mutually exclusive/u);
     assert.equal(isLocalApiOrigin('http://127.0.0.1:3000'), true);
     assert.equal(isLocalApiOrigin('https://damatong.net'), false);
 });
 
-test('remote apply stays blocked while the support contacts are placeholders', async () => {
+test('remote apply stays blocked unless the explicit remote-write gate is present', async () => {
     await assert.rejects(
         () =>
             syncDamatongStorefront({
@@ -318,13 +331,32 @@ test('remote apply stays blocked while the support contacts are placeholders', a
                 username: 'admin',
                 password: 'secret',
                 apply: true,
-                allowRemote: true,
                 fetchImpl: async () => {
                     throw new Error('network must not be reached');
                 },
             }),
-        /blocked until real support contacts replace the placeholders/u,
+        /require both --apply and --allow-remote/u,
     );
+});
+
+test('real support contacts entered in Dashboard remain owned by Dashboard', () => {
+    const existing = desiredBlocks().map(asAdminBlock);
+    const support = existing.find(block => block.type === 'SUPPORT');
+    support.settings = { ...support.settings, placeholderContacts: false, contactOwnership: 'dashboard' };
+    support.translations[0].body = '客服已上线';
+    support.items[0] = {
+        ...support.items[0],
+        enabled: true,
+        targetType: 'EXTERNAL_URL',
+        targetValue: 'https://wa.me/60123456789',
+    };
+
+    const preserved = preserveDashboardSupportContacts(existing, desiredBlocks()).find(
+        block => block.type === 'SUPPORT',
+    );
+    assert.equal(preserved.translations.find(value => value.languageCode === 'zh_Hans').body, '客服已上线');
+    assert.equal(preserved.items[0].id, support.items[0].id);
+    assert.equal(preserved.items[0].targetValue, 'https://wa.me/60123456789');
 });
 
 test('apply mode updates drift and verifies the same ids through Admin and Shop APIs', async () => {
@@ -338,15 +370,16 @@ test('apply mode updates drift and verifies the same ids through Admin and Shop 
     });
     const adminBlocks = blocks.map(asAdminBlock);
     let contentUpdated = false;
-    let updateMutationCount = 0;
+    let batchMutationCount = 0;
+    const targetChannelCode = '美宜佳';
 
     const profile = {
         id: 'profile-1',
         updatedAt: '2026-09-05T00:00:00.000Z',
         channel: {
             id: 'channel-my',
-            code: damatongStorefront.channelCode,
-            token: 'target-token',
+            code: targetChannelCode,
+            token: damatongStorefront.channelToken,
             customFields: {
                 storefrontNameZh: damatongStorefront.storefrontNameZh,
                 storefrontNameEn: damatongStorefront.storefrontNameEn,
@@ -387,8 +420,8 @@ test('apply mode updates drift and verifies the same ids through Admin and Shop 
                             channels: [
                                 {
                                     id: 'channel-my',
-                                    code: damatongStorefront.channelCode,
-                                    token: 'target-token',
+                                    code: targetChannelCode,
+                                    token: damatongStorefront.channelToken,
                                 },
                                 {
                                     id: 'channel-default',
@@ -458,20 +491,16 @@ test('apply mode updates drift and verifies the same ids through Admin and Shop 
                 data: { assignAssetsToChannel: request.variables.input.assetIds.map(id => ({ id })) },
             });
         }
-        if (request.query.includes('UpdateDamatongContentBlock')) {
-            assert.match(request.query, /mutation\s+UpdateDamatongContentBlock/u);
+        if (request.query.includes('ApplyDamatongContentChanges')) {
+            assert.match(request.query, /mutation\s+ApplyDamatongContentChanges/u);
             assert.equal(init.headers.authorization, 'Bearer auth-token');
-            assert.equal(request.variables.input.code, blocks[0].code);
-            updateMutationCount += 1;
+            assert.equal(request.variables.input.expectedBlocks.length, adminBlocks.length);
+            assert.equal(request.variables.input.updates[0].code, blocks[0].code);
+            batchMutationCount += 1;
             contentUpdated = true;
             return Response.json({
                 data: {
-                    updateStorefrontContentBlock: {
-                        id: adminBlocks[0].id,
-                        code: blocks[0].code,
-                        type: blocks[0].type,
-                        updatedAt: '2026-09-05T00:01:00.000Z',
-                    },
+                    applyStorefrontContentChanges: adminBlocks,
                 },
             });
         }
@@ -479,7 +508,7 @@ test('apply mode updates drift and verifies the same ids through Admin and Shop 
             const languageCode = init.headers['language-code'];
             return Response.json({
                 data: {
-                    activeChannel: { code: damatongStorefront.channelCode, customFields: {} },
+                    activeChannel: { code: targetChannelCode, customFields: {} },
                     storefrontBranding: {
                         logoAssetId: ids.get('brand-app-icon'),
                         logoOnLightAssetId: ids.get('brand-logo-light'),
@@ -514,29 +543,39 @@ test('apply mode updates drift and verifies the same ids through Admin and Shop 
                             };
                         }),
                     },
-                    storefrontContent: blocks.map((block, blockIndex) => ({
-                        id: `block-${blockIndex + 1}`,
-                        code: block.code,
-                        type: block.type,
-                        imageAsset: block.imageAssetId ? { id: block.imageAssetId } : null,
-                        title: block.translations.find(value => value.languageCode === languageCode).title,
-                        subtitle: '',
-                        body: '',
-                        ctaLabel: '',
-                        settings: block.settings,
-                        items: block.items.map((item, itemIndex) => ({
-                            id: `item-${itemIndex + 1}`,
-                            position: item.position,
-                            imageAsset: item.imageAssetId ? { id: item.imageAssetId } : null,
-                            targetType: item.targetType,
-                            targetValue: item.targetValue,
-                            settings: item.settings,
-                            label:
-                                item.translations.find(value => value.languageCode === languageCode)?.label ??
-                                '',
-                            description: '',
-                        })),
-                    })),
+                    storefrontContent: blocks.map((block, blockIndex) => {
+                        const localized = block.translations.find(
+                            value => value.languageCode === languageCode,
+                        );
+                        return {
+                            id: `block-${blockIndex + 1}`,
+                            code: block.code,
+                            type: block.type,
+                            imageAsset: block.imageAssetId ? { id: block.imageAssetId } : null,
+                            title: localized.title,
+                            subtitle: localized.subtitle ?? '',
+                            body: localized.body ?? '',
+                            ctaLabel: localized.ctaLabel ?? '',
+                            settings: block.settings,
+                            items: block.items
+                                .filter(item => item.enabled !== false)
+                                .map((item, itemIndex) => {
+                                    const itemLocalized = item.translations.find(
+                                        value => value.languageCode === languageCode,
+                                    );
+                                    return {
+                                        id: `item-${itemIndex + 1}`,
+                                        position: item.position,
+                                        imageAsset: item.imageAssetId ? { id: item.imageAssetId } : null,
+                                        targetType: item.targetType,
+                                        targetValue: item.targetValue,
+                                        settings: item.settings,
+                                        label: itemLocalized?.label ?? '',
+                                        description: itemLocalized?.description ?? '',
+                                    };
+                                }),
+                        };
+                    }),
                     storefrontContentSettings: {
                         heroAutoplayIntervalSeconds: damatongStorefront.heroAutoplayIntervalSeconds,
                     },
@@ -555,5 +594,168 @@ test('apply mode updates drift and verifies the same ids through Admin and Shop 
     });
     assert.equal(result.applied, true);
     assert.equal(result.verified, true);
-    assert.equal(updateMutationCount, 1);
+    assert.equal(result.channelCode, targetChannelCode);
+    assert.equal(result.channelToken, damatongStorefront.channelToken);
+    assert.equal(batchMutationCount, 1);
+
+    const verification = await syncDamatongStorefront({
+        apiOrigin: 'http://127.0.0.1:3000',
+        username: 'admin',
+        password: 'secret',
+        verify: true,
+        fetchImpl,
+    });
+    assert.equal(verification.applied, false);
+    assert.equal(verification.verified, true);
+    assert.equal(batchMutationCount, 1);
+});
+
+test('failed Shop verification restores the previous Admin content bindings', async () => {
+    const ids = assetIds();
+    const collections = collectionIds();
+    const sourceItem = sourceAiPluginItem();
+    const blocks = desiredBlocks();
+    const beforeBlocks = blocks.map(asAdminBlock);
+    beforeBlocks[0].internalName = '上线前的首页主视觉';
+    let currentBlocks = structuredClone(beforeBlocks);
+    let batchMutationCount = 0;
+    const profile = {
+        id: 'profile-1',
+        updatedAt: '2026-09-05T00:00:00.000Z',
+        channel: {
+            id: 'channel-my',
+            code: '美宜佳',
+            token: damatongStorefront.channelToken,
+            customFields: {
+                storefrontNameZh: damatongStorefront.storefrontNameZh,
+                storefrontNameEn: damatongStorefront.storefrontNameEn,
+            },
+        },
+        descriptionZh: damatongStorefront.descriptionZh,
+        descriptionEn: damatongStorefront.descriptionEn,
+        taglineZh: damatongStorefront.taglineZh,
+        taglineEn: damatongStorefront.taglineEn,
+        brandBackgroundColor: damatongStorefront.brandBackgroundColor,
+        brandPrimaryColor: damatongStorefront.brandPrimaryColor,
+        brandAccentColor: damatongStorefront.brandAccentColor,
+        brandHighlightColor: damatongStorefront.brandHighlightColor,
+        logoAsset: { id: ids.get('brand-app-icon') },
+        logoOnLightAsset: { id: ids.get('brand-logo-light') },
+        logoOnDarkAsset: { id: ids.get('brand-logo-dark') },
+    };
+    const categoryBySlug = new Map(
+        damatongCategories.map(category => [
+            category.translations.find(value => value.languageCode === 'en').slug,
+            category,
+        ]),
+    );
+    const assetIdByTag = new Map(
+        damatongAssets.map(asset => [`damatong-storefront:${asset.key}`, ids.get(asset.key)]),
+    );
+
+    const fetchImpl = async (_url, init) => {
+        const request = JSON.parse(init.body);
+        const requestChannelToken = init.headers?.['vendure-token'];
+        if (request.query.includes('DamatongStorefrontLogin')) {
+            return new Response(
+                JSON.stringify({
+                    data: {
+                        login: {
+                            id: 'admin-1',
+                            channels: [
+                                {
+                                    id: 'channel-my',
+                                    code: '美宜佳',
+                                    token: damatongStorefront.channelToken,
+                                },
+                                {
+                                    id: 'channel-default',
+                                    code: damatongStorefront.sourceChannelCode,
+                                    token: 'source-token',
+                                },
+                            ],
+                        },
+                    },
+                }),
+                { headers: { 'vendure-auth-token': 'auth-token' } },
+            );
+        }
+        if (request.query.includes('DamatongStoreProfiles')) {
+            return Response.json({ data: { storeProfiles: [profile] } });
+        }
+        if (request.query.includes('DamatongStorefrontBlocks')) {
+            if (requestChannelToken === 'source-token') {
+                return Response.json({
+                    data: {
+                        storefrontContentBlocks: [
+                            {
+                                id: 'source-plugin-block',
+                                updatedAt: '2026-09-05T00:00:00.000Z',
+                                code: 'storefront-client-plugins',
+                                type: 'CLIENT_PLUGINS',
+                                items: [sourceItem],
+                            },
+                        ],
+                        storefrontContentSettings: { heroAutoplayIntervalSeconds: 5 },
+                    },
+                });
+            }
+            return Response.json({
+                data: {
+                    storefrontContentBlocks: structuredClone(currentBlocks),
+                    storefrontContentSettings: {
+                        heroAutoplayIntervalSeconds: damatongStorefront.heroAutoplayIntervalSeconds,
+                    },
+                },
+            });
+        }
+        if (request.query.includes('DamatongCollection')) {
+            const category = categoryBySlug.get(request.variables.slug);
+            if (!category) return Response.json({ data: { collection: null } });
+            const featuredAssetId = ids.get(category.assetKey);
+            return Response.json({
+                data: {
+                    collection: {
+                        id: collections.get(category.code),
+                        featuredAsset: { id: featuredAssetId },
+                        assets: [{ id: featuredAssetId }],
+                        translations: category.translations,
+                    },
+                },
+            });
+        }
+        if (/query\s+DamatongStorefrontAsset\b/u.test(request.query)) {
+            const stableTag = request.variables.tags.find(tag => assetIdByTag.has(tag));
+            return Response.json({ data: { assets: { items: [{ id: assetIdByTag.get(stableTag) }] } } });
+        }
+        if (request.query.includes('AssignDamatongStorefrontAsset')) {
+            return Response.json({ data: { assignAssetsToChannel: [{ id: 'assigned' }] } });
+        }
+        if (request.query.includes('ApplyDamatongContentChanges')) {
+            batchMutationCount += 1;
+            currentBlocks = structuredClone(
+                batchMutationCount === 1 ? blocks.map(asAdminBlock) : beforeBlocks,
+            );
+            currentBlocks[0].updatedAt = `2026-09-05T00:0${String(batchMutationCount)}:00.000Z`;
+            return Response.json({ data: { applyStorefrontContentChanges: currentBlocks } });
+        }
+        if (request.query.includes('VerifyDamatongStorefront')) {
+            return Response.json({ data: { activeChannel: { code: 'wrong-channel' } } });
+        }
+        throw new Error(`Unexpected GraphQL request: ${request.query}`);
+    };
+
+    await assert.rejects(
+        () =>
+            syncDamatongStorefront({
+                apiOrigin: 'http://127.0.0.1:3000',
+                username: 'admin',
+                password: 'secret',
+                apply: true,
+                fetchImpl,
+            }),
+        /previous Admin bindings were restored/u,
+    );
+    assert.equal(batchMutationCount, 2);
+    assert.equal(currentBlocks[0].internalName, '上线前的首页主视觉');
 });
