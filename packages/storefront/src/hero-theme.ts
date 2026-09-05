@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react';
+// eslint-disable-next-line import/order -- organize-imports keeps relative type imports after packages.
 import type { StorefrontContentBlock } from './types';
 
 import {

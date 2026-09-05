@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+// eslint-disable-next-line import/order -- organize-imports keeps relative type imports after packages.
 import type { StorefrontContentBlock } from './types';
 
 import {
