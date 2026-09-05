@@ -197,6 +197,10 @@ Preview the exact assets and targets without writing:
 bun run sync:storefront-media -- --dry-run
 ```
 
+If the Admin user can access multiple Channels, `STOREFRONT_MEDIA_CHANNEL_CODES` is mandatory. A
+Channel is selected implicitly only when the account can access exactly one, so a publisher can
+never silently fall back to an unrelated store.
+
 Apply to a local Vendure instance:
 
 ```bash
@@ -211,9 +215,32 @@ the sync after the API is healthy and before the new storefront is promoted:
 bun run sync:storefront-media -- --apply --allow-remote
 ```
 
+Re-run the hard, read-only Admin API and Shop API reconciliation when independent release evidence
+is required:
+
+```bash
+bun run sync:storefront-media -- --verify
+```
+
 Remote writes require both flags. Existing asset records are not deleted: an unchanged file is
 reused by its SHA-256 tag, while a changed file creates a new asset and moves the configured
-bindings to it. This makes the command safe to repeat and keeps rollback assets available.
+bindings to it. Existing product and variant galleries are preserved. Apply does not return success
+until the same Asset ID is visible on the Admin and Shop APIs; a verification failure restores the
+previous product/content bindings. `asset-library` targets are Admin Channel assets by design and
+are reported as such instead of claiming client parity.
+
+Auth page copy, palette and tags use the separate atomic content publisher. It applies all reviewed
+blocks in one version-checked Admin API batch and verifies both Shop API languages. Set explicit
+`AUTH_VISUAL_CHANNEL_CODES` whenever the Admin user has more than one accessible Channel:
+
+```bash
+bun run sync:auth-visuals -- --dry-run
+bun run sync:auth-visuals -- --apply --allow-remote
+```
+
+Run `bun run check:storefront-publishing` before review. It rejects unclassified storefront media,
+direct managed-media imports outside the fallback registry, and hard-coded remote media URLs in
+runtime client code.
 
 ## Repairing reviewed inventory inheritance targets
 
