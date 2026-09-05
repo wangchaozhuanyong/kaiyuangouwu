@@ -93,6 +93,8 @@ export const navigationTargets = [
     ['/announcements', '系统公告'],
     ['/support', '客服中心'],
     ['/reviews', '评价中心'],
+    ['/legal?id=privacy', '隐私政策'],
+    ['/legal?id=terms', '使用条款'],
 ] as const;
 
 export function defaultLayoutForType(type: StorefrontBlockType): StorefrontLayoutVariant {
