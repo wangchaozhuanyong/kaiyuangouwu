@@ -1,5 +1,4 @@
 import type { CSSProperties } from 'react';
-import type { StorefrontContentBlock } from './types';
 
 import {
     HERO_ACCOUNT_SERVICES_FALLBACK_IMAGE,
@@ -15,6 +14,7 @@ import {
     HERO_VIP_FALLBACK_IMAGE,
     HERO_VIP_IMAGE,
 } from './storefront-images';
+import { StorefrontContentBlock } from './types';
 
 const HEX_COLOR_PATTERN = /^#[0-9a-f]{6}$/i;
 

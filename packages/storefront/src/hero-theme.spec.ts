@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import type { StorefrontContentBlock } from './types';
 
 import {
     builtInHeroFallbackImage,
@@ -17,6 +16,7 @@ import {
     HERO_TOKEN_TOPUP_FALLBACK_IMAGE,
     HERO_TOKEN_TOPUP_IMAGE,
 } from './storefront-images';
+import { StorefrontContentBlock } from './types';
 
 function hero(overrides: Partial<StorefrontContentBlock> = {}): StorefrontContentBlock {
     return {
