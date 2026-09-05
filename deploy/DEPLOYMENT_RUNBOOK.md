@@ -414,6 +414,14 @@ VENDURE_API_ORIGIN=http://127.0.0.1:3002 VENDURE_STOREFRONT_URL=https://damatong
 
 发布器按文件 SHA-256 复用资源，保留 Collection 已有 gallery，用 `expectedUpdatedAt` 防止后台并发覆盖，并把所有装修区块改动放入同一事务。写入后从 Admin API 和中英文 Shop API 反查品牌、分类、固定内容和 AI 插件；独立 `--verify` 不执行任何写入。写入后任一验证失败时，发布器恢复之前的品牌、分类、装修区块和轮播设置；回滚失败按生产事故处理。
 
+大马通受审英文由发布器显式人工锁定：店铺资料使用 `storefrontNameEnLocked`、
+`descriptionEnLocked`、`taglineEnLocked`；内容区块和条目的英文 translation 使用对应
+`<field>Locked` 输入。候选 API 必须支持这些可选字段；旧 API 会拒绝写入，不得删去锁定参数重试。
+发布与恢复原绑定均携带锁定参数，防止中文变化而英文相同时再次调用外部翻译。空的可选双语字段不锁定，
+缺少所需英文会在内容计划阶段停止。未传锁定参数的普通编辑仍使用原有翻译策略，未关闭全站自动翻译。
+回归必须覆盖真实店名配对“大马通 / DAMATONG”到“大马通 DAMATONG / DAMATONG”、
+翻译提供方不可用、重复发布和反向恢复；本地模拟通过后仍须完成候选 API 的 Admin/Shop 读回验收。
+
 客服块首次上线是“联系方式准备中”的安全状态：WhatsApp 和 Telegram 均禁用、无可点击目标，不使用虚假号码或占位链接。后续在 Dashboard 填写并启用真实联系方式后，发布器将客服文案、条目和目标的所有权保留给 Dashboard，以后同步其他装修内容时不会把真实客服资料覆盖回占位状态。生产工作流已接入 `damatong_storefront` 和 `damatong_channel_token` 发布计划字段；只能使用已安装该保护逻辑的引导版本发布正式大马通内容。
 
 对于用户明确要求的一次性后台品牌发布，在已发布支持品牌选择器的后台中执行以下步骤（不替代代码版本的 PR、CI 和不可变制品发布流程）：

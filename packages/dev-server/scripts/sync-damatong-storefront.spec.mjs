@@ -327,6 +327,32 @@ test('brand planning is idempotent after the requested profile is in place', () 
         logoOnDarkAsset: { id: ids.get('brand-logo-dark') },
     };
     assert.equal(buildDamatongBrandPlan(profile, ids).action, 'noop');
+    profile.channel.customFields.storefrontNameZh = '大马通';
+    const plan = buildDamatongBrandPlan(profile, ids);
+    assert.equal(plan.action, 'update');
+    assert.equal(plan.input.storefrontNameEn, 'DAMATONG');
+    assert.equal(plan.input.storefrontNameEnLocked, true);
+    assert.equal(plan.input.descriptionEnLocked, true);
+    assert.equal(plan.input.taglineEnLocked, true);
+});
+
+function assertReviewedBlockInput(block) {
+    for (const [translations, fields] of [
+        [block.translations, ['title', 'subtitle', 'body', 'ctaLabel']],
+        ...block.items.map(item => [item.translations, ['label', 'description']]),
+    ]) {
+        const english = translations.find(value => value.languageCode === 'en');
+        for (const field of fields) {
+            assert.equal(english[`${field}Locked`], Boolean(english[field].trim()));
+        }
+    }
+}
+
+test('all reviewed content locks English, while missing English stops planning', () => {
+    const blocks = desiredBlocks();
+    for (const plan of buildDamatongContentPlans([], blocks)) assertReviewedBlockInput(plan.input);
+    blocks[0].translations.find(value => value.languageCode === 'en').title = '';
+    assert.throws(() => buildDamatongContentPlans([], blocks), /Reviewed English is missing for title/u);
 });
 
 test('publisher CLI is dry-run by default and recognizes guarded apply options', () => {
@@ -402,6 +428,7 @@ test('apply mode updates drift and verifies the same ids through Admin and Shop 
     const adminBlocks = blocks.map(asAdminBlock);
     let contentUpdated = false;
     let batchMutationCount = 0;
+    let profileMutationCount = 0;
     const targetChannelCode = '美宜佳';
     const targetChannelToken = 'opaque-production-token';
 
@@ -413,7 +440,7 @@ test('apply mode updates drift and verifies the same ids through Admin and Shop 
             code: targetChannelCode,
             token: targetChannelToken,
             customFields: {
-                storefrontNameZh: damatongStorefront.storefrontNameZh,
+                storefrontNameZh: '大马通',
                 storefrontNameEn: damatongStorefront.storefrontNameEn,
             },
         },
@@ -528,11 +555,26 @@ test('apply mode updates drift and verifies the same ids through Admin and Shop 
                 data: { assignAssetsToChannel: request.variables.input.assetIds.map(id => ({ id })) },
             });
         }
+        if (request.query.includes('UpdateDamatongStoreProfile')) {
+            const input = request.variables.input;
+            assert.equal(input.storefrontNameEn, 'DAMATONG');
+            assert.equal(input.storefrontNameEnLocked, true);
+            assert.equal(input.descriptionEnLocked, true);
+            assert.equal(input.taglineEnLocked, true);
+            assert.equal(input.expectedUpdatedAt, profile.updatedAt);
+            profile.channel.customFields.storefrontNameZh = input.storefrontNameZh;
+            profile.updatedAt = '2026-09-05T00:01:00.000Z';
+            profileMutationCount += 1;
+            return Response.json({
+                data: { updateStoreProfile: { id: profile.id, updatedAt: profile.updatedAt } },
+            });
+        }
         if (request.query.includes('ApplyDamatongContentChanges')) {
             assert.match(request.query, /mutation\s+ApplyDamatongContentChanges/u);
             assert.equal(init.headers.authorization, 'Bearer auth-token');
             assert.equal(request.variables.input.expectedBlocks.length, adminBlocks.length);
             assert.equal(request.variables.input.updates[0].code, blocks[0].code);
+            request.variables.input.updates.forEach(assertReviewedBlockInput);
             batchMutationCount += 1;
             contentUpdated = true;
             return Response.json({
@@ -543,6 +585,7 @@ test('apply mode updates drift and verifies the same ids through Admin and Shop 
         }
         if (request.query.includes('VerifyDamatongStorefront')) {
             const languageCode = init.headers['language-code'];
+            assert.equal(new URL(_url).searchParams.get('languageCode'), languageCode);
             return Response.json({
                 data: {
                     activeChannel: { code: targetChannelCode, customFields: {} },
@@ -634,6 +677,7 @@ test('apply mode updates drift and verifies the same ids through Admin and Shop 
     assert.equal(result.channelCode, targetChannelCode);
     assert.equal(result.channelToken, damatongStorefront.channelToken);
     assert.equal(batchMutationCount, 1);
+    assert.equal(profileMutationCount, 1);
 
     const verification = await syncDamatongStorefront({
         apiOrigin: 'http://127.0.0.1:3000',
@@ -644,6 +688,15 @@ test('apply mode updates drift and verifies the same ids through Admin and Shop 
     });
     assert.equal(verification.applied, false);
     assert.equal(verification.verified, true);
+    assert.equal(batchMutationCount, 1);
+    await syncDamatongStorefront({
+        apiOrigin: 'http://127.0.0.1:3000',
+        username: 'admin',
+        password: 'secret',
+        apply: true,
+        fetchImpl,
+    });
+    assert.equal(profileMutationCount, 1);
     assert.equal(batchMutationCount, 1);
 });
 
@@ -656,6 +709,7 @@ test('failed Shop verification restores the previous Admin content bindings', as
     beforeBlocks[0].internalName = '上线前的首页主视觉';
     let currentBlocks = structuredClone(beforeBlocks);
     let batchMutationCount = 0;
+    let profileMutationCount = 0;
     const targetChannelCode = '美宜佳';
     const targetChannelToken = 'opaque-production-token';
     const profile = {
@@ -666,7 +720,7 @@ test('failed Shop verification restores the previous Admin content bindings', as
             code: targetChannelCode,
             token: targetChannelToken,
             customFields: {
-                storefrontNameZh: damatongStorefront.storefrontNameZh,
+                storefrontNameZh: '大马通',
                 storefrontNameEn: damatongStorefront.storefrontNameEn,
             },
         },
@@ -777,7 +831,22 @@ test('failed Shop verification restores the previous Admin content bindings', as
         if (request.query.includes('AssignDamatongStorefrontAsset')) {
             return Response.json({ data: { assignAssetsToChannel: [{ id: 'assigned' }] } });
         }
+        if (request.query.includes('UpdateDamatongStoreProfile')) {
+            const input = request.variables.input;
+            assert.equal(input.storefrontNameEn, 'DAMATONG');
+            assert.equal(input.storefrontNameEnLocked, true);
+            assert.equal(input.descriptionEnLocked, true);
+            assert.equal(input.taglineEnLocked, true);
+            assert.equal(input.expectedUpdatedAt, profile.updatedAt);
+            profile.channel.customFields.storefrontNameZh = input.storefrontNameZh;
+            profileMutationCount += 1;
+            profile.updatedAt = `2026-09-05T00:0${profileMutationCount}:00.000Z`;
+            return Response.json({
+                data: { updateStoreProfile: { id: profile.id, updatedAt: profile.updatedAt } },
+            });
+        }
         if (request.query.includes('ApplyDamatongContentChanges')) {
+            request.variables.input.updates.forEach(assertReviewedBlockInput);
             batchMutationCount += 1;
             currentBlocks = structuredClone(
                 batchMutationCount === 1 ? blocks.map(asAdminBlock) : beforeBlocks,
@@ -803,5 +872,8 @@ test('failed Shop verification restores the previous Admin content bindings', as
         /previous Admin bindings were restored/u,
     );
     assert.equal(batchMutationCount, 2);
+    assert.equal(profileMutationCount, 2);
+    assert.equal(profile.channel.customFields.storefrontNameZh, '大马通');
+    assert.equal(profile.channel.customFields.storefrontNameEn, 'DAMATONG');
     assert.equal(currentBlocks[0].internalName, '上线前的首页主视觉');
 });

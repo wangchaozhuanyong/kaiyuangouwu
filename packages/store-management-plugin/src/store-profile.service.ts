@@ -248,7 +248,11 @@ export class StoreProfileService {
     ): Promise<PreparedLocalizedContentField[]> {
         const fields: LocalizedContentFieldInput[] = [];
         const customFields = profile.channel.customFields as StorefrontChannelFields;
-        if (input.storefrontNameZh != null || input.storefrontNameEn != null) {
+        if (
+            input.storefrontNameZh != null ||
+            input.storefrontNameEn != null ||
+            input.storefrontNameEnLocked != null
+        ) {
             fields.push({
                 path: 'storefrontName',
                 sourceText: this.normalizeStorefrontName(
@@ -257,25 +261,28 @@ export class StoreProfileService {
                     '中文店铺名称',
                 ),
                 targetText: input.storefrontNameEn,
+                manualLock: input.storefrontNameEnLocked,
                 existingSourceText: customFields.storefrontNameZh,
                 existingTargetText: customFields.storefrontNameEn,
                 required: true,
             });
         }
-        if (input.descriptionZh != null || input.descriptionEn != null) {
+        if (input.descriptionZh != null || input.descriptionEn != null || input.descriptionEnLocked != null) {
             fields.push({
                 path: 'description',
                 sourceText: this.normalizeDescription(input.descriptionZh, profile.descriptionZh, '中文简介'),
                 targetText: input.descriptionEn,
+                manualLock: input.descriptionEnLocked,
                 existingSourceText: profile.descriptionZh,
                 existingTargetText: profile.descriptionEn,
             });
         }
-        if (input.taglineZh != null || input.taglineEn != null) {
+        if (input.taglineZh != null || input.taglineEn != null || input.taglineEnLocked != null) {
             fields.push({
                 path: 'tagline',
                 sourceText: this.normalizeTagline(input.taglineZh, profile.taglineZh, '中文品牌口号') ?? '',
                 targetText: input.taglineEn,
+                manualLock: input.taglineEnLocked,
                 existingSourceText: profile.taglineZh,
                 existingTargetText: profile.taglineEn,
             });
