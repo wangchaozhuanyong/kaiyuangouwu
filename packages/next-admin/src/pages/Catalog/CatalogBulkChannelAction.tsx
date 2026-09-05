@@ -164,7 +164,7 @@ export function CatalogBulkChannelAction() {
                                 <input
                                     value={search}
                                     onChange={event => setSearch(event.target.value)}
-                                    placeholder="按商品名称搜索（最多返回 100 条）"
+                                    placeholder="按名称搜索（最多返回 100 条）"
                                     className="w-full rounded-lg border border-slate-300 py-2 pl-9 pr-3 text-xs"
                                 />
                             </div>

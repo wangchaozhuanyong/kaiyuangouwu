@@ -3,4 +3,4 @@ Allow: /
 Disallow: /promo/enter
 Disallow: /promo/access
 Disallow: /promo/account-entry
-Sitemap: https://damatong.net/sitemap.xml
+Sitemap: https://moyaoai.com/sitemap.xml

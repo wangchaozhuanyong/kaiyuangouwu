@@ -8,7 +8,7 @@ const defaultRepositoryRoot = path.resolve(scriptDirectory, '..');
 const managedRoots = ['packages/storefront/src/assets/storefront', 'packages/storefront/src/assets/brand'];
 const mediaExtension = /\.(?:avif|gif|jpe?g|png|svg|webp)$/iu;
 const designOnlyAssets = new Set([
-    'packages/storefront/src/assets/brand/awanmesh-moyao/icon.svg',
+    'packages/storefront/src/assets/brand/moyao-ai/icon-monochrome.svg',
     'packages/storefront/src/assets/storefront/auth-login-ai-gateway.jpg',
     'packages/storefront/src/assets/storefront/auth-register-ai-workspace.jpg',
     'packages/storefront/src/assets/storefront/logo.svg',
@@ -83,10 +83,7 @@ export async function auditStorefrontPublishingPolicy(repositoryRoot = defaultRe
         repositoryRoot,
         'packages/dev-server/scripts/sync-storefront-media.mjs',
     );
-    const brandPublisherPath = path.join(
-        repositoryRoot,
-        'packages/dev-server/scripts/sync-awanmesh-brand.mjs',
-    );
+    const brandPublisherPath = path.join(repositoryRoot, 'packages/dev-server/scripts/sync-moyao-brand.mjs');
     const [storefrontImages, mediaPublisher, brandPublisher] = await Promise.all([
         readFile(storefrontImagesPath, 'utf8'),
         readFile(mediaPublisherPath, 'utf8'),
@@ -101,7 +98,7 @@ export async function auditStorefrontPublishingPolicy(repositoryRoot = defaultRe
     for (const absolutePath of publisherAssetPaths(mediaPublisher, storefrontAssets, 'storefrontAssets')) {
         classifiedPaths.add(toPosix(path.relative(repositoryRoot, absolutePath)));
     }
-    const brandDirectory = path.join(repositoryRoot, managedRoots[1], 'awanmesh-moyao');
+    const brandDirectory = path.join(repositoryRoot, managedRoots[1], 'moyao-ai');
     for (const absolutePath of publisherAssetPaths(brandPublisher, brandDirectory, 'brandDirectory')) {
         classifiedPaths.add(toPosix(path.relative(repositoryRoot, absolutePath)));
     }

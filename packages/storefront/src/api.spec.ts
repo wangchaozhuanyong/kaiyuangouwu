@@ -33,6 +33,39 @@ afterEach(() => {
     vi.unstubAllGlobals();
 });
 
+describe('ShopApi storefront config', () => {
+    it('loads managed legal identity and contact fields from storefront branding', async () => {
+        const fetchMock = mockGraphQlResponse({
+            activeChannel: {
+                code: 'moyao-ai-main',
+                defaultLanguageCode: 'zh_Hans',
+                defaultCurrencyCode: 'CNY',
+                customFields: { storefrontNameZh: 'MOYAO AI｜模钥', storefrontNameEn: 'MOYAO AI' },
+            },
+            availableCountries: [],
+            storefrontBranding: {
+                legalEntityName: 'MOYAO AI Example Limited',
+                legalRegistrationCountry: 'Malaysia',
+                supportEmail: 'support@moyaoai.com',
+                privacyEmail: 'privacy@moyaoai.com',
+            },
+            storefrontCurrencyConfiguration: undefined,
+        });
+
+        await expect(new ShopApi(market).storefrontConfig()).resolves.toMatchObject({
+            legalEntityName: 'MOYAO AI Example Limited',
+            legalRegistrationCountry: 'Malaysia',
+            supportEmail: 'support@moyaoai.com',
+            privacyEmail: 'privacy@moyaoai.com',
+        });
+        const request = JSON.parse(jsonRequestBody(fetchMock.mock.calls[0][1])) as { query: string };
+        expect(request.query).toContain('legalEntityName');
+        expect(request.query).toContain('legalRegistrationCountry');
+        expect(request.query).toContain('supportEmail');
+        expect(request.query).toContain('privacyEmail');
+    });
+});
+
 describe('ShopApi storefront mutations', () => {
     it('surfaces the specific native authentication failure returned by the Shop API', async () => {
         const fetchMock = mockGraphQlResponse({

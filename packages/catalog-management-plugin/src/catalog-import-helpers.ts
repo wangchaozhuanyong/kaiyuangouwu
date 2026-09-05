@@ -196,21 +196,28 @@ export function sanitizeCatalogRow(row: NormalizedCatalogRow, expectedRows: numb
     if (!Number.isInteger(row.rowNumber) || row.rowNumber < 2 || row.rowNumber > expectedRows + 1) {
         throw new UserInputError('商品行号超出导入范围');
     }
-    const name = safeRequiredRowText(row.name, 255, row.rowNumber, '名称');
+    const name = safeImportText(row.name, 255);
     const category = safeImportText(row.category, 255);
+    const sku = safeImportText(row.sku, 255);
+    const barcode = safeImportText(row.barcode, 255);
+    if (!name && !sku && !barcode) {
+        throw new UserInputError(`第 ${row.rowNumber} 行：名称为空时必须提供 SKU 或条码`);
+    }
     const purchaseCost = finiteRowNumber(row.purchaseCost, row.rowNumber, '进货价', false);
-    const sellingPrice = finiteRowNumber(row.sellingPrice, row.rowNumber, '销售价', true);
+    const sellingPrice = finiteRowNumber(row.sellingPrice, row.rowNumber, '销售价', false);
     if (purchaseCost != null && purchaseCost < 0) {
         throw new UserInputError(`第 ${row.rowNumber} 行：进货价不能为负数`);
     }
-    if (sellingPrice < 0) throw new UserInputError(`第 ${row.rowNumber} 行：销售价不能为负数`);
+    if (sellingPrice != null && sellingPrice < 0) {
+        throw new UserInputError(`第 ${row.rowNumber} 行：销售价不能为负数`);
+    }
     if (row.shelfLifeDays != null && (!Number.isInteger(row.shelfLifeDays) || row.shelfLifeDays < 0)) {
         throw new UserInputError(`第 ${row.rowNumber} 行：保质期必须是非负整数`);
     }
     if (row.lotQuantity != null && row.lotQuantity < 0) {
         throw new UserInputError(`第 ${row.rowNumber} 行：批次数量不能为负数`);
     }
-    if (!Number.isFinite(row.packageQuantity) || row.packageQuantity <= 0) {
+    if (row.packageQuantity != null && (!Number.isFinite(row.packageQuantity) || row.packageQuantity <= 0)) {
         throw new UserInputError(`第 ${row.rowNumber} 行：包装换算必须大于 0`);
     }
     for (const [value, label] of [
@@ -264,6 +271,7 @@ export function sanitizeCatalogRow(row: NormalizedCatalogRow, expectedRows: numb
     const providedFields = [...new Set((row.providedFields ?? []).filter(field => allowedFields.has(field)))];
     return {
         rowNumber: row.rowNumber,
+        sourceRecordKey: safeImportText(row.sourceRecordKey ?? '', 2_048) || undefined,
         name,
         category,
         channelCode: safeImportText(row.channelCode, 255),
@@ -293,8 +301,8 @@ export function sanitizeCatalogRow(row: NormalizedCatalogRow, expectedRows: numb
             100,
         ),
         sourceCreatedAt: normalizedDate(row.sourceCreatedAt, '创建日期'),
-        sku: safeImportText(row.sku, 255),
-        barcode: safeImportText(row.barcode, 255),
+        sku,
+        barcode,
         lotCode: safeImportText(row.lotCode, 80),
         lotQuantity: row.lotQuantity,
         supplier: normalizeSupplierDisplayName(safeImportText(row.supplier, 255)),

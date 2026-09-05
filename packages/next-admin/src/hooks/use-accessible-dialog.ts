@@ -41,7 +41,7 @@ export function useAccessibleDialog(onClose: () => void, active = true) {
             }
             if (event.key !== 'Tab' || !dialog) return;
 
-            const focusable = [...dialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)].filter(
+            const focusable = Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
                 element =>
                     !element.hidden &&
                     element.getAttribute('aria-hidden') !== 'true' &&

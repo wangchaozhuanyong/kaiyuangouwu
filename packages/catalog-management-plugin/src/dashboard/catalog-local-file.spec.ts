@@ -29,6 +29,27 @@ describe('browser-local catalog parser', () => {
         });
     });
 
+    it('accepts a stable SKU maintenance row with blank values for preserve-on-import', async () => {
+        const csv = ['名称,分类,SKU,包装换算,库存量,进货价,销售价', ',,SKU-KEEP-001,,,,'].join('\n');
+
+        const result = await parseCatalogArrayBuffer(
+            new TextEncoder().encode(csv).buffer,
+            '回导保留原值.csv',
+            'text/csv',
+        );
+
+        expect(result.errors).toEqual([]);
+        expect(result.rows[0]).toMatchObject({
+            name: '',
+            category: '',
+            sku: 'SKU-KEEP-001',
+            packageQuantity: null,
+            stockOnHand: null,
+            purchaseCost: null,
+            sellingPrice: null,
+        });
+    });
+
     it('parses typed Chinese rows, detects warnings and conflicting duplicates without networking', async () => {
         const fetchSpy = vi.fn();
         vi.stubGlobal('fetch', fetchSpy);
@@ -85,6 +106,8 @@ describe('browser-local catalog parser', () => {
         expect(result.errors).toEqual([]);
         expect(result.duplicateGroups).toBe(1);
         expect(result.duplicateRows).toBe(2);
+        expect(result.multiSkuGroups).toBe(0);
+        expect(result.exactDuplicateRows).toBe(0);
         expect(result.warningRows).toBe(1);
         expect(result.fileHash).toMatch(/^[a-f0-9]{64}$/u);
         expect(result.rows[0]).toMatchObject({
@@ -95,6 +118,27 @@ describe('browser-local catalog parser', () => {
             sourceCreatedAt: '2025-01-02T00:00:00.000Z',
         });
         vi.unstubAllGlobals();
+    });
+
+    it('plans legacy same-name differing rows as independent SKUs and marks exact duplicates', async () => {
+        const csv = [
+            '名称,分类,库存量,进货价,销售价',
+            '匿名商品,匿名分类,1,1.00,2.00',
+            '匿名商品,匿名分类,2,1.20,2.50',
+            '匿名商品,匿名分类,2,1.20,2.50',
+        ].join('\n');
+
+        const result = await parseCatalogArrayBuffer(
+            new TextEncoder().encode(csv).buffer,
+            '同名多SKU.csv',
+            'text/csv',
+        );
+
+        expect(result.duplicateGroups).toBe(0);
+        expect(result.multiSkuGroups).toBe(1);
+        expect(result.multiSkuRows).toBe(3);
+        expect(result.exactDuplicateRows).toBe(1);
+        expect(new Set(result.rows.map(row => row.sourceRecordKey)).size).toBe(3);
     });
 
     it('removes raw cell values from every network payload row', async () => {

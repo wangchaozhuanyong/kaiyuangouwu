@@ -181,7 +181,10 @@ export async function verifyDashboardAssets({
         timeoutMs,
     );
     expectStatus(dashboardResponse, 200, 'Dashboard');
-    const queue = extractDashboardAssetUrls(await dashboardResponse.text(), dashboard);
+    const effectiveDashboard = dashboardResponse.url
+        ? normalizeDashboardUrl(dashboardResponse.url)
+        : dashboard;
+    const queue = extractDashboardAssetUrls(await dashboardResponse.text(), effectiveDashboard);
     const discovered = new Map(queue.map(url => [url.href, url]));
     const verified = new Set();
 
@@ -202,7 +205,7 @@ export async function verifyDashboardAssets({
         const source = await response.text();
         verified.add(assetUrl.href);
         if (!assetUrl.pathname.endsWith('.js')) continue;
-        for (const referencedUrl of dashboardAssetReferences(source, dashboard)) {
+        for (const referencedUrl of dashboardAssetReferences(source, effectiveDashboard)) {
             if (!discovered.has(referencedUrl.href)) {
                 discovered.set(referencedUrl.href, referencedUrl);
                 queue.push(referencedUrl);

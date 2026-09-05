@@ -73,6 +73,10 @@ export class StorefrontBrandingShopResolver {
             primaryColor: profile?.brandPrimaryColor ?? null,
             accentColor: profile?.brandAccentColor ?? null,
             highlightColor: profile?.brandHighlightColor ?? null,
+            legalEntityName: profile?.legalEntityName ?? null,
+            legalRegistrationCountry: profile?.legalRegistrationCountry ?? null,
+            supportEmail: profile?.supportEmail ?? null,
+            privacyEmail: profile?.privacyEmail ?? null,
         };
     }
 

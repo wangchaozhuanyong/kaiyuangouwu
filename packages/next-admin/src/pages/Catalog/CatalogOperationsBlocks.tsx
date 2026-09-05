@@ -9,6 +9,7 @@ import {
     addCustomFieldsToDocument,
     customFieldInputFromValues,
     customFieldValuesFromEntity,
+    isDashboardVisibleCustomField,
     localizedCustomFieldInputFromValues,
     validateCustomFieldValues,
 } from '../../custom-fields/custom-field-utils';
@@ -30,6 +31,7 @@ import {
     type CatalogWorkspaceVariantRecord,
     type ProductPackagingWorkspaceResult,
 } from '../../graphql/catalog-operations.graphql';
+import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatDateTime, formatMoney } from '../Sales/sales-utils';
 import { dateInputToUtcDateTime } from './catalog-date';
@@ -237,8 +239,8 @@ export function CatalogOperationsBlock({ context }: { context: NextAdminPageBloc
                                         <small className="ml-2 font-mono text-slate-500">{variant.sku}</small>
                                     </span>
                                     <span className="text-xs text-slate-500">
-                                        售价 {formatMoney(variant.sellingPrice, variant.currencyCode)} · 毛利{' '}
-                                        {margin == null ? '—' : `${(margin * 100).toFixed(1)}%`}
+                                        销售价 {formatMoney(variant.sellingPrice, variant.currencyCode)} ·
+                                        毛利 {margin == null ? '—' : `${(margin * 100).toFixed(1)}%`}
                                     </span>
                                 </div>
                             </summary>
@@ -796,13 +798,27 @@ interface ProductVariantCustomFieldsData {
 export function ProductVariantCustomFieldsBlock({ context }: { context: NextAdminPageBlockContext }) {
     const productId = stringId(context.entity?.id);
     const definitions = useCustomFieldDefinitions('ProductVariant');
+    const { hasAnyPermission } = useAdminPermissions();
+    const visibleDefinitions = useMemo(
+        () =>
+            definitions.filter(
+                field =>
+                    isDashboardVisibleCustomField(field) && hasAnyPermission(field.requiresPermission ?? []),
+            ),
+        [definitions, hasAnyPermission],
+    );
     const document = useMemo(
-        () => addCustomFieldsToDocument(PRODUCT_VARIANT_CUSTOM_FIELDS_QUERY, 'ProductVariant', definitions),
-        [definitions],
+        () =>
+            addCustomFieldsToDocument(
+                PRODUCT_VARIANT_CUSTOM_FIELDS_QUERY,
+                'ProductVariant',
+                visibleDefinitions,
+            ),
+        [visibleDefinitions],
     );
     const query = useQuery<ProductVariantCustomFieldsData>(document, {
         variables: { productId },
-        skip: !productId || definitions.length === 0,
+        skip: !productId || visibleDefinitions.length === 0,
         fetchPolicy: 'cache-and-network',
     });
     const [selectedId, setSelectedId] = useState('');
@@ -823,12 +839,14 @@ export function ProductVariantCustomFieldsBlock({ context }: { context: NextAdmi
     useEffect(() => {
         if (!selected || nextSignature === sourceSignature) return;
         setSelectedId(selected.id);
-        setValues(customFieldValuesFromEntity(definitions, selected.customFields, selected.translations));
+        setValues(
+            customFieldValuesFromEntity(visibleDefinitions, selected.customFields, selected.translations),
+        );
         setSourceSignature(nextSignature);
-    }, [definitions, nextSignature, selected, sourceSignature]);
+    }, [nextSignature, selected, sourceSignature, visibleDefinitions]);
     /* oxlint-enable react/set-state-in-effect */
 
-    if (!productId || definitions.length === 0) return null;
+    if (!productId || visibleDefinitions.length === 0) return null;
     if (query.loading && !query.data) return <PanelState label="正在读取 SKU 扩展字段…" />;
     if (query.error || !query.data?.product) {
         return <PanelState tone="error" label="SKU 扩展字段加载失败" action={() => void query.refetch()} />;
@@ -837,7 +855,9 @@ export function ProductVariantCustomFieldsBlock({ context }: { context: NextAdmi
         const variant = variants.find(item => item.id === id);
         if (!variant) return;
         setSelectedId(id);
-        setValues(customFieldValuesFromEntity(definitions, variant.customFields, variant.translations));
+        setValues(
+            customFieldValuesFromEntity(visibleDefinitions, variant.customFields, variant.translations),
+        );
         setSourceSignature(
             `${variant.id}:${JSON.stringify([variant.customFields ?? {}, variant.translations])}`,
         );
@@ -846,7 +866,7 @@ export function ProductVariantCustomFieldsBlock({ context }: { context: NextAdmi
     };
     const save = async () => {
         if (!selected) return;
-        const validation = validateCustomFieldValues(definitions, values);
+        const validation = validateCustomFieldValues(visibleDefinitions, values);
         if (Object.keys(validation).length > 0) {
             setError(Object.values(validation)[0] ?? 'SKU 扩展字段校验失败');
             return;
@@ -857,13 +877,13 @@ export function ProductVariantCustomFieldsBlock({ context }: { context: NextAdmi
                     input: [
                         {
                             id: selected.id,
-                            customFields: customFieldInputFromValues(definitions, values),
+                            customFields: customFieldInputFromValues(visibleDefinitions, values),
                             translations: selected.translations.map(translation => ({
                                 id: translation.id,
                                 languageCode: translation.languageCode,
                                 name: translation.name,
                                 customFields: localizedCustomFieldInputFromValues(
-                                    definitions,
+                                    visibleDefinitions,
                                     values,
                                     translation.languageCode,
                                 ),
@@ -919,7 +939,7 @@ export function ProductVariantCustomFieldsBlock({ context }: { context: NextAdmi
             {error && <InlineNotice tone="error" message={error} />}
             <DynamicCustomFieldsForm
                 title={`SKU 扩展字段${selected ? ` · ${selected.sku}` : ''}`}
-                fields={definitions}
+                fields={visibleDefinitions}
                 values={values}
                 onChange={setValues}
                 disabled={updateState.loading}

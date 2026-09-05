@@ -1,6 +1,6 @@
 # Vendure 生产发布手册
 
-最后核对：2026-09-04
+最后核对：2026-09-05
 
 本文件只记录稳定的部署入口和无密钥操作流程，不保存密码、令牌、数据库连接值或私钥内容。
 
@@ -10,7 +10,7 @@
 - Git 仓库：`git@github.com:wangchaozhuanyong/kaiyuangouwu.git`
 - 发布分支：`main`
 - 包管理器：Bun（仓库根目录使用 `bun.lock`）
-- AwanMesh 主网店：`https://moyaoai.com`（`www.moyaoai.com` 301 回主域）
+- MOYAO AI 主网店：`https://moyaoai.com`（`www.moyaoai.com` 301 回主域）
 - 美宜佳网店：`https://damatong.net`（`www.damatong.net` 301 回主域）
 - 统一管理后台：`https://console.moyaoai.com/dashboard/`
 - 兼容入口：`https://console.damatong.net/*` 301 到统一管理后台
@@ -128,6 +128,8 @@ bun run --cwd packages/dev-server build:production-runtime -- --require-platform
 
 正式制品优先使用 GitHub Actions 的 `Production Runtime Artifact` 工作流生成。常规发布手动输入 `origin/main` 当前完整的 40 位小写 SHA；若包含已审核的店铺媒体，同时在唯一的可选 `media_keys` 和 `channel_codes` 输入中填写逗号分隔的 manifest key 与明确 Channel 范围，两者必须同时出现。媒体 key 与 Channel 范围会连同目标 SHA、制品名与制品 SHA-256 写入单独校验的 `release-plan.json`，下游只能使用同一制品运行生成的发布计划。当 `main` 只变更 `packages/image-generation-plugin/skill/image-prompt-pro/**` 或对应的已编译 bundle 时，工作流也会使用该 push 的完整 SHA 自动运行。若同一批 push 混入任何其他路径，自动任务会停止，必须按常规发布流程人工审核。正式制品只接受经过审核的双父 `main` 合并提交：第一父必须已被 PR 头提交包含，最终 `main` 源码树必须与 PR 头源码树完全相同，且该 PR 头必须存在成功的 `Build & Test` 运行。在这些证据都精确匹配后，制品阶段不再重复全仓单测、开发工作流测试和变更 lint，只使用 Node `24.19.0`、Bun `1.3.14` 和 `ubuntu-24.04` x64 执行冻结安装、全仓审计、Skill 回归、生产构建、发布专属结构检查、运行产物 High+ 门禁和自验证。任一 CI 证据、分支包含关系、源码树、SHA、源码清洁性、平台或发布门禁不匹配时都不会上传制品。依赖审计将同一份绑定 `bun.lock` 的 JSON 证据用于全仓与运行时门禁，按实际 severity 阻断 High+；仅对 Bun 明确返回的网络超时、连接关闭或底层传输错误最多尝试三次，退避为 15 秒和 60 秒；漏洞、其他命令错误、无效输出或重试耗尽仍立即失败关闭。
 
+登录视觉或 MOYAO AI 品牌变更必须在同一制品调度分别勾选 `auth_visuals` 或 `moyao_brand`，并填写已审核 `channel_codes`。品牌发布只接受 `channel_codes=__default_channel__`。这些字段也写入并校验 `release-plan.json`；缺少审核、Channel 不正确，或在没有对应变更时携带发布范围，都必须在备份和运行时切换前失败关闭。
+
 制品工作流成功后，`Deploy Production Runtime` 会自动接管手动制品任务和仅由上述 Skill 路径触发的 `main` push 发布。它使用 GitHub OIDC 临时凭证承担
 `arn:aws:iam::079740175286:role/yunqiao-vendure-github-deploy`，只把当前 SHA 的不可变归档写入
 `s3://yunqiao-vendure-prod-backup-079740175286-apne1/deployments/<sha>/`，再只向
@@ -136,7 +138,7 @@ GitHub 的 `main` 分支手动运行一次 `Production Runtime Artifact`，Skill
 
 自动发布入口为 `/usr/local/sbin/vendure-production-deploy-from-s3`，来源必须是已提交的
 `deploy/deploy-production-from-s3.sh`。脚本在同一个生产锁内完成源码快进、S3 外层校验、运行产物自验证、
-媒体权限与目标的只读预检、数据库备份和迁移、PM2 切换、已审核媒体写入、Nginx 检查、公网健康检查、版本标记与失败回滚。若目标提交改动了店铺媒体但发布计划没有审核过的 key，或改动了登录视觉、库存修复发布器等不受支持的数据路径，脚本会在备份、迁移和运行时切换前停止。已处于目标 SHA 的重复调度会返回 `PRODUCTION_DEPLOY_ALREADY_CURRENT`，不重复备份、迁移或重启。
+受管 publisher 权限与目标的只读预检、数据库备份和迁移、PM2 切换、已审核媒体/登录视觉/品牌写入、Nginx 检查、公网健康检查、版本标记与失败回滚。若目标提交改动了受管数据但发布计划没有对应的精确审核范围，或者改动了库存修复发布器等不受支持的数据路径，脚本会在备份、迁移和运行时切换前停止。已处于目标 SHA 的重复调度会返回 `PRODUCTION_DEPLOY_ALREADY_CURRENT`，不重复备份、迁移或重启。
 
 新增或修改某类受管 publisher 的生产门禁时必须拆成两次发布：第一版只上线工作流、制品清单和服务器引导门禁，确认生产入口已运行新门禁；第二版才上线 publisher/受管数据改动，并携带新门禁要求的审核范围。当前服务器会在快进并重新执行目标脚本之前先按旧门禁检查差异，因此禁止用手工复制、跳过检查或伪造媒体 key 把两阶段合成一次发布。
 单机发布会确保 `/var/lib/vendure-memory/production.swap` 提供 2 GiB 持久 Swap，并把 `vm.swappiness` 固定为
@@ -341,27 +343,32 @@ VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
     node packages/dev-server/scripts/sync-storefront-media.mjs --verify
 ```
 
-命令使用已由发布 shell 安全加载的 `SUPERADMIN_USERNAME`、`SUPERADMIN_PASSWORD` 和 `STOREFRONT_MEDIA_CHANNEL_CODES`；不得把密码写入参数或发布记录。同步失败立即停止发布，不切换 Storefront 指针。同一文件按 SHA-256 标签复用；新版文件只切换商品和内容块绑定，不删除旧素材，便于数据层单独回退。清单中标记为 `asset-library` 的设计参考图只上传并分配到目标 Channel 素材库，不会自动改动商品、内容块或前台默认海报。如只需发布某一项素材，使用 `--keys <manifest-key>` 限定范围，避免重新绑定其他素材。
+命令使用已由发布 shell 安全加载的 `SUPERADMIN_USERNAME`、`SUPERADMIN_PASSWORD` 和 `STOREFRONT_MEDIA_CHANNEL_CODES`；Admin API 使用候选机的 `VENDURE_API_ORIGIN`，Shop API 必须单独使用已审核公网店铺 `VENDURE_STOREFRONT_URL`，以真实触发域名到 Channel 的路由。不得把密码写入参数或发布记录。同步失败立即停止发布，不切换 Storefront 指针。同一文件按 SHA-256 标签复用；新版文件只切换商品和内容块绑定，不删除旧素材，便于数据层单独回退。清单中标记为 `asset-library` 的设计参考图只上传并分配到目标 Channel 素材库，不会自动改动商品、内容块或前台默认海报。如只需发布某一项素材，使用 `--keys <manifest-key>` 限定范围，避免重新绑定其他素材。
 发布器保留原商品/variant gallery，写入后用 Admin API 和 Shop API 反查同一 Asset ID；任一反查失败会尝试恢复原绑定。独立 `--verify` 证据缺失时不得宣布媒体发布成功。
 
-登录/注册页文案、色板和标签属于 Vendure 内容，不得只改客户端。在 `Production Runtime Artifact` 中勾选 `auth_visuals`，并填写已审核 Channel；发布链会先 dry-run，再以带 `expectedUpdatedAt` 的单个 Admin API 批次原子写入，最后反查中英文 Shop API。验证失败时恢复原内容并停止切换。
+登录/注册页文案、色板和标签属于 Vendure 内容，不得只改客户端。在 `Production Runtime Artifact` 中勾选 `auth_visuals`，并填写已审核 Channel；发布链会先 dry-run，再以带 `expectedUpdatedAt` 的单个 Admin API 批次原子写入，随后运行独立只读 `--verify` 反查 Admin 与中英文 Shop API，并记录 `AUTH_VISUAL_VERIFY_OK`。验证失败时恢复原内容并停止切换。
+发布器的回归样本必须包含当前生产中文/英文配对。若修改中文源文时再次提交与线上完全相同的英文，内容翻译服务可能把该英文判定为过期自动翻译并重新生成。这种发布必须改为新的已审核英文，或使用接口明确支持的人工锁定；不得假设 GraphQL 输入会原样持久化，必须以写入后 Admin/Shop 反查值为准。
+中英文 Shop API 反查必须复制真实客户端的语言路由：同时传递 `languageCode=<locale>` 查询参数与 `language-code: <locale>` 请求头，并分别校验 `zh_Hans` 和 `en`。仅使用请求头的探针不得作为客户端语言一致性证据。
 
-当版本包含已审核的店铺媒体或登录/注册内容变更时，直接在目标 `main` 完整 SHA 的
-`Production Runtime Artifact` 唯一入口填写完整 manifest key/勾选 `auth_visuals`，并填写已审核 Channel code，不再另行触发第二个内容发布工作流，也不回退到服务器默认 Channel。
+当版本包含已审核的店铺媒体、登录/注册内容或 MOYAO AI 品牌变更时，直接在目标 `main` 完整 SHA 的
+`Production Runtime Artifact` 唯一入口填写完整 manifest key/勾选 `auth_visuals`/勾选 `moyao_brand`，并填写已审核 Channel code，不再另行触发第二个内容发布工作流，也不回退到服务器默认 Channel。
 下游部署会校验发布计划、制品 SHA-256 与源工作流 run ID，然后只将已审核的 publisher 范围、key 和 Channel 交给持有生产锁的脚本。脚本在备份、迁移和 PM2 切换前，先通过当前健康 API 执行只读 dry-run，校验登录、Channel 权限、SKU/内容目标和现有素材；仅预检通过后才备份、迁移和启动候选 API，再执行受保护 apply。预检失败不会停止或重启 PM2。
 
-若目标提交包含 AwanMesh 品牌迁移，先预演，再把三套官方 SVG、双语品牌名/口号和色板一次性绑定到主 Channel：
+若目标提交包含 MOYAO AI 品牌更新，必须在该 SHA 的 `Production Runtime Artifact` 中设置 `moyao_brand=true` 与 `channel_codes=__default_channel__`。下游将它与制品 SHA-256 作为同一份发布计划校验，并在唯一生产锁内先预演，再把三套官方品牌素材、双语品牌名/口号和色板一次性绑定到主 Channel：
 
 ```bash
 cd "${CANDIDATE}"
 VENDURE_API_ORIGIN=http://127.0.0.1:3002 VENDURE_STOREFRONT_URL=https://moyaoai.com \
-    node packages/dev-server/scripts/sync-awanmesh-brand.mjs --dry-run --channel-code __default_channel__
+    node packages/dev-server/scripts/sync-moyao-brand.mjs --dry-run --channel-code __default_channel__
 VENDURE_API_ORIGIN=http://127.0.0.1:3002 VENDURE_STOREFRONT_URL=https://moyaoai.com \
-    node packages/dev-server/scripts/sync-awanmesh-brand.mjs --apply --allow-remote \
+    node packages/dev-server/scripts/sync-moyao-brand.mjs --apply --allow-remote \
+    --channel-code __default_channel__
+VENDURE_API_ORIGIN=http://127.0.0.1:3002 VENDURE_STOREFRONT_URL=https://moyaoai.com \
+    node packages/dev-server/scripts/sync-moyao-brand.mjs --verify \
     --channel-code __default_channel__
 ```
 
-该工具按 SHA-256 标签复用品牌资源，通过 Admin API 写入当前 StoreProfile；素材查询和上传结果只读取稳定的 Asset ID，避免历史素材翻译元数据为空时阻断幂等发布。随后以与真实客户端一致的 `languageCode` 查询参数和语言请求头，分别从 Shop API 反查中文、英文名称、口号、色板和三个 Asset ID。任一字段不一致都必须停止切换；密码只从已加载的生产 Secret 环境读取。
+该工具按 SHA-256 标签复用品牌资源，通过 Admin API 写入当前 StoreProfile；素材查询和上传结果只读取稳定的 Asset ID，避免历史素材翻译元数据为空时阻断幂等发布。写入后先核对 Admin 返回的完整品牌字段，再以与真实客户端一致的 `languageCode` 查询参数和语言请求头，分别从 Shop API 反查中文、英文名称、口号、色板和三个 Asset ID。若写入后的任一反查失败，发布器必须使用写入后 `updatedAt` 恢复原 StoreProfile（包括原三组 Asset ID），并再次验证恢复结果；恢复失败按生产事故处理。独立 `--verify` 未通过时不得切换 Storefront 指针或宣布品牌发布成功；密码只从已加载的生产 Secret 环境读取。
 
 切换脚本会在 systemd journal 中以 `vendure-production-switch` 标记依次记录 `requested`、`succeeded` 或 `failed`。每条事件包含部署 ID、目标 SHA、候选目录、调用用户、SSH 来源 IP、进程和父进程信息，不记录命令参数、环境变量或密钥。`requested` 写入失败会中止切换，避免无审计地改动 PM2。发布后用同一部署 ID 核对完整事件链：
 
@@ -388,12 +395,12 @@ sudo -n systemctl reload nginx
 2. 将审核后的修改合并进 `main`，使用普通快进推送，确认远端 `main` 的完整 SHA；禁止强推。若同一需求同时改变 publisher 生产门禁与被该门禁保护的 publisher/数据，必须先拆出并完成门禁引导发布，再合并第二阶段。若使用正式版本标签，标签必须指向这个已在 `main` 中的 SHA，且发布后不得移动或复用。
 3. 从该 SHA 创建隔离的干净工作树，运行测试和生产构建；必须显式执行 `@vendure/operations-dashboard-plugin` 菜单回归测试，禁止仅依赖根命令的工作区自动发现。
 4. 创建发布记录并先填写来源分支、生产引用、`TARGET_SHA`、正式标签（如使用）、上一个生产 SHA、环境和操作人；信息不完整时停止。
-5. 对该 SHA 手动运行一次 `Production Runtime Artifact` 工作流；如果本版本包含已审核店铺媒体，在同一次调度的 `media_keys` 和 `channel_codes` 中填写完整清单。成功后 `Deploy Production Runtime` 会通过 OIDC、私有 S3 和 SSM 自动完成后续部署。或在受控 `linux/x64` 构建机生成唯一的 production runtime 目录并走人工发布。两种方式都必须完成自验证并记录外层校验和。
+5. 对该 SHA 手动运行一次 `Production Runtime Artifact` 工作流；如果本版本包含已审核店铺媒体、登录视觉或 MOYAO AI 品牌，在同一次调度填写 `media_keys`/勾选 `auth_visuals`/勾选 `moyao_brand`，并填写对应已审核 `channel_codes`。成功后 `Deploy Production Runtime` 会通过 OIDC、私有 S3 和 SSM 自动完成后续部署。或在受控 `linux/x64` 构建机生成唯一的 production runtime 目录并走人工发布。两种方式都必须完成自验证并记录外层校验和。
 6. 自动路径由工作流上传归档并调用 `/usr/local/sbin/vendure-production-deploy-from-s3`；人工路径将工作流归档或整个产物目录原样传入 `/var/www/kaiyuangouwu-releases/<sha>-<唯一标识>-linux-x64`。禁止在 EC2 安装依赖或构建。
 7. 服务器校验外层清单哈希、产物内全部文件、符号链接、平台、Git SHA 和运行依赖清单。
 8. 记录当前稳定指针；如果发布计划包含任一受管 publisher，先使用当前健康 API 完成只读 dry-run。数据库迁移只在该预检和生产环境审计明确通过且备份完成后，通过专用迁移入口执行一次。部署日志必须包含 `DEPLOY_BACKUP_OK file=<本地备份> offsite=yes invocation_id=<systemd invocation>`，缺失精确备份文件、校验文件或异地上传证据时停止迁移。
 9. PM2 从候选目录直接启动已编译的 Worker 和 API，不使用 Vendure CLI；等待 `127.0.0.1:3002/health` 与 `127.0.0.1:3002/image-generation/health` 成功，并递归验证候选 Dashboard 的入口、样式、主包与懒加载 JS/CSS 全部可访问。
-10. 从候选产物预演并执行本次审核过的库存继承修复、店铺图片同步、登录/注册内容批次和 AwanMesh 品牌同步；所有远程写入都必须使用 `--apply --allow-remote`，媒体随后还必须通过 `--verify`，并且必须已通过第 8 步的只读预检。全部成功后才原子切换 `kaiyuangouwu-current`。
+10. 从候选产物预演并执行本次审核过的库存继承修复、店铺图片同步、登录/注册内容批次和 MOYAO AI 品牌同步；所有远程写入都必须使用 `--apply --allow-remote`，媒体随后还必须通过 `--verify`，并且必须已通过第 8 步的只读预检。全部成功后才原子切换 `kaiyuangouwu-current`。
 11. 验收前台、后台、Shop API、Admin API、静态资源和 PM2 状态，确认线上 Git SHA。
 12. 完成发布记录中的制品名称、制品 SHA-256、制品与部署工作流编号、UTC 时间和验收结果；记录必须能够唯一定位生产运行的代码和制品。
 13. 发布与验收成功后，先用 `Cleanup Merged Production Branches` 的 dry-run 核对候选，再以 `apply=true` 删除已包含在当前生产 SHA 且不再使用的远程功能/热修复/release 分支；撤销临时 SSH 规则，仅保留原有固定规则。候选和回滚包按策略保留，不删除用户数据。
@@ -447,7 +454,7 @@ node deploy/verify-storefront-realtime.mjs \
 - 边界与超限：新合成 IP 的前 12 条全部就绪，第 13 条只允许返回 HTTP 429，已接受连接必须继续收到 heartbeat；
 - 释放恢复：第三个合成 IP 关闭 12 条连接后，同 IP 在五秒内重新同时占满 12 个槽位并保持五秒，之后三轮“连接—`ready`—明确关闭”全部通过。
 
-释放窗口内短暂的 429 是有界重试的测量值，不是失败；超过五秒仍未重新同时占满 12 个槽位才失败。任何 503 或其他 5xx 都立即失败。Nginx 会将该路由的 `limit_conn_status`、`limit_req_status`、HTTP 状态、请求/上游时间、连接编号与 Cloudflare Ray ID 写入 `/var/log/nginx/awanmesh-storefront-realtime.log`，用于区分连接上限 429 和请求速率 429，不记录 Cookie、Authorization 或响应正文。`origin-full` 只证明本机 Nginx 到应用的槽位释放，不能代替 Cloudflare 到源站取消延迟的公网链路评估；公网 smoke 的 CF Ray ID 必须与上述专用日志关联后再定位该类延迟。
+释放窗口内短暂的 429 是有界重试的测量值，不是失败；超过五秒仍未重新同时占满 12 个槽位才失败。任何 503 或其他 5xx 都立即失败。Nginx 会将该路由的 `limit_conn_status`、`limit_req_status`、HTTP 状态、请求/上游时间、连接编号与 Cloudflare Ray ID 写入 `/var/log/nginx/moyao-storefront-realtime.log`，用于区分连接上限 429 和请求速率 429，不记录 Cookie、Authorization 或响应正文。`origin-full` 只证明本机 Nginx 到应用的槽位释放，不能代替 Cloudflare 到源站取消延迟的公网链路评估；公网 smoke 的 CF Ray ID 必须与上述专用日志关联后再定位该类延迟。
 
 只有未执行任何主动容量测试时，公网单连接持续无法就绪或返回 5xx，才属于实时更新可用性回滚条件。完整容量审计中的边界、超限或释放时间不符合预期时，必须先清理全部探测连接并停止发布收尾，不自动回滚到已知会恢复更低连接上限或 503 语义的旧版本。验证器未能确认自身连接已清理时，结果记为“验收无效”而不是“产品失败”，需换用新的合成 IP 重试。
 
@@ -458,7 +465,7 @@ node deploy/verify-storefront-realtime.mjs \
 - `127.0.0.1:3002` 正常监听，公网不直接暴露 3002；
 - `/storefront-realtime/events` 不缓冲 SSE，连接断开后前端能自动重连；
 - 公网 `https://moyaoai.com/admin-api` 和 `https://damatong.net/admin-api` 均被 Nginx 拒绝；
-- 分别验收 `moyaoai.com` 返回 AwanMesh 主 Channel、`damatong.net` 返回美宜佳 Channel，商品、价格、订单和店铺品牌不得串店；
+- 分别验收 `moyaoai.com` 返回 MOYAO AI 主 Channel、`damatong.net` 返回美宜佳 Channel，商品、价格、订单和店铺品牌不得串店；
 - 管理后台能读取各店铺设置，前台按对应 Channel/店铺域名展示；
 - 实际支付、邮件、短信和物流在未配置真实供应商前不得宣称已具备正式交易能力。
 

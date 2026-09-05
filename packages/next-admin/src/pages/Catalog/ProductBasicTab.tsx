@@ -52,7 +52,7 @@ export function ProductBasicTab() {
                     <h3 className="text-sm font-bold text-slate-900">SPU 核心属性</h3>
 
                     <label className="flex items-center gap-2 cursor-pointer">
-                        <span className="text-xs font-bold text-slate-600">上架状态</span>
+                        <span className="text-xs font-bold text-slate-600">商品状态</span>
                         <input
                             type="checkbox"
                             checked={enabled}
@@ -62,7 +62,7 @@ export function ProductBasicTab() {
                         <span
                             className={`text-[11px] font-bold px-2 py-0.5 rounded ${enabled ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}
                         >
-                            {enabled ? '已上架' : '放入仓库'}
+                            {enabled ? '启用' : '禁用'}
                         </span>
                     </label>
                 </div>
@@ -70,7 +70,7 @@ export function ProductBasicTab() {
                 <div className="space-y-4 text-xs">
                     <div>
                         <label htmlFor="product-name" className="block font-bold text-slate-700 mb-1">
-                            中文商品标题 <span className="text-rose-500">*</span>
+                            名称 <span className="text-rose-500">*</span>
                         </label>
                         <input
                             type="text"
@@ -80,7 +80,7 @@ export function ProductBasicTab() {
                                 setProductName(e.target.value);
                                 if (formErrors.name) setFormErrors(prev => ({ ...prev, name: undefined }));
                             }}
-                            placeholder="输入商品名称，如：无线主动降噪头戴耳机 Pro Max"
+                            placeholder="输入名称，如：无线主动降噪头戴耳机 Pro Max"
                             aria-invalid={Boolean(formErrors.name)}
                             aria-describedby={formErrors.name ? 'product-name-error' : undefined}
                             className={`w-full text-xs font-bold border rounded-lg p-2.5 bg-white focus:outline-none focus:ring-1 ${formErrors.name ? 'border-rose-500 focus:ring-rose-500' : 'border-slate-300 focus:ring-blue-500'}`}
@@ -101,14 +101,14 @@ export function ProductBasicTab() {
                             id="product-slug"
                             value={slug}
                             onChange={e => setSlug(e.target.value)}
-                            placeholder="例如：wireless-noise-cancelling-headphones (留空将根据商品标题自动生成)"
+                            placeholder="例如：wireless-noise-cancelling-headphones (留空将根据名称自动生成)"
                             className="w-full text-xs font-mono border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
                         />
                     </div>
 
                     <div>
                         <label htmlFor="product-description" className="block font-bold text-slate-700 mb-1">
-                            中文商品详情 <span className="text-rose-500">*</span>
+                            商品描述 <span className="text-rose-500">*</span>
                         </label>
                         <textarea
                             rows={6}
@@ -122,7 +122,7 @@ export function ProductBasicTab() {
                                         description: undefined,
                                     }));
                             }}
-                            placeholder="输入商品详情规格、包装清单及说明..."
+                            placeholder="输入商品描述、规格和包装说明..."
                             aria-invalid={Boolean(formErrors.description)}
                             aria-describedby={
                                 formErrors.description ? 'product-description-error' : undefined

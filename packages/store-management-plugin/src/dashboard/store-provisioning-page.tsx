@@ -63,7 +63,7 @@ const zhCopy = {
     merchantName: '商家名称',
     merchantPlaceholder: '例如：模钥科技有限公司',
     code: '网店编码',
-    codePlaceholder: '例如：yunqiao-store',
+    codePlaceholder: '例如：moyao-store',
     chineseName: '网站名称',
     englishName: '网站英文名称（人工覆盖）',
     commonMode: '常用模式',
@@ -98,9 +98,9 @@ const enCopy: typeof zhCopy = {
     description: 'Create an isolated store and administrator; English is generated from the Chinese name.',
     merchant: 'Merchant and store',
     merchantName: 'Merchant name',
-    merchantPlaceholder: 'Example: Yunqiao Trading Ltd',
+    merchantPlaceholder: 'Example: MOYAO Technology Ltd',
     code: 'Store code',
-    codePlaceholder: 'Example: yunqiao-store',
+    codePlaceholder: 'Example: moyao-store',
     chineseName: 'Storefront name (Chinese source)',
     englishName: 'English storefront name (manual override)',
     commonMode: 'Common mode',
@@ -173,7 +173,7 @@ function StoreProvisioningPage() {
                         emailAddress: input.emailAddress,
                     },
                 },
-            }) as Promise<ProvisionStoreResult>,
+            }),
         onSuccess: response => {
             setResult(response.provisionStore);
             toast.success(text.created);

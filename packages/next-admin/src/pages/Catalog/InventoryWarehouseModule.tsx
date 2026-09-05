@@ -664,7 +664,7 @@ export function InventoryWarehouseModule() {
         const amount = Number(bulkPrice);
         if (selectedVariantIds.length === 0) return;
         if (!Number.isFinite(amount) || amount < 0) {
-            showError('请输入有效的非负销售价格');
+            showError('请输入有效的非负销售价');
             return;
         }
         const confirmation = await requestConfirmation({
@@ -691,7 +691,7 @@ export function InventoryWarehouseModule() {
             if (failedIds.length) {
                 throw new Error(`已更新 ${updatedIds.size} 个，${failedIds.length} 个 SKU 未被后端确认`);
             }
-            showNotice(`已更新 ${updatedIds.size} 个 SKU 的当前店铺价格`);
+            showNotice(`已更新 ${updatedIds.size} 个 SKU 的销售价`);
             setBulkPrice('');
         } catch (updateError) {
             showError(toUserFacingError(updateError, 'SKU 批量调价失败，请稍后重试'));
@@ -902,7 +902,7 @@ export function InventoryWarehouseModule() {
                                         value={bulkPrice}
                                         onChange={event => setBulkPrice(event.target.value)}
                                         placeholder="统一价格"
-                                        aria-label="批量设置当前店铺价格"
+                                        aria-label="批量设置销售价"
                                         className="w-28 px-3 py-2 text-xs outline-none"
                                     />
                                     <button
@@ -953,7 +953,7 @@ export function InventoryWarehouseModule() {
                                                 scope="col"
                                                 className="sticky left-12 z-20 w-56 whitespace-nowrap bg-slate-50 px-3 py-3"
                                             >
-                                                商品名称
+                                                名称
                                             </th>
                                             <th scope="col" className="w-56 whitespace-nowrap px-3 py-3">
                                                 规格名称
@@ -962,7 +962,7 @@ export function InventoryWarehouseModule() {
                                                 SKU
                                             </th>
                                             <th scope="col" className="w-36 whitespace-nowrap px-3 py-3">
-                                                当前店铺价格
+                                                销售价
                                             </th>
                                             <th scope="col" className="w-24 whitespace-nowrap px-3 py-3">
                                                 在手
@@ -1123,7 +1123,7 @@ export function InventoryWarehouseModule() {
                                                 scope="col"
                                                 className="sticky left-0 z-20 w-56 whitespace-nowrap bg-slate-50 px-3 py-3"
                                             >
-                                                商品名称
+                                                名称
                                             </th>
                                             <th scope="col" className="w-56 whitespace-nowrap px-3 py-3">
                                                 规格名称
@@ -1395,7 +1395,7 @@ export function InventoryWarehouseModule() {
                                                 数量
                                             </th>
                                             <th scope="col" className="w-64 whitespace-nowrap px-3 py-3">
-                                                商品名称
+                                                名称
                                             </th>
                                             <th scope="col" className="w-48 whitespace-nowrap px-3 py-3">
                                                 SKU

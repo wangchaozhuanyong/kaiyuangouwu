@@ -18,6 +18,7 @@ readonly deployment_id="${target_sha}-github-${GITHUB_RUN_ID:-manual}-$(date -u 
 readonly reviewed_storefront_media_keys="${VENDURE_REVIEWED_STOREFRONT_MEDIA_KEYS:-}"
 readonly reviewed_storefront_media_channel_codes="${VENDURE_REVIEWED_STOREFRONT_MEDIA_CHANNEL_CODES:-}"
 readonly reviewed_auth_visuals="${VENDURE_REVIEWED_AUTH_VISUALS:-false}"
+readonly reviewed_moyao_brand="${VENDURE_REVIEWED_MOYAO_BRAND:-false}"
 
 fail() {
     printf 'Production deployment failed: %s\n' "$1" >&2
@@ -47,13 +48,22 @@ fi
 if [[ "${reviewed_auth_visuals}" != "true" && "${reviewed_auth_visuals}" != "false" ]]; then
     fail 'reviewed auth visual flag must be true or false'
 fi
-if [[ ( -n "${reviewed_storefront_media_keys}" || "${reviewed_auth_visuals}" == "true" ) && \
+if [[ "${reviewed_moyao_brand}" != "true" && "${reviewed_moyao_brand}" != "false" ]]; then
+    fail 'reviewed MOYAO AI brand flag must be true or false'
+fi
+if [[ ( -n "${reviewed_storefront_media_keys}" || "${reviewed_auth_visuals}" == "true" || \
+    "${reviewed_moyao_brand}" == "true" ) && \
     -z "${reviewed_storefront_media_channel_codes}" ]]; then
     fail 'reviewed Channel codes are required for managed publishers'
 fi
 if [[ -z "${reviewed_storefront_media_keys}" && "${reviewed_auth_visuals}" == "false" && \
+    "${reviewed_moyao_brand}" == "false" && \
     -n "${reviewed_storefront_media_channel_codes}" ]]; then
     fail 'reviewed Channel scope was supplied without a managed publisher'
+fi
+if [[ "${reviewed_moyao_brand}" == "true" && \
+    "${reviewed_storefront_media_channel_codes}" != "__default_channel__" ]]; then
+    fail 'reviewed MOYAO AI brand requires the primary Channel only'
 fi
 
 umask 027
@@ -97,10 +107,17 @@ if [[ "${deployed_sha}" == "${target_sha}" ]]; then
     exit 0
 fi
 
+brand_change=false
 if git diff --name-only "${deployed_sha}" "${target_sha}" -- \
-    packages/dev-server/scripts/sync-awanmesh-brand.mjs \
+    packages/dev-server/scripts/sync-moyao-brand.mjs \
     packages/storefront/src/assets/brand/ | grep -q .; then
-    fail 'AwanMesh managed brand data changed; use the reviewed manual publisher release path'
+    brand_change=true
+fi
+if [[ "${brand_change}" == "true" && "${reviewed_moyao_brand}" != "true" ]]; then
+    fail 'MOYAO AI managed brand data changed; select the reviewed brand release scope'
+fi
+if [[ "${brand_change}" == "false" && "${reviewed_moyao_brand}" == "true" ]]; then
+    fail 'reviewed MOYAO AI brand scope was supplied without a brand change'
 fi
 
 mapfile -t managed_storefront_changes < <(
@@ -138,6 +155,7 @@ if [[ "${VENDURE_DEPLOY_REEXECUTED:-0}" != "1" ]]; then
         VENDURE_REVIEWED_STOREFRONT_MEDIA_KEYS="${reviewed_storefront_media_keys}" \
         VENDURE_REVIEWED_STOREFRONT_MEDIA_CHANNEL_CODES="${reviewed_storefront_media_channel_codes}" \
         VENDURE_REVIEWED_AUTH_VISUALS="${reviewed_auth_visuals}" \
+        VENDURE_REVIEWED_MOYAO_BRAND="${reviewed_moyao_brand}" \
         "${repository}/deploy/deploy-production-from-s3.sh" \
         "${target_sha}" "${artifact_name}" "${artifact_s3_prefix}"
     exit $?
@@ -239,7 +257,8 @@ retain_release_file() {
 retain_release_file "${archive_path}" "${releases_dir}/${archive_name}"
 retain_release_file "${checksum_path}" "${releases_dir}/${checksum_name}"
 
-if [[ -n "${reviewed_storefront_media_keys}" || "${reviewed_auth_visuals}" == "true" ]]; then
+if [[ -n "${reviewed_storefront_media_keys}" || "${reviewed_auth_visuals}" == "true" || \
+    "${reviewed_moyao_brand}" == "true" ]]; then
     set -a
     # shellcheck disable=SC1090
     source "${environment_file}"
@@ -251,6 +270,7 @@ if [[ -n "${reviewed_storefront_media_keys}" ]]; then
     cd "${candidate}"
     STOREFRONT_MEDIA_CHANNEL_CODES="${reviewed_storefront_media_channel_codes}" \
         VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
+        VENDURE_STOREFRONT_URL=https://moyaoai.com \
         node packages/dev-server/scripts/sync-storefront-media.mjs \
             --keys "${reviewed_storefront_media_keys}" --dry-run
     cd "${repository}"
@@ -263,9 +283,22 @@ if [[ "${reviewed_auth_visuals}" == "true" ]]; then
     cd "${candidate}"
     AUTH_VISUAL_CHANNEL_CODES="${reviewed_storefront_media_channel_codes}" \
         VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
+        VENDURE_STOREFRONT_URL=https://moyaoai.com \
         node packages/dev-server/scripts/sync-auth-visuals.mjs --dry-run
     cd "${repository}"
     printf 'AUTH_VISUAL_PREFLIGHT_OK channels=%s\n' \
+        "${reviewed_storefront_media_channel_codes}"
+fi
+if [[ "${reviewed_moyao_brand}" == "true" ]]; then
+    printf 'MOYAO_BRAND_PREFLIGHT_BEGIN channel=%s\n' \
+        "${reviewed_storefront_media_channel_codes}"
+    cd "${candidate}"
+    VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
+        VENDURE_STOREFRONT_URL=https://moyaoai.com \
+        node packages/dev-server/scripts/sync-moyao-brand.mjs --dry-run \
+            --channel-code "${reviewed_storefront_media_channel_codes}"
+    cd "${repository}"
+    printf 'MOYAO_BRAND_PREFLIGHT_OK channel=%s\n' \
         "${reviewed_storefront_media_channel_codes}"
 fi
 
@@ -357,16 +390,36 @@ printf 'PRODUCTION_AI_HEALTH_READY attempts=%s\n' "${ai_health_ready_attempt}"
 node "${repository}/deploy/verify-dashboard-assets.mjs" \
     --dashboard-url http://127.0.0.1:3002/dashboard/ \
     --release-id "${target_sha}"
+if [[ "${reviewed_moyao_brand}" == "true" ]]; then
+    printf 'MOYAO_BRAND_PUBLISH_BEGIN channel=%s\n' \
+        "${reviewed_storefront_media_channel_codes}"
+    cd "${candidate}"
+    VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
+        VENDURE_STOREFRONT_URL=https://moyaoai.com \
+        node packages/dev-server/scripts/sync-moyao-brand.mjs --apply --allow-remote \
+            --channel-code "${reviewed_storefront_media_channel_codes}"
+    VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
+        VENDURE_STOREFRONT_URL=https://moyaoai.com \
+        node packages/dev-server/scripts/sync-moyao-brand.mjs --verify \
+            --channel-code "${reviewed_storefront_media_channel_codes}"
+    cd "${repository}"
+    printf 'MOYAO_BRAND_PUBLISH_OK channel=%s\n' \
+        "${reviewed_storefront_media_channel_codes}"
+    printf 'MOYAO_BRAND_VERIFY_OK channel=%s\n' \
+        "${reviewed_storefront_media_channel_codes}"
+fi
 if [[ -n "${reviewed_storefront_media_keys}" ]]; then
     printf 'STOREFRONT_MEDIA_PUBLISH_BEGIN keys=%s channels=%s\n' \
         "${reviewed_storefront_media_keys}" "${reviewed_storefront_media_channel_codes}"
     cd "${candidate}"
     STOREFRONT_MEDIA_CHANNEL_CODES="${reviewed_storefront_media_channel_codes}" \
         VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
+        VENDURE_STOREFRONT_URL=https://moyaoai.com \
         node packages/dev-server/scripts/sync-storefront-media.mjs \
             --keys "${reviewed_storefront_media_keys}" --apply --allow-remote
     STOREFRONT_MEDIA_CHANNEL_CODES="${reviewed_storefront_media_channel_codes}" \
         VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
+        VENDURE_STOREFRONT_URL=https://moyaoai.com \
         node packages/dev-server/scripts/sync-storefront-media.mjs \
             --keys "${reviewed_storefront_media_keys}" --verify
     cd "${repository}"
@@ -381,9 +434,16 @@ if [[ "${reviewed_auth_visuals}" == "true" ]]; then
     cd "${candidate}"
     AUTH_VISUAL_CHANNEL_CODES="${reviewed_storefront_media_channel_codes}" \
         VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
+        VENDURE_STOREFRONT_URL=https://moyaoai.com \
         node packages/dev-server/scripts/sync-auth-visuals.mjs --apply --allow-remote
+    AUTH_VISUAL_CHANNEL_CODES="${reviewed_storefront_media_channel_codes}" \
+        VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
+        VENDURE_STOREFRONT_URL=https://moyaoai.com \
+        node packages/dev-server/scripts/sync-auth-visuals.mjs --verify
     cd "${repository}"
     printf 'AUTH_VISUAL_PUBLISH_OK channels=%s\n' \
+        "${reviewed_storefront_media_channel_codes}"
+    printf 'AUTH_VISUAL_VERIFY_OK channels=%s\n' \
         "${reviewed_storefront_media_channel_codes}"
 fi
 node "${memory_guard}" --stage post-switch --report
@@ -403,7 +463,7 @@ curl --fail --silent --show-error --max-time 10 http://127.0.0.1:3002/health >/d
 curl --fail --silent --show-error --max-time 10 http://127.0.0.1:3002/image-generation/health >/dev/null
 curl --fail --silent --show-error --max-time 15 https://damatong.net/health >/dev/null
 node "${repository}/deploy/verify-dashboard-assets.mjs" \
-    --dashboard-url https://console.damatong.net/dashboard/ \
+    --dashboard-url https://console.moyaoai.com/dashboard/ \
     --release-id "${target_sha}"
 
 sudo -n install -o root -g root -m 0755 \

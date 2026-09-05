@@ -256,3 +256,54 @@ test('rejects a missing lazy Dashboard chunk even when the entry asset is health
         /missing\.js.*expected HTTP 200, received 404/u,
     );
 });
+
+test('verifies Dashboard assets against the final canonical origin after an entry redirect', async () => {
+    const requests = [];
+    const fetchImpl = async url => {
+        const requestUrl = new URL(url);
+        requests.push(requestUrl.href);
+        if (
+            requestUrl.origin === 'https://legacy-console.example.com' &&
+            requestUrl.pathname === '/dashboard/'
+        ) {
+            const response = new Response('<script src="/dashboard/assets/canonical-main.js"></script>', {
+                status: 200,
+                headers: { 'content-type': 'text/html' },
+            });
+            Object.defineProperty(response, 'url', {
+                value: 'https://console.example.com/dashboard/?__release=test-release',
+            });
+            return response;
+        }
+        if (
+            requestUrl.origin === 'https://console.example.com' &&
+            requestUrl.pathname === '/dashboard/assets/canonical-main.js'
+        ) {
+            return new Response('export const ready = true;', {
+                status: 200,
+                headers: { 'content-type': 'application/javascript' },
+            });
+        }
+        return new Response('', { status: 404 });
+    };
+
+    const result = await verifyDashboardAssets({
+        dashboardUrl: 'https://legacy-console.example.com/dashboard/',
+        fetchImpl,
+        releaseId: 'test-release',
+        timeoutMs: 1_000,
+    });
+
+    assert.deepEqual(result, { assetCount: 1 });
+    assert.ok(
+        requests.some(request =>
+            request.startsWith('https://console.example.com/dashboard/assets/canonical-main.js?'),
+        ),
+    );
+    assert.ok(
+        requests.every(
+            request =>
+                !request.startsWith('https://legacy-console.example.com/dashboard/assets/canonical-main.js'),
+        ),
+    );
+});

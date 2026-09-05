@@ -33,6 +33,7 @@ export interface CatalogImportJobRecord {
     fieldMapping: Record<string, string> | null;
     state: CatalogImportState;
     totalRows: number;
+    receivedRows: number;
     createdCount: number;
     updatedCount: number;
     skippedCount: number;
@@ -90,6 +91,7 @@ const jobFields = gql`
         fieldMapping
         state
         totalRows
+        receivedRows
         createdCount
         updatedCount
         skippedCount

@@ -2,6 +2,7 @@ import { LanguageCode, PluginCommonModule, VendurePlugin } from '@vendure/core';
 
 import { adminApiExtensions } from './api-extensions';
 import { CatalogFileParserService } from './catalog-file-parser.service';
+import { CatalogImportCategoryService } from './catalog-import-category.service';
 import { CatalogImportQueueService } from './catalog-import-queue.service';
 import { CatalogImportService } from './catalog-import.service';
 import { CatalogManagementAdminResolver } from './catalog-management.resolver';
@@ -42,6 +43,7 @@ import './types';
         CatalogFileParserService,
         CatalogOperationsService,
         CatalogImportService,
+        CatalogImportCategoryService,
         CatalogImportQueueService,
         InventoryLotLifecycleService,
         CatalogSupplierService,

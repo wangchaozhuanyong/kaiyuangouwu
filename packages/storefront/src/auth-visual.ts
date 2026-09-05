@@ -51,7 +51,7 @@ const defaults: Record<AuthVisualVariant, Record<StorefrontLanguage, AuthVisualM
     register: {
         zh: {
             eyebrow: 'AI 软件服务平台',
-            title: '创建达码通账号',
+            title: '创建 MOYAO AI 账号',
             description: '一个账号，统一管理 AI 软件、订阅服务、订单与售后',
             tags: ['安全可靠', '快速上手', '服务可查'],
             benefits: [
@@ -63,7 +63,7 @@ const defaults: Record<AuthVisualVariant, Record<StorefrontLanguage, AuthVisualM
         },
         en: {
             eyebrow: 'AI SOFTWARE SERVICES',
-            title: 'Create your Damatong account',
+            title: 'Create your MOYAO AI account',
             description: 'Manage AI software, subscriptions, orders and support with one account',
             tags: ['Secure', 'Get started fast', 'Track service'],
             benefits: [
@@ -112,10 +112,10 @@ export function authVisualAccentColor(
 ): string {
     const accent = content?.settings?.accentColor;
     if (typeof accent === 'string' && /^#[0-9a-f]{6}$/i.test(accent)) return accent;
-    return variant === 'login' ? '#4fdcff' : '#60a5fa';
+    return variant === 'login' ? '#22D3EE' : '#8B5CF6';
 }
 
 export function authVisualOverlayColor(content: StorefrontContentBlock | undefined): string {
     const background = content?.backgroundColor;
-    return typeof background === 'string' && /^#[0-9a-f]{6}$/i.test(background) ? background : '#0B1E2D';
+    return typeof background === 'string' && /^#[0-9a-f]{6}$/i.test(background) ? background : '#070B14';
 }

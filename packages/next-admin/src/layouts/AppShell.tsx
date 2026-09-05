@@ -86,7 +86,7 @@ import {
     resolveAppShellOpenMenu,
 } from './app-shell-navigation';
 
-const adminBrandIcon = `${import.meta.env.BASE_URL}favicon.svg`;
+const adminBrandIcon = `${import.meta.env.BASE_URL}favicon.png`;
 
 interface OpenTab {
     path: string;
@@ -460,7 +460,7 @@ export function AppShell() {
             '/catalog/products/new': '发布新商品',
             '/catalog/categories': '分类与属性',
             '/catalog/inventory': '库存与仓库',
-            '/catalog/card-pool': '数字商品与卡密',
+            '/catalog/card-pool': '发卡记录与异常',
             '/catalog/assets': '素材媒体库',
             '/sales/orders': '订单列表',
             '/sales/after-sales': '售后与退款',
@@ -485,7 +485,7 @@ export function AppShell() {
         }
 
         if (currentTitle) {
-            document.title = `${currentTitle} · AwanMesh｜模钥管理后台`;
+            document.title = `${currentTitle} · MOYAO AI｜模钥管理后台`;
             const currentHref = `${location.pathname}${location.search}`;
             setTabs(prev => {
                 const existing = prev.find(tab => tab.path === location.pathname);
@@ -592,7 +592,7 @@ export function AppShell() {
                 ...(showsDigitalCatalog
                     ? [
                           {
-                              title: '虚拟卡密与自动发货库',
+                              title: '发卡记录与异常',
                               path: '/catalog/card-pool',
                               cat: '商品',
                               icon: KeyRound,
@@ -734,7 +734,7 @@ export function AppShell() {
                     <div className="flex items-center gap-2">
                         <div className="relative flex h-8 w-8 items-center justify-center overflow-hidden rounded-lg bg-blue-600 font-bold text-white shadow-lg shadow-blue-900/20">
                             <img
-                                key={storeLogoUrl ?? 'awanmesh'}
+                                key={storeLogoUrl ?? 'moyao-ai'}
                                 src={storeLogoUrl ?? adminBrandIcon}
                                 alt=""
                                 className="absolute inset-0 h-full w-full bg-white object-contain"
@@ -747,7 +747,7 @@ export function AppShell() {
                         </div>
                         {isSidebarOpen && (
                             <span className="font-bold text-white text-base tracking-wide">
-                                AwanMesh｜模钥管理后台
+                                MOYAO AI｜模钥管理后台
                             </span>
                         )}
                     </div>
@@ -840,7 +840,7 @@ export function AppShell() {
                                 to="/catalog/card-pool"
                                 className={navItemClass}
                             >
-                                数字商品与卡密
+                                发卡记录与异常
                             </NavLink>
                             <NavLink
                                 allowed={canAccessPath('/catalog/assets')}

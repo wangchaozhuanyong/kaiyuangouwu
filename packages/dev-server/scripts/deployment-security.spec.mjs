@@ -69,13 +69,13 @@ void test('production Nginx routes protected downloads and hardens both APIs', a
         assert.match(location.groups.body, /proxy_set_header vendure-token "";/u);
         assert.match(
             location.groups.body,
-            /access_log \/var\/log\/nginx\/awanmesh-storefront-realtime\.log vendure_realtime;/u,
+            /access_log \/var\/log\/nginx\/moyao-storefront-realtime\.log vendure_realtime;/u,
         );
         assert.match(location.groups.body, /proxy_ignore_client_abort off;/u);
     }
 });
 
-void test('production ingress keeps AwanMesh and Meiyijia on separate channel-resolved hosts', async () => {
+void test('production ingress keeps MOYAO AI and Meiyijia on separate channel-resolved hosts', async () => {
     const config = await readFile(path.join(repositoryRoot, 'deploy/nginx/damatong.conf'), 'utf8');
 
     assert.match(config, /server_name moyaoai\.com damatong\.net _;/u);
@@ -203,8 +203,8 @@ void test('production runbook elevates only the root-owned atomic runtime switch
     assert.match(runbook, /sync-storefront-media\.mjs --dry-run/u);
     assert.match(runbook, /sync-storefront-media\.mjs --apply --allow-remote/u);
     assert.match(runbook, /sync-storefront-media\.mjs --verify/u);
-    assert.match(runbook, /sync-awanmesh-brand\.mjs --dry-run/u);
-    assert.match(runbook, /sync-awanmesh-brand\.mjs --apply --allow-remote/u);
+    assert.match(runbook, /sync-moyao-brand\.mjs --dry-run/u);
+    assert.match(runbook, /sync-moyao-brand\.mjs --apply --allow-remote/u);
 });
 
 void test('production runbook verifies a direct storefront with an optional promotion page', async () => {
@@ -268,6 +268,8 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.match(script, /9>&-/u);
     assert.match(script, /PRODUCTION_DEPLOY_OK/u);
     assert.match(script, /verify-dashboard-assets\.mjs/u);
+    assert.match(script, /--dashboard-url https:\/\/console\.moyaoai\.com\/dashboard\//u);
+    assert.doesNotMatch(script, /--dashboard-url https:\/\/console\.damatong\.net\/dashboard\//u);
     assert.match(script, /--release-id "\$\{target_sha\}"/u);
     assert.match(script, /managed storefront data changed/u);
     assert.match(script, /VENDURE_REVIEWED_STOREFRONT_MEDIA_KEYS/u);
@@ -277,6 +279,10 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.match(script, /reviewed storefront media Channel codes are invalid/u);
     assert.match(script, /VENDURE_REVIEWED_AUTH_VISUALS/u);
     assert.match(script, /managed auth visual publisher changed/u);
+    assert.match(script, /VENDURE_REVIEWED_MOYAO_BRAND/u);
+    assert.match(script, /MOYAO AI managed brand data changed; select the reviewed brand release scope/u);
+    assert.match(script, /reviewed MOYAO AI brand scope was supplied without a brand change/u);
+    assert.match(script, /reviewed MOYAO AI brand requires the primary Channel only/u);
     assert.match(script, /unsupported managed data change/u);
     assert.equal(
         (
@@ -292,7 +298,7 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
                 /^\s*AUTH_VISUAL_CHANNEL_CODES="\$\{reviewed_storefront_media_channel_codes\}"/gmu,
             ) ?? []
         ).length,
-        2,
+        3,
     );
     assert.match(script, /sync-storefront-media\.mjs[\s\S]*--keys/u);
     assert.doesNotMatch(script, /sync-storefront-media\.mjs[\s\S]{0,200}--channel-codes/u);
@@ -306,19 +312,35 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.match(script, /STOREFRONT_MEDIA_VERIFY_OK/u);
     assert.match(script, /AUTH_VISUAL_PREFLIGHT_BEGIN/u);
     assert.match(script, /AUTH_VISUAL_PUBLISH_OK/u);
+    assert.match(script, /sync-auth-visuals\.mjs --verify/u);
+    assert.match(script, /AUTH_VISUAL_VERIFY_OK/u);
+    assert.match(script, /MOYAO_BRAND_PREFLIGHT_BEGIN/u);
+    assert.match(script, /MOYAO_BRAND_PREFLIGHT_OK/u);
+    assert.match(script, /MOYAO_BRAND_PUBLISH_BEGIN/u);
+    assert.match(script, /MOYAO_BRAND_PUBLISH_OK/u);
+    assert.match(script, /MOYAO_BRAND_VERIFY_OK/u);
+    assert.match(script, /sync-moyao-brand\.mjs --dry-run/u);
+    assert.match(script, /sync-moyao-brand\.mjs --apply --allow-remote/u);
+    assert.match(script, /sync-moyao-brand\.mjs --verify/u);
+    assert.equal((script.match(/^\s*VENDURE_STOREFRONT_URL=https:\/\/moyaoai\.com/gmu) ?? []).length, 9);
     assert.ok(script.indexOf('STOREFRONT_MEDIA_PREFLIGHT_BEGIN') < script.indexOf('DEPLOY_MIGRATION_BEGIN'));
     assert.ok(
         script.indexOf('STOREFRONT_MEDIA_PREFLIGHT_OK') < script.indexOf('vendure-mysql-backup.service'),
     );
+    assert.ok(script.indexOf('MOYAO_BRAND_PREFLIGHT_OK') < script.indexOf('vendure-mysql-backup.service'));
     assert.ok(
         script.indexOf('switch-production-runtime.sh" "${candidate}') <
             script.indexOf('STOREFRONT_MEDIA_PUBLISH_BEGIN'),
     );
+    assert.ok(
+        script.indexOf('switch-production-runtime.sh" "${candidate}') <
+            script.indexOf('MOYAO_BRAND_PUBLISH_BEGIN'),
+    );
     assert.match(script, /rollback_needed=0\n\s+printf 'ROLLBACK_BEGIN/u);
     assert.equal(script.match(/ROLLBACK_BEGIN/gu)?.length, 1);
-    assert.match(script, /sync-awanmesh-brand\.mjs/u);
+    assert.match(script, /sync-moyao-brand\.mjs/u);
     assert.match(script, /packages\/storefront\/src\/assets\/brand\//u);
-    assert.match(script, /AwanMesh managed brand data changed/u);
+    assert.match(script, /MOYAO AI managed brand data changed/u);
     assert.match(script, /readonly memory_guard=.*production-memory-guard\.cjs/u);
     assert.match(script, /ensure-production-swap\.sh/u);
     assert.match(script, /vendure-production-swap/u);
@@ -346,6 +368,8 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.match(workflow, /VENDURE_REVIEWED_STOREFRONT_MEDIA_KEYS/u);
     assert.match(workflow, /VENDURE_REVIEWED_STOREFRONT_MEDIA_CHANNEL_CODES/u);
     assert.match(workflow, /VENDURE_REVIEWED_AUTH_VISUALS/u);
+    assert.match(workflow, /VENDURE_REVIEWED_MOYAO_BRAND/u);
+    assert.match(workflow, /MOYAO_BRAND/u);
     assert.match(workflow, /SSM_RESULT="\$RUNNER_TEMP\/ssm-result\.json"/u);
     assert.match(workflow, /grep -E '\^\(PRODUCTION_\|DEPLOY_\|STOREFRONT_MEDIA_/u);
     assert.match(workflow, /tail -n 160/u);
@@ -355,11 +379,13 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.match(artifactWorkflow, /media_keys:/u);
     assert.match(artifactWorkflow, /channel_codes:/u);
     assert.match(artifactWorkflow, /auth_visuals:/u);
+    assert.match(artifactWorkflow, /moyao_brand:/u);
     assert.match(artifactWorkflow, /release-plan\.json/u);
     assert.match(artifactWorkflow, /release-plan\.json\.sha256/u);
     assert.match(artifactWorkflow, /archiveSha256/u);
     assert.match(artifactWorkflow, /mediaChannelCodes/u);
     assert.match(artifactWorkflow, /authVisuals/u);
+    assert.match(artifactWorkflow, /moyaoBrand/u);
     await assert.rejects(
         readFile(path.join(repositoryRoot, '.github/workflows/deploy_reviewed_storefront_media.yml')),
         { code: 'ENOENT' },

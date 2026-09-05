@@ -6,7 +6,7 @@ const TRANSIENT_PROMOTION_STATUSES = new Set([429, 502, 503, 504]);
 class TransientPromotionEntryError extends Error {}
 
 async function requestPromotionAccessCookie(api: Awaited<ReturnType<typeof request.newContext>>) {
-    const promoResponse = await api.get('https://damatong.net/promo');
+    const promoResponse = await api.get('https://moyaoai.com/promo');
     if (!promoResponse.ok()) {
         const ErrorType = TRANSIENT_PROMOTION_STATUSES.has(promoResponse.status())
             ? TransientPromotionEntryError
@@ -18,7 +18,7 @@ async function requestPromotionAccessCookie(api: Awaited<ReturnType<typeof reque
     const ticket = promoHtml.match(/name="ticket" value="([^"]+)"/u)?.[1];
     if (!ticket) throw new Error('生产推广页没有返回入口票据');
 
-    const entryResponse = await api.post('https://damatong.net/promo/enter', {
+    const entryResponse = await api.post('https://moyaoai.com/promo/enter', {
         form: { ticket },
         maxRedirects: 0,
     });
