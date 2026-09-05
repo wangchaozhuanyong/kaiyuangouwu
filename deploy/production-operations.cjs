@@ -5,12 +5,31 @@
 const assert = require('node:assert/strict');
 const { execFileSync, spawnSync } = require('node:child_process');
 const { createHash } = require('node:crypto');
-const { readdirSync, statSync } = require('node:fs');
+const { closeSync, constants, fstatSync, openSync, readdirSync, statSync } = require('node:fs');
 const path = require('node:path');
 const retention = require('./systemd/vendure-production-release-retention.cjs');
 
 const DEPLOY_LOCK = '/run/lock/vendure-production-deploy.lock';
 const BACKUP_DIRECTORY = '/var/backups/vendure-mysql';
+
+function withProductionLock(callback, lockPath = DEPLOY_LOCK) {
+    // The existing deployment lock is owned by ubuntu in a sticky directory.
+    // Open it without O_CREAT: root must not recreate it or change its owner.
+    const lockFd = openSync(lockPath, constants.O_RDONLY | constants.O_NOFOLLOW);
+    try {
+        assert.ok(fstatSync(lockFd).isFile(), 'The production lock must be a regular file');
+        const acquired = spawnSync('flock', ['--exclusive', '--wait', '300', '3'], {
+            stdio: ['ignore', 'pipe', 'pipe', lockFd],
+            timeout: 310000,
+        });
+        assert.equal(acquired.status, 0, 'Could not acquire the existing production deployment lock');
+        // flock and this process share the open file description. The parent
+        // retains the lock until the descriptor is closed in finally.
+        return callback();
+    } finally {
+        closeSync(lockFd);
+    }
+}
 
 function validateRequest(environment) {
     const operation = environment.OPS_OPERATION || 'diagnose';
@@ -205,17 +224,8 @@ function runLocked(environment = process.env) {
 if (require.main === module) {
     try {
         validateRequest(process.env);
-        if (process.argv.length === 3 && process.argv[2] === '--locked') {
-            runLocked();
-        } else {
-            assert.equal(process.argv.length, 2, 'Unexpected operations argument');
-            const child = spawnSync(
-                'flock',
-                ['--exclusive', '--wait', '300', DEPLOY_LOCK, process.execPath, __filename, '--locked'],
-                { stdio: 'inherit' },
-            );
-            process.exitCode = child.status ?? 1;
-        }
+        assert.equal(process.argv.length, 2, 'Unexpected operations argument');
+        withProductionLock(() => runLocked());
     } catch (error) {
         process.stderr.write(`${error instanceof Error ? error.message : 'Production operation failed'}\n`);
         process.exitCode = 1;
@@ -228,4 +238,5 @@ module.exports = {
     planDigest,
     retainReviewedPlan,
     validateRequest,
+    withProductionLock,
 };
