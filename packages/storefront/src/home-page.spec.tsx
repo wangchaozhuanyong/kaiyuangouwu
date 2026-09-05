@@ -510,6 +510,7 @@ describe('HomePage mobile header layout', () => {
         expect(stylesheet).toMatch(
             /\.home-topbar > \.topbar-actions\s*\{[^}]*grid-column:\s*2;[^}]*grid-row:\s*1;/,
         );
+        expect(stylesheet).toMatch(/\.home-topbar > \.brand\s*\{[^}]*width:\s*100%;[^}]*max-width:\s*100%;/);
         expect(stylesheet).not.toMatch(/\.home-topbar > \.search-trigger/);
     });
 
