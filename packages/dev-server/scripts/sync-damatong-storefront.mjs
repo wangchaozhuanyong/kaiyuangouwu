@@ -234,6 +234,17 @@ export function isLocalApiOrigin(value) {
     }
 }
 
+export function validateDamatongBrandNames(brand = damatongStorefront) {
+    for (const field of ['storefrontNameZh', 'storefrontNameEn']) {
+        // Match StoreProfileService's display-unit limit before any remote requests or writes.
+        const units = Array.from(brand[field].trim()).reduce(
+            (total, character) => total + (/\p{Script=Han}|[\uFF01-\uFF60]/u.test(character) ? 2 : 1),
+            0,
+        );
+        assert.ok(units >= 1 && units <= 16, `${field} must contain 1 to 16 display units`);
+    }
+}
+
 export function damatongAssetTags(key, hash) {
     return ['damatong-storefront', `damatong-storefront:${key}`, `damatong-storefront-sha256:${hash}`];
 }
@@ -1083,6 +1094,7 @@ export async function syncDamatongStorefront({
     assert.ok(apiOrigin, 'VENDURE_API_ORIGIN or --api-origin is required');
     assert.ok(username && password, 'SUPERADMIN_USERNAME and SUPERADMIN_PASSWORD are required');
     assert.ok(!(apply && verify), '--apply and --verify are mutually exclusive');
+    validateDamatongBrandNames();
     if (apply && (production || !isLocalApiOrigin(apiOrigin))) {
         assert.ok(allowRemote, 'Remote or production writes require both --apply and --allow-remote');
         assert.equal(
@@ -1398,6 +1410,7 @@ const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPat
 if (isMain) {
     const options = parseCliArguments(process.argv.slice(2));
     if (options.validate) {
+        validateDamatongBrandNames();
         const assets = await prepareDamatongAssets();
         process.stdout.write(
             `${JSON.stringify(

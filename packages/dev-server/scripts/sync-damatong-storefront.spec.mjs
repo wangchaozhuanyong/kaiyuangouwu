@@ -18,6 +18,7 @@ import {
     prepareDamatongAssets,
     preserveDashboardSupportContacts,
     syncDamatongStorefront,
+    validateDamatongBrandNames,
 } from './sync-damatong-storefront.mjs';
 
 function assetIds() {
@@ -317,6 +318,23 @@ test('brand publishing supplies a new English name when changing the production 
     assert.notEqual(input.storefrontNameEn, profile.channel.customFields.storefrontNameEn);
     assert.ok(input.storefrontNameEn.trim());
     assert.doesNotMatch(input.storefrontNameEn, /\p{Script=Han}/u);
+});
+
+test('brand names obey the API display-unit limit before remote publishing', () => {
+    assert.doesNotThrow(() => validateDamatongBrandNames());
+    assert.doesNotThrow(() =>
+        validateDamatongBrandNames({ ...damatongStorefront, storefrontNameEn: '1234567890123456' }),
+    );
+    for (const storefrontNameEn of ['', 'DAMATONG Marketplace', '12345678901234567']) {
+        assert.throws(
+            () => validateDamatongBrandNames({ ...damatongStorefront, storefrontNameEn }),
+            /storefrontNameEn must contain 1 to 16 display units/u,
+        );
+    }
+    assert.throws(
+        () => validateDamatongBrandNames({ ...damatongStorefront, storefrontNameZh: '一二三四五六七八九' }),
+        /storefrontNameZh must contain 1 to 16 display units/u,
+    );
 });
 
 test('brand planning is idempotent after the requested profile is in place', () => {
