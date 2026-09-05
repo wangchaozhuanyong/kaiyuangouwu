@@ -87,10 +87,15 @@ export async function auditStorefrontPublishingPolicy(repositoryRoot = defaultRe
         'packages/dev-server/scripts/sync-storefront-media.mjs',
     );
     const brandPublisherPath = path.join(repositoryRoot, 'packages/dev-server/scripts/sync-moyao-brand.mjs');
-    const [storefrontImages, mediaPublisher, brandPublisher] = await Promise.all([
+    const damatongPublisherConfigPath = path.join(
+        repositoryRoot,
+        'packages/dev-server/scripts/damatong-storefront-config.mjs',
+    );
+    const [storefrontImages, mediaPublisher, brandPublisher, damatongPublisherConfig] = await Promise.all([
         readFile(storefrontImagesPath, 'utf8'),
         readFile(mediaPublisherPath, 'utf8'),
         readFile(brandPublisherPath, 'utf8'),
+        readFile(damatongPublisherConfigPath, 'utf8'),
     ]);
 
     const classifiedPaths = new Set(designOnlyAssets);
@@ -103,6 +108,22 @@ export async function auditStorefrontPublishingPolicy(repositoryRoot = defaultRe
     }
     const brandDirectory = path.join(repositoryRoot, managedRoots[1], 'moyao-ai');
     for (const absolutePath of publisherAssetPaths(brandPublisher, brandDirectory, 'brandDirectory')) {
+        classifiedPaths.add(toPosix(path.relative(repositoryRoot, absolutePath)));
+    }
+    const damatongStorefrontDirectory = path.join(managedRoots[0], 'damatong');
+    for (const absolutePath of publisherAssetPaths(
+        damatongPublisherConfig,
+        path.join(repositoryRoot, damatongStorefrontDirectory),
+        'storefrontAssetDirectory',
+    )) {
+        classifiedPaths.add(toPosix(path.relative(repositoryRoot, absolutePath)));
+    }
+    const damatongBrandDirectory = path.join(managedRoots[1], 'damatong-market');
+    for (const absolutePath of publisherAssetPaths(
+        damatongPublisherConfig,
+        path.join(repositoryRoot, damatongBrandDirectory),
+        'brandAssetDirectory',
+    )) {
         classifiedPaths.add(toPosix(path.relative(repositoryRoot, absolutePath)));
     }
 

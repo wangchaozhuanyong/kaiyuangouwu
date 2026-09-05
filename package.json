@@ -18,6 +18,7 @@
         "sync:homepage-carousel": "bun run --cwd packages/dev-server sync:homepage-carousel",
         "sync:auth-visuals": "bun run --cwd packages/dev-server sync:auth-visuals",
         "sync:moyao-brand": "bun run --cwd packages/dev-server sync:moyao-brand",
+        "sync:damatong-storefront": "bun run --cwd packages/dev-server sync:damatong-storefront",
         "repair:inventory-inheritance": "bun run --cwd packages/dev-server repair:inventory-inheritance",
         "lint": "eslint --fix",
         "lint:check": "node scripts/lint-check.mjs",

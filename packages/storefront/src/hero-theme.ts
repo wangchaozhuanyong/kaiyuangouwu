@@ -47,13 +47,14 @@ export function heroThemeStyle(block: StorefrontContentBlock, vipTheme: boolean)
     const overlayColor = normalizedColor(block.backgroundColor, '#090d16');
     const accentColor = normalizedColor(settings.accentColor, defaultAccent);
     const lightOverlay = isLightColor(overlayColor);
+    const highContrast = settings.contrastMode === 'high';
 
     return {
         '--hero-overlay-color': overlayColor,
-        '--hero-overlay-strong': colorWithAlpha(overlayColor, 0.92),
-        '--hero-overlay-medium': colorWithAlpha(overlayColor, 0.82),
-        '--hero-overlay-soft': colorWithAlpha(overlayColor, 0.46),
-        '--hero-overlay-fade': colorWithAlpha(overlayColor, 0.08),
+        '--hero-overlay-strong': colorWithAlpha(overlayColor, highContrast ? 0.97 : 0.92),
+        '--hero-overlay-medium': colorWithAlpha(overlayColor, highContrast ? 0.9 : 0.82),
+        '--hero-overlay-soft': colorWithAlpha(overlayColor, highContrast ? 0.66 : 0.46),
+        '--hero-overlay-fade': colorWithAlpha(overlayColor, highContrast ? 0.18 : 0.08),
         '--hero-title-color': normalizedColor(block.textColor, '#ffffff'),
         '--hero-body-color': normalizedColor(settings.secondaryTextColor, '#cbd5e1'),
         '--hero-accent-color': accentColor,
