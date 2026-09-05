@@ -559,6 +559,8 @@ test('apply mode updates drift and verifies the same ids through Admin and Shop 
         }
         if (request.query.includes('VerifyDamatongStorefront')) {
             const languageCode = init.headers['language-code'];
+            assert.match(request.query, /take: 100, skip: \$skip/u);
+            assert.ok([0, 100].includes(request.variables.skip));
             return Response.json({
                 data: {
                     activeChannel: { code: targetChannelCode, customFields: {} },
@@ -584,17 +586,21 @@ test('apply mode updates drift and verifies the same ids through Admin and Shop 
                         highlightColor: damatongStorefront.brandHighlightColor,
                     },
                     collections: {
-                        items: damatongCategories.map(category => {
-                            const localized = category.translations.find(
-                                value => value.languageCode === languageCode,
-                            );
-                            return {
-                                id: collections.get(category.code),
-                                name: localized.name,
-                                slug: localized.slug,
-                                featuredAsset: { id: ids.get(category.assetKey) },
-                            };
-                        }),
+                        totalItems: 100 + damatongCategories.length,
+                        items:
+                            request.variables.skip === 0
+                                ? Array.from({ length: 100 }, (_, index) => ({ id: `unmanaged-${index}` }))
+                                : damatongCategories.map(category => {
+                                      const localized = category.translations.find(
+                                          value => value.languageCode === languageCode,
+                                      );
+                                      return {
+                                          id: collections.get(category.code),
+                                          name: localized.name,
+                                          slug: localized.slug,
+                                          featuredAsset: { id: ids.get(category.assetKey) },
+                                      };
+                                  }),
                     },
                     storefrontContent: blocks.map((block, blockIndex) => {
                         const localized = block.translations.find(

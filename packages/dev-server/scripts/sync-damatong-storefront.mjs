@@ -176,7 +176,7 @@ const UPDATE_SETTINGS_MUTATION = `
 `;
 
 const SHOP_VERIFICATION_QUERY = `
-    query VerifyDamatongStorefront {
+    query VerifyDamatongStorefront($skip: Int!) {
         activeChannel { code customFields { storefrontNameZh storefrontNameEn } }
         storefrontBranding {
             logoAssetId
@@ -190,7 +190,8 @@ const SHOP_VERIFICATION_QUERY = `
             accentColor
             highlightColor
         }
-        collections(options: { take: 200 }) {
+        collections(options: { take: 100, skip: $skip }) {
+            totalItems
             items { id name slug featuredAsset { id } }
         }
         storefrontContent {
@@ -762,7 +763,7 @@ async function verifyShop(
             fetchImpl,
             endpoint.toString(),
             SHOP_VERIFICATION_QUERY,
-            undefined,
+            { skip: 0 },
             requestHeaders('', channel.token, languageCode),
         );
         assert.equal(result.data.activeChannel.code, channel.code);
@@ -772,11 +773,22 @@ async function verifyShop(
             damatongStorefront.heroAutoplayIntervalSeconds,
         );
 
+        const shopCollections = [...result.data.collections.items];
+        while (shopCollections.length < result.data.collections.totalItems) {
+            const page = await graphql(
+                fetchImpl,
+                endpoint.toString(),
+                SHOP_VERIFICATION_QUERY,
+                { skip: shopCollections.length },
+                requestHeaders('', channel.token, languageCode),
+            );
+            assert.ok(page.data.collections.items.length, 'Shop API collection pagination stopped early');
+            shopCollections.push(...page.data.collections.items);
+        }
+
         for (const category of damatongCategories) {
             const expectedId = collectionIdsByCode.get(category.code);
-            const collection = result.data.collections.items.find(
-                item => String(item.id) === String(expectedId),
-            );
+            const collection = shopCollections.find(item => String(item.id) === String(expectedId));
             assert.ok(collection, `Shop API is missing ${category.code} for ${languageCode}`);
             assert.equal(
                 String(collection.featuredAsset?.id),
