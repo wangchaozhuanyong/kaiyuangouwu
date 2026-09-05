@@ -1,6 +1,7 @@
 import { useMutation, useQuery } from '@apollo/client/react';
 import {
     AlertCircle,
+    Archive,
     BadgePercent,
     Ban,
     Check,
@@ -9,6 +10,7 @@ import {
     Copy,
     Download,
     Edit3,
+    Eye,
     Flame,
     LoaderCircle,
     Plus,
@@ -22,7 +24,9 @@ import {
     X,
 } from 'lucide-react';
 import { useDeferredValue, useEffect, useState } from 'react';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
+    ARCHIVE_COUPON_CAMPAIGN_MUTATION,
     COUPON_DAILY_REPORT_QUERY,
     COUPON_LEDGER_QUERY,
     CREATE_COUPON_CAMPAIGN_MUTATION,
@@ -31,9 +35,11 @@ import {
     CouponLedgerRecord,
     DELETE_STORE_PROMOTION_MUTATION,
     GRANT_STORE_COUPON_MUTATION,
+    MARKETING_CAMPAIGN_SCOPE_QUERY,
     MARKETING_CATALOG_LOOKUP_QUERY,
     MARKETING_CUSTOMER_LOOKUP_QUERY,
     MARKETING_OVERVIEW_QUERY,
+    MarketingCampaignScopeResult,
     MarketingOverviewResult,
     PromotionProductRecord,
     REVOKE_COUPON_CAMPAIGN_MUTATION,
@@ -46,6 +52,7 @@ import {
 } from '../../graphql/marketing.graphql';
 import { useAccessibleDialog } from '../../hooks/use-accessible-dialog';
 import { useUrlTab } from '../../hooks/use-url-tab';
+import { dataTableSortPolicy } from '../../utils/data-table-sort-policy';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatDateTime, formatMoney, majorInputToMoney } from '../Sales/sales-utils';
 import { GenericPromotionsPanel } from './GenericPromotionsPanel';
@@ -62,7 +69,13 @@ type SensitiveAction =
     | { kind: 'TOGGLE'; id: string; name: string; enabled: boolean }
     | { kind: 'STOP'; id: string; name: string }
     | { kind: 'REVOKE'; id: string; name: string; affectedCount: number }
+    | { kind: 'ARCHIVE'; id: string; name: string; claimedCount: number }
     | { kind: 'DELETE'; id: string; name: string; subject: '优惠券' | '秒杀' };
+
+type CampaignDetail =
+    { type: 'COUPON'; item: StoreCouponRecord } | { type: 'FLASH_SALE'; item: StoreFlashSaleRecord };
+
+type CouponVisibility = 'CURRENT' | 'ACTIVE' | 'ENDED' | 'ARCHIVED' | 'ALL';
 
 interface CouponDraft {
     name: string;
@@ -117,6 +130,8 @@ export function PromotionsModule() {
     const [sensitiveAction, setSensitiveAction] = useState<SensitiveAction | null>(null);
     const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
     const [granting, setGranting] = useState<StoreCouponRecord | null>(null);
+    const [viewing, setViewing] = useState<CampaignDetail | null>(null);
+    const [couponVisibility, setCouponVisibility] = useState<CouponVisibility>('CURRENT');
     const [notice, setNotice] = useState('');
     const [actionError, setActionError] = useState('');
     const [ledgerPage, setLedgerPage] = useState(0);
@@ -166,21 +181,34 @@ export function PromotionsModule() {
 
     const [setEnabled, enabledState] = useMutation(SET_PROMOTION_ENABLED_MUTATION);
     const [stopIssuance, stopState] = useMutation(STOP_COUPON_ISSUANCE_MUTATION);
+    const [archiveCoupon, archiveState] = useMutation(ARCHIVE_COUPON_CAMPAIGN_MUTATION);
     const [revokeOutstanding, revokeState] = useMutation(REVOKE_COUPON_CAMPAIGN_MUTATION);
     const [deletePromotion, deleteState] = useMutation<{
         deleteStorePromotion: { result: string; message?: string | null };
     }>(DELETE_STORE_PROMOTION_MUTATION);
     const [updateName, renameState] = useMutation(UPDATE_PROMOTION_NAME_MUTATION);
     const actionPending =
-        enabledState.loading || stopState.loading || revokeState.loading || deleteState.loading;
+        enabledState.loading ||
+        stopState.loading ||
+        archiveState.loading ||
+        revokeState.loading ||
+        deleteState.loading;
 
     const refreshAll = async () => {
         setActionError('');
         await Promise.all([overview.refetch(), ledger.refetch(), report.refetch()]);
     };
 
+    const openSensitiveAction = (action: SensitiveAction) => {
+        setNotice('');
+        setActionError('');
+        setSensitiveAction(action);
+    };
+
     const executeSensitiveAction = async (password: string, reason: string) => {
         if (!sensitiveAction) return;
+        setNotice('');
+        setActionError('');
         try {
             if (sensitiveAction.kind === 'TOGGLE')
                 await setEnabled({
@@ -196,6 +224,8 @@ export function PromotionsModule() {
                         reason: reason.trim() || '管理员在营销后台批量作废未使用优惠券',
                     },
                 });
+            if (sensitiveAction.kind === 'ARCHIVE')
+                await archiveCoupon({ variables: { id: sensitiveAction.id, password } });
             if (sensitiveAction.kind === 'DELETE') {
                 const response = await deletePromotion({
                     variables: { id: sensitiveAction.id, password },
@@ -209,6 +239,7 @@ export function PromotionsModule() {
             setSensitiveAction(null);
             await refreshAll();
         } catch (error) {
+            setNotice('');
             setActionError(errorText(error));
         }
     };
@@ -225,11 +256,19 @@ export function PromotionsModule() {
         }
     };
 
-    const visibleCoupons = coupons.filter(
-        item =>
+    const archivedCouponCount = coupons.filter(item => item.archivedAt).length;
+    const currentCoupons = coupons.filter(item => !item.archivedAt);
+    const visibleCoupons = coupons.filter(item => {
+        const matchesSearch =
             !searchTerm.trim() ||
-            `${item.name} ${item.couponCode}`.toLowerCase().includes(searchTerm.trim().toLowerCase()),
-    );
+            `${item.name} ${item.couponCode}`.toLowerCase().includes(searchTerm.trim().toLowerCase());
+        if (!matchesSearch) return false;
+        if (couponVisibility === 'CURRENT') return !item.archivedAt;
+        if (couponVisibility === 'ARCHIVED') return Boolean(item.archivedAt);
+        if (couponVisibility === 'ACTIVE') return !item.archivedAt && couponIsActive(item);
+        if (couponVisibility === 'ENDED') return !item.archivedAt && !couponIsActive(item);
+        return true;
+    });
     const visibleFlashSales = flashSales.filter(
         item => !searchTerm.trim() || item.name.toLowerCase().includes(searchTerm.trim().toLowerCase()),
     );
@@ -239,7 +278,10 @@ export function PromotionsModule() {
             <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-4 sm:px-8">
                 <div className="mx-auto flex w-full max-w-none flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                        <h1 className="text-xl font-bold text-slate-900">优惠与促销</h1>
+                        <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
+                            优惠与促销
+                            <FeatureHelpButton topic="marketing.promotions" title="优惠与促销" />
+                        </h1>
                         <p className="mt-1 text-xs text-slate-500">
                             优惠券、限时秒杀、经营报表和客户使用流水统一管理
                         </p>
@@ -283,7 +325,7 @@ export function PromotionsModule() {
                         {notice}
                     </Message>
                 )}
-                {actionError && (
+                {actionError && !sensitiveAction && (
                     <Message kind="error" onClose={() => setActionError('')}>
                         {actionError}
                     </Message>
@@ -291,8 +333,8 @@ export function PromotionsModule() {
                 <section className="grid overflow-hidden rounded-xl border border-slate-200 bg-white sm:grid-cols-2 xl:grid-cols-4">
                     <OverviewMetric
                         label="优惠券活动"
-                        value={`${coupons.length} 个`}
-                        detail={`${coupons.filter(couponIsActive).length} 个正在发放`}
+                        value={`${currentCoupons.length} 个`}
+                        detail={`${currentCoupons.filter(couponIsActive).length} 个正在发放·${archivedCouponCount} 个已归档`}
                     />
                     <OverviewMetric
                         label="累计领取"
@@ -343,24 +385,45 @@ export function PromotionsModule() {
                     />
                 </nav>
                 {(activeTab === 'COUPONS' || activeTab === 'FLASH_SALES') && (
-                    <div className="relative max-w-md">
-                        <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                        <input
-                            value={searchTerm}
-                            onChange={event => setSearchTerm(event.target.value)}
-                            aria-label="搜索营销活动"
-                            placeholder="搜索活动名称或券码"
-                            className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-9 text-xs outline-none focus:border-blue-500"
-                        />
-                        {searchTerm && (
-                            <button
-                                type="button"
-                                onClick={() => setSearchTerm('')}
-                                className="absolute right-2.5 top-2 text-slate-400"
-                                aria-label="清空搜索"
+                    <div className="flex max-w-2xl flex-col gap-2 sm:flex-row">
+                        <div className="relative flex-1">
+                            <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                            <input
+                                type="search"
+                                name="promotion-search"
+                                autoComplete="off"
+                                value={searchTerm}
+                                onChange={event => setSearchTerm(event.target.value)}
+                                aria-label="搜索营销活动"
+                                placeholder="搜索活动名称或券码"
+                                className="w-full appearance-none rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-9 text-xs outline-none focus:border-blue-500"
+                            />
+                            {searchTerm && (
+                                <button
+                                    type="button"
+                                    onClick={() => setSearchTerm('')}
+                                    className="absolute right-2.5 top-2 text-slate-400"
+                                    aria-label="清空搜索"
+                                >
+                                    <X className="h-4 w-4" />
+                                </button>
+                            )}
+                        </div>
+                        {activeTab === 'COUPONS' && (
+                            <select
+                                value={couponVisibility}
+                                onChange={event =>
+                                    setCouponVisibility(event.target.value as CouponVisibility)
+                                }
+                                aria-label="筛选优惠券活动"
+                                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-700"
                             >
-                                <X className="h-4 w-4" />
-                            </button>
+                                <option value="CURRENT">未归档（默认）</option>
+                                <option value="ACTIVE">正在发放</option>
+                                <option value="ENDED">已结束</option>
+                                <option value="ARCHIVED">已归档</option>
+                                <option value="ALL">全部活动</option>
+                            </select>
                         )}
                     </div>
                 )}
@@ -386,8 +449,9 @@ export function PromotionsModule() {
                             }
                         }}
                         onGrant={setGranting}
+                        onView={item => setViewing({ type: 'COUPON', item })}
                         onRename={setRenaming}
-                        onSensitive={setSensitiveAction}
+                        onSensitive={openSensitiveAction}
                     />
                 ) : activeTab === 'FLASH_SALES' ? (
                     <FlashSaleList
@@ -395,7 +459,8 @@ export function PromotionsModule() {
                         actionPending={actionPending}
                         onCreate={() => setFlashEditorOpen(true)}
                         onRename={setRenaming}
-                        onSensitive={setSensitiveAction}
+                        onView={item => setViewing({ type: 'FLASH_SALE', item })}
+                        onSensitive={openSensitiveAction}
                     />
                 ) : activeTab === 'REPORT' ? (
                     <CouponReport
@@ -459,7 +524,11 @@ export function PromotionsModule() {
                 <SensitiveDialog
                     action={sensitiveAction}
                     pending={actionPending}
-                    onClose={() => setSensitiveAction(null)}
+                    error={actionError}
+                    onClose={() => {
+                        setSensitiveAction(null);
+                        setActionError('');
+                    }}
                     onConfirm={executeSensitiveAction}
                 />
             )}
@@ -484,6 +553,13 @@ export function PromotionsModule() {
                     onError={setActionError}
                 />
             )}
+            {viewing && (
+                <CampaignDetailDialog
+                    campaign={viewing}
+                    currencyCode={currencyCode}
+                    onClose={() => setViewing(null)}
+                />
+            )}
         </div>
     );
 }
@@ -495,6 +571,7 @@ function CouponList({
     onCreate,
     onCopy,
     onGrant,
+    onView,
     onRename,
     onSensitive,
 }: {
@@ -504,6 +581,7 @@ function CouponList({
     onCreate: () => void;
     onCopy: (code: string) => void;
     onGrant: (coupon: StoreCouponRecord) => void;
+    onView: (coupon: StoreCouponRecord) => void;
     onRename: (value: { id: string; name: string }) => void;
     onSensitive: (action: SensitiveAction) => void;
 }) {
@@ -536,6 +614,11 @@ function CouponList({
                                     startsAt={coupon.claimStartsAt ?? coupon.startsAt}
                                     endsAt={coupon.claimEndsAt ?? coupon.endsAt}
                                 />
+                                {coupon.archivedAt && (
+                                    <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-bold text-violet-700">
+                                        已归档
+                                    </span>
+                                )}
                             </div>
                             <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500">
                                 <button
@@ -576,21 +659,33 @@ function CouponList({
                         <div className="flex shrink-0 flex-wrap gap-2 text-[11px]">
                             <button
                                 type="button"
-                                onClick={() => onGrant(coupon)}
-                                className="flex items-center gap-1 rounded-lg bg-blue-50 px-3 py-2 font-bold text-blue-700 hover:bg-blue-100"
+                                onClick={() => onView(coupon)}
+                                className="flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-2 font-bold text-slate-700 hover:bg-slate-50"
                             >
-                                <Send className="h-3.5 w-3.5" />
-                                指定发券
+                                <Eye className="h-3.5 w-3.5" />
+                                查看详情
                             </button>
-                            <button
-                                type="button"
-                                onClick={() => onRename({ id: coupon.id, name: coupon.name })}
-                                className="rounded-lg border border-slate-300 bg-white p-2 text-slate-600 hover:bg-slate-50"
-                                aria-label="修改名称"
-                            >
-                                <Edit3 className="h-4 w-4" />
-                            </button>
-                            {couponIsActive(coupon) && (
+                            {!coupon.archivedAt && (
+                                <button
+                                    type="button"
+                                    onClick={() => onGrant(coupon)}
+                                    className="flex items-center gap-1 rounded-lg bg-blue-50 px-3 py-2 font-bold text-blue-700 hover:bg-blue-100"
+                                >
+                                    <Send className="h-3.5 w-3.5" />
+                                    指定发券
+                                </button>
+                            )}
+                            {!coupon.archivedAt && (
+                                <button
+                                    type="button"
+                                    onClick={() => onRename({ id: coupon.id, name: coupon.name })}
+                                    className="rounded-lg border border-slate-300 bg-white p-2 text-slate-600 hover:bg-slate-50"
+                                    aria-label="修改名称"
+                                >
+                                    <Edit3 className="h-4 w-4" />
+                                </button>
+                            )}
+                            {!coupon.archivedAt && couponIsActive(coupon) && (
                                 <button
                                     type="button"
                                     onClick={() =>
@@ -603,7 +698,7 @@ function CouponList({
                                     停止发放
                                 </button>
                             )}
-                            {coupon.availableCount > 0 && (
+                            {!coupon.archivedAt && coupon.availableCount > 0 && (
                                 <button
                                     type="button"
                                     onClick={() =>
@@ -620,22 +715,43 @@ function CouponList({
                                     作废未使用券
                                 </button>
                             )}
-                            <button
-                                type="button"
-                                onClick={() =>
-                                    onSensitive({
-                                        kind: 'DELETE',
-                                        id: coupon.id,
-                                        name: coupon.name,
-                                        subject: '优惠券',
-                                    })
-                                }
-                                disabled={actionPending}
-                                className="rounded-lg border border-slate-300 bg-white p-2 text-slate-400 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
-                                aria-label="删除优惠券"
-                            >
-                                <Trash2 className="h-4 w-4" />
-                            </button>
+                            {!coupon.archivedAt && coupon.claimedCount > 0 && (
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        onSensitive({
+                                            kind: 'ARCHIVE',
+                                            id: coupon.id,
+                                            name: coupon.name,
+                                            claimedCount: coupon.claimedCount,
+                                        })
+                                    }
+                                    disabled={actionPending}
+                                    className="flex items-center gap-1 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 font-bold text-violet-700 disabled:opacity-50"
+                                    title="已产生领取记录，归档后保留客户权益和财务流水"
+                                >
+                                    <Archive className="h-3.5 w-3.5" />
+                                    归档
+                                </button>
+                            )}
+                            {!coupon.archivedAt && coupon.claimedCount === 0 && (
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        onSensitive({
+                                            kind: 'DELETE',
+                                            id: coupon.id,
+                                            name: coupon.name,
+                                            subject: '优惠券',
+                                        })
+                                    }
+                                    disabled={actionPending}
+                                    className="rounded-lg border border-slate-300 bg-white p-2 text-slate-400 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
+                                    aria-label="删除优惠券"
+                                >
+                                    <Trash2 className="h-4 w-4" />
+                                </button>
+                            )}
                         </div>
                     </div>
                 </article>
@@ -649,12 +765,14 @@ function FlashSaleList({
     actionPending,
     onCreate,
     onRename,
+    onView,
     onSensitive,
 }: {
     sales: StoreFlashSaleRecord[];
     actionPending: boolean;
     onCreate: () => void;
     onRename: (value: { id: string; name: string }) => void;
+    onView: (sale: StoreFlashSaleRecord) => void;
     onSensitive: (action: SensitiveAction) => void;
 }) {
     if (!sales.length)
@@ -716,6 +834,14 @@ function FlashSaleList({
                         <div className="flex shrink-0 gap-2">
                             <button
                                 type="button"
+                                onClick={() => onView(sale)}
+                                className="flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-[11px] font-bold text-slate-700 hover:bg-slate-50"
+                            >
+                                <Eye className="h-3.5 w-3.5" />
+                                查看详情
+                            </button>
+                            <button
+                                type="button"
                                 onClick={() => onRename({ id: sale.id, name: sale.name })}
                                 className="rounded-lg border border-slate-300 bg-white p-2 text-slate-600"
                                 aria-label="修改名称"
@@ -761,6 +887,264 @@ function FlashSaleList({
     );
 }
 
+export function CampaignDetailDialog({
+    campaign,
+    currencyCode,
+    onClose,
+}: {
+    campaign: CampaignDetail;
+    currencyCode: string;
+    onClose: () => void;
+}) {
+    const coupon = campaign.type === 'COUPON' ? campaign.item : null;
+    const scopeQuery = useQuery<MarketingCampaignScopeResult>(MARKETING_CAMPAIGN_SCOPE_QUERY, {
+        variables: {
+            collectionIds: coupon?.collectionIds ?? [],
+            variantIds: coupon?.productVariantIds ?? [],
+            collectionTake: Math.max(1, coupon?.collectionIds.length ?? 0),
+            variantTake: Math.max(1, coupon?.productVariantIds.length ?? 0),
+        },
+        skip: !coupon || (!coupon.collectionIds.length && !coupon.productVariantIds.length),
+        fetchPolicy: 'cache-first',
+    });
+
+    if (campaign.type === 'FLASH_SALE') {
+        const sale = campaign.item;
+        return (
+            <Modal
+                title="秒杀活动设置详情"
+                description="只读查看活动规则和商品价格，不会修改活动。"
+                onClose={onClose}
+                width="max-w-4xl"
+            >
+                <DetailGrid>
+                    <DetailValue label="活动名称" value={sale.name} />
+                    <DetailValue
+                        label="当前状态"
+                        value={campaignStateText(sale.enabled, sale.startsAt, sale.endsAt)}
+                    />
+                    <DetailValue label="开始时间" value={formatDateTime(sale.startsAt)} />
+                    <DetailValue label="结束时间" value={formatDateTime(sale.endsAt)} />
+                    <DetailValue label="创建时间" value={formatDateTime(sale.createdAt)} />
+                    <DetailValue label="最后更新" value={formatDateTime(sale.updatedAt)} />
+                    <DetailValue label="活动 ID" value={sale.id} mono />
+                    <DetailValue label="商品规格" value={`${sale.items.length} 个`} />
+                </DetailGrid>
+                <DetailSection title="秒杀商品与价格">
+                    <div className="overflow-x-auto rounded-xl border border-slate-200">
+                        <table className="w-full min-w-[680px] text-left text-xs">
+                            <thead className="bg-slate-50 text-slate-500">
+                                <tr>
+                                    <th className="px-3 py-2.5">商品</th>
+                                    <th className="px-3 py-2.5">规格</th>
+                                    <th className="px-3 py-2.5">原价</th>
+                                    <th className="px-3 py-2.5">秒杀价</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                                {sale.items.map(item => (
+                                    <tr key={item.productVariantId}>
+                                        <td className="px-3 py-2.5 font-bold text-slate-800">
+                                            {item.productName}
+                                        </td>
+                                        <td className="px-3 py-2.5 text-slate-600">{item.variantName}</td>
+                                        <td className="px-3 py-2.5 font-mono text-slate-500">
+                                            {formatMoney(item.originalPrice, item.currencyCode)}
+                                        </td>
+                                        <td className="px-3 py-2.5 font-mono font-bold text-orange-600">
+                                            {formatMoney(item.salePrice, item.currencyCode)}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </DetailSection>
+            </Modal>
+        );
+    }
+
+    if (!coupon) return null;
+
+    const collectionNames = scopeQuery.data?.collections.items.map(item => item.name) ?? [];
+    const variantNames =
+        scopeQuery.data?.productVariants.items.map(
+            item => `${item.product.name} / ${item.name}${item.sku ? `（${item.sku}）` : ''}`,
+        ) ?? [];
+    return (
+        <Modal
+            title="优惠券活动设置详情"
+            description="只读查看活动设置、客户权益和经营结果。"
+            onClose={onClose}
+            width="max-w-4xl"
+        >
+            {coupon.archivedAt && (
+                <div className="mb-4 rounded-xl border border-violet-200 bg-violet-50 p-3 text-xs text-violet-700">
+                    该活动已于 {formatDateTime(coupon.archivedAt)}{' '}
+                    归档；客户已领取优惠券、订单与财务流水仍然保留。
+                </div>
+            )}
+            <DetailSection title="基本信息">
+                <DetailGrid>
+                    <DetailValue label="活动名称" value={coupon.name} />
+                    <DetailValue label="活动类型" value={couponKindLabels[coupon.kind]} />
+                    <DetailValue
+                        label="当前状态"
+                        value={
+                            coupon.archivedAt
+                                ? '已归档'
+                                : campaignStateText(
+                                      coupon.enabled,
+                                      coupon.claimStartsAt ?? coupon.startsAt,
+                                      coupon.claimEndsAt ?? coupon.endsAt,
+                                  )
+                        }
+                    />
+                    <DetailValue label="内部券码" value={coupon.couponCode} mono />
+                    <DetailValue label="创建时间" value={formatDateTime(coupon.createdAt)} />
+                    <DetailValue label="最后更新" value={formatDateTime(coupon.updatedAt)} />
+                    <DetailValue label="活动 ID" value={coupon.id} mono />
+                    <DetailValue
+                        label="删除策略"
+                        value={
+                            coupon.claimedCount > 0
+                                ? `已领取 ${coupon.claimedCount} 张，只可归档`
+                                : '尚无领取记录，可删除'
+                        }
+                    />
+                </DetailGrid>
+            </DetailSection>
+            <DetailSection title="优惠与适用范围">
+                <DetailGrid>
+                    <DetailValue label="优惠规则" value={couponRule(coupon, currencyCode)} />
+                    <DetailValue
+                        label="叠加规则"
+                        value={coupon.stackPolicy === 'STACKABLE' ? '可与其他优惠叠加' : '不可叠加'}
+                    />
+                    <DetailValue
+                        label="适用分类"
+                        value={scopeValue(
+                            coupon.collectionIds,
+                            collectionNames,
+                            scopeQuery.loading,
+                            scopeQuery.error?.message,
+                        )}
+                    />
+                    <DetailValue
+                        label="适用商品规格"
+                        value={scopeValue(
+                            coupon.productVariantIds,
+                            variantNames,
+                            scopeQuery.loading,
+                            scopeQuery.error?.message,
+                        )}
+                    />
+                </DetailGrid>
+            </DetailSection>
+            <DetailSection title="时间、数量与权益规则">
+                <DetailGrid>
+                    <DetailValue
+                        label="领取开始"
+                        value={formatDateTime(coupon.claimStartsAt ?? coupon.startsAt)}
+                    />
+                    <DetailValue
+                        label="领取结束"
+                        value={formatDateTime(coupon.claimEndsAt ?? coupon.endsAt)}
+                    />
+                    <DetailValue
+                        label="领取后有效期"
+                        value={coupon.validityDays ? `${coupon.validityDays} 天` : '按活动结束时间'}
+                    />
+                    <DetailValue label="发放总量" value={limitValue(coupon.issueLimit, '张')} />
+                    <DetailValue label="剩余可发" value={limitValue(coupon.remainingIssueCount, '张')} />
+                    <DetailValue label="每人领取上限" value={`${coupon.perCustomerClaimLimit} 张`} />
+                    <DetailValue label="总使用次数" value={limitValue(coupon.usageLimit, '次')} />
+                    <DetailValue
+                        label="每人使用上限"
+                        value={limitValue(coupon.perCustomerUsageLimit, '次')}
+                    />
+                    <DetailValue label="取消订单返券" value={coupon.returnOnCancellation ? '是' : '否'} />
+                    <DetailValue label="全额退款返券" value={coupon.returnOnFullRefund ? '是' : '否'} />
+                </DetailGrid>
+            </DetailSection>
+            <DetailSection title="领取、使用与经营数据">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+                    <DetailMetric label="已领取" value={`${coupon.claimedCount} 张`} />
+                    <DetailMetric label="当前可用" value={`${coupon.availableCount} 张`} />
+                    <DetailMetric label="订单锁定" value={`${coupon.lockedCount} 张`} />
+                    <DetailMetric label="已核销" value={`${coupon.usedCount} 张`} />
+                    <DetailMetric label="已返还" value={`${coupon.returnedCount} 张`} />
+                    <DetailMetric label="已过期" value={`${coupon.expiredCount} 张`} />
+                    <DetailMetric label="已作废" value={`${coupon.revokedCount} 张`} />
+                    <DetailMetric label="贡献订单" value={`${coupon.redeemedOrderCount} 笔`} />
+                    <DetailMetric
+                        label="优惠成本"
+                        value={formatMoney(coupon.discountAmountTotal, currencyCode)}
+                    />
+                    <DetailMetric
+                        label="带动成交"
+                        value={formatMoney(coupon.assistedRevenueTotal, currencyCode)}
+                    />
+                </div>
+            </DetailSection>
+        </Modal>
+    );
+}
+
+function DetailSection({ title, children }: { title: string; children: React.ReactNode }) {
+    return (
+        <section className="mb-5 last:mb-0">
+            <h3 className="mb-2 text-xs font-bold text-slate-900">{title}</h3>
+            {children}
+        </section>
+    );
+}
+
+function DetailGrid({ children }: { children: React.ReactNode }) {
+    return <div className="grid gap-2 rounded-xl border border-slate-200 p-3 sm:grid-cols-2">{children}</div>;
+}
+
+function DetailValue({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
+    return (
+        <div className="min-w-0 rounded-lg bg-slate-50 px-3 py-2.5">
+            <div className="text-[10px] font-bold text-slate-400">{label}</div>
+            <div
+                className={`mt-1 break-words text-xs font-semibold text-slate-800 ${mono ? 'font-mono' : ''}`}
+            >
+                {value}
+            </div>
+        </div>
+    );
+}
+
+function DetailMetric({ label, value }: { label: string; value: string }) {
+    return (
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <div className="text-[10px] font-bold text-slate-400">{label}</div>
+            <div className="mt-1 font-mono text-sm font-bold text-slate-900">{value}</div>
+        </div>
+    );
+}
+
+function scopeValue(ids: string[], names: string[], loading: boolean, error?: string) {
+    if (!ids.length) return '全部';
+    if (loading) return '正在读取…';
+    if (error) return `读取失败（${ids.length} 项）`;
+    return names.length ? names.join('、') : `${ids.length} 项（名称不可用）`;
+}
+
+function limitValue(value: number | null, unit: string) {
+    return value == null ? '不限' : `${value} ${unit}`;
+}
+
+function campaignStateText(enabled: boolean, startsAt: string | null, endsAt: string | null) {
+    if (!enabled) return '已停用';
+    const now = Date.now();
+    if (startsAt && Date.parse(startsAt) > now) return '待开始';
+    if (endsAt && Date.parse(endsAt) <= now) return '已结束';
+    return '进行中';
+}
+
 function CouponReport({
     coupons,
     currencyCode,
@@ -793,7 +1177,10 @@ function CouponReport({
         <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-2xs">
             <div className="flex flex-col gap-3 border-b border-slate-100 pb-4 lg:flex-row lg:items-end lg:justify-between">
                 <div>
-                    <h2 className="text-sm font-bold text-slate-900">优惠券经营报表</h2>
+                    <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                        优惠券经营报表
+                        <FeatureHelpButton topic="marketing.coupon-report" title="优惠券经营报表" />
+                    </h2>
                     <p className="mt-1 text-[11px] text-slate-500">
                         统计领取、核销、退款、优惠成本和带动成交
                     </p>
@@ -967,7 +1354,10 @@ function CouponLedger({
         <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xs">
             <div className="flex flex-col gap-3 border-b border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                    <h2 className="text-sm font-bold text-slate-900">优惠券全生命周期流水</h2>
+                    <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                        优惠券全生命周期流水
+                        <FeatureHelpButton topic="marketing.coupon-ledger" title="优惠券全生命周期流水" />
+                    </h2>
                     <p className="mt-1 text-[11px] text-slate-500">
                         每次领取、锁定、核销、退款和作废均可追溯
                     </p>
@@ -1127,7 +1517,7 @@ function CouponEditor({
         variables: {
             collectionOptions: {
                 take: draft.kind === 'COLLECTION_PERCENTAGE' ? 30 : 1,
-                sort: { name: 'ASC' },
+                sort: dataTableSortPolicy.alphabeticalName,
                 filter:
                     draft.kind === 'COLLECTION_PERCENTAGE' && deferredSearch
                         ? { name: { contains: deferredSearch } }
@@ -1135,7 +1525,7 @@ function CouponEditor({
             },
             productOptions: {
                 take: draft.kind === 'PRODUCT_PERCENTAGE' ? 30 : 1,
-                sort: { name: 'ASC' },
+                sort: dataTableSortPolicy.alphabeticalName,
                 filter:
                     draft.kind === 'PRODUCT_PERCENTAGE' && deferredSearch
                         ? { name: { contains: deferredSearch } }
@@ -1357,7 +1747,7 @@ function FlashEditor({
             collectionOptions: { take: 1 },
             productOptions: {
                 take: 30,
-                sort: { name: 'ASC' },
+                sort: dataTableSortPolicy.alphabeticalName,
                 filter: deferredSearch ? { name: { contains: deferredSearch } } : {},
             },
         },
@@ -1452,7 +1842,10 @@ function FlashEditor({
             />
             {selectedProducts.length > 0 && (
                 <div className="mt-4">
-                    <h3 className="text-xs font-bold text-slate-800">可选：单独设置 SKU 秒杀价</h3>
+                    <h3 className="flex items-center gap-2 text-xs font-bold text-slate-800">
+                        可选：单独设置 SKU 秒杀价
+                        <FeatureHelpButton topic="marketing.sku-sale-prices" title="单独设置 SKU 秒杀价" />
+                    </h3>
                     <p className="mt-1 text-[10px] text-slate-400">
                         留空则按统一降价比例计算；填写价格必须低于原价。
                     </p>
@@ -1541,7 +1934,7 @@ function GrantCouponDialog({
             }>;
         };
     }>(MARKETING_CUSTOMER_LOOKUP_QUERY, {
-        variables: { options: { take: 20, sort: { createdAt: 'DESC' }, filter } },
+        variables: { options: { take: 20, sort: dataTableSortPolicy.newestCreated, filter } },
         fetchPolicy: 'cache-and-network',
     });
     const [grant, state] = useMutation(GRANT_STORE_COUPON_MUTATION);
@@ -1615,14 +2008,16 @@ function GrantCouponDialog({
     );
 }
 
-function SensitiveDialog({
+export function SensitiveDialog({
     action,
     pending,
+    error,
     onClose,
     onConfirm,
 }: {
     action: SensitiveAction;
     pending: boolean;
+    error?: string;
     onClose: () => void;
     onConfirm: (password: string, reason: string) => Promise<void>;
 }) {
@@ -1635,6 +2030,19 @@ function SensitiveDialog({
                 <strong>{action.name}</strong>
                 <p className="mt-1">{copy.impact}</p>
             </div>
+            {error && (
+                <div
+                    className="mt-4 flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs leading-5 text-rose-800"
+                    role="alert"
+                    aria-live="assertive"
+                >
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                    <div>
+                        <strong>操作未完成</strong>
+                        <p>{error}</p>
+                    </div>
+                </div>
+            )}
             {action.kind === 'REVOKE' && (
                 <label className="mt-4 block text-xs font-bold text-slate-700">
                     作废原因
@@ -1652,7 +2060,8 @@ function SensitiveDialog({
                 管理员密码确认 *
                 <input
                     type="password"
-                    autoComplete="current-password"
+                    name="promotion-sensitive-action-confirmation"
+                    autoComplete="off"
                     value={password}
                     onChange={event => setPassword(event.target.value)}
                     className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-normal"
@@ -2238,6 +2647,7 @@ function sensitiveSuccessMessage(action: SensitiveAction) {
     if (action.kind === 'TOGGLE') return action.enabled ? '秒杀活动已启用' : '秒杀活动已停用';
     if (action.kind === 'STOP') return '优惠券已停止发放，客户已领取券仍可按原规则使用';
     if (action.kind === 'REVOKE') return `未使用优惠券已作废（预计影响 ${action.affectedCount} 张）`;
+    if (action.kind === 'ARCHIVE') return '优惠券活动已归档，已领取券、订单和财务流水已保留';
     return `${action.subject}活动已删除`;
 }
 function sensitiveCopy(action: SensitiveAction) {
@@ -2261,6 +2671,13 @@ function sensitiveCopy(action: SensitiveAction) {
             description: '这是不可逆的客户权益变更。',
             impact: `预计作废 ${action.affectedCount} 张可用券，已核销券不受影响。`,
             confirmLabel: '确认批量作废',
+        };
+    if (action.kind === 'ARCHIVE')
+        return {
+            title: '归档优惠券活动',
+            description: '归档会从默认活动列表移除，但不删除业务数据。',
+            impact: `已领取 ${action.claimedCount} 张券的客户权益、订单核销和财务流水将继续保留；同时停止新领取。`,
+            confirmLabel: '确认归档',
         };
     return {
         title: `删除${action.subject}活动`,

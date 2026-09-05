@@ -4,6 +4,7 @@ import {
     Blocks,
     Boxes,
     ChevronDown,
+    CircleDollarSign,
     Command,
     CornerDownLeft,
     FolderTree,
@@ -463,6 +464,7 @@ export function AppShell() {
             '/catalog/card-pool': '发卡记录与异常',
             '/catalog/assets': '素材媒体库',
             '/sales/orders': '订单列表',
+            '/sales/profit': '利润统计',
             '/sales/after-sales': '售后与退款',
             '/sales/reviews': '买家评价管理',
             '/customers/list': '客户管理',
@@ -605,6 +607,12 @@ export function AppShell() {
                     path: '/sales/orders',
                     cat: '订单与售后',
                     icon: ShoppingBag,
+                },
+                {
+                    title: '利润、成本与物流收入统计',
+                    path: '/sales/profit',
+                    cat: '订单与售后',
+                    icon: CircleDollarSign,
                 },
                 {
                     title: '售后退款工单审核流',
@@ -892,6 +900,13 @@ export function AppShell() {
                                 className={navItemClass}
                             >
                                 订单列表
+                            </NavLink>
+                            <NavLink
+                                allowed={canAccessPath('/sales/profit')}
+                                to="/sales/profit"
+                                className={navItemClass}
+                            >
+                                利润统计
                             </NavLink>
                             <NavLink
                                 allowed={canAccessPath('/sales/after-sales')}

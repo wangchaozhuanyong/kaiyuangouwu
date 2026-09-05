@@ -3,6 +3,7 @@ import { Download, ShieldCheck } from 'lucide-react';
 import QRCode from 'qrcode';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 
 import { clearAuthSession } from '../../apollo';
 import {
@@ -161,6 +162,7 @@ export function TwoFactorSecurityCard() {
                     <ShieldCheck className="h-8 w-8 text-emerald-600" />
                     <h2 id="recovery-title" className="mt-4 text-xl font-bold">
                         请保存一次性恢复码
+                        <FeatureHelpButton topic="profile.login-two-factor" title="请保存一次性恢复码" />
                     </h2>
                     <p className="mt-3 text-sm leading-6 text-slate-600">
                         安全设置已生效，旧登录会话已退出。这些恢复码只展示这一次；验证器丢失时可配合密码登录。请保存到安全位置。
@@ -213,6 +215,7 @@ export function TwoFactorSecurityCard() {
                 <ShieldCheck className="h-4 w-4 text-emerald-600" />
                 <h2 id="two-factor-title" className="text-sm font-bold text-slate-900">
                     账号安全 · 验证器 2FA
+                    <FeatureHelpButton topic="profile.login-two-factor" title="账号安全 · 验证器 2FA" />
                 </h2>
             </div>
             <p className="mt-2 text-xs leading-5 text-slate-500">

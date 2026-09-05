@@ -1,5 +1,7 @@
-import { renderToStaticMarkup } from 'react-dom/server';
+import type { ReactElement } from 'react';
+import { renderToStaticMarkup as renderMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
+import { FeatureHelpProvider } from '../../components/FeatureHelp';
 
 import { ProductFacetsCollectionsTab } from './ProductFacetsCollectionsTab';
 
@@ -77,3 +79,7 @@ describe('ProductFacetsCollectionsTab collection hierarchy', () => {
         expect(markup).toContain('aria-label="取消选择二级分类：GPT订阅"');
     });
 });
+
+function renderToStaticMarkup(element: ReactElement) {
+    return renderMarkup(<FeatureHelpProvider>{element}</FeatureHelpProvider>);
+}

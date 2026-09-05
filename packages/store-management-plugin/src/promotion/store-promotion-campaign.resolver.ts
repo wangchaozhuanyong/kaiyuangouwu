@@ -104,6 +104,19 @@ export class StorePromotionCampaignAdminResolver {
 
     @Transaction()
     @Mutation()
+    @Allow(Permission.DeletePromotion)
+    archiveStoreCouponCampaign(
+        @Ctx() ctx: RequestContext,
+        @Args('id') id: ID,
+        @Args('password') password: string,
+    ) {
+        return this.passwordService
+            .assertCurrentPassword(ctx, password)
+            .then(() => this.campaignService.archiveCouponCampaign(ctx, id));
+    }
+
+    @Transaction()
+    @Mutation()
     @Allow(Permission.UpdatePromotion)
     revokeStoreCouponCampaignOutstanding(
         @Ctx() ctx: RequestContext,

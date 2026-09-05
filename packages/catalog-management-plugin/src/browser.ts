@@ -27,3 +27,11 @@ export {
     type CatalogExportFormat,
 } from './dashboard/catalog-export-file.js';
 export type { CatalogExportRowRecord } from './dashboard/catalog-management.graphql.js';
+
+export {
+    MAX_ORDER_EXPENSE_IMPORT_ROWS,
+    parseOrderExpenseArrayBuffer,
+    type LocalOrderExpenseFile,
+    type OrderExpenseImportError,
+    type OrderExpenseImportRow,
+} from './order-expense-local-file.js';

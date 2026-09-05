@@ -64,7 +64,7 @@ interface StoreDeprovisionFacts {
 export function getStoreDeprovisionBlockers(facts: StoreDeprovisionFacts): string[] {
     const blockers: string[] = [];
     if (facts.isDefaultChannel) blockers.push('默认店铺不允许清退');
-    if (facts.isProvisioningTemplate) blockers.push('开店配置模板不允许清退');
+    if (facts.isProvisioningTemplate) blockers.push('长期基础模板不允许清退');
     if (facts.isActiveChannel) blockers.push('请先切换到其他店铺再清退当前店铺');
     if (facts.status !== 'SUSPENDED') blockers.push('店铺必须先暂停营业');
     if (facts.orderCount > 0) blockers.push(`已存在 ${facts.orderCount} 笔订单，必须保留审计数据`);
@@ -83,7 +83,7 @@ export function getStoreSuspendBlockers(
 ): string[] {
     const blockers: string[] = [];
     if (facts.isDefaultChannel) blockers.push('默认店铺不允许暂停营业');
-    if (facts.isProvisioningTemplate) blockers.push('开店配置模板不允许暂停营业');
+    if (facts.isProvisioningTemplate) blockers.push('长期基础模板不允许暂停营业');
     if (facts.isActiveChannel) blockers.push('请先切换到其他店铺再暂停当前店铺');
     return blockers;
 }

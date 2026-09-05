@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useDeferredValue, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
 import {
     ADD_ITEM_TO_DRAFT_ORDER,
@@ -535,7 +536,10 @@ export function DraftOrderEditor() {
                         onClose={() => setActionError('')}
                     />
                     <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-2xs">
-                        <h2 className="text-sm font-semibold text-slate-900">订单商品</h2>
+                        <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                            订单商品
+                            <FeatureHelpButton topic="sales.order-items" title="订单商品" />
+                        </h2>
                         <div className="mt-4 space-y-2">
                             {order.lines.map(line => (
                                 <div
@@ -604,6 +608,7 @@ export function DraftOrderEditor() {
                         <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-2xs">
                             <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
                                 <UserRound className="h-4 w-4 text-blue-600" /> 客户
+                                <FeatureHelpButton topic="sales.orders" title="订单客户" />
                             </h2>
                             {order.customer && (
                                 <div className="mt-3 rounded-lg bg-blue-50 p-3 text-xs text-blue-900">
@@ -644,7 +649,10 @@ export function DraftOrderEditor() {
                         </section>
 
                         <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-2xs">
-                            <h2 className="text-sm font-semibold text-slate-900">金额与优惠</h2>
+                            <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                                金额与优惠
+                                <FeatureHelpButton topic="sales.totals" title="金额与优惠" />
+                            </h2>
                             <div className="mt-3 flex items-end justify-between rounded-lg bg-slate-900 p-4 text-white">
                                 <span className="text-xs text-slate-300">草稿合计</span>
                                 <strong className="font-mono text-xl">
@@ -686,7 +694,10 @@ export function DraftOrderEditor() {
                     </div>
 
                     <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-2xs">
-                        <h2 className="text-sm font-semibold text-slate-900">收货与账单地址</h2>
+                        <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                            收货与账单地址
+                            <FeatureHelpButton topic="sales.orders" title="收货与账单地址" />
+                        </h2>
                         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                             {(
                                 [
@@ -734,7 +745,10 @@ export function DraftOrderEditor() {
                     </section>
 
                     <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-2xs">
-                        <h2 className="text-sm font-semibold text-slate-900">配送与完成草稿</h2>
+                        <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                            配送与完成草稿
+                            <FeatureHelpButton topic="sales.fulfillment" title="配送与完成草稿" />
+                        </h2>
                         <div className="mt-4 grid gap-4 lg:grid-cols-2">
                             <div>
                                 <label className="text-xs font-semibold text-slate-700">配送方式</label>
@@ -1008,7 +1022,10 @@ export function ModifyOrderEditor() {
                     <div className="space-y-4">
                         <WorkflowMessages error={actionError} onClose={() => setActionError('')} />
                         <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-2xs">
-                            <h2 className="text-sm font-semibold text-slate-900">调整订单商品</h2>
+                            <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                                调整订单商品
+                                <FeatureHelpButton topic="sales.order-items" title="调整订单商品" />
+                            </h2>
                             <div className="mt-4 space-y-2">
                                 {order.lines.map(line => {
                                     const quantity = adjustments[line.id] ?? line.quantity;
@@ -1107,7 +1124,10 @@ export function ModifyOrderEditor() {
 
                         <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-2xs">
                             <div className="flex items-center justify-between gap-3">
-                                <h2 className="text-sm font-semibold text-slate-900">附加费用</h2>
+                                <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                                    附加费用
+                                    <FeatureHelpButton topic="sales.totals" title="附加费用" />
+                                </h2>
                                 <button
                                     type="button"
                                     onClick={() => {

@@ -17,6 +17,7 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import { sensitiveActionContext } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
 import { DynamicCustomFieldsForm } from '../../custom-fields/DynamicCustomFieldsForm';
 import type { CustomFieldValueMap } from '../../custom-fields/custom-field-types';
@@ -730,7 +731,10 @@ export function CategoriesModule() {
         <div className="flex h-full flex-col bg-slate-50">
             <div className="flex shrink-0 flex-col gap-4 border-b border-slate-200 bg-white px-5 py-5 shadow-2xs sm:flex-row sm:items-center sm:justify-between sm:px-8">
                 <div>
-                    <h1 className="text-xl font-bold text-slate-900">分类与属性</h1>
+                    <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
+                        分类与属性
+                        <FeatureHelpButton topic="catalog.categories" title="分类与属性" />
+                    </h1>
                     <p className="mt-1 text-xs text-slate-500">
                         集中管理 Vendure 商品分类、通用规格模板与前台筛选属性
                     </p>
@@ -1039,6 +1043,7 @@ export function CategoriesModule() {
                                     onChange={setFormFilters}
                                 />
                                 <DynamicCustomFieldsForm
+                                    helpTopic="catalog.categories"
                                     title="分类扩展字段"
                                     fields={collectionCustomFields}
                                     values={customFieldValues}
@@ -1170,7 +1175,10 @@ function CollectionFiltersEditor({
         <section className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                    <h4 className="text-xs font-bold text-slate-800">集合筛选规则</h4>
+                    <h4 className="flex items-center gap-2 text-xs font-bold text-slate-800">
+                        集合筛选规则
+                        <FeatureHelpButton topic="catalog.collection-rules" title="集合筛选规则" />
+                    </h4>
                     <p className="mt-1 text-[10px] leading-4 text-slate-500">
                         规则来自当前 Vendure 服务端注册的 CollectionFilter，可在保存前预览命中的 SKU。
                     </p>

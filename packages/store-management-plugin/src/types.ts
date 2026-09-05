@@ -122,6 +122,8 @@ export interface StoreCouponFinancialTotal {
 
 export interface StoreCouponCampaignView extends StoreCouponCampaignStats {
     id: ID;
+    createdAt: Date;
+    updatedAt: Date;
     name: string;
     couponCode?: string;
     kind: StoreCouponCampaignKind;
@@ -144,6 +146,7 @@ export interface StoreCouponCampaignView extends StoreCouponCampaignStats {
     stackPolicy: StoreCouponStackPolicy;
     returnOnCancellation: boolean;
     returnOnFullRefund: boolean;
+    archivedAt: Date | null;
     remainingIssueCount: number | null;
     claimed: boolean;
     claimable: boolean;
@@ -266,6 +269,8 @@ export interface StoreFlashSaleItemView {
 
 export interface StoreFlashSaleView {
     id: ID;
+    createdAt: Date;
+    updatedAt: Date;
     name: string;
     enabled: boolean;
     startsAt: Date | null;

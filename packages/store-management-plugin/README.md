@@ -8,15 +8,19 @@ enable multi-vendor order splitting or public seller registration.
 The SuperAdmin-only `provisionStore` Admin API mutation creates these resources in one transaction:
 
 - one Seller;
-- one Channel copied from an existing template Channel's language, currency, tax, shipping, and inventory defaults;
+- one Channel copied from a selected existing base Channel's language, currency, tax, shipping, and inventory defaults;
 - one Channel-scoped merchant administrator Role;
 - one Administrator with a server-generated temporary password;
 - one password gate that restricts the merchant Admin API until the temporary password is changed;
-- the template Channel's existing StockLocations assigned to the new Channel for shared inventory;
+- the selected base Channel's existing StockLocations assigned to the new Channel for shared inventory;
 - one private `StoreProfile` for that store's customer-facing names, descriptions, logo, and status.
 
 The generated Role excludes platform-level permissions such as creating or deleting Channels, Sellers,
 Administrators, and Roles. Storefront content and custom-domain access use dedicated CRUD permissions.
+
+Any existing Channel can be selected by a SuperAdmin as the base store. The
+`isStoreProvisioningTemplate` flag protects a permanent base template from suspension and deprovisioning;
+it is not required for copying configuration. The new store keeps its own merchant role and profile.
 
 ## Operational sequence
 

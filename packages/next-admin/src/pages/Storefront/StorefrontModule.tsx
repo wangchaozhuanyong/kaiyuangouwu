@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
     CREATE_STOREFRONT_BLOCK_MUTATION,
     DELETE_STOREFRONT_BLOCK_MUTATION,
@@ -169,7 +170,10 @@ export function StorefrontModule() {
             <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-4 sm:px-8">
                 <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                        <h1 className="text-xl font-bold text-slate-900">商城首页装修</h1>
+                        <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
+                            商城首页装修
+                            <FeatureHelpButton topic="storefront.decoration" title="商城首页装修" />
+                        </h1>
                         <p className="mt-1 text-xs text-slate-500">
                             管理当前店铺真实楼层、展示顺序、排期与中英文内容
                         </p>
@@ -225,9 +229,7 @@ export function StorefrontModule() {
                         />
                         <Metric
                             label="当前店铺"
-                            value={
-                                query.data ? getChannelDisplayName(query.data.activeChannel.code) : '—'
-                            }
+                            value={query.data ? getChannelDisplayName(query.data.activeChannel.code) : '—'}
                             detail={`${heroCount} 张首页轮播图`}
                         />
                     </section>
@@ -235,7 +237,13 @@ export function StorefrontModule() {
                     <section className="rounded-xl border border-slate-200 bg-white">
                         <div className="flex items-center justify-between border-b border-slate-100 p-4">
                             <div>
-                                <h2 className="text-sm font-bold text-slate-900">楼层顺序与状态</h2>
+                                <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                                    楼层顺序与状态
+                                    <FeatureHelpButton
+                                        topic="storefront.floor-order"
+                                        title="楼层顺序与状态"
+                                    />
+                                </h2>
                                 <p className="mt-1 text-[11px] text-slate-400">
                                     上下移动会立即更新客户端顺序
                                 </p>
@@ -300,7 +308,10 @@ export function StorefrontModule() {
                     </section>
 
                     <section className="rounded-xl border border-slate-200 bg-white p-4">
-                        <h2 className="text-sm font-bold text-slate-900">可用首页模块</h2>
+                        <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                            可用首页模块
+                            <FeatureHelpButton topic="storefront.available-blocks" title="可用首页模块" />
+                        </h2>
                         <p className="mt-1 text-[11px] text-slate-400">未配置的模块不会在客户端显示</p>
                         <div className="mt-3 grid gap-2 sm:grid-cols-2">
                             {homepageModuleDescriptors
@@ -348,7 +359,10 @@ export function StorefrontModule() {
                 <section className="min-h-[680px] overflow-hidden rounded-xl border border-slate-200 bg-slate-100 xl:sticky xl:top-0 xl:self-start">
                     <div className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
                         <div>
-                            <h2 className="text-sm font-bold text-slate-900">结构预览</h2>
+                            <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                                结构预览
+                                <FeatureHelpButton topic="storefront.structure-preview" title="结构预览" />
+                            </h2>
                             <p className="mt-1 text-[10px] text-slate-400">
                                 显示真实楼层内容，不会伪造商品与价格
                             </p>

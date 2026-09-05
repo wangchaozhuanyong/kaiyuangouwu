@@ -3,6 +3,7 @@ import { Layers3, Search, X } from 'lucide-react';
 import { useDeferredValue, useState } from 'react';
 
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
     ASSIGN_PRODUCTS_TO_CHANNEL,
     GET_CATALOG_CHANNELS,
@@ -101,7 +102,10 @@ export function CatalogBulkChannelAction() {
                     >
                         <div className="flex items-start justify-between border-b p-5">
                             <div>
-                                <h2 className="text-base font-bold">商品批量店铺操作</h2>
+                                <h2 className="flex items-center gap-2 text-base font-bold">
+                                    商品批量店铺操作
+                                    <FeatureHelpButton topic="catalog.products" title="商品批量店铺操作" />
+                                </h2>
                                 <p className="mt-1 text-xs text-slate-500">
                                     将多个商品分配到目标 Channel 或从中移除；价格系数只在分配时应用。
                                 </p>

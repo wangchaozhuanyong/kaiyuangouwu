@@ -26,6 +26,7 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { NextAdminDashboardAlerts, NextAdminDashboardWidgets } from '../../extensions/extension-hosts';
 import {
     DASHBOARD_BOOTSTRAP_QUERY,
@@ -240,7 +241,10 @@ export function DashboardModule() {
                 <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                     <div>
                         <div className="flex flex-wrap items-center gap-2">
-                            <h1 className="text-xl font-bold text-slate-900">经营概览</h1>
+                            <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
+                                经营概览
+                                <FeatureHelpButton topic="dashboard.overview" title="经营概览" />
+                            </h1>
                             <span className="rounded-md bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-600">
                                 当前店铺：
                                 {metrics.data
@@ -344,9 +348,13 @@ export function DashboardModule() {
                                         <div className="mb-3">
                                             <h2
                                                 id="dashboard-metrics-title"
-                                                className="text-sm font-bold text-slate-900"
+                                                className="flex items-center gap-2 text-sm font-bold text-slate-900"
                                             >
                                                 核心经营指标
+                                                <FeatureHelpButton
+                                                    topic="dashboard.overview"
+                                                    title="核心经营指标"
+                                                />
                                             </h2>
                                             <p className="mt-0.5 text-[11px] text-slate-500">
                                                 按已结算支付金额统计，退款会从成交额中扣除
@@ -477,9 +485,13 @@ export function DashboardModule() {
                                             <div>
                                                 <h2
                                                     id="recent-orders-title"
-                                                    className="text-sm font-bold text-slate-900"
+                                                    className="flex items-center gap-2 text-sm font-bold text-slate-900"
                                                 >
                                                     最近订单
+                                                    <FeatureHelpButton
+                                                        topic="dashboard.overview"
+                                                        title="最近订单"
+                                                    />
                                                 </h2>
                                                 <p className="mt-0.5 text-[11px] text-slate-500">
                                                     最新下单记录，共{' '}
@@ -631,9 +643,10 @@ export function DashboardModule() {
                                     >
                                         <h2
                                             id="quick-actions-title"
-                                            className="text-sm font-bold text-slate-900"
+                                            className="flex items-center gap-2 text-sm font-bold text-slate-900"
                                         >
                                             快捷操作
+                                            <FeatureHelpButton topic="dashboard.overview" title="快捷操作" />
                                         </h2>
                                         <p className="mt-1 text-[11px] text-slate-500">
                                             常用经营入口集中在这里
@@ -680,9 +693,13 @@ export function DashboardModule() {
                                         <div className="min-w-0 flex-1">
                                             <h2
                                                 id="search-index-title"
-                                                className="text-sm font-bold text-slate-900"
+                                                className="flex items-center gap-2 text-sm font-bold text-slate-900"
                                             >
                                                 商品索引状态
+                                                <FeatureHelpButton
+                                                    topic="dashboard.overview"
+                                                    title="商品索引状态"
+                                                />
                                             </h2>
                                             <p className="mt-1 text-[11px] text-slate-500">
                                                 {(metrics.data?.pendingSearchIndexUpdates ?? 0) > 0
@@ -737,8 +754,12 @@ export function DashboardModule() {
                     >
                         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
                             <div>
-                                <h2 id={customizerTitleId} className="text-base font-bold text-slate-900">
+                                <h2
+                                    id={customizerTitleId}
+                                    className="flex items-center gap-2 text-base font-bold text-slate-900"
+                                >
                                     调整工作台
+                                    <FeatureHelpButton topic="dashboard.customizer" title="调整工作台" />
                                 </h2>
                                 <p className="mt-1 text-[11px] text-slate-500">
                                     选择预设、显示组件；回到工作台可拖动排序
@@ -755,7 +776,10 @@ export function DashboardModule() {
                         </div>
                         <div className="flex-1 space-y-6 overflow-y-auto p-5">
                             <section>
-                                <h3 className="text-xs font-bold text-slate-800">角色预设</h3>
+                                <h3 className="flex items-center gap-2 text-xs font-bold text-slate-800">
+                                    角色预设
+                                    <FeatureHelpButton topic="dashboard.customizer" title="工作台角色预设" />
+                                </h3>
                                 <div className="mt-3 grid gap-2">
                                     {(
                                         Object.entries(DASHBOARD_PRESETS) as Array<
@@ -780,7 +804,10 @@ export function DashboardModule() {
                             </section>
                             <section>
                                 <div className="flex items-center justify-between">
-                                    <h3 className="text-xs font-bold text-slate-800">8 个工作台组件</h3>
+                                    <h3 className="flex items-center gap-2 text-xs font-bold text-slate-800">
+                                        8 个工作台组件
+                                        <FeatureHelpButton topic="dashboard.customizer" title="工作台组件" />
+                                    </h3>
                                     <button
                                         type="button"
                                         onClick={() =>

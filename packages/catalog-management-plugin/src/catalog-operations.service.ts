@@ -568,6 +568,123 @@ export class CatalogOperationsService {
         };
     }
 
+    async productOperations(ctx: RequestContext, productIds: ID[]) {
+        const uniqueProductIds = [...new Set(productIds.map(String).filter(Boolean))];
+        if (uniqueProductIds.length > 100) {
+            throw new UserInputError('单次最多读取 100 个商品的成本与库存摘要');
+        }
+        if (uniqueProductIds.length === 0) return [];
+        const currencyCode = ctx.channel.defaultCurrencyCode;
+        const variants = await this.connection
+            .getRepository(ctx, ProductVariant)
+            .createQueryBuilder('variant')
+            .innerJoin('variant.channels', 'variantChannel', 'variantChannel.id = :channelId', {
+                channelId: ctx.channelId,
+            })
+            .leftJoinAndSelect(
+                'variant.productVariantPrices',
+                'variantPrice',
+                'variantPrice.channelId = :channelId AND variantPrice.currencyCode = :currencyCode',
+                { channelId: ctx.channelId, currencyCode },
+            )
+            .leftJoinAndSelect('variant.stockLevels', 'stockLevel')
+            .where('variant.productId IN (:...productIds)', { productIds: uniqueProductIds })
+            .andWhere('variant.deletedAt IS NULL')
+            .getMany();
+        const variantIds = variants.map(variant => variant.id);
+        const allowedStockLocationIds = new Set(
+            (await this.stockLocations(ctx)).map(location => location.id),
+        );
+        const [costs, policies] = variantIds.length
+            ? await Promise.all([
+                  this.connection.getRepository(ctx, VariantCostRecord).find({
+                      where: { variantId: In(variantIds), channelId: ctx.channelId, currencyCode },
+                      order: { effectiveAt: 'DESC', id: 'DESC' },
+                  }),
+                  this.connection.getRepository(ctx, InventoryPolicy).find({
+                      where: { variantId: In(variantIds) },
+                  }),
+              ])
+            : [[], []];
+        const latestCostByVariant = new Map<string, number>();
+        for (const cost of costs) {
+            const key = String(cost.variantId);
+            if (!latestCostByVariant.has(key)) latestCostByVariant.set(key, Number(cost.costMicrounits));
+        }
+        const policyByVariantAndLocation = new Map(
+            policies.map(policy => [`${String(policy.variantId)}:${String(policy.stockLocationId)}`, policy]),
+        );
+
+        return uniqueProductIds.flatMap(productId => {
+            const productVariants = variants.filter(variant => String(variant.productId) === productId);
+            if (productVariants.length === 0) return [];
+            const prices = productVariants.flatMap(variant =>
+                variant.productVariantPrices.map(price => price.price),
+            );
+            const purchaseCosts = productVariants.flatMap(variant => {
+                const value = latestCostByVariant.get(String(variant.id));
+                return value == null ? [] : [value];
+            });
+            const margins = productVariants.flatMap(variant => {
+                const price = variant.productVariantPrices[0]?.price;
+                const cost = latestCostByVariant.get(String(variant.id));
+                const margin = price == null || cost == null ? null : calculateMargin(price, cost);
+                return margin == null ? [] : [margin];
+            });
+            const productVariantIds = new Set(productVariants.map(variant => String(variant.id)));
+            const configuredPolicies = policies.filter(
+                policy =>
+                    productVariantIds.has(String(policy.variantId)) &&
+                    allowedStockLocationIds.has(String(policy.stockLocationId)),
+            );
+            let lowStock = false;
+            for (const variant of productVariants) {
+                for (const level of variant.stockLevels.filter(stock =>
+                    allowedStockLocationIds.has(String(stock.stockLocationId)),
+                )) {
+                    const policy = policyByVariantAndLocation.get(
+                        `${String(variant.id)}:${String(level.stockLocationId)}`,
+                    );
+                    if (
+                        policy?.minimumStock != null &&
+                        level.stockOnHand - level.stockAllocated <= policy.minimumStock
+                    ) {
+                        lowStock = true;
+                    }
+                }
+            }
+            return [
+                {
+                    productId,
+                    variantCount: productVariants.length,
+                    minimumSellingPrice: minimum(prices),
+                    maximumSellingPrice: maximum(prices),
+                    minimumPurchaseCostMicrounits: minimum(purchaseCosts),
+                    maximumPurchaseCostMicrounits: maximum(purchaseCosts),
+                    minimumMargin: minimum(margins),
+                    maximumMargin: maximum(margins),
+                    minimumStock:
+                        configuredPolicies.length === 0
+                            ? null
+                            : configuredPolicies.reduce(
+                                  (total, policy) => total + (policy.minimumStock ?? 0),
+                                  0,
+                              ),
+                    maximumStock:
+                        configuredPolicies.length === 0 ||
+                        configuredPolicies.some(policy => policy.maximumStock == null)
+                            ? null
+                            : configuredPolicies.reduce(
+                                  (total, policy) => total + (policy.maximumStock ?? 0),
+                                  0,
+                              ),
+                    lowStock,
+                    missingCostVariants: productVariants.length - purchaseCosts.length,
+                },
+            ];
+        });
+    }
+
     /**
      * Returns the regular ProductList shape without sending every matching ID through GraphQL.
      * Matching IDs stay on the server and are applied in bounded chunks, then the final page is
@@ -978,6 +1095,14 @@ function chunks<T>(values: T[], size: number): T[][] {
     return result;
 }
 
+function minimum(values: number[]): number | null {
+    return values.length === 0 ? null : Math.min(...values);
+}
+
+function maximum(values: number[]): number | null {
+    return values.length === 0 ? null : Math.max(...values);
+}
+
 function compareProducts(left: Product, right: Product, sort: CatalogProductListOptions['sort']): number {
     const entries = Object.entries(sort ?? {});
     for (const [field, direction] of entries) {
@@ -1042,13 +1167,13 @@ function validateSummaryFilter(filter: CatalogProductSummaryFilterInput): void {
             throw new UserInputError(`${label}必须是非负数`);
         }
     }
-    for (const [minimum, maximum, label] of [
+    for (const [minimumValue, maximumValue, label] of [
         [filter.minimumSellingPrice, filter.maximumSellingPrice, '售价'],
         [filter.minimumPurchaseCostMicrounits, filter.maximumPurchaseCostMicrounits, '成本'],
         [filter.minimumMargin, filter.maximumMargin, '毛利率'],
         [filter.minimumAvailableStock, filter.maximumAvailableStock, '可用库存'],
     ] as const) {
-        if (minimum != null && maximum != null && minimum > maximum) {
+        if (minimumValue != null && maximumValue != null && minimumValue > maximumValue) {
             throw new UserInputError(`${label}上限不能小于下限`);
         }
     }

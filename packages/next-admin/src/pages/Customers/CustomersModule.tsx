@@ -24,6 +24,7 @@ import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { sensitiveActionContext } from '../../apollo';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { SensitiveActionDialog } from '../../components/SensitiveActionDialog';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
 import { DynamicCustomFieldsForm } from '../../custom-fields/DynamicCustomFieldsForm';
@@ -374,7 +375,10 @@ export function CustomersModule() {
             <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-4 sm:px-8">
                 <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                        <h1 className="text-xl font-bold text-slate-900">客户管理</h1>
+                        <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
+                            客户管理
+                            <FeatureHelpButton topic="customers.management" title="客户管理" />
+                        </h1>
                         <p className="mt-1 text-xs text-slate-500">
                             客户资料、分组、地址、订单与内部跟进记录集中处理
                         </p>
@@ -1053,7 +1057,13 @@ function CustomerDrawer({
                             </section>
                             {totals.size > 0 && (
                                 <section className="rounded-xl border border-blue-100 bg-blue-50/60 p-4">
-                                    <h3 className="text-xs font-bold text-blue-900">历史有效订单金额</h3>
+                                    <h3 className="flex items-center gap-2 text-xs font-bold text-blue-900">
+                                        历史有效订单金额
+                                        <FeatureHelpButton
+                                            topic="customers.management"
+                                            title="历史有效订单金额"
+                                        />
+                                    </h3>
                                     <p className="mt-1 text-[10px] text-blue-700">
                                         按最近100笔订单汇总并排除已取消订单，不等同于财务实收
                                     </p>
@@ -1074,6 +1084,10 @@ function CustomerDrawer({
                                     <h3 className="flex items-center gap-1.5 text-xs font-bold text-slate-900">
                                         <CircleUserRound className="h-4 w-4 text-blue-600" />
                                         基础资料
+                                        <FeatureHelpButton
+                                            topic="customers.management"
+                                            title="客户基础资料"
+                                        />
                                     </h3>
                                     {!editing && canUpdateCustomer && (
                                         <button
@@ -1114,6 +1128,7 @@ function CustomerDrawer({
                             </section>
                             {editing && (
                                 <DynamicCustomFieldsForm
+                                    helpTopic="customers.management"
                                     title="客户扩展字段"
                                     fields={customerCustomFields}
                                     values={customFieldValues}
@@ -1125,6 +1140,7 @@ function CustomerDrawer({
                                 <h3 className="mb-3 flex items-center gap-1.5 text-xs font-bold text-slate-900">
                                     <Tag className="h-4 w-4 text-blue-600" />
                                     客户分组
+                                    <FeatureHelpButton topic="customers.management" title="客户分组" />
                                 </h3>
                                 <div className="flex flex-wrap gap-2">
                                     {customer.groups.length ? (
@@ -1181,6 +1197,7 @@ function CustomerDrawer({
                                     <h3 className="flex items-center gap-1.5 text-xs font-bold text-slate-900">
                                         <MapPin className="h-4 w-4 text-emerald-600" />
                                         客户地址
+                                        <FeatureHelpButton topic="customers.management" title="客户地址" />
                                     </h3>
                                     {canCreateAddress && (
                                         <button
@@ -1271,6 +1288,7 @@ function CustomerDrawer({
                                 <h3 className="mb-3 flex items-center gap-1.5 text-xs font-bold text-slate-900">
                                     <Clock3 className="h-4 w-4 text-amber-600" />
                                     内部跟进
+                                    <FeatureHelpButton topic="customers.management" title="内部跟进" />
                                 </h3>
                                 <p className="-mt-2 mb-3 text-[10px] text-slate-400">
                                     当前读取最近 {customer.history.items.length} /{' '}
@@ -1328,6 +1346,10 @@ function CustomerDrawer({
                                     <h3 className="flex items-center gap-1.5 text-xs font-bold text-slate-900">
                                         <ShoppingBag className="h-4 w-4 text-violet-600" />
                                         最近订单
+                                        <FeatureHelpButton
+                                            topic="customers.management"
+                                            title="客户最近订单"
+                                        />
                                     </h3>
                                     <button
                                         type="button"

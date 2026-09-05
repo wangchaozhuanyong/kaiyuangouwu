@@ -6,6 +6,7 @@ import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
+import { FeatureHelpProvider } from '../../components/FeatureHelp';
 
 import {
     IMPORT_AUTO_CARD_ITEMS_MUTATION,
@@ -56,26 +57,28 @@ describe('ProductAutoCardSetupPanel', () => {
 
     it('keeps a new auto-card SKU on one page until the product is saved', () => {
         const html = renderToStaticMarkup(
-            <ProductAutoCardSetupPanel
-                variants={[
-                    {
-                        sku: 'gift-card-10',
-                        name: '10 美元',
-                        price: '10',
-                        stockOnHand: 0,
-                        stockAllocated: 0,
-                        enabled: true,
-                        digitalDeliveryMode: 'auto_card',
-                        digitalStockPolicy: 'pool_derived',
-                        optionIds: [],
-                        isNew: true,
-                    },
-                ]}
-                productIsDirty
-                productSaving={false}
-                onSaveProduct={async () => undefined}
-                onRefreshProduct={async () => undefined}
-            />,
+            <FeatureHelpProvider>
+                <ProductAutoCardSetupPanel
+                    variants={[
+                        {
+                            sku: 'gift-card-10',
+                            name: '10 美元',
+                            price: '10',
+                            stockOnHand: 0,
+                            stockAllocated: 0,
+                            enabled: true,
+                            digitalDeliveryMode: 'auto_card',
+                            digitalStockPolicy: 'pool_derived',
+                            optionIds: [],
+                            isNew: true,
+                        },
+                    ]}
+                    productIsDirty
+                    productSaving={false}
+                    onSaveProduct={async () => undefined}
+                    onRefreshProduct={async () => undefined}
+                />
+            </FeatureHelpProvider>,
         );
 
         expect(html).toContain('一站式设置');
@@ -195,26 +198,28 @@ describe('ProductAutoCardSetupPanel', () => {
                         value={{ permissions: [], hasAnyPermission: () => true }}
                     >
                         <MemoryRouter>
-                            <ProductAutoCardSetupPanel
-                                variants={[
-                                    {
-                                        id: 'variant-1',
-                                        sku: 'gift-card-10',
-                                        name: '10 美元',
-                                        price: '10',
-                                        stockOnHand: 0,
-                                        stockAllocated: 0,
-                                        enabled: true,
-                                        digitalDeliveryMode: 'auto_card',
-                                        digitalStockPolicy: 'pool_derived',
-                                        optionIds: [],
-                                    },
-                                ]}
-                                productIsDirty={false}
-                                productSaving={false}
-                                onSaveProduct={async () => undefined}
-                                onRefreshProduct={onRefreshProduct}
-                            />
+                            <FeatureHelpProvider>
+                                <ProductAutoCardSetupPanel
+                                    variants={[
+                                        {
+                                            id: 'variant-1',
+                                            sku: 'gift-card-10',
+                                            name: '10 美元',
+                                            price: '10',
+                                            stockOnHand: 0,
+                                            stockAllocated: 0,
+                                            enabled: true,
+                                            digitalDeliveryMode: 'auto_card',
+                                            digitalStockPolicy: 'pool_derived',
+                                            optionIds: [],
+                                        },
+                                    ]}
+                                    productIsDirty={false}
+                                    productSaving={false}
+                                    onSaveProduct={async () => undefined}
+                                    onRefreshProduct={onRefreshProduct}
+                                />
+                            </FeatureHelpProvider>
                         </MemoryRouter>
                     </AdminPermissionsContext.Provider>
                 </MockedProvider>,

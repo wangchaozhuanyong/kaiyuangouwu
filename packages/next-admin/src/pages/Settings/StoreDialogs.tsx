@@ -1,6 +1,7 @@
 import { useApolloClient, useMutation, useQuery } from '@apollo/client/react';
 import { AlertCircle, CheckCircle2, Copy, Languages, LoaderCircle, Trash2 } from 'lucide-react';
 import { useState, type Dispatch, type SetStateAction } from 'react';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
 import { DynamicCustomFieldsForm } from '../../custom-fields/DynamicCustomFieldsForm';
 import type { CustomFieldValueMap } from '../../custom-fields/custom-field-types';
@@ -741,29 +742,35 @@ export function ProvisionStoreDialog({
                 )}
             </div>
             <div className="mt-4">
-                <Field label="开店配置模板 *">
+                <Field label="选择基础店铺 *">
                     <select
                         value={draft.templateChannelId}
                         onChange={event => set('templateChannelId', event.target.value)}
                         className={inputClass}
                     >
-                        <option value="">请选择模板</option>
+                        <option value="">请选择要复制配置的现有店铺</option>
                         {templates.map(template => (
                             <option key={template.id} value={template.id}>
-                                {template.code} · {template.defaultLanguageCode} /{' '}
+                                {getChannelDisplayName(template.code)} · {template.defaultLanguageCode} /{' '}
                                 {template.defaultCurrencyCode}
                             </option>
                         ))}
                     </select>
                 </Field>
+                <p className="mt-2 text-[10px] leading-4 text-slate-500">
+                    新店会复制所选店铺的语言、币种、税务和库存默认值，并共享其库存点、支付方式和配送方式。
+                </p>
                 {!templates.length && (
                     <p className="mt-2 text-[10px] text-amber-700">
-                        当前没有可用模板，需要先在后端 Channel 配置中启用开店模板。
+                        当前没有可作为基础配置的店铺，请联系平台管理员检查 Channel。
                     </p>
                 )}
             </div>
             <div className="mt-5 border-t border-slate-100 pt-5">
-                <h3 className="mb-3 text-xs font-bold text-slate-800">店铺管理员</h3>
+                <h3 className="mb-3 flex items-center gap-2 text-xs font-bold text-slate-800">
+                    店铺管理员
+                    <FeatureHelpButton topic="settings.store-profile" title="店铺管理员" />
+                </h3>
                 <div className="grid gap-4 sm:grid-cols-3">
                     <Field label="名 *">
                         <input
@@ -853,6 +860,7 @@ export function SellerDialog({
             <div className="mt-5">
                 <DynamicCustomFieldsForm
                     title="商家主体扩展字段"
+                    helpTopic="settings.store-profile"
                     fields={customFieldDefinitions}
                     values={customFieldValues}
                     onChange={setCustomFieldValues}

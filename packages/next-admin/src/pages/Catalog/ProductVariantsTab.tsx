@@ -1,4 +1,5 @@
 import { Check, FolderTree, Layers, Plus, Search, Trash2 } from 'lucide-react';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import type { DigitalDeliveryMode, DigitalStockPolicy } from '../../graphql/commerce.graphql';
 import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
@@ -50,6 +51,7 @@ export function ProductVariantsTab() {
                         <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                             <FolderTree className="h-4 w-4 text-blue-600" />
                             销售店铺与独立定价
+                            <FeatureHelpButton topic="catalog.variant-channels" title="销售店铺与独立定价" />
                         </h3>
                         <p className="mt-1 text-xs leading-5 text-slate-500">
                             当前正在编辑{' '}
@@ -110,10 +112,11 @@ export function ProductVariantsTab() {
             <div className="bg-white rounded-xl shadow-2xs border border-slate-200 overflow-hidden">
                 <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
                     <div>
-                        <h3 className="text-sm font-bold text-slate-900">
+                        <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                             {effectiveFulfillmentType === 'digital'
                                 ? '销售、SKU 与自动发货'
                                 : 'SKU 规格变体与在手库存'}
+                            <FeatureHelpButton topic="catalog.variants" title="SKU 规格变体与交付" />
                         </h3>
                         <p className="text-xs text-slate-400 mt-0.5">
                             {effectiveFulfillmentType === 'digital'

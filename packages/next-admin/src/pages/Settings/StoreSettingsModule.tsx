@@ -11,6 +11,7 @@ import {
     WalletCards,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 
 import { type StoreManagementResult, type StoreProfileRecord } from '../../graphql/management.graphql';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
@@ -153,6 +154,7 @@ export function StoreSettingsModule() {
                         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                             <Store className="h-5 w-5 text-blue-600" />
                             店铺综合设置
+                            <FeatureHelpButton topic="settings.store-profile" title="店铺综合设置" />
                         </h1>
                         <p className="mt-1 text-xs text-slate-500">
                             店铺、域名、商家、支付交付及平台业务基础配置集中管理

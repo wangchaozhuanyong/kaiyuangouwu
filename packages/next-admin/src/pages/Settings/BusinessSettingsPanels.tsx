@@ -1,6 +1,7 @@
 import { useMutation, useQuery } from '@apollo/client/react';
 import { Languages, MapPin, Pencil, ReceiptText, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
 import { DynamicCustomFieldsForm } from '../../custom-fields/DynamicCustomFieldsForm';
 import type { CustomFieldValueMap } from '../../custom-fields/custom-field-types';
@@ -241,7 +242,10 @@ function GlobalBusinessSettings({
         <section className="rounded-xl border border-slate-200 bg-white p-5">
             <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-4">
                 <div>
-                    <h2 className="text-sm font-bold text-slate-900">平台全局设置</h2>
+                    <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                        平台全局设置
+                        <FeatureHelpButton topic="settings.store-profile" title="平台全局设置" />
+                    </h2>
                     <p className="mt-1 text-xs text-slate-400">影响所有 Channel 可选语言和库存默认行为</p>
                 </div>
                 <button
@@ -363,6 +367,7 @@ function ChannelBusinessSettings({
                     <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                         <Languages className="h-4 w-4 text-blue-600" />
                         当前店铺语言与币种
+                        <FeatureHelpButton topic="settings.store-profile" title="当前店铺语言与币种" />
                     </h2>
                     <p className="mt-1 text-xs text-slate-400">{channel.code} · 直接选择店铺要使用的选项</p>
                 </div>
@@ -489,6 +494,7 @@ function ChannelBusinessSettings({
             </div>
             <div className="mt-4">
                 <DynamicCustomFieldsForm
+                    helpTopic="settings.store-profile"
                     fields={customFieldDefinitions}
                     values={customFieldValues}
                     onChange={setCustomFieldValues}
@@ -640,6 +646,7 @@ function TaxBusinessSettings({
                 <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                     <ReceiptText className="h-4 w-4 text-blue-600" />
                     税类与税率
+                    <FeatureHelpButton topic="settings.finance" title="税类与税率" />
                 </h2>
                 <p className="mt-1 text-xs text-slate-400">税率按“税类 + 区域”匹配订单</p>
             </div>
@@ -1034,6 +1041,7 @@ function ZoneBusinessSettings({
                 <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                     <MapPin className="h-4 w-4 text-blue-600" />
                     国家与业务区域
+                    <FeatureHelpButton topic="settings.store-profile" title="国家与业务区域" />
                 </h2>
                 <p className="mt-1 text-xs text-slate-400">
                     业务区域是计税和配送范围，不是店铺名称；选择国家后系统会自动命名。
@@ -1180,7 +1188,10 @@ function ZoneBusinessSettings({
             </div>
             <div className="space-y-3 border-t border-slate-100 p-5">
                 <div>
-                    <h3 className="text-xs font-bold text-slate-800">添加国家/地区</h3>
+                    <h3 className="flex items-center gap-2 text-xs font-bold text-slate-800">
+                        添加国家/地区
+                        <FeatureHelpButton topic="settings.store-profile" title="添加国家/地区" />
+                    </h3>
                     <p className="mt-1 text-[11px] text-slate-400">
                         常用国家直接选择，代码和名称会自动填写。
                     </p>

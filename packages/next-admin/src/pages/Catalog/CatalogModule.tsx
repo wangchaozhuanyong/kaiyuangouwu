@@ -21,7 +21,12 @@ import { useNavigate } from 'react-router-dom';
 
 import { sensitiveActionContext, switchActiveChannel } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { NextAdminActions } from '../../extensions/extension-hosts';
+import {
+    CATALOG_PRODUCT_OPERATIONS_QUERY,
+    type CatalogProductOperationsResult,
+} from '../../graphql/catalog-operations.graphql';
 import {
     DELETE_PRODUCT,
     GET_CATALOG_CHANNELS,
@@ -134,6 +139,29 @@ const formatMoney = (amount: number, currencyCode: string) => {
     }
 };
 
+const formatMicrounits = (amount: number, currencyCode: string) => {
+    try {
+        return new Intl.NumberFormat('zh-CN', {
+            style: 'currency',
+            currency: currencyCode,
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 3,
+        }).format(amount / 1_000);
+    } catch {
+        return `${currencyCode} ${(amount / 1_000).toFixed(3)}`;
+    }
+};
+
+const formatRange = (
+    minimum: number | null | undefined,
+    maximum: number | null | undefined,
+    format: (value: number) => string,
+) => {
+    if (minimum == null) return '—';
+    if (maximum == null || maximum === minimum) return format(minimum);
+    return `${format(minimum)} – ${format(maximum)}`;
+};
+
 export function CatalogModule() {
     const navigate = useNavigate();
     const { page, searchParams, searchTerm, setFilter, setPage, setSearchTerm } = useUrlListState();
@@ -206,6 +234,12 @@ export function CatalogModule() {
         variables: { options: { skip: 0, take: 100, sort: { code: 'ASC' } } },
         fetchPolicy: 'cache-first',
     });
+    const productIds = useMemo(() => data?.products.items.map(product => product.id) ?? [], [data]);
+    const operationsQuery = useQuery<CatalogProductOperationsResult>(CATALOG_PRODUCT_OPERATIONS_QUERY, {
+        variables: { productIds },
+        skip: productIds.length === 0,
+        fetchPolicy: 'cache-and-network',
+    });
 
     const [deleteProductMutation, { loading: deleting }] = useMutation<{
         deleteProduct: { result: string; message?: string };
@@ -232,6 +266,9 @@ export function CatalogModule() {
     const totalItems = data?.products?.totalItems ?? 0;
     const totalPages = Math.ceil(totalItems / pageSize) || 1;
     const productList = data?.products?.items ?? [];
+    const operationsByProduct = new Map(
+        (operationsQuery.data?.catalogProductOperations ?? []).map(summary => [summary.productId, summary]),
+    );
     const activeChannel = activeChannelQuery.data?.activeChannel;
     const activeChannelLabel = activeChannel ? getChannelDisplayLabel(activeChannel) : '当前店铺';
     const defaultChannel = activeChannelQuery.data?.channels.items.find(channel =>
@@ -275,7 +312,10 @@ export function CatalogModule() {
             {/* Header */}
             <div className="flex shrink-0 flex-col gap-4 border-b border-slate-200 bg-white px-5 py-5 shadow-2xs sm:flex-row sm:items-center sm:justify-between sm:px-8">
                 <div>
-                    <h1 className="text-xl font-bold text-slate-900">商品管理</h1>
+                    <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
+                        商品管理
+                        <FeatureHelpButton topic="catalog.products" title="商品管理" />
+                    </h1>
                     <p className="text-xs text-slate-500 mt-1">管理商品状态、规格、库存量和销售价</p>
                 </div>
 
@@ -473,7 +513,7 @@ export function CatalogModule() {
 
                         {/* 真实数据列表 */}
                         {productList.length > 0 && (
-                            <table className="w-full min-w-[1480px] border-collapse text-left text-xs">
+                            <table className="w-full min-w-[1880px] border-collapse text-left text-xs">
                                 <thead>
                                     <tr className="border-b border-slate-200 bg-slate-50/70 text-slate-500 font-bold whitespace-nowrap">
                                         <th
@@ -513,6 +553,15 @@ export function CatalogModule() {
                                         <th scope="col" className="w-36 px-3 py-3">
                                             销售价（起）
                                         </th>
+                                        <th scope="col" className="w-40 px-3 py-3">
+                                            成本价
+                                        </th>
+                                        <th scope="col" className="w-32 px-3 py-3">
+                                            毛利率
+                                        </th>
+                                        <th scope="col" className="w-36 px-3 py-3">
+                                            库存下限 / 上限
+                                        </th>
                                         <th
                                             scope="col"
                                             className="sticky right-0 z-20 w-32 whitespace-nowrap border-l border-slate-200 bg-slate-50 px-3 py-3 text-right"
@@ -523,6 +572,7 @@ export function CatalogModule() {
                                 </thead>
                                 <tbody className="divide-y divide-slate-100 text-slate-700">
                                     {productList.map(product => {
+                                        const operations = operationsByProduct.get(product.id);
                                         const variants = product.variants || [];
                                         const pricedVariants = variants.filter(
                                             v => typeof v.price === 'number' && !isNaN(v.price),
@@ -700,6 +750,85 @@ export function CatalogModule() {
                                                               minPriceVariant.currencyCode,
                                                           )
                                                         : '-'}
+                                                </td>
+
+                                                {/* Purchase cost */}
+                                                <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-xs">
+                                                    {operationsQuery.error && !operations ? (
+                                                        <span
+                                                            className="font-bold text-rose-600"
+                                                            title="成本与库存策略读取失败"
+                                                        >
+                                                            读取失败
+                                                        </span>
+                                                    ) : operationsQuery.loading && !operations ? (
+                                                        <span className="text-slate-400">读取中…</span>
+                                                    ) : operations?.minimumPurchaseCostMicrounits == null ? (
+                                                        <span className="font-bold text-rose-600">
+                                                            缺成本
+                                                        </span>
+                                                    ) : (
+                                                        <div>
+                                                            <div className="font-bold text-slate-900">
+                                                                {formatRange(
+                                                                    operations.minimumPurchaseCostMicrounits,
+                                                                    operations.maximumPurchaseCostMicrounits,
+                                                                    value =>
+                                                                        formatMicrounits(
+                                                                            value,
+                                                                            activeChannel?.defaultCurrencyCode ??
+                                                                                minPriceVariant?.currencyCode ??
+                                                                                'CNY',
+                                                                        ),
+                                                                )}
+                                                            </div>
+                                                            {operations.missingCostVariants > 0 && (
+                                                                <div className="text-[10px] font-bold text-rose-600">
+                                                                    另有 {operations.missingCostVariants} 个
+                                                                    SKU 缺成本
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </td>
+
+                                                {/* Margin */}
+                                                <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-xs font-bold">
+                                                    {operations?.minimumMargin == null ? (
+                                                        <span className="text-slate-400">—</span>
+                                                    ) : (
+                                                        <span
+                                                            className={
+                                                                operations.minimumMargin < 0
+                                                                    ? 'text-rose-600'
+                                                                    : 'text-emerald-700'
+                                                            }
+                                                        >
+                                                            {formatRange(
+                                                                operations.minimumMargin,
+                                                                operations.maximumMargin,
+                                                                value => `${(value * 100).toFixed(1)}%`,
+                                                            )}
+                                                        </span>
+                                                    )}
+                                                </td>
+
+                                                {/* Inventory policy */}
+                                                <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-xs font-bold">
+                                                    <span
+                                                        className={
+                                                            operations?.lowStock
+                                                                ? 'text-rose-600'
+                                                                : 'text-slate-700'
+                                                        }
+                                                    >
+                                                        {operations?.minimumStock == null
+                                                            ? '—'
+                                                            : `${operations.minimumStock} / ${operations.maximumStock ?? '—'}`}
+                                                    </span>
+                                                    {operations?.lowStock && (
+                                                        <div className="text-[10px]">已低于下限</div>
+                                                    )}
                                                 </td>
 
                                                 {/* Actions */}

@@ -9,6 +9,8 @@ export const MARKETING_OVERVIEW_QUERY = gql`
         }
         storeCouponCampaigns {
             id
+            createdAt
+            updatedAt
             name
             couponCode
             kind
@@ -30,6 +32,7 @@ export const MARKETING_OVERVIEW_QUERY = gql`
             stackPolicy
             returnOnCancellation
             returnOnFullRefund
+            archivedAt
             remainingIssueCount
             claimedCount
             availableCount
@@ -45,6 +48,8 @@ export const MARKETING_OVERVIEW_QUERY = gql`
         }
         storeFlashSales {
             id
+            createdAt
+            updatedAt
             name
             enabled
             startsAt
@@ -58,6 +63,41 @@ export const MARKETING_OVERVIEW_QUERY = gql`
                 salePrice
                 currencyCode
                 imageUrl
+            }
+        }
+    }
+`;
+
+export const MARKETING_CAMPAIGN_SCOPE_QUERY = gql`
+    query AdminMarketingCampaignScope(
+        $collectionIds: [String!]!
+        $variantIds: [String!]!
+        $collectionTake: Int!
+        $variantTake: Int!
+    ) {
+        collections(
+            options: {
+                take: $collectionTake
+                filter: { id: { in: $collectionIds } }
+                sort: { name: ASC, id: ASC }
+            }
+        ) {
+            items {
+                id
+                name
+            }
+        }
+        productVariants(
+            options: { take: $variantTake, filter: { id: { in: $variantIds } }, sort: { name: ASC, id: ASC } }
+        ) {
+            items {
+                id
+                name
+                sku
+                product {
+                    id
+                    name
+                }
             }
         }
     }
@@ -172,6 +212,16 @@ export const STOP_COUPON_ISSUANCE_MUTATION = gql`
     mutation AdminStopCouponIssuance($id: ID!, $password: String!) {
         stopStoreCouponIssuance(id: $id, password: $password) {
             id
+            claimEndsAt
+        }
+    }
+`;
+
+export const ARCHIVE_COUPON_CAMPAIGN_MUTATION = gql`
+    mutation AdminArchiveCouponCampaign($id: ID!, $password: String!) {
+        archiveStoreCouponCampaign(id: $id, password: $password) {
+            id
+            archivedAt
             claimEndsAt
         }
     }
@@ -529,6 +579,8 @@ export type StoreCouponKind =
 
 export interface StoreCouponRecord {
     id: string;
+    createdAt: string;
+    updatedAt: string;
     name: string;
     couponCode: string;
     kind: StoreCouponKind;
@@ -550,6 +602,7 @@ export interface StoreCouponRecord {
     stackPolicy: 'EXCLUSIVE' | 'STACKABLE';
     returnOnCancellation: boolean;
     returnOnFullRefund: boolean;
+    archivedAt: string | null;
     remainingIssueCount: number | null;
     claimedCount: number;
     availableCount: number;
@@ -566,6 +619,8 @@ export interface StoreCouponRecord {
 
 export interface StoreFlashSaleRecord {
     id: string;
+    createdAt: string;
+    updatedAt: string;
     name: string;
     enabled: boolean;
     startsAt: string | null;
@@ -580,6 +635,13 @@ export interface StoreFlashSaleRecord {
         currencyCode: string;
         imageUrl: string | null;
     }>;
+}
+
+export interface MarketingCampaignScopeResult {
+    collections: { items: Array<{ id: string; name: string }> };
+    productVariants: {
+        items: Array<{ id: string; name: string; sku: string; product: { id: string; name: string } }>;
+    };
 }
 
 export interface PromotionProductRecord {

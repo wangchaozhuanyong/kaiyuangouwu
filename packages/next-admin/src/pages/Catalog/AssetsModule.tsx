@@ -20,6 +20,7 @@ import {
 import { useDeferredValue, useMemo, useRef, useState } from 'react';
 import { sensitiveActionContext, uploadAdminFiles } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
 import { DynamicCustomFieldsForm } from '../../custom-fields/DynamicCustomFieldsForm';
 import type { CustomFieldValueMap } from '../../custom-fields/custom-field-types';
@@ -395,6 +396,7 @@ export function AssetsModule() {
                     <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                         <ImageIcon className="h-5 w-5 text-blue-600" />
                         素材媒体库
+                        <FeatureHelpButton topic="catalog.assets" title="素材媒体库" />
                     </h1>
                     <p className="mt-1 text-xs text-slate-500">
                         管理 Vendure 全局图片、视频与文件素材，支持真实上传、标签编辑和安全删除
@@ -628,6 +630,7 @@ export function AssetsModule() {
                             <h2 className="flex items-center gap-2 text-base font-bold text-slate-900">
                                 <UploadCloud className="h-5 w-5 text-blue-600" />
                                 上传多媒体文件
+                                <FeatureHelpButton topic="catalog.assets" title="上传多媒体文件" />
                             </h2>
                             <button
                                 type="button"
@@ -770,6 +773,7 @@ export function AssetsModule() {
                             <h2 className="flex items-center gap-2 text-base font-bold text-slate-900">
                                 <ImageIcon className="h-5 w-5 text-blue-600" />
                                 素材属性
+                                <FeatureHelpButton topic="catalog.assets" title="素材属性" />
                             </h2>
                             <button
                                 type="button"
@@ -852,6 +856,7 @@ export function AssetsModule() {
                                 </div>
                             </div>
                             <DynamicCustomFieldsForm
+                                helpTopic="catalog.assets"
                                 title="素材扩展字段"
                                 fields={assetCustomFields}
                                 values={customFieldValues}

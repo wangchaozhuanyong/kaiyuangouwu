@@ -264,6 +264,123 @@ export const adminApiExtensions = gql`
         totalItems: Int!
     }
 
+    type CatalogProductOperationsSummary {
+        productId: ID!
+        variantCount: Int!
+        minimumSellingPrice: Money
+        maximumSellingPrice: Money
+        minimumPurchaseCostMicrounits: Float
+        maximumPurchaseCostMicrounits: Float
+        minimumMargin: Float
+        maximumMargin: Float
+        minimumStock: Int
+        maximumStock: Int
+        lowStock: Boolean!
+        missingCostVariants: Int!
+    }
+
+    input CatalogProfitReportInput {
+        from: DateTime!
+        to: DateTime!
+        currencyCode: CurrencyCode
+        skip: Int
+        take: Int
+    }
+
+    type CatalogProfitSummary {
+        currencyCode: CurrencyCode!
+        orderCount: Int!
+        quantity: Int!
+        settledRevenueMicrounits: Float!
+        refundedRevenueMicrounits: Float!
+        netRevenueMicrounits: Float!
+        shippingRevenueMicrounits: Float!
+        productCostMicrounits: Float
+        grossProfitMicrounits: Float
+        grossMargin: Float
+        missingCostOrderCount: Int!
+        missingCostLineCount: Int!
+        estimatedCostOrderCount: Int!
+        estimatedCostLineCount: Int!
+        carrierShippingCostMicrounits: Float
+        paymentFeeMicrounits: Float
+        netProfitMicrounits: Float
+        netMargin: Float
+        missingCarrierShippingCostOrderCount: Int!
+        missingPaymentFeeOrderCount: Int!
+        includesCarrierShippingCost: Boolean!
+        includesPaymentFees: Boolean!
+    }
+
+    type CatalogProfitOrder implements Node {
+        id: ID!
+        code: String!
+        orderPlacedAt: DateTime!
+        currencyCode: CurrencyCode!
+        quantity: Int!
+        settledRevenueMicrounits: Float!
+        refundedRevenueMicrounits: Float!
+        netRevenueMicrounits: Float!
+        shippingRevenueMicrounits: Float!
+        productCostMicrounits: Float
+        grossProfitMicrounits: Float
+        grossMargin: Float
+        carrierShippingCostMicrounits: Float
+        paymentFeeMicrounits: Float
+        netProfitMicrounits: Float
+        netMargin: Float
+        missingCostLineCount: Int!
+        estimatedCostLineCount: Int!
+    }
+
+    type CatalogProfitReport {
+        summary: CatalogProfitSummary!
+        items: [CatalogProfitOrder!]!
+        totalItems: Int!
+    }
+
+    type CatalogOrderProfitExpense implements Node {
+        id: ID!
+        createdAt: DateTime!
+        updatedAt: DateTime!
+        orderId: ID!
+        currencyCode: CurrencyCode!
+        carrierShippingCostMicrounits: Float
+        paymentFeeMicrounits: Float
+        source: String!
+        sourceReference: String
+        note: String
+    }
+
+    input SaveCatalogOrderProfitExpenseInput {
+        orderId: ID!
+        carrierShippingCostMicrounits: Float
+        paymentFeeMicrounits: Float
+        note: String
+        expectedUpdatedAt: DateTime
+    }
+
+    input CatalogOrderProfitExpenseImportRowInput {
+        rowNumber: Int!
+        orderCode: String!
+        carrierShippingCostMicrounits: Float
+        paymentFeeMicrounits: Float
+        note: String
+    }
+
+    input ImportCatalogOrderProfitExpensesInput {
+        currencyCode: CurrencyCode!
+        filename: String!
+        fileHash: String!
+        rows: [CatalogOrderProfitExpenseImportRowInput!]!
+    }
+
+    type CatalogOrderProfitExpenseImportResult {
+        totalRows: Int!
+        createdCount: Int!
+        updatedCount: Int!
+    }
+
     input CatalogImportContextInput {
         channelId: ID!
         stockLocationId: ID!
@@ -484,6 +601,9 @@ export const adminApiExtensions = gql`
             skip: Int
             take: Int
         ): CatalogProductSummaryList!
+        catalogProductOperations(productIds: [ID!]!): [CatalogProductOperationsSummary!]!
+        catalogOrderProfitExpense(orderId: ID!): CatalogOrderProfitExpense
+        catalogProfitReport(input: CatalogProfitReportInput!): CatalogProfitReport!
         catalogProducts(filter: CatalogProductSummaryFilterInput, options: ProductListOptions): ProductList!
         catalogExportRows(skip: Int, take: Int): CatalogExportPage!
         catalogSuppliers(options: CatalogSupplierListOptions): CatalogSupplierList!
@@ -504,6 +624,10 @@ export const adminApiExtensions = gql`
         createCatalogProduct(input: CreateCatalogProductInput!): Product!
         saveCatalogProduct(input: SaveCatalogProductInput!): Product!
         saveCatalogInventoryLot(input: SaveCatalogInventoryLotInput!): CatalogInventoryLot!
+        saveCatalogOrderProfitExpense(input: SaveCatalogOrderProfitExpenseInput!): CatalogOrderProfitExpense!
+        importCatalogOrderProfitExpenses(
+            input: ImportCatalogOrderProfitExpensesInput!
+        ): CatalogOrderProfitExpenseImportResult!
         createCatalogSupplier(input: CreateCatalogSupplierInput!): CatalogSupplier!
         updateCatalogSupplier(input: UpdateCatalogSupplierInput!): CatalogSupplier!
     }

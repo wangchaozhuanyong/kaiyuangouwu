@@ -21,6 +21,7 @@ import {
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
 import {
     CLEAR_DASHBOARD_TWO_FACTOR_ACCOUNTS_MUTATION,
@@ -359,6 +360,7 @@ export function TwoFactorCodesModule() {
                         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                             <KeyRound className="h-5 w-5 text-blue-600" aria-hidden="true" />
                             2FA 动态码
+                            <FeatureHelpButton topic="plugins.two-factor" title="2FA 动态码" />
                         </h1>
                         <p className="mt-1 text-xs text-slate-500">
                             保存第三方服务的 TOTP 密钥并生成动态验证码，不用于管理账号登录验证
@@ -531,8 +533,12 @@ function QuickQueryCard({
         >
             <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                    <h2 id="quick-query-title" className="text-sm font-bold text-slate-900">
+                    <h2
+                        id="quick-query-title"
+                        className="flex items-center gap-2 text-sm font-bold text-slate-900"
+                    >
                         单独查询验证码
+                        <FeatureHelpButton topic="plugins.two-factor" title="单独查询验证码" />
                     </h2>
                     <p className="mt-1 text-[11px] leading-5 text-slate-500">
                         输入一次性 Base32 密钥即可本机生成验证码；只有点击“保存账号”才会写入数据库。
@@ -680,8 +686,12 @@ function AccountList({
             <div className="flex flex-col gap-3 border-b border-slate-100 p-5 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-2">
                     <div>
-                        <h2 id="account-list-title" className="text-sm font-bold text-slate-900">
+                        <h2
+                            id="account-list-title"
+                            className="flex items-center gap-2 text-sm font-bold text-slate-900"
+                        >
                             2FA 账号列表
+                            <FeatureHelpButton topic="plugins.two-factor" title="2FA 账号列表" />
                         </h2>
                         <p className="mt-1 text-[11px] text-slate-400">每个管理员最多保存 100 个账号</p>
                     </div>
@@ -1028,7 +1038,10 @@ function BatchImportDialog({
             >
                 <div className="flex items-start justify-between gap-4">
                     <div>
-                        <h2 className="text-base font-bold text-slate-900">批量导入 2FA 账号</h2>
+                        <h2 className="flex items-center gap-2 text-base font-bold text-slate-900">
+                            批量导入 2FA 账号
+                            <FeatureHelpButton topic="plugins.two-factor" title="批量导入 2FA 账号" />
+                        </h2>
                         <p className="mt-1 text-xs leading-5 text-slate-500">
                             格式为“项目名称 | 2FA 密钥”；也可以一行只放一个密钥，系统会自动命名。
                         </p>

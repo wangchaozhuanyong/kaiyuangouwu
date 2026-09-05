@@ -19,6 +19,7 @@ import {
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
     CREATE_STOREFRONT_BLOCK_MUTATION,
     CREATE_SYSTEM_ANNOUNCEMENT_MUTATION,
@@ -176,7 +177,10 @@ export function StorefrontContentModule() {
             <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-4 sm:px-8">
                 <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                        <h1 className="text-xl font-bold text-slate-900">店铺内容与页面</h1>
+                        <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
+                            店铺内容与页面
+                            <FeatureHelpButton topic="storefront.content" title="店铺内容与页面" />
+                        </h1>
                         <p className="mt-1 text-xs text-slate-500">
                             法律客服、登录视觉、导航、公告和推广落地页集中管理
                         </p>
@@ -346,7 +350,10 @@ function PageBlockList({
     return (
         <div>
             <div className="mb-4">
-                <h2 className="text-sm font-bold text-slate-900">固定内容配置</h2>
+                <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                    固定内容配置
+                    <FeatureHelpButton topic="storefront.fixed-content" title="固定内容配置" />
+                </h2>
                 <p className="mt-1 text-xs text-slate-500">
                     首页轮播与营销楼层已放到“商城首页装修”，这里不再重复。
                 </p>
@@ -438,7 +445,10 @@ function AnnouncementList({
         <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
             <div className="flex items-center justify-between border-b border-slate-100 p-4">
                 <div>
-                    <h2 className="text-sm font-bold text-slate-900">全站系统公告</h2>
+                    <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                        全站系统公告
+                        <FeatureHelpButton topic="storefront.announcements" title="全站系统公告" />
+                    </h2>
                     <p className="mt-1 text-[11px] text-slate-400">
                         优先级数字越大越靠前，可设定自动上线和下线时间
                     </p>
@@ -788,6 +798,7 @@ function PromotionPageEditor({
                     <div>
                         <div className="flex items-center gap-2">
                             <h2 className="text-sm font-bold text-slate-900">推广落地页源码</h2>
+                            <FeatureHelpButton topic="storefront.landing-source" title="推广落地页源码" />
                             <span
                                 className={`rounded px-2 py-0.5 text-[9px] font-bold ${value.isCustomized ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-500'}`}
                             >
@@ -874,7 +885,10 @@ function PromotionPageEditor({
             </section>
             <section className="overflow-hidden rounded-xl border border-slate-200 bg-white xl:sticky xl:top-0 xl:self-start">
                 <div className="border-b border-slate-100 p-4">
-                    <h2 className="text-sm font-bold text-slate-900">安全预览</h2>
+                    <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                        安全预览
+                        <FeatureHelpButton topic="storefront.safe-preview" title="安全预览" />
+                    </h2>
                     <p className="mt-1 text-[10px] text-slate-400">预览在沙箱中渲染，不执行页面脚本</p>
                 </div>
                 {previewHtml ? (

@@ -40,7 +40,7 @@ function createService() {
             outOfStockThreshold: 0,
             defaultShippingZone: { id: 'shipping-zone-1' },
             defaultTaxZone: { id: 'tax-zone-1' },
-            customFields: { isStoreProvisioningTemplate: true },
+            customFields: { isStoreProvisioningTemplate: false },
         }),
         create: vi.fn().mockResolvedValue(channel),
         assignToChannels: vi.fn().mockResolvedValue(undefined),
@@ -112,7 +112,7 @@ const input = {
 };
 
 describe('StoreProvisioningService', () => {
-    it('creates one isolated store from a template Channel', async () => {
+    it('creates one isolated store from the selected base Channel without a separate template flag', async () => {
         const {
             administratorService,
             channel,
@@ -240,7 +240,7 @@ describe('StoreProvisioningService', () => {
         expect(sellerService.create).not.toHaveBeenCalled();
     });
 
-    it('rejects provisioning when the template has no shared inventory', async () => {
+    it('rejects provisioning when the base store has no shared inventory', async () => {
         const { stockLocationRepository, sellerService, service } = createService();
         stockLocationRepository.find.mockResolvedValueOnce([]);
 
@@ -249,27 +249,11 @@ describe('StoreProvisioningService', () => {
                 { channelId: 'template-1', session: { user: { channelPermissions: [] } } } as any,
                 input,
             ),
-        ).rejects.toThrow('没有可共享的库存点');
+        ).rejects.toThrow('基础店铺没有可共享的库存点');
         expect(sellerService.create).not.toHaveBeenCalled();
     });
 
-    it('rejects a Channel that is not explicitly enabled as a provisioning template', async () => {
-        const { channelService, sellerService, service } = createService();
-        channelService.findOne.mockResolvedValueOnce({
-            id: 'ordinary-channel',
-            customFields: { isStoreProvisioningTemplate: false },
-        });
-
-        await expect(
-            service.provision(
-                { channelId: 'template-1', session: { user: { channelPermissions: [] } } } as any,
-                input,
-            ),
-        ).rejects.toThrow('未启用“开店配置模板”');
-        expect(sellerService.create).not.toHaveBeenCalled();
-    });
-
-    it('lists only Channels explicitly enabled as provisioning templates', async () => {
+    it('lists every existing Channel as a selectable base store', async () => {
         const { repository, service } = createService();
         repository.find.mockResolvedValueOnce([
             { id: 'template', code: 'template', customFields: { isStoreProvisioningTemplate: true } },
@@ -278,6 +262,7 @@ describe('StoreProvisioningService', () => {
 
         await expect(service.findTemplates({} as any)).resolves.toEqual([
             expect.objectContaining({ id: 'template' }),
+            expect.objectContaining({ id: 'store' }),
         ]);
         expect(repository.find).toHaveBeenCalledWith({ order: { code: 'ASC' } });
     });

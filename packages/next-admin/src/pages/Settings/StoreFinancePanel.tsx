@@ -3,6 +3,7 @@ import { CircleDollarSign, RefreshCw, Save, ShieldCheck, WalletCards } from 'luc
 import { useEffect, useState } from 'react';
 
 import { sensitiveActionContext } from '../../apollo';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { SensitiveActionDialog } from '../../components/SensitiveActionDialog';
 import {
     MY_STORE_FINANCE_QUERY,
@@ -522,6 +523,7 @@ function PanelHeading({
             <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                 {icon}
                 {title}
+                <FeatureHelpButton topic="settings.finance" title={title} />
             </h2>
             <p className="mt-1 text-xs leading-5 text-slate-500">{description}</p>
         </div>

@@ -1,5 +1,7 @@
-import { renderToStaticMarkup } from 'react-dom/server';
+import type { ReactElement } from 'react';
+import { renderToStaticMarkup as renderMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { FeatureHelpProvider } from '../../components/FeatureHelp';
 
 import { UsdtPaymentManagementModule } from './UsdtPaymentManagementModule';
 
@@ -30,3 +32,7 @@ describe('UsdtPaymentManagementModule', () => {
         expect(html).toContain('min-h-[620px]');
     });
 });
+
+function renderToStaticMarkup(element: ReactElement) {
+    return renderMarkup(<FeatureHelpProvider>{element}</FeatureHelpProvider>);
+}

@@ -1,6 +1,7 @@
 import { useMutation, useQuery } from '@apollo/client/react';
 import { ExternalLink, RefreshCw, RotateCcw, Save, Sparkles } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 
 import {
     CREATE_STOREFRONT_BLOCK_MUTATION,
@@ -146,6 +147,7 @@ export function BusinessServicesCopyModule() {
                         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                             <Sparkles className="h-5 w-5 text-violet-600" />
                             商业服务页文案
+                            <FeatureHelpButton topic="storefront.business-copy" title="商业服务页文案" />
                         </h1>
                         <p className="mt-1 text-xs text-slate-500">
                             编辑商业服务页顶部卡片的中英文标题、说明与跳转链接 · 当前店铺{' '}
@@ -188,7 +190,13 @@ export function BusinessServicesCopyModule() {
                         <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-5">
                             <div className="flex items-center justify-between gap-3">
                                 <div>
-                                    <h2 className="text-sm font-bold">页面顶部文案</h2>
+                                    <h2 className="flex items-center gap-2 text-sm font-bold">
+                                        页面顶部文案
+                                        <FeatureHelpButton
+                                            topic="storefront.business-copy"
+                                            title="页面顶部文案"
+                                        />
+                                    </h2>
                                     <p className="mt-1 text-xs text-slate-500">
                                         保留同一配置块中的客户端插件与排序，只更新页面文案与跳转链接。
                                     </p>
@@ -278,7 +286,13 @@ export function BusinessServicesCopyModule() {
                         </section>
                         <section className="rounded-xl border border-slate-200 bg-white p-5">
                             <div className="flex items-center justify-between">
-                                <h2 className="text-sm font-bold">前台预览</h2>
+                                <h2 className="flex items-center gap-2 text-sm font-bold">
+                                    前台预览
+                                    <FeatureHelpButton
+                                        topic="storefront.business-copy"
+                                        title="商业服务页前台预览"
+                                    />
+                                </h2>
                                 <select
                                     value={previewLanguage}
                                     onChange={event => setPreviewLanguage(event.target.value as Language)}

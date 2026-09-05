@@ -11,6 +11,7 @@ import {
     XCircle,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
 import {
     PLATFORM_USDT_WALLETS_QUERY,
@@ -220,6 +221,7 @@ export function UsdtPaymentSetupPanel({
                 <div>
                     <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                         <WalletCards className="h-4 w-4 text-emerald-600" /> USDT-TRC20 收款
+                        <FeatureHelpButton topic="settings.usdt" title="USDT-TRC20 收款" />
                     </h2>
                     <p className="mt-1 text-xs leading-5 text-slate-500">
                         收款地址审核通过后，系统会自动为当前店铺分配 USDT 支付方式，无需在上方手工新增。
@@ -265,7 +267,10 @@ export function UsdtPaymentSetupPanel({
                         <section className="space-y-4 rounded-xl border border-slate-200 p-4">
                             <div className="flex items-start justify-between gap-3">
                                 <div>
-                                    <h3 className="text-xs font-bold text-slate-900">报价与汇率</h3>
+                                    <h3 className="flex items-center gap-2 text-xs font-bold text-slate-900">
+                                        报价与汇率
+                                        <FeatureHelpButton topic="settings.usdt" title="USDT 报价与汇率" />
+                                    </h3>
                                     <p className="mt-1 text-[10px] leading-4 text-slate-500">
                                         开启后，客户可按锁定汇率生成 10 分钟有效的 USDT 付款报价。
                                     </p>
@@ -404,7 +409,10 @@ export function UsdtPaymentSetupPanel({
 
                         <section className="space-y-4 rounded-xl border border-slate-200 p-4">
                             <div>
-                                <h3 className="text-xs font-bold text-slate-900">本网店收款钱包</h3>
+                                <h3 className="flex items-center gap-2 text-xs font-bold text-slate-900">
+                                    本网店收款钱包
+                                    <FeatureHelpButton topic="settings.usdt" title="本网店收款钱包" />
+                                </h3>
                                 <p className="mt-1 text-[10px] leading-4 text-slate-500">
                                     只填写 TRON 主网公钥地址。禁止提交私钥、助记词、钱包密码或付款密钥。
                                 </p>
@@ -484,6 +492,7 @@ export function UsdtPaymentSetupPanel({
                             <div>
                                 <h3 className="flex items-center gap-2 text-xs font-bold text-slate-900">
                                     <ShieldCheck className="h-4 w-4 text-blue-600" /> 平台待审核收款地址
+                                    <FeatureHelpButton topic="settings.usdt" title="平台待审核收款地址" />
                                 </h3>
                                 <p className="mt-1 text-[10px] leading-4 text-slate-500">
                                     应由未参与地址提交的第二名 SuperAdmin 对照钱包 App 完整地址和指纹复核。

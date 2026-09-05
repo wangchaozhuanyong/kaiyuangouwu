@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
 
+import type { ReactElement } from 'react';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { renderToStaticMarkup } from 'react-dom/server';
+import { renderToStaticMarkup as renderMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { FeatureHelpProvider } from '../../components/FeatureHelp';
 
 import { ConfirmDialogContext, type RequestConfirmation } from '../../components/confirm-dialog-context';
 import {
@@ -148,9 +150,11 @@ describe('BusinessBasicsPanel', () => {
 
         await act(async () => {
             root.render(
-                <ConfirmDialogContext.Provider value={requestConfirmation}>
-                    <BusinessBasicsPanel onChanged={async () => undefined} onError={() => undefined} />
-                </ConfirmDialogContext.Provider>,
+                <FeatureHelpProvider>
+                    <ConfirmDialogContext.Provider value={requestConfirmation}>
+                        <BusinessBasicsPanel onChanged={async () => undefined} onError={() => undefined} />
+                    </ConfirmDialogContext.Provider>
+                </FeatureHelpProvider>,
             );
         });
 
@@ -176,3 +180,7 @@ describe('BusinessBasicsPanel', () => {
         expect(deleteCountry).toHaveBeenCalledWith({ variables: { id: 'country-1' } });
     });
 });
+
+function renderToStaticMarkup(element: ReactElement) {
+    return renderMarkup(<FeatureHelpProvider>{element}</FeatureHelpProvider>);
+}

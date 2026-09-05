@@ -28,6 +28,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { getServerHealthUrl, sensitiveActionContext } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import type { CustomFieldDefinition, CustomFieldValueMap } from '../../custom-fields/custom-field-types';
 import {
     addCustomFieldsToDocument,
@@ -115,6 +116,7 @@ export function SystemOpsModule() {
                         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                             <Terminal className="h-5 w-5 text-blue-600" />
                             系统运维
+                            <FeatureHelpButton topic="settings.system-ops" title="系统运维" />
                         </h1>
                         <p className="mt-1 text-xs text-slate-500">
                             查看服务健康、任务队列、Telegram 通知、定时调度、配置仓库和 API 密钥
@@ -360,7 +362,10 @@ function HealthPanel({ data, graphQLError }: { data?: SystemOperationsResult; gr
                             <Server className="h-5 w-5" />
                         </div>
                         <div>
-                            <h2 className="text-sm font-bold text-slate-900">服务实时检查</h2>
+                            <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                                服务实时检查
+                                <FeatureHelpButton topic="settings.service-checks" title="服务实时检查" />
+                            </h2>
                             <p className="mt-1 text-xs leading-5 text-slate-500">
                                 每 30 秒请求一次后端{' '}
                                 <code className="rounded bg-slate-100 px-1 font-mono text-[10px]">
@@ -377,7 +382,10 @@ function HealthPanel({ data, graphQLError }: { data?: SystemOperationsResult; gr
                             <Gauge className="h-5 w-5" />
                         </div>
                         <div>
-                            <h2 className="text-sm font-bold text-amber-950">监控能力边界</h2>
+                            <h2 className="flex items-center gap-2 text-sm font-bold text-amber-950">
+                                监控能力边界
+                                <FeatureHelpButton topic="settings.service-checks" title="监控能力边界" />
+                            </h2>
                             <p className="mt-1 text-xs leading-5 text-amber-900">
                                 当前后端没有提供
                                 CPU、内存、数据库连接池和请求吞吐量指标。本页不生成模拟数据；需要这些指标时，应先接入
@@ -475,7 +483,10 @@ function JobsPanel({
             <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
                 <div className="flex flex-col gap-3 border-b border-slate-100 p-4 xl:flex-row xl:items-center xl:justify-between">
                     <div>
-                        <h2 className="text-sm font-bold text-slate-900">任务执行记录</h2>
+                        <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                            任务执行记录
+                            <FeatureHelpButton topic="settings.job-runs" title="任务执行记录" />
+                        </h2>
                         <p className="mt-1 text-[10px] text-slate-400">
                             Vendure 不提供通用“重试任意任务”接口，因此这里只允许取消未完成任务
                         </p>
@@ -669,7 +680,10 @@ function SchedulesPanel({
     return (
         <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
             <div className="border-b border-slate-100 p-5">
-                <h2 className="text-sm font-bold text-slate-900">定时任务调度</h2>
+                <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                    定时任务调度
+                    <FeatureHelpButton topic="settings.schedules" title="定时任务调度" />
+                </h2>
                 <p className="mt-1 text-xs text-slate-400">启停和立即执行均直接调用服务端调度器</p>
             </div>
             <div className="overflow-x-auto">
@@ -826,7 +840,10 @@ function SettingsStorePanel({
         <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
             <div className="flex flex-col gap-3 border-b border-slate-100 p-4 xl:flex-row xl:items-center xl:justify-between">
                 <div>
-                    <h2 className="text-sm font-bold text-slate-900">动态配置仓库</h2>
+                    <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                        动态配置仓库
+                        <FeatureHelpButton topic="settings.dynamic-config" title="动态配置仓库" />
+                    </h2>
                     <p className="mt-1 text-[10px] text-slate-400">
                         字段、作用域、只读状态和值全部由服务端注册；JSON 会保留原始类型
                     </p>
@@ -1002,7 +1019,10 @@ function ApiKeysPanel({
         <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
             <div className="flex items-center justify-between border-b border-slate-100 p-5">
                 <div>
-                    <h2 className="text-sm font-bold text-slate-900">API 密钥</h2>
+                    <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                        API 密钥
+                        <FeatureHelpButton topic="settings.api-keys" title="API 密钥" />
+                    </h2>
                     <p className="mt-1 text-xs text-slate-400">密钥明文只在创建或轮转成功后显示一次</p>
                 </div>
                 <button type="button" onClick={() => setCreateOpen(true)} className={primaryButton}>
@@ -1247,6 +1267,7 @@ function EditApiKeyDialog({
             </div>
             <div className="mt-5">
                 <DynamicCustomFieldsForm
+                    helpTopic="settings.dynamic-config"
                     title="API 密钥扩展字段"
                     fields={customFieldDefinitions}
                     values={customFieldValues}

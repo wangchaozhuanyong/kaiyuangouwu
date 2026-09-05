@@ -1,6 +1,7 @@
 import { ApolloClient, ApolloLink, InMemoryCache, Observable } from '@apollo/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
+import { FeatureHelpProvider } from '../../components/FeatureHelp';
 import type { StoreProfileRecord } from '../../graphql/management.graphql';
 import { StoreBrandAssets } from './StoreBrandAssets';
 import {
@@ -183,12 +184,14 @@ describe('store brand publication', () => {
 
     it('exposes three distinct preview and selection slots', () => {
         const html = renderToStaticMarkup(
-            <StoreBrandAssets
-                assets={storeProfileBrandAssets(profile)}
-                channel={profile.channel}
-                disabled={false}
-                onChange={() => undefined}
-            />,
+            <FeatureHelpProvider>
+                <StoreBrandAssets
+                    assets={storeProfileBrandAssets(profile)}
+                    channel={profile.channel}
+                    disabled={false}
+                    onChange={() => undefined}
+                />
+            </FeatureHelpProvider>,
         );
         expect(html).toContain('aria-label="选择店铺图标"');
         expect(html).toContain('aria-label="选择浅色背景 Logo"');

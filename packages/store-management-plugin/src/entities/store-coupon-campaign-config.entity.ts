@@ -7,6 +7,7 @@ import { CouponStackPolicy } from '../promotion/coupon-lifecycle.constants';
 @Entity({ name: 'store_coupon_campaign_config' })
 @Index('IDX_store_coupon_campaign_config_promotion', ['promotionId'], { unique: true })
 @Index('IDX_store_coupon_campaign_config_channel_claim', ['channelId', 'claimStartsAt', 'claimEndsAt'])
+@Index('IDX_store_coupon_campaign_config_channel_archived_created', ['channelId', 'archivedAt', 'createdAt'])
 export class StoreCouponCampaignConfig extends VendureEntity {
     constructor(input?: DeepPartial<StoreCouponCampaignConfig>) {
         super(input);
@@ -49,4 +50,7 @@ export class StoreCouponCampaignConfig extends VendureEntity {
 
     @Column({ type: 'boolean', default: true })
     returnOnFullRefund: boolean;
+
+    @Column({ type: Date, nullable: true })
+    archivedAt: Date | null;
 }

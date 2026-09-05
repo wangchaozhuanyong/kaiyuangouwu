@@ -3,6 +3,7 @@ import { ExternalLink, Globe2, Pencil, Plus, Store, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react';
 import { client } from '../../apollo';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { useCustomFieldDefinitions } from '../../custom-fields/custom-fields-context';
 import {
     STORE_COMMERCE_MODE_QUERY,
@@ -110,7 +111,10 @@ export function CommerceModePanel({
         <section className="min-h-[220px] rounded-xl border border-slate-200 bg-white p-5">
             <div className="flex flex-col gap-4 border-b border-slate-100 pb-4 lg:flex-row lg:items-start lg:justify-between">
                 <div>
-                    <h2 className="text-sm font-bold text-slate-900">当前店铺经营模式</h2>
+                    <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                        当前店铺经营模式
+                        <FeatureHelpButton topic="settings.commerce-mode" title="当前店铺经营模式" />
+                    </h2>
                     <p className="mt-1 max-w-3xl text-xs leading-5 text-slate-400">
                         控制可创建的商品类型、结账收货信息，以及后台显示的库存仓库或数字交付模块。
                     </p>
@@ -439,7 +443,10 @@ export function DomainsPanel({
             <section className="rounded-xl border border-slate-200 bg-white p-5">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                     <div>
-                        <h2 className="text-sm font-bold text-slate-900">{storeName(profile)} · 独立域名</h2>
+                        <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                            {storeName(profile)} · 独立域名
+                            <FeatureHelpButton topic="settings.store-profile" title="店铺独立域名" />
+                        </h2>
                         <p className="mt-1 text-xs text-slate-400">
                             先将域名 CNAME 指向{' '}
                             <code className="font-mono text-slate-600">

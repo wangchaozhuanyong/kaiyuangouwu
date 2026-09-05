@@ -1,6 +1,7 @@
 import { useMutation } from '@apollo/client/react';
 import { Edit3, Plus, ShieldCheck, Trash2 } from 'lucide-react';
 import { useState } from 'react';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
     DELETE_REFERRAL_POSTER_MUTATION,
     ReferralPosterRecord,
@@ -37,7 +38,10 @@ export function TodayOverview({ data }: { data: ReferralProgramResult['referralT
         <section>
             <div className="mb-2 flex items-center justify-between">
                 <div>
-                    <h2 className="text-sm font-bold text-slate-900">今日经营概览</h2>
+                    <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                        今日经营概览
+                        <FeatureHelpButton topic="marketing.referrals" title="今日经营概览" />
+                    </h2>
                     <p className="mt-0.5 text-[10px] text-slate-500">
                         业务日期 {data.businessDate}，按支付结算与退款后的净数据统计
                     </p>
@@ -118,7 +122,10 @@ export function ProgramSettings({
     return (
         <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-2xs">
             <div className="mb-5 border-b border-slate-100 pb-4">
-                <h2 className="text-sm font-bold text-slate-900">邀请返利规则</h2>
+                <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                    邀请返利规则
+                    <FeatureHelpButton topic="marketing.referral-rules" title="邀请返利规则" />
+                </h2>
                 <p className="mt-1 text-[11px] text-slate-500">
                     当前后端是一级邀请返利，不存在二级团队分佣；规则调整只影响后续订单，不篡改已有流水。
                 </p>
@@ -916,7 +923,10 @@ export function PostersPanel({
             {/* 系统预置海报模板 */}
             <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-2xs">
                 <div className="border-b border-slate-100 pb-4">
-                    <h2 className="text-sm font-bold text-slate-900">系统预置海报模板</h2>
+                    <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                        系统预置海报模板
+                        <FeatureHelpButton topic="marketing.poster-templates" title="系统预置海报模板" />
+                    </h2>
                     <p className="mt-1 text-[11px] text-slate-500">
                         系统内置 5
                         款全屏移动端海报模板（1080×1920）。您可以通过“在客户端显示”开关自由选择哪些在买家端展示；开启的模板会自动与自定义模板一同在前台展示。
@@ -1005,7 +1015,13 @@ export function PostersPanel({
             <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-2xs">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-4">
                     <div>
-                        <h2 className="text-sm font-bold text-slate-900">店铺自定义海报模板</h2>
+                        <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                            店铺自定义海报模板
+                            <FeatureHelpButton
+                                topic="marketing.poster-templates"
+                                title="店铺自定义海报模板"
+                            />
+                        </h2>
                         <p className="mt-1 text-[11px] text-slate-500">
                             上传您自己设计的专属背景图（建议尺寸 1080×1920
                             竖版）。开启开关后，买家在前台即可选用该海报。

@@ -1,4 +1,5 @@
 import { Image as ImageIcon, X } from 'lucide-react';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { DynamicCustomFieldsForm } from '../../custom-fields/DynamicCustomFieldsForm';
 import type { RefundPolicy } from '../../graphql/commerce.graphql';
 import { useProductEditor } from './ProductEditorContext';
@@ -49,7 +50,10 @@ export function ProductBasicTab() {
             {/* 核心属性 */}
             <div className="bg-white rounded-xl shadow-2xs border border-slate-200 p-6 space-y-5">
                 <div className="border-b border-slate-100 pb-3 flex justify-between items-center">
-                    <h3 className="text-sm font-bold text-slate-900">SPU 核心属性</h3>
+                    <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                        SPU 核心属性
+                        <FeatureHelpButton topic="catalog.spu-core" title="SPU 核心属性" />
+                    </h3>
 
                     <label className="flex items-center gap-2 cursor-pointer">
                         <span className="text-xs font-bold text-slate-600">商品状态</span>
@@ -144,7 +148,10 @@ export function ProductBasicTab() {
             {/* 商品级履约类型与售后政策 */}
             <div className="space-y-5 rounded-xl border border-slate-200 bg-white p-6 shadow-2xs">
                 <div className="border-b border-slate-100 pb-3">
-                    <h3 className="text-sm font-bold text-slate-900">商品类型与交付政策</h3>
+                    <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                        商品类型与交付政策
+                        <FeatureHelpButton topic="catalog.product-policy" title="商品类型与交付政策" />
+                    </h3>
                     <p className="mt-1 text-xs leading-5 text-slate-400">
                         商品类型固定在 SPU 级，同一商品下所有 SKU 使用相同类型；数字交付方式仍按 SKU 配置。
                     </p>
@@ -241,7 +248,13 @@ export function ProductBasicTab() {
                     <section className="p-6">
                         <div className="flex min-h-12 items-start justify-between gap-4 border-b border-slate-100 pb-3">
                             <div>
-                                <h3 className="text-sm font-bold text-slate-900">商品主图</h3>
+                                <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                                    商品主图
+                                    <FeatureHelpButton
+                                        topic="catalog.product-assets"
+                                        title="商品主图与详情图"
+                                    />
+                                </h3>
                                 <p className="mt-0.5 text-xs leading-5 text-slate-400">
                                     用于商品列表、搜索结果和详情页首屏
                                 </p>
@@ -310,7 +323,10 @@ export function ProductBasicTab() {
                     <section className="border-t border-slate-200 bg-slate-50/40 p-6 lg:border-l lg:border-t-0">
                         <div className="flex min-h-12 items-start justify-between gap-4 border-b border-slate-200 pb-3">
                             <div>
-                                <h3 className="text-sm font-bold text-slate-900">商品详情图</h3>
+                                <h3 className="text-sm font-bold text-slate-900">
+                                    商品详情图
+                                    <FeatureHelpButton topic="catalog.product-assets" title="商品详情图" />
+                                </h3>
                                 <p className="mt-0.5 text-xs leading-5 text-slate-400">
                                     可多选素材，用于展示商品细节、功能和使用说明
                                 </p>
@@ -383,6 +399,7 @@ export function ProductBasicTab() {
                 </div>
             </div>
             <DynamicCustomFieldsForm
+                helpTopic="catalog.product-editor"
                 fields={productExtensionFields}
                 values={dynamicCustomFieldValues}
                 onChange={setDynamicCustomFieldValues}
