@@ -628,6 +628,13 @@ export interface MarketConfig {
     label: string;
 }
 
+export interface StorefrontLegalIdentity {
+    legalEntityName: string | null;
+    legalRegistrationCountry: string | null;
+    supportEmail: string | null;
+    privacyEmail: string | null;
+}
+
 export interface StorefrontConfig {
     code: string;
     defaultLanguageCode: string;
@@ -645,6 +652,10 @@ export interface StorefrontConfig {
     brandPrimaryColor?: string | null;
     brandAccentColor?: string | null;
     brandHighlightColor?: string | null;
+    legalEntityName?: string | null;
+    legalRegistrationCountry?: string | null;
+    supportEmail?: string | null;
+    privacyEmail?: string | null;
     currencyConfiguration?: StorefrontCurrencyConfiguration;
     customFields: {
         storefrontNameZh?: string | null;

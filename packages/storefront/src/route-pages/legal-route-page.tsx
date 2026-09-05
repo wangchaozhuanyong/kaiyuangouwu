@@ -12,6 +12,7 @@ export function LegalRoutePage() {
             language={runtime.language}
             storefrontName={runtime.storefrontName}
             contentBlocks={runtime.contentBlocks}
+            legalIdentity={runtime.legalIdentity}
             onBack={runtime.goBack}
         />
     );

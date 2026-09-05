@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
 import type { StorefrontContentBlock, StorefrontContentBlockType } from './types';
+import { describe, expect, it } from 'vitest';
 
 import {
     authVisualAccentColor,
@@ -69,10 +69,10 @@ describe('managed auth visuals', () => {
 
     it('falls back safely when no managed content has been published', () => {
         expect(resolveAuthVisualMessage(undefined, 'register', 'zh')).toMatchObject({
-            title: '创建达码通账号',
+            title: '创建 MOYAO AI 账号',
         });
-        expect(authVisualAccentColor(undefined, 'register')).toBe('#60a5fa');
-        expect(authVisualOverlayColor(undefined)).toBe('#0B1E2D');
+        expect(authVisualAccentColor(undefined, 'register')).toBe('#8B5CF6');
+        expect(authVisualOverlayColor(undefined)).toBe('#070B14');
     });
 
     it('keeps managed colors authoritative after a media publish', () => {

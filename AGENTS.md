@@ -14,16 +14,22 @@ Headless e-commerce framework. Lerna monorepo with fixed versioning.
 - Publish these changes with a repository-owned release script that calls the Vendure Admin API. Manual Dashboard publishing may be used only for an explicitly requested one-off operation; it must not be the only undocumented release path.
 - The standard media publisher is `packages/dev-server/scripts/sync-storefront-media.mjs`. Extend its manifest or create an equally reviewed, tested, idempotent Admin API publisher when another managed data type is introduced.
 - Never simulate synchronization with client-only filename matching, hidden URL replacement maps, hard-coded asset overrides, or duplicated managed content. Bundled client assets are allowed only as explicit empty-state or unavailable-backend fallbacks.
+- `bun run check:storefront-publishing` is a required repository gate. All managed storefront/brand media must be classified by an Admin API publisher, the central `packages/storefront/src/storefront-images.ts` fallback registry, or the explicit design-only inventory. Runtime components must not import managed media directly or hard-code remote media URLs.
 - Every Admin API publisher must:
-  - default to read-only validation or `--dry-run`, with writes requiring an explicit `--apply` flag;
-  - require an additional explicit production/remote-write guard such as `--allow-remote`;
-  - read credentials and target Channels from environment variables, never command arguments, source files, or logs;
-  - resolve products by stable SKU and managed content by stable code/type, and fail before writes when a target is missing or ambiguous;
-  - upload assets with deterministic logical tags plus a content hash, reuse unchanged assets, and remain safe to repeat;
-  - bind the same Vendure asset IDs/settings to the Dashboard-managed entity consumed by the Shop API;
-  - avoid deleting historical assets or user data during a normal publish so rollback remains possible;
-  - report a reviewable summary of planned/applied targets without exposing secrets.
-- Production release order is mandatory: start the candidate API, wait for health, run the publisher in dry-run mode, review exact Channel/SKU/content targets, run `--apply --allow-remote`, verify Admin API/Dashboard and Shop API/client resolve the same asset IDs and values, and only then promote the storefront candidate. A sync or verification failure stops the release.
+    - default to read-only validation or `--dry-run`, with writes requiring an explicit `--apply` flag;
+    - require an additional explicit production/remote-write guard such as `--allow-remote`;
+    - read credentials and target Channels from environment variables, never command arguments, source files, or logs;
+    - resolve products by stable SKU and managed content by stable code/type, and fail before writes when a target is missing or ambiguous;
+    - upload assets with deterministic logical tags plus a content hash, reuse unchanged assets, and remain safe to repeat;
+    - bind the same Vendure asset IDs/settings to the Dashboard-managed entity consumed by the Shop API;
+    - preserve existing asset galleries, use optimistic `expectedUpdatedAt` versions for managed content, and batch related content changes atomically where the API supports it;
+    - hard-verify the written values through both Admin API and Shop API before returning success, and restore the previous bindings if post-write verification fails;
+    - model the production source/English translation pair in tests. Changing Simplified Chinese while resubmitting byte-identical English can be treated as stale automatic translation; use a reviewed new English value or an explicit supported manual lock, then verify the persisted English value rather than assuming the submitted text was preserved;
+    - mirror the real client's Shop API locale routing in verification. If the client sends both the `languageCode` query parameter and `language-code` header, the publisher must send both and prove each requested locale independently; a header-only probe is not acceptable evidence;
+    - avoid deleting historical assets or user data during a normal publish so rollback remains possible;
+    - report a reviewable summary of planned/applied targets without exposing secrets.
+- Production release order is mandatory: start the candidate API, wait for health, run the publisher in dry-run mode, review exact Channel/SKU/content targets, run `--apply --allow-remote`, run the publisher's read-only verification mode, verify Admin API/Dashboard and Shop API/client resolve the same asset IDs and values, and only then promote the storefront candidate. A sync or verification failure stops the release.
+- When a release introduces or changes the production guard for a managed publisher, deploy that guard/bootstrap in a separate first release before releasing the guarded publisher or managed data. The second release must use the new reviewed scope and verification path; never bypass the currently deployed guard to combine both stages.
 - Pure presentation changes such as CSS spacing may ship with the client build. If the value is editable or represents catalog/content data, it belongs in Vendure and must use the Admin API publishing path above.
 - Any task that changes managed storefront data or its publisher must update relevant manifests/config examples/runbook instructions and run publisher tests, storefront tests, and the relevant production build checks.
 
@@ -54,12 +60,14 @@ When adding a new test, **always check existing suites first** before creating a
 - `tests/regression/` — **only** for tests that genuinely don't fit any existing suite
 
 Add a comment referencing the issue number above the test, e.g.:
+
 ```ts
 // #4393 — product list should default to sorting by updatedAt descending
 test('should apply descending updatedAt sort by default', async ({ page }) => {
 ```
 
 Run dashboard e2e tests from `packages/dashboard`:
+
 ```bash
 CI=true VITE_TEST_PORT=5176 bunx playwright test --config e2e/playwright.config.ts <test-path> --reporter=list
 ```
@@ -93,8 +101,8 @@ CI=true VITE_TEST_PORT=5176 bunx playwright test --config e2e/playwright.config.
 ## Production Deployment
 
 - Canonical runbook: `deploy/DEPLOYMENT_RUNBOOK.md`. Read it before every production release and update it when the topology changes.
-- Production storefronts: AwanMesh at `https://moyaoai.com`; Meiyijia at `https://damatong.net`.
-- Production dashboard: `https://console.moyaoai.com/dashboard/`; the legacy Damatong console redirects here.
+- Production storefronts: MOYAO AI at `https://moyaoai.com`; Meiyijia at `https://damatong.net`.
+- Production dashboard: `https://console.moyaoai.com/dashboard/`; the legacy console domain redirects here.
 - AWS region: `ap-northeast-1` (Tokyo); EC2 instance: `i-041a146558e432cbf`; security group: `sg-013cf38df187011ca`.
 - Current public IPv4 snapshot: `52.196.65.143`; SSH user: `ubuntu`. The production SSH private key is stored outside the repository at `/Users/wangchao/Desktop/yamaxunmiyao2/yunqiao-vendure-prod-key.pem`; use this exact path with `-i` and `-o IdentitiesOnly=yes` for production SSH/rsync access unless the instance or key is explicitly replaced.
 - Server repository: `/var/www/kaiyuangouwu`; branch: `main`; Vendure upstream: `127.0.0.1:3002`.

@@ -197,6 +197,17 @@ export const CATALOG_EXPORT_ROWS_QUERY = gql`
     }
 `;
 
+export const CATALOG_EXPORT_CONTEXT_QUERY = gql`
+    query NextAdminCatalogExportContext {
+        stockLocations(options: { take: 100 }) {
+            items {
+                id
+                name
+            }
+        }
+    }
+`;
+
 export const CATALOG_INTEGRITY_SUMMARY_QUERY = gql`
     query NextAdminCatalogIntegritySummary {
         catalogIntegritySummary {

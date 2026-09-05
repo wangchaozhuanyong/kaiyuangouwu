@@ -133,16 +133,13 @@
 
     .brand {
         max-width: 240px;
-        gap: 10px;
+        gap: 0;
     }
 
-    .brand-mark {
-        width: 38px;
-        height: 38px;
-    }
-
-    .brand strong {
-        font-size: 16px;
+    .brand-wordmark {
+        width: min(220px, 100%);
+        max-width: none;
+        height: 48px;
     }
 
     .search-trigger {

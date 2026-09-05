@@ -353,7 +353,7 @@ defineNextAdminExtension({
             id: 'operations-card-pool',
             path: '/catalog/card-pool',
             legacyPaths: ['/auto-card'],
-            title: '数字商品与卡密',
+            title: '发卡记录与异常',
             component: CardPoolModule,
             permissions: ['ReadCatalog', 'ReadProduct'],
             preload: routeModuleLoaders.cardPool,

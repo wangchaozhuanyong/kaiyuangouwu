@@ -11,7 +11,7 @@ import {
 describe('route loading skeletons', () => {
     it('uses a semantic branded transition without replacing the destination layout', () => {
         const markup = renderToStaticMarkup(
-            <RouteTransitionLoader language="zh" storefrontName="云桥Ai" logoUrl="/brand.svg" />,
+            <RouteTransitionLoader language="zh" storefrontName="MOYAO AI｜模钥" logoUrl="/brand.svg" />,
         );
 
         expect(markup).toContain('class="route-transition"');
@@ -20,7 +20,7 @@ describe('route loading skeletons', () => {
         expect(markup).toContain('aria-busy="true"');
         expect(markup).toContain('class="route-transition-card"');
         expect(markup).toContain('src="/brand.svg"');
-        expect(markup).toContain('云桥Ai');
+        expect(markup).toContain('MOYAO AI｜模钥');
         expect(markup).not.toContain('page-skeleton--route');
     });
 

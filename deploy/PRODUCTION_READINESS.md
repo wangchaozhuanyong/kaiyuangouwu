@@ -8,7 +8,7 @@
 
 上线前必须解决以下阻塞项：
 
-1. 将已确认的 `moyaoai.com` 和 `damatong.net` 分别绑定、验证到 AwanMesh 主 Channel 与美宜佳 Channel。
+1. 将已确认的 `moyaoai.com` 和 `damatong.net` 分别绑定、验证到 MOYAO AI 主 Channel 与美宜佳 Channel。
 2. 确认经营主体所在地、价格是否含税，以及数字商品面向各司法辖区的税务规则。
 3. 如上架实物商品，配置真实的全球配送范围、费用、免邮门槛和无法配送规则。
 4. 选择真实支付渠道并完成服务端回调、退款、失败重试和对账测试。`dummy-payment-handler` 仅用于后台受控开启的模拟支付，不是正式支付处理器。
@@ -46,7 +46,7 @@
 
 ### P0：接入正式域名和邮件
 
-- AwanMesh 主网店使用 `moyaoai.com`，美宜佳店铺使用 `damatong.net`，统一后台使用 `console.moyaoai.com`。
+- MOYAO AI 主网店使用 `moyaoai.com`，美宜佳店铺使用 `damatong.net`，统一后台使用 `console.moyaoai.com`。
 - 在 Store Domain 中创建域名记录，并完成 DNS 验证。
 - 每个 Channel 只能有一个有效主域名，账户验证和密码重置邮件将使用该主域名。
 - 生产环境使用 `STORE_DOMAIN_ROUTING_MODE=require-domain`。
@@ -65,7 +65,7 @@
 3. 将以下变量同时注入 API Server 与 Worker；`SMTP_PASSWORD` 的值由生产 Secret 管理提供。
 
 ```dotenv
-VENDURE_EMAIL_FROM="AwanMesh <noreply@moyaoai.com>"
+VENDURE_EMAIL_FROM="MOYAO AI <noreply@moyaoai.com>"
 SMTP_HOST=smtp.resend.com
 SMTP_PORT=465
 SMTP_SECURE=true
@@ -270,7 +270,7 @@ node packages/dev-server/dist/index.js
 
 `deploy/nginx/damatong.conf` 已准备以下目标配置（生产证书和 DNS 生效后才能加载）：
 
-- `moyaoai.com` 为 AwanMesh 主网店，`damatong.net` 为美宜佳网店；
+- `moyaoai.com` 为 MOYAO AI 主网店，`damatong.net` 为美宜佳网店；
 - 两个 `www` 域名分别 301 到对应根域；
 - `console.moyaoai.com` 为统一管理后台，`console.damatong.net` 301 到新后台；
 - Cloudflare for SaaS 保留店铺 `Host`；启用自动化前必须现场验证 Cloudflare 默认客户域名 SNI 或已配置的 SNI 覆盖能通过源站证书；
@@ -295,7 +295,7 @@ node packages/dev-server/dist/index.js
 - 新 SAN 证书是否已真实覆盖两个根域、两个 `www` 和两个 `console` 域名。
 - 平台外部的商家域名是否已按后台提示完成 CNAME 与 TXT 记录。
 
-完整切换步骤与回滚边界见 `deploy/AWANMESH_DOMAIN_CUTOVER.md`。
+完整切换步骤与回滚边界见 `deploy/MOYAO_DOMAIN_CUTOVER.md`。
 
 ## 上线放行表
 
@@ -319,7 +319,7 @@ node packages/dev-server/dist/index.js
 
 开始下一轮正式配置前，需要一次性确认：
 
-1. 生产后台中 AwanMesh 与美宜佳的准确 Channel code/id，以及美宜佳商品数据的真实来源与字段映射。
+1. 生产后台中 MOYAO AI 与美宜佳的准确 Channel code/id，以及美宜佳商品数据的真实来源与字段映射。
 2. 经营主体所在地、商品价格是否含税，以及跨境数字商品的税务规则。
 3. 如上架实物商品，提供配送公司、全球配送区域、价格和免邮规则。
 4. 面向全球客户的支付渠道、收款主体与支持币种。

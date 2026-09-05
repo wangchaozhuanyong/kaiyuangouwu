@@ -14,7 +14,7 @@ import {
     verifyRuntimeArtifact,
     writeIntegrityFiles,
 } from './production-runtime-verify.mjs';
-import { awanMeshBrandAssets } from './sync-awanmesh-brand.mjs';
+import { moyaoBrandAssets } from './sync-moyao-brand.mjs';
 import { storefrontMediaManifest } from './sync-storefront-media.mjs';
 
 const scriptPath = fileURLToPath(import.meta.url);
@@ -48,8 +48,8 @@ export const RUNTIME_PACKAGE_ASSETS = Object.freeze({
 const STOREFRONT_MEDIA_RUNTIME_FILES = Object.freeze(
     storefrontMediaManifest.map(entry => path.relative(repositoryRoot, entry.file).split(path.sep).join('/')),
 );
-const AWANMESH_BRAND_RUNTIME_FILES = Object.freeze(
-    awanMeshBrandAssets.map(entry => path.relative(repositoryRoot, entry.file).split(path.sep).join('/')),
+const MOYAO_BRAND_RUNTIME_FILES = Object.freeze(
+    moyaoBrandAssets.map(entry => path.relative(repositoryRoot, entry.file).split(path.sep).join('/')),
 );
 
 export const REQUIRED_RUNTIME_FILES = Object.freeze([
@@ -65,11 +65,12 @@ export const REQUIRED_RUNTIME_FILES = Object.freeze([
     'packages/telemetry-plugin/dist/index.js',
     'packages/storefront/dist/index.html',
     'packages/dev-server/scripts/sync-storefront-media.mjs',
-    'packages/dev-server/scripts/sync-awanmesh-brand.mjs',
+    'packages/dev-server/scripts/sync-auth-visuals.mjs',
+    'packages/dev-server/scripts/sync-moyao-brand.mjs',
     'packages/dev-server/scripts/repair-inventory-inheritance.mjs',
     'packages/image-generation-plugin/dist/index.js',
     ...STOREFRONT_MEDIA_RUNTIME_FILES,
-    ...AWANMESH_BRAND_RUNTIME_FILES,
+    ...MOYAO_BRAND_RUNTIME_FILES,
 ]);
 
 function isPathInside(parent, candidate) {
@@ -225,7 +226,8 @@ async function copyRuntimeBuildOutputs(stagingRoot) {
 export async function copyStorefrontMediaReleaseInputs(stagingRoot) {
     const releaseScripts = [
         'sync-storefront-media.mjs',
-        'sync-awanmesh-brand.mjs',
+        'sync-auth-visuals.mjs',
+        'sync-moyao-brand.mjs',
         'repair-inventory-inheritance.mjs',
     ];
     for (const scriptName of releaseScripts) {
@@ -245,10 +247,10 @@ export async function copyStorefrontMediaReleaseInputs(stagingRoot) {
         await cp(entry.file, destination);
     }
 
-    for (const entry of awanMeshBrandAssets) {
+    for (const entry of moyaoBrandAssets) {
         const relativePath = path.relative(repositoryRoot, entry.file);
         if (relativePath.startsWith(`..${path.sep}`) || path.isAbsolute(relativePath)) {
-            throw new Error(`AwanMesh brand asset must stay inside the repository: ${entry.file}`);
+            throw new Error(`MOYAO AI brand asset must stay inside the repository: ${entry.file}`);
         }
         const destination = path.join(stagingRoot, relativePath);
         await mkdir(path.dirname(destination), { recursive: true });
@@ -272,7 +274,8 @@ async function writeRuntimeRootFiles(stagingRoot, rootManifest, metadata) {
             'repair:inventory-inheritance':
                 'node packages/dev-server/scripts/repair-inventory-inheritance.mjs',
             'sync:storefront-media': 'node packages/dev-server/scripts/sync-storefront-media.mjs',
-            'sync:awanmesh-brand': 'node packages/dev-server/scripts/sync-awanmesh-brand.mjs',
+            'sync:auth-visuals': 'node packages/dev-server/scripts/sync-auth-visuals.mjs',
+            'sync:moyao-brand': 'node packages/dev-server/scripts/sync-moyao-brand.mjs',
             'start:server': 'node packages/dev-server/dist/index.js',
             'start:worker': 'node packages/dev-server/dist/index-worker.js',
             verify: 'node verify-runtime.mjs',

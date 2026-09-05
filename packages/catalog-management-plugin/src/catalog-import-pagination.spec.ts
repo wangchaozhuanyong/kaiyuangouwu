@@ -14,7 +14,19 @@ describe('catalog import row pagination', () => {
                     findOne: vi.fn().mockResolvedValue({ id: 'job-1', channelId: 'channel-1' }),
                 };
             }
-            if (entity === CatalogImportRow) return { findAndCount };
+            if (entity === CatalogImportRow)
+                return {
+                    findAndCount,
+                    createQueryBuilder: () => ({
+                        select: () => ({
+                            addSelect: () => ({
+                                where: () => ({
+                                    groupBy: () => ({ getRawMany: vi.fn().mockResolvedValue([]) }),
+                                }),
+                            }),
+                        }),
+                    }),
+                };
             throw new Error('Unexpected repository');
         });
         const service = createService(getRepository);

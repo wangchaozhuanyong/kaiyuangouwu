@@ -757,7 +757,7 @@ export function useProductEditorForm() {
             return;
         }
         setVariants(current => [...current, ...generated]);
-        showNotice(`已生成 ${generated.length} 个待填写 SKU 组合，请补充编码、售价和库存后保存`);
+        showNotice(`已生成 ${generated.length} 个待填写 SKU 组合，请补充编码、销售价和库存后保存`);
     };
 
     const handleDeleteVariant = async (index: number) => {
@@ -888,7 +888,7 @@ export function useProductEditorForm() {
     const validateForm = (): boolean => {
         const errors: typeof formErrors = {};
         if (!productName.trim()) {
-            errors.name = '请输入商品名称';
+            errors.name = '请输入名称';
         }
         if (!description.trim()) {
             errors.description = '请输入中文商品详情';
@@ -1061,7 +1061,7 @@ export function useProductEditorForm() {
                 try {
                     await syncProductOptionGroups(newProductId, []);
                 } catch (err: unknown) {
-                    navigate(`/catalog/products/${newProductId}`, { replace: true });
+                    navigate(`/catalog/products/${newProductId}?tab=variants`, { replace: true });
                     showError(
                         `[阶段 2：商品已创建，但规格模板分配失败] ${toUserFacingError(err, '请稍后重试')}`,
                     );
@@ -1092,7 +1092,7 @@ export function useProductEditorForm() {
                         });
                     } catch (err: unknown) {
                         // SPU 已创建但规格失败，如实告知用户，不能冒充成功
-                        navigate(`/catalog/products/${newProductId}`, { replace: true });
+                        navigate(`/catalog/products/${newProductId}?tab=variants`, { replace: true });
                         showError(
                             `[阶段 3：商品与规格模板已保存，但 SKU 变体创建失败] ${toUserFacingError(err, '请稍后重试')}`,
                         );
@@ -1107,7 +1107,7 @@ export function useProductEditorForm() {
                     await syncProductChannels(newProductId, activeChannelId ? [activeChannelId] : []);
                     await syncProductCollections(newProductId);
                 } catch (err: unknown) {
-                    navigate(`/catalog/products/${newProductId}`, { replace: true });
+                    navigate(`/catalog/products/${newProductId}?tab=variants`, { replace: true });
                     showError(
                         `[阶段 4：商品与 SKU 已保存，但销售店铺或分类归属保存失败] ${toUserFacingError(err, '请稍后重试')}`,
                     );
@@ -1116,7 +1116,7 @@ export function useProductEditorForm() {
                 }
 
                 showNotice(`商品《${productName}》及 ${variants.length} 个规格变体已全部发布入库！`);
-                navigate(`/catalog/products/${newProductId}`, { replace: true });
+                navigate(`/catalog/products/${newProductId}?tab=variants`, { replace: true });
             } else {
                 const existingVariants = variants.filter(v => v.id && !v.isNew);
                 const newVariants = variants.filter(v => v.isNew);

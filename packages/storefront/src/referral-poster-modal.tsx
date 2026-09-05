@@ -24,11 +24,11 @@ export const referralPosterStyles: ReferralPosterStyle[] = [
     {
         id: 'BRAND_MINIMAL',
         nameZh: '模钥简约',
-        nameEn: 'AwanMesh minimal',
-        colors: ['#eef7ff', '#ffffff', '#eaf4ff'],
-        background: 'linear-gradient(145deg,#eef7ff,#ffffff 48%,#eaf4ff)',
-        foreground: '#0e2a63',
-        accent: '#1269e8',
+        nameEn: 'MOYAO AI minimal',
+        colors: ['#f1f0ff', '#ffffff', '#e8fbff'],
+        background: 'linear-gradient(145deg,#f1f0ff,#ffffff 48%,#e8fbff)',
+        foreground: '#19154b',
+        accent: '#635BFF',
         pattern: 'minimal',
         dark: false,
     },
@@ -68,11 +68,11 @@ export const referralPosterStyles: ReferralPosterStyle[] = [
     {
         id: 'CLOUD_BRIDGE_ORBIT',
         nameZh: '模钥轨道',
-        nameEn: 'AwanMesh orbit',
+        nameEn: 'MOYAO AI orbit',
         colors: ['#f1efff', '#d9e6ff', '#efe3ff'],
         background: 'linear-gradient(145deg,#f1efff,#d9e6ff 48%,#efe3ff)',
         foreground: '#31265f',
-        accent: '#6657dc',
+        accent: '#8B5CF6',
         pattern: 'orbit',
         dark: false,
     },
@@ -108,7 +108,7 @@ export function ReferralPosterModal({
     onNotify: (message: string) => void;
 }) {
     const isZh = language === 'zh';
-    const effectiveLogoUrl = logoUrl || '/storefront/awanmesh-logo.svg';
+    const effectiveLogoUrl = logoUrl || '/storefront/moyao-ai/icon.webp';
     const styles = useMemo(() => {
         const custom = templateConfigs.filter(template => template.enabled);
         const enabledLegacy = referralPosterStyles.filter(entry => templates.includes(entry.id));
@@ -338,7 +338,7 @@ export function ReferralPosterModal({
                             alt={isZh ? `${style.name}邀请海报预览` : `${style.name} referral poster preview`}
                         />
                     ) : (
-                        <div className="grid size-full place-items-center bg-[linear-gradient(145deg,#172554,#7c3aed,#db2777)] text-sm font-bold text-white">
+                        <div className="grid size-full place-items-center bg-[linear-gradient(145deg,#070B14,#635BFF,#22D3EE)] text-sm font-bold text-white">
                             {isZh ? '正在生成海报…' : 'Generating poster…'}
                         </div>
                     )}
@@ -439,8 +439,8 @@ function legacyPosterTemplate(style: ReferralPosterStyle, isZh: boolean): Poster
         featureThreeTitleEn: 'Dedicated support',
         featureThreeTextZh: '专业客服 贴心服务',
         featureThreeTextEn: 'Friendly help when you need it',
-        qrEyebrowZh: '扫码访问 AwanMesh 模钥',
-        qrEyebrowEn: 'Scan AwanMesh',
+        qrEyebrowZh: '扫码访问 MOYAO AI 模钥',
+        qrEyebrowEn: 'Scan MOYAO AI',
         qrTitleZh: '发现更多实用 AI 服务',
         qrTitleEn: 'Discover practical AI services',
         qrDescriptionZh: '满足多种 AI 使用场景',
@@ -453,8 +453,8 @@ function legacyPosterTemplate(style: ReferralPosterStyle, isZh: boolean): Poster
         sceneThreeEn: 'Learn',
         sceneFourZh: '智能编程',
         sceneFourEn: 'Code',
-        ctaTextZh: '长按识别二维码，立即进入 AwanMesh 模钥',
-        ctaTextEn: 'Press and hold to enter AwanMesh',
+        ctaTextZh: '长按识别二维码，立即进入 MOYAO AI 模钥',
+        ctaTextEn: 'Press and hold to enter MOYAO AI',
         footerTitleZh: '让好用的 AI，真正为你所用',
         footerTitleEn: 'AI that works for you',
         footerTextZh: '热门 AI 工具与数字服务一站式平台',
@@ -522,7 +522,7 @@ async function renderReferralPoster({
 
     // 01. Brand block
     try {
-        const logo = await getCachedImage(logoUrl || '/storefront/awanmesh-logo.svg', true);
+        const logo = await getCachedImage(logoUrl || '/storefront/moyao-ai/icon.webp', true);
         context.save();
         roundedRect(context, 74, 72, 106, 106, 28);
         context.clip();
@@ -1046,9 +1046,9 @@ function drawCornerNetwork(
 function getShareDomain(shareUrl: string): string {
     try {
         if (typeof window !== 'undefined' && window.location.host) return window.location.host;
-        return new URL(shareUrl).host || 'damatong.net';
+        return new URL(shareUrl).host || 'moyaoai.com';
     } catch {
-        return 'damatong.net';
+        return 'moyaoai.com';
     }
 }
 

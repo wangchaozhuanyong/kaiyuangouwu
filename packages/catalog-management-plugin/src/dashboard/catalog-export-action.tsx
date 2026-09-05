@@ -3,6 +3,11 @@ import {
     AlertDescription,
     Button,
     Progress,
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
     Sheet,
     SheetContent,
     SheetDescription,
@@ -15,7 +20,7 @@ import {
     useQuery,
 } from '@vendure/dashboard';
 import { AlertTriangle, Download, FileSpreadsheet, Loader2, ShieldCheck } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { CatalogExportFormat, downloadCatalogBlob, exportCatalogRowsLocally } from './catalog-export-file';
 import {
@@ -23,6 +28,7 @@ import {
     CatalogIntegritySummaryRecord,
     catalogExportRowsQuery,
     catalogIntegritySummaryQuery,
+    stockLocationsQuery,
 } from './catalog-management.graphql';
 
 export function CatalogExportAction() {
@@ -31,7 +37,7 @@ export function CatalogExportAction() {
         <>
             <Button variant="outline" onClick={() => setOpen(true)}>
                 <Download className="mr-2 size-4" />
-                导出报表
+                导出可回导商品表
             </Button>
             <CatalogExportSheet open={open} onOpenChange={setOpen} />
         </>
@@ -44,6 +50,21 @@ function CatalogExportSheet({
 }: Readonly<{ open: boolean; onOpenChange: (open: boolean) => void }>) {
     const { activeChannel } = useChannel();
     const [progress, setProgress] = useState(0);
+    const [stockLocationId, setStockLocationId] = useState('');
+    const locationsQuery = useQuery({
+        queryKey: ['catalog-export-stock-locations', activeChannel?.id],
+        queryFn: () =>
+            api.query<{ stockLocations: { items: Array<{ id: string; name: string }> } }>(
+                stockLocationsQuery,
+            ),
+        enabled: open,
+    });
+    const locations = locationsQuery.data?.stockLocations.items ?? [];
+    useEffect(() => {
+        if (!locations.some(location => location.id === stockLocationId)) {
+            setStockLocationId(locations[0]?.id ?? '');
+        }
+    }, [locations, stockLocationId]);
     const integrityQuery = useQuery({
         queryKey: ['catalog-integrity-summary', activeChannel?.id],
         queryFn: () => api.query<CatalogIntegritySummaryRecord>(catalogIntegritySummaryQuery),
@@ -70,7 +91,8 @@ function CatalogExportSheet({
                 if (page.catalogExportRows.items.length === 0) break;
             }
             setProgress(90);
-            const output = await exportCatalogRowsLocally(rows, format);
+            if (!stockLocationId) throw new Error('请选择默认回导仓库');
+            const output = await exportCatalogRowsLocally(rows, format, stockLocationId);
             setProgress(100);
             return { ...output, count: rows.length };
         },
@@ -91,7 +113,7 @@ function CatalogExportSheet({
             >
                 <SheetHeader>
                     <SheetTitle className="flex items-center gap-2">
-                        <FileSpreadsheet className="size-5" /> 商品标准报表
+                        <FileSpreadsheet className="size-5" /> 导出可回导商品表
                     </SheetTitle>
                     <SheetDescription>
                         服务器只返回结构化商品数据，XLSX 或 CSV 文件在当前浏览器中生成并直接下载。
@@ -101,11 +123,32 @@ function CatalogExportSheet({
                     <Alert>
                         <ShieldCheck className="size-4" />
                         <AlertDescription>
-                            XLSX 包含商品与SKU、库存策略、批次效期和字段说明四个工作表；CSV 只导出商品与SKU。
+                            XLSX 保留全部仓库库存明细；CSV 按所选仓库导出一行一个 SKU，两者都可再次导入。
                         </AlertDescription>
                     </Alert>
                     <div className="rounded-lg border p-4 text-sm">
                         当前门店：<strong>{activeChannel?.code ?? '—'}</strong>
+                    </div>
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium">默认回导仓库</label>
+                        <Select
+                            value={stockLocationId}
+                            onValueChange={value => value && setStockLocationId(value)}
+                        >
+                            <SelectTrigger>
+                                <SelectValue placeholder="请选择仓库" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {locations.map(location => (
+                                    <SelectItem key={location.id} value={location.id}>
+                                        {location.name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">
+                            主表的库存量和上下限来自该仓库；库存是绝对值。
+                        </p>
                     </div>
                     {integrityQuery.isLoading && (
                         <div className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
@@ -151,21 +194,29 @@ function CatalogExportSheet({
                     <div className="grid gap-3 sm:grid-cols-2">
                         <Button
                             disabled={
-                                mutation.isPending || integrityQuery.isLoading || integrityQuery.isError
+                                mutation.isPending ||
+                                integrityQuery.isLoading ||
+                                integrityQuery.isError ||
+                                locationsQuery.isLoading ||
+                                !stockLocationId
                             }
                             onClick={() => mutation.mutate('xlsx')}
                         >
                             {mutation.isPending && <Loader2 className="mr-2 size-4 animate-spin" />}
-                            导出标准 XLSX
+                            导出可回导 XLSX
                         </Button>
                         <Button
                             variant="outline"
                             disabled={
-                                mutation.isPending || integrityQuery.isLoading || integrityQuery.isError
+                                mutation.isPending ||
+                                integrityQuery.isLoading ||
+                                integrityQuery.isError ||
+                                locationsQuery.isLoading ||
+                                !stockLocationId
                             }
                             onClick={() => mutation.mutate('csv')}
                         >
-                            导出商品 CSV
+                            导出可回导 CSV
                         </Button>
                     </div>
                 </div>

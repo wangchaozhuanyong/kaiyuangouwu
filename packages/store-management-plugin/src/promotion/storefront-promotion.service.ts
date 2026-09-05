@@ -26,9 +26,9 @@ interface StorefrontChannelFields {
 }
 
 const DEFAULT_PROMOTION_BRAND = {
-    zh: 'AwanMesh｜模钥',
-    en: 'AwanMesh',
-    logoUrl: '/storefront/awanmesh-logo.svg',
+    zh: 'MOYAO AI｜模钥',
+    en: 'MOYAO AI',
+    logoUrl: '/storefront/moyao-ai/icon.webp',
 } as const;
 
 @Injectable()

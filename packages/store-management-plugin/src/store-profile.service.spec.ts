@@ -45,6 +45,10 @@ function profile(overrides: Record<string, unknown> = {}) {
             brandPrimaryColor: null,
             brandAccentColor: null,
             brandHighlightColor: null,
+            legalEntityName: null,
+            legalRegistrationCountry: null,
+            supportEmail: null,
+            privacyEmail: null,
         }),
         overrides,
     );
@@ -307,21 +311,21 @@ describe('StoreProfileService', () => {
 
         const updated = await service.updateForMerchant({ channelId: 'channel-1' } as any, {
             expectedUpdatedAt: current.updatedAt,
-            taglineZh: ' 一钥通百模 ',
-            taglineEn: ' One Key. Every Model. ',
-            brandBackgroundColor: '#071426',
-            brandPrimaryColor: '#2f6bff',
+            taglineZh: ' 全球模型，一钥直达 ',
+            taglineEn: ' One Key to Every Model. ',
+            brandBackgroundColor: '#070b14',
+            brandPrimaryColor: '#635bff',
             brandAccentColor: '#22d3ee',
-            brandHighlightColor: '#7c3aed',
+            brandHighlightColor: '#8b5cf6',
         });
 
         expect(updated).toMatchObject({
-            taglineZh: '一钥通百模',
-            taglineEn: 'One Key. Every Model.',
-            brandBackgroundColor: '#071426',
-            brandPrimaryColor: '#2F6BFF',
+            taglineZh: '全球模型，一钥直达',
+            taglineEn: 'One Key to Every Model.',
+            brandBackgroundColor: '#070B14',
+            brandPrimaryColor: '#635BFF',
             brandAccentColor: '#22D3EE',
-            brandHighlightColor: '#7C3AED',
+            brandHighlightColor: '#8B5CF6',
         });
 
         await expect(
@@ -330,6 +334,36 @@ describe('StoreProfileService', () => {
                 brandPrimaryColor: 'blue',
             }),
         ).rejects.toThrow('#RRGGBB');
+    });
+
+    it('normalizes legal identity fields and rejects invalid contact emails', async () => {
+        const current = profile();
+        const profileRepository = {
+            findOne: vi.fn().mockResolvedValue(current),
+            save: vi.fn(value => Promise.resolve(value)),
+        };
+        const { service } = createService(profileRepository, { find: vi.fn().mockResolvedValue([]) });
+
+        const updated = await service.updateForMerchant({ channelId: 'channel-1' } as any, {
+            expectedUpdatedAt: current.updatedAt,
+            legalEntityName: ' MOYAO AI Example Limited ',
+            legalRegistrationCountry: ' Malaysia ',
+            supportEmail: ' Support@MOYAOAI.com ',
+            privacyEmail: ' Privacy@MOYAOAI.com ',
+        });
+
+        expect(updated).toMatchObject({
+            legalEntityName: 'MOYAO AI Example Limited',
+            legalRegistrationCountry: 'Malaysia',
+            supportEmail: 'support@moyaoai.com',
+            privacyEmail: 'privacy@moyaoai.com',
+        });
+        await expect(
+            service.updateForMerchant({ channelId: 'channel-1' } as any, {
+                expectedUpdatedAt: current.updatedAt,
+                privacyEmail: 'not-an-email',
+            }),
+        ).rejects.toThrow('隐私邮箱格式无效');
     });
 
     it('updates only the active Channel profile for a merchant', async () => {

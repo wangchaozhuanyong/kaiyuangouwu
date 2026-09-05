@@ -7,45 +7,48 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
-const brandDirectory = path.resolve(scriptDirectory, '../../storefront/src/assets/brand/awanmesh-moyao');
+const brandDirectory = path.resolve(scriptDirectory, '../../storefront/src/assets/brand/moyao-ai');
 
-export const awanMeshBrand = {
+export const moyaoBrand = {
     channelCode: '__default_channel__',
-    storefrontNameZh: 'AwanMesh｜模钥',
-    storefrontNameEn: 'AwanMesh',
-    descriptionZh: 'AI 模型与数字服务一站式平台',
-    descriptionEn: 'One-stop marketplace for AI models and digital services.',
-    taglineZh: '一钥通百模',
-    taglineEn: 'One Key. Every Model.',
-    brandBackgroundColor: '#071426',
-    brandPrimaryColor: '#2F6BFF',
+    storefrontNameZh: 'MOYAO AI｜模钥',
+    storefrontNameEn: 'MOYAO AI',
+    descriptionZh: '全球 AI 模型与数字服务的一站式平台',
+    descriptionEn: 'One place to access AI models and digital services.',
+    taglineZh: '全球模型，一钥直达',
+    taglineEn: 'One Key to Every Model.',
+    brandBackgroundColor: '#070B14',
+    brandPrimaryColor: '#635BFF',
     brandAccentColor: '#22D3EE',
-    brandHighlightColor: '#7C3AED',
+    brandHighlightColor: '#8B5CF6',
 };
 
-export const awanMeshBrandAssets = [
+export const moyaoBrandAssets = [
     {
         key: 'app-icon',
-        file: path.join(brandDirectory, 'app-icon.svg'),
+        file: path.join(brandDirectory, 'app-icon.webp'),
+        mimeType: 'image/webp',
         profileField: 'logoAssetId',
-        name: 'AwanMesh Moyao app icon',
+        name: 'MOYAO AI app icon',
     },
     {
         key: 'logo-on-light',
-        file: path.join(brandDirectory, 'logo-on-light.svg'),
+        file: path.join(brandDirectory, 'logo-on-light.webp'),
+        mimeType: 'image/webp',
         profileField: 'logoOnLightAssetId',
-        name: 'AwanMesh Moyao logo on light',
+        name: 'MOYAO AI logo on light',
     },
     {
         key: 'logo-on-dark',
-        file: path.join(brandDirectory, 'logo-on-dark.svg'),
+        file: path.join(brandDirectory, 'logo-on-dark.webp'),
+        mimeType: 'image/webp',
         profileField: 'logoOnDarkAssetId',
-        name: 'AwanMesh Moyao logo on dark',
+        name: 'MOYAO AI logo on dark',
     },
 ];
 
 const LOGIN_MUTATION = `
-    mutation AwanMeshBrandLogin($username: String!, $password: String!) {
+    mutation MoyaoBrandLogin($username: String!, $password: String!) {
         login(username: $username, password: $password, rememberMe: false) {
             ... on CurrentUser { id channels { id code token } }
             ... on ErrorResult { errorCode message }
@@ -54,7 +57,7 @@ const LOGIN_MUTATION = `
 `;
 
 const STORE_PROFILES_QUERY = `
-    query AwanMeshBrandProfiles {
+    query MoyaoBrandProfiles {
         storeProfiles {
             id
             updatedAt
@@ -75,7 +78,7 @@ const STORE_PROFILES_QUERY = `
 `;
 
 const ASSET_QUERY = `
-    query AwanMeshBrandAsset($tags: [String!]) {
+    query MoyaoBrandAsset($tags: [String!]) {
         assets(options: { take: 1, tags: $tags, tagsOperator: AND }) {
             items { id }
         }
@@ -83,13 +86,13 @@ const ASSET_QUERY = `
 `;
 
 const ASSIGN_ASSET_MUTATION = `
-    mutation AssignAwanMeshBrandAsset($input: AssignAssetsToChannelInput!) {
+    mutation AssignMoyaoBrandAsset($input: AssignAssetsToChannelInput!) {
         assignAssetsToChannel(input: $input) { id }
     }
 `;
 
 const UPDATE_PROFILE_MUTATION = `
-    mutation UpdateAwanMeshBrand($input: UpdateStoreProfileInput!) {
+    mutation UpdateMoyaoBrand($input: UpdateStoreProfileInput!) {
         updateStoreProfile(input: $input) {
             id
             updatedAt
@@ -110,7 +113,7 @@ const UPDATE_PROFILE_MUTATION = `
 `;
 
 const SHOP_BRANDING_QUERY = `
-    query VerifyAwanMeshBrand {
+    query VerifyMoyaoBrand {
         storefrontBranding {
             logoAssetId
             logoOnLightAssetId
@@ -142,10 +145,10 @@ export function isLocalApiOrigin(value) {
 }
 
 export function brandAssetTags(key, hash) {
-    return ['awanmesh-brand', `awanmesh-brand:${key}`, `awanmesh-brand-sha256:${hash}`];
+    return ['moyao-ai-brand', `moyao-ai-brand:${key}`, `moyao-ai-brand-sha256:${hash}`];
 }
 
-export async function prepareAwanMeshBrandAssets(manifest = awanMeshBrandAssets) {
+export async function prepareMoyaoBrandAssets(manifest = moyaoBrandAssets) {
     const keys = new Set();
     return Promise.all(
         manifest.map(async asset => {
@@ -208,8 +211,8 @@ async function uploadAsset(fetchImpl, adminEndpoint, authToken, channel, asset) 
     form.append(
         'operations',
         JSON.stringify({
-            operationName: 'CreateAwanMeshBrandAsset',
-            query: `mutation CreateAwanMeshBrandAsset($input: [CreateAssetInput!]!) {
+            operationName: 'CreateMoyaoBrandAsset',
+            query: `mutation CreateMoyaoBrandAsset($input: [CreateAssetInput!]!) {
                 createAssets(input: $input) {
                     ... on Asset { id }
                     ... on ErrorResult { errorCode message }
@@ -230,7 +233,7 @@ async function uploadAsset(fetchImpl, adminEndpoint, authToken, channel, asset) 
         }),
     );
     form.append('map', JSON.stringify({ 0: ['variables.input.0.file'] }));
-    form.append('0', new Blob([asset.bytes], { type: 'image/svg+xml' }), path.basename(asset.file));
+    form.append('0', new Blob([asset.bytes], { type: asset.mimeType }), path.basename(asset.file));
     const response = await fetchImpl(adminEndpoint, {
         method: 'POST',
         headers: requestHeaders(authToken, channel.token),
@@ -257,13 +260,52 @@ function profileAssetId(profile, field) {
     return profile[relation]?.id ?? null;
 }
 
+function profileBrandingSnapshot(profile) {
+    return {
+        storefrontNameZh: profile.channel.customFields?.storefrontNameZh ?? '',
+        storefrontNameEn: profile.channel.customFields?.storefrontNameEn ?? '',
+        descriptionZh: profile.descriptionZh ?? '',
+        descriptionEn: profile.descriptionEn ?? '',
+        taglineZh: profile.taglineZh,
+        taglineEn: profile.taglineEn,
+        brandBackgroundColor: profile.brandBackgroundColor,
+        brandPrimaryColor: profile.brandPrimaryColor,
+        brandAccentColor: profile.brandAccentColor,
+        brandHighlightColor: profile.brandHighlightColor,
+        logoAssetId: profileAssetId(profile, 'logoAssetId'),
+        logoOnLightAssetId: profileAssetId(profile, 'logoOnLightAssetId'),
+        logoOnDarkAssetId: profileAssetId(profile, 'logoOnDarkAssetId'),
+    };
+}
+
+export function buildMoyaoBrandRestoreInput(beforeProfile, currentProfile) {
+    const before = profileBrandingSnapshot(beforeProfile);
+    return {
+        id: beforeProfile.id,
+        expectedUpdatedAt: currentProfile.updatedAt,
+        storefrontNameZh: before.storefrontNameZh,
+        storefrontNameEn: before.storefrontNameEn,
+        descriptionZh: before.descriptionZh,
+        descriptionEn: before.descriptionEn,
+        taglineZh: before.taglineZh ?? '',
+        taglineEn: before.taglineEn ?? '',
+        brandBackgroundColor: before.brandBackgroundColor,
+        brandPrimaryColor: before.brandPrimaryColor,
+        brandAccentColor: before.brandAccentColor,
+        brandHighlightColor: before.brandHighlightColor,
+        logoAssetId: before.logoAssetId,
+        logoOnLightAssetId: before.logoOnLightAssetId,
+        logoOnDarkAssetId: before.logoOnDarkAssetId,
+    };
+}
+
 function shopEndpointForLanguage(endpoint, languageCode) {
     const url = new URL(endpoint);
     url.searchParams.set('languageCode', languageCode);
     return url.toString();
 }
 
-export function buildAwanMeshBrandPlan(profile, assetsByKey, brand = awanMeshBrand) {
+export function buildMoyaoBrandPlan(profile, assetsByKey, brand = moyaoBrand, manifest = moyaoBrandAssets) {
     const desired = {
         storefrontNameZh: brand.storefrontNameZh,
         storefrontNameEn: brand.storefrontNameEn,
@@ -290,7 +332,7 @@ export function buildAwanMeshBrandPlan(profile, assetsByKey, brand = awanMeshBra
     };
     const changes = Object.keys(desired).filter(key => current[key] !== desired[key]);
     const input = { id: profile.id, expectedUpdatedAt: profile.updatedAt, ...desired };
-    for (const definition of awanMeshBrandAssets) {
+    for (const definition of manifest) {
         const asset = assetsByKey.get(definition.key);
         if (!asset) {
             changes.push(definition.profileField);
@@ -304,45 +346,84 @@ export function buildAwanMeshBrandPlan(profile, assetsByKey, brand = awanMeshBra
     return { action: changes.length ? 'update' : 'noop', changes, input };
 }
 
-function assertShopBranding(branding, languageCode, assetIds, brand) {
-    assert.equal(branding.name, languageCode === 'zh_Hans' ? brand.storefrontNameZh : brand.storefrontNameEn);
-    assert.equal(
-        branding.description,
-        languageCode === 'zh_Hans' ? brand.descriptionZh : brand.descriptionEn,
-    );
-    assert.equal(branding.tagline, languageCode === 'zh_Hans' ? brand.taglineZh : brand.taglineEn);
-    assert.equal(String(branding.logoAssetId), String(assetIds['app-icon']));
-    assert.equal(String(branding.logoOnLightAssetId), String(assetIds['logo-on-light']));
-    assert.equal(String(branding.logoOnDarkAssetId), String(assetIds['logo-on-dark']));
-    assert.equal(branding.backgroundColor, brand.brandBackgroundColor);
-    assert.equal(branding.primaryColor, brand.brandPrimaryColor);
-    assert.equal(branding.accentColor, brand.brandAccentColor);
-    assert.equal(branding.highlightColor, brand.brandHighlightColor);
+function assertProfileBranding(profile, expected) {
+    const actual = profileBrandingSnapshot(profile);
+    for (const [field, value] of Object.entries(expected)) {
+        assert.equal(actual[field], value, `Admin StoreProfile ${field} does not match the published value`);
+    }
 }
 
-export async function syncAwanMeshBrand({
+function assertShopBranding(branding, languageCode, expected) {
+    assert.equal(
+        branding.name,
+        languageCode === 'zh_Hans' ? expected.storefrontNameZh : expected.storefrontNameEn,
+    );
+    assert.equal(
+        branding.description,
+        languageCode === 'zh_Hans' ? expected.descriptionZh : expected.descriptionEn,
+    );
+    assert.equal(branding.tagline, languageCode === 'zh_Hans' ? expected.taglineZh : expected.taglineEn);
+    assert.equal(String(branding.logoAssetId), String(expected.logoAssetId));
+    assert.equal(String(branding.logoOnLightAssetId), String(expected.logoOnLightAssetId));
+    assert.equal(String(branding.logoOnDarkAssetId), String(expected.logoOnDarkAssetId));
+    assert.equal(branding.backgroundColor, expected.brandBackgroundColor);
+    assert.equal(branding.primaryColor, expected.brandPrimaryColor);
+    assert.equal(branding.accentColor, expected.brandAccentColor);
+    assert.equal(branding.highlightColor, expected.brandHighlightColor);
+}
+
+async function verifyBranding({ fetchImpl, shopEndpoint, channel, expected, attempts, delayMs, waitImpl }) {
+    let verificationError;
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+        try {
+            for (const languageCode of ['zh_Hans', 'en']) {
+                const result = await graphql(
+                    fetchImpl,
+                    shopEndpointForLanguage(shopEndpoint, languageCode),
+                    SHOP_BRANDING_QUERY,
+                    undefined,
+                    requestHeaders('', channel.token, languageCode),
+                );
+                assertShopBranding(result.data.storefrontBranding, languageCode, expected);
+            }
+            return;
+        } catch (error) {
+            verificationError = error;
+            if (attempt < attempts) await waitImpl(delayMs);
+        }
+    }
+    throw verificationError;
+}
+
+export async function syncMoyaoBrand({
     apiOrigin,
     shopOrigin = apiOrigin,
     username,
     password,
-    channelCode = awanMeshBrand.channelCode,
+    channelCode = moyaoBrand.channelCode,
     apply = false,
+    verify = false,
     allowRemote = false,
     production = process.env.NODE_ENV === 'production',
     fetchImpl = fetch,
-    assetManifest = awanMeshBrandAssets,
-    brand = awanMeshBrand,
+    assetManifest = moyaoBrandAssets,
+    brand = moyaoBrand,
+    verificationAttempts = 5,
+    verificationDelayMs = 250,
+    waitImpl = delayMs => new Promise(resolve => setTimeout(resolve, delayMs)),
 }) {
     assert.ok(apiOrigin, 'VENDURE_API_ORIGIN or --api-origin is required');
     assert.ok(username && password, 'SUPERADMIN_USERNAME and SUPERADMIN_PASSWORD are required');
+    assert.ok(!(apply && verify), '--apply and --verify are mutually exclusive');
     if (apply && (production || !isLocalApiOrigin(apiOrigin))) {
         assert.ok(allowRemote, 'Remote or production writes require both --apply and --allow-remote');
     }
+    assert.ok(Number.isInteger(verificationAttempts) && verificationAttempts > 0);
     const normalizedApiOrigin = apiOrigin.replace(/\/$/u, '');
     const normalizedShopOrigin = shopOrigin.replace(/\/$/u, '');
     const adminEndpoint = `${normalizedApiOrigin}/admin-api`;
     const shopEndpoint = `${normalizedShopOrigin}/shop-api`;
-    const preparedAssets = await prepareAwanMeshBrandAssets(assetManifest);
+    const preparedAssets = await prepareMoyaoBrandAssets(assetManifest);
     const session = await login(fetchImpl, adminEndpoint, username, password);
     const channel = session.channels.find(item => item.code === channelCode);
     assert.ok(channel, `Admin user cannot access Channel ${channelCode}`);
@@ -356,6 +437,7 @@ export async function syncAwanMeshBrand({
     const profiles = profilesResult.data.storeProfiles.filter(item => item.channel.code === channelCode);
     assert.equal(profiles.length, 1, `Expected one StoreProfile for Channel ${channelCode}`);
     let profile = profiles[0];
+    const beforeProfile = structuredClone(profile);
     const assetsByKey = new Map();
     const assetActions = [];
     for (const definition of preparedAssets) {
@@ -376,34 +458,85 @@ export async function syncAwanMeshBrand({
         if (asset) assetsByKey.set(definition.key, asset);
         assetActions.push({ key: definition.key, action, assetId: asset?.id ?? null, hash: definition.hash });
     }
-    let plan = buildAwanMeshBrandPlan(profile, assetsByKey, brand);
-    if (apply) {
+    let plan = buildMoyaoBrandPlan(profile, assetsByKey, brand, preparedAssets);
+    if (apply || verify) {
         assert.equal(assetsByKey.size, preparedAssets.length, 'All three brand assets are required');
-        plan = buildAwanMeshBrandPlan(profile, assetsByKey, brand);
-        if (plan.action === 'update') {
-            const updated = await graphql(
+        plan = buildMoyaoBrandPlan(profile, assetsByKey, brand, preparedAssets);
+        const desired = {
+            storefrontNameZh: brand.storefrontNameZh,
+            storefrontNameEn: brand.storefrontNameEn,
+            descriptionZh: brand.descriptionZh,
+            descriptionEn: brand.descriptionEn,
+            taglineZh: brand.taglineZh,
+            taglineEn: brand.taglineEn,
+            brandBackgroundColor: brand.brandBackgroundColor,
+            brandPrimaryColor: brand.brandPrimaryColor,
+            brandAccentColor: brand.brandAccentColor,
+            brandHighlightColor: brand.brandHighlightColor,
+            logoAssetId: assetsByKey.get('app-icon').id,
+            logoOnLightAssetId: assetsByKey.get('logo-on-light').id,
+            logoOnDarkAssetId: assetsByKey.get('logo-on-dark').id,
+        };
+        let updatedProfile;
+        try {
+            if (apply && plan.action === 'update') {
+                const updated = await graphql(
+                    fetchImpl,
+                    adminEndpoint,
+                    UPDATE_PROFILE_MUTATION,
+                    { input: plan.input },
+                    requestHeaders(session.authToken, channel.token),
+                );
+                profile = updated.data.updateStoreProfile;
+                updatedProfile = profile;
+            }
+            assertProfileBranding(profile, desired);
+            await verifyBranding({
                 fetchImpl,
-                adminEndpoint,
-                UPDATE_PROFILE_MUTATION,
-                { input: plan.input },
-                requestHeaders(session.authToken, channel.token),
+                shopEndpoint,
+                channel,
+                expected: desired,
+                attempts: verificationAttempts,
+                delayMs: verificationDelayMs,
+                waitImpl,
+            });
+        } catch (verificationError) {
+            if (!apply || !updatedProfile) throw verificationError;
+            try {
+                const restored = await graphql(
+                    fetchImpl,
+                    adminEndpoint,
+                    UPDATE_PROFILE_MUTATION,
+                    { input: buildMoyaoBrandRestoreInput(beforeProfile, updatedProfile) },
+                    requestHeaders(session.authToken, channel.token),
+                );
+                profile = restored.data.updateStoreProfile;
+                const previous = profileBrandingSnapshot(beforeProfile);
+                assertProfileBranding(profile, previous);
+                await verifyBranding({
+                    fetchImpl,
+                    shopEndpoint,
+                    channel,
+                    expected: previous,
+                    attempts: verificationAttempts,
+                    delayMs: verificationDelayMs,
+                    waitImpl,
+                });
+            } catch (rollbackError) {
+                throw new AggregateError(
+                    [verificationError, rollbackError],
+                    `MOYAO brand verification failed and StoreProfile rollback also failed in Channel ${channel.code}`,
+                );
+            }
+            throw new Error(
+                `MOYAO brand verification failed; the previous StoreProfile was restored in Channel ${channel.code}`,
+                { cause: verificationError },
             );
-            profile = updated.data.updateStoreProfile;
-        }
-        const assetIds = Object.fromEntries([...assetsByKey].map(([key, asset]) => [key, asset.id]));
-        for (const languageCode of ['zh_Hans', 'en']) {
-            const result = await graphql(
-                fetchImpl,
-                shopEndpointForLanguage(shopEndpoint, languageCode),
-                SHOP_BRANDING_QUERY,
-                undefined,
-                requestHeaders('', channel.token, languageCode),
-            );
-            assertShopBranding(result.data.storefrontBranding, languageCode, assetIds, brand);
         }
     }
     return {
         applied: apply,
+        verified: apply || verify,
         apiOrigin: normalizedApiOrigin,
         shopOrigin: normalizedShopOrigin,
         channelCode,
@@ -414,12 +547,15 @@ export async function syncAwanMeshBrand({
 }
 
 export function parseCliArguments(args) {
-    const options = { apply: false, allowRemote: false, validate: false };
+    const options = { apply: false, verify: false, allowRemote: false, validate: false };
     for (let index = 0; index < args.length; index += 1) {
         const argument = args[index];
         if (argument === '--apply') options.apply = true;
-        else if (argument === '--dry-run') options.apply = false;
-        else if (argument === '--allow-remote') options.allowRemote = true;
+        else if (argument === '--verify') options.verify = true;
+        else if (argument === '--dry-run') {
+            options.apply = false;
+            options.verify = false;
+        } else if (argument === '--allow-remote') options.allowRemote = true;
         else if (argument === '--validate') options.validate = true;
         else if (argument === '--api-origin') options.apiOrigin = args[++index];
         else if (argument === '--shop-origin') options.shopOrigin = args[++index];
@@ -433,7 +569,7 @@ const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPat
 if (isMain) {
     const options = parseCliArguments(process.argv.slice(2));
     if (options.validate) {
-        const assets = await prepareAwanMeshBrandAssets();
+        const assets = await prepareMoyaoBrandAssets();
         process.stdout.write(
             `${JSON.stringify({ ok: true, mode: 'validate', assets: assets.map(item => ({ key: item.key, hash: item.hash })) }, null, 2)}\n`,
         );
@@ -442,14 +578,14 @@ if (isMain) {
             options.apiOrigin ??
             process.env.VENDURE_API_ORIGIN ??
             `http://${process.env.VENDURE_HOSTNAME || '127.0.0.1'}:${process.env.PORT || '3000'}`;
-        const result = await syncAwanMeshBrand({
+        const result = await syncMoyaoBrand({
             apiOrigin,
             shopOrigin: options.shopOrigin ?? process.env.VENDURE_STOREFRONT_URL ?? apiOrigin,
             username: process.env.SUPERADMIN_USERNAME,
             password: process.env.SUPERADMIN_PASSWORD,
-            channelCode:
-                options.channelCode ?? process.env.AWANMESH_CHANNEL_CODE ?? awanMeshBrand.channelCode,
+            channelCode: options.channelCode ?? process.env.MOYAO_CHANNEL_CODE ?? moyaoBrand.channelCode,
             apply: options.apply,
+            verify: options.verify,
             allowRemote: options.allowRemote,
         });
         process.stdout.write(`${JSON.stringify({ ok: true, ...result }, null, 2)}\n`);

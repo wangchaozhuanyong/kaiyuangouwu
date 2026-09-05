@@ -1,5 +1,34 @@
 import { gql } from '@apollo/client';
 
+const CUSTOM_FIELD_CONFIG_TYPES = [
+    'StringCustomFieldConfig',
+    'LocaleStringCustomFieldConfig',
+    'IntCustomFieldConfig',
+    'FloatCustomFieldConfig',
+    'BooleanCustomFieldConfig',
+    'DateTimeCustomFieldConfig',
+    'RelationCustomFieldConfig',
+    'TextCustomFieldConfig',
+    'LocaleTextCustomFieldConfig',
+    'StructCustomFieldConfig',
+];
+
+const STRUCT_FIELD_CONFIG_TYPES = [
+    'StringStructFieldConfig',
+    'IntStructFieldConfig',
+    'FloatStructFieldConfig',
+    'BooleanStructFieldConfig',
+    'DateTimeStructFieldConfig',
+    'TextStructFieldConfig',
+];
+
+export const CUSTOM_FIELD_POSSIBLE_TYPES: Record<string, string[]> = {
+    CustomField: CUSTOM_FIELD_CONFIG_TYPES,
+    CustomFieldConfig: CUSTOM_FIELD_CONFIG_TYPES,
+    StructField: STRUCT_FIELD_CONFIG_TYPES,
+    StructFieldConfig: STRUCT_FIELD_CONFIG_TYPES,
+};
+
 export const CUSTOM_FIELD_SERVER_CONFIG_QUERY = gql`
     query NextAdminCustomFieldServerConfig {
         globalSettings {
@@ -8,6 +37,7 @@ export const CUSTOM_FIELD_SERVER_CONFIG_QUERY = gql`
                 entityCustomFields {
                     entityName
                     customFields {
+                        __typename
                         ... on CustomField {
                             name
                             type
@@ -62,6 +92,7 @@ export const CUSTOM_FIELD_SERVER_CONFIG_QUERY = gql`
                         }
                         ... on StructCustomFieldConfig {
                             fields {
+                                __typename
                                 ... on StructField {
                                     name
                                     type

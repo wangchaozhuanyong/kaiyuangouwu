@@ -358,6 +358,10 @@ export interface UpdateStoreProfileInput {
     brandPrimaryColor?: string | null;
     brandAccentColor?: string | null;
     brandHighlightColor?: string | null;
+    legalEntityName?: string | null;
+    legalRegistrationCountry?: string | null;
+    supportEmail?: string | null;
+    privacyEmail?: string | null;
     currentPassword?: string | null;
 }
 
@@ -411,6 +415,10 @@ export interface UpdateMyStoreProfileInput {
     brandPrimaryColor?: string | null;
     brandAccentColor?: string | null;
     brandHighlightColor?: string | null;
+    legalEntityName?: string | null;
+    legalRegistrationCountry?: string | null;
+    supportEmail?: string | null;
+    privacyEmail?: string | null;
 }
 
 export interface StoreCommerceConfiguration {

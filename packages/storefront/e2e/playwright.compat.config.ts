@@ -45,7 +45,7 @@ export default defineConfig({
               timeout: 120_000,
               env: {
                   ...process.env,
-                  VITE_SHOP_API_PROXY_TARGET: 'https://damatong.net',
+                  VITE_SHOP_API_PROXY_TARGET: 'https://moyaoai.com',
               },
           },
     projects: [

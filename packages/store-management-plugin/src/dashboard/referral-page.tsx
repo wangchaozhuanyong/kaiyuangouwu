@@ -425,9 +425,9 @@ export const SYSTEM_POSTER_TEMPLATES = [
     {
         id: 'BRAND_MINIMAL',
         nameZh: '模钥简约',
-        nameEn: 'AwanMesh minimal',
+        nameEn: 'MOYAO AI minimal',
         desc: '经典白蓝极简科技版式，通用度最高，适合各类数字化产品。',
-        gradient: 'linear-gradient(135deg, #1d4ed8, #60a5fa)',
+        gradient: 'linear-gradient(135deg, #635BFF, #22D3EE)',
     },
     {
         id: 'BENEFIT_RED_GOLD',
@@ -453,9 +453,9 @@ export const SYSTEM_POSTER_TEMPLATES = [
     {
         id: 'CLOUD_BRIDGE_ORBIT',
         nameZh: '模钥轨道',
-        nameEn: 'AwanMesh orbit',
+        nameEn: 'MOYAO AI orbit',
         desc: '紫蓝科技轨道渐变，未来感与营销冲击力强。',
-        gradient: 'linear-gradient(135deg, #4338ca, #7c3aed)',
+        gradient: 'linear-gradient(135deg, #635BFF, #8B5CF6)',
     },
 ] as const;
 
@@ -826,7 +826,7 @@ function PosterTemplateManager({
                                         className="size-full object-cover"
                                     />
                                 ) : (
-                                    <div className="grid size-full place-items-center bg-[linear-gradient(145deg,#172554,#7c3aed,#db2777)] text-sm font-semibold text-white/80">
+                                    <div className="grid size-full place-items-center bg-[linear-gradient(145deg,#070B14,#635BFF,#22D3EE)] text-sm font-semibold text-white/80">
                                         待上传竖版背景
                                     </div>
                                 )}
@@ -938,7 +938,7 @@ function PosterTemplateManager({
                     <DialogHeader>
                         <DialogTitle>{draft?.id ? '编辑邀请海报模板' : '新建邀请海报模板'}</DialogTitle>
                         <DialogDescription>
-                            参照 AwanMesh 模钥移动端分享图规范：推荐 1080×1920，左右安全边距 64px。中文和
+                            参照 MOYAO AI 模钥移动端分享图规范：推荐 1080×1920，左右安全边距 64px。中文和
                             English 使用同一版式，前台根据用户语言自动切换。
                         </DialogDescription>
                     </DialogHeader>
@@ -1465,8 +1465,8 @@ function emptyPosterTemplateDraft(position: number): PosterTemplateDraft {
         featureThreeTitleEn: 'Dedicated support',
         featureThreeTextZh: '专业客服 贴心服务',
         featureThreeTextEn: 'Friendly help when you need it',
-        qrEyebrowZh: '扫码访问 AwanMesh 模钥',
-        qrEyebrowEn: 'Scan AwanMesh',
+        qrEyebrowZh: '扫码访问 MOYAO AI 模钥',
+        qrEyebrowEn: 'Scan MOYAO AI',
         qrTitleZh: '发现更多实用 AI 服务',
         qrTitleEn: 'Discover practical AI services',
         qrDescriptionZh: '满足多种 AI 使用场景',
@@ -1479,8 +1479,8 @@ function emptyPosterTemplateDraft(position: number): PosterTemplateDraft {
         sceneThreeEn: 'Learn',
         sceneFourZh: '智能编程',
         sceneFourEn: 'Code',
-        ctaTextZh: '长按识别二维码，立即进入 AwanMesh 模钥',
-        ctaTextEn: 'Press and hold to enter AwanMesh',
+        ctaTextZh: '长按识别二维码，立即进入 MOYAO AI 模钥',
+        ctaTextEn: 'Press and hold to enter MOYAO AI',
         footerTitleZh: '让好用的 AI，真正为你所用',
         footerTitleEn: 'AI that works for you',
         footerTextZh: '热门 AI 工具与数字服务一站式平台',

@@ -10,6 +10,7 @@ import { useState } from 'react';
 
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import {
+    CATALOG_EXPORT_CONTEXT_QUERY,
     CATALOG_EXPORT_ROWS_QUERY,
     CATALOG_INTEGRITY_SUMMARY_QUERY,
 } from '../../graphql/catalog-operations.graphql';
@@ -29,20 +30,35 @@ export function CatalogExportAction() {
     const [loading, setLoading] = useState(false);
     const [progress, setProgress] = useState(0);
     const [summary, setSummary] = useState<IntegritySummary | null>(null);
+    const [locations, setLocations] = useState<Array<{ id: string; name: string }>>([]);
+    const [stockLocationId, setStockLocationId] = useState('');
     const [error, setError] = useState('');
 
     const inspect = async () => {
         setOpen(true);
         setError('');
         try {
-            const result = await client.query<{ catalogIntegritySummary: IntegritySummary }>({
-                query: CATALOG_INTEGRITY_SUMMARY_QUERY,
-                fetchPolicy: 'network-only',
-            });
+            const [result, context] = await Promise.all([
+                client.query<{ catalogIntegritySummary: IntegritySummary }>({
+                    query: CATALOG_INTEGRITY_SUMMARY_QUERY,
+                    fetchPolicy: 'network-only',
+                }),
+                client.query<{ stockLocations: { items: Array<{ id: string; name: string }> } }>({
+                    query: CATALOG_EXPORT_CONTEXT_QUERY,
+                    fetchPolicy: 'network-only',
+                }),
+            ]);
             if (!result.data?.catalogIntegritySummary) {
                 throw new Error('商品完整性接口未返回统计数据');
             }
             setSummary(result.data.catalogIntegritySummary);
+            const nextLocations = context.data?.stockLocations.items ?? [];
+            setLocations(nextLocations);
+            setStockLocationId(current =>
+                nextLocations.some(location => location.id === current)
+                    ? current
+                    : (nextLocations[0]?.id ?? ''),
+            );
         } catch (cause) {
             setError(toUserFacingError(cause, '商品完整性检查失败，当前暂停导出'));
         }
@@ -70,10 +86,11 @@ export function CatalogExportAction() {
                 setProgress(Math.round((rows.length / Math.max(totalItems, 1)) * 80));
                 if (!exportPage.items.length) break;
             }
-            const output = await exportCatalogRowsLocally(rows, format);
+            if (!stockLocationId) throw new Error('请选择默认回导仓库');
+            const output = await exportCatalogRowsLocally(rows, format, stockLocationId);
             setProgress(100);
             const date = new Date().toISOString().slice(0, 10);
-            downloadCatalogBlob(output.blob, `商品标准报表-${date}.${output.extension}`);
+            downloadCatalogBlob(output.blob, `商品回导主表-${date}.${output.extension}`);
         } catch (cause) {
             setError(toUserFacingError(cause, '商品报表生成失败，请稍后重试'));
         } finally {
@@ -93,19 +110,19 @@ export function CatalogExportAction() {
                 onClick={() => void inspect()}
                 className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
             >
-                <Download className="h-4 w-4" /> 导出报表
+                <Download className="h-4 w-4" /> 导出可回导商品表
             </button>
             {open && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4">
                     <AccessibleDialogSurface
-                        accessibleName="商品标准报表"
+                        accessibleName="导出可回导商品表"
                         onRequestClose={() => !loading && setOpen(false)}
                         className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl"
                     >
                         <div className="flex items-start justify-between gap-4">
                             <div>
                                 <h2 className="flex items-center gap-2 text-base font-bold text-slate-900">
-                                    <FileSpreadsheet className="h-5 w-5 text-blue-600" /> 商品标准报表
+                                    <FileSpreadsheet className="h-5 w-5 text-blue-600" /> 导出可回导商品表
                                 </h2>
                                 <p className="mt-1 text-xs text-slate-500">
                                     文件在当前浏览器生成；服务器只返回结构化商品数据。
@@ -126,9 +143,29 @@ export function CatalogExportAction() {
                             <div className="flex gap-3 rounded-xl border border-blue-200 bg-blue-50 p-4 text-xs text-blue-900">
                                 <ShieldCheck className="h-5 w-5 shrink-0" />
                                 <p>
-                                    XLSX 包含商品与 SKU、库存策略、批次效期和字段说明；CSV 仅包含商品与 SKU。
+                                    XLSX 保留全部仓库的库存明细；CSV 按下方所选仓库导出一行一个
+                                    SKU，两者都可再次导入。
                                 </p>
                             </div>
+                            <label className="block space-y-2">
+                                <span className="text-xs font-bold text-slate-700">默认回导仓库</span>
+                                <select
+                                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800"
+                                    value={stockLocationId}
+                                    onChange={event => setStockLocationId(event.target.value)}
+                                    disabled={loading}
+                                >
+                                    <option value="">请选择仓库</option>
+                                    {locations.map(location => (
+                                        <option key={location.id} value={location.id}>
+                                            {location.name}
+                                        </option>
+                                    ))}
+                                </select>
+                                <span className="block text-[11px] text-slate-500">
+                                    主表的库存量和上下限来自该仓库；库存是绝对值。
+                                </span>
+                            </label>
                             {!summary && !error && (
                                 <p className="py-6 text-center text-sm text-slate-500" role="status">
                                     正在检查商品完整性…
@@ -177,17 +214,17 @@ export function CatalogExportAction() {
                             )}
                             <div className="grid gap-3 border-t pt-4 sm:grid-cols-2">
                                 <ExportButton
-                                    disabled={!summary || loading}
+                                    disabled={!summary || !stockLocationId || loading}
                                     onClick={() => void exportRows('xlsx')}
                                 >
-                                    导出标准 XLSX
+                                    导出可回导 XLSX
                                 </ExportButton>
                                 <ExportButton
-                                    disabled={!summary || loading}
+                                    disabled={!summary || !stockLocationId || loading}
                                     onClick={() => void exportRows('csv')}
                                     secondary
                                 >
-                                    导出商品 CSV
+                                    导出可回导 CSV
                                 </ExportButton>
                             </div>
                         </div>

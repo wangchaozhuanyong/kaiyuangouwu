@@ -66,6 +66,10 @@ export interface StoreProfileRecord {
     descriptionZh: string;
     descriptionEn: string;
     internalNote: string | null;
+    legalEntityName: string | null;
+    legalRegistrationCountry: string | null;
+    supportEmail: string | null;
+    privacyEmail: string | null;
     primaryDomain: string | null;
     storefrontUrl: string | null;
     isOperational: boolean;
@@ -99,6 +103,10 @@ const storeProfileFields = gql`
         descriptionZh
         descriptionEn
         internalNote
+        legalEntityName
+        legalRegistrationCountry
+        supportEmail
+        privacyEmail
         primaryDomain
         storefrontUrl
         isOperational
