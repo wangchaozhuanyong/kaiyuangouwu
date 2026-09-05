@@ -17,6 +17,7 @@ import {
 import { useDeferredValue, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
     ADD_ORDER_FULFILLMENT,
     CREATE_DRAFT_ORDER,
@@ -361,7 +362,10 @@ export function SalesModule() {
             <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-5 sm:px-8">
                 <div className="flex w-full flex-wrap items-center justify-between gap-4">
                     <div>
-                        <h1 className="text-xl font-semibold tracking-tight text-slate-950">订单与履约</h1>
+                        <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight text-slate-950">
+                            订单与履约
+                            <FeatureHelpButton topic="sales.orders" title="订单与履约" />
+                        </h1>
                         <p className="mt-1 text-xs leading-5 text-slate-500">
                             集中处理支付状态、实物发货、虚拟交付与交易查询
                         </p>
@@ -861,9 +865,13 @@ export function SalesModule() {
                             <div>
                                 <h2
                                     id="batch-fulfillment-title"
-                                    className="text-base font-semibold text-slate-950"
+                                    className="flex items-center gap-2 text-base font-semibold text-slate-950"
                                 >
                                     批量填写运单并创建履约
+                                    <FeatureHelpButton
+                                        topic="sales.fulfillment"
+                                        title="批量填写运单并创建履约"
+                                    />
                                 </h2>
                                 <p className="mt-1 text-xs text-slate-500">
                                     每笔订单必须填写真实运单号，不自动生成虚假物流信息。

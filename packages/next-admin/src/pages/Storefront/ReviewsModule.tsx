@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { GET_STOREFRONT_REVIEWS, MODERATE_STOREFRONT_REVIEW } from '../../graphql/sales.graphql';
 import { useUrlTab } from '../../hooks/use-url-tab';
 import { toUserFacingError } from '../../utils/user-facing-error';
@@ -143,7 +144,10 @@ export function ReviewsModule() {
             <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-5 sm:px-8">
                 <div className="flex w-full flex-wrap items-center justify-between gap-4">
                     <div>
-                        <h1 className="text-xl font-semibold tracking-tight text-slate-950">买家评价</h1>
+                        <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight text-slate-950">
+                            买家评价
+                            <FeatureHelpButton topic="storefront.reviews" title="买家评价" />
+                        </h1>
                         <p className="mt-1 text-xs leading-5 text-slate-500">
                             审核真实购买评价，并维护商家公开回复
                         </p>

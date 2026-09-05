@@ -16,6 +16,7 @@ import {
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { GET_AFTER_SALES_REQUESTS, TRANSITION_AFTER_SALES_REQUEST } from '../../graphql/sales.graphql';
 import { useUrlTab } from '../../hooks/use-url-tab';
 import { toUserFacingError } from '../../utils/user-facing-error';
@@ -257,8 +258,9 @@ export function AfterSalesModule() {
             <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-5 sm:px-8">
                 <div className="flex w-full flex-wrap items-center justify-between gap-4">
                     <div>
-                        <h1 className="text-xl font-semibold tracking-tight text-slate-950">
+                        <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight text-slate-950">
                             售后与退款工单
+                            <FeatureHelpButton topic="sales.after-sales" title="售后与退款工单" />
                         </h1>
                         <p className="mt-1 text-xs leading-5 text-slate-500">
                             审核买家售后申请，核对真实退款记录后完成归档
@@ -616,7 +618,10 @@ export function AfterSalesModule() {
                                 </div>
                             </div>
                             <section>
-                                <h3 className="text-xs font-semibold text-slate-900">买家诉求</h3>
+                                <h3 className="flex items-center gap-2 text-xs font-semibold text-slate-900">
+                                    买家诉求
+                                    <FeatureHelpButton topic="sales.after-sales" title="买家诉求" />
+                                </h3>
                                 <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs leading-6 text-amber-900">
                                     <div className="font-semibold">
                                         {typeLabels[selectedRequest.type]} ·{' '}
@@ -626,7 +631,10 @@ export function AfterSalesModule() {
                                 </div>
                             </section>
                             <section>
-                                <h3 className="text-xs font-semibold text-slate-900">涉及商品</h3>
+                                <h3 className="flex items-center gap-2 text-xs font-semibold text-slate-900">
+                                    涉及商品
+                                    <FeatureHelpButton topic="sales.after-sales" title="售后涉及商品" />
+                                </h3>
                                 <div className="mt-2 space-y-2">
                                     {selectedRequest.items.map(item => (
                                         <div
@@ -658,7 +666,10 @@ export function AfterSalesModule() {
                             {(selectedRequest.state === 'PENDING' ||
                                 selectedRequest.state === 'APPROVED') && (
                                 <section className="rounded-xl border border-blue-200 bg-blue-50/50 p-4">
-                                    <h3 className="text-xs font-semibold text-blue-950">商家处理</h3>
+                                    <h3 className="flex items-center gap-2 text-xs font-semibold text-blue-950">
+                                        商家处理
+                                        <FeatureHelpButton topic="sales.after-sales" title="商家处理" />
+                                    </h3>
                                     <label className="mt-3 block text-xs font-semibold text-slate-700">
                                         处理说明 *
                                     </label>
@@ -730,7 +741,10 @@ export function AfterSalesModule() {
                             {selectedRequest.resolution &&
                                 !['PENDING', 'APPROVED'].includes(selectedRequest.state) && (
                                     <section>
-                                        <h3 className="text-xs font-semibold text-slate-900">处理结论</h3>
+                                        <h3 className="flex items-center gap-2 text-xs font-semibold text-slate-900">
+                                            处理结论
+                                            <FeatureHelpButton topic="sales.after-sales" title="处理结论" />
+                                        </h3>
                                         <div className="mt-2 whitespace-pre-wrap rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs leading-6 text-slate-700">
                                             {selectedRequest.resolution}
                                         </div>
@@ -740,6 +754,7 @@ export function AfterSalesModule() {
                                 <h3 className="flex items-center gap-2 text-xs font-semibold text-slate-900">
                                     <Clock3 className="h-4 w-4 text-blue-600" />
                                     工单时间线
+                                    <FeatureHelpButton topic="sales.after-sales" title="工单时间线" />
                                 </h3>
                                 <div className="mt-3 space-y-3">
                                     {selectedRequest.events.map(event => (

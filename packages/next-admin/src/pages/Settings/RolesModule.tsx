@@ -16,6 +16,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { sensitiveActionContext } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
 import {
     CREATE_ADMINISTRATOR_MUTATION,
@@ -143,6 +144,7 @@ export function RolesModule() {
                         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                             <Shield className="h-5 w-5 text-blue-600" />
                             员工与权限
+                            <FeatureHelpButton topic="settings.team" title="员工与权限" />
                         </h1>
                         <p className="mt-1 text-xs text-slate-500">
                             账号、角色和渠道范围集中管理；权限项直接读取当前服务端定义

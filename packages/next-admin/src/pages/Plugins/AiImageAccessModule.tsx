@@ -10,6 +10,7 @@ import {
     X,
 } from 'lucide-react';
 import { useState } from 'react';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
     IMAGE_PROVIDER_ADMIN_QUERY,
     SAVE_IMAGE_PROVIDER_MUTATION,
@@ -33,6 +34,7 @@ export function AiImageAccessModule() {
                         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                             <KeyRound className="h-5 w-5 text-blue-600" />
                             AI 服务商接入
+                            <FeatureHelpButton topic="plugins.ai-access" title="AI 服务商接入" />
                         </h1>
                         <p className="mt-1 text-xs text-slate-500">
                             平台超管配置 OpenAI / Gemini 网关、密钥和提示词优化模型；密钥不会回显

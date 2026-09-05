@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 
 import {
     IMPORT_AUTO_CARD_ITEMS_MUTATION,
@@ -95,6 +96,7 @@ export function ProductAutoCardSetupPanel({
                             className="text-lg font-semibold tracking-tight text-slate-950"
                         >
                             自动发卡
+                            <FeatureHelpButton topic="catalog.auto-card" title="自动发卡" />
                         </h3>
                         <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-500">
                             在当前商品页完成交付方式、卡密格式、库存导入和就绪检查，无需切换到其他设置页。
@@ -677,7 +679,10 @@ function AutoCardSetupEditor({
                 <div className="border-t border-slate-200 pt-5">
                     <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                         <div>
-                            <h4 className="text-xs font-semibold text-slate-900">3. 最近发卡结果</h4>
+                            <h4 className="text-xs font-semibold text-slate-900">
+                                3. 最近发卡结果
+                                <FeatureHelpButton topic="sales.card-pool" title="3. 最近发卡结果" />
+                            </h4>
                             <p className="mt-1 text-[11px] text-slate-500">当前 SKU 最近 5 条交付记录。</p>
                         </div>
                         <Link

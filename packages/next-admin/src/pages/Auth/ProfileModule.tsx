@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { sensitiveActionContext } from '../../apollo';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
     ACTIVE_ADMINISTRATOR_PROFILE_QUERY,
     UPDATE_ACTIVE_ADMINISTRATOR_MUTATION,
@@ -235,6 +236,7 @@ function ProfileContent({
                                 <div className="flex items-center gap-2">
                                     <User className="h-4 w-4 text-blue-600" />
                                     <h2 className="text-sm font-bold text-slate-900">基本资料</h2>
+                                    <FeatureHelpButton topic="profile.basic" title="基本资料" />
                                 </div>
                                 <p className="mt-1 text-[11px] text-slate-500">
                                     姓名和邮箱会用于后台账号识别与登录。
@@ -290,6 +292,7 @@ function ProfileContent({
                                 <div className="flex items-center gap-2">
                                     <LockKeyhole className="h-4 w-4 text-violet-600" />
                                     <h2 className="text-sm font-bold text-slate-900">修改登录密码</h2>
+                                    <FeatureHelpButton topic="profile.password" title="修改登录密码" />
                                 </div>
                                 <p className="mt-1 text-[11px] text-slate-500">
                                     为保护账号安全，修改密码前需要验证当前登录密码。
@@ -343,6 +346,7 @@ function ProfileContent({
                                 <div className="flex items-center gap-2">
                                     <ShieldCheck className="h-4 w-4 text-emerald-600" />
                                     <h2 className="text-sm font-bold text-slate-900">账号状态</h2>
+                                    <FeatureHelpButton topic="profile.account-status" title="账号状态" />
                                 </div>
                                 <dl className="mt-4 space-y-3 text-xs">
                                     <InfoRow label="账号 ID" value={profile.id} mono />
@@ -360,7 +364,10 @@ function ProfileContent({
                             </section>
 
                             <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-xs">
-                                <h2 className="text-sm font-bold text-slate-900">认证方式</h2>
+                                <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                                    认证方式
+                                    <FeatureHelpButton topic="profile.authentication" title="认证方式" />
+                                </h2>
                                 <div className="mt-3 space-y-2">
                                     {profile.user.authenticationMethods.length === 0 ? (
                                         <p className="text-xs text-slate-400">服务器未返回认证方式</p>
@@ -386,7 +393,10 @@ function ProfileContent({
                             </section>
 
                             <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-xs">
-                                <h2 className="text-sm font-bold text-slate-900">角色与店铺范围</h2>
+                                <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                                    角色与店铺范围
+                                    <FeatureHelpButton topic="profile.scope" title="角色与店铺范围" />
+                                </h2>
                                 <div className="mt-3 flex flex-wrap gap-1.5">
                                     {profile.user.roles.length === 0 ? (
                                         <span className="text-xs text-slate-400">未分配角色</span>

@@ -17,6 +17,7 @@ import {
     X,
 } from 'lucide-react';
 import { useDeferredValue, useEffect, useMemo, useState } from 'react';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
     CREATE_STOREFRONT_BLOCK_MUTATION,
     STOREFRONT_CONTENT_QUERY,
@@ -210,7 +211,10 @@ export function ClientPluginsModule() {
             <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-4 sm:px-8">
                 <div className="mx-auto flex w-full max-w-none flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                        <h1 className="text-xl font-bold text-slate-900">客户端插件中心</h1>
+                        <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
+                            客户端插件中心
+                            <FeatureHelpButton topic="plugins.client-center" title="客户端插件中心" />
+                        </h1>
                         <p className="mt-1 text-xs text-slate-500">
                             只能装配平台代码中已发布的官方插件，商家不能上传第三方代码
                         </p>
@@ -279,7 +283,10 @@ export function ClientPluginsModule() {
                         <>
                             <section>
                                 <div className="mb-3">
-                                    <h2 className="text-sm font-bold text-slate-900">平台插件</h2>
+                                    <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                                        平台插件
+                                        <FeatureHelpButton topic="plugins.platform" title="平台插件" />
+                                    </h2>
                                     <p className="mt-1 text-[11px] text-slate-400">
                                         清单直接来自当前后端发布的插件 manifest
                                     </p>
@@ -305,7 +312,10 @@ export function ClientPluginsModule() {
                             </section>
                             <section className="rounded-xl border border-slate-200 bg-white">
                                 <div className="border-b border-slate-100 p-4">
-                                    <h2 className="text-sm font-bold text-slate-900">已添加到客户端</h2>
+                                    <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                                        已添加到客户端
+                                        <FeatureHelpButton topic="plugins.installed" title="已添加到客户端" />
+                                    </h2>
                                     <p className="mt-1 text-[11px] text-slate-400">
                                         同一位置的插件依照下方顺序展示；选择“指定分类”时必须勾选至少一项
                                     </p>

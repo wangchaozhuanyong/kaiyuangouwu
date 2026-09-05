@@ -1,5 +1,7 @@
 import { Plus, Trash2 } from 'lucide-react';
 import { createElement, useMemo, useState } from 'react';
+import { FeatureHelpButton } from '../components/FeatureHelp';
+import type { FeatureHelpTopic } from '../components/feature-help-content';
 import type { CustomFieldDefinition, CustomFieldValueMap, StructFieldDefinition } from './custom-field-types';
 
 import { getNextAdminCustomFieldComponent } from '../extensions/extension-api';
@@ -20,6 +22,7 @@ interface DynamicCustomFieldsFormProps {
     excludedFieldNames?: readonly string[];
     languageCode?: string;
     title?: string;
+    helpTopic?: FeatureHelpTopic;
     languageCodes?: readonly string[];
 }
 
@@ -31,6 +34,7 @@ export function DynamicCustomFieldsForm({
     excludedFieldNames = [],
     languageCode = 'zh_Hans',
     title = '扩展字段',
+    helpTopic,
     languageCodes,
 }: DynamicCustomFieldsFormProps) {
     const { hasAnyPermission } = useAdminPermissions();
@@ -48,7 +52,10 @@ export function DynamicCustomFieldsForm({
     return (
         <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-2xs">
             <div className="mb-4">
-                <h2 className="text-sm font-bold text-slate-900">{title}</h2>
+                <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                    {title}
+                    {helpTopic && <FeatureHelpButton topic={helpTopic} title={title} />}
+                </h2>
                 <p className="mt-1 text-xs leading-5 text-slate-500">
                     字段由后端配置动态生成，新增扩展字段无需重写本页。
                 </p>

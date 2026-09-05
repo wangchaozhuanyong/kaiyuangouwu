@@ -5,6 +5,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 
 import { clearAuthSession, hasActiveChannelSelection, setInitialActiveChannel } from './apollo';
 import { ConfirmDialogProvider } from './components/ConfirmDialog';
+import { FeatureHelpProvider } from './components/FeatureHelp';
 import { getNextAdminExtensionLegacyRoutes, getNextAdminExtensionRoutes } from './extensions/extension-api';
 import './extensions/installed-extensions';
 import { InitialPasswordChangeModule } from './pages/Auth/InitialPasswordChangeModule';
@@ -39,6 +40,9 @@ const AssetsModule = lazy(() =>
     routeModuleLoaders.assets().then(module => ({ default: module.AssetsModule })),
 );
 const SalesModule = lazy(() => routeModuleLoaders.sales().then(module => ({ default: module.SalesModule })));
+const ProfitReportModule = lazy(() =>
+    routeModuleLoaders.profitReport().then(module => ({ default: module.ProfitReportModule })),
+);
 const OrderEditor = lazy(() =>
     routeModuleLoaders.orderEditor().then(module => ({ default: module.OrderEditor })),
 );
@@ -170,7 +174,9 @@ function AuthenticatedShell() {
                 </div>
             }
         >
-            <AppShell />
+            <FeatureHelpProvider>
+                <AppShell />
+            </FeatureHelpProvider>
         </Suspense>
     );
 }
@@ -224,6 +230,7 @@ function App() {
                         <Route path="sales">
                             <Route index element={<Navigate to="orders" replace />} />
                             <Route path="orders" element={<SalesModule />} />
+                            <Route path="profit" element={<ProfitReportModule />} />
                             <Route path="orders/draft/:id" element={<DraftOrderEditor />} />
                             <Route path="orders/:id/modify" element={<ModifyOrderEditor />} />
                             <Route path="orders/:id" element={<OrderEditor />} />

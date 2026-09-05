@@ -97,6 +97,8 @@ import { AddStoreDomainAutomation1788526800000 } from './1788526800000-add-store
 import { AddStoreProfileLegalIdentity1788530400000 } from './1788530400000-add-store-profile-legal-identity';
 import { AddAdminLoginTwoFactor1788609600000 } from './1788609600000-add-admin-login-two-factor';
 import { AlignAdminTwoFactorTimestamps1788613200000 } from './1788613200000-align-admin-two-factor-timestamps';
+import { AddOrderProfitExpenses1788652800000 } from './1788652800000-add-order-profit-expenses';
+import { AddCouponCampaignArchive1788652860000 } from './1788652860000-add-coupon-campaign-archive';
 
 export const devServerMigrations = [
     CommerceFulfillment1786514145999,
@@ -198,4 +200,6 @@ export const devServerMigrations = [
     AddStoreProfileLegalIdentity1788530400000,
     AddAdminLoginTwoFactor1788609600000,
     AlignAdminTwoFactorTimestamps1788613200000,
+    AddOrderProfitExpenses1788652800000,
+    AddCouponCampaignArchive1788652860000,
 ];

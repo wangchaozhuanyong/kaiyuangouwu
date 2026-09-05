@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { FeatureHelpProvider } from '../../components/FeatureHelp';
 import type { TelegramNotificationsResult } from '../../graphql/telegram-notifications.graphql';
 
 import { TelegramNotificationsPanel } from './TelegramNotificationsPanel';
@@ -138,7 +139,7 @@ describe('TelegramNotificationsPanel', () => {
     });
 
     it('shows configuration, worker health, twelve departments and dead-letter retry', () => {
-        const html = renderToStaticMarkup(<TelegramNotificationsPanel />);
+        const html = renderPanel();
 
         expect(html).toContain('Telegram 连接与策略');
         expect(html).toContain('12 成功 · 1 失败');
@@ -150,9 +151,17 @@ describe('TelegramNotificationsPanel', () => {
     });
 
     it('keeps P0 escalation and action controls locked', () => {
-        const html = renderToStaticMarkup(<TelegramNotificationsPanel />);
+        const html = renderPanel();
 
         expect(html).toMatch(/aria-label="system\.database\.down 升级部门"[^>]*disabled/u);
         expect(html).toMatch(/aria-label="system\.database\.down 需要处理"[^>]*disabled/u);
     });
 });
+
+function renderPanel(): string {
+    return renderToStaticMarkup(
+        <FeatureHelpProvider>
+            <TelegramNotificationsPanel />
+        </FeatureHelpProvider>,
+    );
+}

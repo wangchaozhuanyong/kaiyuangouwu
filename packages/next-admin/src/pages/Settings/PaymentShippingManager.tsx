@@ -2,6 +2,7 @@ import { useLazyQuery, useMutation, useQuery } from '@apollo/client/react';
 import { Beaker, CreditCard, Pencil, Plus, Trash2, Truck, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
 import { DynamicCustomFieldsForm } from '../../custom-fields/DynamicCustomFieldsForm';
 import type { CustomFieldDefinition, CustomFieldValueMap } from '../../custom-fields/custom-field-types';
@@ -125,6 +126,7 @@ export function PaymentShippingManager({
                         <div>
                             <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                                 <CreditCard className="h-4 w-4 text-blue-600" /> 支付方式
+                                <FeatureHelpButton topic="settings.payment-shipping" title="支付方式" />
                             </h2>
                             <p className="mt-1 text-xs text-slate-400">
                                 管理名称、处理器、资格检查器与启停状态
@@ -232,6 +234,7 @@ export function PaymentShippingManager({
                             <div>
                                 <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                                     <Truck className="h-4 w-4 text-blue-600" /> 配送方式
+                                    <FeatureHelpButton topic="settings.payment-shipping" title="配送方式" />
                                 </h2>
                                 <p className="mt-1 text-xs text-slate-400">
                                     管理资格检查器、运费计算器和履约处理器
@@ -558,6 +561,7 @@ function MethodEditorDialog({
                         </>
                     )}
                     <DynamicCustomFieldsForm
+                        helpTopic="settings.payment-shipping"
                         title={`${state.kind === 'payment' ? '支付方式' : '配送方式'}扩展字段`}
                         fields={customFieldDefinitions}
                         values={customFieldValues}
@@ -646,7 +650,10 @@ function ShippingMethodTester({
             <div className="flex items-start gap-2">
                 <Beaker className="mt-0.5 h-4 w-4 text-blue-600" />
                 <div>
-                    <h3 className="text-xs font-bold text-slate-800">配送方式试算</h3>
+                    <h3 className="flex items-center gap-2 text-xs font-bold text-slate-800">
+                        配送方式试算
+                        <FeatureHelpButton topic="settings.payment-shipping" title="配送方式试算" />
+                    </h3>
                     <p className="mt-1 text-[10px] leading-4 text-slate-500">
                         使用当前未保存的检查器和计算器参数，只执行 Vendure 试算查询，不创建订单。
                     </p>

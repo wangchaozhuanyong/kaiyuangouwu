@@ -18,6 +18,7 @@ import {
 import { useDeferredValue, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
 import {
     AUTO_CARD_VARIANTS_QUERY,
@@ -112,6 +113,7 @@ export function CardPoolModule() {
                         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                             <KeyRound className="h-5 w-5 text-blue-600" />
                             发卡记录与异常
+                            <FeatureHelpButton topic="sales.card-pool" title="发卡记录与异常" />
                         </h1>
                         <p className="mt-1 text-xs text-slate-500">
                             跨商品查看卡密库存、交付结果和需要人工处理的问题

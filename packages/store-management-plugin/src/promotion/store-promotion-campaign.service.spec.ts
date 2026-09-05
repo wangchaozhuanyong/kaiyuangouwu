@@ -1,8 +1,10 @@
-import { CreatePromotionInput } from '@vendure/common/lib/generated-types';
+import { CreatePromotionInput, SortOrder } from '@vendure/common/lib/generated-types';
 import { describe, expect, it, vi } from 'vitest';
 
 import { CouponLedgerEntry } from '../entities/coupon-ledger-entry.entity';
 import { CouponOrderAllocation } from '../entities/coupon-order-allocation.entity';
+import { CustomerCoupon } from '../entities/customer-coupon.entity';
+import { StoreCouponCampaignConfig } from '../entities/store-coupon-campaign-config.entity';
 
 import { StorePromotionCampaignService } from './store-promotion-campaign.service';
 
@@ -238,8 +240,17 @@ describe('StorePromotionCampaignService', () => {
         const sales = await harness.service.findFlashSales(ctx, true);
 
         expect(sales).toHaveLength(10);
-        expect(harness.findAllPromotions).toHaveBeenNthCalledWith(1, ctx, { take: 100, skip: 0 });
-        expect(harness.findAllPromotions).toHaveBeenNthCalledWith(2, ctx, { take: 100, skip: 100 });
+        const newestFirst = { createdAt: SortOrder.DESC, id: SortOrder.DESC };
+        expect(harness.findAllPromotions).toHaveBeenNthCalledWith(1, ctx, {
+            take: 100,
+            skip: 0,
+            sort: newestFirst,
+        });
+        expect(harness.findAllPromotions).toHaveBeenNthCalledWith(2, ctx, {
+            take: 100,
+            skip: 100,
+            sort: newestFirst,
+        });
     });
 
     it('loads every product variant in pages that respect the production list limit', async () => {
@@ -273,6 +284,18 @@ describe('StorePromotionCampaignService', () => {
         const harness = createHarness({ promotions: [promotion], issuedCount: 3 });
 
         await expect(harness.service.delete(ctx, promotion.id)).rejects.toThrow('已经发放 3 张');
+        expect(harness.softDeletePromotion).not.toHaveBeenCalled();
+    });
+
+    it('archives an issued coupon campaign without deleting its protected history', async () => {
+        const promotion = couponPromotion();
+        const harness = createHarness({ promotions: [promotion], issuedCount: 3 });
+
+        const archived = await harness.service.archiveCouponCampaign(ctx, promotion.id);
+
+        expect(archived.archivedAt).toBeInstanceOf(Date);
+        expect(archived.claimEndsAt).toBeInstanceOf(Date);
+        expect(archived.claimable).toBe(false);
         expect(harness.softDeletePromotion).not.toHaveBeenCalled();
     });
 
@@ -391,11 +414,13 @@ function createHarness({
     };
 } = {}) {
     const createPromotion = vi.fn((_ctx: unknown, input: CreatePromotionInput) => promotionFromInput(input));
-    const findAllPromotions = vi.fn((_ctx: unknown, options?: { skip?: number; take?: number }) => {
-        const skip = options?.skip ?? 0;
-        const take = options?.take ?? promotions.length;
-        return { items: promotions.slice(skip, skip + take), totalItems: promotions.length };
-    });
+    const findAllPromotions = vi.fn(
+        (_ctx: unknown, options?: { skip?: number; take?: number; sort?: Record<string, SortOrder> }) => {
+            const skip = options?.skip ?? 0;
+            const take = options?.take ?? promotions.length;
+            return { items: promotions.slice(skip, skip + take), totalItems: promotions.length };
+        },
+    );
     const softDeletePromotion = vi.fn();
     const updatePromotion = vi.fn((_ctx: unknown, input: any) => ({
         ...(promotions.find(promotion => promotion.id === input.id) ?? {}),
@@ -429,6 +454,7 @@ function createHarness({
         ),
     };
     const updateEntity = vi.fn();
+    let campaignConfig: StoreCouponCampaignConfig | null = null;
     let allocationReportQuery = 0;
     const queryBuilder = (rows: any[]) => {
         const builder = {
@@ -444,23 +470,37 @@ function createHarness({
     };
     const connection = {
         findByIdsInChannel: vi.fn(() => []),
-        getRepository: vi.fn((_ctx, entity) => ({
-            save: vi.fn((value: unknown) => value),
-            find: vi.fn(() => []),
-            count: vi.fn(() => issuedCount),
-            update: updateEntity,
-            createQueryBuilder:
-                entity === CouponLedgerEntry
-                    ? () => queryBuilder(reportRows?.ledger ?? [])
-                    : entity === CouponOrderAllocation
-                      ? () =>
-                            queryBuilder(
-                                allocationReportQuery++ === 0
-                                    ? (reportRows?.usage ?? [])
-                                    : (reportRows?.refund ?? []),
-                            )
-                      : undefined,
-        })),
+        getRepository: vi.fn((_ctx, entity) => {
+            if (entity === StoreCouponCampaignConfig) {
+                return {
+                    save: vi.fn((value: StoreCouponCampaignConfig) => {
+                        campaignConfig = value;
+                        return value;
+                    }),
+                    find: vi.fn(() => (campaignConfig ? [campaignConfig] : [])),
+                    findOne: vi.fn(() => campaignConfig),
+                };
+            }
+            return {
+                save: vi.fn((value: unknown) => value),
+                find: vi.fn(() => []),
+                count: vi.fn(() => issuedCount),
+                update: updateEntity,
+                createQueryBuilder:
+                    entity === CouponLedgerEntry
+                        ? () => queryBuilder(reportRows?.ledger ?? [])
+                        : entity === CustomerCoupon
+                          ? () => queryBuilder([])
+                          : entity === CouponOrderAllocation
+                            ? () =>
+                                  queryBuilder(
+                                      allocationReportQuery++ === 0
+                                          ? (reportRows?.usage ?? [])
+                                          : (reportRows?.refund ?? []),
+                                  )
+                            : undefined,
+            };
+        }),
     };
     const customerService = {
         findOneByUserId: vi.fn(),
@@ -485,6 +525,8 @@ function createHarness({
 function couponPromotion() {
     return {
         id: 'coupon-1',
+        createdAt: new Date('2026-08-25T00:00:00.000Z'),
+        updatedAt: new Date('2026-08-26T00:00:00.000Z'),
         name: '已发放优惠券',
         description: '优惠券',
         enabled: true,
@@ -501,6 +543,8 @@ function couponPromotion() {
 function promotionFromInput(input: CreatePromotionInput) {
     return {
         id: 'promotion-1',
+        createdAt: new Date('2026-08-25T00:00:00.000Z'),
+        updatedAt: new Date('2026-08-25T00:00:00.000Z'),
         name: input.translations[0].name,
         enabled: input.enabled,
         startsAt: input.startsAt ?? null,

@@ -644,6 +644,8 @@ export const adminApiExtensions = gql`
 
     type StoreCouponCampaign {
         id: ID!
+        createdAt: DateTime!
+        updatedAt: DateTime!
         name: String!
         couponCode: String!
         kind: StoreCouponCampaignKind!
@@ -666,6 +668,7 @@ export const adminApiExtensions = gql`
         stackPolicy: StoreCouponStackPolicy!
         returnOnCancellation: Boolean!
         returnOnFullRefund: Boolean!
+        archivedAt: DateTime
         remainingIssueCount: Int
         claimedCount: Int!
         availableCount: Int!
@@ -809,6 +812,8 @@ export const adminApiExtensions = gql`
 
     type StoreFlashSale {
         id: ID!
+        createdAt: DateTime!
+        updatedAt: DateTime!
         name: String!
         enabled: Boolean!
         startsAt: DateTime
@@ -1176,6 +1181,7 @@ export const adminApiExtensions = gql`
         setStorePromotionEnabled(id: ID!, enabled: Boolean!, password: String!): StorePromotionToggleResult!
         updateStorePromotionName(id: ID!, name: String!): StorePromotionNameResult!
         stopStoreCouponIssuance(id: ID!, password: String!): StoreCouponCampaign!
+        archiveStoreCouponCampaign(id: ID!, password: String!): StoreCouponCampaign!
         revokeStoreCouponCampaignOutstanding(
             id: ID!
             password: String!

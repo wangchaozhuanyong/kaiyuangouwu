@@ -26,6 +26,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { sensitiveActionContext } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { DynamicCustomFieldsForm } from '../../custom-fields/DynamicCustomFieldsForm';
 import type { CustomFieldValueMap } from '../../custom-fields/custom-field-types';
 import {
@@ -49,6 +50,7 @@ import {
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
+import { OrderProfitExpensePanel } from './OrderProfitExpensePanel';
 import {
     buildCompatibleRefundOrderInput,
     formatAddress,
@@ -216,6 +218,8 @@ export function OrderEditor() {
     const { id } = useParams<{ id: string }>();
     const { hasAnyPermission } = useAdminPermissions();
     const canUpdateOrder = hasAnyPermission(['UpdateOrder']);
+    const canReadProfitExpenses = hasAnyPermission(['ReadCatalogOperations']);
+    const canUpdateProfitExpenses = canUpdateOrder && hasAnyPermission(['UpdateCatalogOperations']);
     const orderCustomFieldDefinitions = useCustomFieldDefinitions('Order');
     const orderDetailDocument = useMemo(
         () => addCustomFieldsToDocument(GET_SALES_ORDER, 'Order', orderCustomFieldDefinitions, ['order']),
@@ -733,6 +737,7 @@ export function OrderEditor() {
                                 onChange={setOrderCustomFieldValues}
                                 disabled={!canUpdateOrder || savingCustomFields}
                                 title="订单扩展信息"
+                                helpTopic="sales.orders"
                             />
                             {canUpdateOrder && (
                                 <div className="flex justify-end">
@@ -752,6 +757,15 @@ export function OrderEditor() {
                         </div>
                     )}
 
+                    {order.orderPlacedAt && (
+                        <OrderProfitExpensePanel
+                            orderId={order.id}
+                            currencyCode={order.currencyCode}
+                            canRead={canReadProfitExpenses}
+                            canUpdate={canUpdateProfitExpenses}
+                        />
+                    )}
+
                     <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_21rem]">
                         <div className="min-w-0 space-y-4">
                             <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xs">
@@ -759,6 +773,7 @@ export function OrderEditor() {
                                     <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
                                         <PackageCheck className="h-4 w-4 text-blue-600" />
                                         商品明细
+                                        <FeatureHelpButton topic="sales.order-items" title="商品明细" />
                                     </h2>
                                     <span className="text-xs text-slate-500">
                                         {order.lines.length} 个 SKU · {order.totalQuantity} 件
@@ -862,6 +877,7 @@ export function OrderEditor() {
                                     <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
                                         <Truck className="h-4 w-4 text-blue-600" />
                                         履约与物流
+                                        <FeatureHelpButton topic="sales.fulfillment" title="履约与物流" />
                                     </h2>
                                     {remainingPhysicalLines.length > 0 && (
                                         <span className="rounded bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700">
@@ -922,6 +938,7 @@ export function OrderEditor() {
                                 <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
                                     <CreditCard className="h-4 w-4 text-blue-600" />
                                     支付与退款
+                                    <FeatureHelpButton topic="sales.payment" title="支付与退款" />
                                 </h2>
                                 <div className="mt-4 space-y-3">
                                     {(order.payments ?? []).length === 0 ? (
@@ -982,6 +999,7 @@ export function OrderEditor() {
                                 <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
                                     <MessageSquare className="h-4 w-4 text-blue-600" />
                                     内部备注
+                                    <FeatureHelpButton topic="sales.orders" title="订单内部备注" />
                                 </h2>
                                 <p className="mt-1 text-[10px] text-slate-400">
                                     当前读取最近 {order.history.items.length} / {order.history.totalItems}{' '}
@@ -1048,6 +1066,7 @@ export function OrderEditor() {
                                 <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
                                     <Clock3 className="h-4 w-4 text-blue-600" />
                                     订单时间线（最近 20 条）
+                                    <FeatureHelpButton topic="sales.orders" title="订单时间线" />
                                 </h2>
                                 <div className="mt-4 space-y-3">
                                     {timeline.length === 0 ? (
@@ -1079,6 +1098,7 @@ export function OrderEditor() {
                                 <h2 className="flex items-center gap-2 text-xs font-semibold text-slate-900">
                                     <User className="h-4 w-4 text-blue-600" />
                                     买家信息
+                                    <FeatureHelpButton topic="sales.orders" title="买家信息" />
                                 </h2>
                                 <div className="mt-3 space-y-1.5 text-xs">
                                     <div className="font-semibold text-slate-900">
@@ -1108,6 +1128,7 @@ export function OrderEditor() {
                                 <h2 className="flex items-center gap-2 text-xs font-semibold text-slate-900">
                                     <Store className="h-4 w-4 text-blue-600" />
                                     渠道与配送
+                                    <FeatureHelpButton topic="sales.orders" title="渠道与配送" />
                                 </h2>
                                 <div className="mt-3 space-y-2 text-xs text-slate-600">
                                     <div>
@@ -1125,7 +1146,10 @@ export function OrderEditor() {
                                 </div>
                             </section>
                             <section className="rounded-xl bg-slate-900 p-5 text-white shadow-sm">
-                                <h2 className="text-xs font-semibold text-slate-300">金额汇总</h2>
+                                <h2 className="flex items-center gap-2 text-xs font-semibold text-slate-300">
+                                    金额汇总
+                                    <FeatureHelpButton topic="sales.totals" title="金额汇总" />
+                                </h2>
                                 <div className="mt-4 space-y-2 text-xs">
                                     <div className="flex justify-between text-slate-300">
                                         <span>商品小计</span>

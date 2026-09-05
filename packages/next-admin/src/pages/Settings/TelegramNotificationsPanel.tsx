@@ -10,6 +10,7 @@ import {
     Send,
 } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 
 import {
     RETRY_TELEGRAM_NOTIFICATION,
@@ -211,7 +212,10 @@ export function TelegramNotificationsPanel() {
                             <Bot className="h-5 w-5" />
                         </span>
                         <div>
-                            <h2 className="text-sm font-bold text-slate-900">Telegram 连接与策略</h2>
+                            <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                                Telegram 连接与策略
+                                <FeatureHelpButton topic="settings.telegram" title="Telegram 连接与策略" />
+                            </h2>
                             <p className="mt-1 text-xs leading-5 text-slate-500">
                                 Token 不入库、不返回前端；所有部门共用同一个内部群，不创建多群或 Topics。
                             </p>
@@ -392,7 +396,10 @@ export function TelegramNotificationsPanel() {
 
             <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
                 <div className="border-b border-slate-100 p-5">
-                    <h2 className="text-sm font-bold text-slate-900">配置变更审计</h2>
+                    <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                        配置变更审计
+                        <FeatureHelpButton topic="settings.telegram" title="Telegram 配置变更审计" />
+                    </h2>
                     <p className="mt-1 text-xs text-slate-500">
                         保留最近 10 次后台修改；Chat ID 在审计记录中脱敏，Bot Token 始终不入库。
                     </p>
@@ -418,7 +425,10 @@ export function TelegramNotificationsPanel() {
 
             <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
                 <div className="border-b border-slate-100 p-5">
-                    <h2 className="text-sm font-bold text-slate-900">部门责任路由</h2>
+                    <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                        部门责任路由
+                        <FeatureHelpButton topic="settings.telegram" title="部门责任路由" />
+                    </h2>
                     <p className="mt-1 text-xs text-slate-500">
                         P0 固定立即升级 EXEC；P1 按配置时限升级。提及对象只用于
                         P0/P1。修改后需点击上方“保存配置”。
@@ -604,7 +614,10 @@ export function TelegramNotificationsPanel() {
             <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
                 <div className="flex flex-col gap-3 border-b border-slate-100 p-5 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                        <h2 className="text-sm font-bold text-slate-900">最近发送记录</h2>
+                        <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                            最近发送记录
+                            <FeatureHelpButton topic="settings.telegram" title="最近发送记录" />
+                        </h2>
                         <p className="mt-1 text-xs text-slate-500">
                             共 {deliveries.totalItems} 条，显示最近 25 条
                         </p>

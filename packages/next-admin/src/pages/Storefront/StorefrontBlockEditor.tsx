@@ -15,6 +15,7 @@ import {
 import { useDeferredValue, useRef, useState } from 'react';
 import { uploadAdminFiles } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { CREATE_ASSETS_MULTIPART } from '../../graphql/catalog-admin.graphql';
 import { GET_ASSETS, GET_COLLECTIONS, GET_PRODUCTS } from '../../graphql/catalog.graphql';
 import {
@@ -199,7 +200,13 @@ export function StorefrontBlockEditor({
                             <section className="rounded-xl border border-slate-200 bg-white p-5">
                                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                                     <div>
-                                        <h3 className="text-sm font-bold text-slate-900">基础设置</h3>
+                                        <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                                            基础设置
+                                            <FeatureHelpButton
+                                                topic="storefront.block-basic"
+                                                title="楼层基础设置"
+                                            />
+                                        </h3>
                                         <p className="mt-1 text-[11px] text-slate-400">
                                             编码用于客户端稳定识别，创建后建议不修改
                                         </p>
@@ -271,7 +278,13 @@ export function StorefrontBlockEditor({
                             <section className="rounded-xl border border-slate-200 bg-white p-5">
                                 <div className="flex items-center justify-between gap-3">
                                     <div>
-                                        <h3 className="text-sm font-bold text-slate-900">前台文案</h3>
+                                        <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                                            前台文案
+                                            <FeatureHelpButton
+                                                topic="storefront.block-copy"
+                                                title="前台文案"
+                                            />
+                                        </h3>
                                         <p className="mt-1 text-[11px] text-slate-400">
                                             同一个区块的中英文在此集中维护
                                         </p>
@@ -324,8 +337,9 @@ export function StorefrontBlockEditor({
                             </section>
 
                             <section className="rounded-xl border border-slate-200 bg-white p-5">
-                                <h3 className="text-sm font-bold text-slate-900">
+                                <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                                     {isSupport ? '客服页配色' : '图片、配色与跳转'}
+                                    <FeatureHelpButton topic="storefront.block-visuals" title="图片与配色" />
                                 </h3>
                                 {isSupport && (
                                     <p className="mt-1 text-[11px] text-slate-400">
@@ -405,8 +419,12 @@ export function StorefrontBlockEditor({
 
                             {moduleHasSettings(draft.type) && (
                                 <section className="rounded-xl border border-slate-200 bg-white p-5">
-                                    <h3 className="text-sm font-bold text-slate-900">
+                                    <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                                         {isSupport ? '客服服务时间' : '展示规则'}
+                                        <FeatureHelpButton
+                                            topic="storefront.block-rules"
+                                            title="展示规则与服务时间"
+                                        />
                                     </h3>
                                     <div className="mt-4 grid gap-4 sm:grid-cols-2">
                                         {draft.type === 'SUPPORT' ? (
@@ -588,8 +606,12 @@ export function StorefrontBlockEditor({
                                 <section className="rounded-xl border border-slate-200 bg-white p-5">
                                     <div className="flex items-center justify-between">
                                         <div>
-                                            <h3 className="text-sm font-bold text-slate-900">
+                                            <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                                                 {isSupport ? '客服渠道' : '子项内容'}
+                                                <FeatureHelpButton
+                                                    topic="storefront.block-copy"
+                                                    title="模块子项内容"
+                                                />
                                             </h3>
                                             <p className="mt-1 text-[11px] text-slate-400">
                                                 {isSupport
@@ -1215,7 +1237,13 @@ function AssetPicker({
                     >
                         <div className="flex items-center justify-between">
                             <div>
-                                <h3 className="font-bold text-slate-900">选择图片素材</h3>
+                                <h3 className="flex items-center gap-2 font-bold text-slate-900">
+                                    选择图片素材
+                                    <FeatureHelpButton
+                                        topic="storefront.block-visuals"
+                                        title="选择图片素材"
+                                    />
+                                </h3>
                                 <p className="mt-1 text-xs text-slate-400">读取商品管理中的真实素材库</p>
                             </div>
                             <button
@@ -1430,7 +1458,10 @@ function BlockPreview({
         return (
             <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
                 <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-                    <h3 className="text-xs font-bold text-slate-900">简易前台预览</h3>
+                    <h3 className="text-xs font-bold text-slate-900">
+                        简易前台预览
+                        <FeatureHelpButton topic="storefront.safe-preview" title="简易前台预览" />
+                    </h3>
                     <span className="rounded bg-slate-100 px-2 py-1 font-mono text-[10px] text-slate-500">
                         SUPPORT
                     </span>
@@ -1505,7 +1536,10 @@ function BlockPreview({
     return (
         <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
             <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-                <h3 className="text-xs font-bold text-slate-900">简易前台预览</h3>
+                <h3 className="flex items-center gap-2 text-xs font-bold text-slate-900">
+                    简易前台预览
+                    <FeatureHelpButton topic="storefront.structure-preview" title="简易前台预览" />
+                </h3>
                 <span className="rounded bg-slate-100 px-2 py-1 font-mono text-[10px] text-slate-500">
                     {block.type}
                 </span>

@@ -1,5 +1,6 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import React from 'react';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { ReferralPosterRecord, ReferralProgramRecord } from '../../graphql/marketing.graphql';
 import { getStatusLabel } from '../../utils/status-labels';
 import { toUserFacingError } from '../../utils/user-facing-error';
@@ -20,7 +21,10 @@ export function TableCard({
     return (
         <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xs">
             <div className="border-b border-slate-200 p-4">
-                <h2 className="text-sm font-bold text-slate-900">{title}</h2>
+                <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                    {title}
+                    <FeatureHelpButton topic="marketing.referrals" title={title} />
+                </h2>
                 <p className="mt-1 text-[11px] text-slate-500">{description}</p>
             </div>
             <div className="overflow-x-auto">{children}</div>
@@ -465,4 +469,18 @@ export function withdrawalSuccess(status: WithdrawalAction['status']) {
 }
 export function errorText(error: unknown) {
     return toUserFacingError(error, '操作失败，请稍后重试');
+}
+
+export function ReferralHeading() {
+    return (
+        <div>
+            <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
+                分销与返利
+                <FeatureHelpButton topic="marketing.referrals" title="分销与返利" />
+            </h1>
+            <p className="mt-1 text-xs text-slate-500">
+                一级邀请返利、推广员、奖励、钱包、提现和分享海报统一管理
+            </p>
+        </div>
+    );
 }

@@ -1,4 +1,5 @@
 import { Check, CornerDownRight, FolderTree, Search, Tag } from 'lucide-react';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { hasDirectProductAssignment } from '../../utils/product-collection-assignment';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { LookupPager } from './LookupPager';
@@ -63,7 +64,10 @@ export function ProductFacetsCollectionsTab() {
             {/* Facet 筛选标签属性 */}
             <div className="bg-white rounded-xl shadow-2xs border border-slate-200 p-6 space-y-4">
                 <div className="border-b border-slate-100 pb-3">
-                    <h3 className="text-sm font-bold text-slate-900">Facet 属性标签关联</h3>
+                    <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                        Facet 属性标签关联
+                        <FeatureHelpButton topic="catalog.facets" title="Facet 属性标签关联" />
+                    </h3>
                     <p className="text-xs text-slate-400 mt-0.5">
                         勾选商品所属的 Facet 标签，将直接保存至后端并用于前台筛选检索
                     </p>
@@ -145,7 +149,10 @@ export function ProductFacetsCollectionsTab() {
             {/* 所属商品分类 */}
             <div className="bg-white rounded-xl shadow-2xs border border-slate-200 p-6 space-y-3">
                 <div className="border-b border-slate-100 pb-3">
-                    <h3 className="text-sm font-bold text-slate-900">所属商品分类 (Collections)</h3>
+                    <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                        所属商品分类 (Collections)
+                        <FeatureHelpButton topic="catalog.collections" title="所属商品分类" />
+                    </h3>
                     <p className="text-xs text-slate-400 mt-0.5">
                         勾选后直接加入分类；已有 Facet 自动分类规则会完整保留，不会被人工归类覆盖
                     </p>

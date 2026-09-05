@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 
 import { sensitiveActionContext } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { SensitiveActionDialog } from '../../components/SensitiveActionDialog';
 import type { NextAdminPageBlockContext } from '../../extensions/extension-api';
 import {
@@ -543,6 +544,7 @@ function Heading({ icon, title, detail }: { icon: React.ReactNode; title: string
             <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                 {icon}
                 {title}
+                <FeatureHelpButton topic="sales.payment" title={title} />
             </h2>
             <p className="mt-1 text-xs text-slate-500">{detail}</p>
         </div>

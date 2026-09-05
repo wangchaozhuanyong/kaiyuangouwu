@@ -7,6 +7,7 @@ interface RoutePermissionRule {
 
 // More-specific prefixes must be declared before their parent sections.
 const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
+    { prefix: '/sales/profit', permissions: ['ReadOrder', 'ReadCatalogOperations'] },
     { prefix: '/plugins/ai-access', permissions: ['SuperAdmin'] },
     {
         prefix: '/sales/orders/draft',
@@ -61,5 +62,13 @@ export function canAccessAdminPath(
     pathname: string,
     grantedPermissions: readonly AdminPermission[],
 ): boolean {
+    if (pathname === '/sales/profit' || pathname.startsWith('/sales/profit/')) {
+        return (
+            grantedPermissions.includes('SuperAdmin') ||
+            ['ReadOrder', 'ReadCatalogOperations'].every(permission =>
+                grantedPermissions.includes(permission),
+            )
+        );
+    }
     return hasAnyAdminPermission(grantedPermissions, getRequiredPermissionsForAdminPath(pathname));
 }

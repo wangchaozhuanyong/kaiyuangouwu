@@ -35,7 +35,7 @@ import {
     TodayOverview,
     WithdrawalsPanel,
 } from './ReferralPanels';
-import { PAGE_SIZE, errorText, programDraft, programDraftError } from './referral-ui';
+import { PAGE_SIZE, ReferralHeading, errorText, programDraft, programDraftError } from './referral-ui';
 import { ProgramDraft, ReferralTab, ReportKey, WithdrawalAction } from './referrals-types';
 
 const REFERRAL_TABS = {
@@ -126,12 +126,7 @@ export function ReferralsModule() {
         <div className="flex h-full flex-col bg-slate-50">
             <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-4 sm:px-8">
                 <div className="mx-auto flex w-full max-w-none flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                        <h1 className="text-xl font-bold text-slate-900">分销与返利</h1>
-                        <p className="mt-1 text-xs text-slate-500">
-                            一级邀请返利、推广员、奖励、钱包、提现和分享海报统一管理
-                        </p>
-                    </div>
+                    <ReferralHeading />
                     <div className="flex flex-wrap gap-2">
                         <button
                             type="button"

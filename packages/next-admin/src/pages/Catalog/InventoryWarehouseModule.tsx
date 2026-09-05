@@ -24,6 +24,7 @@ import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { sensitiveActionContext } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
 import {
     CREATE_STOCK_LOCATION,
@@ -721,7 +722,10 @@ export function InventoryWarehouseModule() {
         <div className="flex h-full flex-col bg-slate-50">
             <div className="flex shrink-0 flex-col gap-4 border-b border-slate-200 bg-white px-5 py-5 shadow-2xs sm:flex-row sm:items-center sm:justify-between sm:px-8">
                 <div>
-                    <h1 className="text-xl font-bold text-slate-900">库存与多仓管理</h1>
+                    <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
+                        库存与多仓管理
+                        <FeatureHelpButton topic="catalog.inventory" title="库存与多仓管理" />
+                    </h1>
                     <p className="mt-1 text-xs text-slate-500">
                         读取 Vendure 多库存点数据，统一处理在手、锁定、可售库存与真实变动流水
                     </p>
@@ -1536,7 +1540,10 @@ export function InventoryWarehouseModule() {
                         onClick={event => event.stopPropagation()}
                     >
                         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                            <h3 className="text-base font-bold text-slate-900">实物库存盘点调整</h3>
+                            <h3 className="flex items-center gap-2 text-base font-bold text-slate-900">
+                                实物库存盘点调整
+                                <FeatureHelpButton topic="catalog.inventory" title="实物库存盘点调整" />
+                            </h3>
                             <button
                                 type="button"
                                 onClick={() => setSelectedStock(null)}

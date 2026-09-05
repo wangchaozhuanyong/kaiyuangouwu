@@ -9,6 +9,7 @@ import { AlertTriangle, Download, FileSpreadsheet, ShieldCheck, X } from 'lucide
 import { useState } from 'react';
 
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
     CATALOG_EXPORT_CONTEXT_QUERY,
     CATALOG_EXPORT_ROWS_QUERY,
@@ -123,6 +124,7 @@ export function CatalogExportAction() {
                             <div>
                                 <h2 className="flex items-center gap-2 text-base font-bold text-slate-900">
                                     <FileSpreadsheet className="h-5 w-5 text-blue-600" /> 导出可回导商品表
+                                    <FeatureHelpButton topic="catalog.products" title="导出可回导商品表" />
                                 </h2>
                                 <p className="mt-1 text-xs text-slate-500">
                                     文件在当前浏览器生成；服务器只返回结构化商品数据。

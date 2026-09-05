@@ -3,6 +3,7 @@ import {
     ConfigurableOperationInput,
     CreatePromotionInput,
     LanguageCode,
+    SortOrder,
 } from '@vendure/common/lib/generated-types';
 import { ID } from '@vendure/common/lib/shared-types';
 import type { ProductVariant } from '@vendure/core';
@@ -108,10 +109,13 @@ export class StorePromotionCampaignService {
                 stackPolicy: config?.stackPolicy ?? 'EXCLUSIVE',
                 returnOnCancellation: config?.returnOnCancellation ?? true,
                 returnOnFullRefund: config?.returnOnFullRefund ?? true,
+                archivedAt: config?.archivedAt ?? null,
                 remainingIssueCount,
                 claimed: customerClaimedCount > 0,
                 claimable:
-                    customerClaimedCount === 0 && (remainingIssueCount == null || remainingIssueCount > 0),
+                    !config?.archivedAt &&
+                    customerClaimedCount === 0 &&
+                    (remainingIssueCount == null || remainingIssueCount > 0),
             };
         });
     }
@@ -121,6 +125,7 @@ export class StorePromotionCampaignService {
         return (await this.findCoupons(ctx))
             .filter(
                 coupon =>
+                    !coupon.archivedAt &&
                     coupon.enabled &&
                     (!coupon.endsAt || coupon.endsAt > now) &&
                     (!coupon.claimStartsAt || coupon.claimStartsAt <= now) &&
@@ -269,6 +274,7 @@ export class StorePromotionCampaignService {
                 stackPolicy: input.stackPolicy ?? 'EXCLUSIVE',
                 returnOnCancellation: input.returnOnCancellation ?? true,
                 returnOnFullRefund: input.returnOnFullRefund ?? true,
+                archivedAt: null,
             }),
         );
         if (config.claimStartsAt && config.claimEndsAt && config.claimStartsAt >= config.claimEndsAt) {
@@ -285,6 +291,7 @@ export class StorePromotionCampaignService {
             stackPolicy: config.stackPolicy,
             returnOnCancellation: config.returnOnCancellation,
             returnOnFullRefund: config.returnOnFullRefund,
+            archivedAt: config.archivedAt,
             remainingIssueCount: config.issueLimit,
             claimed: false,
             claimable: true,
@@ -474,6 +481,32 @@ export class StorePromotionCampaignService {
         return updated;
     }
 
+    async archiveCouponCampaign(ctx: RequestContext, id: ID): Promise<StoreCouponCampaignView> {
+        const promotion = await this.promotionService.findOne(ctx, id);
+        if (!promotion || !this.toCouponView(promotion)) {
+            throw new UserInputError('找不到该优惠券活动');
+        }
+        const config = await this.configForPromotion(ctx, promotion);
+        if (!config.archivedAt) {
+            const now = new Date();
+            config.archivedAt = now;
+            if (!config.claimEndsAt || config.claimEndsAt > now) config.claimEndsAt = now;
+            await this.connection
+                .getRepository(ctx, StoreCouponCampaignConfig)
+                .save(config, { reload: false });
+        }
+        const archived = (await this.findCoupons(ctx)).find(coupon => idsAreEqual(coupon.id, id));
+        if (!archived) throw new UserInputError('优惠券活动归档后无法读取');
+        await this.eventBus?.publish(
+            new StorefrontDataChangedEvent(ctx, ['content'], {
+                channelIds: [ctx.channelId],
+                entityType: 'StoreCouponCampaign',
+                entityIds: [id],
+            }),
+        );
+        return archived;
+    }
+
     async delete(ctx: RequestContext, id: ID) {
         const promotion = await this.promotionService.findOne(ctx, id);
         if (!promotion || !this.isManagedPromotion(promotion)) {
@@ -613,6 +646,8 @@ export class StorePromotionCampaignService {
         const percentageOff = numberArg(action, 'discount');
         return {
             id: promotion.id,
+            createdAt: promotion.createdAt,
+            updatedAt: promotion.updatedAt,
             name: promotion.name,
             couponCode: promotion.couponCode,
             kind,
@@ -636,6 +671,7 @@ export class StorePromotionCampaignService {
             stackPolicy: 'EXCLUSIVE',
             returnOnCancellation: true,
             returnOnFullRefund: true,
+            archivedAt: null,
             remainingIssueCount: promotion.usageLimit,
             claimed: false,
             claimable: true,
@@ -768,6 +804,8 @@ export class StorePromotionCampaignService {
         const items = mappedItems.filter((item): item is StoreFlashSaleItemView => item != null);
         return {
             id: promotion.id,
+            createdAt: promotion.createdAt,
+            updatedAt: promotion.updatedAt,
             name: promotion.name,
             enabled: promotion.enabled,
             startsAt: promotion.startsAt,
@@ -811,6 +849,7 @@ export class StorePromotionCampaignService {
                     stackPolicy: 'EXCLUSIVE',
                     returnOnCancellation: true,
                     returnOnFullRefund: true,
+                    archivedAt: null,
                 }),
             );
         }
@@ -832,7 +871,11 @@ export class StorePromotionCampaignService {
     private async loadPromotions(ctx: RequestContext): Promise<Promotion[]> {
         const items: Promotion[] = [];
         while (true) {
-            const page = await this.promotionService.findAll(ctx, { take: 100, skip: items.length });
+            const page = await this.promotionService.findAll(ctx, {
+                take: 100,
+                skip: items.length,
+                sort: { createdAt: SortOrder.DESC, id: SortOrder.DESC },
+            });
             items.push(...page.items);
             if (items.length >= page.totalItems || page.items.length === 0) return items;
         }

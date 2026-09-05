@@ -716,17 +716,17 @@ export const devConfig: VendureConfig = {
                 defaultValue: false,
                 public: false,
                 label: [
-                    { languageCode: LanguageCode.zh_Hans, value: '可作为开店配置模板' },
-                    { languageCode: LanguageCode.en, value: 'Use as store provisioning template' },
+                    { languageCode: LanguageCode.zh_Hans, value: '保护为长期基础模板' },
+                    { languageCode: LanguageCode.en, value: 'Protect as a permanent base template' },
                 ],
                 description: [
                     {
                         languageCode: LanguageCode.zh_Hans,
-                        value: '允许平台管理员基于此 Channel 的语言、币种、税务、库存、支付和配送配置创建新网店',
+                        value: '勾选后防止该 Channel 被暂停或清退；未勾选的现有店铺也可在开店弹窗中直接作为基础店铺',
                     },
                     {
                         languageCode: LanguageCode.en,
-                        value: 'Allows platform administrators to provision stores from this Channel configuration',
+                        value: 'Prevents this Channel from being suspended or deprovisioned; any existing store can still be selected directly as a base store',
                     },
                 ],
             },

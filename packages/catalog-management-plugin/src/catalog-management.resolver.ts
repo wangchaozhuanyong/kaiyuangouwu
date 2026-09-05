@@ -4,6 +4,12 @@ import { Allow, Ctx, ID, RequestContext } from '@vendure/core';
 
 import { CatalogImportService } from './catalog-import.service';
 import { CatalogOperationsService } from './catalog-operations.service';
+import {
+    CatalogProfitReportInput,
+    CatalogProfitService,
+    ImportCatalogOrderProfitExpensesInput,
+    SaveCatalogOrderProfitExpenseInput,
+} from './catalog-profit.service';
 import { CatalogSupplierService } from './catalog-supplier.service';
 import {
     manageCatalogExportPermission,
@@ -34,6 +40,7 @@ export class CatalogManagementAdminResolver {
     constructor(
         private readonly imports: CatalogImportService,
         private readonly operations: CatalogOperationsService,
+        private readonly profit: CatalogProfitService,
         private readonly suppliers: CatalogSupplierService,
     ) {}
 
@@ -98,6 +105,24 @@ export class CatalogManagementAdminResolver {
         @Args('take') take?: number,
     ) {
         return this.operations.productSummaries(ctx, filter ?? {}, skip, take);
+    }
+
+    @Query()
+    @Allow(manageCatalogOperationsPermission.Read)
+    catalogProductOperations(@Ctx() ctx: RequestContext, @Args('productIds') productIds: ID[]) {
+        return this.operations.productOperations(ctx, productIds);
+    }
+
+    @Query()
+    @Allow(Permission.ReadOrder, manageCatalogOperationsPermission.Read)
+    catalogOrderProfitExpense(@Ctx() ctx: RequestContext, @Args('orderId') orderId: ID) {
+        return this.profit.orderExpense(ctx, String(orderId));
+    }
+
+    @Query()
+    @Allow(Permission.ReadOrder, manageCatalogOperationsPermission.Read)
+    catalogProfitReport(@Ctx() ctx: RequestContext, @Args('input') input: CatalogProfitReportInput) {
+        return this.profit.report(ctx, input);
     }
 
     @Query()
@@ -233,6 +258,24 @@ export class CatalogManagementAdminResolver {
     @Allow(manageCatalogOperationsPermission.Update, manageCatalogImportPermission.Update)
     saveCatalogInventoryLot(@Ctx() ctx: RequestContext, @Args('input') input: SaveInventoryLotInput) {
         return this.operations.saveLot(ctx, input);
+    }
+
+    @Mutation()
+    @Allow(Permission.UpdateOrder, manageCatalogOperationsPermission.Update)
+    saveCatalogOrderProfitExpense(
+        @Ctx() ctx: RequestContext,
+        @Args('input') input: SaveCatalogOrderProfitExpenseInput,
+    ) {
+        return this.profit.saveOrderExpense(ctx, input);
+    }
+
+    @Mutation()
+    @Allow(Permission.UpdateOrder, manageCatalogOperationsPermission.Update)
+    importCatalogOrderProfitExpenses(
+        @Ctx() ctx: RequestContext,
+        @Args('input') input: ImportCatalogOrderProfitExpensesInput,
+    ) {
+        return this.profit.importOrderExpenses(ctx, input);
     }
 
     @Mutation()

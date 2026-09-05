@@ -36,6 +36,7 @@ import {
 } from 'react';
 
 import { AccessibleDialogSurface } from '../../../components/AccessibleDialogSurface';
+import { FeatureHelpButton } from '../../../components/FeatureHelp';
 import { useConfirmDialog } from '../../../components/confirm-dialog-context';
 import {
     APPEND_CATALOG_IMPORT_ROWS_MUTATION,
@@ -536,6 +537,7 @@ export function CatalogImportDialog({ open, onClose }: { open: boolean; onClose:
                         <h2 className="flex items-center gap-2 text-lg font-bold text-slate-900">
                             <FileSpreadsheet className="h-5 w-5 text-blue-600" />
                             商品安全导入中心
+                            <FeatureHelpButton topic="catalog.products" title="商品安全导入中心" />
                         </h2>
                         <p className="mt-1 text-xs text-slate-500">
                             先本地解析和预览差异，只有点击“确认执行”后才会写入数据库。
@@ -910,6 +912,32 @@ function LocalPreviewSummary({ preview }: { preview: LocalCatalogFile }) {
         ['风险警告', preview.warningRows, preview.warningRows > 0],
         ['未知列', preview.unknownHeaders.length, preview.unknownHeaders.length > 0],
     ] as const;
+    const rowCount = preview.rows.length;
+    const coverage = [
+        ['进货价', preview.rows.filter(row => row.purchaseCost != null).length],
+        ['销售价', preview.rows.filter(row => row.sellingPrice != null).length],
+        ['库存量', preview.rows.filter(row => row.stockOnHand != null).length],
+        ['库存下限', preview.rows.filter(row => row.minimumStock != null).length],
+        ['库存上限', preview.rows.filter(row => row.maximumStock != null).length],
+        ['商品描述', preview.rows.filter(row => row.description.trim()).length],
+        ['标签', preview.rows.filter(row => row.tags.length > 0).length],
+    ] as const;
+    const providedFields = new Set(preview.rows[0]?.providedFields ?? []);
+    const inheritsImportContext = ['channelCode', 'stockLocationCode', 'currencyCode'].filter(
+        field => !providedFields.has(field),
+    );
+    const hasVariantIdentity = ['sku', 'barcode', 'specification', 'primaryUnit'].some(field =>
+        providedFields.has(field),
+    );
+    const negativeStockRows = preview.rows.filter(
+        row => row.stockOnHand != null && row.stockOnHand < 0,
+    ).length;
+    const saleBelowCostRows = preview.rows.filter(
+        row => row.purchaseCost != null && row.sellingPrice != null && row.sellingPrice < row.purchaseCost,
+    ).length;
+    const invertedStockPolicyRows = preview.rows.filter(
+        row => row.minimumStock != null && row.maximumStock != null && row.maximumStock < row.minimumStock,
+    ).length;
     return (
         <div className="space-y-3 rounded-xl border border-blue-200 bg-blue-50 p-4 md:col-span-3">
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
@@ -925,8 +953,59 @@ function LocalPreviewSummary({ preview }: { preview: LocalCatalogFile }) {
                 ))}
             </div>
             <p className="text-[11px] text-blue-800">
-                {preview.sheetName} · {preview.headers.length} 列 · 文件摘要 {preview.fileHash.slice(0, 12)}…
+                {preview.sheetName} · 已识别 {preview.mappedHeaders}/{preview.headers.length} 列 · 文件摘要{' '}
+                {preview.fileHash.slice(0, 12)}…
             </p>
+            <div>
+                <div className="mb-2 text-[11px] font-bold text-blue-900">本次字段有效覆盖</div>
+                <div className="flex flex-wrap gap-2">
+                    {coverage.map(([label, count]) => (
+                        <span
+                            key={label}
+                            className={`rounded-full border px-2.5 py-1 text-[10px] font-bold ${count === 0 ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-blue-200 bg-white text-blue-800'}`}
+                        >
+                            {label} {count}/{rowCount}
+                        </span>
+                    ))}
+                </div>
+            </div>
+            <div className="rounded-lg border border-blue-200 bg-white p-3 text-[11px] leading-5 text-slate-600">
+                表格“毛利率”只用于核对，后台会始终按“销售价 − 成本价”实时计算，避免手工毛利率失真。
+                {inheritsImportContext.length > 0 && (
+                    <span className="block font-bold text-amber-700">
+                        文件未提供门店、仓库或币种时，全部行会使用上方选择的目标；执行前请确认店铺与币种正确。
+                    </span>
+                )}
+                {coverage.some(
+                    ([label, count]) => ['库存下限', '库存上限'].includes(label) && count === 0,
+                ) && (
+                    <span className="block font-bold text-amber-700">
+                        库存上下限列当前没有有效值，默认不会写入预警值；请在表格补数后重新预检。
+                    </span>
+                )}
+                {preview.duplicateRows > 0 && !hasVariantIdentity && (
+                    <span className="block font-bold text-rose-700">
+                        文件缺少 SKU、条码、规格和销售单位，同名商品无法区分；当前有 {preview.duplicateRows}{' '}
+                        行落入重复冲突。请至少补 SKU 或规格，系统不会用价格猜商品身份。
+                    </span>
+                )}
+                {negativeStockRows > 0 && (
+                    <span className="block font-bold text-rose-700">
+                        有 {negativeStockRows}{' '}
+                        行库存量为负数，执行前请确认是否为盘点差异，不要直接当成在手库存。
+                    </span>
+                )}
+                {saleBelowCostRows > 0 && (
+                    <span className="block font-bold text-rose-700">
+                        有 {saleBelowCostRows} 行销售价低于进货价，执行前必须核对，避免倒挂销售。
+                    </span>
+                )}
+                {invertedStockPolicyRows > 0 && (
+                    <span className="block font-bold text-rose-700">
+                        有 {invertedStockPolicyRows} 行库存上限低于下限，执行前必须修正。
+                    </span>
+                )}
+            </div>
             {preview.unknownHeaders.length > 0 && (
                 <InlineAlert>
                     未知列：{preview.unknownHeaders.join('、')}。请映射到系统字段或明确排除。
@@ -961,7 +1040,10 @@ function FieldMappingEditor({
         <div className="space-y-3 rounded-xl border border-slate-200 p-4 md:col-span-3">
             <div className="flex items-start justify-between gap-3">
                 <div>
-                    <h3 className="text-xs font-bold text-slate-800">字段映射</h3>
+                    <h3 className="flex items-center gap-2 text-xs font-bold text-slate-800">
+                        字段映射
+                        <FeatureHelpButton topic="catalog.products" title="商品导入字段映射" />
+                    </h3>
                     <p className="mt-1 text-[11px] text-slate-500">
                         可修正自动识别结果；同一系统字段只能映射一次。
                     </p>

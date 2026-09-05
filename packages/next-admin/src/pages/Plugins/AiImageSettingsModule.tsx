@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
     ACTIVATE_IMAGE_SKILL_MUTATION,
     IMAGE_GENERATION_ADMIN_QUERY,
@@ -129,6 +130,7 @@ export function AiImageSettingsModule() {
                         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                             <Sparkles className="h-5 w-5 text-blue-600" />
                             AI 图片工坊管理
+                            <FeatureHelpButton topic="plugins.ai-settings" title="AI 图片工坊管理" />
                         </h1>
                         <p className="mt-1 text-xs text-slate-500">
                             店铺开关、模型定价、服务协议、生图任务和提示词规则包
@@ -301,7 +303,10 @@ function ConfigPanel({
             <section className="rounded-xl border border-slate-200 bg-white p-5">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div>
-                        <h2 className="text-sm font-bold text-slate-900">店铺服务开关</h2>
+                        <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                            店铺服务开关
+                            <FeatureHelpButton topic="plugins.ai-settings" title="AI 店铺服务开关" />
+                        </h2>
                         <p className="mt-1 text-[11px] text-slate-400">
                             只有凭据健康且模型测试通过时，买家端才会真正开放
                         </p>
@@ -356,7 +361,10 @@ function ConfigPanel({
             </section>
             <section>
                 <div className="mb-3">
-                    <h2 className="text-sm font-bold text-slate-900">生图模型与单张定价</h2>
+                    <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                        生图模型与单张定价
+                        <FeatureHelpButton topic="plugins.ai-settings" title="生图模型与单张定价" />
+                    </h2>
                     <p className="mt-1 text-[11px] text-slate-400">
                         价格按 Vendure 最小货币单位结算，不使用虚构“算力点”
                     </p>
@@ -375,7 +383,10 @@ function ConfigPanel({
             </section>
             <section className="rounded-xl border border-slate-200 bg-white p-5">
                 <div>
-                    <h2 className="text-sm font-bold text-slate-900">买家服务条款与免责声明</h2>
+                    <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                        买家服务条款与免责声明
+                        <FeatureHelpButton topic="plugins.ai-settings" title="买家服务条款与免责声明" />
+                    </h2>
                     <p className="mt-1 text-[11px] text-slate-400">
                         条款版本将写入每个生图任务快照，用于后续审计
                     </p>
@@ -668,7 +679,10 @@ function JobsPanel({
         <section className="space-y-3">
             <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                    <h2 className="text-sm font-bold text-slate-900">生图任务流水</h2>
+                    <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                        生图任务流水
+                        <FeatureHelpButton topic="plugins.ai-settings" title="生图任务流水" />
+                    </h2>
                     <p className="mt-1 text-[11px] text-slate-400">
                         当前条件共 {total} 条；FAILED 输出会自动释放预占费用
                     </p>
@@ -905,7 +919,10 @@ function JobOutputsDialog({
             >
                 <div className="flex items-center justify-between gap-4 border-b border-slate-200 px-5 py-4">
                     <div className="min-w-0">
-                        <h2 className="text-sm font-bold text-slate-900">任务输出明细</h2>
+                        <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                            任务输出明细
+                            <FeatureHelpButton topic="plugins.ai-settings" title="任务输出明细" />
+                        </h2>
                         <p className="mt-1 truncate font-mono text-[10px] text-slate-400" title={job.id}>
                             {job.id}
                         </p>
@@ -1045,7 +1062,10 @@ function SkillPanel({
     return (
         <section className="rounded-xl border border-slate-200 bg-white">
             <div className="border-b border-slate-100 p-4">
-                <h2 className="text-sm font-bold text-slate-900">提示词编译规则发布</h2>
+                <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                    提示词编译规则发布
+                    <FeatureHelpButton topic="plugins.ai-settings" title="提示词编译规则发布" />
+                </h2>
                 <p className="mt-1 text-[11px] text-slate-400">
                     规则包由后端构建发布，本页只允许激活已经过校验的版本
                 </p>

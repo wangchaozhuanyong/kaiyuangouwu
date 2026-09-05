@@ -3,6 +3,7 @@ import { Boxes, CalendarClock, CircleDollarSign, PackageOpen, Plus, RefreshCw, S
 import { useEffect, useMemo, useState } from 'react';
 
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { DynamicCustomFieldsForm } from '../../custom-fields/DynamicCustomFieldsForm';
 import type { CustomFieldValueMap } from '../../custom-fields/custom-field-types';
 import {
@@ -35,6 +36,7 @@ import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatDateTime, formatMoney } from '../Sales/sales-utils';
 import { dateInputToUtcDateTime } from './catalog-date';
+import { calculateDraftMargin } from './catalog-margin';
 
 interface VariantDraft {
     id: string;
@@ -186,6 +188,7 @@ export function CatalogOperationsBlock({ context }: { context: NextAdminPageBloc
                 <div>
                     <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                         <Boxes className="h-4 w-4 text-blue-600" /> 采购、成本、库存与批次
+                        <FeatureHelpButton topic="catalog.inventory" title="采购、成本、库存与批次" />
                     </h2>
                     <p className="mt-1 text-xs text-slate-500">
                         恢复旧后台的 SKU 经营字段；成本保留三位小数，价格按当前店铺币种保存。
@@ -225,7 +228,7 @@ export function CatalogOperationsBlock({ context }: { context: NextAdminPageBloc
                 {workspace.variants.map(variant => {
                     const draft = drafts[variant.id];
                     if (!draft) return null;
-                    const margin = draftMargin(draft);
+                    const margin = calculateDraftMargin(draft.sellingPrice, draft.purchaseCost);
                     return (
                         <details
                             key={variant.id}
@@ -357,6 +360,7 @@ export function CatalogOperationsBlock({ context }: { context: NextAdminPageBloc
             <div className="border-t border-slate-200 pt-5">
                 <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                     <CalendarClock className="h-4 w-4 text-amber-600" /> 当前仓库批次与效期
+                    <FeatureHelpButton topic="catalog.inventory" title="当前仓库批次与效期" />
                 </h3>
                 {!visibleLots.length ? (
                     <p className="mt-3 rounded-lg border border-dashed p-6 text-center text-xs text-slate-500">
@@ -527,6 +531,7 @@ export function ProductPackagingBlock({ context }: { context: NextAdminPageBlock
                 <div>
                     <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                         <PackageOpen className="h-4 w-4 text-violet-600" /> 包装换算与自动拆包
+                        <FeatureHelpButton topic="catalog.inventory" title="包装换算与自动拆包" />
                     </h2>
                     <p className="mt-1 text-xs text-slate-500">
                         散件库存不足时，可在支付确认阶段自动拆整包补充库存。
@@ -577,7 +582,10 @@ export function ProductPackagingBlock({ context }: { context: NextAdminPageBlock
                 </div>
             )}
             <div>
-                <h3 className="text-xs font-bold text-slate-700">最近自动拆包记录</h3>
+                <h3 className="flex items-center gap-2 text-xs font-bold text-slate-700">
+                    最近自动拆包记录
+                    <FeatureHelpButton topic="catalog.inventory" title="最近自动拆包记录" />
+                </h3>
                 {!data.productPackagingUnpackEvents.length ? (
                     <p className="mt-2 text-xs text-slate-500">尚未发生自动拆包</p>
                 ) : (
@@ -715,6 +723,7 @@ export function ProductVariantPricesBlock({ context }: { context: NextAdminPageB
                 <div>
                     <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                         <CircleDollarSign className="h-4 w-4 text-emerald-600" /> SKU 多币种价格
+                        <FeatureHelpButton topic="catalog.variant-channels" title="SKU 多币种价格" />
                     </h2>
                     <p className="mt-1 text-xs text-slate-500">
                         价格保存在当前 Channel「{data.activeChannel.code}」，不会覆盖其他店铺。
@@ -907,7 +916,10 @@ export function ProductVariantCustomFieldsBlock({ context }: { context: NextAdmi
         <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-5">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                    <h2 className="text-sm font-bold text-slate-900">SKU 动态扩展字段</h2>
+                    <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                        SKU 动态扩展字段
+                        <FeatureHelpButton topic="catalog.sku-custom-fields" title="SKU 动态扩展字段" />
+                    </h2>
                     <p className="mt-1 text-xs text-slate-500">
                         字段由后端 ProductVariant 配置生成，并按 SKU 独立保存。
                     </p>
@@ -939,6 +951,7 @@ export function ProductVariantCustomFieldsBlock({ context }: { context: NextAdmi
             {error && <InlineNotice tone="error" message={error} />}
             <DynamicCustomFieldsForm
                 title={`SKU 扩展字段${selected ? ` · ${selected.sku}` : ''}`}
+                helpTopic="catalog.sku-custom-fields"
                 fields={visibleDefinitions}
                 values={values}
                 onChange={setValues}
@@ -1110,11 +1123,6 @@ const integer = (value: string, label: string) => {
     return parsed;
 };
 const optionalInteger = (value: string, label: string) => (value.trim() ? integer(value, label) : null);
-const draftMargin = (draft: VariantDraft) => {
-    const price = Number(draft.sellingPrice);
-    const cost = Number(draft.purchaseCost);
-    return Number.isFinite(price) && Number.isFinite(cost) && price > 0 ? (price - cost) / price : null;
-};
 const dateOnly = (value?: string | null) => (value ? new Date(value).toLocaleDateString('zh-CN') : '—');
 const inputDate = (value?: string | null) => (value ? new Date(value).toISOString().slice(0, 10) : '');
 

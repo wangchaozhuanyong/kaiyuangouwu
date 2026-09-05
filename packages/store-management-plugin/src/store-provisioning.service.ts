@@ -37,10 +37,6 @@ import {
 import { StoreProfileService } from './store-profile.service';
 import { ProvisionStoreInput, ProvisionStoreResult } from './types';
 
-interface StoreProvisioningChannelFields {
-    isStoreProvisioningTemplate?: boolean | null;
-}
-
 export const storeAdministratorPermissions: Permission[] = [
     Permission.ReadChannel,
     Permission.ReadCatalog,
@@ -112,28 +108,16 @@ export class StoreProvisioningService {
     ) {}
 
     async findTemplates(ctx: RequestContext): Promise<Channel[]> {
-        const channels = await this.connection.getRepository(ctx, Channel).find({
+        return this.connection.getRepository(ctx, Channel).find({
             order: { code: 'ASC' },
         });
-        return channels.filter(channel =>
-            Boolean(
-                (channel.customFields as StoreProvisioningChannelFields | undefined)
-                    ?.isStoreProvisioningTemplate,
-            ),
-        );
     }
 
     async provision(ctx: RequestContext, input: ProvisionStoreInput): Promise<ProvisionStoreResult> {
         const normalized = this.validateInput(input);
         const template = await this.channelService.findOne(ctx, normalized.templateChannelId);
         if (!template) {
-            throw new UserInputError('网店模板 Channel 不存在');
-        }
-        if (
-            !(template.customFields as StoreProvisioningChannelFields | undefined)
-                ?.isStoreProvisioningTemplate
-        ) {
-            throw new UserInputError('所选 Channel 未启用“开店配置模板”，不能用于创建网店');
+            throw new UserInputError('基础店铺 Channel 不存在');
         }
         const [sharedStockLocations, sharedPaymentMethods, sharedShippingMethods] = await Promise.all([
             this.connection.getRepository(ctx, StockLocation).find({
@@ -150,7 +134,7 @@ export class StoreProvisioningService {
             }),
         ]);
         if (sharedStockLocations.length === 0) {
-            throw new UserInputError('网店模板没有可共享的库存点');
+            throw new UserInputError('基础店铺没有可共享的库存点');
         }
         await this.assertUnique(ctx, normalized.code, normalized.administrator.emailAddress);
 

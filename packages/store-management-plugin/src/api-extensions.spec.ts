@@ -111,6 +111,30 @@ describe('store management API extensions', () => {
         );
     });
 
+    it('exposes coupon archive metadata and the protected archive mutation through the Admin API', () => {
+        const couponCampaign = adminApiExtensions.definitions.find(
+            definition =>
+                definition.kind === Kind.OBJECT_TYPE_DEFINITION &&
+                definition.name.value === 'StoreCouponCampaign',
+        );
+        const mutation = adminApiExtensions.definitions.find(
+            definition =>
+                definition.kind === Kind.OBJECT_TYPE_EXTENSION && definition.name.value === 'Mutation',
+        );
+
+        expect(couponCampaign?.kind).toBe(Kind.OBJECT_TYPE_DEFINITION);
+        expect(mutation?.kind).toBe(Kind.OBJECT_TYPE_EXTENSION);
+        if (
+            couponCampaign?.kind === Kind.OBJECT_TYPE_DEFINITION &&
+            mutation?.kind === Kind.OBJECT_TYPE_EXTENSION
+        ) {
+            expect(couponCampaign.fields?.map(field => field.name.value)).toEqual(
+                expect.arrayContaining(['createdAt', 'updatedAt', 'archivedAt']),
+            );
+            expect(mutation.fields?.map(field => field.name.value)).toContain('archiveStoreCouponCampaign');
+        }
+    });
+
     it('uses the generated coupon ledger list options input without a duplicate options argument', () => {
         const ledgerOptions = adminApiExtensions.definitions.find(
             definition =>

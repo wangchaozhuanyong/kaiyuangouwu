@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ConfirmDialogContext } from '../../components/confirm-dialog-context';
+import { FeatureHelpProvider } from '../../components/FeatureHelp';
 import type { StoreUsdtSetupResult } from '../../graphql/store-usdt.graphql';
 import { AdminPermissionsContext } from '../../hooks/use-admin-permissions';
 import type { AdminPermission } from '../../utils/admin-permissions';
@@ -127,7 +128,9 @@ function renderPanel(permissions: readonly AdminPermission[]): string {
             }}
         >
             <ConfirmDialogContext.Provider value={async () => false}>
-                <UsdtPaymentSetupPanel onChanged={async () => undefined} onError={() => undefined} />
+                <FeatureHelpProvider>
+                    <UsdtPaymentSetupPanel onChanged={async () => undefined} onError={() => undefined} />
+                </FeatureHelpProvider>
             </ConfirmDialogContext.Provider>
         </AdminPermissionsContext.Provider>,
     );

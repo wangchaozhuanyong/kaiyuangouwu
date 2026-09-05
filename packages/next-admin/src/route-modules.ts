@@ -9,6 +9,7 @@ export const routeModuleLoaders = {
     cardPool: () => import('./pages/Sales/CardPoolModule'),
     assets: () => import('./pages/Catalog/AssetsModule'),
     sales: () => import('./pages/Sales/SalesModule'),
+    profitReport: () => import('./pages/Sales/ProfitReportModule'),
     orderEditor: () => import('./pages/Sales/OrderEditor'),
     orderWorkflow: () => import('./pages/Sales/OrderWorkflowEditor'),
     afterSales: () => import('./pages/Sales/AfterSalesModule'),
@@ -49,6 +50,7 @@ export function getRouteModuleKey(target: string): RouteModuleKey | null {
     if (/^\/sales\/orders\/[^/]+$/.test(pathname)) return 'orderEditor';
     if (pathname === '/sales/after-sales') return 'afterSales';
     if (pathname === '/sales/reviews') return 'reviews';
+    if (pathname === '/sales/profit') return 'profitReport';
     if (pathname.startsWith('/sales')) return 'sales';
     if (pathname.startsWith('/customers')) return 'customers';
     if (pathname === '/marketing/referrals') return 'referrals';

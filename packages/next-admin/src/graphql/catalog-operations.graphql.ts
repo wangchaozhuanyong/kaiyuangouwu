@@ -59,6 +59,120 @@ export const CATALOG_PRODUCT_WORKSPACE_QUERY = gql`
     }
 `;
 
+export const CATALOG_PRODUCT_OPERATIONS_QUERY = gql`
+    query NextAdminCatalogProductOperations($productIds: [ID!]!) {
+        catalogProductOperations(productIds: $productIds) {
+            productId
+            variantCount
+            minimumSellingPrice
+            maximumSellingPrice
+            minimumPurchaseCostMicrounits
+            maximumPurchaseCostMicrounits
+            minimumMargin
+            maximumMargin
+            minimumStock
+            maximumStock
+            lowStock
+            missingCostVariants
+        }
+    }
+`;
+
+export const CATALOG_PROFIT_REPORT_QUERY = gql`
+    query NextAdminCatalogProfitReport($input: CatalogProfitReportInput!) {
+        catalogProfitReport(input: $input) {
+            summary {
+                currencyCode
+                orderCount
+                quantity
+                settledRevenueMicrounits
+                refundedRevenueMicrounits
+                netRevenueMicrounits
+                shippingRevenueMicrounits
+                productCostMicrounits
+                grossProfitMicrounits
+                grossMargin
+                missingCostOrderCount
+                missingCostLineCount
+                estimatedCostOrderCount
+                estimatedCostLineCount
+                carrierShippingCostMicrounits
+                paymentFeeMicrounits
+                netProfitMicrounits
+                netMargin
+                missingCarrierShippingCostOrderCount
+                missingPaymentFeeOrderCount
+                includesCarrierShippingCost
+                includesPaymentFees
+            }
+            items {
+                id
+                code
+                orderPlacedAt
+                currencyCode
+                quantity
+                settledRevenueMicrounits
+                refundedRevenueMicrounits
+                netRevenueMicrounits
+                shippingRevenueMicrounits
+                productCostMicrounits
+                grossProfitMicrounits
+                grossMargin
+                carrierShippingCostMicrounits
+                paymentFeeMicrounits
+                netProfitMicrounits
+                netMargin
+                missingCostLineCount
+                estimatedCostLineCount
+            }
+            totalItems
+        }
+    }
+`;
+
+const CATALOG_ORDER_PROFIT_EXPENSE_FIELDS = gql`
+    fragment NextAdminCatalogOrderProfitExpenseFields on CatalogOrderProfitExpense {
+        id
+        createdAt
+        updatedAt
+        orderId
+        currencyCode
+        carrierShippingCostMicrounits
+        paymentFeeMicrounits
+        source
+        sourceReference
+        note
+    }
+`;
+
+export const CATALOG_ORDER_PROFIT_EXPENSE_QUERY = gql`
+    query NextAdminCatalogOrderProfitExpense($orderId: ID!) {
+        catalogOrderProfitExpense(orderId: $orderId) {
+            ...NextAdminCatalogOrderProfitExpenseFields
+        }
+    }
+    ${CATALOG_ORDER_PROFIT_EXPENSE_FIELDS}
+`;
+
+export const SAVE_CATALOG_ORDER_PROFIT_EXPENSE_MUTATION = gql`
+    mutation NextAdminSaveCatalogOrderProfitExpense($input: SaveCatalogOrderProfitExpenseInput!) {
+        saveCatalogOrderProfitExpense(input: $input) {
+            ...NextAdminCatalogOrderProfitExpenseFields
+        }
+    }
+    ${CATALOG_ORDER_PROFIT_EXPENSE_FIELDS}
+`;
+
+export const IMPORT_CATALOG_ORDER_PROFIT_EXPENSES_MUTATION = gql`
+    mutation NextAdminImportCatalogOrderProfitExpenses($input: ImportCatalogOrderProfitExpensesInput!) {
+        importCatalogOrderProfitExpenses(input: $input) {
+            totalRows
+            createdCount
+            updatedCount
+        }
+    }
+`;
+
 export const UPDATE_CATALOG_VARIANT_OPERATIONS_MUTATION = gql`
     mutation NextAdminUpdateCatalogVariantOperations($input: UpdateCatalogVariantOperationsInput!) {
         updateCatalogVariantOperations(input: $input) {
@@ -428,6 +542,104 @@ export interface CatalogWorkspaceResult {
         currencyCode: string;
         stockLocations: Array<{ id: string; name: string }>;
         variants: CatalogWorkspaceVariantRecord[];
+    };
+}
+
+export interface CatalogProductOperationsSummary {
+    productId: string;
+    variantCount: number;
+    minimumSellingPrice?: number | null;
+    maximumSellingPrice?: number | null;
+    minimumPurchaseCostMicrounits?: number | null;
+    maximumPurchaseCostMicrounits?: number | null;
+    minimumMargin?: number | null;
+    maximumMargin?: number | null;
+    minimumStock?: number | null;
+    maximumStock?: number | null;
+    lowStock: boolean;
+    missingCostVariants: number;
+}
+
+export interface CatalogProductOperationsResult {
+    catalogProductOperations: CatalogProductOperationsSummary[];
+}
+
+export interface CatalogProfitReportSummary {
+    currencyCode: string;
+    orderCount: number;
+    quantity: number;
+    settledRevenueMicrounits: number;
+    refundedRevenueMicrounits: number;
+    netRevenueMicrounits: number;
+    shippingRevenueMicrounits: number;
+    productCostMicrounits?: number | null;
+    grossProfitMicrounits?: number | null;
+    grossMargin?: number | null;
+    missingCostOrderCount: number;
+    missingCostLineCount: number;
+    estimatedCostOrderCount: number;
+    estimatedCostLineCount: number;
+    carrierShippingCostMicrounits?: number | null;
+    paymentFeeMicrounits?: number | null;
+    netProfitMicrounits?: number | null;
+    netMargin?: number | null;
+    missingCarrierShippingCostOrderCount: number;
+    missingPaymentFeeOrderCount: number;
+    includesCarrierShippingCost: boolean;
+    includesPaymentFees: boolean;
+}
+
+export interface CatalogProfitOrderRecord {
+    id: string;
+    code: string;
+    orderPlacedAt: string;
+    currencyCode: string;
+    quantity: number;
+    settledRevenueMicrounits: number;
+    refundedRevenueMicrounits: number;
+    netRevenueMicrounits: number;
+    shippingRevenueMicrounits: number;
+    productCostMicrounits?: number | null;
+    grossProfitMicrounits?: number | null;
+    grossMargin?: number | null;
+    carrierShippingCostMicrounits?: number | null;
+    paymentFeeMicrounits?: number | null;
+    netProfitMicrounits?: number | null;
+    netMargin?: number | null;
+    missingCostLineCount: number;
+    estimatedCostLineCount: number;
+}
+
+export interface CatalogProfitReportResult {
+    catalogProfitReport: {
+        summary: CatalogProfitReportSummary;
+        items: CatalogProfitOrderRecord[];
+        totalItems: number;
+    };
+}
+
+export interface CatalogOrderProfitExpenseRecord {
+    id: string;
+    createdAt: string;
+    updatedAt: string;
+    orderId: string;
+    currencyCode: string;
+    carrierShippingCostMicrounits?: number | null;
+    paymentFeeMicrounits?: number | null;
+    source: string;
+    sourceReference?: string | null;
+    note?: string | null;
+}
+
+export interface CatalogOrderProfitExpenseQueryResult {
+    catalogOrderProfitExpense?: CatalogOrderProfitExpenseRecord | null;
+}
+
+export interface CatalogOrderProfitExpenseImportResult {
+    importCatalogOrderProfitExpenses: {
+        totalRows: number;
+        createdCount: number;
+        updatedCount: number;
     };
 }
 

@@ -3,6 +3,7 @@ import { Check, ChevronLeft, ChevronRight, RefreshCw, ShieldCheck, WalletCards, 
 import { useMemo, useState } from 'react';
 
 import { sensitiveActionContext } from '../../apollo';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { SensitiveActionDialog } from '../../components/SensitiveActionDialog';
 import {
     PLATFORM_USDT_PAYMENT_MANAGEMENT_QUERY,
@@ -116,6 +117,7 @@ export function UsdtPaymentManagementModule() {
                         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                             <WalletCards className="h-5 w-5 text-emerald-600" />
                             支付与 USDT 收款管理
+                            <FeatureHelpButton topic="settings.usdt" title="支付与 USDT 收款管理" />
                         </h1>
                         <p className="mt-1 text-xs text-slate-500">
                             平台级钱包审核、全部支付流水、链上意向和人工退款审计
@@ -548,7 +550,10 @@ function RefundEditor({
             >
                 <div className="flex justify-between">
                     <div>
-                        <h2 className="text-base font-bold">记录 USDT 人工退款</h2>
+                        <h2 className="flex items-center gap-2 text-base font-bold">
+                            记录 USDT 人工退款
+                            <FeatureHelpButton topic="settings.usdt" title="记录 USDT 人工退款" />
+                        </h2>
                         <p className="mt-1 text-xs text-slate-500">
                             订单 {payment.orderCode} · 支付 {payment.id}
                         </p>

@@ -1,5 +1,6 @@
 import { Image as ImageIcon } from 'lucide-react';
 import { useState } from 'react';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { BrandAssetPickerDialog } from './BrandAssetPickerDialog';
 import { secondaryButton } from './settings-ui';
 import {
@@ -25,7 +26,10 @@ export function StoreBrandAssets({
     const [editing, setEditing] = useState<BrandAssetField | null>(null);
     return (
         <section className="mt-4" aria-label="店铺品牌图片">
-            <h3 className="text-xs font-bold text-slate-800">品牌图片</h3>
+            <h3 className="text-xs font-bold text-slate-800">
+                品牌图片
+                <FeatureHelpButton topic="settings.store-profile" title="品牌图片" />
+            </h3>
             <p className="mt-1 text-xs leading-5 text-slate-500">
                 从素材库选择图片，保存店铺档案后同步到店铺前台。
             </p>

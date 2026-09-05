@@ -30,6 +30,12 @@ describe('admin permissions', () => {
         expect(canAccessAdminPath('/sales/orders/42/modify', ['UpdateOrder'])).toBe(true);
     });
 
+    it('requires both order and cost visibility for the profit report', () => {
+        expect(canAccessAdminPath('/sales/profit', ['ReadOrder'])).toBe(false);
+        expect(canAccessAdminPath('/sales/profit', ['ReadCatalogOperations'])).toBe(false);
+        expect(canAccessAdminPath('/sales/profit', ['ReadOrder', 'ReadCatalogOperations'])).toBe(true);
+    });
+
     it('treats SuperAdmin as unrestricted', () => {
         expect(hasAnyAdminPermission(['SuperAdmin'], ['ReadSystem'])).toBe(true);
         expect(canAccessAdminPath('/plugins/ai-access', ['SuperAdmin'])).toBe(true);

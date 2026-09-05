@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 
 import { sensitiveActionContext } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { SensitiveActionDialog } from '../../components/SensitiveActionDialog';
 import {
     CREATE_GENERIC_PROMOTION_MUTATION,
@@ -89,6 +90,10 @@ export function GenericPromotionsPanel() {
                         <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                             <Settings2 className="h-4 w-4 text-violet-600" />
                             Vendure 通用促销
+                            <FeatureHelpButton
+                                topic="marketing.generic-promotions"
+                                title="Vendure 通用促销"
+                            />
                         </h2>
                         <p className="mt-1 text-xs text-slate-500">
                             直接编辑当前服务端已注册的任意 PromotionCondition 和

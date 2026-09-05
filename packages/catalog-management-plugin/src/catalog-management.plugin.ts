@@ -8,6 +8,7 @@ import { CatalogImportQueueService } from './catalog-import-queue.service';
 import { CatalogImportService } from './catalog-import.service';
 import { CatalogManagementAdminResolver } from './catalog-management.resolver';
 import { CatalogOperationsService } from './catalog-operations.service';
+import { CatalogProfitService } from './catalog-profit.service';
 import { CatalogSupplierService } from './catalog-supplier.service';
 import {
     manageCatalogExportPermission,
@@ -23,6 +24,7 @@ import { CatalogVariantSupplier } from './entities/catalog-variant-supplier.enti
 import { InventoryLotMovement } from './entities/inventory-lot-movement.entity';
 import { InventoryLot } from './entities/inventory-lot.entity';
 import { InventoryPolicy } from './entities/inventory-policy.entity';
+import { OrderProfitExpense } from './entities/order-profit-expense.entity';
 import { VariantCostRecord } from './entities/variant-cost-record.entity';
 import { InventoryLotLifecycleService } from './inventory-lot-lifecycle.service';
 import './types';
@@ -37,12 +39,14 @@ import './types';
         InventoryPolicy,
         InventoryLot,
         InventoryLotMovement,
+        OrderProfitExpense,
         CatalogSupplier,
         CatalogVariantSupplier,
     ],
     providers: [
         CatalogFileParserService,
         CatalogOperationsService,
+        CatalogProfitService,
         CatalogImportService,
         CatalogImportCategoryService,
         CatalogImportOptionsService,

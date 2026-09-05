@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
     BACKFILL_CONTENT_TRANSLATIONS_MUTATION,
     CONTENT_TRANSLATION_AUDIT_QUERY,
@@ -88,6 +89,7 @@ export function TranslationsModule() {
                         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                             <Languages className="h-5 w-5 text-blue-600" />
                             客户可见内容翻译
+                            <FeatureHelpButton topic="settings.translations" title="客户可见内容翻译" />
                         </h1>
                         <p className="mt-1 text-xs text-slate-500">
                             审计中英文同步状态，补齐历史内容；静态界面词典不属于该后端插件
@@ -187,7 +189,13 @@ export function TranslationsModule() {
                             <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
                                 <div className="flex flex-col gap-3 border-b border-slate-100 p-4 xl:flex-row xl:items-center xl:justify-between">
                                     <div>
-                                        <h2 className="text-sm font-bold text-slate-900">字段翻译审计</h2>
+                                        <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                                            字段翻译审计
+                                            <FeatureHelpButton
+                                                topic="settings.translations"
+                                                title="字段翻译审计"
+                                            />
+                                        </h2>
                                         <p className="mt-1 text-[11px] text-slate-400">
                                             每个客户可见字段都会保留一条审计记录；正常的自动翻译也会显示
                                         </p>
