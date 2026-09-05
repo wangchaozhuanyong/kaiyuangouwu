@@ -393,7 +393,7 @@ VENDURE_API_ORIGIN=http://127.0.0.1:3002 VENDURE_STOREFRONT_URL=https://moyaoai.
 
 ### 大马通店铺装修发布器
 
-`sync-damatong-storefront.mjs` 使用公开受审选择器 `my-malaysia` 启用大马通发布范围，再从 `damatong.net` 的 Shop API 解析实际 Channel code，不将当前后台 code“美宜佳”写死，也不输出或要求操作者填写真实 Channel token。它统一写入大马通品牌资料、六个分类、首页三组轮播广告、其他首页内容、条款、客服、登录/注册视觉和客户端导航。已启用的旧单图轮播可安全接管为第一组；如发现未审核的多余启用广告则停止写入。`ai-image-studio-entry` 必须从 `__default_channel__` 当前启用项读取；默认站缺失、重复或中英文配置不完整时，预演和写入都会失败关闭。
+`sync-damatong-storefront.mjs` 使用公开受审选择器 `my-malaysia` 启用大马通发布范围，再从 `damatong.net` 的 Shop API 解析实际 Channel code，不将当前后台 code“美宜佳”写死，也不输出或要求操作者填写真实 Channel token。它统一写入大马通品牌资料、六个分类、首页三组轮播广告、其他首页内容、条款、客服、登录/注册视觉和客户端导航。生产中已审核的三组旧版大马通轮播代码按明确的一对一映射原位升级；单个更早的旧轮播也可安全接管为第一组。如发现未审核的多余启用广告则停止写入。`ai-image-studio-entry` 必须从 `__default_channel__` 当前启用项读取；默认站缺失、重复或中英文配置不完整时，预演和写入都会失败关闭。
 
 制品构建前先执行静态资源校验；生产发布只允许从已验证候选制品运行，先预演再写入：
 
