@@ -1,0 +1,194 @@
+name: Production Operations
+
+on:
+    workflow_dispatch:
+        inputs:
+            operation:
+                description: Diagnose production or apply the reviewed release retention plan
+                required: true
+                default: diagnose
+                type: choice
+                options:
+                    - diagnose
+                    - retain-reviewed
+            expected_plan_sha256:
+                description: Exact plan SHA-256 from a successful diagnose run; required for retain-reviewed
+                required: false
+                default: ''
+                type: string
+
+permissions:
+    contents: read
+    id-token: write
+
+concurrency:
+    group: production-deploy
+    cancel-in-progress: false
+
+jobs:
+    operate:
+        name: run reviewed production operations through AWS SSM
+        runs-on: ubuntu-24.04
+        timeout-minutes: 15
+        env:
+            AWS_REGION: ap-northeast-1
+            AWS_ACCOUNT_ID: '079740175286'
+            AWS_ROLE_ARN: arn:aws:iam::079740175286:role/yunqiao-vendure-github-deploy
+            INSTANCE_ID: i-041a146558e432cbf
+            OPS_OPERATION: ${{ inputs.operation }}
+            OPS_EXPECTED_PLAN_SHA256: ${{ inputs.expected_plan_sha256 }}
+            OPS_SOURCE_SHA: ${{ github.sha }}
+
+        steps:
+            - name: Validate operation inputs and main revision
+              env:
+                  GH_TOKEN: ${{ github.token }}
+              run: |
+                  set -Eeuo pipefail
+                  [[ "$GITHUB_REF" == refs/heads/main ]] || {
+                    echo 'Production operations must run from main' >&2
+                    exit 1
+                  }
+                  [[ "$OPS_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+                  case "$OPS_OPERATION" in
+                    diagnose)
+                      [[ -z "$OPS_EXPECTED_PLAN_SHA256" ]] || {
+                        echo 'diagnose must not include an expected retention plan' >&2
+                        exit 1
+                      }
+                      ;;
+                    retain-reviewed)
+                      [[ "$OPS_EXPECTED_PLAN_SHA256" =~ ^[0-9a-f]{64}$ ]] || {
+                        echo 'retain-reviewed requires the exact lowercase plan SHA-256' >&2
+                        exit 1
+                      }
+                      ;;
+                    *)
+                      echo 'Unsupported production operation' >&2
+                      exit 1
+                      ;;
+                  esac
+                  latest_main="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)"
+                  [[ "$OPS_SOURCE_SHA" == "$latest_main" ]] || {
+                    echo 'Production operations must use the latest main revision' >&2
+                    exit 1
+                  }
+
+            - name: Check out the reviewed revision
+              uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+              with:
+                  ref: ${{ github.sha }}
+                  persist-credentials: false
+
+            - name: Prepare fixed production operation
+              run: |
+                  set -Eeuo pipefail
+                  [[ "$(git rev-parse HEAD)" == "$OPS_SOURCE_SHA" ]]
+                  test -z "$(git status --porcelain --untracked-files=no)"
+                  python3 - <<'PY'
+                  import base64
+                  import json
+                  import os
+                  from pathlib import Path
+                  import shlex
+
+                  operation = shlex.quote(os.environ['OPS_OPERATION'])
+                  expected_plan = shlex.quote(os.environ['OPS_EXPECTED_PLAN_SHA256'])
+                  source_sha = shlex.quote(os.environ['OPS_SOURCE_SHA'])
+                  operations_script = base64.b64encode(Path('deploy/production-operations.cjs').read_bytes()).decode('ascii')
+                  retention_script = base64.b64encode(Path('deploy/systemd/vendure-production-release-retention.cjs').read_bytes()).decode('ascii')
+                  command = "/bin/bash <<'VENDURE_OPERATIONS_SCRIPT'\n" + '\n'.join([
+                      'set -Eeuo pipefail',
+                      'umask 077',
+                      'operations_dir="$(mktemp -d /tmp/vendure-production-operations.XXXXXX)"',
+                      "trap 'rm -rf -- \"$operations_dir\"' EXIT",
+                      'mkdir "$operations_dir/systemd"',
+                      f"printf '%s' '{operations_script}' | base64 -d > \"$operations_dir/production-operations.cjs\"",
+                      f"printf '%s' '{retention_script}' | base64 -d > \"$operations_dir/systemd/vendure-production-release-retention.cjs\"",
+                      'chown -R ubuntu:ubuntu "$operations_dir"',
+                      f'sudo -H -u ubuntu env OPS_OPERATION={operation} OPS_EXPECTED_PLAN_SHA256={expected_plan} OPS_SOURCE_SHA={source_sha} /usr/bin/node "$operations_dir/production-operations.cjs"',
+                  ]) + '\nVENDURE_OPERATIONS_SCRIPT'
+                  Path(os.environ['RUNNER_TEMP'], 'operations-ssm-parameters.json').write_text(
+                      json.dumps({'commands': [command], 'executionTimeout': ['600']})
+                  )
+                  PY
+
+            - name: Configure short-lived AWS credentials
+              uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+              with:
+                  role-to-assume: ${{ env.AWS_ROLE_ARN }}
+                  role-session-name: vendure-operations-${{ github.run_id }}
+                  aws-region: ${{ env.AWS_REGION }}
+                  allowed-account-ids: ${{ env.AWS_ACCOUNT_ID }}
+
+            - name: Run the fixed production operation
+              id: operation
+              env:
+                  GH_TOKEN: ${{ github.token }}
+              run: |
+                  set -Eeuo pipefail
+                  latest_main="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)"
+                  [[ "$OPS_SOURCE_SHA" == "$latest_main" ]] || {
+                    echo 'main changed before the production operation; rerun against current main' >&2
+                    exit 1
+                  }
+                  command_id="$(aws ssm send-command \
+                    --region "$AWS_REGION" \
+                    --document-name AWS-RunShellScript \
+                    --instance-ids "$INSTANCE_ID" \
+                    --comment "Vendure ${OPS_OPERATION} ${OPS_SOURCE_SHA}" \
+                    --parameters "file://$RUNNER_TEMP/operations-ssm-parameters.json" \
+                    --timeout-seconds 120 \
+                    --query 'Command.CommandId' \
+                    --output text)"
+                  [[ "$command_id" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]
+                  printf 'command_id=%s\n' "$command_id" >> "$GITHUB_OUTPUT"
+
+                  status=Pending
+                  for attempt in $(seq 1 144); do
+                    status="$(aws ssm get-command-invocation \
+                      --region "$AWS_REGION" \
+                      --command-id "$command_id" \
+                      --instance-id "$INSTANCE_ID" \
+                      --query Status \
+                      --output text 2>/dev/null || true)"
+                    case "$status" in
+                      Success|Failed|Cancelled|TimedOut|Cancelling)
+                        break
+                        ;;
+                    esac
+                    sleep 5
+                  done
+
+                  aws ssm get-command-invocation \
+                    --region "$AWS_REGION" \
+                    --command-id "$command_id" \
+                    --instance-id "$INSTANCE_ID" \
+                    --query '{Status:Status,ResponseCode:ResponseCode,Output:StandardOutputContent,Error:StandardErrorContent}' \
+                    --output json > "$RUNNER_TEMP/production-operations-result.json"
+                  cat "$RUNNER_TEMP/production-operations-result.json"
+                  jq -e '.Status == "Success" and .ResponseCode == 0' \
+                    "$RUNNER_TEMP/production-operations-result.json" >/dev/null
+
+            - name: Record production operation result
+              if: ${{ always() }}
+              env:
+                  COMMAND_ID: ${{ steps.operation.outputs.command_id }}
+              run: |
+                  set -Eeuo pipefail
+                  {
+                    echo '## Production operations'
+                    echo
+                    printf -- '- Source: `%s`\n' "$OPS_SOURCE_SHA"
+                    printf -- '- SSM command: `%s`\n' "${COMMAND_ID:-not submitted}"
+                    if [[ -s "$RUNNER_TEMP/production-operations-result.json" ]] && \
+                       jq -e 'type == "object"' "$RUNNER_TEMP/production-operations-result.json" >/dev/null; then
+                      printf -- '- Result: `%s`\n' "$(jq -r .Status "$RUNNER_TEMP/production-operations-result.json")"
+                      echo
+                      echo '```text'
+                      jq -r '.Output // "", .Error // ""' "$RUNNER_TEMP/production-operations-result.json"
+                      echo '```'
+                    else
+                      echo '- Result: operation did not produce a completed SSM result; inspect the failed step.'
+                    fi
+                  } >> "$GITHUB_STEP_SUMMARY"
