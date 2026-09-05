@@ -51,6 +51,39 @@ export const storefrontMediaManifest = [
             purpose: 'referral-poster-layout-reference',
         },
     },
+    {
+        key: 'home-hero-token-topup-v1',
+        file: path.join(storefrontAssets, 'carousel/colorful-marketplace-v1/token-topup-v1.png'),
+        names: {
+            en: 'MOYAO Token top-up carousel artwork',
+            zh: '模钥 Token 充值轮播主视觉',
+        },
+        assetOnly: {
+            purpose: 'homepage-carousel-token-topup',
+        },
+    },
+    {
+        key: 'home-hero-codex-tiers-v1',
+        file: path.join(storefrontAssets, 'carousel/colorful-marketplace-v1/codex-tiers-v1.png'),
+        names: {
+            en: 'MOYAO Codex account tiers carousel artwork',
+            zh: '模钥 Codex 账号档位轮播主视觉',
+        },
+        assetOnly: {
+            purpose: 'homepage-carousel-codex-tiers',
+        },
+    },
+    {
+        key: 'home-hero-account-services-v1',
+        file: path.join(storefrontAssets, 'carousel/colorful-marketplace-v1/account-services-v1.png'),
+        names: {
+            en: 'MOYAO account services carousel artwork',
+            zh: '模钥数字账号服务轮播主视觉',
+        },
+        assetOnly: {
+            purpose: 'homepage-carousel-account-services',
+        },
+    },
 ];
 
 const LOGIN_MUTATION = `

@@ -4,7 +4,7 @@ These prompts define the approved art direction for future production-bound stor
 
 ## Shared rules
 
-Use the MOYAO AI palette: deep ground `#070B14`, primary violet `#635BFF`, secondary violet `#8B5CF6`, signal cyan `#22D3EE`, and white `#FFFFFF`. Keep one focal object, generous negative space, restrained glass or matte depth, and crisp small-thumbnail recognition. Do not invent claims, prices, badges, certifications, provider logos, watermarks, UI controls, or unreadable pseudo-text.
+Use the MOYAO AI palette: primary violet `#635BFF`, secondary violet `#8B5CF6`, signal cyan `#22D3EE`, fog white and restrained deep blue. Homepage commerce art uses bright translucent product cards and a clear digital-service subject. Do not substitute abstract keys, model orbs, galaxies or generic AI portals for the actual recharge/account offer. Do not invent claims, dynamic prices, badges, certifications, provider logos, watermarks, UI controls, or unreadable pseudo-text.
 
 Product masters are `1600×1600` with all critical content inside the central 80%. They must survive a square mobile card and a complete `4:3` desktop contain frame. Hero and category masters are `1600×900`; Hero artwork keeps the left 46% quiet for live HTML copy and CTA controls.
 
@@ -16,9 +16,21 @@ Product masters are `1600×1600` with all critical content inside the central 80
 
 > Edit the supplied square Codex Pro X5 poster as a premium sibling of the Plus cover. Preserve its verified tier name and approved copy, use the same structure and safe area, and distinguish the tier with stronger secondary-violet depth rather than gold or extra badges. Keep one focal membership/service object, reduce machinery and glow, and retain complete readability at small card size.
 
-## MOYAO AI homepage hero
+## Homepage carousel — approved 2026-09-05
 
-> Edit the supplied 16:9 Hero background into one intelligent gateway connecting multiple model capabilities. Place the main architectural object in the right 54%; keep the left 46% low-detail and bright enough for dark live copy. Use a fog-white-to-deep-ground transition with violet paths and a restrained cyan signal. No text, CTA, prices, provider-logo wall, people, watermarks, particles or decorative dashboards. The result must crop safely from 16:9 to a shorter mobile banner without moving the focal object behind copy.
+All three compositions keep the left 46% quiet for live HTML copy. The source PNGs are preserved under `carousel/colorful-marketplace-v1/source/`; reviewed `1600×900` masters and responsive WebP derivatives live one directory above them. The built-in image generation workflow was used, followed by an opaque-background repair on the Codex artwork and a deterministic Sharp normalization pass.
+
+### Slide 01 — Token top-up
+
+> Create a premium ecommerce carousel banner for an AI API relay Token top-up service, not a generic AI brand poster. On the right, show three unmistakable translucent recharge cards for USD 1, USD 5 and USD 10 Token credit tiers on a stepped product shelf. The only image text is exactly `$1`, `$5`, `$10`, one per card. Include restrained API usage meter lines, small token chips and data-stream motifs; avoid finance and cryptocurrency imagery. Use electric cyan, cobalt blue and MOYAO violet `#635BFF` on bright white glass. No people, cash, bank imagery, logos, screenshots, claims, watermark, signature, border or dark cyberpunk styling.
+
+### Slide 02 — Codex account tiers
+
+> Create a premium ecommerce carousel banner for Codex digital account products in three tiers. On the right, place three refined translucent access cards on a product podium. The only image text is exactly `PLUS`, `PRO X5`, `PRO X20`. Make the tiers immediately distinguishable: Plus compact cyan, Pro X5 emerald and Pro X20 blue-violet with a premium edge. Add restrained code brackets, terminal cursor and compute-line motifs without a real screenshot or company logo. Use a bright fog-white and pale cyan background. No people, credentials, claims, prices, third-party marks, watermark, signature, border, alpha transparency or dark cyberpunk styling.
+
+### Slide 03 — Account services
+
+> Create a premium ecommerce carousel banner for a digital marketplace selling Gemini Pro accounts and Google US-region accounts. On the right, show two colorful digital account cards and a sealed digital delivery packet. One uses an original violet-blue-pink prism sparkle motif; the other uses a small globe, restrained red-white-blue regional ribbon and blue/red/yellow/green accents without reproducing official logos. Add a small order-status check seal to communicate trackable digital delivery without promising instant delivery. No readable image text, people, credentials, email addresses, screenshots, third-party logos, prices, watermark, signature, border or dark cyberpunk styling.
 
 ## Login hero
 
