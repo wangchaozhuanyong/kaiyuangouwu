@@ -245,9 +245,9 @@ function MyStoreProfilePage() {
             if (input.storefrontNameEn !== input.originalStorefrontNameEn) {
                 updateInput.storefrontNameEn = input.storefrontNameEn;
             }
-            return api.mutate(updateMyStoreProfileMutation, {
+            return api.mutate<UpdateMyStoreProfileResult>(updateMyStoreProfileMutation, {
                 input: updateInput,
-            }) as Promise<UpdateMyStoreProfileResult>;
+            });
         },
         onSuccess: result => {
             setDraft(toDraft(result.updateMyStoreProfile));

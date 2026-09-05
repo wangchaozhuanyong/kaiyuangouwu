@@ -160,7 +160,7 @@ function StoreProvisioningPage() {
     const templates = templatesQuery.data?.storeProvisioningTemplates ?? [];
     const mutation = useMutation({
         mutationFn: (input: StoreDraft) =>
-            api.mutate(provisionStoreMutation, {
+            api.mutate<ProvisionStoreResult>(provisionStoreMutation, {
                 input: {
                     code: input.code,
                     name: input.name,
@@ -173,7 +173,7 @@ function StoreProvisioningPage() {
                         emailAddress: input.emailAddress,
                     },
                 },
-            }) as Promise<ProvisionStoreResult>,
+            }),
         onSuccess: response => {
             setResult(response.provisionStore);
             toast.success(text.created);

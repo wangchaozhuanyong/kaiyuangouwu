@@ -4,6 +4,8 @@ import {
     AdministratorService,
     ConfigService,
     ForbiddenError,
+    I18nError,
+    LogLevel,
     PasswordCipher,
     RequestContext,
     TransactionalConnection,
@@ -96,6 +98,21 @@ const allowedRootFields = new Set([
     'Mutation.logout',
 ]);
 
+export const SENSITIVE_ACTION_PASSWORD_REQUIRED = 'SENSITIVE_ACTION_PASSWORD_REQUIRED';
+export const SENSITIVE_ACTION_PASSWORD_INVALID = 'SENSITIVE_ACTION_PASSWORD_INVALID';
+
+class SensitiveActionPasswordRequiredError extends I18nError {
+    constructor() {
+        super('请输入当前账号密码后继续', {}, SENSITIVE_ACTION_PASSWORD_REQUIRED, LogLevel.Debug);
+    }
+}
+
+class SensitiveActionPasswordInvalidError extends I18nError {
+    constructor() {
+        super('当前账号密码不正确', {}, SENSITIVE_ACTION_PASSWORD_INVALID);
+    }
+}
+
 @Injectable()
 export class MerchantInitialPasswordService {
     constructor(
@@ -157,8 +174,11 @@ export class MerchantInitialPasswordService {
         if (!ctx.activeUserId) {
             throw new ForbiddenError();
         }
-        if (!password || !(await this.matchesCurrentPassword(ctx, ctx.activeUserId, password))) {
-            throw new UserInputError('当前账号密码不正确');
+        if (!password) {
+            throw new SensitiveActionPasswordRequiredError();
+        }
+        if (!(await this.matchesCurrentPassword(ctx, ctx.activeUserId, password))) {
+            throw new SensitiveActionPasswordInvalidError();
         }
     }
 

@@ -2,6 +2,7 @@ import { ApolloClient, ApolloLink, InMemoryCache, createHttpLink, gql } from '@a
 import { setContext } from '@apollo/client/link/context';
 
 import { adminMutationFeedbackLink } from './apollo-mutation-feedback';
+import { sensitiveActionPasswordLink } from './apollo-sensitive-action';
 import { CUSTOM_FIELD_POSSIBLE_TYPES } from './custom-fields/custom-fields.graphql';
 import { createAdminFeedbackId, publishAdminFeedback } from './utils/admin-feedback';
 import { toUserFacingError } from './utils/user-facing-error';
@@ -11,7 +12,7 @@ const AUTH_PERSISTENCE_KEY = 'vendure-auth-persistence';
 const AUTH_TOKEN_HEADER = 'vendure-auth-token';
 const ACTIVE_CHANNEL_HEADER = 'vendure-token';
 const ACTIVE_CHANNEL_TOKEN_KEY = 'vendure-active-channel-token';
-const SENSITIVE_ACTION_PASSWORD_HEADER = 'x-vendure-sensitive-action-password';
+export { sensitiveActionContext } from './apollo-sensitive-action';
 
 export const ADMIN_API_URL = import.meta.env.VITE_VENDURE_ADMIN_API_URL?.trim() || '/admin-api';
 
@@ -57,12 +58,6 @@ export const clearAuthSession = () => {
     sessionStorage.removeItem(AUTH_TOKEN_KEY);
     sessionStorage.removeItem(AUTH_PERSISTENCE_KEY);
 };
-
-export const sensitiveActionContext = (currentPassword: string) => ({
-    headers: {
-        [SENSITIVE_ACTION_PASSWORD_HEADER]: currentPassword,
-    },
-});
 
 const vendureFetch: typeof fetch = async (input, init) => {
     const response = await fetch(input, {
@@ -157,7 +152,7 @@ const authLink = setContext((_, { headers }) => {
 });
 
 export const client = new ApolloClient({
-    link: ApolloLink.from([authLink, adminMutationFeedbackLink, httpLink]),
+    link: ApolloLink.from([authLink, adminMutationFeedbackLink, sensitiveActionPasswordLink, httpLink]),
     cache: new InMemoryCache({ possibleTypes: CUSTOM_FIELD_POSSIBLE_TYPES }),
 });
 
