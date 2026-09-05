@@ -24,6 +24,7 @@ import { isStrongAdministratorPassword, PASSWORD_REQUIREMENT } from '../../utils
 import { getRoleLabel } from '../../utils/status-labels';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatDateTime } from '../Sales/sales-utils';
+import { TwoFactorSecurityCard } from './TwoFactorSecurityCard';
 
 interface UpdateActiveAdministratorVariables {
     input: {
@@ -226,6 +227,7 @@ function ProfileContent({
 
                     <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
                         <div className="space-y-5">
+                            <TwoFactorSecurityCard />
                             <form
                                 onSubmit={handleSaveProfile}
                                 className="rounded-xl border border-slate-200 bg-white p-5 shadow-xs sm:p-6"

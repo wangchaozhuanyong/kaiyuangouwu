@@ -91,6 +91,8 @@ const passwordProtectedEnabledMutations = new Set([
 const passwordProtectedPasswordChangeMutations = new Set(['updateActiveAdministrator']);
 
 const allowedRootFields = new Set([
+    'Mutation.adminBeginLogin',
+    'Mutation.adminCompleteTwoFactorLogin',
     'Query.activeAdministrator',
     'Query.me',
     'Query.merchantInitialPasswordStatus',
