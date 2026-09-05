@@ -17,7 +17,7 @@ export const damatongStorefront = Object.freeze({
     channelToken: 'my-malaysia',
     sourceChannelCode: '__default_channel__',
     storefrontNameZh: '大马通 DAMATONG',
-    storefrontNameEn: 'DAMATONG',
+    storefrontNameEn: 'DAMATONG Marketplace',
     descriptionZh: '马来西亚华人精选超市与实用服务平台',
     descriptionEn: 'A curated Chinese marketplace and practical services platform for Malaysia.',
     taglineZh: '中国好物与在马服务，一站办妥',

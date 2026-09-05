@@ -1,4 +1,4 @@
-import { DehydratedState, QueryClient, dehydrate, hydrate } from '@tanstack/react-query';
+import { DehydratedState, QueryClient, QueryKey, dehydrate, hydrate } from '@tanstack/react-query';
 
 import { ShopApiTimeoutError } from './api';
 
@@ -53,13 +53,20 @@ export function storefrontRefetchPolicy(_query: { meta?: Record<string, unknown>
     return true;
 }
 
+function isStorefrontConfigQuery(queryKey: QueryKey): boolean {
+    return queryKey[0] === 'storefront' && queryKey[3] === 'config';
+}
+
 export function persistPublicQueryCache(
     client: QueryClient,
     storage: Pick<Storage, 'setItem'> = sessionStorage,
     savedAt = Date.now(),
 ): void {
     const state = dehydrate(client, {
-        shouldDehydrateQuery: query => query.state.status === 'success' && query.meta?.persistPublic === true,
+        shouldDehydrateQuery: query =>
+            query.state.status === 'success' &&
+            query.meta?.persistPublic === true &&
+            !isStorefrontConfigQuery(query.queryKey),
     });
     const payload: PersistedPublicQueryCache = {
         version: PUBLIC_QUERY_CACHE_VERSION,
@@ -88,7 +95,12 @@ export function restorePublicQueryCache(
             storage.removeItem(PUBLIC_QUERY_CACHE_KEY);
             return false;
         }
-        hydrate(client, payload.state);
+        // Existing sessions can contain both bootstrap and resolved-market branding.
+        // Always load configuration from the Shop API so cleared copy cannot return on reload.
+        hydrate(client, {
+            ...payload.state,
+            queries: payload.state.queries.filter(query => !isStorefrontConfigQuery(query.queryKey)),
+        });
         return true;
     } catch {
         storage.removeItem(PUBLIC_QUERY_CACHE_KEY);
