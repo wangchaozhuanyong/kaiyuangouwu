@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
     catalogImportOptionCode,
     catalogImportOptionGroupCode,
+    changed,
+    changedOptional,
     isCatalogImportResolutionState,
     productDescriptionForCreate,
 } from './catalog-import-planning';
@@ -10,6 +12,21 @@ import { CatalogImportService, clearsVariantIdentity, shouldClear } from './cata
 import { NormalizedCatalogRow } from './types';
 
 describe('catalog import blank clearing rules', () => {
+    it('does not rewrite human-readable fields solely because import normalizes Unicode punctuation', () => {
+        const changes: Record<string, unknown> = {};
+        changed(changes, 'productName', '商品(A)', '商品（A）');
+        changed(changes, 'category', '分类(A)', '分类（A）');
+        changedOptional(changes, 'productDescription', '原描述,不变', '原描述，不变', false);
+        expect(changes).toEqual({});
+
+        changedOptional(changes, 'productDescription', '真正修改', '原描述，不变', false);
+        expect(changes.productDescription).toEqual({ from: '原描述，不变', to: '真正修改' });
+        changedOptional(changes, 'productDescription', '', '原描述，不变', true, '');
+        expect(changes.productDescription).toEqual({ from: '原描述，不变', to: '' });
+        changed(changes, 'sku', 'SKU(A)', 'SKU（A）');
+        expect(changes.sku).toEqual({ from: 'SKU（A）', to: 'SKU(A)' });
+    });
+
     it('only clears an explicitly present blank column when the mode is enabled', () => {
         const row = { raw: { description: null, minimumStock: 0 } } as unknown as NormalizedCatalogRow;
 

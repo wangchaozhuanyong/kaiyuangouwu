@@ -242,7 +242,7 @@ export function changed(
     previous: unknown,
 ): void {
     if (next === null || next === undefined || next === '') return;
-    if (!sameValue(next, previous)) target[key] = { from: previous ?? null, to: next };
+    if (!samePlannedValue(key, next, previous)) target[key] = { from: previous ?? null, to: next };
 }
 
 export function changedOptional(
@@ -254,12 +254,24 @@ export function changedOptional(
     clearedValue: unknown = null,
 ): void {
     if (!isBlankValue(next)) {
-        if (!sameValue(next, previous)) target[key] = { from: previous ?? null, to: next };
+        if (!samePlannedValue(key, next, previous)) target[key] = { from: previous ?? null, to: next };
         return;
     }
     if (clear && !isBlankValue(previous)) {
         target[key] = { from: previous, to: clearedValue };
     }
+}
+
+function samePlannedValue(key: string, next: unknown, previous: unknown): boolean {
+    // Parsing normalizes display text; keep the stored spelling when only that normalization differs.
+    if (
+        ['productName', 'productDescription', 'category'].includes(key) &&
+        typeof next === 'string' &&
+        typeof previous === 'string'
+    ) {
+        return next.normalize('NFKC') === previous.normalize('NFKC');
+    }
+    return sameValue(next, previous);
 }
 
 export function money(value: number | null): number {
