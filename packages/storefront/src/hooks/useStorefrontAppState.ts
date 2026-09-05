@@ -199,7 +199,7 @@ export function useStorefrontAppState() {
         queryFn: ({ signal }) => api.storefrontConfig(signal),
         staleTime: PUBLIC_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
-        meta: publicQueryMeta(),
+        refetchOnWindowFocus: 'always',
         refetchInterval: 60_000,
     });
     const legalIdentity = useMemo<StorefrontLegalIdentity>(
@@ -719,10 +719,17 @@ export function useStorefrontAppState() {
         ) {
             const nextLanguage = readStoredLanguage(nextMarket);
             if (nextLanguage === language) {
-                queryClient.setQueryData(
-                    storefrontQueryKeys.config(storefrontQueryKeys.market(nextMarket), vendureLanguageCode),
-                    config,
+                const nextConfigKey = storefrontQueryKeys.config(
+                    storefrontQueryKeys.market(nextMarket),
+                    vendureLanguageCode,
                 );
+                const nextConfigState = queryClient.getQueryState(nextConfigKey);
+                // Copy the response age as well as its data, and preserve a newer destination value.
+                if (!nextConfigState?.data || nextConfigState.dataUpdatedAt < configQuery.dataUpdatedAt) {
+                    queryClient.setQueryData(nextConfigKey, config, {
+                        updatedAt: configQuery.dataUpdatedAt,
+                    });
+                }
             }
             setStorefrontContextResolved(false);
             setStorefrontContext({
@@ -754,7 +761,7 @@ export function useStorefrontAppState() {
         setLogoOnDarkUrl(config.logoOnDarkUrl ?? null);
         setStorefrontDescription(config.description?.trim() ?? '');
         setStorefrontTagline(config.tagline?.trim() ?? '');
-    }, [configQuery.data, language, market, queryClient, vendureLanguageCode]);
+    }, [configQuery.data, configQuery.dataUpdatedAt, language, market, queryClient, vendureLanguageCode]);
 
     useEffect(() => {
         const root = document.documentElement;
