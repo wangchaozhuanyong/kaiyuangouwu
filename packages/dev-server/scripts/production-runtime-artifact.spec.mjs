@@ -8,6 +8,7 @@ import {
     assertSafeOutputPath,
     copyStorefrontMediaReleaseInputs,
     ensureRuntimeRootPermissions,
+    HOMEPAGE_CAROUSEL_RUNTIME_FILES,
     pruneDeniedRuntimePackages,
     repositoryRoot,
     REQUIRED_RUNTIME_FILES,
@@ -84,6 +85,13 @@ void test('runtime artifact includes release publishers and every media manifest
         await access(path.join(fixtureRoot, 'packages/dev-server/scripts/sync-storefront-media.mjs'));
         await access(path.join(fixtureRoot, 'packages/dev-server/scripts/sync-auth-visuals.mjs'));
         await access(path.join(fixtureRoot, 'packages/dev-server/scripts/sync-moyao-brand.mjs'));
+        for (const file of HOMEPAGE_CAROUSEL_RUNTIME_FILES) {
+            assert.ok(REQUIRED_RUNTIME_FILES.includes(file));
+            assert.equal(
+                await readFile(path.join(fixtureRoot, file), 'utf8'),
+                await readFile(path.join(repositoryRoot, file), 'utf8'),
+            );
+        }
         await access(path.join(fixtureRoot, 'packages/dev-server/scripts/repair-inventory-inheritance.mjs'));
         for (const entry of storefrontMediaManifest) {
             const relativePath = path.relative(repositoryRoot, entry.file);
