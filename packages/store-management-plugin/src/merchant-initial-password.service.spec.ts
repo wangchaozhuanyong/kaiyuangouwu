@@ -230,6 +230,12 @@ describe('MerchantInitialPasswordService', () => {
         await expect(
             service.assertRootFieldAccess(ctx, 'Mutation', 'completeInitialPasswordChange'),
         ).resolves.toBeUndefined();
+        for (const field of ['adminBeginLogin', 'adminCompleteTwoFactorLogin']) {
+            await expect(service.assertRootFieldAccess(ctx, 'Mutation', field)).resolves.toBeUndefined();
+        }
+        await expect(
+            service.assertRootFieldAccess(ctx, 'Mutation', 'adminBeginTwoFactorSetup'),
+        ).rejects.toBeInstanceOf(ForbiddenError);
     });
 
     it('changes the password and removes the gate in one service flow', async () => {
