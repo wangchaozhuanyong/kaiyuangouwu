@@ -73,6 +73,8 @@ void test('workflow rejects invalid carousel scope before checkout', () => {
                 MEDIA_KEYS: media,
                 AUTH_VISUALS: 'false',
                 MOYAO_BRAND: 'false',
+                DAMATONG_STOREFRONT: 'false',
+                DAMATONG_CHANNEL_TOKEN: '',
             },
             encoding: 'utf8',
         });

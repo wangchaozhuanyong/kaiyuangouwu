@@ -21,6 +21,8 @@ readonly reviewed_auth_visuals="${VENDURE_REVIEWED_AUTH_VISUALS:-false}"
 readonly reviewed_moyao_brand="${VENDURE_REVIEWED_MOYAO_BRAND:-false}"
 readonly reviewed_homepage_carousel="${VENDURE_REVIEWED_HOMEPAGE_CAROUSEL:-false}"
 readonly homepage_carousel_media_keys="home-hero-token-topup-v1,home-hero-codex-tiers-v1,home-hero-account-services-v1"
+readonly reviewed_damatong_storefront="${VENDURE_REVIEWED_DAMATONG_STOREFRONT:-false}"
+readonly reviewed_damatong_channel_token="${VENDURE_REVIEWED_DAMATONG_CHANNEL_TOKEN:-}"
 
 fail() {
     printf 'Production deployment failed: %s\n' "$1" >&2
@@ -62,6 +64,13 @@ if [[ "${reviewed_homepage_carousel}" == "true" ]]; then
     [[ "${reviewed_storefront_media_keys}" == "${homepage_carousel_media_keys}" ]] ||
         fail 'reviewed homepage carousel requires its exact three media keys'
 fi
+if [[ "${reviewed_damatong_storefront}" != "true" && "${reviewed_damatong_storefront}" != "false" ]]; then
+    fail 'reviewed Damatong storefront flag must be true or false'
+fi
+if [[ -n "${reviewed_damatong_channel_token}" && \
+    ! "${reviewed_damatong_channel_token}" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
+    fail 'reviewed Damatong Channel token is invalid'
+fi
 if [[ ( -n "${reviewed_storefront_media_keys}" || "${reviewed_auth_visuals}" == "true" || \
     "${reviewed_moyao_brand}" == "true" ) && \
     -z "${reviewed_storefront_media_channel_codes}" ]]; then
@@ -75,6 +84,14 @@ fi
 if [[ "${reviewed_moyao_brand}" == "true" && \
     "${reviewed_storefront_media_channel_codes}" != "__default_channel__" ]]; then
     fail 'reviewed MOYAO AI brand requires the primary Channel only'
+fi
+if [[ "${reviewed_damatong_storefront}" == "true" && \
+    "${reviewed_damatong_channel_token}" != "my-malaysia" ]]; then
+    fail 'reviewed Damatong storefront requires the my-malaysia Channel token'
+fi
+if [[ "${reviewed_damatong_storefront}" == "false" && \
+    -n "${reviewed_damatong_channel_token}" ]]; then
+    fail 'reviewed Damatong Channel token was supplied without its publisher'
 fi
 
 umask 027
@@ -121,8 +138,23 @@ fi
 brand_change=false
 if git diff --name-only "${deployed_sha}" "${target_sha}" -- \
     packages/dev-server/scripts/sync-moyao-brand.mjs \
-    packages/storefront/src/assets/brand/ | grep -q .; then
+    packages/storefront/src/assets/brand/moyao-ai/ | grep -q .; then
     brand_change=true
+fi
+
+damatong_change=false
+if git diff --name-only "${deployed_sha}" "${target_sha}" -- \
+    packages/dev-server/scripts/damatong-storefront-config.mjs \
+    packages/dev-server/scripts/sync-damatong-storefront.mjs \
+    packages/storefront/src/assets/brand/damatong-market/ \
+    packages/storefront/src/assets/storefront/damatong/ | grep -q .; then
+    damatong_change=true
+fi
+if [[ "${damatong_change}" == "true" && "${reviewed_damatong_storefront}" != "true" ]]; then
+    fail 'Damatong managed storefront data changed; select the reviewed Damatong release scope'
+fi
+if [[ "${damatong_change}" == "false" && "${reviewed_damatong_storefront}" == "true" ]]; then
+    fail 'reviewed Damatong storefront scope was supplied without a Damatong data change'
 fi
 if [[ "${brand_change}" == "true" && "${reviewed_moyao_brand}" != "true" ]]; then
     fail 'MOYAO AI managed brand data changed; select the reviewed brand release scope'
@@ -148,7 +180,8 @@ mapfile -t managed_storefront_changes < <(
     git diff --name-only "${deployed_sha}" "${target_sha}" -- \
         packages/dev-server/scripts/sync-storefront-media.mjs \
         packages/dev-server/scripts/repair-inventory-inheritance.mjs \
-        packages/storefront/src/assets/storefront/
+        packages/storefront/src/assets/storefront/ | \
+        grep -v '^packages/storefront/src/assets/storefront/damatong/' || true
 )
 if [[ "${#managed_storefront_changes[@]}" -gt 0 ]]; then
     [[ -n "${reviewed_storefront_media_keys}" ]] ||
@@ -181,6 +214,8 @@ if [[ "${VENDURE_DEPLOY_REEXECUTED:-0}" != "1" ]]; then
         VENDURE_REVIEWED_AUTH_VISUALS="${reviewed_auth_visuals}" \
         VENDURE_REVIEWED_MOYAO_BRAND="${reviewed_moyao_brand}" \
         VENDURE_REVIEWED_HOMEPAGE_CAROUSEL="${reviewed_homepage_carousel}" \
+        VENDURE_REVIEWED_DAMATONG_STOREFRONT="${reviewed_damatong_storefront}" \
+        VENDURE_REVIEWED_DAMATONG_CHANNEL_TOKEN="${reviewed_damatong_channel_token}" \
         "${repository}/deploy/deploy-production-from-s3.sh" \
         "${target_sha}" "${artifact_name}" "${artifact_s3_prefix}"
     exit $?
@@ -283,11 +318,22 @@ retain_release_file "${archive_path}" "${releases_dir}/${archive_name}"
 retain_release_file "${checksum_path}" "${releases_dir}/${checksum_name}"
 
 if [[ -n "${reviewed_storefront_media_keys}" || "${reviewed_auth_visuals}" == "true" || \
-    "${reviewed_moyao_brand}" == "true" ]]; then
+    "${reviewed_moyao_brand}" == "true" || "${reviewed_damatong_storefront}" == "true" ]]; then
     set -a
     # shellcheck disable=SC1090
     source "${environment_file}"
     set +a
+fi
+if [[ "${reviewed_damatong_storefront}" == "true" ]]; then
+    printf 'DAMATONG_PREFLIGHT_BEGIN token=%s\n' "${reviewed_damatong_channel_token}"
+    cd "${candidate}"
+    VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
+        VENDURE_STOREFRONT_URL=https://damatong.net \
+        node packages/dev-server/scripts/sync-damatong-storefront.mjs --dry-run \
+            --channel-token "${reviewed_damatong_channel_token}" \
+            --source-channel-code __default_channel__
+    cd "${repository}"
+    printf 'DAMATONG_PREFLIGHT_OK token=%s\n' "${reviewed_damatong_channel_token}"
 fi
 if [[ -n "${reviewed_storefront_media_keys}" ]]; then
     printf 'STOREFRONT_MEDIA_PREFLIGHT_BEGIN keys=%s channels=%s\n' \
@@ -339,7 +385,6 @@ if [[ "${reviewed_homepage_carousel}" == "true" ]]; then
     printf 'HOMEPAGE_CAROUSEL_PREFLIGHT_OK channel=%s\n' \
         "${reviewed_storefront_media_channel_codes}"
 fi
-
 node "${memory_guard}" --stage pre-migration --check
 printf 'DEPLOY_MIGRATION_BEGIN\n'
 sudo -n systemctl start vendure-mysql-backup.service
@@ -445,6 +490,23 @@ if [[ "${reviewed_moyao_brand}" == "true" ]]; then
         "${reviewed_storefront_media_channel_codes}"
     printf 'MOYAO_BRAND_VERIFY_OK channel=%s\n' \
         "${reviewed_storefront_media_channel_codes}"
+fi
+if [[ "${reviewed_damatong_storefront}" == "true" ]]; then
+    printf 'DAMATONG_PUBLISH_BEGIN token=%s\n' "${reviewed_damatong_channel_token}"
+    cd "${candidate}"
+    VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
+        VENDURE_STOREFRONT_URL=https://damatong.net \
+        node packages/dev-server/scripts/sync-damatong-storefront.mjs --apply --allow-remote \
+            --channel-token "${reviewed_damatong_channel_token}" \
+            --source-channel-code __default_channel__
+    VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
+        VENDURE_STOREFRONT_URL=https://damatong.net \
+        node packages/dev-server/scripts/sync-damatong-storefront.mjs --verify \
+            --channel-token "${reviewed_damatong_channel_token}" \
+            --source-channel-code __default_channel__
+    cd "${repository}"
+    printf 'DAMATONG_PUBLISH_OK token=%s\n' "${reviewed_damatong_channel_token}"
+    printf 'DAMATONG_VERIFY_OK token=%s\n' "${reviewed_damatong_channel_token}"
 fi
 if [[ -n "${reviewed_storefront_media_keys}" ]]; then
     printf 'STOREFRONT_MEDIA_PUBLISH_BEGIN keys=%s channels=%s\n' \
