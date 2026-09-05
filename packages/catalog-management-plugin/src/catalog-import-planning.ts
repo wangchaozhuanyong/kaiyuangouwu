@@ -169,6 +169,10 @@ export function productFieldFingerprint(row: NormalizedCatalogRow): string {
     });
 }
 
+export function productDescriptionForCreate(row: NormalizedCatalogRow): string {
+    return row.description.trim() || row.name.trim();
+}
+
 export function variantMatches(variant: ProductVariant, row: NormalizedCatalogRow): boolean {
     const fields = (variant.customFields ?? {}) as Record<string, unknown>;
     const specification = normalizeIdentity(stringValue(fields.specification));

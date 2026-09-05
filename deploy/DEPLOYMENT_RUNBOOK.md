@@ -391,6 +391,31 @@ VENDURE_API_ORIGIN=http://127.0.0.1:3002 VENDURE_STOREFRONT_URL=https://moyaoai.
 
 该工具按 SHA-256 标签复用品牌资源，通过 Admin API 写入当前 StoreProfile；素材查询和上传结果只读取稳定的 Asset ID，避免历史素材翻译元数据为空时阻断幂等发布。写入后先核对 Admin 返回的完整品牌字段，再以与真实客户端一致的 `languageCode` 查询参数和语言请求头，分别从 Shop API 反查中文、英文名称、口号、色板和三个 Asset ID。若写入后的任一反查失败，发布器必须使用写入后 `updatedAt` 恢复原 StoreProfile（包括原三组 Asset ID），并再次验证恢复结果；恢复失败按生产事故处理。独立 `--verify` 未通过时不得切换 Storefront 指针或宣布品牌发布成功；密码只从已加载的生产 Secret 环境读取。
 
+### 大马通店铺装修发布器
+
+`sync-damatong-storefront.mjs` 通过公开 Channel token `my-malaysia` 唯一解析大马通的实际 Channel code，不将当前显示名“美宜佳”写死，也不覆盖 MOYAO AI 默认站。它统一写入大马通品牌资料、六个分类、首页三组轮播广告、其他首页内容、条款、客服、登录/注册视觉和客户端导航。已启用的旧单图轮播可安全接管为第一组；如发现未审核的多余启用广告则停止写入。`ai-image-studio-entry` 必须从 `__default_channel__` 当前启用项读取；默认站缺失、重复或中英文配置不完整时，预演和写入都会失败关闭。
+
+制品构建前先执行静态资源校验；生产发布只允许从已验证候选制品运行，先预演再写入：
+
+```bash
+node packages/dev-server/scripts/sync-damatong-storefront.mjs --validate
+
+cd "${CANDIDATE}"
+VENDURE_API_ORIGIN=http://127.0.0.1:3002 VENDURE_STOREFRONT_URL=https://damatong.net \
+    node packages/dev-server/scripts/sync-damatong-storefront.mjs --dry-run \
+    --channel-token my-malaysia --source-channel-code __default_channel__
+VENDURE_API_ORIGIN=http://127.0.0.1:3002 VENDURE_STOREFRONT_URL=https://damatong.net \
+    node packages/dev-server/scripts/sync-damatong-storefront.mjs --apply --allow-remote \
+    --channel-token my-malaysia --source-channel-code __default_channel__
+VENDURE_API_ORIGIN=http://127.0.0.1:3002 VENDURE_STOREFRONT_URL=https://damatong.net \
+    node packages/dev-server/scripts/sync-damatong-storefront.mjs --verify \
+    --channel-token my-malaysia --source-channel-code __default_channel__
+```
+
+发布器按文件 SHA-256 复用资源，保留 Collection 已有 gallery，用 `expectedUpdatedAt` 防止后台并发覆盖，并把所有装修区块改动放入同一事务。写入后从 Admin API 和中英文 Shop API 反查品牌、分类、固定内容和 AI 插件；独立 `--verify` 不执行任何写入。写入后任一验证失败时，发布器恢复之前的品牌、分类、装修区块和轮播设置；回滚失败按生产事故处理。
+
+客服块首次上线是“联系方式准备中”的安全状态：WhatsApp 和 Telegram 均禁用、无可点击目标，不使用虚假号码或占位链接。后续在 Dashboard 填写并启用真实联系方式后，发布器将客服文案、条目和目标的所有权保留给 Dashboard，以后同步其他装修内容时不会把真实客服资料覆盖回占位状态。生产工作流已接入 `damatong_storefront` 和 `damatong_channel_token` 发布计划字段；只能使用已安装该保护逻辑的引导版本发布正式大马通内容。
+
 对于用户明确要求的一次性后台品牌发布，在已发布支持品牌选择器的后台中执行以下步骤（不替代代码版本的 PR、CI 和不可变制品发布流程）：
 
 1. 记录目标店铺档案版本、名称和现有三个品牌素材关联；选择目标店铺后，在素材中心上传原品牌包。上传请求必须携带当前店铺渠道，没有选择店铺时拒绝上传。

@@ -372,6 +372,19 @@ describe('HomePage localized trust bar layout', () => {
             /\.home-trust-bar\.has-long-copy \.home-trust-item\s*\{[^}]*white-space:\s*normal;/,
         );
     });
+
+    it('applies the balanced marketplace treatment only when managed content opts in', () => {
+        const markup = renderHome({
+            contentBlocks: [
+                {
+                    ...trustBarBlock,
+                    settings: { visualStyle: 'damatong-balanced' },
+                },
+            ],
+        });
+
+        expect(markup).toContain('class="home-trust-bar is-color-marketplace"');
+    });
 });
 
 describe('HomePage account-aware coupon campaigns', () => {
@@ -590,6 +603,30 @@ describe('HomePage desktop intro layout', () => {
         expect(markup).toContain('class="home-intro-grid"');
         expect(markup).not.toContain('class="home-intro-grid is-desktop-grouped"');
     });
+
+    it('renders all six managed Damatong category shortcuts in a balanced grid', () => {
+        const labels = ['正品香烟', '正品白酒', '正品槟榔', '坦克咖啡', '商业服务', '软件订阅'];
+        const managedQuickLinksBlock: StorefrontContentBlock = {
+            ...quickLinksBlock,
+            settings: { visualStyle: 'damatong-balanced' },
+            items: labels.map((label, position) => ({
+                id: `quick-link-${position + 1}`,
+                enabled: true,
+                position,
+                imageUrl: `/assets/category-${position + 1}.webp`,
+                targetType: 'COLLECTION',
+                targetValue: `collection-${position + 1}`,
+                label,
+                description: '',
+            })),
+        };
+        const markup = renderHome({ contentBlocks: [managedQuickLinksBlock] });
+        const stylesheet = readStorefrontStylesheet();
+
+        expect(markup).toContain('class="quick-grid quick-grid-6 is-color-marketplace"');
+        for (const label of labels) expect(markup).toContain(`<b>${label}</b>`);
+        expect(stylesheet).toMatch(/\.quick-grid-6\s*\{[^}]*repeat\(3,/u);
+    });
 });
 
 describe('HomePage notices', () => {
@@ -790,6 +827,44 @@ describe('HomePage category promotion', () => {
 
         expect(markup).toContain('class="section-header-end-subtitle">右侧副标题</p>');
         expect(markup).not.toContain('不应显示的按钮文案');
+    });
+
+    it('uses the balanced marketplace treatment and localized service badge when configured', () => {
+        const markup = renderHome({
+            configuredBlockTypes: [...baseProps.configuredBlockTypes, 'CATEGORY_AD'],
+            contentBlocks: [
+                {
+                    ...categoryAdBlock,
+                    settings: { ...categoryAdBlock.settings, visualStyle: 'damatong-balanced' },
+                },
+            ],
+        });
+
+        expect(markup).toContain('category-promotion-section is-color-marketplace');
+        expect(markup).toContain('热门服务');
+        expect(markup).not.toContain('Category edit');
+    });
+});
+
+describe('HomePage managed story contrast', () => {
+    it('keeps the managed title color instead of the global heading color', () => {
+        const storyBlock: StorefrontContentBlock = {
+            ...heroBlock,
+            id: 'story-1',
+            code: 'homepage-story',
+            type: 'STORY',
+            backgroundColor: '#0e241f',
+            textColor: '#f7f1e5',
+            title: '不只是商品，还有在马需要的服务',
+        };
+        const markup = renderHome({
+            configuredBlockTypes: [...baseProps.configuredBlockTypes, 'STORY'],
+            contentBlocks: [storyBlock],
+        });
+        const stylesheet = readStorefrontStylesheet();
+
+        expect(markup).toContain('background-color:#0e241f;color:#f7f1e5');
+        expect(stylesheet).toMatch(/\.content-story-copy h2\s*\{[^}]*color:\s*currentColor;/u);
     });
 });
 

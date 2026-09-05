@@ -279,7 +279,7 @@ export function CatalogModule() {
                     <p className="text-xs text-slate-500 mt-1">管理商品状态、规格、库存量和销售价</p>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end sm:gap-3 [&>button]:shrink-0">
                     <NextAdminActions pageId="product-list" />
                     <button
                         type="button"

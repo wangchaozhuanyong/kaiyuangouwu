@@ -62,6 +62,7 @@ import {
     importScopeError,
     microunits,
     money,
+    productDescriptionForCreate,
     productFieldFingerprint,
     validationWarning,
     variantCustomFieldUpdates,
@@ -1235,7 +1236,7 @@ export class CatalogImportService {
                         languageCode: ctx.languageCode,
                         name: row.normalizedData.name,
                         slug: await this.uniqueSlug(ctx, row.normalizedData.name),
-                        description: row.normalizedData.description,
+                        description: productDescriptionForCreate(row.normalizedData),
                     },
                 ],
             });
