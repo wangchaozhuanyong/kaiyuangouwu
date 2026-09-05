@@ -88,6 +88,8 @@ export class AdminTwoFactorService {
             .insert()
             .values({ bucket, expiresAt, attempts: 0 })
             .orIgnore()
+            // An ignored MySQL insert has no generated ID; the counter is updated by its unique bucket.
+            .updateEntity(false)
             .execute();
         await repository.update({ bucket, expiresAt: LessThan(now) }, { expiresAt, attempts: 0 });
         const result = await repository
@@ -344,6 +346,8 @@ export class AdminTwoFactorService {
                 authVersion: newOpaqueToken(),
             })
             .orIgnore()
+            // Always read the credential by userId below, including when this insert was ignored.
+            .updateEntity(false)
             .execute();
         const credential = approval.credential ?? (await this.credential(userId));
         if (!credential) throw new ForbiddenError();

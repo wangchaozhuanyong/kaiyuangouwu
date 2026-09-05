@@ -97,6 +97,88 @@ describe('browser-local catalog export', () => {
             purchaseCost: null,
         });
     });
+
+    it('uses maintenance-sheet inventory edits for its warehouse while preserving other warehouse details', async () => {
+        const row = exportRow();
+        row.stockLevels.push({
+            ...row.stockLevels[0],
+            stockLocationId: 's2',
+            stockLocationName: '副仓',
+            stockOnHand: 20,
+        });
+        const workbook = XLSX.read(buildCatalogExport([row], 'xlsx', 's1').buffer, { type: 'array' });
+        XLSX.utils.sheet_add_aoa(workbook.Sheets['商品与SKU'], [[8]], { origin: 'E2' });
+        XLSX.utils.sheet_add_aoa(workbook.Sheets['商品与SKU'], [[60, 0]], { origin: 'I2' });
+
+        const parsed = await parseCatalogArrayBuffer(XLSX.write(workbook, { type: 'array' }), '维护.xlsx');
+
+        expect(parsed.errors).toEqual([]);
+        expect(parsed.rows).toHaveLength(2);
+        expect(parsed.rows[0]).toMatchObject({
+            stockLocationCode: '主仓',
+            stockOnHand: 8,
+            minimumStock: 0,
+            maximumStock: 60,
+            lotQuantity: 10,
+        });
+        expect(parsed.rows[1]).toMatchObject({
+            stockLocationCode: '副仓',
+            stockOnHand: 20,
+            minimumStock: 3,
+            maximumStock: 50,
+        });
+    });
+
+    it('preserves explicit blanks and zero from the maintenance sheet instead of restoring stale detail values', async () => {
+        const row = exportRow();
+        row.lots = [];
+        const workbook = XLSX.read(buildCatalogExport([row], 'xlsx', 's1').buffer, { type: 'array' });
+        XLSX.utils.sheet_add_aoa(workbook.Sheets['商品与SKU'], [[0]], { origin: 'E2' });
+        delete workbook.Sheets['商品与SKU'].I2;
+        delete workbook.Sheets['商品与SKU'].J2;
+
+        const parsed = await parseCatalogArrayBuffer(XLSX.write(workbook, { type: 'array' }), '空白.xlsx');
+
+        expect(parsed.rows[0]).toMatchObject({ stockOnHand: 0, minimumStock: null, maximumStock: null });
+        expect(parsed.rows[0].providedFields).toEqual(
+            expect.arrayContaining(['minimumStock', 'maximumStock']),
+        );
+    });
+
+    it('keeps legacy warehouse expansion when the main sheet has no warehouse or inventory columns', async () => {
+        const row = exportRow();
+        row.lots = [];
+        const workbook = XLSX.read(buildCatalogExport([row], 'xlsx', 's1').buffer, { type: 'array' });
+        workbook.Sheets['商品与SKU'] = XLSX.utils.aoa_to_sheet([
+            ['名称', '分类', 'SKU', '进货价', '销售价'],
+            [row.productName, '匿名分类', row.sku, 1.255, 2.5],
+        ]);
+
+        const parsed = await parseCatalogArrayBuffer(XLSX.write(workbook, { type: 'array' }), '旧模板.xlsx');
+
+        expect(parsed.rows[0]).toMatchObject({
+            stockLocationCode: '主仓',
+            stockOnHand: 10,
+            minimumStock: 3,
+            maximumStock: 50,
+        });
+    });
+
+    it('retains a main-sheet warehouse missing from the supplemental inventory sheets', async () => {
+        const row = exportRow();
+        row.lots = [];
+        const workbook = XLSX.read(buildCatalogExport([row], 'xlsx', 's1').buffer, { type: 'array' });
+        XLSX.utils.sheet_add_aoa(workbook.Sheets['商品与SKU'], [['新仓', 5]], { origin: 'D2' });
+
+        const parsed = await parseCatalogArrayBuffer(
+            XLSX.write(workbook, { type: 'array' }),
+            '新增仓库.xlsx',
+        );
+
+        expect(parsed.rows).toHaveLength(2);
+        expect(parsed.rows[0]).toMatchObject({ stockLocationCode: '主仓', stockOnHand: 10 });
+        expect(parsed.rows[1]).toMatchObject({ stockLocationCode: '新仓', stockOnHand: 5 });
+    });
 });
 
 function exportRow(): CatalogExportRowRecord {

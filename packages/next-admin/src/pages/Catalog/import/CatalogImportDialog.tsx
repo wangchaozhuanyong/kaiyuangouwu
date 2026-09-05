@@ -392,16 +392,28 @@ export function CatalogImportDialog({ open, onClose }: { open: boolean; onClose:
                 setNotice('当前任务没有可批量处理的记录');
                 return;
             }
+            const retryCount = candidates.filter(row => row.action === 'ERROR').length;
+            const riskCount = candidates.filter(row => row.action === 'WARNING').length;
+            const applyTitle =
+                retryCount > 0 && riskCount > 0
+                    ? `确认 ${riskCount} 条风险并重试 ${retryCount} 条错误记录？`
+                    : retryCount > 0
+                      ? `确认重试全部 ${retryCount} 条错误记录？`
+                      : `统一确认全部 ${riskCount} 条风险记录？`;
+            const applyDescription =
+                retryCount > 0
+                    ? '警告行会按文件原值确认，可重试错误行会重新加入后台执行；系统将记录确认人和时间。'
+                    : '将按文件原值导入已标记的负库存、价格倒挂等风险数据，并记录确认人和时间。';
             const confirmation = await requestConfirmation({
                 title:
+                    resolution === 'APPLY' ? applyTitle : `确认跳过全部 ${candidates.length} 条待处理记录？`,
+                description: resolution === 'APPLY' ? applyDescription : '这些记录不会写入商品、价格或库存。',
+                confirmLabel:
                     resolution === 'APPLY'
-                        ? `统一确认全部 ${candidates.length} 条风险记录？`
-                        : `确认跳过全部 ${candidates.length} 条待处理记录？`,
-                description:
-                    resolution === 'APPLY'
-                        ? '将按文件原值导入已标记的负库存、价格倒挂等风险数据，并记录确认人和时间。'
-                        : '这些记录不会写入商品、价格或库存。',
-                confirmLabel: resolution === 'APPLY' ? '确认全部风险' : '确认全部跳过',
+                        ? retryCount > 0
+                            ? '确认并重试'
+                            : '确认全部风险'
+                        : '确认全部跳过',
                 tone: 'warning',
             });
             if (!confirmation) return;
@@ -1046,7 +1058,14 @@ function JobWorkspace({
     onBatchApply: () => void;
     onBatchSkip: () => void;
 }) {
-    const terminal = ['COMPLETED', 'COMPLETED_WITH_ERRORS', 'ROLLED_BACK'].includes(job.state);
+    const terminal = ['COMPLETED', 'ROLLED_BACK'].includes(job.state);
+    const batchApplyCount = job.warningCount + job.errorCount;
+    const batchApplyLabel =
+        job.errorCount > 0 && job.warningCount > 0
+            ? `确认风险并重试 ${batchApplyCount}`
+            : job.errorCount > 0
+              ? `批量确认重试 ${job.errorCount}`
+              : `统一确认全部风险 ${job.warningCount || ''}`;
     return (
         <div className="space-y-4">
             <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -1165,10 +1184,10 @@ function JobWorkspace({
                             <button
                                 type="button"
                                 className={secondaryButton}
-                                disabled={job.warningCount + job.errorCount === 0 || busy !== null}
+                                disabled={batchApplyCount === 0 || busy !== null}
                                 onClick={onBatchApply}
                             >
-                                统一确认全部风险 {job.warningCount || ''}
+                                {batchApplyLabel}
                             </button>
                             <button
                                 type="button"

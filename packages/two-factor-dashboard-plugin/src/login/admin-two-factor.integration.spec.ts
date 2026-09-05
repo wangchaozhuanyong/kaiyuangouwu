@@ -9,7 +9,13 @@ import {
     TransactionalConnection,
     User,
 } from '@vendure/core';
-import { createTestEnvironment, registerInitializer, SqljsInitializer, testConfig } from '@vendure/testing';
+import {
+    createTestEnvironment,
+    MysqlInitializer,
+    registerInitializer,
+    SqljsInitializer,
+    testConfig,
+} from '@vendure/testing';
 import { randomBytes } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { createServer } from 'node:net';
@@ -27,6 +33,7 @@ import {
     AdminTwoFactorCredential,
     AdminTwoFactorRateLimit,
 } from './admin-two-factor.entity';
+import { AdminTwoFactorService } from './admin-two-factor.service';
 
 const begin =
     'mutation($u:String!,$p:String!){adminBeginLogin(username:$u,password:$p,rememberMe:false){status challengeToken expiresAt message}}';
@@ -87,8 +94,24 @@ describe.sequential('administrator login 2FA through real GraphQL and SQL', () =
         await new Promise<void>(resolve => listener.close(() => resolve()));
         url = `http://127.0.0.1:${port}/admin-api`;
         registerInitializer('sqljs', new SqljsInitializer(directory));
+        // Use only an explicitly selected disposable MySQL fixture, as in the core E2E suite.
+        const mysql = process.env.DB === 'mysql';
+        if (mysql && !process.env.E2E_MYSQL_PORT) throw new Error('E2E_MYSQL_PORT is required');
+        if (mysql) registerInitializer('mysql', new MysqlInitializer());
         environment = createTestEnvironment(
             mergeConfig(testConfig, {
+                ...(mysql
+                    ? {
+                          dbConnectionOptions: {
+                              type: 'mysql' as const,
+                              host: '127.0.0.1',
+                              port: Number(process.env.E2E_MYSQL_PORT),
+                              username: 'root',
+                              password: 'password',
+                              synchronize: true,
+                          },
+                      }
+                    : {}),
                 apiOptions: { port },
                 logger: new DefaultLogger({ level: LogLevel.Error }),
                 authOptions: {
@@ -116,6 +139,10 @@ describe.sequential('administrator login 2FA through real GraphQL and SQL', () =
         expect(login.errors).toBeUndefined();
         expect(login.data.adminBeginLogin.status).toBe('SUCCESS');
         firstToken = login.token;
+        // MySQL INSERT IGNORE returns no generated ID for an existing rate-limit bucket.
+        const repeated = await request(begin, { u: username, p: password });
+        expect(repeated.errors).toBeUndefined();
+        expect(repeated.data.adminBeginLogin.status).toBe('SUCCESS');
         expect((await request(status, {}, firstToken)).data.adminTwoFactorStatus).toMatchObject({
             enabled: false,
             available: true,
@@ -145,6 +172,23 @@ describe.sequential('administrator login 2FA through real GraphQL and SQL', () =
             .findOneByOrFail({});
         expect(stored.recoveryHashes).not.toContain(codes[0]);
         expect(stored.pendingSecret).toBeNull();
+    });
+
+    it('keeps duplicate bucket inserts atomic and preserves the limit and expiry reset', async () => {
+        const service = environment.server.app.get(AdminTwoFactorService);
+        const scope = 'duplicate-bucket-regression';
+        const outcomes = await Promise.allSettled(
+            Array.from({ length: 6 }, () => service.rateLimit(scope, 3)),
+        );
+        expect(outcomes.filter(result => result.status === 'fulfilled')).toHaveLength(3);
+        for (const outcome of outcomes) {
+            if (outcome.status === 'rejected') expect(outcome.reason.message).toContain('尝试次数过多');
+        }
+        const repository = connection.rawConnection.getRepository(AdminTwoFactorRateLimit);
+        expect((await repository.findOneByOrFail({ bucket: hashValue(scope) })).attempts).toBe(3);
+        await repository.update({ bucket: hashValue(scope) }, { expiresAt: new Date(Date.now() - 1000) });
+        await service.rateLimit(scope, 3);
+        expect((await repository.findOneByOrFail({ bucket: hashValue(scope) })).attempts).toBe(1);
     });
 
     it('rejects legacy login, authenticate(native), setup-code replay and Shop API session reuse', async () => {
