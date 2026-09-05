@@ -39,6 +39,12 @@ const LOGIN_MUTATION = `
     }
 `;
 
+const ACTIVE_CHANNEL_QUERY = `
+    query DamatongActiveChannel {
+        activeChannel { code }
+    }
+`;
+
 const STORE_PROFILES_QUERY = `
     query DamatongStoreProfiles {
         storeProfiles {
@@ -1070,10 +1076,17 @@ export async function syncDamatongStorefront({
     const adminEndpoint = `${normalizedApiOrigin}/admin-api`;
     const shopEndpoint = `${normalizedShopOrigin}/shop-api`;
     const preparedAssets = await prepareDamatongAssets(assetManifest);
+    const storefrontChannelResult = await graphql(fetchImpl, shopEndpoint, ACTIVE_CHANNEL_QUERY, undefined);
+    const storefrontChannelCode = storefrontChannelResult.data.activeChannel?.code;
+    assert.ok(storefrontChannelCode, 'The Damatong Shop API did not resolve an active Channel');
     const session = await authenticate(fetchImpl, adminEndpoint, username, password);
-    const targetChannels = session.channels.filter(item => item.token === channelToken);
+    const targetChannels = session.channels.filter(item => item.code === storefrontChannelCode);
     const sourceChannels = session.channels.filter(item => item.code === sourceChannelCode);
-    assert.equal(targetChannels.length, 1, `Expected one accessible Channel with token ${channelToken}`);
+    assert.equal(
+        targetChannels.length,
+        1,
+        `Expected one accessible Channel routed by the Damatong Shop API (${storefrontChannelCode})`,
+    );
     assert.equal(
         sourceChannels.length,
         1,
