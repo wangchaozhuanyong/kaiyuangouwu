@@ -40,7 +40,7 @@ test('Channel selection is implicit only when exactly one Channel is accessible'
 test('storefront media manifest has readable, hashed and uniquely targeted files', async () => {
     const prepared = await prepareStorefrontMediaManifest();
 
-    assert.equal(prepared.length, 4);
+    assert.equal(prepared.length, 7);
     assert.equal(new Set(prepared.map(item => item.key)).size, prepared.length);
     for (const item of prepared) {
         assert.match(item.hash, /^[a-f0-9]{64}$/);
@@ -49,6 +49,16 @@ test('storefront media manifest has readable, hashed and uniquely targeted files
     }
     const referralReference = prepared.find(item => item.key === 'referral-poster-neon-layout-reference');
     assert.equal(referralReference?.assetOnly?.purpose, 'referral-poster-layout-reference');
+    assert.deepEqual(
+        prepared
+            .filter(item => item.key.startsWith('home-hero-'))
+            .map(item => [item.key, item.assetOnly?.purpose]),
+        [
+            ['home-hero-token-topup-v1', 'homepage-carousel-token-topup'],
+            ['home-hero-codex-tiers-v1', 'homepage-carousel-codex-tiers'],
+            ['home-hero-account-services-v1', 'homepage-carousel-account-services'],
+        ],
+    );
     await assert.rejects(
         prepareStorefrontMediaManifest([
             storefrontMediaManifest[0],

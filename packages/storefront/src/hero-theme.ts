@@ -1,15 +1,20 @@
 import type { CSSProperties } from 'react';
-// eslint-disable-next-line import/order -- organize-imports keeps relative type imports after packages.
-import type { StorefrontContentBlock } from './types';
 
 import {
+    HERO_ACCOUNT_SERVICES_FALLBACK_IMAGE,
+    HERO_ACCOUNT_SERVICES_IMAGE,
     HERO_CLOUD_BRIDGE_FALLBACK_IMAGE,
     HERO_CLOUD_BRIDGE_IMAGE,
+    HERO_CODEX_TIERS_FALLBACK_IMAGE,
+    HERO_CODEX_TIERS_IMAGE,
     HERO_GATEWAY_FALLBACK_IMAGE,
     HERO_GATEWAY_IMAGE,
+    HERO_TOKEN_TOPUP_FALLBACK_IMAGE,
+    HERO_TOKEN_TOPUP_IMAGE,
     HERO_VIP_FALLBACK_IMAGE,
     HERO_VIP_IMAGE,
 } from './storefront-images';
+import { StorefrontContentBlock } from './types';
 
 const HEX_COLOR_PATTERN = /^#[0-9a-f]{6}$/i;
 
@@ -77,14 +82,28 @@ export function heroThemeStyle(block: StorefrontContentBlock, vipTheme: boolean)
         '--hero-stat-shadow': lightOverlay
             ? '0 4px 14px rgba(69, 26, 26, 0.1)'
             : '0 3px 10px rgba(0, 0, 0, 0.22)',
+        '--hero-pagination-color': lightOverlay
+            ? colorWithAlpha(accentColor, 0.38)
+            : 'rgba(255, 255, 255, 0.5)',
+        '--hero-pagination-active-color': lightOverlay ? accentColor : '#ffffff',
     };
 }
 
 export function heroUsesImageOverlay(block: StorefrontContentBlock): boolean {
-    return block.settings?.themePreset !== 'cloudbridge-bright';
+    const themePreset = typeof block.settings?.themePreset === 'string' ? block.settings.themePreset : '';
+    return !['cloudbridge-bright', 'marketplace-bright'].includes(themePreset);
 }
 
 export function builtInHeroImage(block: StorefrontContentBlock, vipTheme: boolean): string {
+    if (block.settings?.fallbackImage === 'moyao-token-topup-v1') {
+        return HERO_TOKEN_TOPUP_IMAGE;
+    }
+    if (block.settings?.fallbackImage === 'moyao-codex-tiers-v1') {
+        return HERO_CODEX_TIERS_IMAGE;
+    }
+    if (block.settings?.fallbackImage === 'moyao-account-services-v1') {
+        return HERO_ACCOUNT_SERVICES_IMAGE;
+    }
     if (block.settings?.fallbackImage === 'cloudbridge-ai-hub') {
         return HERO_CLOUD_BRIDGE_IMAGE;
     }
@@ -92,6 +111,15 @@ export function builtInHeroImage(block: StorefrontContentBlock, vipTheme: boolea
 }
 
 export function builtInHeroFallbackImage(block: StorefrontContentBlock, vipTheme: boolean): string {
+    if (block.settings?.fallbackImage === 'moyao-token-topup-v1') {
+        return HERO_TOKEN_TOPUP_FALLBACK_IMAGE;
+    }
+    if (block.settings?.fallbackImage === 'moyao-codex-tiers-v1') {
+        return HERO_CODEX_TIERS_FALLBACK_IMAGE;
+    }
+    if (block.settings?.fallbackImage === 'moyao-account-services-v1') {
+        return HERO_ACCOUNT_SERVICES_FALLBACK_IMAGE;
+    }
     if (block.settings?.fallbackImage === 'cloudbridge-ai-hub') {
         return HERO_CLOUD_BRIDGE_FALLBACK_IMAGE;
     }

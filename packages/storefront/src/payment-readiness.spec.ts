@@ -16,29 +16,40 @@ function method(overrides: Partial<PaymentMethod> = {}): PaymentMethod {
 }
 
 describe('paymentAvailability', () => {
-    it('keeps every method returned by the active Channel', () => {
-        const result = paymentAvailability([
-            method(),
-            method({ id: 'test', code: '模拟支付', name: '模拟支付（测试）' }),
-        ]);
+    it('keeps test handlers in development and hides real handlers', () => {
+        const result = paymentAvailability(
+            [method(), method({ id: 'test', code: '测试支付', name: '测试支付' })],
+            { allowTestMethods: true },
+        );
 
         expect(result.status).toBe('READY');
-        expect(result.methods.map(item => item.id)).toEqual(['payment-1', 'test']);
+        expect(result.methods.map(item => item.id)).toEqual(['test']);
     });
 
-    it('allows an enabled simulated method to make checkout ready', () => {
-        const result = paymentAvailability([
-            method({ code: 'simulated-payment', name: 'Simulated payment (test)' }),
-        ]);
+    it('keeps real handlers in production and excludes test handlers', () => {
+        const result = paymentAvailability(
+            [method(), method({ id: 'dummy', code: 'dummy-payment-handler', name: 'Dummy' })],
+            { allowTestMethods: false },
+        );
 
         expect(result.status).toBe('READY');
-        expect(result.methods).toHaveLength(1);
+        expect(result.methods.map(item => item.id)).toEqual(['payment-1']);
+    });
+
+    it('reports a channel without a real provider as not configured', () => {
+        const result = paymentAvailability([method({ code: '测试支付', name: '测试支付' })], {
+            allowTestMethods: false,
+        });
+
+        expect(result.status).toBe('NOT_CONFIGURED');
+        expect(result.methods).toEqual([]);
     });
 
     it('preserves provider eligibility errors for the active order', () => {
-        const result = paymentAvailability([
-            method({ isEligible: false, eligibilityMessage: 'Minimum order total is MYR 10' }),
-        ]);
+        const result = paymentAvailability(
+            [method({ isEligible: false, eligibilityMessage: 'Minimum order total is MYR 10' })],
+            { allowTestMethods: false },
+        );
 
         expect(result.status).toBe('ORDER_INELIGIBLE');
         expect(result.eligibleMethods).toEqual([]);
@@ -49,8 +60,6 @@ describe('paymentAvailability', () => {
 describe('isTestPaymentMethod', () => {
     it('detects common placeholder payment handlers without matching normal provider names', () => {
         expect(isTestPaymentMethod(method({ code: 'dummy-payment-handler' }))).toBe(true);
-        expect(isTestPaymentMethod(method({ code: 'simulated-payment' }))).toBe(true);
-        expect(isTestPaymentMethod(method({ name: '模拟支付' }))).toBe(true);
         expect(isTestPaymentMethod(method({ code: 'tng-ewallet', name: 'Touch n Go eWallet' }))).toBe(false);
     });
 });

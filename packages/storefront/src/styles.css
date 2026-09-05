@@ -1072,6 +1072,8 @@ img {
     --hero-pill-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
     --hero-stat-background: rgba(15, 23, 42, 0.7);
     --hero-stat-shadow: 0 3px 10px rgba(0, 0, 0, 0.22);
+    --hero-pagination-color: rgba(255, 255, 255, 0.5);
+    --hero-pagination-active-color: #ffffff;
     min-height: 195px;
     margin: 0 12px 14px;
     position: relative;
