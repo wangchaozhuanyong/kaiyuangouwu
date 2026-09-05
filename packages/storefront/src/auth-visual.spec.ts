@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
 import type { StorefrontContentBlock, StorefrontContentBlockType } from './types';
+import { describe, expect, it } from 'vitest';
 
 import {
     authVisualAccentColor,
