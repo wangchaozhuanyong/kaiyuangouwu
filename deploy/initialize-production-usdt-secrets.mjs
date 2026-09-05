@@ -21,6 +21,7 @@ const managedKeys = [
     'USDT_PAYMENT_PROOF_SECRET',
     'USDT_WALLET_ENCRYPTION_KEY',
     'TWO_FACTOR_DASHBOARD_ENCRYPTION_KEY',
+    'ADMIN_TWO_FACTOR_ENCRYPTION_KEY',
 ];
 const environmentFile = process.argv[2];
 
@@ -79,6 +80,24 @@ const replacements = new Map([
     ['USDT_WALLET_ENCRYPTION_KEY', walletKey],
     ['TWO_FACTOR_DASHBOARD_ENCRYPTION_KEY', dashboardTwoFactorKey],
 ]);
+const adminLoginKey = entries.get('ADMIN_TWO_FACTOR_ENCRYPTION_KEY') ?? '';
+const otherSecrets = [
+    ...[...entries].filter(([key]) => key !== 'ADMIN_TWO_FACTOR_ENCRYPTION_KEY').map(([, value]) => value),
+    ...replacements.values(),
+    ...previousKeys,
+];
+// A configured login key must never be silently rotated: existing authenticators depend on it.
+if (adminLoginKey && !placeholderPattern.test(adminLoginKey)) {
+    if (!/^[a-f0-9]{64}$/iu.test(adminLoginKey)) {
+        throw new Error('ADMIN_TWO_FACTOR_ENCRYPTION_KEY must contain exactly 64 hexadecimal characters');
+    }
+    if (otherSecrets.some(value => value.toLowerCase() === adminLoginKey.toLowerCase())) {
+        throw new Error('ADMIN_TWO_FACTOR_ENCRYPTION_KEY must be independent of other production secrets');
+    }
+    replacements.set('ADMIN_TWO_FACTOR_ENCRYPTION_KEY', adminLoginKey);
+} else {
+    replacements.set('ADMIN_TWO_FACTOR_ENCRYPTION_KEY', createSecret(otherSecrets));
+}
 const updates = new Map([...replacements].filter(([key, value]) => entries.get(key) !== value));
 const updated = replaceEnvironmentValues(original, updates);
 const changed = updated !== original;
@@ -91,6 +110,7 @@ for (const key of managedKeys) {
 }
 process.stdout.write(`environment_file_updated=${changed ? 'yes' : 'no'}\n`);
 process.stdout.write('DASHBOARD_TWO_FACTOR_SECRET_INITIALIZATION_OK\n');
+process.stdout.write('ADMIN_LOGIN_TWO_FACTOR_SECRET_INITIALIZATION_OK\n');
 process.stdout.write('USDT_SECRET_INITIALIZATION_OK\n');
 
 function parseEnvironment(source) {

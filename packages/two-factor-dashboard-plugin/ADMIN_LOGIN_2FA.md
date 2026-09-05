@@ -15,6 +15,7 @@
 ## 上线前配置
 
 - 在服务器秘密配置中设置 `ADMIN_TWO_FACTOR_ENCRYPTION_KEY`，值为 32 个安全随机字节的 64 位十六进制编码。独立于 `TWO_FACTOR_DASHBOARD_ENCRYPTION_KEY` 和 Cookie 密钥；不要放进前端构建变量、代码或日志。
+- 标准生产发布在备份后、迁移前通过现有秘密初始化脚本自动生成缺失或占位的登录密钥并原子保存。已配置的有效值原样保留；格式错误或与其他秘密重复时停止发布，不自动轮换。
 - 密钥必须跨实例、重启、发布保持一致，并与数据库分别备份。没有有效密钥时，页面显示暂不可用，不允许绑定；已绑定账号验证失败时不会降级成密码登录。
 - 执行注册迁移 `AddAdminLoginTwoFactor1788609600000`，新增四张 `admin_two_factor_*` 表。需先备份，使用项目发布流程，在切入新 API 代码之前完成迁移。
 - 必须同时交付 API 和 next-admin 前端。新前端使用 `adminBeginLogin` / `adminCompleteTwoFactorLogin`；旧的 `login` 和 `authenticate(native)` 对未开启账号继续工作，对开启账号拒绝密码单独登录。

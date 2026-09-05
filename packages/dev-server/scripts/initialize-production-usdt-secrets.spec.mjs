@@ -28,10 +28,14 @@ void test('initializes independent production secrets atomically without printin
             const proofSecret = firstValues.get('USDT_PAYMENT_PROOF_SECRET');
             const walletKey = firstValues.get('USDT_WALLET_ENCRYPTION_KEY');
             const dashboardTwoFactorKey = firstValues.get('TWO_FACTOR_DASHBOARD_ENCRYPTION_KEY');
+            const adminLoginKey = firstValues.get('ADMIN_TWO_FACTOR_ENCRYPTION_KEY');
 
             assert.match(proofSecret ?? '', /^[a-f0-9]{64}$/u);
             assert.match(walletKey ?? '', /^[a-f0-9]{64}$/u);
             assert.match(dashboardTwoFactorKey ?? '', /^[a-f0-9]{64}$/u);
+            assert.match(adminLoginKey ?? '', /^[a-f0-9]{64}$/u);
+            assert.equal(new Set([proofSecret, walletKey, dashboardTwoFactorKey, adminLoginKey]).size, 4);
+            assert.equal(firstOutput.includes(adminLoginKey ?? 'missing'), false);
             assert.notEqual(proofSecret, walletKey);
             assert.notEqual(dashboardTwoFactorKey, proofSecret);
             assert.notEqual(dashboardTwoFactorKey, walletKey);
@@ -48,9 +52,23 @@ void test('initializes independent production secrets atomically without printin
             assert.match(secondOutput, /USDT_PAYMENT_PROOF_SECRET=preserved/u);
             assert.match(secondOutput, /USDT_WALLET_ENCRYPTION_KEY=preserved/u);
             assert.match(secondOutput, /TWO_FACTOR_DASHBOARD_ENCRYPTION_KEY=preserved/u);
+            assert.match(secondOutput, /ADMIN_TWO_FACTOR_ENCRYPTION_KEY=preserved/u);
             assert.match(secondOutput, /environment_file_updated=no/u);
         },
     );
+});
+
+void test('rejects invalid or reused administrator login keys without replacing configured secrets', () => {
+    for (const value of ['too-short', 'z'.repeat(64), 'A'.repeat(64)]) {
+        const original = `COOKIE_SECRET=${'a'.repeat(64)}\nADMIN_TWO_FACTOR_ENCRYPTION_KEY=${value}\n`;
+        withEnvironmentFile(original, environmentFile => {
+            const result = spawnSync(process.execPath, [initializer, environmentFile], { encoding: 'utf8' });
+            assert.notEqual(result.status, 0);
+            assert.match(result.stderr, /ADMIN_TWO_FACTOR_ENCRYPTION_KEY must/u);
+            assert.equal(result.stderr.includes(value), false);
+            assert.equal(readFileSync(environmentFile, 'utf8'), original);
+        });
+    }
 });
 
 void test('preserves a valid wallet key and rotates a proof secret that reuses it', () => {
