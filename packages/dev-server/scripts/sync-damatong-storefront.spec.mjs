@@ -774,6 +774,9 @@ test('failed Shop verification restores the previous Admin content bindings', as
     let currentBlocks = structuredClone(beforeBlocks);
     let batchMutationCount = 0;
     let profileMutationCount = 0;
+    const createdCategory = damatongCategories.at(-1);
+    let categoryCreated = false;
+    let categoryDeleteCount = 0;
     const targetChannelCode = '美宜佳';
     const targetChannelToken = 'opaque-production-token';
     const profile = {
@@ -873,9 +876,25 @@ test('failed Shop verification restores the previous Admin content bindings', as
                 },
             });
         }
+        if (request.query.includes('CreateDamatongCollection')) {
+            categoryCreated = true;
+            return Response.json({
+                data: { createCollection: { id: collections.get(createdCategory.code) } },
+            });
+        }
+        if (request.query.includes('DeleteDamatongCollection')) {
+            assert.equal(init.headers['x-vendure-sensitive-action-password'], 'secret');
+            assert.equal(request.variables.id, collections.get(createdCategory.code));
+            categoryCreated = false;
+            categoryDeleteCount += 1;
+            return Response.json({ data: { deleteCollection: { result: 'DELETED' } } });
+        }
+        assert.equal(init.headers['x-vendure-sensitive-action-password'], undefined);
         if (request.query.includes('DamatongCollection')) {
             const category = categoryBySlug.get(request.variables.slug);
-            if (!category) return Response.json({ data: { collection: null } });
+            if (!category || (category.code === createdCategory.code && !categoryCreated)) {
+                return Response.json({ data: { collection: null } });
+            }
             const featuredAssetId = ids.get(category.assetKey);
             return Response.json({
                 data: {
@@ -935,6 +954,8 @@ test('failed Shop verification restores the previous Admin content bindings', as
             }),
         /previous Admin bindings were restored/u,
     );
+    assert.equal(categoryDeleteCount, 1);
+    assert.equal(categoryCreated, false);
     assert.equal(batchMutationCount, 2);
     assert.equal(profileMutationCount, 2);
     assert.equal(profile.channel.customFields.storefrontNameZh, '大马通');

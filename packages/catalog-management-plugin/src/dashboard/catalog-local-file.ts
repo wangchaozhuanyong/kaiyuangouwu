@@ -222,8 +222,8 @@ function expandStandardWorkbookRows(
     const lotSheet = workbook.Sheets['批次效期'];
     if (!stockSheet && !lotSheet) return productRows;
 
-    const stocks = stockSheet ? parseStandardStockRows(stockSheet) : [];
-    const lots = lotSheet ? parseStandardLotRows(lotSheet) : [];
+    const stocks = inventoryBySku(stockSheet ? parseStandardStockRows(stockSheet) : []);
+    const lots = inventoryBySku(lotSheet ? parseStandardLotRows(lotSheet) : []);
     const skuCounts = new Map<string, number>();
     for (const row of productRows) {
         const sku = normalizeIdentity(row.sku);
@@ -232,8 +232,8 @@ function expandStandardWorkbookRows(
     const expanded = productRows.flatMap(product => {
         const sku = normalizeIdentity(product.sku);
         if (!sku || skuCounts.get(sku) !== 1) return [product];
-        const productStocks = stocks.filter(row => normalizeIdentity(row.sku) === sku);
-        const productLots = lots.filter(row => normalizeIdentity(row.sku) === sku);
+        const productStocks = stocks.get(sku) ?? [];
+        const productLots = lots.get(sku) ?? [];
         if (productStocks.length === 0 && productLots.length === 0) return [product];
 
         const rows: NormalizedCatalogRow[] = [];
@@ -268,9 +268,29 @@ function expandStandardWorkbookRows(
                 ]),
             );
         }
+        if (
+            product.stockLocationCode &&
+            !rows.some(
+                row =>
+                    normalizeIdentity(row.stockLocationCode) === normalizeIdentity(product.stockLocationCode),
+            )
+        ) {
+            rows.push(product);
+        }
         return rows.length > 0 ? rows : [product];
     });
     return expanded.map((row, index) => ({ ...row, rowNumber: index + 2 }));
+}
+
+function inventoryBySku<T extends { sku: string }>(rows: T[]): Map<string, T[]> {
+    const groups = new Map<string, T[]>();
+    for (const row of rows) {
+        const key = normalizeIdentity(row.sku);
+        const group = groups.get(key);
+        if (group) group.push(row);
+        else groups.set(key, [row]);
+    }
+    return groups;
 }
 
 function parseStandardStockRows(sheet: XLSX.WorkSheet): StandardStockRow[] {
@@ -328,6 +348,18 @@ function mergeStandardInventory(
     lot: StandardLotRow | undefined,
     providedFields: string[],
 ): NormalizedCatalogRow {
+    const stockLocationCode = lot?.stockLocationCode || stock?.stockLocationCode || product.stockLocationCode;
+    const isMainWarehouse =
+        Boolean(product.stockLocationCode) &&
+        normalizeIdentity(stockLocationCode) === normalizeIdentity(product.stockLocationCode);
+    // The maintenance sheet owns its warehouse values, including explicit blank cells.
+    const inventoryValue = (
+        field: 'stockOnHand' | 'minimumStock' | 'maximumStock',
+        detail: number | null | undefined,
+    ): number | null =>
+        isMainWarehouse && product.providedFields.includes(field)
+            ? product[field]
+            : (detail ?? (isMainWarehouse || !product.stockLocationCode ? product[field] : null));
     const shelfLifeDays =
         lot?.manufacturedAt && lot.expiresAt
             ? Math.max(
@@ -340,10 +372,10 @@ function mergeStandardInventory(
             : product.shelfLifeDays;
     return {
         ...product,
-        stockLocationCode: lot?.stockLocationCode || stock?.stockLocationCode || product.stockLocationCode,
-        stockOnHand: stock?.stockOnHand ?? lot?.quantityOnHand ?? product.stockOnHand,
-        minimumStock: stock?.minimumStock ?? product.minimumStock,
-        maximumStock: stock?.maximumStock ?? product.maximumStock,
+        stockLocationCode,
+        stockOnHand: inventoryValue('stockOnHand', stock?.stockOnHand ?? lot?.quantityOnHand),
+        minimumStock: inventoryValue('minimumStock', stock?.minimumStock),
+        maximumStock: inventoryValue('maximumStock', stock?.maximumStock),
         lotCode: lot?.lotCode ?? product.lotCode,
         lotQuantity: lot?.quantityOnHand ?? product.lotQuantity,
         manufacturedAt: lot?.manufacturedAt ?? product.manufacturedAt,

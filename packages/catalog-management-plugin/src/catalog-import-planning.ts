@@ -16,7 +16,21 @@ import {
     shouldClear,
     stringValue,
 } from './catalog-import-helpers';
-import { CatalogImportAction, CatalogImportContextInput, NormalizedCatalogRow } from './types';
+import {
+    CatalogImportAction,
+    CatalogImportContextInput,
+    CatalogImportState,
+    NormalizedCatalogRow,
+} from './types';
+
+export const reusableCatalogImportStates: CatalogImportState[] = [
+    'RECEIVING',
+    'PREVIEW_READY',
+    'QUEUED',
+    'RUNNING',
+    'FAILED',
+    'COMPLETED_WITH_ERRORS',
+];
 
 export interface PlannedRow {
     action: CatalogImportAction;
@@ -40,6 +54,17 @@ export function emptyPlan(action: CatalogImportAction): PlannedRow {
         plannedChanges: null,
         message: null,
     };
+}
+
+export function catalogImportOptionGroupCode(productId: ID): string {
+    return `import-sku-${String(productId)}`.slice(0, 64);
+}
+
+export function catalogImportOptionCode(sourceKey: string): string {
+    return `import-${sourceKey
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '')}`.slice(0, 64);
 }
 
 export function conflictPlan(message: string): PlannedRow {
@@ -173,6 +198,10 @@ export function productDescriptionForCreate(row: NormalizedCatalogRow): string {
     return row.description.trim() || row.name.trim();
 }
 
+export function isCatalogImportResolutionState(state: CatalogImportState): boolean {
+    return ['PREVIEW_READY', 'FAILED', 'COMPLETED_WITH_ERRORS'].includes(state);
+}
+
 export function variantMatches(variant: ProductVariant, row: NormalizedCatalogRow): boolean {
     const fields = (variant.customFields ?? {}) as Record<string, unknown>;
     const specification = normalizeIdentity(stringValue(fields.specification));
@@ -213,7 +242,7 @@ export function changed(
     previous: unknown,
 ): void {
     if (next === null || next === undefined || next === '') return;
-    if (!sameValue(next, previous)) target[key] = { from: previous ?? null, to: next };
+    if (!samePlannedValue(key, next, previous)) target[key] = { from: previous ?? null, to: next };
 }
 
 export function changedOptional(
@@ -225,12 +254,24 @@ export function changedOptional(
     clearedValue: unknown = null,
 ): void {
     if (!isBlankValue(next)) {
-        if (!sameValue(next, previous)) target[key] = { from: previous ?? null, to: next };
+        if (!samePlannedValue(key, next, previous)) target[key] = { from: previous ?? null, to: next };
         return;
     }
     if (clear && !isBlankValue(previous)) {
         target[key] = { from: previous, to: clearedValue };
     }
+}
+
+function samePlannedValue(key: string, next: unknown, previous: unknown): boolean {
+    // Parsing normalizes display text; keep the stored spelling when only that normalization differs.
+    if (
+        ['productName', 'productDescription', 'category'].includes(key) &&
+        typeof next === 'string' &&
+        typeof previous === 'string'
+    ) {
+        return next.normalize('NFKC') === previous.normalize('NFKC');
+    }
+    return sameValue(next, previous);
 }
 
 export function money(value: number | null): number {

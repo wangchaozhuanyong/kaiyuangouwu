@@ -1,10 +1,32 @@
 import { describe, expect, it } from 'vitest';
 
-import { productDescriptionForCreate } from './catalog-import-planning';
+import {
+    catalogImportOptionCode,
+    catalogImportOptionGroupCode,
+    changed,
+    changedOptional,
+    isCatalogImportResolutionState,
+    productDescriptionForCreate,
+} from './catalog-import-planning';
 import { CatalogImportService, clearsVariantIdentity, shouldClear } from './catalog-import.service';
 import { NormalizedCatalogRow } from './types';
 
 describe('catalog import blank clearing rules', () => {
+    it('does not rewrite human-readable fields solely because import normalizes Unicode punctuation', () => {
+        const changes: Record<string, unknown> = {};
+        changed(changes, 'productName', '商品(A)', '商品（A）');
+        changed(changes, 'category', '分类(A)', '分类（A）');
+        changedOptional(changes, 'productDescription', '原描述,不变', '原描述，不变', false);
+        expect(changes).toEqual({});
+
+        changedOptional(changes, 'productDescription', '真正修改', '原描述，不变', false);
+        expect(changes.productDescription).toEqual({ from: '原描述，不变', to: '真正修改' });
+        changedOptional(changes, 'productDescription', '', '原描述，不变', true, '');
+        expect(changes.productDescription).toEqual({ from: '原描述，不变', to: '' });
+        changed(changes, 'sku', 'SKU(A)', 'SKU（A）');
+        expect(changes.sku).toEqual({ from: 'SKU（A）', to: 'SKU(A)' });
+    });
+
     it('only clears an explicitly present blank column when the mode is enabled', () => {
         const row = { raw: { description: null, minimumStock: 0 } } as unknown as NormalizedCatalogRow;
 
@@ -39,8 +61,23 @@ describe('catalog import blank clearing rules', () => {
         );
     });
 
+    it('allows failed and partially completed imports to resolve rows and retry', () => {
+        expect(isCatalogImportResolutionState('PREVIEW_READY')).toBe(true);
+        expect(isCatalogImportResolutionState('FAILED')).toBe(true);
+        expect(isCatalogImportResolutionState('COMPLETED_WITH_ERRORS')).toBe(true);
+        expect(isCatalogImportResolutionState('RUNNING')).toBe(false);
+        expect(isCatalogImportResolutionState('COMPLETED')).toBe(false);
+    });
+
+    it('creates stable, distinct internal option identifiers for imported SKUs', () => {
+        expect(catalogImportOptionGroupCode('product-1')).toBe('import-sku-product-1');
+        expect(catalogImportOptionCode('ABC:row-1')).toBe('import-abc-row-1');
+        expect(catalogImportOptionCode('ABC:row-1')).not.toBe(catalogImportOptionCode('ABC:row-2'));
+    });
+
     it('plans name and imported-category changes while preserving blank optional values', () => {
         const service = new CatalogImportService(
+            undefined as never,
             undefined as never,
             undefined as never,
             undefined as never,
@@ -87,6 +124,7 @@ describe('catalog import blank clearing rules', () => {
 
     it('treats blank re-import cells as preserve operations for every critical value', () => {
         const service = new CatalogImportService(
+            undefined as never,
             undefined as never,
             undefined as never,
             undefined as never,

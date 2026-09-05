@@ -1003,13 +1003,16 @@ function comparableBlockSet(blocks) {
     return [...blocks].map(comparableBlock).sort((left, right) => left.code.localeCompare(right.code));
 }
 
-async function deleteEntity(fetchImpl, adminEndpoint, authToken, channel, mutation, dataKey, id) {
+async function deleteEntity(fetchImpl, adminEndpoint, authToken, channel, mutation, dataKey, id, password) {
     const result = await graphql(
         fetchImpl,
         adminEndpoint,
         mutation,
         { id },
-        requestHeaders(authToken, channel.token),
+        {
+            ...requestHeaders(authToken, channel.token),
+            'x-vendure-sensitive-action-password': password,
+        },
     );
     const deletion = result.data[dataKey];
     assert.equal(deletion.result, 'DELETED', deletion.message || `Could not delete ${String(id)}`);
@@ -1019,6 +1022,7 @@ async function rollbackDamatongStorefront({
     fetchImpl,
     adminEndpoint,
     authToken,
+    password,
     channel,
     beforeProfile,
     beforeContent,
@@ -1038,6 +1042,7 @@ async function rollbackDamatongStorefront({
                 DELETE_BLOCK_MUTATION,
                 'deleteStorefrontContentBlock',
                 created.id,
+                password,
             );
         }
     }
@@ -1085,6 +1090,7 @@ async function rollbackDamatongStorefront({
                 DELETE_COLLECTION_MUTATION,
                 'deleteCollection',
                 current.id,
+                password,
             );
         } else if (before && current && plan.action === 'update') {
             await graphql(
@@ -1405,6 +1411,7 @@ export async function syncDamatongStorefront({
                 fetchImpl,
                 adminEndpoint,
                 authToken: session.authToken,
+                password,
                 channel,
                 beforeProfile,
                 beforeContent,

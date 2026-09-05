@@ -70,6 +70,7 @@ function createService(
         undefined as never,
         undefined as never,
         undefined as never,
+        undefined as never,
     );
     return { service, getRepository };
 }

@@ -48,6 +48,7 @@ import {
     stringValue,
     validateImportSource,
 } from './catalog-import-helpers';
+import { CatalogImportOptionsService } from './catalog-import-options.service';
 import {
     type PlannedRow,
     changed,
@@ -60,10 +61,12 @@ import {
     groupProductRows,
     groupRows,
     importScopeError,
+    isCatalogImportResolutionState,
     microunits,
     money,
     productDescriptionForCreate,
     productFieldFingerprint,
+    reusableCatalogImportStates,
     validationWarning,
     variantCustomFieldUpdates,
     variantCustomFields,
@@ -112,6 +115,7 @@ export class CatalogImportService {
         private readonly operations: CatalogOperationsService,
         private readonly productService: ProductService,
         private readonly productVariantService: ProductVariantService,
+        private readonly importOptions: CatalogImportOptionsService,
         private readonly categories: CatalogImportCategoryService,
         private readonly facetService: FacetService,
         private readonly facetValueService: FacetValueService,
@@ -138,7 +142,7 @@ export class CatalogImportService {
                 fileHash: input.source.fileHash.toLowerCase(),
                 // Reuse only an in-flight/retryable task. A completed task
                 // must not block a deliberate re-import of the same file.
-                state: In(['RECEIVING', 'PREVIEW_READY', 'QUEUED', 'RUNNING', 'FAILED']),
+                state: In(reusableCatalogImportStates),
             },
             order: { createdAt: 'DESC' },
         });
@@ -351,7 +355,7 @@ export class CatalogImportService {
                 currencyCode: input.currencyCode,
                 clearBlankFields: Boolean(input.clearBlankFields),
                 fileHash: parsed.fileHash,
-                state: In(['RECEIVING', 'PREVIEW_READY', 'QUEUED', 'RUNNING', 'FAILED']),
+                state: In(reusableCatalogImportStates),
             },
             order: { createdAt: 'DESC' },
         });
@@ -547,8 +551,8 @@ export class CatalogImportService {
         if (!row || String(row.job.channelId) !== String(ctx.channelId)) {
             throw new UserInputError('导入行不存在或不属于当前门店');
         }
-        if (!['PREVIEW_READY', 'FAILED'].includes(row.job.state)) {
-            throw new UserInputError('只有预览中或失败待重试的任务可以处理冲突');
+        if (!isCatalogImportResolutionState(row.job.state)) {
+            throw new UserInputError('只有预览中、失败待重试或部分完成的任务可以处理待办行');
         }
         if (!['CONFLICT', 'WARNING', 'ERROR'].includes(row.action)) {
             throw new UserInputError('这一行不需要人工处理');
@@ -640,8 +644,8 @@ export class CatalogImportService {
             if (String(row.job.channelId) !== String(ctx.channelId)) {
                 throw new UserInputError('导入行不属于当前门店');
             }
-            if (!['PREVIEW_READY', 'FAILED'].includes(row.job.state)) {
-                throw new UserInputError('只有预览中或失败待重试的任务可以批量处理');
+            if (!isCatalogImportResolutionState(row.job.state)) {
+                throw new UserInputError('只有预览中、失败待重试或部分完成的任务可以批量处理');
             }
             if (!['CONFLICT', 'WARNING', 'ERROR'].includes(row.action)) {
                 throw new UserInputError(`第 ${row.rowNumber} 行不需要人工处理`);
@@ -673,7 +677,7 @@ export class CatalogImportService {
 
     async queueExecution(ctx: RequestContext, id: ID): Promise<CatalogImportJob> {
         const job = await this.findJob(ctx, id);
-        if (job.state !== 'PREVIEW_READY' && job.state !== 'FAILED') {
+        if (!isCatalogImportResolutionState(job.state)) {
             throw new UserInputError('当前任务状态不能执行');
         }
         const unresolved = await this.connection.getRepository(ctx, CatalogImportRow).count({
@@ -683,6 +687,7 @@ export class CatalogImportService {
         job.state = 'QUEUED';
         job.errorMessage = null;
         job.progress = 0;
+        job.completedAt = null;
         await this.connection.getRepository(ctx, CatalogImportJob).save(job);
         if (!this.enqueue) throw new UserInputError('导入队列尚未就绪，请稍后重试');
         await this.enqueue(job.id);
@@ -705,6 +710,15 @@ export class CatalogImportService {
         const stockLocations = await this.operations.stockLocations(ctx);
         const productByKey = new Map<string, ID>();
         const variantByKey = new Map<string, ID>();
+        const productSourceKeys = new Map<string, Set<string>>();
+        for (const row of rows.filter(item => item.action !== 'SKIP_UNCHANGED')) {
+            const keys = productSourceKeys.get(row.productKey) ?? new Set<string>();
+            keys.add(row.sourceKey);
+            productSourceKeys.set(row.productKey, keys);
+        }
+        const multiVariantProductKeys = new Set(
+            [...productSourceKeys.entries()].filter(([, keys]) => keys.size > 1).map(([key]) => key),
+        );
         for (const applied of rows.filter(row => row.appliedAt && row.targetProductId)) {
             productByKey.set(applied.productKey, applied.targetProductId as ID);
             if (applied.targetVariantId) {
@@ -722,7 +736,15 @@ export class CatalogImportService {
                     throw new UserInputError('存在未解决的冲突或警告');
                 }
                 await this.connection.withTransaction(ctx, async txCtx => {
-                    await this.applyRow(txCtx, job, row, productByKey, variantByKey, stockLocations);
+                    await this.applyRow(
+                        txCtx,
+                        job,
+                        row,
+                        productByKey,
+                        variantByKey,
+                        stockLocations,
+                        multiVariantProductKeys,
+                    );
                 });
             } catch (error) {
                 row.action = 'ERROR';
@@ -1192,6 +1214,7 @@ export class CatalogImportService {
         productByKey: Map<string, ID>,
         variantByKey: Map<string, ID>,
         stockLocations: Array<{ id: string; name: string }>,
+        multiVariantProductKeys: Set<string>,
     ): Promise<void> {
         const stockLocation = effectiveStockLocation(
             row.normalizedData.stockLocationCode,
@@ -1419,11 +1442,19 @@ export class CatalogImportService {
 
         if (!variant) {
             const sku = await this.uniqueSku(ctx, row.normalizedData.sku, row.sourceKey);
+            const optionIds = await this.importOptions.ensureImportVariantOptions(
+                ctx,
+                product,
+                row.sourceKey,
+                sku,
+                multiVariantProductKeys.has(row.productKey),
+            );
             const created = await this.productVariantService.create(ctx, [
                 {
                     productId: product.id,
                     enabled: effectiveVariantEnabled(row.normalizedData) ?? true,
                     sku,
+                    optionIds,
                     price: money(row.normalizedData.sellingPrice),
                     prices: [
                         {

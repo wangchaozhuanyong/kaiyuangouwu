@@ -66,7 +66,9 @@ export function canExecuteCatalogImport(
         | undefined,
     canUpdate: boolean,
 ): boolean {
-    if (!canUpdate || !job || !['PREVIEW_READY', 'FAILED'].includes(job.state)) return false;
+    if (!canUpdate || !job || !['PREVIEW_READY', 'FAILED', 'COMPLETED_WITH_ERRORS'].includes(job.state)) {
+        return false;
+    }
     return job.conflictCount + job.warningCount + job.errorCount === 0;
 }
 

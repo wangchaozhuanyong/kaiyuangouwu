@@ -55,5 +55,6 @@ function createService(getRepository: ReturnType<typeof vi.fn>): CatalogImportSe
         undefined as never,
         undefined as never,
         undefined as never,
+        undefined as never,
     );
 }
