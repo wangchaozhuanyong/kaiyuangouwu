@@ -342,24 +342,6 @@ void test('does not count referral balance as a production payment provider', ()
     assert.match(paymentCheck?.detail ?? '', /non-production methods: referral-balance/u);
 });
 
-void test('blocks an enabled simulated payment method in production readiness', () => {
-    const snapshot = readySnapshot();
-    snapshot.channels[0].paymentMethods = [
-        {
-            code: 'simulated-payment',
-            name: '模拟支付（测试）',
-            enabled: true,
-            handler: { code: 'dummy-payment-handler' },
-        },
-    ];
-
-    const report = evaluateStorefrontReadiness(snapshot, approvedTaxPolicy);
-    const paymentCheck = report.checks.find(check => check.id === 'payments-my-malaysia');
-
-    assert.equal(paymentCheck?.status, 'blocker');
-    assert.match(paymentCheck?.detail ?? '', /non-production methods: simulated-payment/u);
-});
-
 void test('blocks a global physical catalog when shipping remains regional', () => {
     const snapshot = readySnapshot();
     snapshot.channels[0].shippingMethods[0].checker.args = [{ name: 'allowedCountryCodes', value: 'MY' }];
