@@ -226,15 +226,16 @@ function renderHome(overrides: Record<string, unknown> = {}) {
 }
 
 describe('HomePage hero carousel', () => {
-    it('uses the managed light-background wordmark in the main header', () => {
+    it('keeps the managed company name visible beside the brand icon', () => {
         const markup = renderHome({
             logoUrl: '/assets/preview/icon.png',
             logoOnLightUrl: '/assets/preview/logo.png',
         });
 
-        expect(markup).toContain('/assets/preview/logo.png');
-        expect(markup).toContain('class="brand-wordmark"');
-        expect(markup).not.toContain('<strong>测试店铺</strong>');
+        expect(markup).toContain('/assets/preview/icon.png');
+        expect(markup).toContain('class="brand-mark"');
+        expect(markup).toContain('<strong>测试店铺</strong>');
+        expect(markup).not.toContain('/assets/preview/logo.png');
     });
 
     it('does not render a carousel from catalog products when no managed hero exists', () => {
@@ -489,6 +490,7 @@ describe('HomePage mobile header layout', () => {
         expect(stylesheet).toMatch(
             /\.home-topbar > \.topbar-actions\s*\{[^}]*grid-column:\s*2;[^}]*grid-row:\s*1;/,
         );
+        expect(stylesheet).toMatch(/\.home-topbar > \.brand\s*\{[^}]*width:\s*100%;[^}]*max-width:\s*100%;/);
         expect(stylesheet).not.toMatch(/\.home-topbar > \.search-trigger/);
     });
 

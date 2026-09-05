@@ -133,7 +133,7 @@
 
     .brand {
         max-width: 240px;
-        gap: 0;
+        gap: 10px;
     }
 
     .brand-wordmark {

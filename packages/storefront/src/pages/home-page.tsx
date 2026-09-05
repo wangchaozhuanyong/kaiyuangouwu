@@ -496,7 +496,6 @@ export function HomePage() {
         storefrontDescription,
         storefrontTagline,
         logoUrl,
-        logoOnLightUrl,
         couponLoading,
         onCategorySelect,
         onToggleLanguage,
@@ -869,12 +868,8 @@ export function HomePage() {
                         isZh ? `返回 ${storefrontName} 首页顶部` : `Back to the top of ${storefrontName}`
                     }
                 >
-                    <BrandLogo
-                        url={logoOnLightUrl || logoUrl}
-                        name={storefrontName}
-                        className="brand-wordmark"
-                        variant="wordmark"
-                    />
+                    <BrandLogo url={logoUrl} name={storefrontName} className="brand-mark" />
+                    <strong>{storefrontName}</strong>
                 </button>
                 <div className="topbar-actions">
                     {currencySelectorEnabled && availableCurrencyCodes.length > 1 ? (
