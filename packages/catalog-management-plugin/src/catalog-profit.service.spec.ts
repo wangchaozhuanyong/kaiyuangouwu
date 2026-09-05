@@ -15,6 +15,7 @@ function order(overrides: Partial<ProfitOrderSource> = {}): ProfitOrderSource {
         lines: [{ productVariantId: 'variant-1', quantity: 2 }],
         payments: [
             {
+                method: 'card-payment',
                 amount: 10_000,
                 state: 'Settled',
                 refunds: [{ total: 1_000, state: 'Settled' }],
@@ -87,12 +88,84 @@ describe('catalog profit report calculation', () => {
 
     it('ignores authorized payments until they are settled', () => {
         const result = calculateCatalogProfitReport(
-            [order({ payments: [{ amount: 10_000, state: 'Authorized' }] })],
+            [order({ payments: [{ method: 'card-payment', amount: 10_000, state: 'Authorized' }] })],
             new Map(),
         );
 
         expect(result.summary.orderCount).toBe(0);
         expect(result.items).toEqual([]);
+    });
+
+    it.each([
+        'production-coupon-atomicity-test',
+        'dummy-payment',
+        'MOCK_card',
+        'sandbox',
+        'demo',
+        '测试支付',
+    ])('excludes settled test payments identified by persisted method code: %s', method => {
+        const result = calculateCatalogProfitReport(
+            [order({ payments: [{ method, amount: 69_900, state: 'Settled' }] })],
+            new Map(),
+        );
+
+        expect(result.items).toEqual([]);
+        expect(result.summary).toMatchObject({
+            orderCount: 0,
+            settledRevenueMicrounits: 0,
+            missingCostOrderCount: 0,
+            missingPaymentFeeOrderCount: 0,
+        });
+    });
+
+    it('excludes a neutral method name backed by a test handler', () => {
+        const result = calculateCatalogProfitReport(
+            [
+                order({
+                    payments: [
+                        {
+                            method: 'card',
+                            handlerCode: 'dummy-payment-handler',
+                            amount: 100,
+                            state: 'Settled',
+                        },
+                    ],
+                }),
+            ],
+            new Map(),
+        );
+        expect(result.items).toEqual([]);
+    });
+
+    it('keeps real payments and their refunds when an order also contains test payments', () => {
+        const result = calculateCatalogProfitReport(
+            [
+                order({
+                    payments: [
+                        {
+                            method: 'latest-card',
+                            amount: 10_000,
+                            state: 'Settled',
+                            refunds: [{ total: 1_000, state: 'Settled' }],
+                        },
+                        {
+                            method: 'sandbox-card',
+                            amount: 69_900,
+                            state: 'Settled',
+                            refunds: [{ total: 69_900, state: 'Settled' }],
+                        },
+                    ],
+                }),
+            ],
+            new Map(),
+        );
+        expect(result.summary).toMatchObject({
+            orderCount: 1,
+            settledRevenueMicrounits: 100_000,
+            refundedRevenueMicrounits: 10_000,
+            netRevenueMicrounits: 90_000,
+            missingCostOrderCount: 1,
+        });
     });
 
     it('subtracts actual carrier and payment expenses to produce net profit', () => {
