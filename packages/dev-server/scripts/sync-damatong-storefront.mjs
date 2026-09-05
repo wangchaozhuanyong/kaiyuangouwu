@@ -29,6 +29,11 @@ const ADOPT_EXISTING_TYPES = new Set([
     'NAVIGATION',
     'CLIENT_PLUGINS',
 ]);
+const REVIEWED_LEGACY_CODES = new Map([
+    ['damatong-hero-marketplace', ['damatong-hero-coffee']],
+    ['damatong-hero-malaysia-services', ['damatong-hero-services']],
+    ['damatong-hero-ai-subscriptions', ['damatong-hero-subscriptions']],
+]);
 
 const LOGIN_MUTATION = `
     mutation DamatongStorefrontLogin($username: String!, $password: String!) {
@@ -612,6 +617,10 @@ function findExistingBlock(existingBlocks, desired, claimedExistingIds) {
     const exact = availableBlocks.filter(block => block.code === desired.code);
     assert.ok(exact.length <= 1, `Content code ${desired.code} is ambiguous`);
     if (exact[0]) return exact[0];
+    const reviewedLegacyCodes = REVIEWED_LEGACY_CODES.get(desired.code) ?? [];
+    const reviewedLegacy = availableBlocks.filter(block => reviewedLegacyCodes.includes(block.code));
+    assert.ok(reviewedLegacy.length <= 1, `Reviewed legacy content for ${desired.code} is ambiguous`);
+    if (reviewedLegacy[0]) return reviewedLegacy[0];
     if (!ADOPT_EXISTING_TYPES.has(desired.type)) return null;
     const sameType = availableBlocks.filter(block => block.type === desired.type);
     assert.ok(sameType.length <= 1, `Content type ${desired.type} is ambiguous`);

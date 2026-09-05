@@ -253,6 +253,37 @@ test('one legacy hero is adopted once and expanded into exactly three managed ca
     assert.equal(heroPlans[2].input.id, undefined);
 });
 
+test('the three reviewed production heroes migrate to their replacement campaigns by code', () => {
+    const blocks = desiredBlocks();
+    const heroBlocks = blocks.filter(block => block.type === 'HERO');
+    const legacyCodes = ['damatong-hero-coffee', 'damatong-hero-services', 'damatong-hero-subscriptions'];
+    const existing = heroBlocks.map((block, index) =>
+        asAdminBlock(
+            {
+                ...block,
+                code: legacyCodes[index],
+                internalName: `Reviewed legacy hero ${String(index + 1)}`,
+            },
+            index,
+        ),
+    );
+
+    const heroPlans = buildDamatongContentPlans(existing, blocks).filter(plan => plan.type === 'HERO');
+
+    assert.deepEqual(
+        heroPlans.map(plan => plan.action),
+        ['update', 'update', 'update'],
+    );
+    assert.deepEqual(
+        heroPlans.map(plan => plan.input.id),
+        existing.map(block => block.id),
+    );
+    assert.deepEqual(
+        heroPlans.map(plan => plan.input.code),
+        heroBlocks.map(block => block.code),
+    );
+});
+
 test('an extra active hero blocks planning instead of leaking into the three-ad carousel', () => {
     const blocks = desiredBlocks();
     const existing = blocks.map(asAdminBlock);
