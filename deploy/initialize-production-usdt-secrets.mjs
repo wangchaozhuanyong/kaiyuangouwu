@@ -87,16 +87,15 @@ const otherSecrets = [
     ...previousKeys,
 ];
 // A configured login key must never be silently rotated: existing authenticators depend on it.
-if (adminLoginKey && !placeholderPattern.test(adminLoginKey)) {
-    if (!/^[a-f0-9]{64}$/iu.test(adminLoginKey)) {
-        throw new Error('ADMIN_TWO_FACTOR_ENCRYPTION_KEY must contain exactly 64 hexadecimal characters');
-    }
+if (/^[a-f0-9]{64}$/iu.test(adminLoginKey)) {
     if (otherSecrets.some(value => value.toLowerCase() === adminLoginKey.toLowerCase())) {
         throw new Error('ADMIN_TWO_FACTOR_ENCRYPTION_KEY must be independent of other production secrets');
     }
     replacements.set('ADMIN_TWO_FACTOR_ENCRYPTION_KEY', adminLoginKey);
-} else {
+} else if (!adminLoginKey || /^replace[-_]/iu.test(adminLoginKey)) {
     replacements.set('ADMIN_TWO_FACTOR_ENCRYPTION_KEY', createSecret(otherSecrets));
+} else {
+    throw new Error('ADMIN_TWO_FACTOR_ENCRYPTION_KEY must contain exactly 64 hexadecimal characters');
 }
 const updates = new Map([...replacements].filter(([key, value]) => entries.get(key) !== value));
 const updated = replaceEnvironmentValues(original, updates);

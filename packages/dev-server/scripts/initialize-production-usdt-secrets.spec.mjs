@@ -71,6 +71,19 @@ void test('rejects invalid or reused administrator login keys without replacing 
     }
 });
 
+void test('preserves a hexadecimal login key whose prefix resembles a placeholder', () => {
+    const key = `abc${'1'.repeat(61)}`;
+    withEnvironmentFile(`ADMIN_TWO_FACTOR_ENCRYPTION_KEY=${key}\n`, environmentFile => {
+        const output = execFileSync(process.execPath, [initializer, environmentFile], { encoding: 'utf8' });
+        assert.equal(
+            parseEnvironment(readFileSync(environmentFile, 'utf8')).get('ADMIN_TWO_FACTOR_ENCRYPTION_KEY'),
+            key,
+        );
+        assert.match(output, /ADMIN_TWO_FACTOR_ENCRYPTION_KEY=preserved/u);
+        assert.equal(output.includes(key), false);
+    });
+});
+
 void test('preserves a valid wallet key and rotates a proof secret that reuses it', () => {
     const walletKey = 'wallet-key-that-is-safely-long-and-already-in-use';
     withEnvironmentFile(
