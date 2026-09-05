@@ -30,6 +30,11 @@ const getActiveChannelToken = () => localStorage.getItem(ACTIVE_CHANNEL_TOKEN_KE
 
 export const hasActiveChannelSelection = () => Boolean(getActiveChannelToken());
 
+export const channelRequestContext = (channelToken: string) => {
+    if (!channelToken.trim()) throw new Error('请先选择店铺后重试');
+    return { headers: { [ACTIVE_CHANNEL_HEADER]: channelToken }, queryDeduplication: false };
+};
+
 export const setInitialActiveChannel = (channelToken: string) => {
     if (channelToken.trim()) localStorage.setItem(ACTIVE_CHANNEL_TOKEN_KEY, channelToken);
 };
@@ -92,6 +97,7 @@ export const uploadAdminFiles = async <T>(
     });
 
     try {
+        const channelContext = channelRequestContext(getActiveChannelToken() ?? '');
         const formData = new FormData();
         const variables = buildVariables(files.map(() => null));
         const fileMap = Object.fromEntries(
@@ -105,7 +111,10 @@ export const uploadAdminFiles = async <T>(
         const token = getAuthToken();
         const response = await vendureFetch(ADMIN_API_URL, {
             method: 'POST',
-            headers: token ? { authorization: `Bearer ${token}` } : undefined,
+            headers: {
+                ...channelContext.headers,
+                ...(token ? { authorization: `Bearer ${token}` } : {}),
+            },
             body: formData,
         });
         const result = (await response.json()) as GraphqlUploadResponse<T>;
@@ -141,7 +150,8 @@ const httpLink = createHttpLink({
 // 在请求头中注入 Token
 const authLink = setContext((_, { headers }) => {
     const token = getAuthToken();
-    const channelToken = getActiveChannelToken();
+    // 店铺档案可编辑顶部当前店铺以外的店铺，显式目标必须优先于全局选择。
+    const channelToken = headers?.[ACTIVE_CHANNEL_HEADER] ?? getActiveChannelToken();
     return {
         headers: {
             ...headers,
