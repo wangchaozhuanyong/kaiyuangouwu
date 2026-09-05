@@ -16,8 +16,22 @@ describe('catalog import execution gate', () => {
 
         expect(canExecuteCatalogImport(ready, true)).toBe(true);
         expect(canExecuteCatalogImport(job('FAILED'), true)).toBe(true);
+        expect(canExecuteCatalogImport(job('COMPLETED_WITH_ERRORS'), true)).toBe(true);
         expect(canExecuteCatalogImport(ready, false)).toBe(false);
         expect(canExecuteCatalogImport(job('RUNNING'), true)).toBe(false);
+    });
+
+    it('keeps a partially completed task blocked until every error is resolved', () => {
+        expect(
+            canExecuteCatalogImport(
+                job('COMPLETED_WITH_ERRORS', {
+                    conflictCount: 0,
+                    warningCount: 0,
+                    errorCount: 1,
+                }),
+                true,
+            ),
+        ).toBe(false);
     });
 });
 

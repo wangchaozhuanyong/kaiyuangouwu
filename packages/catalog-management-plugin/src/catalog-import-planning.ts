@@ -16,7 +16,21 @@ import {
     shouldClear,
     stringValue,
 } from './catalog-import-helpers';
-import { CatalogImportAction, CatalogImportContextInput, NormalizedCatalogRow } from './types';
+import {
+    CatalogImportAction,
+    CatalogImportContextInput,
+    CatalogImportState,
+    NormalizedCatalogRow,
+} from './types';
+
+export const reusableCatalogImportStates: CatalogImportState[] = [
+    'RECEIVING',
+    'PREVIEW_READY',
+    'QUEUED',
+    'RUNNING',
+    'FAILED',
+    'COMPLETED_WITH_ERRORS',
+];
 
 export interface PlannedRow {
     action: CatalogImportAction;
@@ -40,6 +54,17 @@ export function emptyPlan(action: CatalogImportAction): PlannedRow {
         plannedChanges: null,
         message: null,
     };
+}
+
+export function catalogImportOptionGroupCode(productId: ID): string {
+    return `import-sku-${String(productId)}`.slice(0, 64);
+}
+
+export function catalogImportOptionCode(sourceKey: string): string {
+    return `import-${sourceKey
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '')}`.slice(0, 64);
 }
 
 export function conflictPlan(message: string): PlannedRow {
@@ -171,6 +196,10 @@ export function productFieldFingerprint(row: NormalizedCatalogRow): string {
 
 export function productDescriptionForCreate(row: NormalizedCatalogRow): string {
     return row.description.trim() || row.name.trim();
+}
+
+export function isCatalogImportResolutionState(state: CatalogImportState): boolean {
+    return ['PREVIEW_READY', 'FAILED', 'COMPLETED_WITH_ERRORS'].includes(state);
 }
 
 export function variantMatches(variant: ProductVariant, row: NormalizedCatalogRow): boolean {
