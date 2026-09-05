@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { productDescriptionForCreate } from './catalog-import-planning';
 import { CatalogImportService, clearsVariantIdentity, shouldClear } from './catalog-import.service';
 import { NormalizedCatalogRow } from './types';
 
@@ -27,6 +28,15 @@ describe('catalog import blank clearing rules', () => {
 
         expect(clearsVariantIdentity(row, false)).toBe(false);
         expect(clearsVariantIdentity(row, true)).toBe(true);
+    });
+
+    it('uses the product name when a new product has no description', () => {
+        const row = { ...normalizedRow(), name: ' new name ', description: '' };
+
+        expect(productDescriptionForCreate(row)).toBe('new name');
+        expect(productDescriptionForCreate({ ...row, description: 'Detailed description' })).toBe(
+            'Detailed description',
+        );
     });
 
     it('plans name and imported-category changes while preserving blank optional values', () => {
