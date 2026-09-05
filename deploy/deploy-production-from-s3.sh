@@ -19,6 +19,8 @@ readonly reviewed_storefront_media_keys="${VENDURE_REVIEWED_STOREFRONT_MEDIA_KEY
 readonly reviewed_storefront_media_channel_codes="${VENDURE_REVIEWED_STOREFRONT_MEDIA_CHANNEL_CODES:-}"
 readonly reviewed_auth_visuals="${VENDURE_REVIEWED_AUTH_VISUALS:-false}"
 readonly reviewed_moyao_brand="${VENDURE_REVIEWED_MOYAO_BRAND:-false}"
+readonly reviewed_homepage_carousel="${VENDURE_REVIEWED_HOMEPAGE_CAROUSEL:-false}"
+readonly homepage_carousel_media_keys="home-hero-token-topup-v1,home-hero-codex-tiers-v1,home-hero-account-services-v1"
 
 fail() {
     printf 'Production deployment failed: %s\n' "$1" >&2
@@ -50,6 +52,15 @@ if [[ "${reviewed_auth_visuals}" != "true" && "${reviewed_auth_visuals}" != "fal
 fi
 if [[ "${reviewed_moyao_brand}" != "true" && "${reviewed_moyao_brand}" != "false" ]]; then
     fail 'reviewed MOYAO AI brand flag must be true or false'
+fi
+if [[ "${reviewed_homepage_carousel}" != "true" && "${reviewed_homepage_carousel}" != "false" ]]; then
+    fail 'reviewed homepage carousel flag must be true or false'
+fi
+if [[ "${reviewed_homepage_carousel}" == "true" ]]; then
+    [[ "${reviewed_storefront_media_channel_codes}" == "__default_channel__" ]] ||
+        fail 'reviewed homepage carousel requires the primary Channel only'
+    [[ "${reviewed_storefront_media_keys}" == "${homepage_carousel_media_keys}" ]] ||
+        fail 'reviewed homepage carousel requires its exact three media keys'
 fi
 if [[ ( -n "${reviewed_storefront_media_keys}" || "${reviewed_auth_visuals}" == "true" || \
     "${reviewed_moyao_brand}" == "true" ) && \
@@ -120,6 +131,19 @@ if [[ "${brand_change}" == "false" && "${reviewed_moyao_brand}" == "true" ]]; th
     fail 'reviewed MOYAO AI brand scope was supplied without a brand change'
 fi
 
+homepage_carousel_change=false
+if ! git diff --quiet "${deployed_sha}" "${target_sha}" -- \
+    packages/dev-server/scripts/sync-homepage-carousel.mjs \
+    packages/storefront/src/assets/storefront/carousel/; then
+    homepage_carousel_change=true
+fi
+if [[ "${homepage_carousel_change}" == "true" && "${reviewed_homepage_carousel}" != "true" ]]; then
+    fail 'managed homepage carousel changed; select the reviewed homepage carousel release scope'
+fi
+if [[ "${homepage_carousel_change}" == "false" && "${reviewed_homepage_carousel}" == "true" ]]; then
+    fail 'reviewed homepage carousel scope was supplied without a carousel change'
+fi
+
 mapfile -t managed_storefront_changes < <(
     git diff --name-only "${deployed_sha}" "${target_sha}" -- \
         packages/dev-server/scripts/sync-storefront-media.mjs \
@@ -139,7 +163,7 @@ if [[ "${#managed_storefront_changes[@]}" -gt 0 ]]; then
                 ;;
         esac
     done
-elif [[ -n "${reviewed_storefront_media_keys}" ]]; then
+elif [[ -n "${reviewed_storefront_media_keys}" && "${homepage_carousel_change}" == "false" ]]; then
     fail 'reviewed storefront media scope was supplied without a managed storefront data change'
 fi
 
@@ -156,6 +180,7 @@ if [[ "${VENDURE_DEPLOY_REEXECUTED:-0}" != "1" ]]; then
         VENDURE_REVIEWED_STOREFRONT_MEDIA_CHANNEL_CODES="${reviewed_storefront_media_channel_codes}" \
         VENDURE_REVIEWED_AUTH_VISUALS="${reviewed_auth_visuals}" \
         VENDURE_REVIEWED_MOYAO_BRAND="${reviewed_moyao_brand}" \
+        VENDURE_REVIEWED_HOMEPAGE_CAROUSEL="${reviewed_homepage_carousel}" \
         "${repository}/deploy/deploy-production-from-s3.sh" \
         "${target_sha}" "${artifact_name}" "${artifact_s3_prefix}"
     exit $?
@@ -299,6 +324,19 @@ if [[ "${reviewed_moyao_brand}" == "true" ]]; then
             --channel-code "${reviewed_storefront_media_channel_codes}"
     cd "${repository}"
     printf 'MOYAO_BRAND_PREFLIGHT_OK channel=%s\n' \
+        "${reviewed_storefront_media_channel_codes}"
+fi
+
+if [[ "${reviewed_homepage_carousel}" == "true" ]]; then
+    printf 'HOMEPAGE_CAROUSEL_PREFLIGHT_BEGIN channel=%s\n' \
+        "${reviewed_storefront_media_channel_codes}"
+    cd "${candidate}"
+    HOMEPAGE_CAROUSEL_CHANNEL_CODES="${reviewed_storefront_media_channel_codes}" \
+        VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
+        VENDURE_STOREFRONT_URL=https://moyaoai.com \
+        node packages/dev-server/scripts/sync-homepage-carousel.mjs --dry-run
+    cd "${repository}"
+    printf 'HOMEPAGE_CAROUSEL_PREFLIGHT_OK channel=%s\n' \
         "${reviewed_storefront_media_channel_codes}"
 fi
 
@@ -446,6 +484,24 @@ if [[ "${reviewed_auth_visuals}" == "true" ]]; then
     printf 'AUTH_VISUAL_VERIFY_OK channels=%s\n' \
         "${reviewed_storefront_media_channel_codes}"
 fi
+if [[ "${reviewed_homepage_carousel}" == "true" ]]; then
+    printf 'HOMEPAGE_CAROUSEL_PUBLISH_BEGIN channel=%s\n' \
+        "${reviewed_storefront_media_channel_codes}"
+    cd "${candidate}"
+    HOMEPAGE_CAROUSEL_CHANNEL_CODES="${reviewed_storefront_media_channel_codes}" \
+        VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
+        VENDURE_STOREFRONT_URL=https://moyaoai.com \
+        node packages/dev-server/scripts/sync-homepage-carousel.mjs --apply --allow-remote
+    HOMEPAGE_CAROUSEL_CHANNEL_CODES="${reviewed_storefront_media_channel_codes}" \
+        VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
+        VENDURE_STOREFRONT_URL=https://moyaoai.com \
+        node packages/dev-server/scripts/sync-homepage-carousel.mjs --verify
+    cd "${repository}"
+    printf 'HOMEPAGE_CAROUSEL_PUBLISH_OK channel=%s\n' \
+        "${reviewed_storefront_media_channel_codes}"
+    printf 'HOMEPAGE_CAROUSEL_VERIFY_OK channel=%s\n' \
+        "${reviewed_storefront_media_channel_codes}"
+fi
 node "${memory_guard}" --stage post-switch --report
 pm2 save 9>&-
 
@@ -496,6 +552,10 @@ sudo -n install -o root -g root -m 0644 \
 sudo -n install -o root -g root -m 0755 \
     "${repository}/deploy/deploy-production-from-s3.sh" \
     /usr/local/sbin/vendure-production-deploy-from-s3
+cmp --silent "${repository}/deploy/deploy-production-from-s3.sh" \
+    /usr/local/sbin/vendure-production-deploy-from-s3 ||
+    fail 'installed production bootstrap differs from the reviewed source'
+printf 'PRODUCTION_BOOTSTRAP_VERIFIED sha=%s homepage_carousel_guard=enabled\n' "${target_sha}"
 sudo -n systemctl daemon-reload
 sudo -n systemctl enable --now vendure-production-release-retention.path
 sudo -n systemctl enable --now vendure-mysql-restore-drill.timer

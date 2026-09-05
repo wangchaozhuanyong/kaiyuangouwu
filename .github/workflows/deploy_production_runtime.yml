@@ -90,6 +90,7 @@ jobs:
                     .targetSha == $sha and
                     (.authVisuals | type == "boolean") and
                     (.moyaoBrand | type == "boolean") and
+                    (.homepageCarousel | type == "boolean") and
                     (.mediaChannelCodes | type == "string") and
                     (.mediaKeys | type == "string")
                   ' "$RELEASE_PLAN_PATH" >/dev/null
@@ -97,6 +98,7 @@ jobs:
                   MEDIA_KEYS="$(jq -r '.mediaKeys' "$RELEASE_PLAN_PATH")"
                   AUTH_VISUALS="$(jq -r '.authVisuals' "$RELEASE_PLAN_PATH")"
                   MOYAO_BRAND="$(jq -r '.moyaoBrand' "$RELEASE_PLAN_PATH")"
+                  HOMEPAGE_CAROUSEL="$(jq -r '.homepageCarousel' "$RELEASE_PLAN_PATH")"
                   if [[ -n "$MEDIA_KEYS" ]] && [[ ! "$MEDIA_KEYS" =~ ^[a-z0-9][a-z0-9-]*(,[a-z0-9][a-z0-9-]*)*$ ]]; then
                     echo 'release plan contains invalid reviewed media keys' >&2
                     exit 1
@@ -125,6 +127,16 @@ jobs:
                     echo 'reviewed MOYAO AI brand requires the primary Channel only' >&2
                     exit 1
                   fi
+                  if [[ "$HOMEPAGE_CAROUSEL" != "true" && "$HOMEPAGE_CAROUSEL" != "false" ]]; then
+                    echo 'release plan contains an invalid homepage carousel flag' >&2
+                    exit 1
+                  fi
+                  if [[ "$HOMEPAGE_CAROUSEL" == "true" ]]; then
+                    if [[ "$MEDIA_CHANNEL_CODES" != "__default_channel__" || "$MEDIA_KEYS" != "home-hero-token-topup-v1,home-hero-codex-tiers-v1,home-hero-account-services-v1" ]]; then
+                      echo 'reviewed homepage carousel requires the primary Channel and its exact three media keys' >&2
+                      exit 1
+                    fi
+                  fi
 
                   echo "ARCHIVE_PATH=$ARCHIVE_PATH" >> "$GITHUB_ENV"
                   echo "ARCHIVE_NAME=$ARCHIVE_NAME" >> "$GITHUB_ENV"
@@ -135,6 +147,7 @@ jobs:
                   echo "MEDIA_KEYS=$MEDIA_KEYS" >> "$GITHUB_ENV"
                   echo "AUTH_VISUALS=$AUTH_VISUALS" >> "$GITHUB_ENV"
                   echo "MOYAO_BRAND=$MOYAO_BRAND" >> "$GITHUB_ENV"
+                  echo "HOMEPAGE_CAROUSEL=$HOMEPAGE_CAROUSEL" >> "$GITHUB_ENV"
 
             - name: Configure short-lived AWS credentials
               uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
@@ -151,7 +164,7 @@ jobs:
 
             - name: Deploy through Systems Manager
               run: |
-                  REMOTE_COMMAND="sudo -H -u ubuntu env GITHUB_RUN_ID='${GITHUB_RUN_ID}' VENDURE_REVIEWED_STOREFRONT_MEDIA_KEYS='${MEDIA_KEYS}' VENDURE_REVIEWED_STOREFRONT_MEDIA_CHANNEL_CODES='${MEDIA_CHANNEL_CODES}' VENDURE_REVIEWED_AUTH_VISUALS='${AUTH_VISUALS}' VENDURE_REVIEWED_MOYAO_BRAND='${MOYAO_BRAND}' /usr/local/sbin/vendure-production-deploy-from-s3 '${TARGET_SHA}' '${ARTIFACT_NAME}' '${ARTIFACT_S3_PREFIX}'"
+                  REMOTE_COMMAND="sudo -H -u ubuntu env GITHUB_RUN_ID='${GITHUB_RUN_ID}' VENDURE_REVIEWED_STOREFRONT_MEDIA_KEYS='${MEDIA_KEYS}' VENDURE_REVIEWED_STOREFRONT_MEDIA_CHANNEL_CODES='${MEDIA_CHANNEL_CODES}' VENDURE_REVIEWED_AUTH_VISUALS='${AUTH_VISUALS}' VENDURE_REVIEWED_MOYAO_BRAND='${MOYAO_BRAND}' VENDURE_REVIEWED_HOMEPAGE_CAROUSEL='${HOMEPAGE_CAROUSEL}' /usr/local/sbin/vendure-production-deploy-from-s3 '${TARGET_SHA}' '${ARTIFACT_NAME}' '${ARTIFACT_S3_PREFIX}'"
                   jq -n --arg command "$REMOTE_COMMAND" \
                     '{commands: [$command], executionTimeout: ["3600"]}' > "$RUNNER_TEMP/ssm-parameters.json"
 
@@ -195,7 +208,7 @@ jobs:
                   jq '{Status, ResponseCode}' "$SSM_RESULT"
                   if [[ "$status" == Success ]]; then
                     jq -r '.StandardOutputContent // ""' "$SSM_RESULT" |
-                      grep -E '^(PRODUCTION_|DEPLOY_|STOREFRONT_MEDIA_|AUTH_VISUAL_|MOYAO_BRAND_|Runtime artifact verified)' |
+                      grep -E '^(PRODUCTION_|DEPLOY_|STOREFRONT_MEDIA_|AUTH_VISUAL_|MOYAO_BRAND_|HOMEPAGE_CAROUSEL_|Runtime artifact verified)' |
                       tail -n 120 || true
                   else
                     {

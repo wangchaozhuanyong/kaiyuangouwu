@@ -34,6 +34,11 @@ on:
                 required: false
                 default: false
                 type: boolean
+            homepage_carousel:
+                description: 'Publish the reviewed three-slide homepage carousel to the primary Channel'
+                required: false
+                default: false
+                type: boolean
 
 permissions:
     actions: read
@@ -49,6 +54,7 @@ env:
     MEDIA_KEYS: ${{ inputs.media_keys || '' }}
     AUTH_VISUALS: ${{ inputs.auth_visuals && 'true' || 'false' }}
     MOYAO_BRAND: ${{ inputs.moyao_brand && 'true' || 'false' }}
+    HOMEPAGE_CAROUSEL: ${{ inputs.homepage_carousel && 'true' || 'false' }}
     NODE_OPTIONS: --max-old-space-size=8192
 
 jobs:
@@ -92,6 +98,16 @@ jobs:
                   if [[ "$MOYAO_BRAND" == "true" && "$MEDIA_CHANNEL_CODES" != "__default_channel__" ]]; then
                     echo "moyao_brand requires channel_codes=__default_channel__" >&2
                     exit 1
+                  fi
+                  if [[ "$HOMEPAGE_CAROUSEL" != "true" && "$HOMEPAGE_CAROUSEL" != "false" ]]; then
+                    echo "homepage_carousel must be true or false" >&2
+                    exit 1
+                  fi
+                  if [[ "$HOMEPAGE_CAROUSEL" == "true" ]]; then
+                    if [[ "$MEDIA_CHANNEL_CODES" != "__default_channel__" || "$MEDIA_KEYS" != "home-hero-token-topup-v1,home-hero-codex-tiers-v1,home-hero-account-services-v1" ]]; then
+                      echo "homepage_carousel requires the primary Channel and its exact three media keys" >&2
+                      exit 1
+                    fi
                   fi
 
             - name: Checkout target commit
@@ -284,11 +300,12 @@ jobs:
                     --arg archiveSha256 "$(cut -d ' ' -f 1 "$ARCHIVE_PATH.sha256")" \
                     --argjson authVisuals "$AUTH_VISUALS" \
                     --argjson moyaoBrand "$MOYAO_BRAND" \
+                    --argjson homepageCarousel "$HOMEPAGE_CAROUSEL" \
                     --arg mediaChannelCodes "$MEDIA_CHANNEL_CODES" \
                     --arg mediaKeys "$MEDIA_KEYS" \
                     --arg sourceRunId "$GITHUB_RUN_ID" \
                     --arg targetSha "$TARGET_SHA" \
-                    '{archiveName: $archiveName, archiveSha256: $archiveSha256, authVisuals: $authVisuals, format: 1, mediaChannelCodes: $mediaChannelCodes, mediaKeys: $mediaKeys, moyaoBrand: $moyaoBrand, sourceRunId: $sourceRunId, targetSha: $targetSha}' \
+                    '{archiveName: $archiveName, archiveSha256: $archiveSha256, authVisuals: $authVisuals, format: 1, homepageCarousel: $homepageCarousel, mediaChannelCodes: $mediaChannelCodes, mediaKeys: $mediaKeys, moyaoBrand: $moyaoBrand, sourceRunId: $sourceRunId, targetSha: $targetSha}' \
                     > "$ARCHIVE_DIR/release-plan.json"
                   (
                     cd "$ARCHIVE_DIR"

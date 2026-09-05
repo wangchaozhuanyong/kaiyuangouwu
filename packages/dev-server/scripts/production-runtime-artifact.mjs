@@ -1,5 +1,6 @@
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import { chmod, cp, mkdir, mkdtemp, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -51,6 +52,13 @@ const STOREFRONT_MEDIA_RUNTIME_FILES = Object.freeze(
 const MOYAO_BRAND_RUNTIME_FILES = Object.freeze(
     moyaoBrandAssets.map(entry => path.relative(repositoryRoot, entry.file).split(path.sep).join('/')),
 );
+// Stage one installs the guard without publishing data. Once stage two adds the
+// reviewed publisher, it becomes a required, checksum-protected runtime input.
+export const HOMEPAGE_CAROUSEL_RUNTIME_FILES = Object.freeze(
+    ['packages/dev-server/scripts/sync-homepage-carousel.mjs'].filter(file =>
+        existsSync(path.join(repositoryRoot, file)),
+    ),
+);
 
 export const REQUIRED_RUNTIME_FILES = Object.freeze([
     'packages/catalog-management-plugin/dist/index.js',
@@ -71,6 +79,7 @@ export const REQUIRED_RUNTIME_FILES = Object.freeze([
     'packages/image-generation-plugin/dist/index.js',
     ...STOREFRONT_MEDIA_RUNTIME_FILES,
     ...MOYAO_BRAND_RUNTIME_FILES,
+    ...HOMEPAGE_CAROUSEL_RUNTIME_FILES,
 ]);
 
 function isPathInside(parent, candidate) {
@@ -229,6 +238,7 @@ export async function copyStorefrontMediaReleaseInputs(stagingRoot) {
         'sync-auth-visuals.mjs',
         'sync-moyao-brand.mjs',
         'repair-inventory-inheritance.mjs',
+        ...HOMEPAGE_CAROUSEL_RUNTIME_FILES.map(file => path.basename(file)),
     ];
     for (const scriptName of releaseScripts) {
         const scriptSource = path.join(repositoryRoot, 'packages/dev-server/scripts', scriptName);
