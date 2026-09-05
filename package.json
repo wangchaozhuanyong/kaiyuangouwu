@@ -149,7 +149,7 @@
         "piscina": "4.9.3",
         "postcss": "8.5.26",
         "protobufjs": "7.6.5",
-        "qs": "6.15.2",
+        "qs": "6.16.0",
         "rollup": "4.62.4",
         "serialize-javascript": "7.1.0",
         "seroval": "1.5.3",
@@ -199,7 +199,6 @@
     },
     "patchedDependencies": {
         "husky@4.3.8": "patches/husky@4.3.8.patch",
-        "brace-expansion@5.0.9": "patches/brace-expansion@5.0.9.patch",
-        "qs@6.15.2": "patches/qs@6.15.2.patch"
+        "brace-expansion@5.0.9": "patches/brace-expansion@5.0.9.patch"
     }
 }
