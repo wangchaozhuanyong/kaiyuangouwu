@@ -70,12 +70,16 @@ function asAdminBlock(block, blockIndex) {
         id: `block-${blockIndex + 1}`,
         updatedAt: '2026-09-05T00:00:00.000Z',
         ...fields,
+        imageUrl: imageAssetId ? `/assets/preview/${imageAssetId}.webp` : (fields.imageUrl ?? null),
         imageAsset: imageAssetId ? { id: imageAssetId } : null,
         items: items.map((item, itemIndex) => {
             const { imageAssetId: itemImageAssetId, ...itemFields } = item;
             return {
                 id: `block-${blockIndex + 1}-item-${itemIndex + 1}`,
                 ...itemFields,
+                imageUrl: itemImageAssetId
+                    ? `/assets/preview/${itemImageAssetId}.webp`
+                    : (itemFields.imageUrl ?? null),
                 imageAsset: itemImageAssetId ? { id: itemImageAssetId } : null,
             };
         }),
@@ -230,6 +234,13 @@ test('content planning is idempotent and preserves existing item ids', () => {
     const plans = buildDamatongContentPlans(existing, blocks);
     assert.ok(plans.every(plan => plan.action === 'noop'));
     assert.ok(plans.every(plan => plan.input.items.every(item => item.id)));
+
+    existing[0].imageAsset.id = 'different-asset';
+    assert.equal(buildDamatongContentPlans(existing, blocks)[0].action, 'update');
+
+    const legacy = { ...blocks[0], imageAssetId: null, imageUrl: '/assets/legacy-hero.webp' };
+    const oldLegacy = { ...asAdminBlock(legacy, 0), imageUrl: '/assets/previous-hero.webp' };
+    assert.equal(buildDamatongContentPlans([oldLegacy], [legacy])[0].action, 'update');
 });
 
 test('one legacy hero is adopted once and expanded into exactly three managed campaigns', () => {
@@ -361,7 +372,19 @@ test('brand planning is idempotent after the requested profile is in place', () 
         logoOnLightAsset: { id: ids.get('brand-logo-light') },
         logoOnDarkAsset: { id: ids.get('brand-logo-dark') },
     };
+    for (const field of [
+        'brandBackgroundColor',
+        'brandPrimaryColor',
+        'brandAccentColor',
+        'brandHighlightColor',
+    ]) {
+        profile[field] = profile[field].toUpperCase();
+    }
     assert.equal(buildDamatongBrandPlan(profile, ids).action, 'noop');
+    assert.equal(
+        buildDamatongBrandPlan({ ...profile, brandBackgroundColor: '#000000' }, ids).action,
+        'update',
+    );
     profile.channel.customFields.storefrontNameZh = '大马通';
     const plan = buildDamatongBrandPlan(profile, ids);
     assert.equal(plan.action, 'update');
@@ -642,10 +665,10 @@ test('apply mode updates drift and verifies the same ids through Admin and Shop 
                             languageCode === 'zh_Hans'
                                 ? damatongStorefront.taglineZh
                                 : damatongStorefront.taglineEn,
-                        backgroundColor: damatongStorefront.brandBackgroundColor,
-                        primaryColor: damatongStorefront.brandPrimaryColor,
-                        accentColor: damatongStorefront.brandAccentColor,
-                        highlightColor: damatongStorefront.brandHighlightColor,
+                        backgroundColor: damatongStorefront.brandBackgroundColor.toUpperCase(),
+                        primaryColor: damatongStorefront.brandPrimaryColor.toUpperCase(),
+                        accentColor: damatongStorefront.brandAccentColor.toUpperCase(),
+                        highlightColor: damatongStorefront.brandHighlightColor.toUpperCase(),
                     },
                     collections: {
                         totalItems: 100 + damatongCategories.length,
