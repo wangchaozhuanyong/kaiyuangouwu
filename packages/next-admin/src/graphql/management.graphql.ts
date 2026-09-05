@@ -163,6 +163,7 @@ const STORE_PROFILE_FIELDS = gql`
         channel {
             id
             code
+            token
             defaultCurrencyCode
             defaultLanguageCode
             seller {
@@ -1097,6 +1098,7 @@ export interface StoreProfileRecord {
     channel: {
         id: string;
         code: string;
+        token: string;
         defaultCurrencyCode: string;
         defaultLanguageCode: string;
         seller: { id: string; name: string } | null;
