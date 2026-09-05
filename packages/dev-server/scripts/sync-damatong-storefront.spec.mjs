@@ -303,6 +303,22 @@ test('an extra active hero blocks planning instead of leaking into the three-ad 
     );
 });
 
+test('brand publishing supplies a new English name when changing the production Chinese name', () => {
+    const profile = {
+        id: 'production-profile',
+        updatedAt: '2026-09-05T00:00:00.000Z',
+        channel: {
+            customFields: { storefrontNameZh: '大马通', storefrontNameEn: 'DAMATONG' },
+        },
+    };
+    const { input } = buildDamatongBrandPlan(profile, assetIds());
+    assert.notEqual(input.storefrontNameZh, profile.channel.customFields.storefrontNameZh);
+    // The translation service regenerates byte-identical English when the Chinese source changes.
+    assert.notEqual(input.storefrontNameEn, profile.channel.customFields.storefrontNameEn);
+    assert.ok(input.storefrontNameEn.trim());
+    assert.doesNotMatch(input.storefrontNameEn, /\p{Script=Han}/u);
+});
+
 test('brand planning is idempotent after the requested profile is in place', () => {
     const ids = assetIds();
     const profile = {
