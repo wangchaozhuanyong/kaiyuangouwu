@@ -12,6 +12,7 @@ import {
     Package,
     RotateCcw,
     Sparkles,
+    Store,
     Tag,
     Truck,
     Waypoints,
@@ -22,7 +23,6 @@ import { selectManagedProducts } from '../home-merchandising';
 import { resolveManagedContentCopy } from '../managed-content-copy';
 import { responsiveImageSources } from '../responsive-image';
 import { StorefrontCouponCard } from '../storefront-coupons';
-import { STOREFRONT_LOGO_IMAGE, STOREFRONT_WORDMARK_IMAGE } from '../storefront-images';
 import { routePath } from '../storefront-router';
 import {
     MarketConfig,
@@ -46,33 +46,30 @@ import {
 } from './product-display';
 import { ProductSection } from './product-section';
 
-export function BrandLogo({
-    url,
-    name,
-    className,
-    variant = 'icon',
-}: {
-    url: string | null;
-    name: string;
-    className: string;
-    variant?: 'icon' | 'wordmark';
-}) {
-    const responsiveSource = url ? responsiveImageSources(url, 'thumbnail') : null;
-    const isWordmark = variant === 'wordmark';
+export function BrandLogo({ url, name, className }: { url: string | null; name: string; className: string }) {
+    const [failedUrl, setFailedUrl] = useState<string | null>(null);
+    const sourceUrl = url?.trim() || null;
+    const responsiveSource = sourceUrl ? responsiveImageSources(sourceUrl, 'thumbnail') : null;
+
+    if (!responsiveSource || sourceUrl === failedUrl) {
+        return (
+            <span className={className} aria-hidden="true">
+                <Store size={24} />
+            </span>
+        );
+    }
+
     return (
         <img
             className={className}
-            src={
-                responsiveSource?.fallbackSrc ??
-                url ??
-                (isWordmark ? STOREFRONT_WORDMARK_IMAGE : STOREFRONT_LOGO_IMAGE)
-            }
-            srcSet={responsiveSource?.fallbackSrcSet}
-            sizes={responsiveSource ? (isWordmark ? '200px' : '38px') : undefined}
-            width={isWordmark ? 200 : 38}
-            height={isWordmark ? 56 : 28}
+            src={responsiveSource.fallbackSrc}
+            srcSet={responsiveSource.fallbackSrcSet}
+            sizes="36px"
+            width={36}
+            height={36}
             decoding="async"
             alt={name}
+            onError={() => setFailedUrl(sourceUrl)}
         />
     );
 }

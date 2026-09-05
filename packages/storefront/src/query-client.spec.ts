@@ -194,11 +194,15 @@ describe('public React Query session cache', () => {
         expect(storage.values.has(PUBLIC_QUERY_CACHE_KEY)).toBe(false);
     });
 
-    it('removes the legacy v2 cache before restoring v3 data', () => {
+    it('removes legacy public caches before restoring v4 data', () => {
         const storage = memoryStorage();
-        storage.setItem(LEGACY_PUBLIC_QUERY_CACHE_KEYS[0], '{"accountCouponState":"claimed"}');
+        for (const key of LEGACY_PUBLIC_QUERY_CACHE_KEYS) {
+            storage.setItem(key, '{"staleBranding":true}');
+        }
 
         expect(restorePublicQueryCache(createStorefrontQueryClient(), storage, 2_000)).toBe(false);
-        expect(storage.values.has(LEGACY_PUBLIC_QUERY_CACHE_KEYS[0])).toBe(false);
+        for (const key of LEGACY_PUBLIC_QUERY_CACHE_KEYS) {
+            expect(storage.values.has(key)).toBe(false);
+        }
     });
 });

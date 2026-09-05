@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useApolloClient, useMutation, useQuery } from '@apollo/client/react';
 import { AlertCircle, CheckCircle2, Copy, Languages, LoaderCircle, Trash2 } from 'lucide-react';
 import { useState, type Dispatch, type SetStateAction } from 'react';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
@@ -17,12 +17,12 @@ import {
     STORE_DEPROVISION_IMPACT_QUERY,
     SUSPEND_STORE_MUTATION,
     UPDATE_SELLER_MUTATION,
-    UPDATE_STORE_PROFILE_MUTATION,
     type StoreDeprovisionImpactRecord,
     type StoreManagementResult,
     type StoreProfileRecord,
 } from '../../graphql/management.graphql';
 import { getChannelDisplayName } from '../../utils/channel-display';
+import { StoreBrandAssets } from './StoreBrandAssets';
 import {
     Field,
     ImpactStat,
@@ -33,14 +33,21 @@ import {
     primaryButton,
     secondaryButton,
 } from './settings-ui';
+import {
+    saveStoreProfileWithBrandAssets,
+    storeProfileBrandAssets,
+    type BrandChannel,
+} from './store-brand-assets';
 
 export function StoreEditor({
     profile,
+    sharedChannel,
     onClose,
     onCompleted,
     onError,
 }: {
     profile: StoreProfileRecord;
+    sharedChannel?: BrandChannel;
     onClose: () => void;
     onCompleted: (message: string) => Promise<void>;
     onError: (message: string) => void;
@@ -66,15 +73,24 @@ export function StoreEditor({
     const [internalNote, setInternalNote] = useState(profile.internalNote ?? '');
     const [status, setStatus] = useState(profile.status);
     const [sortOrder, setSortOrder] = useState(profile.sortOrder);
-    const [save, state] = useMutation(UPDATE_STORE_PROFILE_MUTATION);
+    const client = useApolloClient();
+    const [saving, setSaving] = useState(false);
+    const [saveError, setSaveError] = useState('');
+    const [brandAssets, setBrandAssets] = useState(() => storeProfileBrandAssets(profile));
+    const reportError = (message: string) => {
+        setSaveError(message);
+        onError(message);
+    };
     const submit = async () => {
+        if (saving) return;
+        setSaveError('');
         const statusChanged = status !== profile.status;
-        if (!nameZh.trim()) return onError('请填写中文店铺名称');
+        if (!nameZh.trim()) return reportError('请填写中文店铺名称');
         if ([supportEmail, privacyEmail].some(value => value.trim() && !isValidEmail(value))) {
-            return onError('请填写有效的客服邮箱和隐私邮箱');
+            return reportError('请填写有效的客服邮箱和隐私邮箱');
         }
         if (statusChanged && status === 'ACTIVE' && !profile.activationReadiness.ready)
-            return onError('上线检查未通过，暂时不能启用店铺');
+            return reportError('上线检查未通过，暂时不能启用店铺');
         let currentPassword: string | undefined;
         if (statusChanged) {
             const confirmation = await requestConfirmation({
@@ -87,6 +103,7 @@ export function StoreEditor({
             if (!confirmation) return;
             currentPassword = confirmation.currentPassword;
         }
+        setSaving(true);
         try {
             const input = {
                 id: profile.id,
@@ -109,21 +126,21 @@ export function StoreEditor({
                 sortOrder,
                 ...(statusChanged ? { status, currentPassword } : {}),
             };
-            await save({
-                variables: {
-                    input,
-                },
-            });
+            await saveStoreProfileWithBrandAssets(client, profile, brandAssets, input);
             await onCompleted('店铺档案已保存');
         } catch (error) {
-            onError(errorText(error));
+            reportError(errorText(error));
+        } finally {
+            setSaving(false);
         }
     };
     return (
         <Modal
             title="编辑店铺档案"
             description={`${profile.channel.code} · 使用乐观锁避免覆盖他人修改`}
-            onClose={onClose}
+            onClose={() => {
+                if (!saving) onClose();
+            }}
         >
             <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="中文店铺名称 *">
@@ -193,6 +210,13 @@ export function StoreEditor({
                     </div>
                 )}
             </div>
+            <StoreBrandAssets
+                assets={brandAssets}
+                channel={profile.channel}
+                sharedChannel={sharedChannel}
+                disabled={saving}
+                onChange={setBrandAssets}
+            />
             <div className="mt-4">
                 <p className="mb-2 text-xs font-bold text-slate-700">品牌颜色</p>
                 <div className="grid gap-3 sm:grid-cols-4">
@@ -303,10 +327,15 @@ export function StoreEditor({
                     />
                 </Field>
             </div>
+            {saveError && (
+                <p role="alert" className="mt-4 rounded-lg bg-rose-50 p-3 text-xs text-rose-700">
+                    {saveError}
+                </p>
+            )}
             <ModalActions
                 onClose={onClose}
                 onSave={() => void submit()}
-                saving={state.loading}
+                saving={saving}
                 saveLabel="保存店铺档案"
             />
         </Modal>
