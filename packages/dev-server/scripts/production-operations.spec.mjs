@@ -20,6 +20,7 @@ void test('a failing PM2 command cannot leak its stderr or error message', t => 
     t.after(() => rmSync(root, { recursive: true, force: true }));
     const sentinel = 'FAKE_SECRET_MUST_NOT_BE_LOGGED';
     writeFileSync(path.join(root, 'pm2'), `#!/bin/sh\nprintf '${sentinel}' >&2\nexit 1\n`, { mode: 0o700 });
+    writeFileSync(path.join(root, 'sudo'), `#!/bin/sh\nprintf '${sentinel}' >&2\nexit 1\n`, { mode: 0o700 });
     const modulePath = JSON.stringify(require.resolve('../../../deploy/production-operations.cjs'));
     const script = `try { require(${modulePath}).inspectProductionReleases(); }
         catch (error) { process.stderr.write(error.message); process.exitCode = 1; }`;
