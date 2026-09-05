@@ -33,10 +33,20 @@ function withProductionLock(callback, lockPath = DEPLOY_LOCK) {
 
 function validateRequest(environment) {
     const operation = environment.OPS_OPERATION || 'diagnose';
-    assert.ok(['diagnose', 'retain-reviewed'].includes(operation), 'Unsupported production operation');
+    assert.ok(
+        [
+            'diagnose',
+            'retain-reviewed',
+            'plan-two-factor-backup',
+            'backup-two-factor-reviewed',
+            'verify-two-factor-backup',
+            'verify-security-dependencies',
+        ].includes(operation),
+        'Unsupported production operation',
+    );
     assert.match(environment.OPS_SOURCE_SHA || '', /^[a-f0-9]{40}$/u, 'Invalid operations source SHA');
     const expectedPlanSha256 = environment.OPS_EXPECTED_PLAN_SHA256 || '';
-    if (operation === 'retain-reviewed') {
+    if (['retain-reviewed', 'backup-two-factor-reviewed'].includes(operation)) {
         assert.match(expectedPlanSha256, /^[a-f0-9]{64}$/u, 'A reviewed retention plan SHA-256 is required');
     } else {
         assert.equal(expectedPlanSha256, '', 'A read-only diagnosis does not accept a retention approval');
@@ -171,6 +181,44 @@ function diagnose(request) {
 
 function runLocked(environment = process.env) {
     const request = validateRequest(environment);
+    if (request.operation === 'verify-security-dependencies') {
+        const plan = inspectProductionReleases();
+        assert.equal(
+            plan.markerSha,
+            request.sourceSha,
+            'Security verification requires the deployed source SHA',
+        );
+        const { verifyRuntimeSecurityDependencies } = require('./verify-runtime-security-dependencies.cjs');
+        const result = verifyRuntimeSecurityDependencies(plan.currentRuntime);
+        process.stdout.write(`${JSON.stringify({ sourceSha: request.sourceSha, ...result })}\n`);
+        process.stdout.write('PRODUCTION_OPERATIONS_COMPLETE operation=verify-security-dependencies\n');
+        return;
+    }
+    if (request.operation.includes('two-factor')) {
+        // Validate the existing current pointer/marker and online API/Worker
+        // before reading keys. This synchronous child keeps the parent lock.
+        inspectProductionReleases();
+        const result = spawnSync(
+            '/usr/bin/python3',
+            [
+                path.join(__dirname, 'two-factor-key-backup.py'),
+                request.operation,
+                request.sourceSha,
+                request.expectedPlanSha256,
+            ],
+            { encoding: 'utf8', timeout: 540000, maxBuffer: 65536, stdio: ['ignore', 'pipe', 'pipe'] },
+        );
+        // The Python entrypoint emits only its allowlisted report, including on
+        // failures. Its stderr is never forwarded (it can contain raw errors).
+        process.stdout.write(result.stdout || '');
+        assert.equal(result.status, 0, 'The fixed two-factor key backup operation failed');
+        assert.ok(
+            result.stdout.endsWith(`TWO_FACTOR_KEY_BACKUP_COMPLETE operation=${request.operation}\n`),
+            'The two-factor key backup completion evidence is missing',
+        );
+        process.stdout.write(`PRODUCTION_OPERATIONS_COMPLETE operation=${request.operation}\n`);
+        return;
+    }
     const before = diagnose(request);
     process.stdout.write(encodeBeforeReport(before));
     if (request.operation === 'diagnose') {
