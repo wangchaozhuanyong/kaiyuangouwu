@@ -176,7 +176,7 @@ const UPDATE_SETTINGS_MUTATION = `
 `;
 
 const SHOP_VERIFICATION_QUERY = `
-    query VerifyDamatongStorefront {
+    query VerifyDamatongStorefront($skip: Int!) {
         activeChannel { code customFields { storefrontNameZh storefrontNameEn } }
         storefrontBranding {
             logoAssetId
@@ -190,7 +190,8 @@ const SHOP_VERIFICATION_QUERY = `
             accentColor
             highlightColor
         }
-        collections(options: { take: 200 }) {
+        collections(options: { take: 100, skip: $skip }) {
+            totalItems
             items { id name slug featuredAsset { id } }
         }
         storefrontContent {
@@ -230,6 +231,17 @@ export function isLocalApiOrigin(value) {
         );
     } catch {
         return false;
+    }
+}
+
+export function validateDamatongBrandNames(brand = damatongStorefront) {
+    for (const field of ['storefrontNameZh', 'storefrontNameEn']) {
+        // Match StoreProfileService's display-unit limit before any remote requests or writes.
+        const units = Array.from(brand[field].trim()).reduce(
+            (total, character) => total + (/\p{Script=Han}|[\uFF01-\uFF60]/u.test(character) ? 2 : 1),
+            0,
+        );
+        assert.ok(units >= 1 && units <= 16, `${field} must contain 1 to 16 display units`);
     }
 }
 
@@ -800,7 +812,7 @@ async function verifyShop(
             fetchImpl,
             endpoint.toString(),
             SHOP_VERIFICATION_QUERY,
-            undefined,
+            { skip: 0 },
             requestHeaders('', channel.token, languageCode),
         );
         assert.equal(result.data.activeChannel.code, channel.code);
@@ -810,11 +822,22 @@ async function verifyShop(
             damatongStorefront.heroAutoplayIntervalSeconds,
         );
 
+        const shopCollections = [...result.data.collections.items];
+        while (shopCollections.length < result.data.collections.totalItems) {
+            const page = await graphql(
+                fetchImpl,
+                endpoint.toString(),
+                SHOP_VERIFICATION_QUERY,
+                { skip: shopCollections.length },
+                requestHeaders('', channel.token, languageCode),
+            );
+            assert.ok(page.data.collections.items.length, 'Shop API collection pagination stopped early');
+            shopCollections.push(...page.data.collections.items);
+        }
+
         for (const category of damatongCategories) {
             const expectedId = collectionIdsByCode.get(category.code);
-            const collection = result.data.collections.items.find(
-                item => String(item.id) === String(expectedId),
-            );
+            const collection = shopCollections.find(item => String(item.id) === String(expectedId));
             assert.ok(collection, `Shop API is missing ${category.code} for ${languageCode}`);
             assert.equal(
                 String(collection.featuredAsset?.id),
@@ -1112,6 +1135,7 @@ export async function syncDamatongStorefront({
     assert.ok(apiOrigin, 'VENDURE_API_ORIGIN or --api-origin is required');
     assert.ok(username && password, 'SUPERADMIN_USERNAME and SUPERADMIN_PASSWORD are required');
     assert.ok(!(apply && verify), '--apply and --verify are mutually exclusive');
+    validateDamatongBrandNames();
     if (apply && (production || !isLocalApiOrigin(apiOrigin))) {
         assert.ok(allowRemote, 'Remote or production writes require both --apply and --allow-remote');
         assert.equal(
@@ -1427,6 +1451,7 @@ const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPat
 if (isMain) {
     const options = parseCliArguments(process.argv.slice(2));
     if (options.validate) {
+        validateDamatongBrandNames();
         const assets = await prepareDamatongAssets();
         process.stdout.write(
             `${JSON.stringify(

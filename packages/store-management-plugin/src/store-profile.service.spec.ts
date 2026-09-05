@@ -550,6 +550,62 @@ describe('StoreProfileService', () => {
         ).rejects.toBeInstanceOf(EntityNotFoundError);
     });
 
+    it('accepts the actual Damatong publisher names through the API service', async () => {
+        const configPath = '../../dev-server/scripts/damatong-storefront-config.mjs';
+        const { damatongStorefront } = await import(configPath);
+        const current = profile();
+        const profileRepository = {
+            findOne: vi.fn().mockResolvedValue(current),
+            save: vi.fn(value => Promise.resolve(value)),
+        };
+        const { channelService, service } = createService(profileRepository, {
+            find: vi.fn().mockResolvedValue([]),
+        });
+
+        await service.update({} as any, {
+            id: current.id,
+            expectedUpdatedAt: current.updatedAt,
+            storefrontNameZh: damatongStorefront.storefrontNameZh,
+            storefrontNameEn: damatongStorefront.storefrontNameEn,
+            storefrontNameEnLocked: true,
+        });
+
+        expect(channelService.update).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({
+                customFields: expect.objectContaining({
+                    storefrontNameZh: damatongStorefront.storefrontNameZh,
+                    storefrontNameEn: damatongStorefront.storefrontNameEn,
+                }),
+            }),
+        );
+    });
+
+    it.each(['admin', 'merchant'] as const)(
+        'rejects the production overlong English name before %s writes',
+        async mode => {
+            const current = profile();
+            const profileRepository = {
+                findOne: vi.fn().mockResolvedValue(current),
+                save: vi.fn(value => Promise.resolve(value)),
+            };
+            const { channelService, service } = createService(profileRepository, {});
+            const input = {
+                id: current.id,
+                expectedUpdatedAt: current.updatedAt,
+                storefrontNameEn: 'DAMATONG Marketplace',
+                storefrontNameEnLocked: true,
+            };
+            const ctx = { channelId: 'channel-1' } as any;
+
+            await expect(
+                mode === 'admin' ? service.update(ctx, input) : service.updateForMerchant(ctx, input),
+            ).rejects.toThrow('1 至 16 个显示单位');
+            expect(channelService.update).not.toHaveBeenCalled();
+            expect(profileRepository.save).not.toHaveBeenCalled();
+        },
+    );
+
     it('rejects an overlong storefront name before saving', async () => {
         const current = profile();
         const profileRepository = {

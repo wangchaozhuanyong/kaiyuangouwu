@@ -18,6 +18,7 @@ import {
     prepareDamatongAssets,
     preserveDashboardSupportContacts,
     syncDamatongStorefront,
+    validateDamatongBrandNames,
 } from './sync-damatong-storefront.mjs';
 
 function assetIds() {
@@ -300,6 +301,40 @@ test('an extra active hero blocks planning instead of leaking into the three-ad 
     assert.throws(
         () => buildDamatongContentPlans(existing, blocks),
         /Unmanaged active Damatong heroes must be reviewed/u,
+    );
+});
+
+test('brand publishing explicitly locks reviewed English when changing the production Chinese name', () => {
+    const profile = {
+        id: 'production-profile',
+        updatedAt: '2026-09-05T00:00:00.000Z',
+        channel: {
+            customFields: { storefrontNameZh: '大马通', storefrontNameEn: 'DAMATONG' },
+        },
+    };
+    const { input } = buildDamatongBrandPlan(profile, assetIds());
+    assert.notEqual(input.storefrontNameZh, profile.channel.customFields.storefrontNameZh);
+    // An explicit manual lock preserves reviewed English even when the Chinese source changes.
+    assert.equal(input.storefrontNameEn, profile.channel.customFields.storefrontNameEn);
+    assert.equal(input.storefrontNameEnLocked, true);
+    assert.ok(input.storefrontNameEn.trim());
+    assert.doesNotMatch(input.storefrontNameEn, /\p{Script=Han}/u);
+});
+
+test('brand names obey the API display-unit limit before remote publishing', () => {
+    assert.doesNotThrow(() => validateDamatongBrandNames());
+    assert.doesNotThrow(() =>
+        validateDamatongBrandNames({ ...damatongStorefront, storefrontNameEn: '1234567890123456' }),
+    );
+    for (const storefrontNameEn of ['', 'DAMATONG Marketplace', '12345678901234567']) {
+        assert.throws(
+            () => validateDamatongBrandNames({ ...damatongStorefront, storefrontNameEn }),
+            /storefrontNameEn must contain 1 to 16 display units/u,
+        );
+    }
+    assert.throws(
+        () => validateDamatongBrandNames({ ...damatongStorefront, storefrontNameZh: '一二三四五六七八九' }),
+        /storefrontNameZh must contain 1 to 16 display units/u,
     );
 });
 
@@ -586,6 +621,8 @@ test('apply mode updates drift and verifies the same ids through Admin and Shop 
         if (request.query.includes('VerifyDamatongStorefront')) {
             const languageCode = init.headers['language-code'];
             assert.equal(new URL(_url).searchParams.get('languageCode'), languageCode);
+            assert.match(request.query, /take: 100, skip: \$skip/u);
+            assert.ok([0, 100].includes(request.variables.skip));
             return Response.json({
                 data: {
                     activeChannel: { code: targetChannelCode, customFields: {} },
@@ -611,17 +648,21 @@ test('apply mode updates drift and verifies the same ids through Admin and Shop 
                         highlightColor: damatongStorefront.brandHighlightColor,
                     },
                     collections: {
-                        items: damatongCategories.map(category => {
-                            const localized = category.translations.find(
-                                value => value.languageCode === languageCode,
-                            );
-                            return {
-                                id: collections.get(category.code),
-                                name: localized.name,
-                                slug: localized.slug,
-                                featuredAsset: { id: ids.get(category.assetKey) },
-                            };
-                        }),
+                        totalItems: 100 + damatongCategories.length,
+                        items:
+                            request.variables.skip === 0
+                                ? Array.from({ length: 100 }, (_, index) => ({ id: `unmanaged-${index}` }))
+                                : damatongCategories.map(category => {
+                                      const localized = category.translations.find(
+                                          value => value.languageCode === languageCode,
+                                      );
+                                      return {
+                                          id: collections.get(category.code),
+                                          name: localized.name,
+                                          slug: localized.slug,
+                                          featuredAsset: { id: ids.get(category.assetKey) },
+                                      };
+                                  }),
                     },
                     storefrontContent: blocks.map((block, blockIndex) => {
                         const localized = block.translations.find(
