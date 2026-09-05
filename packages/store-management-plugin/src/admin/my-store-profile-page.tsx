@@ -43,6 +43,7 @@ import { useEffect, useState } from 'react';
 import {
     MyStoreProfileRecord,
     MyStoreProfileResult,
+    UpdateMyStoreProfileResult,
     myStoreProfileQuery,
     updateMyStoreProfileMutation,
 } from '../dashboard/merchant-store.graphql';
@@ -244,7 +245,7 @@ function MyStoreProfilePage() {
             if (input.storefrontNameEn !== input.originalStorefrontNameEn) {
                 updateInput.storefrontNameEn = input.storefrontNameEn;
             }
-            return api.mutate(updateMyStoreProfileMutation, {
+            return api.mutate<UpdateMyStoreProfileResult>(updateMyStoreProfileMutation, {
                 input: updateInput,
             });
         },
