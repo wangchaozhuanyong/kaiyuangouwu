@@ -1,5 +1,6 @@
 import { gql } from 'graphql-tag';
 
+import { storeProfileInputSchema } from './store-profile-input.schema';
 import { storefrontBrandingSchema } from './storefront-branding.schema';
 
 const commonTypes = gql`
@@ -397,6 +398,7 @@ const commonTypes = gql`
 
 export const adminApiExtensions = gql`
     ${commonTypes}
+    ${storeProfileInputSchema}
 
     input ProvisionStoreAdministratorInput {
         firstName: String!
@@ -469,32 +471,6 @@ export const adminApiExtensions = gql`
         checks: [StoreActivationCheck!]!
     }
 
-    input UpdateStoreProfileInput {
-        id: ID!
-        expectedUpdatedAt: DateTime!
-        storefrontNameZh: String
-        storefrontNameEn: String
-        status: StoreProfileStatus
-        sortOrder: Int
-        descriptionZh: String
-        descriptionEn: String
-        internalNote: String
-        logoAssetId: ID
-        logoOnLightAssetId: ID
-        logoOnDarkAssetId: ID
-        taglineZh: String
-        taglineEn: String
-        brandBackgroundColor: String
-        brandPrimaryColor: String
-        brandAccentColor: String
-        brandHighlightColor: String
-        legalEntityName: String
-        legalRegistrationCountry: String
-        supportEmail: String
-        privacyEmail: String
-        currentPassword: String
-    }
-
     type StoreDeprovisionImpact {
         profileId: ID!
         channelId: ID!
@@ -528,27 +504,6 @@ export const adminApiExtensions = gql`
         deletedAdministratorCount: Int!
         deletedRole: Boolean!
         deletedSeller: Boolean!
-    }
-
-    input UpdateMyStoreProfileInput {
-        expectedUpdatedAt: DateTime!
-        storefrontNameZh: String
-        storefrontNameEn: String
-        descriptionZh: String
-        descriptionEn: String
-        logoAssetId: ID
-        logoOnLightAssetId: ID
-        logoOnDarkAssetId: ID
-        taglineZh: String
-        taglineEn: String
-        brandBackgroundColor: String
-        brandPrimaryColor: String
-        brandAccentColor: String
-        brandHighlightColor: String
-        legalEntityName: String
-        legalRegistrationCountry: String
-        supportEmail: String
-        privacyEmail: String
     }
 
     type StoreCommerceConfiguration {

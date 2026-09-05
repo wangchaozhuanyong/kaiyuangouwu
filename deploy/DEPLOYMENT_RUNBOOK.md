@@ -395,9 +395,9 @@ VENDURE_API_ORIGIN=http://127.0.0.1:3002 VENDURE_STOREFRONT_URL=https://moyaoai.
 
 `sync-damatong-storefront.mjs` 使用公开受审选择器 `my-malaysia` 启用大马通发布范围，再从 `damatong.net` 的 Shop API 解析实际 Channel code，不将当前后台 code“美宜佳”写死，也不输出或要求操作者填写真实 Channel token。它统一写入大马通品牌资料、六个分类、首页三组轮播广告、其他首页内容、条款、客服、登录/注册视觉和客户端导航。生产中已审核的三组旧版大马通轮播代码按明确的一对一映射原位升级；单个更早的旧轮播也可安全接管为第一组。如发现未审核的多余启用广告则停止写入。`ai-image-studio-entry` 必须从 `__default_channel__` 当前启用项读取；默认站缺失、重复或中英文配置不完整时，预演和写入都会失败关闭。
 
-生产旧店名为中文“大马通”与英文“DAMATONG”。本次更新为“大马通 DAMATONG”与“DAMATONG Market”，中文源文变化时同步提供新的英文，避免沿用旧英文触发自动翻译及其限流。静态校验和远程预演前均按服务端规则检查店名为 1 至 16 个显示单位，汉字和全角标点计为 2 个单位。品牌写入后仍须通过 Admin API 与双语 Shop API 验证实际持久化值。分类校验按 Shop API 的每页 100 条上限分页，直到读取完整分类列表。
+生产旧店名为中文“大马通”与英文“DAMATONG”。本次更新中文为“大马通 DAMATONG”，英文保留受审的“DAMATONG”，通过下文的显式人工锁定防止自动翻译及其限流。店名必须符合服务端 1 至 16 个显示单位的限制；此前的“DAMATONG Marketplace”为 20 个单位，不得再次发布。品牌写入后仍须通过 Admin API 与双语 Shop API 验证实际持久化值。分类校验按 Shop API 的每页 100 条上限分页，直到读取完整分类列表。
 
-制品构建前先执行静态资源校验；生产发布只允许从已验证候选制品运行，先预演再写入：
+制品构建前先执行静态资源与店名显示单位校验；远程请求前也执行同一店名校验。回归测试还会把实际发布清单的双语店名送入真实 StoreProfileService，避免仅靠模拟接口放过非法名称。生产发布只允许从已验证候选制品运行，先预演再写入：
 
 ```bash
 node packages/dev-server/scripts/sync-damatong-storefront.mjs --validate
@@ -415,6 +415,14 @@ VENDURE_API_ORIGIN=http://127.0.0.1:3002 VENDURE_STOREFRONT_URL=https://damatong
 ```
 
 发布器按文件 SHA-256 复用资源，保留 Collection 已有 gallery，用 `expectedUpdatedAt` 防止后台并发覆盖，并把所有装修区块改动放入同一事务。写入后从 Admin API 和中英文 Shop API 反查品牌、分类、固定内容和 AI 插件；独立 `--verify` 不执行任何写入。写入后任一验证失败时，发布器恢复之前的品牌、分类、装修区块和轮播设置；回滚失败按生产事故处理。
+
+大马通受审英文由发布器显式人工锁定：店铺资料使用 `storefrontNameEnLocked`、
+`descriptionEnLocked`、`taglineEnLocked`；内容区块和条目的英文 translation 使用对应
+`<field>Locked` 输入。候选 API 必须支持这些可选字段；旧 API 会拒绝写入，不得删去锁定参数重试。
+发布与恢复原绑定均携带锁定参数，防止中文变化而英文相同时再次调用外部翻译。空的可选双语字段不锁定，
+缺少所需英文会在内容计划阶段停止。未传锁定参数的普通编辑仍使用原有翻译策略，未关闭全站自动翻译。
+回归必须覆盖真实店名配对“大马通 / DAMATONG”到“大马通 DAMATONG / DAMATONG”、
+翻译提供方不可用、重复发布和反向恢复；本地模拟通过后仍须完成候选 API 的 Admin/Shop 读回验收。
 
 客服块首次上线是“联系方式准备中”的安全状态：WhatsApp 和 Telegram 均禁用、无可点击目标，不使用虚假号码或占位链接。后续在 Dashboard 填写并启用真实联系方式后，发布器将客服文案、条目和目标的所有权保留给 Dashboard，以后同步其他装修内容时不会把真实客服资料覆盖回占位状态。生产工作流已接入 `damatong_storefront` 和 `damatong_channel_token` 发布计划字段；只能使用已安装该保护逻辑的引导版本发布正式大马通内容。
 
