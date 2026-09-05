@@ -595,6 +595,8 @@ img {
 }
 
 .home-topbar > .brand {
+    width: 100%;
+    max-width: 100%;
     grid-column: 1;
     grid-row: 1;
 }
