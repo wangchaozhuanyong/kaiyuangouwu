@@ -1,6 +1,16 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+    chmodSync,
+    chownSync,
+    existsSync,
+    mkdirSync,
+    mkdtempSync,
+    rmSync,
+    statSync,
+    symlinkSync,
+    writeFileSync,
+} from 'node:fs';
 import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
@@ -10,6 +20,42 @@ const require = createRequire(import.meta.url);
 const operations = require('../../../deploy/production-operations.cjs');
 const retention = require('../../../deploy/systemd/vendure-production-release-retention.cjs');
 const sourceSha = 'a'.repeat(40);
+
+void test(
+    'Linux root retains the existing foreign-owned lock without changing ownership',
+    {
+        skip: process.platform !== 'linux' || process.getuid?.() !== 0,
+    },
+    t => {
+        const root = mkdtempSync(path.join(os.tmpdir(), 'vendure-operations-lock-'));
+        t.after(() => rmSync(root, { recursive: true, force: true }));
+        chmodSync(root, 0o1777);
+        const lock = path.join(root, 'deploy.lock');
+        writeFileSync(lock, '');
+        chownSync(lock, 1000, 1000);
+        chmodSync(lock, 0o644);
+        const contender = `const {openSync}=require('node:fs'); const {spawnSync}=require('node:child_process');
+        const fd=openSync(${JSON.stringify(lock)},'r');
+        process.exit(spawnSync('flock',['--exclusive','--nonblock','3'],{stdio:['ignore','ignore','ignore',fd]}).status);`;
+        const contend = () => spawnSync(process.execPath, ['-e', contender]).status;
+        operations.withProductionLock(() => assert.equal(contend(), 1), lock);
+        assert.equal(contend(), 0);
+        assert.equal(statSync(lock).uid, 1000);
+        assert.equal(statSync(lock).mode % 0o1000, 0o644);
+        assert.throws(
+            () =>
+                operations.withProductionLock(() => {
+                    throw new Error('fixture failure');
+                }, lock),
+            /fixture failure/u,
+        );
+        assert.equal(contend(), 0);
+        assert.throws(() =>
+            operations.withProductionLock(() => assert.fail('must not run'), path.join(root, 'missing')),
+        );
+        assert.equal(existsSync(path.join(root, 'missing')), false);
+    },
+);
 
 void test('oversized diagnostic evidence fails before any retention can start', () => {
     assert.throws(() => operations.encodeBeforeReport({ data: 'x'.repeat(18000) }), /evidence limit/u);
