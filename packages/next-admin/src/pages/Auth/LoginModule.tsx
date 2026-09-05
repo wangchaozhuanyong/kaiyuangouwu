@@ -1,5 +1,4 @@
-import { gql } from '@apollo/client';
-import { useMutation } from '@apollo/client/react';
+import { useApolloClient } from '@apollo/client/react';
 import {
     AlertCircle,
     ChevronRight,
@@ -14,47 +13,14 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { prepareAuthSession, setInitialActiveChannel } from '../../apollo';
 import { ThemeToggleButton } from '../../components/ThemeToggleButton';
+import {
+    ADMIN_BEGIN_LOGIN,
+    ADMIN_COMPLETE_LOGIN,
+    type AdminLoginResult,
+} from '../../graphql/admin-security.graphql';
+import { toUserFacingError } from '../../utils/user-facing-error';
 
 const adminBrandIcon = `${import.meta.env.BASE_URL}favicon.png`;
-
-const LOGIN_MUTATION = gql`
-    mutation Login($username: String!, $password: String!, $rememberMe: Boolean) {
-        login(username: $username, password: $password, rememberMe: $rememberMe) {
-            __typename
-            ... on CurrentUser {
-                id
-                identifier
-                channels {
-                    id
-                    code
-                    token
-                }
-            }
-            ... on InvalidCredentialsError {
-                errorCode
-                message
-            }
-        }
-    }
-`;
-
-interface LoginMutationData {
-    login:
-        | {
-              __typename: 'CurrentUser';
-              id: string;
-              identifier: string;
-              channels: Array<{ id: string; code: string; token: string }>;
-          }
-        | { __typename: 'InvalidCredentialsError'; errorCode: string; message: string }
-        | { __typename: 'NativeAuthStrategyError' };
-}
-
-interface LoginMutationVariables {
-    username: string;
-    password: string;
-    rememberMe: boolean;
-}
 
 export function LoginModule() {
     const navigate = useNavigate();
@@ -64,40 +30,64 @@ export function LoginModule() {
     const [showPassword, setShowPassword] = useState(false);
     const [loginError, setLoginError] = useState('');
 
-    const [login, { loading }] = useMutation<LoginMutationData, LoginMutationVariables>(LOGIN_MUTATION, {
-        context: { adminFeedback: false },
-        onCompleted: data => {
-            const result = data.login;
-            if (result.__typename === 'CurrentUser') {
-                if (result.channels.length === 1) setInitialActiveChannel(result.channels[0].token);
-                navigate('/dashboard', { replace: true });
-                return;
-            }
+    const client = useApolloClient();
+    const [loading, setLoading] = useState(false);
+    const [challenge, setChallenge] = useState<{ token: string; expiresAt: string } | null>(null);
+    const [code, setCode] = useState('');
+    const [useRecoveryCode, setUseRecoveryCode] = useState(false);
 
-            setLoginError(
-                result.__typename === 'InvalidCredentialsError'
-                    ? '管理员账号或密码不正确，请重新输入'
-                    : '暂时无法完成登录，请稍后重试',
-            );
-        },
-        onError: () => {
-            setLoginError('无法连接管理服务，请稍后重试或联系系统管理员');
-        },
-    });
-
-    const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         if (loading) return;
-
         setLoginError('');
-        prepareAuthSession(rememberMe);
-        void login({
-            variables: {
-                username: username.trim(),
-                password,
-                rememberMe,
-            },
-        });
+        if (challenge && new Date(challenge.expiresAt).getTime() <= Date.now()) {
+            setChallenge(null);
+            setCode('');
+            setLoginError('验证请求已过期，请重新输入账号密码');
+            return;
+        }
+        setLoading(true);
+        try {
+            let result: AdminLoginResult | undefined;
+            if (challenge) {
+                const response = await client.mutate<{ adminCompleteTwoFactorLogin: AdminLoginResult }>({
+                    mutation: ADMIN_COMPLETE_LOGIN,
+                    variables: { challengeToken: challenge.token, code: code.trim() },
+                    fetchPolicy: 'no-cache',
+                    context: { adminFeedback: false },
+                });
+                result = response.data?.adminCompleteTwoFactorLogin;
+            } else {
+                prepareAuthSession(rememberMe);
+                const response = await client.mutate<{ adminBeginLogin: AdminLoginResult }>({
+                    mutation: ADMIN_BEGIN_LOGIN,
+                    variables: { username: username.trim(), password, rememberMe },
+                    fetchPolicy: 'no-cache',
+                    context: { adminFeedback: false },
+                });
+                result = response.data?.adminBeginLogin;
+            }
+            if (result?.status === 'SUCCESS') {
+                setPassword('');
+                setCode('');
+                setChallenge(null);
+                if (result.activeChannelToken) setInitialActiveChannel(result.activeChannelToken);
+                await client.clearStore();
+                navigate('/dashboard', { replace: true });
+            } else if (result?.status === 'REQUIRES_2FA' && result.challengeToken && result.expiresAt) {
+                setPassword('');
+                setCode('');
+                setUseRecoveryCode(false);
+                setChallenge({ token: result.challengeToken, expiresAt: result.expiresAt });
+            } else {
+                setCode('');
+                setLoginError(result?.message || '暂时无法完成登录，请稍后重试');
+            }
+        } catch (error) {
+            setLoginError(toUserFacingError(error, '无法连接管理服务，请稍后重试'));
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
@@ -137,7 +127,11 @@ export function LoginModule() {
                     <div className="mx-auto w-full max-w-sm">
                         <div className="mb-8">
                             <h2 className="text-2xl font-bold tracking-tight text-slate-900">管理员登录</h2>
-                            <p className="mt-2 text-sm text-slate-500">请输入管理员账号和密码进入后台</p>
+                            <p className="mt-2 text-sm text-slate-500">
+                                {challenge
+                                    ? '请输入验证器动态码完成安全验证'
+                                    : '请输入管理员账号和密码进入后台'}
+                            </p>
                         </div>
 
                         <form onSubmit={handleSubmit} className="space-y-5">
@@ -152,89 +146,152 @@ export function LoginModule() {
                                 </div>
                             )}
 
-                            <div>
-                                <label
-                                    htmlFor="admin-username"
-                                    className="mb-2 block text-sm font-semibold text-slate-700"
-                                >
-                                    管理员账号
-                                </label>
-                                <div className="relative">
-                                    <UserRound className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
-                                    <input
-                                        id="admin-username"
-                                        name="username"
-                                        type="text"
-                                        autoComplete="username"
-                                        autoCapitalize="none"
-                                        spellCheck={false}
-                                        value={username}
-                                        onChange={event => {
-                                            setUsername(event.target.value);
-                                            if (loginError) setLoginError('');
-                                        }}
-                                        disabled={loading}
-                                        className="h-12 w-full rounded-xl border border-slate-300 bg-white pl-11 pr-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 hover:border-slate-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-50"
-                                        placeholder="请输入管理员账号"
-                                        required
-                                    />
-                                </div>
-                            </div>
+                            {!challenge && (
+                                <>
+                                    <div>
+                                        <label
+                                            htmlFor="admin-username"
+                                            className="mb-2 block text-sm font-semibold text-slate-700"
+                                        >
+                                            管理员账号
+                                        </label>
+                                        <div className="relative">
+                                            <UserRound className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+                                            <input
+                                                id="admin-username"
+                                                name="username"
+                                                type="text"
+                                                autoComplete="username"
+                                                autoCapitalize="none"
+                                                spellCheck={false}
+                                                value={username}
+                                                onChange={event => {
+                                                    setUsername(event.target.value);
+                                                    if (loginError) setLoginError('');
+                                                }}
+                                                disabled={loading}
+                                                className="h-12 w-full rounded-xl border border-slate-300 bg-white pl-11 pr-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 hover:border-slate-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-50"
+                                                placeholder="请输入管理员账号"
+                                                required
+                                            />
+                                        </div>
+                                    </div>
 
-                            <div>
-                                <label
-                                    htmlFor="admin-password"
-                                    className="mb-2 block text-sm font-semibold text-slate-700"
-                                >
-                                    登录密码
-                                </label>
-                                <div className="relative">
-                                    <LockKeyhole className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
-                                    <input
-                                        id="admin-password"
-                                        name="password"
-                                        type={showPassword ? 'text' : 'password'}
-                                        autoComplete="current-password"
-                                        value={password}
-                                        onChange={event => {
-                                            setPassword(event.target.value);
-                                            if (loginError) setLoginError('');
-                                        }}
-                                        disabled={loading}
-                                        className="h-12 w-full rounded-xl border border-slate-300 bg-white pl-11 pr-12 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 hover:border-slate-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-50"
-                                        placeholder="请输入登录密码"
-                                        required
-                                    />
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowPassword(current => !current)}
-                                        disabled={loading}
-                                        className="absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed"
-                                        aria-label={showPassword ? '隐藏密码' : '显示密码'}
-                                        aria-pressed={showPassword}
+                                    <div>
+                                        <label
+                                            htmlFor="admin-password"
+                                            className="mb-2 block text-sm font-semibold text-slate-700"
+                                        >
+                                            登录密码
+                                        </label>
+                                        <div className="relative">
+                                            <LockKeyhole className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+                                            <input
+                                                id="admin-password"
+                                                name="password"
+                                                type={showPassword ? 'text' : 'password'}
+                                                autoComplete="current-password"
+                                                value={password}
+                                                onChange={event => {
+                                                    setPassword(event.target.value);
+                                                    if (loginError) setLoginError('');
+                                                }}
+                                                disabled={loading}
+                                                className="h-12 w-full rounded-xl border border-slate-300 bg-white pl-11 pr-12 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 hover:border-slate-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-50"
+                                                placeholder="请输入登录密码"
+                                                required
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowPassword(current => !current)}
+                                                disabled={loading}
+                                                className="absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed"
+                                                aria-label={showPassword ? '隐藏密码' : '显示密码'}
+                                                aria-pressed={showPassword}
+                                            >
+                                                {showPassword ? (
+                                                    <EyeOff className="h-5 w-5" />
+                                                ) : (
+                                                    <Eye className="h-5 w-5" />
+                                                )}
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                        <label className="flex w-fit cursor-pointer items-center gap-2 text-sm text-slate-600">
+                                            <input
+                                                type="checkbox"
+                                                checked={rememberMe}
+                                                onChange={event => setRememberMe(event.target.checked)}
+                                                disabled={loading}
+                                                className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                            />
+                                            在此设备上保持登录
+                                        </label>
+                                        <span className="text-xs text-slate-400">
+                                            忘记密码请联系系统管理员
+                                        </span>
+                                    </div>
+                                </>
+                            )}
+                            {challenge && (
+                                <div className="space-y-4">
+                                    <label
+                                        htmlFor="admin-two-factor-code"
+                                        className="block text-sm font-semibold text-slate-700"
                                     >
-                                        {showPassword ? (
-                                            <EyeOff className="h-5 w-5" />
-                                        ) : (
-                                            <Eye className="h-5 w-5" />
-                                        )}
-                                    </button>
-                                </div>
-                            </div>
-
-                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                                <label className="flex w-fit cursor-pointer items-center gap-2 text-sm text-slate-600">
+                                        {useRecoveryCode ? '一次性恢复码' : '验证器 2FA 动态码'}
+                                    </label>
                                     <input
-                                        type="checkbox"
-                                        checked={rememberMe}
-                                        onChange={event => setRememberMe(event.target.checked)}
+                                        id="admin-two-factor-code"
+                                        name="code"
+                                        type="text"
+                                        autoComplete="one-time-code"
+                                        inputMode={useRecoveryCode ? 'text' : 'numeric'}
+                                        spellCheck={false}
+                                        maxLength={useRecoveryCode ? 64 : 6}
+                                        pattern={useRecoveryCode ? undefined : '[0-9]{6}'}
+                                        value={code}
+                                        onChange={event => setCode(event.target.value)}
+                                        required
                                         disabled={loading}
-                                        className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                        className="h-12 w-full rounded-xl border border-slate-300 bg-white px-4 font-mono text-lg focus:border-blue-600 focus:outline-none focus:ring-4 focus:ring-blue-100"
+                                        placeholder={useRecoveryCode ? '输入已保存的恢复码' : '6 位动态码'}
                                     />
-                                    在此设备上保持登录
-                                </label>
-                                <span className="text-xs text-slate-400">忘记密码请联系系统管理员</span>
-                            </div>
+                                    <p className="text-xs leading-5 text-slate-500">
+                                        {useRecoveryCode
+                                            ? '每个恢复码只能使用一次。验证请求 5 分钟内有效。'
+                                            : '在你的验证器中查看动态码，无需手机号或短信。'}
+                                    </p>
+                                    <div className="flex flex-wrap justify-between gap-3 text-xs">
+                                        <button
+                                            type="button"
+                                            disabled={loading}
+                                            onClick={() => {
+                                                setUseRecoveryCode(value => !value);
+                                                setCode('');
+                                                setLoginError('');
+                                            }}
+                                            className="text-blue-700 underline"
+                                        >
+                                            {useRecoveryCode ? '使用验证器动态码' : '使用一次性恢复码'}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            disabled={loading}
+                                            onClick={() => {
+                                                setChallenge(null);
+                                                setCode('');
+                                                setLoginError('');
+                                            }}
+                                            className="text-slate-500 underline"
+                                        >
+                                            返回账号密码
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
 
                             <button
                                 type="submit"
@@ -248,7 +305,8 @@ export function LoginModule() {
                                     </>
                                 ) : (
                                     <>
-                                        进入管理后台 <ChevronRight className="h-5 w-5" />
+                                        {challenge ? '验证并登录' : '进入管理后台'}{' '}
+                                        <ChevronRight className="h-5 w-5" />
                                     </>
                                 )}
                             </button>
