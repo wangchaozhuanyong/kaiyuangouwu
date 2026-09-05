@@ -594,11 +594,12 @@ export function preserveDashboardSupportContacts(existingBlocks, desiredBlocks) 
 }
 
 function comparableItem(item) {
+    const imageAssetId = item.imageAsset?.id ?? item.imageAssetId ?? null;
     return {
         enabled: item.enabled ?? true,
         position: item.position,
-        imageAssetId: item.imageAsset?.id ?? item.imageAssetId ?? null,
-        imageUrl: item.imageUrl ?? null,
+        imageAssetId,
+        imageUrl: imageAssetId != null ? null : (item.imageUrl ?? null),
         targetType: item.targetType ?? 'NONE',
         targetValue: item.targetValue ?? null,
         settings: item.settings ?? null,
@@ -607,6 +608,7 @@ function comparableItem(item) {
 }
 
 function comparableBlock(block) {
+    const imageAssetId = block.imageAsset?.id ?? block.imageAssetId ?? null;
     return {
         code: block.code,
         internalName: block.internalName ?? null,
@@ -616,8 +618,8 @@ function comparableBlock(block) {
         position: block.position,
         startsAt: block.startsAt ?? null,
         endsAt: block.endsAt ?? null,
-        imageAssetId: block.imageAsset?.id ?? block.imageAssetId ?? null,
-        imageUrl: block.imageUrl ?? null,
+        imageAssetId,
+        imageUrl: imageAssetId != null ? null : (block.imageUrl ?? null),
         backgroundColor: block.backgroundColor ?? null,
         textColor: block.textColor ?? null,
         targetType: block.targetType ?? 'NONE',
