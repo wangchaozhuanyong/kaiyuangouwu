@@ -36,9 +36,9 @@ export const homepageCarouselManifest = [
                 ctaLabel: '查看充值档位',
             },
             en: {
-                title: 'Token credit for every workload',
+                title: 'Token credit, your way',
                 subtitle: 'API relay top-ups',
-                body: 'Choose USD 1, 5, or 10 credit for testing and ongoing calls.',
+                body: 'USD 1 / 5 / 10 credit tiers.',
                 ctaLabel: 'View top-up tiers',
             },
         },
@@ -71,9 +71,9 @@ export const homepageCarouselManifest = [
                 ctaLabel: '选择 Codex 方案',
             },
             en: {
-                title: 'A Codex tier for every workload',
+                title: 'Choose your Codex tier',
                 subtitle: 'Codex account services',
-                body: 'Compare Plus, Pro X5, and Pro X20 account tiers clearly.',
+                body: 'Plus, Pro X5 and Pro X20 accounts.',
                 ctaLabel: 'Choose a Codex tier',
             },
         },
@@ -100,22 +100,22 @@ export const homepageCarouselManifest = [
         },
         translations: {
             zh_Hans: {
-                title: '订阅、账号与区域服务，一站选购',
+                title: 'AI 账号与订阅，一站选购',
                 subtitle: 'AI 数字账号服务',
-                body: 'Gemini Pro、Google 美区账号等现有服务集中浏览',
+                body: 'Gemini Pro 与 Google 美区账号',
                 ctaLabel: '浏览全部商品',
             },
             en: {
-                title: 'Accounts and subscriptions in one place',
+                title: 'AI accounts, all in one place',
                 subtitle: 'AI digital account services',
-                body: 'Browse available Gemini Pro, Google US-region, and other digital services.',
+                body: 'Gemini Pro and Google US accounts.',
                 ctaLabel: 'Browse all products',
             },
         },
         items: [
-            { zh: ['Gemini Pro', '智能账号'], en: ['Gemini Pro', 'AI account'] },
-            { zh: ['Google US', '美区账号'], en: ['Google US', 'US region'] },
-            { zh: ['订单可查', '数字交付'], en: ['Trackable', 'Digital delivery'] },
+            { zh: ['Gemini', 'Pro 账号'], en: ['Gemini', 'Pro account'] },
+            { zh: ['Google', '美区账号'], en: ['Google', 'US region'] },
+            { zh: ['数字交付', '订单可查'], en: ['Digital', 'Trackable'] },
         ],
     },
 ];
