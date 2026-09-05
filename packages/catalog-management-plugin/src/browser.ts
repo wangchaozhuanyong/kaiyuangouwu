@@ -1,4 +1,10 @@
 export {
+    MAX_CATALOG_APPEND_REQUEST_BYTES,
+    MAX_CATALOG_APPEND_ROWS,
+    catalogAppendRequestBytes,
+    createCatalogImportBatches,
+} from './dashboard/catalog-import-batches.js';
+export {
     CATALOG_BROWSER_PARSER_VERSION,
     CATALOG_EXCLUDED_HEADERS,
     CATALOG_FIELD_OPTIONS,

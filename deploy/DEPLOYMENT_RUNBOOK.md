@@ -130,6 +130,8 @@ bun run --cwd packages/dev-server build:production-runtime -- --require-platform
 
 登录视觉或 MOYAO AI 品牌变更必须在同一制品调度分别勾选 `auth_visuals` 或 `moyao_brand`，并填写已审核 `channel_codes`。品牌发布只接受 `channel_codes=__default_channel__`。这些字段也写入并校验 `release-plan.json`；缺少审核、Channel 不正确，或在没有对应变更时携带发布范围，都必须在备份和运行时切换前失败关闭。
 
+大马通整店受管内容使用独立的 `damatong_storefront` 与 `damatong_channel_token` 发布范围，不复用容易混淆 Channel code 与 token 的通用字段。生产只接受 `damatong_channel_token=my-malaysia`；发布脚本再通过 Admin API 将该公开 token 解析为真实 Channel，并以 `damatong.net` 的 Shop API 反查同一 Channel。首次启用必须先单独发布本工作流和服务器保护逻辑，且该门禁引导版本不得携带大马通内容或勾选发布范围；确认生产已安装新保护逻辑后，第二个正式版本才可携带发布器、图片与内容并勾选该范围。
+
 制品工作流成功后，`Deploy Production Runtime` 会自动接管手动制品任务和仅由上述 Skill 路径触发的 `main` push 发布。它使用 GitHub OIDC 临时凭证承担
 `arn:aws:iam::079740175286:role/yunqiao-vendure-github-deploy`，只把当前 SHA 的不可变归档写入
 `s3://yunqiao-vendure-prod-backup-079740175286-apne1/deployments/<sha>/`，再只向
@@ -364,9 +366,10 @@ Channel 默认复用 `STOREFRONT_MEDIA_CHANNEL_CODES`，需要独立范围时才
 
 登录/注册页文案、色板和标签属于 Vendure 内容，不得只改客户端。在 `Production Runtime Artifact` 中勾选 `auth_visuals`，并填写已审核 Channel；发布链会先 dry-run，再以带 `expectedUpdatedAt` 的单个 Admin API 批次原子写入，随后运行独立只读 `--verify` 反查 Admin 与中英文 Shop API，并记录 `AUTH_VISUAL_VERIFY_OK`。验证失败时恢复原内容并停止切换。
 发布器的回归样本必须包含当前生产中文/英文配对。若修改中文源文时再次提交与线上完全相同的英文，内容翻译服务可能把该英文判定为过期自动翻译并重新生成。这种发布必须改为新的已审核英文，或使用接口明确支持的人工锁定；不得假设 GraphQL 输入会原样持久化，必须以写入后 Admin/Shop 反查值为准。
+中英文 Shop API 反查必须复制真实客户端的语言路由：同时传递 `languageCode=<locale>` 查询参数与 `language-code: <locale>` 请求头，并分别校验 `zh_Hans` 和 `en`。仅使用请求头的探针不得作为客户端语言一致性证据。
 
 当版本包含已审核的店铺媒体、登录/注册内容或 MOYAO AI 品牌变更时，直接在目标 `main` 完整 SHA 的
-`Production Runtime Artifact` 唯一入口填写完整 manifest key/勾选 `auth_visuals`/勾选 `moyao_brand`，并填写已审核 Channel code，不再另行触发第二个内容发布工作流，也不回退到服务器默认 Channel。
+`Production Runtime Artifact` 唯一入口填写完整 manifest key/勾选 `auth_visuals`/勾选 `moyao_brand`，并填写已审核 Channel code；大马通整店内容则勾选 `damatong_storefront` 并填写 `damatong_channel_token=my-malaysia`。不再另行触发第二个内容发布工作流，也不回退到服务器默认 Channel。
 下游部署会校验发布计划、制品 SHA-256 与源工作流 run ID，然后只将已审核的 publisher 范围、key 和 Channel 交给持有生产锁的脚本。脚本在备份、迁移和 PM2 切换前，先通过当前健康 API 执行只读 dry-run，校验登录、Channel 权限、SKU/内容目标和现有素材；仅预检通过后才备份、迁移和启动候选 API，再执行受保护 apply。预检失败不会停止或重启 PM2。
 
 若目标提交包含 MOYAO AI 品牌更新，必须在该 SHA 的 `Production Runtime Artifact` 中设置 `moyao_brand=true` 与 `channel_codes=__default_channel__`。下游将它与制品 SHA-256 作为同一份发布计划校验，并在唯一生产锁内先预演，再把三套官方品牌素材、双语品牌名/口号和色板一次性绑定到主 Channel：
@@ -410,7 +413,7 @@ sudo -n systemctl reload nginx
 2. 将审核后的修改合并进 `main`，使用普通快进推送，确认远端 `main` 的完整 SHA；禁止强推。若同一需求同时改变 publisher 生产门禁与被该门禁保护的 publisher/数据，必须先拆出并完成门禁引导发布，再合并第二阶段。若使用正式版本标签，标签必须指向这个已在 `main` 中的 SHA，且发布后不得移动或复用。
 3. 从该 SHA 创建隔离的干净工作树，运行测试和生产构建；必须显式执行 `@vendure/operations-dashboard-plugin` 菜单回归测试，禁止仅依赖根命令的工作区自动发现。
 4. 创建发布记录并先填写来源分支、生产引用、`TARGET_SHA`、正式标签（如使用）、上一个生产 SHA、环境和操作人；信息不完整时停止。
-5. 对该 SHA 手动运行一次 `Production Runtime Artifact` 工作流；如果本版本包含已审核店铺媒体、登录视觉或 MOYAO AI 品牌，在同一次调度填写 `media_keys`/勾选 `auth_visuals`/勾选 `moyao_brand`，并填写对应已审核 `channel_codes`。成功后 `Deploy Production Runtime` 会通过 OIDC、私有 S3 和 SSM 自动完成后续部署。或在受控 `linux/x64` 构建机生成唯一的 production runtime 目录并走人工发布。两种方式都必须完成自验证并记录外层校验和。
+5. 对该 SHA 手动运行一次 `Production Runtime Artifact` 工作流；如果本版本包含已审核店铺媒体、登录视觉或 MOYAO AI 品牌，在同一次调度填写 `media_keys`/勾选 `auth_visuals`/勾选 `moyao_brand`，并填写对应已审核 `channel_codes`。大马通整店内容必须勾选 `damatong_storefront` 并填写 `damatong_channel_token=my-malaysia`。成功后 `Deploy Production Runtime` 会通过 OIDC、私有 S3 和 SSM 自动完成后续部署。或在受控 `linux/x64` 构建机生成唯一的 production runtime 目录并走人工发布。两种方式都必须完成自验证并记录外层校验和。
 6. 自动路径由工作流上传归档并调用 `/usr/local/sbin/vendure-production-deploy-from-s3`；人工路径将工作流归档或整个产物目录原样传入 `/var/www/kaiyuangouwu-releases/<sha>-<唯一标识>-linux-x64`。禁止在 EC2 安装依赖或构建。
 7. 服务器校验外层清单哈希、产物内全部文件、符号链接、平台、Git SHA 和运行依赖清单。
 8. 记录当前稳定指针；如果发布计划包含任一受管 publisher，先使用当前健康 API 完成只读 dry-run。数据库迁移只在该预检和生产环境审计明确通过且备份完成后，通过专用迁移入口执行一次。部署日志必须包含 `DEPLOY_BACKUP_OK file=<本地备份> offsite=yes invocation_id=<systemd invocation>`，缺失精确备份文件、校验文件或异地上传证据时停止迁移。

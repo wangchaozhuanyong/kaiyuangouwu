@@ -204,6 +204,8 @@ export interface SaveInventoryLotInput {
 
 export interface NormalizedCatalogRow {
     rowNumber: number;
+    /** Stable per-source record identity used to make retries and legacy rows idempotent. */
+    sourceRecordKey?: string;
     name: string;
     category: string;
     channelCode: string;
@@ -212,7 +214,7 @@ export interface NormalizedCatalogRow {
     specification: string;
     primaryUnit: string;
     purchaseUnit: string;
-    packageQuantity: number;
+    packageQuantity: number | null;
     stockOnHand: number | null;
     purchaseCost: number | null;
     sellingPrice: number | null;

@@ -22,6 +22,8 @@ describe('catalog import privacy contract', () => {
         expect(schema).toContain('catalogSuppliers');
         expect(schema).toContain('supplier: String!');
         expect(schema).toContain('rows: [CatalogNormalizedRowInput!]!');
+        expect(schema).toContain('sourceRecordKey: String');
+        expect(schema).toContain('receivedRows: Int!');
         expect(schema).not.toContain('Upload');
         expect(schema).not.toContain('multipart');
         expect(schema).not.toMatch(/\braw\s*:/u);

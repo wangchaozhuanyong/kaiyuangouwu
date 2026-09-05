@@ -34,6 +34,16 @@ on:
                 required: false
                 default: false
                 type: boolean
+            damatong_storefront:
+                description: 'Publish the reviewed Damatong storefront bundle through Admin API'
+                required: false
+                default: false
+                type: boolean
+            damatong_channel_token:
+                description: 'Required public Channel token when publishing the Damatong storefront bundle'
+                required: false
+                default: ''
+                type: string
 
 permissions:
     actions: read
@@ -49,6 +59,8 @@ env:
     MEDIA_KEYS: ${{ inputs.media_keys || '' }}
     AUTH_VISUALS: ${{ inputs.auth_visuals && 'true' || 'false' }}
     MOYAO_BRAND: ${{ inputs.moyao_brand && 'true' || 'false' }}
+    DAMATONG_STOREFRONT: ${{ inputs.damatong_storefront && 'true' || 'false' }}
+    DAMATONG_CHANNEL_TOKEN: ${{ inputs.damatong_channel_token || '' }}
     NODE_OPTIONS: --max-old-space-size=8192
 
 jobs:
@@ -81,6 +93,14 @@ jobs:
                     echo "moyao_brand must be true or false" >&2
                     exit 1
                   fi
+                  if [[ "$DAMATONG_STOREFRONT" != "true" && "$DAMATONG_STOREFRONT" != "false" ]]; then
+                    echo "damatong_storefront must be true or false" >&2
+                    exit 1
+                  fi
+                  if [[ -n "$DAMATONG_CHANNEL_TOKEN" ]] && [[ ! "$DAMATONG_CHANNEL_TOKEN" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
+                    echo "damatong_channel_token must be a lowercase public Channel token" >&2
+                    exit 1
+                  fi
                   if [[ ( -n "$MEDIA_KEYS" || "$AUTH_VISUALS" == "true" || "$MOYAO_BRAND" == "true" ) && -z "$MEDIA_CHANNEL_CODES" ]]; then
                     echo "channel_codes is required when a managed publisher is selected" >&2
                     exit 1
@@ -91,6 +111,14 @@ jobs:
                   fi
                   if [[ "$MOYAO_BRAND" == "true" && "$MEDIA_CHANNEL_CODES" != "__default_channel__" ]]; then
                     echo "moyao_brand requires channel_codes=__default_channel__" >&2
+                    exit 1
+                  fi
+                  if [[ "$DAMATONG_STOREFRONT" == "true" && "$DAMATONG_CHANNEL_TOKEN" != "my-malaysia" ]]; then
+                    echo "damatong_storefront requires damatong_channel_token=my-malaysia" >&2
+                    exit 1
+                  fi
+                  if [[ "$DAMATONG_STOREFRONT" == "false" && -n "$DAMATONG_CHANNEL_TOKEN" ]]; then
+                    echo "damatong_channel_token cannot be set without damatong_storefront" >&2
                     exit 1
                   fi
 
@@ -283,12 +311,14 @@ jobs:
                     --arg archiveName "$(basename "$ARCHIVE_PATH")" \
                     --arg archiveSha256 "$(cut -d ' ' -f 1 "$ARCHIVE_PATH.sha256")" \
                     --argjson authVisuals "$AUTH_VISUALS" \
+                    --argjson damatongStorefront "$DAMATONG_STOREFRONT" \
+                    --arg damatongChannelToken "$DAMATONG_CHANNEL_TOKEN" \
                     --argjson moyaoBrand "$MOYAO_BRAND" \
                     --arg mediaChannelCodes "$MEDIA_CHANNEL_CODES" \
                     --arg mediaKeys "$MEDIA_KEYS" \
                     --arg sourceRunId "$GITHUB_RUN_ID" \
                     --arg targetSha "$TARGET_SHA" \
-                    '{archiveName: $archiveName, archiveSha256: $archiveSha256, authVisuals: $authVisuals, format: 1, mediaChannelCodes: $mediaChannelCodes, mediaKeys: $mediaKeys, moyaoBrand: $moyaoBrand, sourceRunId: $sourceRunId, targetSha: $targetSha}' \
+                    '{archiveName: $archiveName, archiveSha256: $archiveSha256, authVisuals: $authVisuals, damatongChannelToken: $damatongChannelToken, damatongStorefront: $damatongStorefront, format: 1, mediaChannelCodes: $mediaChannelCodes, mediaKeys: $mediaKeys, moyaoBrand: $moyaoBrand, sourceRunId: $sourceRunId, targetSha: $targetSha}' \
                     > "$ARCHIVE_DIR/release-plan.json"
                   (
                     cd "$ARCHIVE_DIR"
@@ -323,6 +353,10 @@ jobs:
                     fi
                     echo "- Reviewed auth visuals: \`$AUTH_VISUALS\`"
                     echo "- Reviewed MOYAO AI brand: \`$MOYAO_BRAND\`"
+                    echo "- Reviewed Damatong storefront: \`$DAMATONG_STOREFRONT\`"
+                    if [[ -n "$DAMATONG_CHANNEL_TOKEN" ]]; then
+                      echo "- Reviewed Damatong Channel token: \`$DAMATONG_CHANNEL_TOKEN\`"
+                    fi
                     if [[ -n "$MEDIA_CHANNEL_CODES" ]]; then
                       echo "- Reviewed Channel codes: \`$MEDIA_CHANNEL_CODES\`"
                     fi

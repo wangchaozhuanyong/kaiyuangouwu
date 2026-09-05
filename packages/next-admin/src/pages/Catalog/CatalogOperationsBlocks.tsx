@@ -239,8 +239,8 @@ export function CatalogOperationsBlock({ context }: { context: NextAdminPageBloc
                                         <small className="ml-2 font-mono text-slate-500">{variant.sku}</small>
                                     </span>
                                     <span className="text-xs text-slate-500">
-                                        售价 {formatMoney(variant.sellingPrice, variant.currencyCode)} · 毛利{' '}
-                                        {margin == null ? '—' : `${(margin * 100).toFixed(1)}%`}
+                                        销售价 {formatMoney(variant.sellingPrice, variant.currencyCode)} ·
+                                        毛利 {margin == null ? '—' : `${(margin * 100).toFixed(1)}%`}
                                     </span>
                                 </div>
                             </summary>
