@@ -86,6 +86,18 @@ describe('hero theme', () => {
         expect(style['--hero-title-shadow']).toContain('rgba(255, 255, 255, 0.86)');
     });
 
+    it('strengthens the image overlay only when a managed hero opts into high contrast', () => {
+        const style = heroThemeStyle(
+            hero({ backgroundColor: '#0E241F', settings: { contrastMode: 'high' } }),
+            false,
+        );
+
+        expect(style['--hero-overlay-strong']).toBe('rgba(14, 36, 31, 0.97)');
+        expect(style['--hero-overlay-medium']).toBe('rgba(14, 36, 31, 0.9)');
+        expect(style['--hero-overlay-soft']).toBe('rgba(14, 36, 31, 0.66)');
+        expect(style['--hero-overlay-fade']).toBe('rgba(14, 36, 31, 0.18)');
+    });
+
     it('keeps CloudBridge artwork unfiltered while preserving overlays for other themes', () => {
         expect(heroUsesImageOverlay(hero({ settings: { themePreset: 'cloudbridge-bright' } }))).toBe(false);
         expect(heroUsesImageOverlay(hero())).toBe(true);

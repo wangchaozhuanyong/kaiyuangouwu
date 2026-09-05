@@ -18,21 +18,30 @@
     text-align: left;
     box-shadow: 0 8px 24px rgb(15 23 42 / 6%);
     cursor: pointer;
+    transition:
+        transform 180ms ease,
+        border-color 180ms ease,
+        box-shadow 180ms ease;
 }
 
 .category-client-plugin:hover {
-    border-color: #a7f3d0;
+    border-color: color-mix(in srgb, var(--brand-primary) 38%, white);
     transform: translateY(-1px);
+    box-shadow: 0 12px 28px color-mix(in srgb, var(--brand-background) 10%, transparent);
 }
 
 .category-client-plugin:focus-visible {
-    outline: 3px solid rgb(16 185 129 / 25%);
+    outline: 3px solid color-mix(in srgb, var(--brand-primary) 26%, transparent);
     outline-offset: 2px;
 }
 
 .category-client-plugin-image-studio {
-    border-color: #bbf7d0;
-    background: linear-gradient(135deg, #f0fdf4, #eff6ff);
+    border-color: color-mix(in srgb, var(--brand-accent) 42%, white);
+    background: linear-gradient(
+        135deg,
+        color-mix(in srgb, var(--brand-accent) 14%, white),
+        color-mix(in srgb, var(--brand-primary) 8%, white)
+    );
 }
 
 .category-client-plugin-icon {
@@ -41,8 +50,8 @@
     height: 44px;
     place-items: center;
     border-radius: 13px;
-    background: #ecfdf5;
-    color: #047857;
+    background: color-mix(in srgb, var(--brand-primary) 12%, white);
+    color: var(--brand-primary);
 }
 
 .category-client-plugin-icon svg {
@@ -67,7 +76,7 @@
 }
 
 .category-client-plugin-action {
-    color: #047857;
+    color: var(--brand-primary);
     font-size: 13px;
     font-weight: 700;
     white-space: nowrap;

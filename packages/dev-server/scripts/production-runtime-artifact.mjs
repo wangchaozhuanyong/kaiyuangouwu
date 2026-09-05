@@ -6,6 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
+import { damatongAssets } from './damatong-storefront-config.mjs';
 import { auditRuntimePackages } from './production-runtime-audit.mjs';
 import {
     collectArtifactEntries,
@@ -59,6 +60,9 @@ export const HOMEPAGE_CAROUSEL_RUNTIME_FILES = Object.freeze(
         existsSync(path.join(repositoryRoot, file)),
     ),
 );
+const DAMATONG_RUNTIME_FILES = Object.freeze(
+    damatongAssets.map(entry => path.relative(repositoryRoot, entry.file).split(path.sep).join('/')),
+);
 
 export const REQUIRED_RUNTIME_FILES = Object.freeze([
     'packages/catalog-management-plugin/dist/index.js',
@@ -75,11 +79,14 @@ export const REQUIRED_RUNTIME_FILES = Object.freeze([
     'packages/dev-server/scripts/sync-storefront-media.mjs',
     'packages/dev-server/scripts/sync-auth-visuals.mjs',
     'packages/dev-server/scripts/sync-moyao-brand.mjs',
+    'packages/dev-server/scripts/damatong-storefront-config.mjs',
+    'packages/dev-server/scripts/sync-damatong-storefront.mjs',
     'packages/dev-server/scripts/repair-inventory-inheritance.mjs',
     'packages/image-generation-plugin/dist/index.js',
     ...STOREFRONT_MEDIA_RUNTIME_FILES,
     ...MOYAO_BRAND_RUNTIME_FILES,
     ...HOMEPAGE_CAROUSEL_RUNTIME_FILES,
+    ...DAMATONG_RUNTIME_FILES,
 ]);
 
 function isPathInside(parent, candidate) {
@@ -237,6 +244,8 @@ export async function copyStorefrontMediaReleaseInputs(stagingRoot) {
         'sync-storefront-media.mjs',
         'sync-auth-visuals.mjs',
         'sync-moyao-brand.mjs',
+        'damatong-storefront-config.mjs',
+        'sync-damatong-storefront.mjs',
         'repair-inventory-inheritance.mjs',
         ...HOMEPAGE_CAROUSEL_RUNTIME_FILES.map(file => path.basename(file)),
     ];
@@ -266,6 +275,16 @@ export async function copyStorefrontMediaReleaseInputs(stagingRoot) {
         await mkdir(path.dirname(destination), { recursive: true });
         await cp(entry.file, destination);
     }
+
+    for (const entry of damatongAssets) {
+        const relativePath = path.relative(repositoryRoot, entry.file);
+        if (relativePath.startsWith(`..${path.sep}`) || path.isAbsolute(relativePath)) {
+            throw new Error(`Damatong asset must stay inside the repository: ${entry.file}`);
+        }
+        const destination = path.join(stagingRoot, relativePath);
+        await mkdir(path.dirname(destination), { recursive: true });
+        await cp(entry.file, destination);
+    }
 }
 
 /**
@@ -286,6 +305,7 @@ async function writeRuntimeRootFiles(stagingRoot, rootManifest, metadata) {
             'sync:storefront-media': 'node packages/dev-server/scripts/sync-storefront-media.mjs',
             'sync:auth-visuals': 'node packages/dev-server/scripts/sync-auth-visuals.mjs',
             'sync:moyao-brand': 'node packages/dev-server/scripts/sync-moyao-brand.mjs',
+            'sync:damatong-storefront': 'node packages/dev-server/scripts/sync-damatong-storefront.mjs',
             'start:server': 'node packages/dev-server/dist/index.js',
             'start:worker': 'node packages/dev-server/dist/index-worker.js',
             verify: 'node verify-runtime.mjs',

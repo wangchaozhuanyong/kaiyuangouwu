@@ -45,7 +45,9 @@ export function HomeRoutePage() {
                 language: runtime.language,
                 storefrontName: runtime.storefrontName,
                 storefrontDescription: runtime.storefrontDescription,
+                storefrontTagline: runtime.storefrontTagline,
                 logoUrl: runtime.logoUrl,
+                logoOnLightUrl: runtime.logoOnLightUrl,
                 addingVariantId: runtime.addingVariantId,
                 couponLoading: runtime.cartLoading,
                 onCategorySelect: (collection: CollectionSummary) => {

@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 220" role="img" aria-labelledby="title">
+    <title id="title">Damatong Market</title>
+    <rect x="18" y="18" width="184" height="184" rx="48" fill="#102d4a" />
+    <path
+        d="M50 91 110 47l60 44"
+        fill="none"
+        stroke="#ffffff"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-width="13"
+    />
+    <path
+        d="M65 95v67h90V95"
+        fill="none"
+        stroke="#dce8f6"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-width="11"
+    />
+    <path
+        d="M45 140h39l20-20 22 22h50"
+        fill="none"
+        stroke="#2f6feb"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-width="13"
+    />
+    <circle cx="45" cy="140" r="8" fill="#2f6feb" />
+    <circle cx="176" cy="142" r="8" fill="#f28c28" />
+    <g
+        transform="translate(244 63)"
+        fill="none"
+        stroke="#102d4a"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-width="11"
+    >
+        <path d="M0 1v72m0-72h17c32 0 32 72 0 72H0" />
+        <path d="M65 73 90 1l25 72M75 47h30" />
+        <path d="M130 73V1l25 35 25-35v72" />
+        <path d="M195 73 220 1l25 72m-40-26h30" />
+        <path d="M260 1h50M285 1v72" />
+        <ellipse cx="350" cy="37" rx="25" ry="36" />
+        <path d="M390 73V1l50 72V1" />
+        <path d="M505 16C499 6 491 1 480 1c-17 0-25 15-25 36s8 36 25 36c11 0 19-5 25-14V42h-22" />
+    </g>
+    <path d="M246 164h214" stroke="#102d4a" stroke-linecap="round" stroke-width="8" />
+    <circle cx="478" cy="164" r="5" fill="#f28c28" />
+    <path d="M494 164h91" stroke="#2f6feb" stroke-linecap="round" stroke-width="8" />
+</svg>

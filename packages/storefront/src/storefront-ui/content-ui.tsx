@@ -64,6 +64,7 @@ export function BrandLogo({
             className={className}
             src={
                 responsiveSource?.fallbackSrc ??
+                url ??
                 (isWordmark ? STOREFRONT_WORDMARK_IMAGE : STOREFRONT_LOGO_IMAGE)
             }
             srcSet={responsiveSource?.fallbackSrcSet}

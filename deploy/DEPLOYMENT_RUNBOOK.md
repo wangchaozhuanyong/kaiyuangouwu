@@ -375,6 +375,28 @@ VENDURE_API_ORIGIN=http://127.0.0.1:3002 VENDURE_STOREFRONT_URL=https://moyaoai.
 
 该工具按 SHA-256 标签复用品牌资源，通过 Admin API 写入当前 StoreProfile；素材查询和上传结果只读取稳定的 Asset ID，避免历史素材翻译元数据为空时阻断幂等发布。写入后先核对 Admin 返回的完整品牌字段，再以与真实客户端一致的 `languageCode` 查询参数和语言请求头，分别从 Shop API 反查中文、英文名称、口号、色板和三个 Asset ID。若写入后的任一反查失败，发布器必须使用写入后 `updatedAt` 恢复原 StoreProfile（包括原三组 Asset ID），并再次验证恢复结果；恢复失败按生产事故处理。独立 `--verify` 未通过时不得切换 Storefront 指针或宣布品牌发布成功；密码只从已加载的生产 Secret 环境读取。
 
+### 大马通店铺装修发布器
+
+`sync-damatong-storefront.mjs` 只面向 `my-malaysia` Channel，不覆盖 MOYAO AI 默认站。它统一写入大马通品牌资料、六个分类、首页三组轮播广告、其他首页内容、条款、客服、登录/注册视觉和客户端导航。已启用的旧单图轮播可安全接管为第一组；如发现未审核的多余启用广告则停止写入。`ai-image-studio-entry` 必须从 `__default_channel__` 当前启用项读取；默认站缺失、重复或中英文配置不完整时，预演和写入都会失败关闭。
+
+制品构建前先执行静态资源校验；生产发布只允许从已验证候选制品运行，先预演再写入：
+
+```bash
+node packages/dev-server/scripts/sync-damatong-storefront.mjs --validate
+
+cd "${CANDIDATE}"
+VENDURE_API_ORIGIN=http://127.0.0.1:3002 VENDURE_STOREFRONT_URL=https://damatong.net \
+    node packages/dev-server/scripts/sync-damatong-storefront.mjs --dry-run \
+    --channel-code my-malaysia --source-channel-code __default_channel__
+VENDURE_API_ORIGIN=http://127.0.0.1:3002 VENDURE_STOREFRONT_URL=https://damatong.net \
+    node packages/dev-server/scripts/sync-damatong-storefront.mjs --apply --allow-remote \
+    --channel-code my-malaysia --source-channel-code __default_channel__
+```
+
+发布器按文件 SHA-256 复用资源，保留 Collection 已有 gallery，用 `expectedUpdatedAt` 防止后台并发覆盖，并在写入后从 Admin API 和中英文 Shop API 反查品牌、分类、固定内容和 AI 插件。任一验证失败都不得切换 Storefront 稳定指针。
+
+客服块中的 WhatsApp 和 Telegram 初始值是明确的虚拟占位账号，且 `placeholderContacts=true`。当 `supportContactsReadyForProduction=false` 时，发布器即使收到 `--apply --allow-remote` 也会在联网和写入前停止。正式上线前必须先在发布配置中替换为真实联系方式，关闭占位标记并将生产就绪值改为 `true`；未替换时必须将大马通业务验收记为阻断，不得宣布可正式接单。该 publisher 尚未接入现有生产工作流的发布计划字段；首次生产使用必须按本手册“两次发布”规则先增加并验证 publisher 门禁，不允许直接手工绕过。
+
 切换脚本会在 systemd journal 中以 `vendure-production-switch` 标记依次记录 `requested`、`succeeded` 或 `failed`。每条事件包含部署 ID、目标 SHA、候选目录、调用用户、SSH 来源 IP、进程和父进程信息，不记录命令参数、环境变量或密钥。`requested` 写入失败会中止切换，避免无审计地改动 PM2。发布后用同一部署 ID 核对完整事件链：
 
 ```bash

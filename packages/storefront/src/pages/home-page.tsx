@@ -110,6 +110,11 @@ interface HomepageCouponHubProps {
 }
 
 const homepageSectionShellClassName = 'homepage-module-shell is-section-start';
+const homepageQuickLinkLimit = 6;
+
+function isDamatongMarketplaceVisualStyle(value: unknown): boolean {
+    return value === 'damatong-colorful' || value === 'damatong-balanced';
+}
 
 export interface HomeNoticeItem {
     id: string;
@@ -575,7 +580,7 @@ export function HomePage() {
         (managedHero ? builtInHeroFallbackImage(managedHero, isVipTheme) : DEFAULT_HERO_FALLBACK_IMAGE);
     const heroStyle = managedHero ? heroThemeStyle(managedHero, isVipTheme) : undefined;
     const showHeroImageOverlay = managedHero ? heroUsesImageOverlay(managedHero) : false;
-    const quickCollections = collections.slice(0, 5);
+    const quickCollections = collections.slice(0, homepageQuickLinkLimit);
     const noticeItems = buildHomeNoticeItems(systemAnnouncements, noticeBlock, language);
     const defaultNoticeItem: HomeNoticeItem = {
         id: 'default-notice',
@@ -805,7 +810,7 @@ export function HomePage() {
         disabled?: boolean;
         onClick: () => void;
     }> = quickBlock?.items.length
-        ? quickBlock.items.slice(0, 5).map((item, index) => ({
+        ? quickBlock.items.slice(0, homepageQuickLinkLimit).map((item, index) => ({
               id: item.id,
               label: item.label,
               icon: renderColorfulQuickIcon(item.label, index, item.imageUrl),
@@ -850,13 +855,15 @@ export function HomePage() {
                   icon: renderColorfulQuickIcon(compactCopy.home.orders, 3),
                   onClick: () => navigateTo({ name: 'orders', tab: 'all' }),
               },
-          ].slice(0, 5);
+          ].slice(0, homepageQuickLinkLimit);
     const trustIcons = [ShieldCheck, Zap, Lock, Headphones];
     const defaultTrustLabels = Object.values(compactCopy.trust);
     const trustItems = trustBlock?.items.length
         ? trustBlock.items.slice(0, 4).map(item => item.label)
         : defaultTrustLabels;
     const trustBarHasLongCopy = trustItems.some(label => Array.from(label.trim()).length > (isZh ? 4 : 10));
+    const colorfulTrustBar = isDamatongMarketplaceVisualStyle(trustBlock?.settings?.visualStyle);
+    const colorfulQuickLinks = isDamatongMarketplaceVisualStyle(quickBlock?.settings?.visualStyle);
 
     return (
         <main className="page home-page">
@@ -1147,7 +1154,7 @@ export function HomePage() {
 
                             {hasHomepageModule('TRUST_BAR') ? (
                                 <div
-                                    className={`home-trust-bar${trustBarHasLongCopy ? ' has-long-copy' : ''}`}
+                                    className={`home-trust-bar${trustBarHasLongCopy ? ' has-long-copy' : ''}${colorfulTrustBar ? ' is-color-marketplace' : ''}`}
                                     style={{ order: homepageModuleOrder('TRUST_BAR') }}
                                     aria-label={isZh ? '服务信息' : 'Service information'}
                                 >
@@ -1165,7 +1172,7 @@ export function HomePage() {
 
                             {hasHomepageModule('QUICK_LINKS') ? (
                                 <nav
-                                    className={`quick-grid quick-grid-${quickLinks.length}`}
+                                    className={`quick-grid quick-grid-${quickLinks.length}${colorfulQuickLinks ? ' is-color-marketplace' : ''}`}
                                     style={{ order: homepageModuleOrder('QUICK_LINKS') }}
                                     aria-label={isZh ? '快捷分类' : 'Quick categories'}
                                 >
@@ -1770,10 +1777,14 @@ function CategoryPromotionSection({
     });
     const productGridCount = Math.max(1, Math.min(4, categoryProducts.length));
     const hasSupportingContent = categoryProducts.length > 0 || block.items.length > 0;
+    const colorfulMarketplace = isDamatongMarketplaceVisualStyle(block.settings?.visualStyle);
+    const sectionClassName = `content-section managed-content-section managed-content-category_ad category-promotion-section${
+        colorfulMarketplace ? ' is-color-marketplace' : ''
+    }`;
 
     return (
         <section
-            className="content-section managed-content-section managed-content-category_ad category-promotion-section"
+            className={sectionClassName}
             style={{
                 backgroundColor: block.backgroundColor ?? undefined,
                 color: block.textColor ?? undefined,
@@ -1798,7 +1809,7 @@ function CategoryPromotionSection({
                         </span>
                     )}
                     <span className="category-promotion-visual-copy" aria-hidden="true">
-                        <small>{isZh ? '分类精选' : 'Category edit'}</small>
+                        <small>{isZh ? '热门服务' : 'Featured service'}</small>
                     </span>
                 </button>
 

@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
+import { damatongAssets } from './damatong-storefront-config.mjs';
 import {
     assertSafeOutputPath,
     copyStorefrontMediaReleaseInputs,
@@ -92,6 +93,8 @@ void test('runtime artifact includes release publishers and every media manifest
                 await readFile(path.join(repositoryRoot, file), 'utf8'),
             );
         }
+        await access(path.join(fixtureRoot, 'packages/dev-server/scripts/damatong-storefront-config.mjs'));
+        await access(path.join(fixtureRoot, 'packages/dev-server/scripts/sync-damatong-storefront.mjs'));
         await access(path.join(fixtureRoot, 'packages/dev-server/scripts/repair-inventory-inheritance.mjs'));
         for (const entry of storefrontMediaManifest) {
             const relativePath = path.relative(repositoryRoot, entry.file);
@@ -102,6 +105,11 @@ void test('runtime artifact includes release publishers and every media manifest
             const relativePath = path.relative(repositoryRoot, entry.file);
             const copied = await readFile(path.join(fixtureRoot, relativePath));
             assert.ok(copied.byteLength > 0, `Missing copied brand asset: ${entry.key}`);
+        }
+        for (const entry of damatongAssets) {
+            const relativePath = path.relative(repositoryRoot, entry.file);
+            const copied = await readFile(path.join(fixtureRoot, relativePath));
+            assert.ok(copied.byteLength > 0, `Missing copied Damatong asset: ${entry.key}`);
         }
     } finally {
         await rm(fixtureRoot, { recursive: true, force: true });

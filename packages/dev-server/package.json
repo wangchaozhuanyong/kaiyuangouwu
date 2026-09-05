@@ -28,6 +28,7 @@
         "sync:storefront-media": "node ./scripts/sync-storefront-media.mjs",
         "sync:auth-visuals": "node ./scripts/sync-auth-visuals.mjs",
         "sync:moyao-brand": "node ./scripts/sync-moyao-brand.mjs",
+        "sync:damatong-storefront": "node ./scripts/sync-damatong-storefront.mjs",
         "repair:inventory-inheritance": "node ./scripts/repair-inventory-inheritance.mjs",
         "repair:sqlite-foreign-keys": "node ./scripts/repair-sqlite-foreign-keys.mjs",
         "migrate:commerce-mode": "node ./scripts/migrate-commerce-mode.mjs",
