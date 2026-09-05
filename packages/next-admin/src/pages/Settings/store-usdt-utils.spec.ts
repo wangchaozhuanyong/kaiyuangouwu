@@ -4,7 +4,6 @@ import type {
     StoreUsdtConfigurationDraft,
     StoreUsdtConfigurationRecord,
 } from '../../graphql/store-usdt.graphql';
-import { SIMULATED_PAYMENT_HANDLER_CODE } from './simulated-payment-utils';
 import {
     USDT_PAYMENT_HANDLER_CODE,
     buildStoreUsdtConfigurationInput,
@@ -60,7 +59,6 @@ describe('store USDT setup helpers', () => {
     it('removes the system-managed USDT handler from the generic payment editor', () => {
         const definitions: ConfigurableOperationDefinitionRecord[] = [
             operationDefinition(USDT_PAYMENT_HANDLER_CODE),
-            operationDefinition(SIMULATED_PAYMENT_HANDLER_CODE),
             operationDefinition('stripe-handler'),
         ];
 

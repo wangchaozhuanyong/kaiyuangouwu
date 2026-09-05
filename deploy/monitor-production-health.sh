@@ -219,7 +219,7 @@ if [[ "${audit_storefront_realtime_capacity}" == true ]]; then
         --release-id "${target_sha}"
 fi
 node "${repository}/deploy/verify-dashboard-assets.mjs" \
-    --dashboard-url https://console.damatong.net/dashboard/
+    --dashboard-url https://console.moyaoai.com/dashboard/
 
 pm2 jlist | CANDIDATE="${candidate}" node -e "
 let input = '';

@@ -2,6 +2,7 @@ import { ApolloClient, ApolloLink, InMemoryCache, Observable, gql } from '@apoll
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { adminMutationFeedbackLink } from './apollo-mutation-feedback';
+import { SensitiveActionCancelledError } from './apollo-sensitive-action';
 import { subscribeAdminFeedback, type AdminFeedback } from './utils/admin-feedback';
 
 const SAVE_MUTATION = gql`
@@ -66,6 +67,16 @@ describe('adminMutationFeedbackLink', () => {
             title: '保存失败',
             message: '无法连接管理服务，请检查网络后重试',
         });
+    });
+
+    it('replaces pending feedback with an informational state when password verification is cancelled', async () => {
+        const events = collectFeedback();
+        const client = createClient(undefined, new SensitiveActionCancelledError());
+
+        await expect(client.mutate({ mutation: SAVE_MUTATION })).rejects.toThrow('操作已取消');
+
+        expect(events.map(event => event.kind)).toEqual(['loading', 'info']);
+        expect(events.at(-1)?.title).toBe('操作已取消');
     });
 
     it('shows GraphQL validation reasons without reporting success', async () => {
