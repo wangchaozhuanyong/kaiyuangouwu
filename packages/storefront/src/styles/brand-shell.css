@@ -8,24 +8,15 @@
     background: transparent;
     display: flex;
     align-items: center;
-    gap: 0;
+    gap: 9px;
     overflow: hidden;
     text-align: left;
     cursor: pointer;
 }
 
-.brand-wordmark {
-    width: auto;
-    max-width: 100%;
-    height: 34px;
-    display: block;
-    object-fit: contain;
-    object-position: left center;
-}
-
 .brand-mark {
     width: 36px;
-    height: 28px;
+    height: 36px;
     flex: none;
     background: transparent;
     color: var(--accent);
@@ -35,7 +26,6 @@
     font-weight: 700;
 }
 
-img.brand-mark,
 img.auth-brand-mark,
 img.fatal-error-mark {
     width: auto;
@@ -48,6 +38,10 @@ img.fatal-error-mark {
     border-radius: 0;
     box-shadow: none;
     filter: drop-shadow(0 2px 5px rgba(99, 91, 255, 0.22));
+}
+
+img.brand-mark {
+    object-fit: contain;
 }
 
 .brand strong {

@@ -6,9 +6,12 @@ export const PUBLIC_QUERY_STALE_TIME = 60_000;
 export const ROUTE_QUERY_STALE_TIME = 60_000;
 export const PUBLIC_QUERY_GC_TIME = 30 * 60_000;
 export const PUBLIC_QUERY_CACHE_MAX_AGE = 5 * 60_000;
-export const PUBLIC_QUERY_CACHE_KEY = 'vendure-storefront-public-query-cache:v3';
-export const LEGACY_PUBLIC_QUERY_CACHE_KEYS = ['vendure-storefront-public-query-cache:v2'] as const;
-const PUBLIC_QUERY_CACHE_VERSION = 3;
+export const PUBLIC_QUERY_CACHE_KEY = 'vendure-storefront-public-query-cache:v4';
+export const LEGACY_PUBLIC_QUERY_CACHE_KEYS = [
+    'vendure-storefront-public-query-cache:v3',
+    'vendure-storefront-public-query-cache:v2',
+] as const;
+const PUBLIC_QUERY_CACHE_VERSION = 4;
 
 export function storefrontQueryRetry(failureCount: number, error: unknown): boolean {
     return !(error instanceof ShopApiTimeoutError) && failureCount < 1;

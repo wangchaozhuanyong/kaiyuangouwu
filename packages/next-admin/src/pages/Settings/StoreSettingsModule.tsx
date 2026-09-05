@@ -319,7 +319,13 @@ export function StoreSettingsModule() {
             </main>
             {storeEditor && (
                 <StoreEditor
+                    key={storeEditor.id}
                     profile={storeEditor}
+                    sharedChannel={
+                        query.data?.storeProfiles.find(
+                            profile => profile.channel.code === '__default_channel__',
+                        )?.channel
+                    }
                     onClose={() => setStoreEditor(null)}
                     onCompleted={completed}
                     onError={setActionError}
