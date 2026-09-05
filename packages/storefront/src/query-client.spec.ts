@@ -1,3 +1,4 @@
+import { dehydrate } from '@tanstack/react-query';
 import { describe, expect, it } from 'vitest';
 
 import { ShopApiTimeoutError } from './api';
@@ -192,6 +193,71 @@ describe('public React Query session cache', () => {
         const expired = createStorefrontQueryClient();
         expect(restorePublicQueryCache(expired, storage, 1_000 + PUBLIC_QUERY_CACHE_MAX_AGE + 1)).toBe(false);
         expect(storage.values.has(PUBLIC_QUERY_CACHE_KEY)).toBe(false);
+    });
+
+    it('does not persist store configuration alongside reusable catalog data', async () => {
+        const client = createStorefrontQueryClient();
+        await client.fetchQuery({
+            queryKey: storefrontQueryKeys.config('cn-mainland:CNY', 'zh_Hans'),
+            queryFn: () => ({ description: 'Old store description' }),
+            meta: publicQueryMeta(),
+        });
+        await client.fetchQuery({
+            queryKey: storefrontQueryKeys.product('cn-mainland:CNY', 'zh_Hans', '1'),
+            queryFn: () => ({ id: '1' }),
+            meta: publicQueryMeta(),
+        });
+        const storage = memoryStorage();
+
+        persistPublicQueryCache(client, storage);
+
+        const restored = createStorefrontQueryClient();
+        expect(restorePublicQueryCache(restored, storage)).toBe(true);
+        expect(
+            restored.getQueryData(storefrontQueryKeys.config('cn-mainland:CNY', 'zh_Hans')),
+        ).toBeUndefined();
+        expect(restored.getQueryData(storefrontQueryKeys.product('cn-mainland:CNY', 'zh_Hans', '1'))).toEqual(
+            { id: '1' },
+        );
+    });
+
+    it('ignores previously persisted branding and fetches cleared copy on every reload', async () => {
+        const source = createStorefrontQueryClient();
+        const configKey = storefrontQueryKeys.config('cn-mainland:CNY', 'zh_Hans');
+        const resolvedConfigKey = storefrontQueryKeys.config('__default_channel__:CNY', 'zh_Hans');
+        source.setQueryData(configKey, { description: 'Old store description', tagline: 'Old tagline' });
+        source.setQueryData(resolvedConfigKey, { description: '', tagline: '' });
+        const storage = memoryStorage();
+        storage.setItem(
+            PUBLIC_QUERY_CACHE_KEY,
+            JSON.stringify({
+                version: 4,
+                savedAt: Date.now(),
+                state: dehydrate(source),
+            }),
+        );
+        let requests = 0;
+
+        for (let reload = 0; reload < 2; reload += 1) {
+            const client = createStorefrontQueryClient();
+            expect(restorePublicQueryCache(client, storage)).toBe(true);
+            expect(client.getQueryData(configKey)).toBeUndefined();
+            expect(client.getQueryData(resolvedConfigKey)).toBeUndefined();
+            await expect(
+                client.fetchQuery({
+                    queryKey: configKey,
+                    queryFn: () => {
+                        requests += 1;
+                        return { description: '', tagline: '' };
+                    },
+                    meta: publicQueryMeta(),
+                }),
+            ).resolves.toEqual({ description: '', tagline: '' });
+            persistPublicQueryCache(client, storage);
+            client.clear();
+        }
+
+        expect(requests).toBe(2);
     });
 
     it('removes legacy public caches before restoring v4 data', () => {
