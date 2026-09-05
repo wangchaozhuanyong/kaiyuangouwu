@@ -59,7 +59,7 @@ export function ProductVariantsTab() {
                                     : '当前店铺'}
                             </strong>{' '}
                             的 {activeCurrencyCode}{' '}
-                            售价。勾选其他店铺后，使用顶部“当前店铺”切换并分别维护售价。
+                            销售价。勾选其他店铺后，使用顶部“当前店铺”切换并分别维护销售价。
                         </p>
                     </div>
                     <span className="shrink-0 rounded-lg bg-white px-2.5 py-1 text-[11px] font-bold text-blue-700 shadow-2xs">
@@ -102,7 +102,7 @@ export function ProductVariantsTab() {
                     })}
                 </div>
                 <p className="mt-3 text-[10px] leading-4 text-slate-400">
-                    新增店铺初始价格按当前售价 1:1
+                    新增店铺初始价格按当前销售价 1:1
                     复制；切换店铺后可修改为该店铺自己的价格。当前店铺不能在本页取消发布，避免编辑中的商品立即消失。
                 </p>
             </section>
@@ -117,8 +117,8 @@ export function ProductVariantsTab() {
                         </h3>
                         <p className="text-xs text-slate-400 mt-0.5">
                             {effectiveFulfillmentType === 'digital'
-                                ? '在同一页完成售价、交付方式、卡密格式和库存导入'
-                                : '为商品配置不同规格型号、条形码 SKU、售价与初始库存'}
+                                ? '在同一页完成销售价、交付方式、卡密格式和库存导入'
+                                : '为商品配置不同规格型号、条形码 SKU、销售价与初始库存'}
                         </p>
                     </div>
                     <button
@@ -234,7 +234,7 @@ export function ProductVariantsTab() {
                                         SKU 编码 <span className="text-rose-500">*</span>
                                     </th>
                                     <th scope="col" className="whitespace-nowrap px-3 py-3">
-                                        售价 ({activeCurrencyCode}) <span className="text-rose-500">*</span>
+                                        销售价 ({activeCurrencyCode}) <span className="text-rose-500">*</span>
                                     </th>
                                     {effectiveFulfillmentType === 'digital' ? (
                                         <>
@@ -326,7 +326,7 @@ export function ProductVariantsTab() {
                                                     </span>
                                                     <input
                                                         type="number"
-                                                        aria-label={`第 ${index + 1} 行售价`}
+                                                        aria-label={`第 ${index + 1} 行销售价`}
                                                         step="0.01"
                                                         min="0"
                                                         value={variant.price}

@@ -5,9 +5,11 @@ import {
     CATALOG_FIELD_OPTIONS,
     CATALOG_MAPPING_EXCLUDED,
     CATALOG_MAPPING_UNKNOWN,
+    createCatalogImportBatches,
     rowsForCatalogTransport,
     type LocalCatalogFile,
 } from '@vendure/catalog-management-plugin/browser';
+import { print } from 'graphql';
 import {
     AlertTriangle,
     CheckCircle2,
@@ -57,6 +59,7 @@ import { GET_PRODUCTS } from '../../../graphql/catalog.graphql';
 import { useAdminPermissions } from '../../../hooks/use-admin-permissions';
 import { toUserFacingError } from '../../../utils/user-facing-error';
 import { formatDateTime } from '../../Sales/sales-utils';
+import { CatalogExportAction } from '../CatalogExportAction';
 
 import { parseCatalogFile } from './catalog-import-file';
 
@@ -97,6 +100,8 @@ export function CatalogImportDialog({ open, onClose }: { open: boolean; onClose:
     const [currencyCode, setCurrencyCode] = useState('');
     const [clearBlankFields, setClearBlankFields] = useState(false);
     const [transferProgress, setTransferProgress] = useState(0);
+    const [transferStage, setTransferStage] = useState('');
+    const [receivedRows, setReceivedRows] = useState(0);
     const [jobId, setJobId] = useState<string | null>(null);
     const [actionFilter, setActionFilter] = useState<ActionFilter>('ALL');
     const [rowPage, setRowPage] = useState(0);
@@ -183,6 +188,8 @@ export function CatalogImportDialog({ open, onClose }: { open: boolean; onClose:
         setFieldMapping({});
         setMappingDirty(false);
         setTransferProgress(0);
+        setTransferStage('');
+        setReceivedRows(0);
         setJobId(null);
         setActionFilter('ALL');
         setRowPage(0);
@@ -219,7 +226,7 @@ export function CatalogImportDialog({ open, onClose }: { open: boolean; onClose:
             const confirmation = await requestConfirmation({
                 title: '启用空白字段清除模式？',
                 description:
-                    '文件中已提供但留空的描述、品牌、标签、条码、规格、单位、保质期、库存预警值和供货商将在确认执行后被清除。',
+                    '文件中已提供但留空的商品描述、品牌、标签、条码、规格、单位、保质期、库存预警值和供货商将在确认执行后被清除。',
                 confirmLabel: '生成高风险预览',
                 tone: 'warning',
             });
@@ -228,55 +235,85 @@ export function CatalogImportDialog({ open, onClose }: { open: boolean; onClose:
         setBusy('PREVIEW');
         setActionError('');
         setTransferProgress(0);
+        setTransferStage('创建导入任务');
+        setReceivedRows(0);
         try {
-            const beginResult = await client.mutate<{
-                beginCatalogImport: CatalogImportJobRecord;
-            }>({
-                mutation: BEGIN_CATALOG_IMPORT_MUTATION,
-                variables: {
-                    input: {
-                        context: {
-                            channelId: activeChannel.id,
-                            stockLocationId: effectiveStockLocationId,
-                            currencyCode: effectiveCurrencyCode,
-                            clearBlankFields,
+            let beginResult;
+            try {
+                beginResult = await client.mutate<{
+                    beginCatalogImport: CatalogImportJobRecord;
+                }>({
+                    mutation: BEGIN_CATALOG_IMPORT_MUTATION,
+                    variables: {
+                        input: {
+                            context: {
+                                channelId: activeChannel.id,
+                                stockLocationId: effectiveStockLocationId,
+                                currencyCode: effectiveCurrencyCode,
+                                clearBlankFields,
+                            },
+                            source: {
+                                filename: localPreview.filename,
+                                mimetype: localPreview.mimetype || 'application/octet-stream',
+                                byteSize: localPreview.byteSize,
+                                fileHash: localPreview.fileHash,
+                                sheetName: localPreview.sheetName,
+                                detectedHeaders: localPreview.headers,
+                                fieldMapping: localPreview.fieldMapping,
+                                parserVersion: CATALOG_BROWSER_PARSER_VERSION,
+                            },
+                            totalRows: localPreview.rows.length,
                         },
-                        source: {
-                            filename: localPreview.filename,
-                            mimetype: localPreview.mimetype || 'application/octet-stream',
-                            byteSize: localPreview.byteSize,
-                            fileHash: localPreview.fileHash,
-                            sheetName: localPreview.sheetName,
-                            detectedHeaders: localPreview.headers,
-                            fieldMapping: localPreview.fieldMapping,
-                            parserVersion: CATALOG_BROWSER_PARSER_VERSION,
-                        },
-                        totalRows: localPreview.rows.length,
                     },
-                },
-            });
+                });
+            } catch (error) {
+                throw new Error(`创建任务阶段：${toUserFacingError(error, '请重试')}`);
+            }
             let currentJob = requiredData(beginResult.data?.beginCatalogImport, '创建导入任务失败');
             if (currentJob.state === 'RECEIVING') {
                 const transportRows = rowsForCatalogTransport(localPreview.rows);
-                for (let index = 0; index < transportRows.length; index += 500) {
-                    const batch = transportRows.slice(index, index + 500);
-                    const appendResult = await client.mutate<{
-                        appendCatalogImportRows: CatalogImportJobRecord;
+                const batches = createCatalogImportBatches(currentJob.id, transportRows, {
+                    operationName: 'NextAdminAppendCatalogImportRows',
+                    query: print(APPEND_CATALOG_IMPORT_ROWS_MUTATION),
+                });
+                setTransferStage('接收数据');
+                setReceivedRows(currentJob.receivedRows);
+                for (let index = 0; index < batches.length; index++) {
+                    try {
+                        const appendResult = await client.mutate<{
+                            appendCatalogImportRows: CatalogImportJobRecord;
+                        }>({
+                            mutation: APPEND_CATALOG_IMPORT_ROWS_MUTATION,
+                            variables: { input: { jobId: currentJob.id, rows: batches[index] } },
+                        });
+                        currentJob = requiredData(
+                            appendResult.data?.appendCatalogImportRows,
+                            '提交导入数据失败',
+                        );
+                        setReceivedRows(currentJob.receivedRows);
+                        setTransferProgress(
+                            Math.round((currentJob.receivedRows / Math.max(transportRows.length, 1)) * 100),
+                        );
+                    } catch (error) {
+                        throw new Error(
+                            `接收阶段：第 ${index + 1}/${batches.length} 批失败；已接收 ${currentJob.receivedRows}/${transportRows.length}。可重新选择同一文件继续。${toUserFacingError(error, '请重试')}`,
+                        );
+                    }
+                }
+                setTransferStage('生成数据库差异预览');
+                let finalizeResult;
+                try {
+                    finalizeResult = await client.mutate<{
+                        finalizeCatalogImportPreview: CatalogImportJobRecord;
                     }>({
-                        mutation: APPEND_CATALOG_IMPORT_ROWS_MUTATION,
-                        variables: { input: { jobId: currentJob.id, rows: batch } },
+                        mutation: FINALIZE_CATALOG_IMPORT_PREVIEW_MUTATION,
+                        variables: { id: currentJob.id },
                     });
-                    currentJob = requiredData(appendResult.data?.appendCatalogImportRows, '提交导入数据失败');
-                    setTransferProgress(
-                        Math.round(((index + batch.length) / Math.max(transportRows.length, 1)) * 100),
+                } catch (error) {
+                    throw new Error(
+                        `生成预览阶段：已接收 ${currentJob.receivedRows}/${localPreview.rows.length}。${toUserFacingError(error, '请重试')}`,
                     );
                 }
-                const finalizeResult = await client.mutate<{
-                    finalizeCatalogImportPreview: CatalogImportJobRecord;
-                }>({
-                    mutation: FINALIZE_CATALOG_IMPORT_PREVIEW_MUTATION,
-                    variables: { id: currentJob.id },
-                });
                 currentJob = requiredData(
                     finalizeResult.data?.finalizeCatalogImportPreview,
                     '生成数据库差异预览失败',
@@ -321,32 +358,53 @@ export function CatalogImportDialog({ open, onClose }: { open: boolean; onClose:
         }
     };
 
-    const resolveCurrentPage = async (resolution: 'APPLY' | 'SKIP') => {
+    const resolveAllRows = async (resolution: 'APPLY' | 'SKIP') => {
         if (!canUpdate) return;
-        const candidates = rows.filter(row => {
-            if (resolution === 'SKIP') return ['CONFLICT', 'WARNING', 'ERROR'].includes(row.action);
-            const safeAction = row.plannedChanges?.safeAction;
-            return (
-                ['WARNING', 'ERROR'].includes(row.action) && ['CREATE', 'UPDATE'].includes(String(safeAction))
-            );
-        });
-        if (candidates.length === 0) return;
-        const confirmation = await requestConfirmation({
-            title:
-                resolution === 'APPLY'
-                    ? `确认继续应用 ${candidates.length} 行？`
-                    : `确认跳过 ${candidates.length} 行？`,
-            description:
-                resolution === 'APPLY'
-                    ? '只会应用已被后端标记为可安全继续的警告或错误行。'
-                    : '这些行将不会写入商品、价格或库存。',
-            confirmLabel: resolution === 'APPLY' ? '确认应用' : '确认跳过',
-            tone: 'warning',
-        });
-        if (!confirmation) return;
         setBusy('RESOLVE');
         setActionError('');
         try {
+            const allRows: CatalogImportRowRecord[] = [];
+            let expectedTotal = Number.POSITIVE_INFINITY;
+            for (let skip = 0; skip < expectedTotal; skip += 500) {
+                const result = await client.query<{
+                    catalogImportRowPage: { items: CatalogImportRowRecord[]; totalItems: number };
+                }>({
+                    query: CATALOG_IMPORT_ROW_PAGE_QUERY,
+                    variables: { jobId, action: null, skip, take: 500 },
+                    fetchPolicy: 'network-only',
+                });
+                const page = requiredData(result.data?.catalogImportRowPage, '无法读取待处理行');
+                expectedTotal = page.totalItems;
+                allRows.push(...page.items);
+                if (page.items.length === 0) break;
+            }
+            const candidates = allRows.filter(row => {
+                if (resolution === 'SKIP') {
+                    return ['CONFLICT', 'WARNING', 'ERROR'].includes(row.action);
+                }
+                const safeAction = row.plannedChanges?.safeAction;
+                return (
+                    ['WARNING', 'ERROR'].includes(row.action) &&
+                    ['CREATE', 'UPDATE'].includes(String(safeAction))
+                );
+            });
+            if (candidates.length === 0) {
+                setNotice('当前任务没有可批量处理的记录');
+                return;
+            }
+            const confirmation = await requestConfirmation({
+                title:
+                    resolution === 'APPLY'
+                        ? `统一确认全部 ${candidates.length} 条风险记录？`
+                        : `确认跳过全部 ${candidates.length} 条待处理记录？`,
+                description:
+                    resolution === 'APPLY'
+                        ? '将按文件原值导入已标记的负库存、价格倒挂等风险数据，并记录确认人和时间。'
+                        : '这些记录不会写入商品、价格或库存。',
+                confirmLabel: resolution === 'APPLY' ? '确认全部风险' : '确认全部跳过',
+                tone: 'warning',
+            });
+            if (!confirmation) return;
             for (let index = 0; index < candidates.length; index += 500) {
                 await client.mutate({
                     mutation: RESOLVE_CATALOG_IMPORT_ROWS_MUTATION,
@@ -360,7 +418,7 @@ export function CatalogImportDialog({ open, onClose }: { open: boolean; onClose:
             }
             await refetchJobAndRows();
             setRowPage(0);
-            setNotice('当前页批量处理已完成');
+            setNotice(`全部 ${candidates.length} 条待处理记录已批量处理`);
         } catch (error) {
             setActionError(toUserFacingError(error, '批量处理失败'));
         } finally {
@@ -545,6 +603,8 @@ export function CatalogImportDialog({ open, onClose }: { open: boolean; onClose:
                             mappingDirty={mappingDirty}
                             clearBlankFields={clearBlankFields}
                             transferProgress={transferProgress}
+                            transferStage={transferStage}
+                            receivedRows={receivedRows}
                             busy={busy}
                             fileInputRef={fileInputRef}
                             onRetryContext={() => void contextQuery.refetch()}
@@ -554,6 +614,8 @@ export function CatalogImportDialog({ open, onClose }: { open: boolean; onClose:
                                 setFieldMapping({});
                                 setMappingDirty(false);
                                 setTransferProgress(0);
+                                setTransferStage('');
+                                setReceivedRows(0);
                                 setActionError('');
                             }}
                             onStockLocationChange={setStockLocationId}
@@ -608,8 +670,8 @@ export function CatalogImportDialog({ open, onClose }: { open: boolean; onClose:
                             onResolve={(rowId, resolution, targetVariantId) =>
                                 void resolveRow(rowId, resolution, targetVariantId)
                             }
-                            onBatchApply={() => void resolveCurrentPage('APPLY')}
-                            onBatchSkip={() => void resolveCurrentPage('SKIP')}
+                            onBatchApply={() => void resolveAllRows('APPLY')}
+                            onBatchSkip={() => void resolveAllRows('SKIP')}
                         />
                     )}
                 </main>
@@ -632,6 +694,8 @@ function UploadPanel({
     mappingDirty,
     clearBlankFields,
     transferProgress,
+    transferStage,
+    receivedRows,
     busy,
     fileInputRef,
     onRetryContext,
@@ -657,6 +721,8 @@ function UploadPanel({
     mappingDirty: boolean;
     clearBlankFields: boolean;
     transferProgress: number;
+    transferStage: string;
+    receivedRows: number;
     busy: BusyAction;
     fileInputRef: RefObject<HTMLInputElement | null>;
     onRetryContext: () => void;
@@ -774,9 +840,13 @@ function UploadPanel({
                         />
                     </>
                 )}
-                {submitting && transferProgress > 0 && (
+                {(parsing || submitting) && (
                     <ProgressBar
-                        label="正在分批提交标准化商品字段"
+                        label={
+                            parsing
+                                ? '本地解析'
+                                : `${transferStage || '准备接收'} · 已接收 ${receivedRows}/${preview?.rows.length ?? 0}`
+                        }
                         value={transferProgress}
                         className="md:col-span-3"
                     />
@@ -820,8 +890,11 @@ function LocalPreviewSummary({ preview }: { preview: LocalCatalogFile }) {
     const metrics = [
         ['有效行', preview.rows.length, false],
         ['解析错误', preview.errors.length, preview.errors.length > 0],
-        ['重复冲突组', preview.duplicateGroups, preview.duplicateGroups > 0],
+        ['标识冲突组', preview.duplicateGroups, preview.duplicateGroups > 0],
         ['冲突行', preview.duplicateRows, preview.duplicateRows > 0],
+        ['同名多 SKU 组', preview.multiSkuGroups, false],
+        ['独立 SKU 行', preview.multiSkuRows, false],
+        ['完全重复将跳过', preview.exactDuplicateRows, false],
         ['风险警告', preview.warningRows, preview.warningRows > 0],
         ['未知列', preview.unknownHeaders.length, preview.unknownHeaders.length > 0],
     ] as const;
@@ -974,12 +1047,6 @@ function JobWorkspace({
     onBatchSkip: () => void;
 }) {
     const terminal = ['COMPLETED', 'COMPLETED_WITH_ERRORS', 'ROLLED_BACK'].includes(job.state);
-    const unresolvedOnPage = rows.filter(row => ['CONFLICT', 'WARNING', 'ERROR'].includes(row.action));
-    const applicableOnPage = rows.filter(
-        row =>
-            ['WARNING', 'ERROR'].includes(row.action) &&
-            ['CREATE', 'UPDATE'].includes(String(row.plannedChanges?.safeAction)),
-    );
     return (
         <div className="space-y-4">
             <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -1051,9 +1118,19 @@ function JobWorkspace({
                                 确认执行
                             </button>
                         )}
+                        {['COMPLETED', 'COMPLETED_WITH_ERRORS'].includes(job.state) && (
+                            <CatalogExportAction />
+                        )}
                     </div>
                 </div>
                 <ImportSummary job={job} />
+                {job.state === 'RECEIVING' && (
+                    <ProgressBar
+                        label={`接收数据 · 已接收 ${job.receivedRows}/${job.totalRows}`}
+                        value={job.progress}
+                        className="mt-4"
+                    />
+                )}
                 {running && <ProgressBar label="后台导入中" value={job.progress} className="mt-4" />}
                 {job.errorMessage && <InlineAlert className="mt-4">{job.errorMessage}</InlineAlert>}
             </section>
@@ -1088,18 +1165,21 @@ function JobWorkspace({
                             <button
                                 type="button"
                                 className={secondaryButton}
-                                disabled={applicableOnPage.length === 0 || busy !== null}
+                                disabled={job.warningCount + job.errorCount === 0 || busy !== null}
                                 onClick={onBatchApply}
                             >
-                                批量确认本页警告 {applicableOnPage.length || ''}
+                                统一确认全部风险 {job.warningCount || ''}
                             </button>
                             <button
                                 type="button"
                                 className={secondaryButton}
-                                disabled={unresolvedOnPage.length === 0 || busy !== null}
+                                disabled={
+                                    job.conflictCount + job.warningCount + job.errorCount === 0 ||
+                                    busy !== null
+                                }
                                 onClick={onBatchSkip}
                             >
-                                批量跳过本页 {unresolvedOnPage.length || ''}
+                                批量跳过全部 {job.conflictCount + job.warningCount + job.errorCount || ''}
                             </button>
                         </div>
                     )}
@@ -1117,10 +1197,10 @@ function JobWorkspace({
                                 <tr>
                                     <th className="p-3">行号</th>
                                     <th className="p-3">结果</th>
-                                    <th className="p-3">商品</th>
+                                    <th className="p-3">名称</th>
                                     <th className="p-3">分类</th>
                                     <th className="p-3">规格 / 单位</th>
-                                    <th className="p-3">价格 / 库存</th>
+                                    <th className="p-3">销售价 / 进货价 / 库存量</th>
                                     <th className="p-3">说明与处理</th>
                                 </tr>
                             </thead>
@@ -1206,8 +1286,8 @@ function ImportRow({
                     .join(' / ') || '—'}
             </td>
             <td className="whitespace-nowrap p-3">
-                {displayValue(data.sellingPrice, '—')} / {displayValue(data.purchaseCost, '—')}
-                <div className="mt-1 text-slate-500">库存 {displayValue(data.stockOnHand, '—')}</div>
+                销售价 {displayValue(data.sellingPrice, '—')} / 进货价 {displayValue(data.purchaseCost, '—')}
+                <div className="mt-1 text-slate-500">库存量 {displayValue(data.stockOnHand, '—')}</div>
             </td>
             <td className="min-w-80 p-3">
                 <p className="mb-2 leading-5 text-slate-500">{row.message || '—'}</p>
@@ -1301,6 +1381,7 @@ function ImportRow({
 function ImportSummary({ job }: { job: CatalogImportJobRecord }) {
     const cards = [
         ['总行数', job.totalRows, false],
+        ['已接收', job.receivedRows, false],
         ['新增', job.createdCount, false],
         ['修改', job.updatedCount, false],
         ['跳过', job.skippedCount, false],
@@ -1309,7 +1390,7 @@ function ImportSummary({ job }: { job: CatalogImportJobRecord }) {
         ['错误', job.errorCount, job.errorCount > 0],
     ] as const;
     return (
-        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-7">
+        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-8">
             {cards.map(([label, value, danger]) => (
                 <div key={label} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
                     <div className="text-[10px] text-slate-500">{label}</div>
@@ -1370,6 +1451,11 @@ function ImportHistory({
                             </td>
                             <td className="p-3">
                                 <StateBadge state={job.state} />
+                                {job.state === 'RECEIVING' && (
+                                    <div className="mt-1 text-[10px] text-slate-500">
+                                        已接收 {job.receivedRows}/{job.totalRows}
+                                    </div>
+                                )}
                             </td>
                             <td className="p-3">
                                 新增 {job.createdCount} · 修改 {job.updatedCount} · 错误 {job.errorCount}
@@ -1571,10 +1657,10 @@ function stateLabel(state: CatalogImportJobRecord['state']) {
 function downloadTemplate() {
     const rows = [
         [
-            '名称（必填）',
-            '分类（必填）',
-            '门店编码',
-            '仓库编码',
+            '名称',
+            '分类',
+            '门店',
+            '仓库',
             '币种',
             'SKU',
             '条码',
@@ -1583,8 +1669,8 @@ function downloadTemplate() {
             '采购单位',
             '包装换算',
             '库存量',
-            '进货价（必填）',
-            '销售价（必填）',
+            '进货价',
+            '销售价',
             '库存上限',
             '库存下限',
             '品牌',
@@ -1645,7 +1731,7 @@ function downloadImportReport(job: CatalogImportJobRecord, rows: CatalogImportRo
         ['原始表头', '处理状态', '系统字段'],
         ...headerAudit,
         [],
-        ['行号', '结果', '处理选择', '商品名称', '分类', 'SKU', '说明', '应用时间'],
+        ['行号', '结果', '处理选择', '名称', '分类', 'SKU', '说明', '应用时间'],
         ...rows.map(row => [
             String(row.rowNumber),
             row.action,

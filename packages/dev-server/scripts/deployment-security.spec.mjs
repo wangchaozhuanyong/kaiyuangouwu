@@ -279,6 +279,18 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.match(script, /reviewed storefront media Channel codes are invalid/u);
     assert.match(script, /VENDURE_REVIEWED_AUTH_VISUALS/u);
     assert.match(script, /managed auth visual publisher changed/u);
+    assert.match(script, /VENDURE_REVIEWED_MOYAO_BRAND/u);
+    assert.match(script, /MOYAO AI managed brand data changed; select the reviewed brand release scope/u);
+    assert.match(script, /reviewed MOYAO AI brand scope was supplied without a brand change/u);
+    assert.match(script, /reviewed MOYAO AI brand requires the primary Channel only/u);
+    assert.match(script, /VENDURE_REVIEWED_DAMATONG_STOREFRONT/u);
+    assert.match(script, /VENDURE_REVIEWED_DAMATONG_CHANNEL_TOKEN/u);
+    assert.match(script, /Damatong managed storefront data changed/u);
+    assert.match(script, /reviewed Damatong storefront scope was supplied without a Damatong data change/u);
+    assert.match(script, /reviewed Damatong storefront requires the my-malaysia Channel token/u);
+    assert.match(script, /packages\/storefront\/src\/assets\/brand\/moyao-ai\//u);
+    assert.match(script, /packages\/storefront\/src\/assets\/brand\/damatong-market\//u);
+    assert.match(script, /packages\/storefront\/src\/assets\/storefront\/damatong\//u);
     assert.match(script, /unsupported managed data change/u);
     assert.equal(
         (
@@ -294,7 +306,7 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
                 /^\s*AUTH_VISUAL_CHANNEL_CODES="\$\{reviewed_storefront_media_channel_codes\}"/gmu,
             ) ?? []
         ).length,
-        2,
+        3,
     );
     assert.match(script, /sync-storefront-media\.mjs[\s\S]*--keys/u);
     assert.doesNotMatch(script, /sync-storefront-media\.mjs[\s\S]{0,200}--channel-codes/u);
@@ -308,13 +320,43 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.match(script, /STOREFRONT_MEDIA_VERIFY_OK/u);
     assert.match(script, /AUTH_VISUAL_PREFLIGHT_BEGIN/u);
     assert.match(script, /AUTH_VISUAL_PUBLISH_OK/u);
+    assert.match(script, /sync-auth-visuals\.mjs --verify/u);
+    assert.match(script, /AUTH_VISUAL_VERIFY_OK/u);
+    assert.match(script, /MOYAO_BRAND_PREFLIGHT_BEGIN/u);
+    assert.match(script, /MOYAO_BRAND_PREFLIGHT_OK/u);
+    assert.match(script, /MOYAO_BRAND_PUBLISH_BEGIN/u);
+    assert.match(script, /MOYAO_BRAND_PUBLISH_OK/u);
+    assert.match(script, /MOYAO_BRAND_VERIFY_OK/u);
+    assert.match(script, /sync-moyao-brand\.mjs --dry-run/u);
+    assert.match(script, /sync-moyao-brand\.mjs --apply --allow-remote/u);
+    assert.match(script, /sync-moyao-brand\.mjs --verify/u);
+    assert.equal((script.match(/^\s*VENDURE_STOREFRONT_URL=https:\/\/moyaoai\.com/gmu) ?? []).length, 9);
+    assert.match(script, /DAMATONG_PREFLIGHT_BEGIN/u);
+    assert.match(script, /DAMATONG_PREFLIGHT_OK/u);
+    assert.match(script, /DAMATONG_PUBLISH_BEGIN/u);
+    assert.match(script, /DAMATONG_PUBLISH_OK/u);
+    assert.match(script, /DAMATONG_VERIFY_OK/u);
+    assert.match(script, /sync-damatong-storefront\.mjs --dry-run/u);
+    assert.match(script, /sync-damatong-storefront\.mjs --apply --allow-remote/u);
+    assert.match(script, /sync-damatong-storefront\.mjs --verify/u);
+    assert.equal((script.match(/^\s*VENDURE_STOREFRONT_URL=https:\/\/damatong\.net/gmu) ?? []).length, 3);
     assert.ok(script.indexOf('STOREFRONT_MEDIA_PREFLIGHT_BEGIN') < script.indexOf('DEPLOY_MIGRATION_BEGIN'));
     assert.ok(
         script.indexOf('STOREFRONT_MEDIA_PREFLIGHT_OK') < script.indexOf('vendure-mysql-backup.service'),
     );
+    assert.ok(script.indexOf('MOYAO_BRAND_PREFLIGHT_OK') < script.indexOf('vendure-mysql-backup.service'));
+    assert.ok(script.indexOf('DAMATONG_PREFLIGHT_OK') < script.indexOf('vendure-mysql-backup.service'));
     assert.ok(
         script.indexOf('switch-production-runtime.sh" "${candidate}') <
             script.indexOf('STOREFRONT_MEDIA_PUBLISH_BEGIN'),
+    );
+    assert.ok(
+        script.indexOf('switch-production-runtime.sh" "${candidate}') <
+            script.indexOf('MOYAO_BRAND_PUBLISH_BEGIN'),
+    );
+    assert.ok(
+        script.indexOf('switch-production-runtime.sh" "${candidate}') <
+            script.indexOf('DAMATONG_PUBLISH_BEGIN'),
     );
     assert.match(script, /rollback_needed=0\n\s+printf 'ROLLBACK_BEGIN/u);
     assert.equal(script.match(/ROLLBACK_BEGIN/gu)?.length, 1);
@@ -348,6 +390,12 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.match(workflow, /VENDURE_REVIEWED_STOREFRONT_MEDIA_KEYS/u);
     assert.match(workflow, /VENDURE_REVIEWED_STOREFRONT_MEDIA_CHANNEL_CODES/u);
     assert.match(workflow, /VENDURE_REVIEWED_AUTH_VISUALS/u);
+    assert.match(workflow, /VENDURE_REVIEWED_MOYAO_BRAND/u);
+    assert.match(workflow, /MOYAO_BRAND/u);
+    assert.match(workflow, /VENDURE_REVIEWED_DAMATONG_STOREFRONT/u);
+    assert.match(workflow, /VENDURE_REVIEWED_DAMATONG_CHANNEL_TOKEN/u);
+    assert.match(workflow, /DAMATONG_STOREFRONT/u);
+    assert.match(workflow, /damatongChannelToken/u);
     assert.match(workflow, /SSM_RESULT="\$RUNNER_TEMP\/ssm-result\.json"/u);
     assert.match(workflow, /grep -E '\^\(PRODUCTION_\|DEPLOY_\|STOREFRONT_MEDIA_/u);
     assert.match(workflow, /tail -n 160/u);
@@ -357,11 +405,17 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.match(artifactWorkflow, /media_keys:/u);
     assert.match(artifactWorkflow, /channel_codes:/u);
     assert.match(artifactWorkflow, /auth_visuals:/u);
+    assert.match(artifactWorkflow, /moyao_brand:/u);
+    assert.match(artifactWorkflow, /damatong_storefront:/u);
+    assert.match(artifactWorkflow, /damatong_channel_token:/u);
     assert.match(artifactWorkflow, /release-plan\.json/u);
     assert.match(artifactWorkflow, /release-plan\.json\.sha256/u);
     assert.match(artifactWorkflow, /archiveSha256/u);
     assert.match(artifactWorkflow, /mediaChannelCodes/u);
     assert.match(artifactWorkflow, /authVisuals/u);
+    assert.match(artifactWorkflow, /moyaoBrand/u);
+    assert.match(artifactWorkflow, /damatongStorefront/u);
+    assert.match(artifactWorkflow, /damatongChannelToken/u);
     await assert.rejects(
         readFile(path.join(repositoryRoot, '.github/workflows/deploy_reviewed_storefront_media.yml')),
         { code: 'ENOENT' },

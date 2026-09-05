@@ -21,7 +21,7 @@ export const authVisualManifest = [
                 body: '',
             },
             en: {
-                ctaLabel: 'CURATED AI TOOLS',
+                ctaLabel: 'MOYAO AI TOOLS',
                 title: 'Welcome back to your AI workflow',
                 subtitle: 'Manage your everyday AI tools, favorites and orders in one place',
                 body: '',
@@ -106,9 +106,9 @@ const ADMIN_BLOCKS_QUERY = `
     }
 `;
 
-const UPDATE_BLOCK_MUTATION = `
-    mutation UpdateAuthVisual($input: UpdateStorefrontContentBlockInput!) {
-        updateStorefrontContentBlock(input: $input) {
+const APPLY_BLOCKS_MUTATION = `
+    mutation ApplyAuthVisualChanges($input: ApplyStorefrontContentChangesInput!) {
+        applyStorefrontContentChanges(input: $input) {
             id
             updatedAt
             code
@@ -169,6 +169,24 @@ export function parseChannelCodes(value) {
                 .filter(Boolean),
         ),
     );
+}
+
+export function selectAuthVisualChannels(availableChannels, channelCodes) {
+    if (channelCodes?.length) {
+        const channelsByCode = new Map(availableChannels.map(channel => [channel.code, channel]));
+        return channelCodes.map(code => {
+            const channel = channelsByCode.get(code);
+            assert.ok(channel, `Admin user cannot access Channel ${code}`);
+            return channel;
+        });
+    }
+    assert.ok(availableChannels.length > 0, 'Admin user cannot access any Channel');
+    assert.equal(
+        availableChannels.length,
+        1,
+        'AUTH_VISUAL_CHANNEL_CODES is required when the admin user can access multiple Channels',
+    );
+    return availableChannels;
 }
 
 export function findAuthVisualBlock(blocks, definition) {
@@ -326,6 +344,7 @@ export function buildAuthVisualPlan(block, definition) {
         desired,
         input: {
             id: block.id,
+            expectedUpdatedAt: block.updatedAt,
             backgroundColor: definition.backgroundColor,
             textColor: definition.textColor,
             settings,
@@ -366,6 +385,15 @@ function assertAdminShopParity(adminBlock, shopBlocksByLanguage) {
             adminPresentation(adminBlock, languageCode),
             `${adminBlock.code} differs between Admin API and Shop API for ${languageCode}`,
         );
+    }
+}
+
+function adminShopParityReport(adminBlock, shopBlocksByLanguage) {
+    try {
+        assertAdminShopParity(adminBlock, shopBlocksByLanguage);
+        return { inSync: true, error: null };
+    } catch (error) {
+        return { inSync: false, error: error.message };
     }
 }
 
@@ -432,7 +460,8 @@ async function loadAdminBlocks(fetchImpl, apiOrigin, authToken, channel) {
 async function loadShopBlocks(fetchImpl, apiOrigin, channel) {
     const blocksByLanguage = {};
     for (const languageCode of LANGUAGE_CODES) {
-        const result = await graphql(fetchImpl, apiOrigin, 'shop-api', SHOP_BLOCKS_QUERY, undefined, {
+        const apiPath = `shop-api?languageCode=${encodeURIComponent(languageCode)}`;
+        const result = await graphql(fetchImpl, apiOrigin, apiPath, SHOP_BLOCKS_QUERY, undefined, {
             'vendure-token': String(channel.token),
             'language-code': languageCode,
         });
@@ -441,75 +470,292 @@ async function loadShopBlocks(fetchImpl, apiOrigin, channel) {
     return blocksByLanguage;
 }
 
-async function updateBlock(fetchImpl, apiOrigin, authToken, channel, input) {
-    await graphql(
+async function applyBlockPlans(fetchImpl, apiOrigin, authToken, channel, blocks, plans) {
+    const updates = plans.filter(plan => plan.action === 'update').map(plan => plan.input);
+    if (!updates.length) return blocks;
+    const result = await graphql(
         fetchImpl,
         apiOrigin,
         'admin-api',
-        UPDATE_BLOCK_MUTATION,
-        { input },
+        APPLY_BLOCKS_MUTATION,
+        {
+            input: {
+                expectedBlocks: blocks.map(block => ({
+                    id: block.id,
+                    expectedUpdatedAt: block.updatedAt,
+                })),
+                creates: [],
+                updates,
+            },
+        },
         requestHeaders(authToken, channel.token),
     );
+    return result.data.applyStorefrontContentChanges;
 }
 
-export async function syncAuthVisuals({
+function restoreAuthVisualInput(beforeBlock, currentBlock) {
+    return {
+        id: beforeBlock.id,
+        expectedUpdatedAt: currentBlock.updatedAt,
+        backgroundColor: beforeBlock.backgroundColor,
+        textColor: beforeBlock.textColor,
+        settings: beforeBlock.settings,
+        translations: beforeBlock.translations.map(({ languageCode, title, subtitle, body, ctaLabel }) => ({
+            languageCode,
+            title,
+            subtitle,
+            body,
+            ctaLabel,
+        })),
+        items: beforeBlock.items.map(item => ({
+            id: item.id,
+            enabled: item.enabled,
+            position: item.position,
+            targetType: item.targetType,
+            targetValue: item.targetValue,
+            settings: item.settings,
+            translations: item.translations.map(({ languageCode, label, description }) => ({
+                languageCode,
+                label,
+                description,
+            })),
+        })),
+    };
+}
+
+async function restoreAuthVisuals(
+    fetchImpl,
     apiOrigin,
-    username,
-    password,
-    adminBearerToken,
-    channelCodes = ['cn-mainland'],
-    apply = false,
-    allowRemote = false,
-    production = process.env.NODE_ENV === 'production',
-    fetchImpl = fetch,
-    manifest = authVisualManifest,
-}) {
-    assert.ok(apiOrigin, 'VENDURE_API_ORIGIN or --api-origin is required');
-    assert.ok(
-        adminBearerToken || (username && password),
-        'VENDURE_ADMIN_BEARER_TOKEN or SUPERADMIN_USERNAME and SUPERADMIN_PASSWORD are required',
+    authToken,
+    channel,
+    beforeBlocks,
+    currentBlocks,
+    plans,
+) {
+    const changedIds = new Set(
+        plans.filter(plan => plan.action === 'update').map(plan => String(plan.blockId)),
     );
-    assert.ok(channelCodes.length > 0, 'At least one auth visual Channel is required');
-    if (apply && (production || !isLocalApiOrigin(apiOrigin))) {
-        assert.ok(allowRemote, 'Remote or production writes require both --apply and --allow-remote');
-    }
-
-    const normalizedOrigin = apiOrigin.replace(/\/$/, '');
-    const session = await authenticate(fetchImpl, normalizedOrigin, username, password, adminBearerToken);
-    const channelsByCode = new Map(session.channels.map(channel => [channel.code, channel]));
-    const selectedChannels = channelCodes.map(code => {
-        const channel = channelsByCode.get(code);
-        assert.ok(channel, `Admin user cannot access Channel ${code}`);
-        return channel;
-    });
-
-    const results = [];
-    for (const channel of selectedChannels) {
-        const beforeBlocks = await loadAdminBlocks(fetchImpl, normalizedOrigin, session.authToken, channel);
-        const beforeShop = await loadShopBlocks(fetchImpl, normalizedOrigin, channel);
-        const plans = manifest.map(definition => {
-            const block = findAuthVisualBlock(beforeBlocks, definition);
-            assertAdminShopParity(block, beforeShop);
-            return buildAuthVisualPlan(block, definition);
+    const restorePlans = beforeBlocks
+        .filter(block => changedIds.has(String(block.id)))
+        .map(block => {
+            const current = currentBlocks.find(candidate => String(candidate.id) === String(block.id));
+            assert.ok(current, `Cannot restore missing auth visual block ${block.code}`);
+            return { action: 'update', input: restoreAuthVisualInput(block, current) };
         });
+    await applyBlockPlans(fetchImpl, apiOrigin, authToken, channel, currentBlocks, restorePlans);
+}
 
-        if (apply) {
-            for (const plan of plans) {
-                if (plan.action === 'update') {
-                    await updateBlock(fetchImpl, normalizedOrigin, session.authToken, channel, plan.input);
-                }
-            }
-            const afterBlocks = await loadAdminBlocks(
-                fetchImpl,
-                normalizedOrigin,
-                session.authToken,
-                channel,
-            );
-            const afterShop = await loadShopBlocks(fetchImpl, normalizedOrigin, channel);
+async function rollbackCompletedAuthChannels(rollbacks) {
+    const errors = [];
+    for (const rollback of [...rollbacks].reverse()) {
+        try {
+            await rollback();
+        } catch (error) {
+            errors.push(error);
+        }
+    }
+    if (errors.length) {
+        throw new AggregateError(errors, 'One or more previously published auth Channels failed rollback');
+    }
+}
+
+async function verifyAuthVisualPlans({
+    fetchImpl,
+    apiOrigin,
+    shopOrigin = apiOrigin,
+    authToken,
+    channel,
+    plans,
+    attempts,
+    delayMs,
+    waitImpl,
+}) {
+    let afterBlocks;
+    let verificationError;
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+        afterBlocks = await loadAdminBlocks(fetchImpl, apiOrigin, authToken, channel);
+        try {
+            const afterShop = await loadShopBlocks(fetchImpl, shopOrigin, channel);
             for (const plan of plans) {
                 const block = findAuthVisualBlock(afterBlocks, plan);
                 assertAdminMatchesPlan(block, plan);
                 assertAdminShopParity(block, afterShop);
+            }
+            return afterBlocks;
+        } catch (error) {
+            verificationError = error;
+            if (attempt < attempts) await waitImpl(delayMs);
+        }
+    }
+    throw verificationError;
+}
+
+export async function syncAuthVisuals({
+    apiOrigin,
+    shopOrigin = apiOrigin,
+    username,
+    password,
+    adminBearerToken,
+    channelCodes,
+    apply = false,
+    verify = false,
+    allowRemote = false,
+    production = process.env.NODE_ENV === 'production',
+    fetchImpl = fetch,
+    manifest = authVisualManifest,
+    verificationAttempts = 5,
+    verificationDelayMs = 250,
+    waitImpl = delayMs => new Promise(resolve => setTimeout(resolve, delayMs)),
+}) {
+    assert.ok(apiOrigin, 'VENDURE_API_ORIGIN or --api-origin is required');
+    assert.ok(shopOrigin, 'VENDURE_STOREFRONT_URL or --shop-origin is required');
+    assert.ok(
+        adminBearerToken || (username && password),
+        'VENDURE_ADMIN_BEARER_TOKEN or SUPERADMIN_USERNAME and SUPERADMIN_PASSWORD are required',
+    );
+    assert.ok(!(apply && verify), '--apply and --verify are mutually exclusive');
+    if (channelCodes) {
+        assert.ok(channelCodes.length > 0, 'At least one auth visual Channel is required');
+    }
+    assert.ok(Number.isInteger(verificationAttempts) && verificationAttempts > 0);
+    if (apply && (production || !isLocalApiOrigin(apiOrigin))) {
+        assert.ok(allowRemote, 'Remote or production writes require both --apply and --allow-remote');
+    }
+
+    const normalizedApiOrigin = apiOrigin.replace(/\/$/, '');
+    const normalizedShopOrigin = shopOrigin.replace(/\/$/, '');
+    const session = await authenticate(fetchImpl, normalizedApiOrigin, username, password, adminBearerToken);
+    const selectedChannels = selectAuthVisualChannels(session.channels, channelCodes);
+
+    const results = [];
+    const completedChannelRollbacks = [];
+    for (const channel of selectedChannels) {
+        const beforeBlocks = await loadAdminBlocks(
+            fetchImpl,
+            normalizedApiOrigin,
+            session.authToken,
+            channel,
+        );
+        const beforeShop = await loadShopBlocks(fetchImpl, normalizedShopOrigin, channel);
+        const plans = manifest.map(definition => {
+            const block = findAuthVisualBlock(beforeBlocks, definition);
+            return {
+                ...buildAuthVisualPlan(block, definition),
+                beforeParity: adminShopParityReport(block, beforeShop),
+            };
+        });
+
+        if (verify) {
+            await verifyAuthVisualPlans({
+                fetchImpl,
+                apiOrigin: normalizedApiOrigin,
+                shopOrigin: normalizedShopOrigin,
+                authToken: session.authToken,
+                channel,
+                plans,
+                attempts: verificationAttempts,
+                delayMs: verificationDelayMs,
+                waitImpl,
+            });
+        }
+
+        if (apply) {
+            let appliedBlocks;
+            let afterBlocks;
+            let currentRestored = false;
+            const hasUpdates = plans.some(plan => plan.action === 'update');
+            try {
+                appliedBlocks = await applyBlockPlans(
+                    fetchImpl,
+                    normalizedApiOrigin,
+                    session.authToken,
+                    channel,
+                    beforeBlocks,
+                    plans,
+                );
+                afterBlocks = appliedBlocks;
+                try {
+                    afterBlocks = await verifyAuthVisualPlans({
+                        fetchImpl,
+                        apiOrigin: normalizedApiOrigin,
+                        shopOrigin: normalizedShopOrigin,
+                        authToken: session.authToken,
+                        channel,
+                        plans,
+                        attempts: verificationAttempts,
+                        delayMs: verificationDelayMs,
+                        waitImpl,
+                    });
+                } catch (verificationError) {
+                    if (!hasUpdates) throw verificationError;
+                    try {
+                        await restoreAuthVisuals(
+                            fetchImpl,
+                            normalizedApiOrigin,
+                            session.authToken,
+                            channel,
+                            beforeBlocks,
+                            afterBlocks,
+                            plans,
+                        );
+                        currentRestored = true;
+                    } catch (rollbackError) {
+                        throw new AggregateError(
+                            [verificationError, rollbackError],
+                            `Auth visual verification failed and rollback also failed in Channel ${channel.code}`,
+                        );
+                    }
+                    throw new Error(
+                        `Auth visual verification failed; previous Admin bindings were restored in Channel ${channel.code}`,
+                        { cause: verificationError },
+                    );
+                }
+                completedChannelRollbacks.push(async () => {
+                    const currentBlocks = await loadAdminBlocks(
+                        fetchImpl,
+                        normalizedApiOrigin,
+                        session.authToken,
+                        channel,
+                    );
+                    await restoreAuthVisuals(
+                        fetchImpl,
+                        normalizedApiOrigin,
+                        session.authToken,
+                        channel,
+                        beforeBlocks,
+                        currentBlocks,
+                        plans,
+                    );
+                });
+            } catch (error) {
+                const rollbackErrors = [];
+                if (appliedBlocks && hasUpdates && !currentRestored) {
+                    try {
+                        await restoreAuthVisuals(
+                            fetchImpl,
+                            normalizedApiOrigin,
+                            session.authToken,
+                            channel,
+                            beforeBlocks,
+                            afterBlocks ?? appliedBlocks,
+                            plans,
+                        );
+                    } catch (rollbackError) {
+                        rollbackErrors.push(rollbackError);
+                    }
+                }
+                try {
+                    await rollbackCompletedAuthChannels(completedChannelRollbacks);
+                } catch (rollbackError) {
+                    rollbackErrors.push(rollbackError);
+                }
+                if (rollbackErrors.length) {
+                    throw new AggregateError(
+                        [error, ...rollbackErrors],
+                        'Auth visual batch failed and one or more Channels also failed rollback',
+                    );
+                }
+                throw error;
             }
         }
 
@@ -524,6 +770,7 @@ export async function syncAuthVisuals({
                 imageUrl: plan.image.imageUrl,
                 action: plan.action,
                 changes: plan.changes,
+                beforeAdminShopParity: plan.beforeParity,
                 desiredZhHans: {
                     ctaLabel: plan.desired.zh_Hans.ctaLabel,
                     title: plan.desired.zh_Hans.title,
@@ -537,17 +784,28 @@ export async function syncAuthVisuals({
         });
     }
 
-    return { applied: apply, apiOrigin: normalizedOrigin, channelCodes, results };
+    return {
+        applied: apply,
+        verified: apply || verify,
+        apiOrigin: normalizedApiOrigin,
+        shopOrigin: normalizedShopOrigin,
+        channelCodes: selectedChannels.map(channel => channel.code),
+        results,
+    };
 }
 
 export function parseCliArguments(args) {
-    const options = { allowRemote: false, apply: false };
+    const options = { allowRemote: false, apply: false, verify: false };
     for (let index = 0; index < args.length; index += 1) {
         const argument = args[index];
         if (argument === '--apply') options.apply = true;
+        else if (argument === '--verify') options.verify = true;
         else if (argument === '--allow-remote') options.allowRemote = true;
-        else if (argument === '--dry-run') options.apply = false;
-        else if (argument === '--api-origin') options.apiOrigin = args[++index];
+        else if (argument === '--dry-run') {
+            options.apply = false;
+            options.verify = false;
+        } else if (argument === '--api-origin') options.apiOrigin = args[++index];
+        else if (argument === '--shop-origin') options.shopOrigin = args[++index];
         else if (argument === '--channel-codes') options.channelCodes = parseChannelCodes(args[++index]);
         else throw new Error(`Unknown argument: ${String(argument)}`);
     }
@@ -563,26 +821,27 @@ if (isMain) {
         `http://${process.env.VENDURE_HOSTNAME || '127.0.0.1'}:${process.env.PORT || '3000'}`;
     const channelCodes =
         options.channelCodes ??
-        parseChannelCodes(
-            process.env.AUTH_VISUAL_CHANNEL_CODES ??
-                process.env.STOREFRONT_MEDIA_CHANNEL_CODES ??
-                'cn-mainland',
-        );
+        (process.env.AUTH_VISUAL_CHANNEL_CODES
+            ? parseChannelCodes(process.env.AUTH_VISUAL_CHANNEL_CODES)
+            : undefined);
     const result = await syncAuthVisuals({
         apiOrigin,
+        shopOrigin: options.shopOrigin ?? process.env.VENDURE_STOREFRONT_URL ?? apiOrigin,
         username: process.env.SUPERADMIN_USERNAME,
         password: process.env.SUPERADMIN_PASSWORD,
         adminBearerToken: process.env.VENDURE_ADMIN_BEARER_TOKEN,
         channelCodes,
         apply: options.apply,
+        verify: options.verify,
         allowRemote: options.allowRemote,
     });
     process.stdout.write(
         `${JSON.stringify(
             {
                 ok: true,
-                mode: result.applied ? 'apply' : 'dry-run',
+                mode: result.applied ? 'apply' : result.verified ? 'verify' : 'dry-run',
                 apiOrigin: result.apiOrigin,
+                shopOrigin: result.shopOrigin,
                 channelCodes: result.channelCodes,
                 channels: result.results,
             },

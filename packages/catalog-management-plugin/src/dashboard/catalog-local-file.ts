@@ -1,123 +1,28 @@
 import * as XLSX from 'xlsx';
 
+import {
+    CATALOG_EXCLUDED_HEADERS,
+    CATALOG_FIELD_OPTIONS,
+    CATALOG_HEADER_ALIASES,
+    CATALOG_REQUIRED_FIELDS,
+    catalogFieldLabel,
+} from '../catalog-field-definitions';
+import { assignCatalogSourceRecordKeys } from '../catalog-row-identity';
 import { type NormalizedCatalogRow } from '../types';
+
+export { CATALOG_EXCLUDED_HEADERS, CATALOG_FIELD_OPTIONS } from '../catalog-field-definitions';
 
 type CellValue = string | number | boolean | Date | null | undefined;
 
-export const CATALOG_BROWSER_PARSER_VERSION = 'catalog-browser-v2';
+export const CATALOG_BROWSER_PARSER_VERSION = 'catalog-browser-v3';
 export const MAX_LOCAL_CATALOG_BYTES = 20 * 1024 * 1024;
 export const MAX_LOCAL_CATALOG_ROWS = 20_000;
 export const CATALOG_MAPPING_EXCLUDED = '__excluded__';
 export const CATALOG_MAPPING_UNKNOWN = '__unknown__';
 
-export const CATALOG_FIELD_OPTIONS: Array<{ value: keyof NormalizedCatalogRow; label: string }> = [
-    { value: 'name', label: '商品名称' },
-    { value: 'category', label: '分类' },
-    { value: 'sku', label: 'SKU' },
-    { value: 'barcode', label: '条码' },
-    { value: 'specification', label: '规格' },
-    { value: 'primaryUnit', label: '销售单位' },
-    { value: 'purchaseUnit', label: '采购单位' },
-    { value: 'packageQuantity', label: '包装换算' },
-    { value: 'currencyCode', label: '币种' },
-    { value: 'purchaseCost', label: '进货价' },
-    { value: 'sellingPrice', label: '销售价' },
-    { value: 'reportedMargin', label: '报表毛利率' },
-    { value: 'stockLocationCode', label: '仓库' },
-    { value: 'stockOnHand', label: '库存量' },
-    { value: 'minimumStock', label: '库存下限' },
-    { value: 'maximumStock', label: '库存上限' },
-    { value: 'brand', label: '品牌' },
-    { value: 'tags', label: '标签' },
-    { value: 'enabled', label: '状态' },
-    { value: 'variantEnabled', label: 'SKU 状态' },
-    { value: 'description', label: '描述' },
-    { value: 'manufacturedAt', label: '生产日期' },
-    { value: 'shelfLifeDays', label: '保质期天数' },
-    { value: 'lotCode', label: '批次号' },
-    { value: 'lotQuantity', label: '批次数量' },
-    { value: 'sourceCreatedAt', label: '来源创建日期' },
-    { value: 'channelCode', label: '门店' },
-    { value: 'supplier', label: '供货商' },
-];
-
 const importableFields = new Set<keyof NormalizedCatalogRow>(
     CATALOG_FIELD_OPTIONS.map(option => option.value),
 );
-
-const headerAliases: Record<string, keyof NormalizedCatalogRow> = {
-    名称: 'name',
-    商品名称: 'name',
-    分类: 'category',
-    商品分类: 'category',
-    门店: 'channelCode',
-    门店编码: 'channelCode',
-    仓库: 'stockLocationCode',
-    仓库编码: 'stockLocationCode',
-    币种: 'currencyCode',
-    规格: 'specification',
-    主单位: 'primaryUnit',
-    单位: 'primaryUnit',
-    销售单位: 'primaryUnit',
-    采购单位: 'purchaseUnit',
-    包装换算: 'packageQuantity',
-    包装换算数量: 'packageQuantity',
-    库存量: 'stockOnHand',
-    库存: 'stockOnHand',
-    进货价: 'purchaseCost',
-    成本价: 'purchaseCost',
-    销售价: 'sellingPrice',
-    售价: 'sellingPrice',
-    毛利率: 'reportedMargin',
-    库存上限: 'maximumStock',
-    库存下限: 'minimumStock',
-    品牌: 'brand',
-    生产日期: 'manufacturedAt',
-    保质期: 'shelfLifeDays',
-    保质期天数: 'shelfLifeDays',
-    商品状态: 'enabled',
-    状态: 'enabled',
-    SKU状态: 'variantEnabled',
-    商品描述: 'description',
-    描述: 'description',
-    标签: 'tags',
-    创建日期: 'sourceCreatedAt',
-    SKU: 'sku',
-    商品编码: 'sku',
-    条码: 'barcode',
-    批次号: 'lotCode',
-    批次数量: 'lotQuantity',
-    供货商: 'supplier',
-    供应商: 'supplier',
-};
-
-export const CATALOG_EXCLUDED_HEADERS = new Set([
-    '扩展条码',
-    '主编码',
-    '批发价',
-    '会员价',
-    '会员折扣',
-    '积分商品',
-    '库位',
-    '拼音码',
-    '货号',
-    '自定义1',
-    '自定义2',
-    '自定义3',
-    '重量',
-    '是否称重',
-    '是否传秤',
-    '是否计数商品',
-    '称编码',
-    '系统创建时间',
-]);
-
-const requiredFields: Array<keyof NormalizedCatalogRow> = [
-    'name',
-    'category',
-    'purchaseCost',
-    'sellingPrice',
-];
 
 export interface LocalCatalogRowError {
     rowNumber: number;
@@ -136,6 +41,9 @@ export interface LocalCatalogFile {
     errors: LocalCatalogRowError[];
     duplicateGroups: number;
     duplicateRows: number;
+    multiSkuGroups: number;
+    multiSkuRows: number;
+    exactDuplicateRows: number;
     warningRows: number;
     mappedHeaders: number;
     excludedHeaders: string[];
@@ -190,7 +98,7 @@ export async function parseCatalogArrayBuffer(
             }
             return { field: undefined, status: 'UNKNOWN' as const };
         }
-        const field = headerAliases[header];
+        const field = CATALOG_HEADER_ALIASES[header];
         if (field) return { field, status: 'MAPPED' as const };
         if (CATALOG_EXCLUDED_HEADERS.has(header)) {
             return { field: undefined, status: 'EXCLUDED' as const };
@@ -198,7 +106,7 @@ export async function parseCatalogArrayBuffer(
         return { field: undefined, status: 'UNKNOWN' as const };
     });
     const columnFields = mappingStatuses.map(item => item.field);
-    const missing = requiredFields.filter(field => !columnFields.includes(field));
+    const missing = CATALOG_REQUIRED_FIELDS.filter(field => !columnFields.includes(field));
     if (missing.length > 0) {
         throw new Error(`缺少必填列：${missing.map(displayField).join('、')}`);
     }
@@ -228,7 +136,7 @@ export async function parseCatalogArrayBuffer(
             });
         }
     });
-    const rows = expandStandardWorkbookRows(workbook, productRows);
+    const rows = assignCatalogSourceRecordKeys(expandStandardWorkbookRows(workbook, productRows));
     if (rows.length > MAX_LOCAL_CATALOG_ROWS) {
         throw new Error(`合并库存和批次后最多导入 ${MAX_LOCAL_CATALOG_ROWS} 行商品`);
     }
@@ -367,7 +275,7 @@ function expandStandardWorkbookRows(
 
 function parseStandardStockRows(sheet: XLSX.WorkSheet): StandardStockRow[] {
     return standardSheetRecords(sheet).flatMap((record, index) => {
-        const sku = textValue(record.get('SKU'));
+        const sku = importSafeTextValue(record.get('SKU'));
         if (!sku) return [];
         const stockOnHand = integerValue(record.get('库存量'), index + 2, '库存量');
         if (stockOnHand == null) throw new Error(`库存策略第 ${index + 2} 行：库存量不能为空`);
@@ -385,7 +293,7 @@ function parseStandardStockRows(sheet: XLSX.WorkSheet): StandardStockRow[] {
 
 function parseStandardLotRows(sheet: XLSX.WorkSheet): StandardLotRow[] {
     return standardSheetRecords(sheet).flatMap((record, index) => {
-        const sku = textValue(record.get('SKU'));
+        const sku = importSafeTextValue(record.get('SKU'));
         if (!sku) return [];
         const quantity = integerValue(record.get('批次数量'), index + 2, '批次数量');
         if (quantity == null) throw new Error(`批次效期第 ${index + 2} 行：批次数量不能为空`);
@@ -393,7 +301,7 @@ function parseStandardLotRows(sheet: XLSX.WorkSheet): StandardLotRow[] {
             {
                 sku,
                 stockLocationCode: textValue(record.get('仓库')),
-                lotCode: textValue(record.get('批次号')),
+                lotCode: importSafeTextValue(record.get('批次号')),
                 manufacturedAt: dateValue(record.get('生产日期'), index + 2, '生产日期'),
                 expiresAt: dateValue(record.get('到期日期'), index + 2, '到期日期'),
                 quantityOnHand: quantity,
@@ -459,23 +367,29 @@ function normalizeRow(
     });
     const name = textValue(values.get('name'));
     const category = textValue(values.get('category'));
-    if (!name) throw new Error(`第 ${rowNumber} 行：名称不能为空`);
+    const sku = importSafeTextValue(values.get('sku'));
+    const barcode = importSafeTextValue(values.get('barcode'));
+    if (!name && !sku && !barcode) {
+        throw new Error(`第 ${rowNumber} 行：名称为空时必须提供 SKU 或条码`);
+    }
     const purchaseCost = decimalValue(values.get('purchaseCost'), rowNumber, '进货价');
-    const sellingPrice = decimalValue(values.get('sellingPrice'), rowNumber, '销售价', true);
+    const sellingPrice = decimalValue(values.get('sellingPrice'), rowNumber, '销售价');
     const shelfLifeDays = integerValue(values.get('shelfLifeDays'), rowNumber, '保质期');
     const lotQuantity = integerValue(values.get('lotQuantity'), rowNumber, '批次数量');
-    const packageQuantity = decimalValue(values.get('packageQuantity'), rowNumber, '包装换算') ?? 1;
+    const packageQuantity = decimalValue(values.get('packageQuantity'), rowNumber, '包装换算');
     if (purchaseCost != null && purchaseCost < 0) {
         throw new Error(`第 ${rowNumber} 行：进货价不能为负数`);
     }
-    if (sellingPrice < 0) throw new Error(`第 ${rowNumber} 行：销售价不能为负数`);
+    if (sellingPrice != null && sellingPrice < 0) throw new Error(`第 ${rowNumber} 行：销售价不能为负数`);
     if (shelfLifeDays != null && shelfLifeDays < 0) {
         throw new Error(`第 ${rowNumber} 行：保质期不能为负数`);
     }
     if (lotQuantity != null && lotQuantity < 0) {
         throw new Error(`第 ${rowNumber} 行：批次数量不能为负数`);
     }
-    if (packageQuantity <= 0) throw new Error(`第 ${rowNumber} 行：包装换算必须大于 0`);
+    if (packageQuantity != null && packageQuantity <= 0) {
+        throw new Error(`第 ${rowNumber} 行：包装换算必须大于 0`);
+    }
     const raw: Record<string, string | number | boolean | null> = {};
     fields.forEach((field, index) => {
         if (!field) return;
@@ -510,11 +424,11 @@ function normalizeRow(
             .map(value => value.trim())
             .filter(Boolean),
         sourceCreatedAt: dateValue(values.get('sourceCreatedAt'), rowNumber, '创建日期'),
-        sku: textValue(values.get('sku')),
-        barcode: textValue(values.get('barcode')),
-        lotCode: textValue(values.get('lotCode')),
+        sku,
+        barcode,
+        lotCode: importSafeTextValue(values.get('lotCode')),
         lotQuantity,
-        supplier: normalizeSupplier(textValue(values.get('supplier'))),
+        supplier: normalizeSupplier(importSafeTextValue(values.get('supplier'))),
         providedFields: [...values.keys()].map(String),
         raw,
     };
@@ -527,26 +441,37 @@ function localDuplicateCounts(rows: NormalizedCatalogRow[]) {
         productGroups.set(key, [...(productGroups.get(key) ?? []), row]);
     }
     const duplicateGroups: NormalizedCatalogRow[][] = [];
+    const multiSkuGroups: NormalizedCatalogRow[][] = [];
+    let exactDuplicateRows = 0;
     for (const productGroup of productGroups.values()) {
         if (productGroup.length < 2) continue;
-        if (new Set(productGroup.map(stableProductRow)).size > 1) {
-            duplicateGroups.push(productGroup);
-            continue;
-        }
         const inventoryGroups = new Map<string, NormalizedCatalogRow[]>();
         for (const row of productGroup) {
             const key = localIdentity(row);
             inventoryGroups.set(key, [...(inventoryGroups.get(key) ?? []), row]);
         }
-        duplicateGroups.push(
-            ...[...inventoryGroups.values()].filter(
-                group => group.length > 1 && new Set(group.map(stableRow)).size > 1,
-            ),
-        );
+        for (const group of inventoryGroups.values()) {
+            const fingerprintCounts = new Map<string, number>();
+            for (const row of group) {
+                const fingerprint = stableRow(row);
+                fingerprintCounts.set(fingerprint, (fingerprintCounts.get(fingerprint) ?? 0) + 1);
+            }
+            exactDuplicateRows += [...fingerprintCounts.values()].reduce(
+                (total, count) => total + Math.max(0, count - 1),
+                0,
+            );
+            if (fingerprintCounts.size > 1) {
+                if (group[0]?.sku || group[0]?.barcode) duplicateGroups.push(group);
+                else multiSkuGroups.push(group);
+            }
+        }
     }
     return {
         duplicateGroups: duplicateGroups.length,
         duplicateRows: duplicateGroups.reduce((total, group) => total + group.length, 0),
+        multiSkuGroups: multiSkuGroups.length,
+        multiSkuRows: multiSkuGroups.reduce((total, group) => total + group.length, 0),
+        exactDuplicateRows,
     };
 }
 
@@ -570,31 +495,8 @@ function localProductIdentity(row: NormalizedCatalogRow): string {
 }
 
 function stableRow(row: NormalizedCatalogRow): string {
-    const { rowNumber: _rowNumber, raw: _raw, reportedMargin: _margin, ...stable } = row;
+    const { rowNumber: _rowNumber, sourceRecordKey: _sourceRecordKey, raw: _raw, ...stable } = row;
     return JSON.stringify(stable);
-}
-
-function stableProductRow(row: NormalizedCatalogRow): string {
-    return JSON.stringify({
-        name: row.name,
-        category: row.category,
-        currencyCode: row.currencyCode,
-        specification: row.specification,
-        primaryUnit: row.primaryUnit,
-        purchaseUnit: row.purchaseUnit,
-        packageQuantity: row.packageQuantity,
-        purchaseCost: row.purchaseCost,
-        sellingPrice: row.sellingPrice,
-        brand: row.brand,
-        enabled: row.enabled,
-        variantEnabled: row.variantEnabled,
-        description: row.description,
-        tags: row.tags,
-        sourceCreatedAt: row.sourceCreatedAt,
-        sku: row.sku,
-        barcode: row.barcode,
-        supplier: row.supplier,
-    });
 }
 
 function hasLocalWarning(row: NormalizedCatalogRow): boolean {
@@ -625,6 +527,11 @@ function textValue(value: CellValue): string {
     if (value == null) return '';
     if (value instanceof Date) return value.toISOString();
     return String(value).normalize('NFKC').trim();
+}
+
+function importSafeTextValue(value: CellValue): string {
+    const text = textValue(value);
+    return /^'[=+\-@]/u.test(text) ? text.slice(1) : text;
 }
 
 function decimalValue(value: CellValue, rowNumber: number, label: string, required: true): number;
@@ -681,16 +588,7 @@ function statusValue(value: CellValue, rowNumber: number, label = '商品状态'
 }
 
 function displayField(field: keyof NormalizedCatalogRow): string {
-    return (
-        (
-            {
-                name: '名称',
-                category: '分类',
-                purchaseCost: '进货价',
-                sellingPrice: '销售价',
-            } as Partial<Record<keyof NormalizedCatalogRow, string>>
-        )[field] ?? String(field)
-    );
+    return catalogFieldLabel(field);
 }
 
 function assertLocalFile(filename: string, byteSize: number): void {

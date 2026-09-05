@@ -757,7 +757,7 @@ export function useProductEditorForm() {
             return;
         }
         setVariants(current => [...current, ...generated]);
-        showNotice(`已生成 ${generated.length} 个待填写 SKU 组合，请补充编码、售价和库存后保存`);
+        showNotice(`已生成 ${generated.length} 个待填写 SKU 组合，请补充编码、销售价和库存后保存`);
     };
 
     const handleDeleteVariant = async (index: number) => {
@@ -888,7 +888,7 @@ export function useProductEditorForm() {
     const validateForm = (): boolean => {
         const errors: typeof formErrors = {};
         if (!productName.trim()) {
-            errors.name = '请输入商品名称';
+            errors.name = '请输入名称';
         }
         if (!description.trim()) {
             errors.description = '请输入中文商品详情';
