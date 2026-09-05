@@ -143,6 +143,9 @@ GitHub 的 `main` 分支手动运行一次 `Production Runtime Artifact`，Skill
 受管 publisher 权限与目标的只读预检、数据库备份和迁移、PM2 切换、已审核媒体/登录视觉/品牌写入、Nginx 检查、公网健康检查、版本标记与失败回滚。若目标提交改动了受管数据但发布计划没有对应的精确审核范围，或者改动了库存修复发布器等不受支持的数据路径，脚本会在备份、迁移和运行时切换前停止。已处于目标 SHA 的重复调度会返回 `PRODUCTION_DEPLOY_ALREADY_CURRENT`，不重复备份、迁移或重启。
 
 新增或修改某类受管 publisher 的生产门禁时必须拆成两次发布：第一版只上线工作流、制品清单和服务器引导门禁，确认生产入口已运行新门禁；第二版才上线 publisher/受管数据改动，并携带新门禁要求的审核范围。当前服务器会在快进并重新执行目标脚本之前先按旧门禁检查差异，因此禁止用手工复制、跳过检查或伪造媒体 key 把两阶段合成一次发布。
+
+首页三张轮播使用独立的 `homepage_carousel` 审核开关。第一阶段只发布该门禁，不勾选开关、不携带媒体或 Channel；必须在部署日志确认 `PRODUCTION_BOOTSTRAP_VERIFIED ... homepage_carousel_guard=enabled` 后才进入第二阶段。第二阶段新增 `sync-homepage-carousel.mjs` 与图片时，该脚本自动成为制品必需输入，勾选 `homepage_carousel=true`，并精确填写 `channel_codes=__default_channel__` 和 `media_keys=home-hero-token-topup-v1,home-hero-codex-tiers-v1,home-hero-account-services-v1`。缺少开关、Channel 或三张图片范围不一致均失败关闭。脚本先在备份前预演，候选 API 健康后执行 `--apply --allow-remote` 与独立 `--verify`；只有 `HOMEPAGE_CAROUSEL_VERIFY_OK` 后才切换客户端。图片、双语文案、链接和排序都绑定在 Vendure 首页内容区块，不能仅上传图片就宣布同步成功。
+
 单机发布会确保 `/var/lib/vendure-memory/production.swap` 提供 2 GiB 持久 Swap，并把 `vm.swappiness` 固定为
 10；创建前必须至少保留额外 1 GiB 磁盘空间，已有合规 Swap 时保持幂等。随后在下载前、迁移前和运行时切换
 前读取 Linux `MemAvailable` 与可用 Swap；物理可用内存不得低于 192 MiB，总有效余量不得低于 384 MiB 或

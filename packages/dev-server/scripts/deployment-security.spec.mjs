@@ -330,7 +330,7 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.match(script, /sync-moyao-brand\.mjs --dry-run/u);
     assert.match(script, /sync-moyao-brand\.mjs --apply --allow-remote/u);
     assert.match(script, /sync-moyao-brand\.mjs --verify/u);
-    assert.equal((script.match(/^\s*VENDURE_STOREFRONT_URL=https:\/\/moyaoai\.com/gmu) ?? []).length, 9);
+    assert.equal((script.match(/^\s*VENDURE_STOREFRONT_URL=https:\/\/moyaoai\.com/gmu) ?? []).length, 12);
     assert.match(script, /DAMATONG_PREFLIGHT_BEGIN/u);
     assert.match(script, /DAMATONG_PREFLIGHT_OK/u);
     assert.match(script, /DAMATONG_PUBLISH_BEGIN/u);
