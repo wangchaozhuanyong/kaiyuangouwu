@@ -29,9 +29,35 @@ function planDigest(plan, sourceSha) {
     return createHash('sha256').update(JSON.stringify({ sourceSha, plan })).digest('hex');
 }
 
+function inspectProductionReleases() {
+    let pm2Processes;
+    try {
+        pm2Processes = JSON.parse(
+            execFileSync('pm2', ['jlist'], {
+                encoding: 'utf8',
+                timeout: 30000,
+                maxBuffer: 10 * 1024 * 1024,
+                stdio: ['ignore', 'pipe', 'pipe'],
+            }),
+        );
+    } catch {
+        throw new Error('PM2 snapshot unavailable; retention is blocked');
+    }
+    return retention.inspectReleaseState({ pm2Processes });
+}
+
+function encodeBeforeReport(report) {
+    const output = `${JSON.stringify({ stage: 'before', ...report }, null, 2)}\n`;
+    assert.ok(
+        Buffer.byteLength(output) <= 18000,
+        'Diagnosis exceeds the SSM evidence limit; retention is blocked',
+    );
+    return output;
+}
+
 function retainReviewedPlan(
     request,
-    inspect = () => retention.inspectReleaseState({}),
+    inspect = inspectProductionReleases,
     apply = retention.applyRetentionPlan,
 ) {
     assert.equal(request.operation, 'retain-reviewed', 'Retention requires the reviewed operation');
@@ -98,7 +124,7 @@ function diagnose(request) {
         latestBackups: backupMetadata(),
     };
     try {
-        const plan = retention.inspectReleaseState({});
+        const plan = inspectProductionReleases();
         result.retention = { status: 'ready', planSha256: planDigest(plan, request.sourceSha), plan };
     } catch {
         result.retention = {
@@ -112,17 +138,20 @@ function diagnose(request) {
 function runLocked(environment = process.env) {
     const request = validateRequest(environment);
     const before = diagnose(request);
-    process.stdout.write(`${JSON.stringify({ stage: 'before', ...before }, null, 2)}\n`);
-    if (request.operation === 'diagnose') return;
+    process.stdout.write(encodeBeforeReport(before));
+    if (request.operation === 'diagnose') {
+        process.stdout.write('PRODUCTION_OPERATIONS_COMPLETE operation=diagnose\n');
+        return;
+    }
     const appliedPlan = retainReviewedPlan(request);
     process.stdout.write(
         `${JSON.stringify(
             {
                 stage: 'retention-applied',
                 planSha256: request.expectedPlanSha256,
-                deletedDirectories: appliedPlan.deleteDirectories,
-                deletedArchives: appliedPlan.deleteArchives,
-                preservedDirectories: appliedPlan.keepDirectories,
+                deletedDirectoryCount: appliedPlan.deleteDirectories.length,
+                deletedArchiveCount: appliedPlan.deleteArchives.length,
+                preservedDirectoryCount: appliedPlan.keepDirectories.length,
             },
             null,
             2,
@@ -135,13 +164,27 @@ function runLocked(environment = process.env) {
         'vendure-production-healthcheck.service',
     ]);
     process.stdout.write(
-        `${JSON.stringify({ stage: 'after', healthRefresh, ...diagnose(request) }, null, 2)}\n`,
+        `${JSON.stringify(
+            {
+                stage: 'after',
+                healthRefresh,
+                disk: readCommand('df', ['-Pk', '/']),
+                healthService: readCommand('systemctl', [
+                    'show',
+                    'vendure-production-healthcheck.service',
+                    '--property=Result,ExecMainStatus,ExecMainExitTimestamp,ActiveState',
+                ]),
+            },
+            null,
+            2,
+        )}\n`,
     );
     assert.equal(
         healthRefresh.status,
         'ok',
         'Retention completed, but the production health check still failed',
     );
+    process.stdout.write('PRODUCTION_OPERATIONS_COMPLETE operation=retain-reviewed\n');
 }
 
 if (require.main === module) {
@@ -164,4 +207,10 @@ if (require.main === module) {
     }
 }
 
-module.exports = { planDigest, retainReviewedPlan, validateRequest };
+module.exports = {
+    encodeBeforeReport,
+    inspectProductionReleases,
+    planDigest,
+    retainReviewedPlan,
+    validateRequest,
+};

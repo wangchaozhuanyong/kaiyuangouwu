@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import os from 'node:os';
@@ -9,6 +10,27 @@ const require = createRequire(import.meta.url);
 const operations = require('../../../deploy/production-operations.cjs');
 const retention = require('../../../deploy/systemd/vendure-production-release-retention.cjs');
 const sourceSha = 'a'.repeat(40);
+
+void test('oversized diagnostic evidence fails before any retention can start', () => {
+    assert.throws(() => operations.encodeBeforeReport({ data: 'x'.repeat(18000) }), /evidence limit/u);
+});
+
+void test('a failing PM2 command cannot leak its stderr or error message', t => {
+    const root = mkdtempSync(path.join(os.tmpdir(), 'vendure-pm2-redaction-'));
+    t.after(() => rmSync(root, { recursive: true, force: true }));
+    const sentinel = 'FAKE_SECRET_MUST_NOT_BE_LOGGED';
+    writeFileSync(path.join(root, 'pm2'), `#!/bin/sh\nprintf '${sentinel}' >&2\nexit 1\n`, { mode: 0o700 });
+    const modulePath = JSON.stringify(require.resolve('../../../deploy/production-operations.cjs'));
+    const script = `try { require(${modulePath}).inspectProductionReleases(); }
+        catch (error) { process.stderr.write(error.message); process.exitCode = 1; }`;
+    const result = spawnSync(process.execPath, ['-e', script], {
+        encoding: 'utf8',
+        env: { ...process.env, PATH: root },
+    });
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /PM2 snapshot unavailable/u);
+    assert.equal(`${result.stdout}${result.stderr}`.includes(sentinel), false);
+});
 
 function fixture(t) {
     const root = mkdtempSync(path.join(os.tmpdir(), 'vendure-production-operations-'));

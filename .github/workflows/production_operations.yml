@@ -167,7 +167,8 @@ jobs:
                     --query '{Status:Status,ResponseCode:ResponseCode,Output:StandardOutputContent,Error:StandardErrorContent}' \
                     --output json > "$RUNNER_TEMP/production-operations-result.json"
                   cat "$RUNNER_TEMP/production-operations-result.json"
-                  jq -e '.Status == "Success" and .ResponseCode == 0' \
+                  jq -e --arg completion "PRODUCTION_OPERATIONS_COMPLETE operation=${OPS_OPERATION}" \
+                    '.Status == "Success" and .ResponseCode == 0 and (.Output | endswith($completion + "\n"))' \
                     "$RUNNER_TEMP/production-operations-result.json" >/dev/null
 
             - name: Record production operation result
