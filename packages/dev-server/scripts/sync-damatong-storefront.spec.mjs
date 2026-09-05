@@ -372,6 +372,7 @@ test('apply mode updates drift and verifies the same ids through Admin and Shop 
     let contentUpdated = false;
     let batchMutationCount = 0;
     const targetChannelCode = '美宜佳';
+    const targetChannelToken = 'opaque-production-token';
 
     const profile = {
         id: 'profile-1',
@@ -379,7 +380,7 @@ test('apply mode updates drift and verifies the same ids through Admin and Shop 
         channel: {
             id: 'channel-my',
             code: targetChannelCode,
-            token: damatongStorefront.channelToken,
+            token: targetChannelToken,
             customFields: {
                 storefrontNameZh: damatongStorefront.storefrontNameZh,
                 storefrontNameEn: damatongStorefront.storefrontNameEn,
@@ -411,6 +412,10 @@ test('apply mode updates drift and verifies the same ids through Admin and Shop 
     const fetchImpl = async (_url, init) => {
         const request = JSON.parse(init.body);
         const channelToken = init.headers?.['vendure-token'];
+        if (request.query.includes('DamatongActiveChannel')) {
+            assert.equal(channelToken, undefined);
+            return Response.json({ data: { activeChannel: { code: targetChannelCode } } });
+        }
         if (request.query.includes('DamatongStorefrontLogin')) {
             return new Response(
                 JSON.stringify({
@@ -421,7 +426,7 @@ test('apply mode updates drift and verifies the same ids through Admin and Shop 
                                 {
                                     id: 'channel-my',
                                     code: targetChannelCode,
-                                    token: damatongStorefront.channelToken,
+                                    token: targetChannelToken,
                                 },
                                 {
                                     id: 'channel-default',
@@ -435,6 +440,7 @@ test('apply mode updates drift and verifies the same ids through Admin and Shop 
                 { headers: { 'vendure-auth-token': 'auth-token' } },
             );
         }
+        if (channelToken !== 'source-token') assert.equal(channelToken, targetChannelToken);
         if (request.query.includes('DamatongStoreProfiles')) {
             return Response.json({ data: { storeProfiles: [profile] } });
         }
@@ -619,13 +625,15 @@ test('failed Shop verification restores the previous Admin content bindings', as
     beforeBlocks[0].internalName = '上线前的首页主视觉';
     let currentBlocks = structuredClone(beforeBlocks);
     let batchMutationCount = 0;
+    const targetChannelCode = '美宜佳';
+    const targetChannelToken = 'opaque-production-token';
     const profile = {
         id: 'profile-1',
         updatedAt: '2026-09-05T00:00:00.000Z',
         channel: {
             id: 'channel-my',
-            code: '美宜佳',
-            token: damatongStorefront.channelToken,
+            code: targetChannelCode,
+            token: targetChannelToken,
             customFields: {
                 storefrontNameZh: damatongStorefront.storefrontNameZh,
                 storefrontNameEn: damatongStorefront.storefrontNameEn,
@@ -656,6 +664,10 @@ test('failed Shop verification restores the previous Admin content bindings', as
     const fetchImpl = async (_url, init) => {
         const request = JSON.parse(init.body);
         const requestChannelToken = init.headers?.['vendure-token'];
+        if (request.query.includes('DamatongActiveChannel')) {
+            assert.equal(requestChannelToken, undefined);
+            return Response.json({ data: { activeChannel: { code: targetChannelCode } } });
+        }
         if (request.query.includes('DamatongStorefrontLogin')) {
             return new Response(
                 JSON.stringify({
@@ -665,8 +677,8 @@ test('failed Shop verification restores the previous Admin content bindings', as
                             channels: [
                                 {
                                     id: 'channel-my',
-                                    code: '美宜佳',
-                                    token: damatongStorefront.channelToken,
+                                    code: targetChannelCode,
+                                    token: targetChannelToken,
                                 },
                                 {
                                     id: 'channel-default',
@@ -679,6 +691,9 @@ test('failed Shop verification restores the previous Admin content bindings', as
                 }),
                 { headers: { 'vendure-auth-token': 'auth-token' } },
             );
+        }
+        if (requestChannelToken !== 'source-token') {
+            assert.equal(requestChannelToken, targetChannelToken);
         }
         if (request.query.includes('DamatongStoreProfiles')) {
             return Response.json({ data: { storeProfiles: [profile] } });
