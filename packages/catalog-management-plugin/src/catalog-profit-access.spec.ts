@@ -1,5 +1,5 @@
 import { CurrencyCode, Permission } from '@vendure/common/lib/generated-types';
-import { Order, RequestContext, TransactionalConnection } from '@vendure/core';
+import { Order, PaymentMethod, RequestContext, TransactionalConnection } from '@vendure/core';
 import { describe, expect, it, vi } from 'vitest';
 
 import { CatalogProfitService } from './catalog-profit.service';
@@ -62,6 +62,56 @@ function setup(permissions: string[] = [Permission.UpdateOrder, manageCatalogOpe
 }
 
 describe('catalog profit access and expense writes', () => {
+    it('uses current-channel handler evidence and keeps settled real payments on cancelled orders', async () => {
+        const { ctx, service, query, connection } = setup([
+            Permission.ReadOrder,
+            manageCatalogOperationsPermission.Read,
+        ]);
+        Object.assign(query, {
+            clone: vi.fn().mockReturnValue(query),
+            select: vi.fn().mockReturnValue(query),
+            getRawOne: vi.fn().mockResolvedValue({ totalItems: 3 }),
+            leftJoinAndSelect: vi.fn().mockReturnValue(query),
+            distinct: vi.fn().mockReturnValue(query),
+            orderBy: vi.fn().mockReturnValue(query),
+            addOrderBy: vi.fn().mockReturnValue(query),
+        });
+        query.getMany.mockResolvedValue(
+            ['production-coupon-atomicity-test', 'neutral-card', 'real-card'].map((method, index) => ({
+                id: index + 1,
+                code: `ORDER-${index + 1}`,
+                state: 'Cancelled',
+                orderPlacedAt: updatedAt,
+                currencyCode: CurrencyCode.MYR,
+                shippingWithTax: 0,
+                lines: [],
+                payments: [{ method, amount: 1000, state: 'Settled', refunds: [] }],
+            })),
+        );
+        const methods = {
+            find: vi.fn().mockResolvedValue([
+                { code: 'neutral-card', handler: { code: 'dummy-payment-handler' } },
+                { code: 'real-card', handler: { code: 'stripe-payment-handler' } },
+            ]),
+        };
+        connection.getRepository.mockImplementation((_: RequestContext, entity: unknown) => {
+            if (entity === Order) return { createQueryBuilder: () => query };
+            return entity === PaymentMethod ? methods : { find: vi.fn().mockResolvedValue([]) };
+        });
+        const result = await service.report(ctx, {
+            from: '2026-09-01',
+            to: '2026-09-10',
+            currencyCode: CurrencyCode.MYR,
+        });
+        expect(result.items.map(item => item.code)).toEqual(['ORDER-3']);
+        expect(result.summary.settledRevenueMicrounits).toBe(10_000);
+        expect(methods.find).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: expect.objectContaining({ channels: { id: 9 } }),
+            }),
+        );
+    });
+
     it.each([[Permission.ReadOrder], [manageCatalogOperationsPermission.Read]])(
         'requires both read permissions: %j alone is insufficient',
         async permission => {

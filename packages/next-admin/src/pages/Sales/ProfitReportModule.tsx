@@ -72,7 +72,7 @@ export function ProfitReportModule() {
                             </h1>
                         </div>
                         <p className="mt-1 text-xs text-slate-500">
-                            按下单日期、当前店铺、已结算支付和商品历史成本核算；已结算退款会从收入中扣除。
+                            按下单日期、当前店铺、已结算支付和商品历史成本核算；已结算退款会从收入中扣除，明确标记的测试或沙盒支付及其退款不计入。
                         </p>
                     </div>
                     <div className="flex flex-wrap items-end gap-2">

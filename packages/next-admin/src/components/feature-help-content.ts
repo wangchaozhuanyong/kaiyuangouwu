@@ -7,7 +7,8 @@ export interface FeatureHelpContent {
 
 export const featureHelpContent = {
     'sales.profit': {
-        purpose: '按当前店铺、币种和下单日期核算已结算支付、退款与商品历史成本。',
+        purpose:
+            '按当前店铺、币种和下单日期核算已结算支付、退款与商品历史成本；明确标记的测试或沙盒支付及其退款不计入。',
         requirements: [
             '具有订单和商品经营数据查看权限',
             '成本或实际费用缺失时先补齐；历史成本估算会单独标记',

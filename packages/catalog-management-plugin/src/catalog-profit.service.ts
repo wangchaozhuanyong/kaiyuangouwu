@@ -3,6 +3,7 @@ import { CurrencyCode, Permission } from '@vendure/common/lib/generated-types';
 import {
     ForbiddenError,
     Order,
+    PaymentMethod,
     RequestContext,
     TransactionalConnection,
     UserInputError,
@@ -17,6 +18,7 @@ const MAX_REPORT_DAYS = 366;
 const MAX_REPORT_ORDERS = 20_000;
 const MAX_EXPENSE_IMPORT_ROWS = 5_000;
 const SETTLED_STATE = 'Settled';
+const TEST_PAYMENT_PATTERN = /(?:^|[-_\s])(demo|dummy|mock|sandbox|test)(?:$|[-_\s])|测试/iu;
 
 export interface CatalogProfitReportInput {
     from: Date | string;
@@ -60,6 +62,8 @@ interface ProfitOrderLineSource {
 }
 
 interface ProfitPaymentSource {
+    method: string;
+    handlerCode?: string;
     amount: number;
     state: string;
     refunds?: Array<{ total: number; state: string }>;
@@ -306,7 +310,8 @@ export class CatalogProfitService {
             ...new Set(orders.flatMap(order => order.lines.map(line => String(line.productVariantId)))),
         ];
         const orderIds = orders.map(order => order.id);
-        const [costRecords, expenseRecords] = await Promise.all([
+        const paymentMethodCodes = [...new Set(orders.flatMap(order => order.payments.map(p => p.method)))];
+        const [costRecords, expenseRecords, paymentMethods] = await Promise.all([
             variantIds.length
                 ? this.connection.getRepository(ctx, VariantCostRecord).find({
                       where: {
@@ -326,7 +331,14 @@ export class CatalogProfitService {
                       },
                   })
                 : [],
+            paymentMethodCodes.length
+                ? this.connection.getRepository(ctx, PaymentMethod).find({
+                      where: { code: In(paymentMethodCodes), channels: { id: ctx.channelId } },
+                      select: { code: true, handler: true },
+                  })
+                : [],
         ]);
+        const handlersByMethod = new Map(paymentMethods.map(method => [method.code, method.handler.code]));
         const costsByVariant = new Map<string, CostPoint[]>();
         for (const record of costRecords) {
             const key = String(record.variantId);
@@ -363,6 +375,8 @@ export class CatalogProfitService {
                     quantity: Math.max(line.orderPlacedQuantity, line.quantity),
                 })),
                 payments: order.payments.map(payment => ({
+                    method: payment.method,
+                    handlerCode: handlersByMethod.get(payment.method),
                     amount: payment.amount,
                     state: payment.state,
                     refunds: payment.refunds?.map(refund => ({
@@ -425,13 +439,20 @@ export function calculateCatalogProfitReport(
     expensesByOrder: ReadonlyMap<string, OrderProfitExpenseSource> = new Map(),
 ) {
     const items = orders.flatMap<CatalogProfitOrderResult>(order => {
+        // Historical methods may have been removed. Keep their persisted method code as evidence,
+        // and also detect neutral method names backed by a registered test handler.
+        const payments = order.payments.filter(
+            payment =>
+                !TEST_PAYMENT_PATTERN.test(payment.method) &&
+                !TEST_PAYMENT_PATTERN.test(payment.handlerCode ?? ''),
+        );
         const settledRevenueMicrounits =
-            order.payments
+            payments
                 .filter(payment => payment.state === SETTLED_STATE)
                 .reduce((total, payment) => total + payment.amount, 0) * 10;
         if (settledRevenueMicrounits <= 0) return [];
         const refundedRevenueMicrounits =
-            order.payments
+            payments
                 .flatMap(payment => payment.refunds ?? [])
                 .filter(refund => refund.state === SETTLED_STATE)
                 .reduce((total, refund) => total + refund.total, 0) * 10;
