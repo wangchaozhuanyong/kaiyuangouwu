@@ -132,15 +132,21 @@ export const adminApiExtensions = gql`
     input StorefrontContentBlockTranslationInput {
         languageCode: LanguageCode!
         title: String!
+        titleLocked: Boolean
         subtitle: String
+        subtitleLocked: Boolean
         body: String
+        bodyLocked: Boolean
         ctaLabel: String
+        ctaLabelLocked: Boolean
     }
 
     input StorefrontContentItemTranslationInput {
         languageCode: LanguageCode!
         label: String!
+        labelLocked: Boolean
         description: String
+        descriptionLocked: Boolean
     }
 
     input StorefrontContentItemInput {

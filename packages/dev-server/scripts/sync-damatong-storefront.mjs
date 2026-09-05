@@ -462,7 +462,14 @@ export function buildDamatongBrandPlan(
         brandAccentColor: normalizedBrandColor(profile.brandAccentColor),
         brandHighlightColor: normalizedBrandColor(profile.brandHighlightColor),
     };
-    const input = { id: profile.id, expectedUpdatedAt: profile.updatedAt, ...desired };
+    const input = {
+        id: profile.id,
+        expectedUpdatedAt: profile.updatedAt,
+        ...desired,
+        storefrontNameEnLocked: true,
+        descriptionEnLocked: Boolean(desired.descriptionEn.trim()),
+        taglineEnLocked: Boolean(desired.taglineEn.trim()),
+    };
     const changes = Object.keys(desired).filter(key => current[key] !== desired[key]);
     for (const asset of manifest.filter(value => value.profileField)) {
         const assetId = assetIdsByKey.get(asset.key);
@@ -508,6 +515,37 @@ export function buildDamatongCategoryPlan(existing, definition, featuredAssetId)
         id: existing.id,
         action: translationsChanged || featuredAssetChanged || galleryChanged ? 'update' : 'noop',
         input: { id: existing.id, translations, featuredAssetId, assetIds },
+    };
+}
+
+function reviewedTranslations(translations, fields) {
+    const normalized = normalizedTranslations(translations, fields);
+    const source = normalized.find(value => value.languageCode === 'zh_Hans');
+    const target = normalized.find(value => value.languageCode === 'en');
+    assert.ok(source && target, 'Reviewed content requires Simplified Chinese and English');
+    for (const field of fields) {
+        assert.ok(!source[field].trim() || target[field].trim(), `Reviewed English is missing for ${field}`);
+    }
+    return normalized.map(value =>
+        value.languageCode === 'en'
+            ? {
+                  ...value,
+                  ...Object.fromEntries(
+                      fields.map(field => [`${field}Locked`, Boolean(value[field].trim())]),
+                  ),
+              }
+            : value,
+    );
+}
+
+function reviewedBlockInput(block) {
+    return {
+        ...block,
+        translations: reviewedTranslations(block.translations, ['title', 'subtitle', 'body', 'ctaLabel']),
+        items: block.items.map(item => ({
+            ...item,
+            translations: reviewedTranslations(item.translations, ['label', 'description']),
+        })),
     };
 }
 
@@ -656,7 +694,7 @@ export function buildDamatongContentPlans(existingBlocks, desiredBlocks) {
             assert.equal(existing.type, desiredBlock.type, `${desiredBlock.code} has the wrong content type`);
             claimedExistingIds.add(String(existing.id));
         }
-        const desired = reconcileBlockItems(existing, desiredBlock);
+        const desired = reviewedBlockInput(reconcileBlockItems(existing, desiredBlock));
         if (!existing) {
             return { code: desired.code, type: desired.type, action: 'create', input: desired };
         }
@@ -885,10 +923,13 @@ function profileRestoreInput(beforeProfile, currentProfile) {
         expectedUpdatedAt: currentProfile.updatedAt,
         storefrontNameZh: beforeProfile.channel.customFields?.storefrontNameZh ?? '',
         storefrontNameEn: beforeProfile.channel.customFields?.storefrontNameEn ?? '',
+        storefrontNameEnLocked: true,
         descriptionZh: beforeProfile.descriptionZh ?? '',
         descriptionEn: beforeProfile.descriptionEn ?? '',
+        descriptionEnLocked: Boolean(beforeProfile.descriptionEn?.trim()),
         taglineZh: beforeProfile.taglineZh ?? '',
         taglineEn: beforeProfile.taglineEn ?? '',
+        taglineEnLocked: Boolean(beforeProfile.taglineEn?.trim()),
         brandBackgroundColor: normalizedBrandColor(beforeProfile.brandBackgroundColor),
         brandPrimaryColor: normalizedBrandColor(beforeProfile.brandPrimaryColor),
         brandAccentColor: normalizedBrandColor(beforeProfile.brandAccentColor),
@@ -920,7 +961,7 @@ function blockRestoreInput(beforeBlock, currentBlock) {
         if (!currentItemIds.has(String(item.id))) delete input.id;
         return input;
     };
-    return {
+    return reviewedBlockInput({
         id: beforeBlock.id,
         expectedUpdatedAt: currentBlock.updatedAt,
         code: beforeBlock.code,
@@ -945,7 +986,7 @@ function blockRestoreInput(beforeBlock, currentBlock) {
             'ctaLabel',
         ]),
         items: beforeBlock.items.map(restoreItem),
-    };
+    });
 }
 
 function comparableCollection(collection) {

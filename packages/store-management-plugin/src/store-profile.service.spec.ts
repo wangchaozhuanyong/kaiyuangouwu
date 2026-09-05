@@ -1,5 +1,6 @@
 import 'reflect-metadata';
 
+import { ContentTranslationService } from '@vendure/content-translation-plugin';
 import { Channel, EntityNotFoundError } from '@vendure/core';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -112,6 +113,7 @@ function createService(
         recordPreparedFields: vi.fn(() => Promise.resolve()),
     };
     return {
+        translations,
         activationReadinessService,
         channelService,
         findOneInChannel,
@@ -125,6 +127,126 @@ function createService(
 }
 
 describe('StoreProfileService', () => {
+    it.each(['admin', 'merchant'] as const)(
+        'preserves reviewed English through %s publish, repeat and rollback without a provider',
+        async mode => {
+            const current = profile({
+                channel: {
+                    ...channel(),
+                    customFields: { storefrontNameZh: '大马通', storefrontNameEn: 'DAMATONG' },
+                },
+                descriptionZh: '原简介',
+                descriptionEn: 'Reviewed description',
+                taglineZh: '原口号',
+                taglineEn: 'Reviewed tagline',
+            });
+            const repository = {
+                findOne: vi.fn().mockResolvedValue(current),
+                save: vi.fn(value => Promise.resolve(value)),
+            };
+            const { service, translations } = createService(repository, {
+                find: vi.fn().mockResolvedValue([]),
+            });
+            const translate = vi.fn().mockRejectedValue(new Error('User Rate Limit Exceeded'));
+            const realTranslations = new ContentTranslationService({} as any, {
+                provider: { name: 'unavailable-test-provider', isConfigured: () => false, translate },
+                glossary: {},
+                sourceLanguageCode: 'zh_Hans',
+                targetLanguageCode: 'en',
+            });
+            translations.prepareLocalizedFields.mockImplementation(fields =>
+                realTranslations.prepareLocalizedFields(fields),
+            );
+            const update = (nameZh: string, descriptionZh: string, taglineZh: string) => {
+                const input = {
+                    id: current.id,
+                    expectedUpdatedAt: current.updatedAt,
+                    storefrontNameZh: nameZh,
+                    storefrontNameEn: 'DAMATONG',
+                    storefrontNameEnLocked: true,
+                    descriptionZh,
+                    descriptionEn: 'Reviewed description',
+                    descriptionEnLocked: true,
+                    taglineZh,
+                    taglineEn: 'Reviewed tagline',
+                    taglineEnLocked: true,
+                };
+                return mode === 'admin'
+                    ? service.update({ channelId: current.channelId } as any, input)
+                    : service.updateForMerchant({ channelId: current.channelId } as any, input);
+            };
+            for (const name of ['大马通 DAMATONG', '大马通 DAMATONG', '大马通']) {
+                const restored = name === '大马通';
+                const result = await update(
+                    name,
+                    restored ? '原简介' : '新简介',
+                    restored ? '原口号' : '新口号',
+                );
+                expect(result.channel.customFields).toMatchObject({
+                    storefrontNameZh: name,
+                    storefrontNameEn: 'DAMATONG',
+                });
+                expect(result).toMatchObject({
+                    descriptionEn: 'Reviewed description',
+                    taglineEn: 'Reviewed tagline',
+                });
+                expect(translations.recordPreparedFields).toHaveBeenLastCalledWith(
+                    expect.anything(),
+                    expect.objectContaining({ entityType: 'StoreProfile', entityId: current.id }),
+                    expect.arrayContaining([
+                        expect.objectContaining({
+                            path: 'storefrontName',
+                            translatedText: 'DAMATONG',
+                            locked: true,
+                        }),
+                        expect.objectContaining({
+                            path: 'description',
+                            translatedText: 'Reviewed description',
+                            locked: true,
+                        }),
+                        expect.objectContaining({
+                            path: 'tagline',
+                            translatedText: 'Reviewed tagline',
+                            locked: true,
+                        }),
+                    ]),
+                );
+            }
+            expect(translate).not.toHaveBeenCalled();
+            expect(repository.save).toHaveBeenCalledTimes(3);
+        },
+    );
+
+    it.each(['', '中文英文'])('rejects an invalid manually locked name %j before saving', async nameEn => {
+        const current = profile();
+        const repository = {
+            findOne: vi.fn().mockResolvedValue(current),
+            save: vi.fn(),
+        };
+        const { service, translations } = createService(repository, {});
+        const translate = vi.fn();
+        const realTranslations = new ContentTranslationService({} as any, {
+            provider: { name: 'test', isConfigured: () => false, translate },
+            glossary: {},
+            sourceLanguageCode: 'zh_Hans',
+            targetLanguageCode: 'en',
+        });
+        translations.prepareLocalizedFields.mockImplementation(fields =>
+            realTranslations.prepareLocalizedFields(fields),
+        );
+        await expect(
+            service.update({} as any, {
+                id: current.id,
+                expectedUpdatedAt: current.updatedAt,
+                storefrontNameZh: '大马通 DAMATONG',
+                storefrontNameEn: nameEn,
+                storefrontNameEnLocked: true,
+            }),
+        ).rejects.toThrow(/人工锁定/);
+        expect(repository.save).not.toHaveBeenCalled();
+        expect(translate).not.toHaveBeenCalled();
+    });
+
     it('creates an unpublished draft after the current last position', async () => {
         const save = vi.fn(value => Promise.resolve(value));
         const repository = {
@@ -427,6 +549,62 @@ describe('StoreProfileService', () => {
             }),
         ).rejects.toBeInstanceOf(EntityNotFoundError);
     });
+
+    it('accepts the actual Damatong publisher names through the API service', async () => {
+        const configPath = '../../dev-server/scripts/damatong-storefront-config.mjs';
+        const { damatongStorefront } = await import(configPath);
+        const current = profile();
+        const profileRepository = {
+            findOne: vi.fn().mockResolvedValue(current),
+            save: vi.fn(value => Promise.resolve(value)),
+        };
+        const { channelService, service } = createService(profileRepository, {
+            find: vi.fn().mockResolvedValue([]),
+        });
+
+        await service.update({} as any, {
+            id: current.id,
+            expectedUpdatedAt: current.updatedAt,
+            storefrontNameZh: damatongStorefront.storefrontNameZh,
+            storefrontNameEn: damatongStorefront.storefrontNameEn,
+            storefrontNameEnLocked: true,
+        });
+
+        expect(channelService.update).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({
+                customFields: expect.objectContaining({
+                    storefrontNameZh: damatongStorefront.storefrontNameZh,
+                    storefrontNameEn: damatongStorefront.storefrontNameEn,
+                }),
+            }),
+        );
+    });
+
+    it.each(['admin', 'merchant'] as const)(
+        'rejects the production overlong English name before %s writes',
+        async mode => {
+            const current = profile();
+            const profileRepository = {
+                findOne: vi.fn().mockResolvedValue(current),
+                save: vi.fn(value => Promise.resolve(value)),
+            };
+            const { channelService, service } = createService(profileRepository, {});
+            const input = {
+                id: current.id,
+                expectedUpdatedAt: current.updatedAt,
+                storefrontNameEn: 'DAMATONG Marketplace',
+                storefrontNameEnLocked: true,
+            };
+            const ctx = { channelId: 'channel-1' } as any;
+
+            await expect(
+                mode === 'admin' ? service.update(ctx, input) : service.updateForMerchant(ctx, input),
+            ).rejects.toThrow('1 至 16 个显示单位');
+            expect(channelService.update).not.toHaveBeenCalled();
+            expect(profileRepository.save).not.toHaveBeenCalled();
+        },
+    );
 
     it('rejects an overlong storefront name before saving', async () => {
         const current = profile();
