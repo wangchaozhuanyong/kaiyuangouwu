@@ -4,6 +4,21 @@ import { describe, expect, it } from 'vitest';
 import { adminApiExtensions, shopApiExtensions } from './api-extensions';
 
 describe('store management API extensions', () => {
+    it('exposes optional English locks on both profile update inputs', () => {
+        for (const name of ['UpdateStoreProfileInput', 'UpdateMyStoreProfileInput']) {
+            const definition = adminApiExtensions.definitions.find(
+                value => value.kind === Kind.INPUT_OBJECT_TYPE_DEFINITION && value.name.value === name,
+            );
+            if (definition?.kind !== Kind.INPUT_OBJECT_TYPE_DEFINITION) throw new Error(name);
+            for (const fieldName of ['storefrontNameEnLocked', 'descriptionEnLocked', 'taglineEnLocked']) {
+                expect(definition.fields?.find(field => field.name.value === fieldName)?.type).toMatchObject({
+                    kind: Kind.NAMED_TYPE,
+                    name: { value: 'Boolean' },
+                });
+            }
+        }
+    });
+
     it('exposes managed legal identity fields to admins and the storefront', () => {
         const legalFields = ['legalEntityName', 'legalRegistrationCountry', 'supportEmail', 'privacyEmail'];
         const adminTypeNames = ['StoreProfile', 'UpdateStoreProfileInput', 'UpdateMyStoreProfileInput'];

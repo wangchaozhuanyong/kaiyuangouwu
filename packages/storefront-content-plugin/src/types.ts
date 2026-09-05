@@ -16,15 +16,21 @@ export type StorefrontContentSettingsValue = Record<
 export interface StorefrontContentBlockTranslationInput {
     languageCode: LanguageCode;
     title: string;
+    titleLocked?: boolean | null;
     subtitle?: string | null;
+    subtitleLocked?: boolean | null;
     body?: string | null;
+    bodyLocked?: boolean | null;
     ctaLabel?: string | null;
+    ctaLabelLocked?: boolean | null;
 }
 
 export interface StorefrontContentItemTranslationInput {
     languageCode: LanguageCode;
     label: string;
+    labelLocked?: boolean | null;
     description?: string | null;
+    descriptionLocked?: boolean | null;
 }
 
 export interface StorefrontContentItemInput {
