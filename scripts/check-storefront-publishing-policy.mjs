@@ -15,6 +15,9 @@ const designOnlyAssets = new Set([
     'packages/storefront/src/assets/storefront/products/codex-plus-source.png',
     'packages/storefront/src/assets/storefront/products/codex-pro-x5-source.png',
     'packages/storefront/src/assets/storefront/promotions/category-gpt-source.png',
+    'packages/storefront/src/assets/storefront/carousel/colorful-marketplace-v1/source/token-topup-source.png',
+    'packages/storefront/src/assets/storefront/carousel/colorful-marketplace-v1/source/codex-tiers-source.png',
+    'packages/storefront/src/assets/storefront/carousel/colorful-marketplace-v1/source/account-services-source.png',
 ]);
 
 function toPosix(value) {

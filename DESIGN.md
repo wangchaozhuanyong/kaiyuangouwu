@@ -2,7 +2,7 @@
 
 ## Brand direction
 
-MOYAO AI 的默认站点是一个清晰、克制、可信的 AI 服务商店。视觉重点是“一个入口连接多种模型”，不使用堆满发光图标、重复大海报或赛博装饰的模板化表达。
+MOYAO AI 的默认站点是一个清晰、彩色、可信的 AI 数字服务商城。首屏必须先让用户识别当前可购买的中转站 Token 充值、Codex 成品号和其他在售账号服务，不用抽象钥匙、光球或模型入口概念替代真实商品。
 
 ## Identity
 
@@ -24,21 +24,29 @@ The horizontal wordmark is used in the storefront header and other wide brand lo
 - Homepage sections must each have one purpose. Avoid repeating the same product grid under multiple labels unless the backend intentionally provides different products.
 - Desktop product cards use a `4:3` media frame with `object-fit: contain`; mobile cards stay square for compact two-column browsing.
 - Hero copy remains a live HTML layer. Never bake prices, CTA text or frequently changing promises into an image.
+- The homepage carousel uses exactly three commerce stories in this order: Token top-up, Codex account tiers, then currently available account services. Empty catalog categories are not promoted.
 - Long pages use clear section rhythm and progressively disclosed detail instead of stacking full-width posters.
 
 ## Image system
 
-| Surface               | Master size      | Crop and safe area                          | Content rule                                                     |
-| --------------------- | ---------------- | ------------------------------------------- | ---------------------------------------------------------------- |
-| Product cover         | `1600×1600`      | Keep key text/object inside central 80%     | One product or one service concept; no dense specification sheet |
-| Desktop card render   | `4:3` container  | Use `contain`, never crop critical copy     | Preserve complete product cover with quiet padding               |
-| Homepage hero         | `1600×900`       | Left 46% is copy-safe; main object on right | No embedded CTA, price or third-party logo wall                  |
-| Category/story banner | `1600×900`       | Central 80% safe                            | One theme and one focal object                                   |
-| Social share          | `1200×630`       | Central 84% safe                            | Brand, short value line and canonical domain only                |
-| Referral poster       | `1080×1920`      | 64px side safety; QR kept clear             | One headline, three benefits maximum and one CTA                 |
-| Favicon/app icon      | `512×512` master | Mark centered with breathing room           | Icon only, no wordmark                                           |
+| Surface               | Master size      | Crop and safe area                          | Content rule                                                      |
+| --------------------- | ---------------- | ------------------------------------------- | ----------------------------------------------------------------- |
+| Product cover         | `1600×1600`      | Keep key text/object inside central 80%     | One product or one service concept; no dense specification sheet  |
+| Desktop card render   | `4:3` container  | Use `contain`, never crop critical copy     | Preserve complete product cover with quiet padding                |
+| Homepage hero         | `1600×900`       | Left 46% is copy-safe; main object on right | Stable tier labels only; no embedded CTA, dynamic price or claims |
+| Category/story banner | `1600×900`       | Central 80% safe                            | One theme and one focal object                                    |
+| Social share          | `1200×630`       | Central 84% safe                            | Brand, short value line and canonical domain only                 |
+| Referral poster       | `1080×1920`      | 64px side safety; QR kept clear             | One headline, three benefits maximum and one CTA                  |
+| Favicon/app icon      | `512×512` master | Mark centered with breathing room           | Icon only, no wordmark                                            |
 
 Use WebP or optimized JPEG for photography/artwork and SVG for true vector monochrome marks. Do not upscale small images, stretch logos, add third-party watermarks, or place essential words at crop edges. Product families share lighting and background structure while retaining a clear per-product differentiator.
+
+### Homepage carousel palette
+
+- Token top-up: electric cyan, cobalt blue and primary violet; the three recharge tiers remain immediately distinguishable.
+- Codex tiers: cyan for Plus, emerald for Pro X5 and blue-violet for Pro X20.
+- Account services: violet/pink for Gemini-oriented service imagery, with restrained blue/red/yellow/green and regional red/white/blue accents for Google US-region accounts.
+- All three slides use the same fog-white glass product-shelf language so the carousel feels like one store rather than three unrelated campaigns.
 
 ## Components
 

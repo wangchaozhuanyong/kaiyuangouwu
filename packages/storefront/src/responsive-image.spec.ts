@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { responsiveImageSources, storefrontWebpUrl } from './responsive-image';
+import { HERO_TOKEN_TOPUP_IMAGE } from './storefront-images';
 
 describe('responsiveImageSources', () => {
     it('builds WebP-only card variants without losing existing query parameters', () => {
@@ -31,6 +32,17 @@ describe('responsiveImageSources', () => {
         expect(bundledHero?.webpSrcSet).toContain('default-hero-480.webp');
         expect(bundledHero?.webpSrcSet).toContain('default-hero-1376.webp');
         expect(bundledHero?.placeholderSrc).toContain('default-hero-32.webp');
+    });
+
+    it('serves the Token carousel fallback at each reviewed responsive width', () => {
+        const sources = responsiveImageSources(HERO_TOKEN_TOPUP_IMAGE, 'hero');
+
+        expect(sources).toMatchObject({ width: 1600, height: 900 });
+        expect(sources?.webpSrcSet).toContain('token-topup-v1-480.webp');
+        expect(sources?.webpSrcSet).toContain('token-topup-v1-960.webp');
+        expect(sources?.webpSrcSet).toContain('token-topup-v1-1440.webp');
+        expect(sources?.webpSrcSet).toContain('token-topup-v1-1600.webp');
+        expect(sources?.placeholderSrc).toContain('token-topup-v1-32.webp');
     });
 
     it('returns a directly renderable WebP URL for uploaded assets', () => {

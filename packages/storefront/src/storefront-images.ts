@@ -16,6 +16,24 @@ import authRegisterHero32 from './assets/storefront/auth-register-ai-campaign-v2
 import authRegisterHero480 from './assets/storefront/auth-register-ai-campaign-v2-480.webp';
 import authRegisterHero960 from './assets/storefront/auth-register-ai-campaign-v2-960.webp';
 import authRegisterHeroFallback from './assets/storefront/auth-register-ai-campaign-v2.jpg';
+import heroAccountServices1440 from './assets/storefront/carousel/colorful-marketplace-v1/account-services-v1-1440.webp';
+import heroAccountServices1600 from './assets/storefront/carousel/colorful-marketplace-v1/account-services-v1-1600.webp';
+import heroAccountServices32 from './assets/storefront/carousel/colorful-marketplace-v1/account-services-v1-32.webp';
+import heroAccountServices480 from './assets/storefront/carousel/colorful-marketplace-v1/account-services-v1-480.webp';
+import heroAccountServices960 from './assets/storefront/carousel/colorful-marketplace-v1/account-services-v1-960.webp';
+import heroAccountServicesFallback from './assets/storefront/carousel/colorful-marketplace-v1/account-services-v1.png';
+import heroCodexTiers1440 from './assets/storefront/carousel/colorful-marketplace-v1/codex-tiers-v1-1440.webp';
+import heroCodexTiers1600 from './assets/storefront/carousel/colorful-marketplace-v1/codex-tiers-v1-1600.webp';
+import heroCodexTiers32 from './assets/storefront/carousel/colorful-marketplace-v1/codex-tiers-v1-32.webp';
+import heroCodexTiers480 from './assets/storefront/carousel/colorful-marketplace-v1/codex-tiers-v1-480.webp';
+import heroCodexTiers960 from './assets/storefront/carousel/colorful-marketplace-v1/codex-tiers-v1-960.webp';
+import heroCodexTiersFallback from './assets/storefront/carousel/colorful-marketplace-v1/codex-tiers-v1.png';
+import heroTokenTopup1440 from './assets/storefront/carousel/colorful-marketplace-v1/token-topup-v1-1440.webp';
+import heroTokenTopup1600 from './assets/storefront/carousel/colorful-marketplace-v1/token-topup-v1-1600.webp';
+import heroTokenTopup32 from './assets/storefront/carousel/colorful-marketplace-v1/token-topup-v1-32.webp';
+import heroTokenTopup480 from './assets/storefront/carousel/colorful-marketplace-v1/token-topup-v1-480.webp';
+import heroTokenTopup960 from './assets/storefront/carousel/colorful-marketplace-v1/token-topup-v1-960.webp';
+import heroTokenTopupFallback from './assets/storefront/carousel/colorful-marketplace-v1/token-topup-v1.png';
 import defaultHero1376 from './assets/storefront/default-hero-1376.webp';
 import defaultHero32 from './assets/storefront/default-hero-32.webp';
 import defaultHero480 from './assets/storefront/default-hero-480.webp';
@@ -83,6 +101,12 @@ export const AUTH_LOGIN_HERO_IMAGE = authLoginHero1672;
 export const AUTH_LOGIN_HERO_FALLBACK_IMAGE = authLoginHeroFallback;
 export const AUTH_REGISTER_HERO_IMAGE = authRegisterHero1672;
 export const AUTH_REGISTER_HERO_FALLBACK_IMAGE = authRegisterHeroFallback;
+export const HERO_ACCOUNT_SERVICES_IMAGE = heroAccountServices1600;
+export const HERO_ACCOUNT_SERVICES_FALLBACK_IMAGE = heroAccountServicesFallback;
+export const HERO_CODEX_TIERS_IMAGE = heroCodexTiers1600;
+export const HERO_CODEX_TIERS_FALLBACK_IMAGE = heroCodexTiersFallback;
+export const HERO_TOKEN_TOPUP_IMAGE = heroTokenTopup1600;
+export const HERO_TOKEN_TOPUP_FALLBACK_IMAGE = heroTokenTopupFallback;
 export const DEFAULT_HERO_IMAGE = defaultHero1376;
 export const DEFAULT_HERO_FALLBACK_IMAGE = defaultHeroFallback;
 export const HERO_GATEWAY_IMAGE = heroGateway1376;
@@ -97,6 +121,36 @@ export const STOREFRONT_SOCIAL_IMAGE = '/storefront/moyao-ai/social-card.jpg';
 export const ACCOUNT_RECOMMENDATION_CREST_IMAGE = accountRecommendationCrest;
 
 const STATIC_IMAGE_SOURCES = new Map<string, StaticStorefrontImageSource>([
+    [
+        heroTokenTopup1600,
+        staticSource({
+            src: heroTokenTopupFallback,
+            srcSet: `${heroTokenTopup480} 480w, ${heroTokenTopup960} 960w, ${heroTokenTopup1440} 1440w, ${heroTokenTopup1600} 1600w`,
+            placeholderSrc: heroTokenTopup32,
+            width: 1600,
+            height: 900,
+        }),
+    ],
+    [
+        heroCodexTiers1600,
+        staticSource({
+            src: heroCodexTiersFallback,
+            srcSet: `${heroCodexTiers480} 480w, ${heroCodexTiers960} 960w, ${heroCodexTiers1440} 1440w, ${heroCodexTiers1600} 1600w`,
+            placeholderSrc: heroCodexTiers32,
+            width: 1600,
+            height: 900,
+        }),
+    ],
+    [
+        heroAccountServices1600,
+        staticSource({
+            src: heroAccountServicesFallback,
+            srcSet: `${heroAccountServices480} 480w, ${heroAccountServices960} 960w, ${heroAccountServices1440} 1440w, ${heroAccountServices1600} 1600w`,
+            placeholderSrc: heroAccountServices32,
+            width: 1600,
+            height: 900,
+        }),
+    ],
     [
         authHero1659,
         staticSource({

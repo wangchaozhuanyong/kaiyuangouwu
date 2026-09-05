@@ -26,6 +26,7 @@
         "typecheck": "tsc --project tsconfig.server.json --noEmit && tsc --project tsconfig.worker.json --noEmit",
         "seed:storefront-demo": "node ./scripts/seed-storefront-demo.mjs --apply",
         "sync:storefront-media": "node ./scripts/sync-storefront-media.mjs",
+        "sync:homepage-carousel": "node ./scripts/sync-homepage-carousel.mjs",
         "sync:auth-visuals": "node ./scripts/sync-auth-visuals.mjs",
         "sync:moyao-brand": "node ./scripts/sync-moyao-brand.mjs",
         "repair:inventory-inheritance": "node ./scripts/repair-inventory-inheritance.mjs",
