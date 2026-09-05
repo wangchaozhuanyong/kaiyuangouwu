@@ -428,6 +428,10 @@ function profileAssetId(profile, field) {
     return profile[relation]?.id ?? null;
 }
 
+function normalizedBrandColor(value) {
+    return value?.trim().toUpperCase() || null;
+}
+
 export function buildDamatongBrandPlan(
     profile,
     assetIdsByKey,
@@ -441,10 +445,10 @@ export function buildDamatongBrandPlan(
         descriptionEn: brand.descriptionEn,
         taglineZh: brand.taglineZh,
         taglineEn: brand.taglineEn,
-        brandBackgroundColor: brand.brandBackgroundColor,
-        brandPrimaryColor: brand.brandPrimaryColor,
-        brandAccentColor: brand.brandAccentColor,
-        brandHighlightColor: brand.brandHighlightColor,
+        brandBackgroundColor: normalizedBrandColor(brand.brandBackgroundColor),
+        brandPrimaryColor: normalizedBrandColor(brand.brandPrimaryColor),
+        brandAccentColor: normalizedBrandColor(brand.brandAccentColor),
+        brandHighlightColor: normalizedBrandColor(brand.brandHighlightColor),
     };
     const current = {
         storefrontNameZh: profile.channel.customFields?.storefrontNameZh ?? '',
@@ -453,10 +457,10 @@ export function buildDamatongBrandPlan(
         descriptionEn: profile.descriptionEn ?? '',
         taglineZh: profile.taglineZh ?? '',
         taglineEn: profile.taglineEn ?? '',
-        brandBackgroundColor: profile.brandBackgroundColor ?? null,
-        brandPrimaryColor: profile.brandPrimaryColor ?? null,
-        brandAccentColor: profile.brandAccentColor ?? null,
-        brandHighlightColor: profile.brandHighlightColor ?? null,
+        brandBackgroundColor: normalizedBrandColor(profile.brandBackgroundColor),
+        brandPrimaryColor: normalizedBrandColor(profile.brandPrimaryColor),
+        brandAccentColor: normalizedBrandColor(profile.brandAccentColor),
+        brandHighlightColor: normalizedBrandColor(profile.brandHighlightColor),
     };
     const input = { id: profile.id, expectedUpdatedAt: profile.updatedAt, ...desired };
     const changes = Object.keys(desired).filter(key => current[key] !== desired[key]);
@@ -753,10 +757,16 @@ function assertShopBranding(branding, languageCode, assetIdsByKey, brand) {
     assert.equal(String(branding.logoAssetId), String(assetIdsByKey.get('brand-app-icon')));
     assert.equal(String(branding.logoOnLightAssetId), String(assetIdsByKey.get('brand-logo-light')));
     assert.equal(String(branding.logoOnDarkAssetId), String(assetIdsByKey.get('brand-logo-dark')));
-    assert.equal(branding.backgroundColor, brand.brandBackgroundColor);
-    assert.equal(branding.primaryColor, brand.brandPrimaryColor);
-    assert.equal(branding.accentColor, brand.brandAccentColor);
-    assert.equal(branding.highlightColor, brand.brandHighlightColor);
+    assert.equal(
+        normalizedBrandColor(branding.backgroundColor),
+        normalizedBrandColor(brand.brandBackgroundColor),
+    );
+    assert.equal(normalizedBrandColor(branding.primaryColor), normalizedBrandColor(brand.brandPrimaryColor));
+    assert.equal(normalizedBrandColor(branding.accentColor), normalizedBrandColor(brand.brandAccentColor));
+    assert.equal(
+        normalizedBrandColor(branding.highlightColor),
+        normalizedBrandColor(brand.brandHighlightColor),
+    );
 }
 
 async function verifyShop(
@@ -877,10 +887,10 @@ function profileRestoreInput(beforeProfile, currentProfile) {
         descriptionEn: beforeProfile.descriptionEn ?? '',
         taglineZh: beforeProfile.taglineZh ?? '',
         taglineEn: beforeProfile.taglineEn ?? '',
-        brandBackgroundColor: beforeProfile.brandBackgroundColor ?? null,
-        brandPrimaryColor: beforeProfile.brandPrimaryColor ?? null,
-        brandAccentColor: beforeProfile.brandAccentColor ?? null,
-        brandHighlightColor: beforeProfile.brandHighlightColor ?? null,
+        brandBackgroundColor: normalizedBrandColor(beforeProfile.brandBackgroundColor),
+        brandPrimaryColor: normalizedBrandColor(beforeProfile.brandPrimaryColor),
+        brandAccentColor: normalizedBrandColor(beforeProfile.brandAccentColor),
+        brandHighlightColor: normalizedBrandColor(beforeProfile.brandHighlightColor),
         logoAssetId: profileAssetId(beforeProfile, 'logoAssetId'),
         logoOnLightAssetId: profileAssetId(beforeProfile, 'logoOnLightAssetId'),
         logoOnDarkAssetId: profileAssetId(beforeProfile, 'logoOnDarkAssetId'),

@@ -360,7 +360,19 @@ test('brand planning is idempotent after the requested profile is in place', () 
         logoOnLightAsset: { id: ids.get('brand-logo-light') },
         logoOnDarkAsset: { id: ids.get('brand-logo-dark') },
     };
+    for (const field of [
+        'brandBackgroundColor',
+        'brandPrimaryColor',
+        'brandAccentColor',
+        'brandHighlightColor',
+    ]) {
+        profile[field] = profile[field].toUpperCase();
+    }
     assert.equal(buildDamatongBrandPlan(profile, ids).action, 'noop');
+    assert.equal(
+        buildDamatongBrandPlan({ ...profile, brandBackgroundColor: '#000000' }, ids).action,
+        'update',
+    );
 });
 
 test('publisher CLI is dry-run by default and recognizes guarded apply options', () => {
@@ -598,10 +610,10 @@ test('apply mode updates drift and verifies the same ids through Admin and Shop 
                             languageCode === 'zh_Hans'
                                 ? damatongStorefront.taglineZh
                                 : damatongStorefront.taglineEn,
-                        backgroundColor: damatongStorefront.brandBackgroundColor,
-                        primaryColor: damatongStorefront.brandPrimaryColor,
-                        accentColor: damatongStorefront.brandAccentColor,
-                        highlightColor: damatongStorefront.brandHighlightColor,
+                        backgroundColor: damatongStorefront.brandBackgroundColor.toUpperCase(),
+                        primaryColor: damatongStorefront.brandPrimaryColor.toUpperCase(),
+                        accentColor: damatongStorefront.brandAccentColor.toUpperCase(),
+                        highlightColor: damatongStorefront.brandHighlightColor.toUpperCase(),
                     },
                     collections: {
                         totalItems: 100 + damatongCategories.length,
