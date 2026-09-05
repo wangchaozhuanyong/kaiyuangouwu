@@ -1,0 +1,38 @@
+diff --git a/lib/parse.js b/lib/parse.js
+index 16bedbcd4c78a77e52f688d9c7ee4b1f5c7c7438..69f94fe440fe75abae9116f692ef867bb79cae3e 100644
+--- a/lib/parse.js
++++ b/lib/parse.js
+@@ -38,6 +38,19 @@ var interpretNumericEntities = function (str) {
+
+ var parseArrayValue = function (val, options, currentArrayLength) {
+     if (val && typeof val === 'string' && options.comma && val.indexOf(',') > -1) {
++        // Backport GHSA-x5fp-wj9c-mxmx: count every comma group before allocating.
++        // Upstream: 52afe00abdb36416ee01c8d5243919b47a59af67 and 8859c37470e11b42b547b275e4e9bd0bc8cc5464.
++        if (options.throwOnLimitExceeded) {
++            var commaCount = 0;
++            var commaIndex = val.indexOf(',');
++            while (commaIndex > -1) {
++                commaCount += 1;
++                if (commaCount >= options.arrayLimit) {
++                    throw new RangeError('Array limit exceeded. Only ' + options.arrayLimit + ' element' + (options.arrayLimit === 1 ? '' : 's') + ' allowed in an array.');
++                }
++                commaIndex = val.indexOf(',', commaIndex + 1);
++            }
++        }
+         return val.split(',');
+     }
+
+diff --git a/lib/utils.js b/lib/utils.js
+index 9aa39e16bc3d54e1aa20378d9638281aaed3a0de..52a5232e63e9b90f63ac45e882d2e5dc33687ef0 100644
+--- a/lib/utils.js
++++ b/lib/utils.js
+@@ -296,7 +296,8 @@ var isBuffer = function isBuffer(obj) {
+         return false;
+     }
+
+-    return !!(obj.constructor && obj.constructor.isBuffer && obj.constructor.isBuffer(obj));
++    // Backport GHSA-4mjr-xmp4-gh2g from e83d321ffafb38cf210683ac31714fce6ce1c6c6.
++    return !!(obj.constructor && typeof obj.constructor.isBuffer === 'function' && obj.constructor.isBuffer(obj));
+ };
+
+ var combine = function combine(a, b, arrayLimit, plainObjects) {

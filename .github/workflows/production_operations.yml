@@ -4,15 +4,19 @@ on:
     workflow_dispatch:
         inputs:
             operation:
-                description: Diagnose production or apply the reviewed release retention plan
+                description: Diagnose production, retain reviewed releases, or back up and verify 2FA keys
                 required: true
                 default: diagnose
                 type: choice
                 options:
                     - diagnose
                     - retain-reviewed
+                    - plan-two-factor-backup
+                    - backup-two-factor-reviewed
+                    - verify-two-factor-backup
+                    - verify-security-dependencies
             expected_plan_sha256:
-                description: Exact plan SHA-256 from a successful diagnose run; required for retain-reviewed
+                description: Exact plan SHA-256 from the corresponding read-only plan; required for reviewed writes
                 required: false
                 default: ''
                 type: string
@@ -51,15 +55,15 @@ jobs:
                   }
                   [[ "$OPS_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
                   case "$OPS_OPERATION" in
-                    diagnose)
+                    diagnose|plan-two-factor-backup|verify-two-factor-backup|verify-security-dependencies)
                       [[ -z "$OPS_EXPECTED_PLAN_SHA256" ]] || {
-                        echo 'diagnose must not include an expected retention plan' >&2
+                        echo 'Read-only operations must not include an expected plan' >&2
                         exit 1
                       }
                       ;;
-                    retain-reviewed)
+                    retain-reviewed|backup-two-factor-reviewed)
                       [[ "$OPS_EXPECTED_PLAN_SHA256" =~ ^[0-9a-f]{64}$ ]] || {
-                        echo 'retain-reviewed requires the exact lowercase plan SHA-256' >&2
+                        echo 'Reviewed writes require the exact lowercase plan SHA-256' >&2
                         exit 1
                       }
                       ;;
@@ -97,6 +101,8 @@ jobs:
                   source_sha = shlex.quote(os.environ['OPS_SOURCE_SHA'])
                   operations_script = base64.b64encode(Path('deploy/production-operations.cjs').read_bytes()).decode('ascii')
                   retention_script = base64.b64encode(Path('deploy/systemd/vendure-production-release-retention.cjs').read_bytes()).decode('ascii')
+                  key_backup_script = base64.b64encode(Path('deploy/two-factor-key-backup.py').read_bytes()).decode('ascii')
+                  security_script = base64.b64encode(Path('deploy/verify-runtime-security-dependencies.cjs').read_bytes()).decode('ascii')
                   command = "/bin/bash <<'VENDURE_OPERATIONS_SCRIPT'\n" + '\n'.join([
                       'set -Eeuo pipefail',
                       'umask 077',
@@ -105,6 +111,8 @@ jobs:
                       'mkdir "$operations_dir/systemd"',
                       f"printf '%s' '{operations_script}' | base64 -d > \"$operations_dir/production-operations.cjs\"",
                       f"printf '%s' '{retention_script}' | base64 -d > \"$operations_dir/systemd/vendure-production-release-retention.cjs\"",
+                      f"printf '%s' '{key_backup_script}' | base64 -d > \"$operations_dir/two-factor-key-backup.py\"",
+                      f"printf '%s' '{security_script}' | base64 -d > \"$operations_dir/verify-runtime-security-dependencies.cjs\"",
                       f'env OPS_OPERATION={operation} OPS_EXPECTED_PLAN_SHA256={expected_plan} OPS_SOURCE_SHA={source_sha} /usr/bin/node "$operations_dir/production-operations.cjs"',
                   ]) + '\nVENDURE_OPERATIONS_SCRIPT'
                   Path(os.environ['RUNNER_TEMP'], 'operations-ssm-parameters.json').write_text(

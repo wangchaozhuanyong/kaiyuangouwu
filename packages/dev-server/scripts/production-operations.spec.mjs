@@ -122,6 +122,40 @@ void test('diagnostics are the default; unknown commands and unreviewed retentio
     );
 });
 
+void test('key backup plans and verification are read-only; key writes require a reviewed hash', () => {
+    for (const operation of [
+        'plan-two-factor-backup',
+        'verify-two-factor-backup',
+        'verify-security-dependencies',
+    ]) {
+        assert.equal(
+            operations.validateRequest({ OPS_SOURCE_SHA: sourceSha, OPS_OPERATION: operation }).operation,
+            operation,
+        );
+        assert.throws(() =>
+            operations.validateRequest({
+                OPS_SOURCE_SHA: sourceSha,
+                OPS_OPERATION: operation,
+                OPS_EXPECTED_PLAN_SHA256: 'b'.repeat(64),
+            }),
+        );
+    }
+    assert.throws(() =>
+        operations.validateRequest({
+            OPS_SOURCE_SHA: sourceSha,
+            OPS_OPERATION: 'backup-two-factor-reviewed',
+        }),
+    );
+    assert.equal(
+        operations.validateRequest({
+            OPS_SOURCE_SHA: sourceSha,
+            OPS_OPERATION: 'backup-two-factor-reviewed',
+            OPS_EXPECTED_PLAN_SHA256: 'b'.repeat(64),
+        }).expectedPlanSha256,
+        'b'.repeat(64),
+    );
+});
+
 void test('reviewed retention preserves current, two rollback releases, backup and unrelated files', t => {
     const f = fixture(t);
     const backup = path.join(f.releasesDir, 'vendure-backup.sql.gz');

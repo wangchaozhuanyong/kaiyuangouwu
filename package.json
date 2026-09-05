@@ -118,6 +118,7 @@
         "@protobufjs/utf8": "1.1.2",
         "@sigstore/core": "3.2.1",
         "@sigstore/verify": "3.1.1",
+        "@tiptap/extension-bubble-menu": "3.30.4",
         "axios": "1.18.0",
         "engine.io": "6.6.9",
         "fast-uri": "3.1.6",
@@ -198,6 +199,7 @@
     },
     "patchedDependencies": {
         "husky@4.3.8": "patches/husky@4.3.8.patch",
-        "brace-expansion@5.0.9": "patches/brace-expansion@5.0.9.patch"
+        "brace-expansion@5.0.9": "patches/brace-expansion@5.0.9.patch",
+        "qs@6.15.2": "patches/qs@6.15.2.patch"
     }
 }
