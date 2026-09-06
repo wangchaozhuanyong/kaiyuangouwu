@@ -140,6 +140,76 @@ function backupMetadata() {
     }
 }
 
+function readRepositoryGit(arguments_) {
+    return execFileSync(
+        'sudo',
+        [
+            '-n',
+            '-H',
+            '-u',
+            'ubuntu',
+            'git',
+            '--no-optional-locks',
+            '-C',
+            '/var/www/kaiyuangouwu',
+            ...arguments_,
+        ],
+        { encoding: 'utf8', timeout: 30000, maxBuffer: 4 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] },
+    );
+}
+
+function inspectRepositoryState(sourceSha, readGit = readRepositoryGit) {
+    try {
+        const head = readGit(['rev-parse', '--verify', 'HEAD']).trim();
+        const originMain = readGit(['rev-parse', '--verify', 'refs/remotes/origin/main']).trim();
+        const branch = readGit(['rev-parse', '--abbrev-ref', 'HEAD']).trim();
+        assert.match(head, /^[a-f0-9]{40}$/u);
+        assert.match(originMain, /^[a-f0-9]{40}$/u);
+        assert.ok(branch.length > 0 && branch.length <= 255);
+        const records = readGit(['status', '--porcelain=v1', '-z', '--untracked-files=all']).split('\0');
+        assert.equal(records.pop(), '', 'Incomplete repository status');
+        let trackedChanges = 0;
+        let untrackedFiles = 0;
+        let stagedChanges = 0;
+        let unstagedChanges = 0;
+        let conflicts = 0;
+        for (let index = 0; index < records.length; index++) {
+            const record = records[index];
+            assert.ok(record.length > 3 && record[2] === ' ', 'Invalid repository status');
+            const status = record.slice(0, 2);
+            if (status === '??') {
+                untrackedFiles++;
+                continue;
+            }
+            assert.match(status, /^[ MTADRCU?!]{2}$/u);
+            trackedChanges++;
+            if (status[0] !== ' ') stagedChanges++;
+            if (status[1] !== ' ') unstagedChanges++;
+            if (['DD', 'AU', 'UD', 'UA', 'DU', 'AA', 'UU'].includes(status)) conflicts++;
+            // Porcelain -z emits the original path as a separate record for renames/copies.
+            if (/[RC]/u.test(status)) assert.ok(records[++index], 'Missing original path');
+        }
+        return {
+            status: 'ok',
+            head,
+            originMain,
+            branch,
+            headMatchesOperationsSource: head === sourceSha,
+            originMainMatchesOperationsSource: originMain === sourceSha,
+            trackedChanges,
+            untrackedFiles,
+            stagedChanges,
+            unstagedChanges,
+            conflicts,
+            trackedClean: trackedChanges === 0,
+            clean: trackedChanges === 0 && untrackedFiles === 0,
+        };
+    } catch {
+        // Even file names or Git stderr can contain private configuration. Return no raw paths/content.
+        return { status: 'unavailable' };
+    }
+}
+
 function diagnose(request) {
     const result = {
         operation: request.operation,
@@ -158,6 +228,7 @@ function diagnose(request) {
             'rev-parse',
             'HEAD',
         ]),
+        repositoryState: inspectRepositoryState(request.sourceSha),
         currentRuntime: readCommand('readlink', ['-f', '/var/www/kaiyuangouwu-current']),
         currentSha: readCommand('cat', ['/var/www/kaiyuangouwu-releases/current-sha']),
         healthService: readCommand('systemctl', [
@@ -283,6 +354,7 @@ if (require.main === module) {
 module.exports = {
     encodeBeforeReport,
     inspectProductionReleases,
+    inspectRepositoryState,
     planDigest,
     retainReviewedPlan,
     validateRequest,
