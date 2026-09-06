@@ -36,7 +36,7 @@ describe('native content translation event routing', () => {
         expect(nativeContentTranslationInternals.supportsEntityType(Province)).toBe(true);
     });
 
-    it('rejects Simplified Chinese source content when English cannot be generated', async () => {
+    it('saves Chinese with pending English when the provider is unavailable', async () => {
         const source = {
             languageCode: 'zh_Hans',
             name: '测试商品',
@@ -77,6 +77,7 @@ describe('native content translation event routing', () => {
             findStates: vi.fn().mockResolvedValue([]),
             isConfigured: vi.fn(() => false),
             translate: vi.fn(),
+            recordState: vi.fn(),
         };
         const service = new NativeContentTranslationService(
             {} as any,
@@ -88,11 +89,17 @@ describe('native content translation event routing', () => {
             service.translateEntity({ channelId: 'channel-1' } as any, new Product({ id: 'product-1' }), {
                 translations: [source],
             }),
-        ).rejects.toThrow('translation provider is not configured');
+        ).resolves.toBe(false);
 
         expect(translations.translate).not.toHaveBeenCalled();
-        expect(repository.create).not.toHaveBeenCalled();
-        expect(repository.save).not.toHaveBeenCalled();
+        expect(repository.save).toHaveBeenCalledWith(
+            expect.objectContaining({ languageCode: 'en', name: '', description: '' }),
+            { reload: false },
+        );
+        expect(translations.recordState).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({ fieldPath: 'name', status: 'PENDING', locked: false }),
+        );
     });
 
     it('regenerates a required English translation when a submitted target was cleared', async () => {

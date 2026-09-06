@@ -2,8 +2,10 @@ import { PluginCommonModule, VendurePlugin } from '@vendure/core';
 
 import { adminApiExtensions } from './api-extensions.js';
 import { CONTENT_TRANSLATION_OPTIONS } from './constants.js';
+import { ContentTranslationRetryService } from './content-translation-retry.service.js';
 import { ContentTranslationAdminResolver } from './content-translation.resolver.js';
 import { ContentTranslationService } from './content-translation.service.js';
+import { retryPendingContentTranslations } from './content-translation.tasks.js';
 import { ContentTranslationState } from './entities/content-translation-state.entity.js';
 import { NativeContentTranslationService } from './native-content-translation.service.js';
 import { UnavailableTranslationProvider } from './providers/unavailable-translation.provider.js';
@@ -15,12 +17,17 @@ import { ContentTranslationPluginOptions } from './types.js';
     providers: [
         ContentTranslationService,
         NativeContentTranslationService,
+        ContentTranslationRetryService,
         {
             provide: CONTENT_TRANSLATION_OPTIONS,
             useFactory: () => ContentTranslationPlugin.options,
         },
     ],
     exports: [ContentTranslationService],
+    configuration: config => {
+        config.schedulerOptions.tasks.push(retryPendingContentTranslations);
+        return config;
+    },
     adminApiExtensions: {
         schema: adminApiExtensions,
         resolvers: [ContentTranslationAdminResolver],
