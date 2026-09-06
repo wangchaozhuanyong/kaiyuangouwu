@@ -91,7 +91,8 @@ function assetPath(record) {
         return new URL(value).pathname;
     } catch {
         const path = value.replace(/^\/+/, '');
-        return path.startsWith('assets/') ? `/${path}` : `/assets/${path}`;
+        const normalizedPath = path.startsWith('assets/') ? `/${path}` : `/assets/${path}`;
+        return new URL(normalizedPath, 'https://asset.invalid').pathname;
     }
 }
 

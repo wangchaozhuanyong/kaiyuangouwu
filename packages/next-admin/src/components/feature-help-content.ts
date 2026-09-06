@@ -111,6 +111,12 @@ export const featureHelpContent = {
         example: '例如：将商品同时加入“AI 工具”和“本周推荐”。',
         impact: '影响商品在前台导航、集合页和自动推荐中的展示。',
     },
+    'catalog.category-image': {
+        purpose: '从素材库选择分类主图，也可更换或移除当前分类的图片绑定。',
+        requirements: ['具有分类编辑和素材读取权限', '新图片先上传到素材媒体库'],
+        example: '例如：为咖啡分类选择一张产品图片，确认后保存分类。',
+        impact: '保存分类后生效；移除绑定不会删除素材，也不会清空已有图库。',
+    },
     'catalog.categories': {
         purpose: '管理商品分类层级、规格选项与 Facet 属性，支撑商品组织和前台筛选。',
         requirements: ['调整层级前确认父子分类关系', '修改规则后检查命中的商品'],
@@ -269,6 +275,12 @@ export const featureHelpContent = {
         requirements: ['了解模块需要的图片、文案或商品数据', '添加后完成模块设置'],
         example: '例如：添加“商品列表”模块，再选择要展示的集合。',
         impact: '添加后仅进入当前编辑草稿，完成保存后才生效。',
+    },
+    'storefront.hero-preview': {
+        purpose: '预览当前轮播草稿的图片、遮罩、颜色和文案，可切换手机与电脑宽度。',
+        requirements: ['选好图片并填写对应语言文案', '预览中的跳转按钮不会打开业务页面'],
+        example: '例如：切换无遮罩样式，立即检查原图是否清晰，再决定是否保存。',
+        impact: '预览本身不保存、不发布；保存后仍应在真实商城核对效果。',
     },
     'storefront.structure-preview': {
         purpose: '按已保存内容和发布规则预览首页楼层结构，检查顺序、语言和显隐。',

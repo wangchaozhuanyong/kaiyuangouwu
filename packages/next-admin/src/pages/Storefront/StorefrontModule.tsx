@@ -295,9 +295,9 @@ export function StorefrontModule() {
                             detail={`${configuredTypes.size} 种类型`}
                         />
                         <Metric
-                            label="当前展示"
+                            label="已发布楼层"
                             value={`${visibleRows.length} 个`}
-                            detail="已按排期、双语内容和图片检查"
+                            detail="已通过内容检查；实际显示还取决于商品、活动等数据"
                         />
                         <Metric
                             label="当前店铺"
@@ -575,7 +575,7 @@ function CarouselRow({
                     首页轮播 <FeatureHelpButton topic="storefront.carousel" title="首页轮播" />
                 </h3>
                 <p className="mt-1 text-[10px] text-slate-500">
-                    {blocks.length} 张轮播图 · {visible} 张展示中
+                    {blocks.length} 张轮播图 · {visible} 张已发布
                 </p>
             </div>
             <div className="ml-auto flex shrink-0 items-center gap-0.5">
