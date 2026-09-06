@@ -3,7 +3,7 @@ import { ApolloProvider } from '@apollo/client/react';
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { FeatureHelpProvider } from '../../src/components/FeatureHelp';
-import { AdminPermissionsContext } from '../../src/hooks/use-admin-permissions';
+import { AdminPermissionsProvider } from '../../src/components/admin-permissions-context';
 import '../../src/index.css';
 import { StorefrontModule } from '../../src/pages/Storefront/StorefrontModule';
 import { newContentBlock } from '../../src/pages/Storefront/storefront-content-utils';
@@ -170,15 +170,18 @@ createRoot(document.getElementById('root')!).render(
     <React.Fragment>
         <FeatureHelpProvider>
             <ApolloProvider client={client}>
-                <AdminPermissionsContext.Provider
-                    value={{
-                        permissions: new URLSearchParams(location.search).has('readonly')
+                <AdminPermissionsProvider
+                    permissions={
+                        params.has('readonly')
                             ? ['ReadStorefrontContent']
-                            : ['SuperAdmin'],
-                        hasAnyPermission: permissions =>
-                            !new URLSearchParams(location.search).has('readonly') ||
-                            permissions.includes('ReadStorefrontContent'),
-                    }}
+                            : params.has('editor')
+                              ? [
+                                    'ReadStorefrontContent',
+                                    'UpdateStorefrontContent',
+                                    'CreateStorefrontContent',
+                                ]
+                              : ['SuperAdmin']
+                    }
                 >
                     <div className="bg-slate-900 px-4 py-2 text-xs text-white">
                         本地轮播管理验收 · 示例数据
@@ -186,7 +189,7 @@ createRoot(document.getElementById('root')!).render(
                     <div style={{ height: 'calc(100dvh - 32px)' }}>
                         <StorefrontModule />
                     </div>
-                </AdminPermissionsContext.Provider>
+                </AdminPermissionsProvider>
             </ApolloProvider>
         </FeatureHelpProvider>
     </React.Fragment>,

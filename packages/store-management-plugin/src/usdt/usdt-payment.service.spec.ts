@@ -6,7 +6,7 @@ import { StorefrontUsdtPaymentIntent } from '../entities/storefront-usdt-payment
 
 import { configureUsdtPaymentProofSecret } from './usdt-payment-proof';
 import { USDT_TRC20_CONTRACT_ADDRESS } from './usdt-payment.constants';
-import { UsdtPaymentService } from './usdt-payment.service';
+import { createMatchKey, UsdtPaymentService } from './usdt-payment.service';
 import { fingerprintReceivingAddress } from './usdt-wallet-configuration.service';
 
 const receivingAddress = USDT_TRC20_CONTRACT_ADDRESS;
@@ -27,8 +27,23 @@ describe('UsdtPaymentService', () => {
     it('creates a server-bound intent with a unique six-decimal payment amount', async () => {
         const repository = {
             findOne: vi.fn().mockResolvedValue(null),
-            save: vi.fn().mockImplementation(candidate => Promise.resolve({ id: 'intent-1', ...candidate })),
+            manager: { connection: { options: { type: 'sqljs' } } },
+            createQueryBuilder: vi.fn(),
         };
+        let inserted: StorefrontUsdtPaymentIntent | null = null;
+        const builder = {
+            where: vi.fn().mockReturnThis(),
+            insert: vi.fn().mockReturnThis(),
+            values: vi.fn(value => {
+                inserted = Object.assign(value, { id: 'intent-1' });
+                return builder;
+            }),
+            orIgnore: vi.fn().mockReturnThis(),
+            updateEntity: vi.fn().mockReturnThis(),
+            execute: vi.fn(),
+            getOne: vi.fn(() => Promise.resolve(inserted)),
+        };
+        repository.createQueryBuilder.mockReturnValue(builder);
         const service = new UsdtPaymentService(
             { getRepository: () => repository } as any,
             {} as any,
@@ -70,6 +85,8 @@ describe('UsdtPaymentService', () => {
             createdAt: new Date('2026-08-26T02:00:00.000Z'),
             expiresAt: new Date('2026-08-26T02:10:00.000Z'),
             expectedUsdtAmount: '13.850123',
+            matchKey: createMatchKey('TRC20', receivingAddressFingerprint, '13.850123'),
+            activeMatchKey: createMatchKey('TRC20', receivingAddressFingerprint, '13.850123'),
             network: 'TRC20',
             receivingAddress,
             receivingAddressFingerprint,
@@ -77,7 +94,9 @@ describe('UsdtPaymentService', () => {
             status: 'PENDING',
         });
         const intentRepository = {
-            find: vi.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([intent]),
+            find: vi.fn().mockResolvedValueOnce([intent]).mockResolvedValue([]),
+            findOne: vi.fn().mockResolvedValue(null),
+            update: vi.fn().mockResolvedValue({ affected: 1 }),
             save: vi.fn().mockImplementation(value => Promise.resolve(value)),
             createQueryBuilder: () => ({
                 setLock: vi.fn().mockReturnThis(),
@@ -106,15 +125,18 @@ describe('UsdtPaymentService', () => {
             addPaymentToOrder: vi.fn().mockResolvedValue({ id: 'order-1', state: 'PaymentSettled' }),
         };
         const tronClient = {
-            incomingTransfers: vi.fn().mockResolvedValue([
-                {
-                    transactionId: 'a'.repeat(64),
-                    from: 'TSender',
-                    to: receivingAddress,
-                    amount: '13.850123',
-                    blockTimestamp: now,
-                },
-            ]),
+            scanIncomingTransfers: vi.fn().mockResolvedValue({
+                complete: true,
+                transfers: [
+                    {
+                        transactionId: 'a'.repeat(64),
+                        from: 'TSender',
+                        to: receivingAddress,
+                        amount: '13.850123',
+                        blockTimestamp: now,
+                    },
+                ],
+            }),
             solidifiedTransaction: vi.fn().mockResolvedValue({
                 transactionId: 'a'.repeat(64),
                 blockNumber: 85_700_193,
@@ -155,11 +177,15 @@ describe('UsdtPaymentService', () => {
             createdAt: new Date('2026-08-26T02:00:00.000Z'),
             expiresAt: new Date('2026-08-26T02:10:00.000Z'),
             expectedUsdtAmount: '13.850123',
+            matchKey: createMatchKey('TRC20', receivingAddressFingerprint, '13.850123'),
+            activeMatchKey: createMatchKey('TRC20', receivingAddressFingerprint, '13.850123'),
             receivingAddress,
             status: 'PENDING',
         });
         const intentRepository = {
-            find: vi.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([intent]),
+            find: vi.fn().mockResolvedValueOnce([intent]).mockResolvedValue([]),
+            findOne: vi.fn().mockResolvedValue(null),
+            update: vi.fn().mockResolvedValue({ affected: 1 }),
             save: vi.fn().mockImplementation(value => Promise.resolve(value)),
         };
         const transfer = {
@@ -176,7 +202,7 @@ describe('UsdtPaymentService', () => {
             {} as any,
             { get: () => wallet, requireConfigured: () => wallet } as any,
             {
-                incomingTransfers: vi.fn().mockResolvedValue([transfer]),
+                scanIncomingTransfers: vi.fn().mockResolvedValue({ complete: true, transfers: [transfer] }),
                 solidifiedTransaction: vi.fn().mockResolvedValue({ blockNumber: 100 }),
             } as any,
             eventBus as any,

@@ -8,7 +8,8 @@ import { StorefrontUsdtCheckoutQuote } from './storefront-usdt-checkout-quote.en
 
 @Entity('storefront_usdt_payment_intent')
 @Index('IDX_storefront_usdt_intent_quote', ['quoteId'], { unique: true })
-@Index('IDX_storefront_usdt_intent_match_key', ['matchKey'], { unique: true })
+@Index('IDX_storefront_usdt_intent_match_key', ['matchKey'])
+@Index('IDX_storefront_usdt_intent_active_match_key', ['activeMatchKey'], { unique: true })
 @Index('IDX_storefront_usdt_intent_transaction', ['transactionId'], { unique: true })
 @Index('IDX_storefront_usdt_intent_status_expiry', ['status', 'expiresAt'])
 export class StorefrontUsdtPaymentIntent extends VendureEntity {
@@ -58,6 +59,10 @@ export class StorefrontUsdtPaymentIntent extends VendureEntity {
 
     @Column({ type: 'varchar', length: 64 })
     matchKey: string;
+
+    /** Held until the complete payment window has been reconciled. History keeps matchKey. */
+    @Column({ type: 'varchar', length: 64, nullable: true })
+    activeMatchKey: string | null;
 
     @Column({ type: 'decimal', precision: 24, scale: 6 })
     baseUsdtAmount: string;

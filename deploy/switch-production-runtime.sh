@@ -86,6 +86,10 @@ process.stdout.write(metadata.gitSha);
 NODE
 )"
 
+# Apply the schema compatibility check to forward switches, automatic rollback and recovery.
+# It runs before changing PM2, and never rewrites history or silently restores old uniqueness.
+node "${deploy_dir}/usdt-migration-guard.cjs" check-runtime "${candidate}"
+
 # PM2 reload preserves pm_cwd and pm_exec_path. Replace the old process
 # definitions so both services actually start from this immutable candidate.
 for process_name in vendure-api vendure-worker; do

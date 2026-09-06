@@ -566,6 +566,12 @@ node deploy/verify-storefront-realtime.mjs \
 
 测试结束后关闭对应支付方式；若需全局停用，把环境开关恢复为 `false` 并让 API/Worker 重新读取配置。保留测试订单及原配置记录；关闭开关不会删除已有数据。
 
+## USDT 活动金额迁移
+
+执行 [USDT 两阶段迁移说明](../docs/usdt-active-amount-migration.md)。本版本自动部署在备份与迁移前停止 API 和 worker，记录完整待执行迁移清单与历史数据摘要；迁移后在停写期间验证历史字段、关联、活动键和索引，再启动候选制品。待执行的其他迁移必须单独审核，不能自动混入本批。
+
+`switch-production-runtime.sh` 对每次切换检查 USDT 数据结构兼容性。取消历史金额唯一约束后，旧 API 与 worker 禁止启动；自动回滚会停止写入并输出 `ROLLBACK_BLOCKED_USDT_SCHEMA`，必须前向部署兼容修复。不得执行本节之前的通用旧制品恢复来绕过此检查，也不得删除历史付款以重建旧索引。
+
 ## 回滚原则
 
 - 回滚目标是上一个已通过健康检查、仍保留在 `kaiyuangouwu-releases` 中的不可变运行产物。

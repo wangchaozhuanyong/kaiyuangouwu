@@ -353,7 +353,19 @@ export function PaymentPage({
                                                             ? isZh
                                                                 ? '等待链上到账'
                                                                 : 'Awaiting transfer'
-                                                            : usdtQuoteQuery.data.paymentStatus}
+                                                            : usdtQuoteQuery.data.paymentStatus ===
+                                                                'MANUAL_REVIEW'
+                                                              ? isZh
+                                                                  ? '待人工复核'
+                                                                  : 'Awaiting review'
+                                                              : usdtQuoteQuery.data.paymentStatus ===
+                                                                  'SETTLED'
+                                                                ? isZh
+                                                                    ? '已确认付款'
+                                                                    : 'Payment confirmed'
+                                                                : isZh
+                                                                  ? '报价已过期'
+                                                                  : 'Quote expired'}
                                                     </span>
                                                 </div>
                                                 <code className="mt-2 block break-all text-sm font-bold text-slate-900">
@@ -385,9 +397,11 @@ export function PaymentPage({
                                                         ? '这笔付款需要人工复核，请停止继续转账并联系客服。'
                                                         : 'This payment needs manual review. Do not send another transfer.'
                                                     : isZh
-                                                      ? `只能通过 TRC20 转入，并且必须准确支付 ₮${usdtQuoteQuery.data.usdtAmount.toFixed(6)}。请勿使用 ERC20 或其他网络。系统确认固化到账后自动进入待发货。`
+                                                      ? `只能通过 TRC20 转入，并且必须准确支付 ₮${usdtQuoteQuery.data.usdtAmount.toFixed(6)}。` +
+                                                        '请勿使用 ERC20 或其他网络。系统确认固化到账及付款归属后进入待发货；归属不明确的付款需人工复核。'
                                                       : `Send exactly ₮${usdtQuoteQuery.data.usdtAmount.toFixed(6)} over TRC20 only. ` +
-                                                        'Other networks are not supported. The order moves to fulfillment after solidified confirmation.'}
+                                                        'Other networks are not supported. Fulfillment follows solidified confirmation and payment attribution. ' +
+                                                        'Ambiguous payments require manual review.'}
                                             </small>
                                         </>
                                     ) : usdtQuoteQuery.isLoading ? (

@@ -768,6 +768,8 @@ function CarouselInterval({
     pending: boolean;
     onSave: (seconds: number) => Promise<void>;
 }) {
+    const { hasAnyPermission } = useAdminPermissions();
+    const canUpdate = hasAnyPermission(['UpdateStorefrontContent']);
     const [draft, setDraft] = useState(String(value));
     return (
         <form
@@ -786,14 +788,14 @@ function CarouselInterval({
                     max={30}
                     step={1}
                     value={draft}
-                    disabled={pending}
+                    disabled={!canUpdate || pending}
                     onChange={event => setDraft(event.target.value)}
                     className="mt-2 block w-full min-w-24 rounded-lg border border-slate-300 px-3 py-2 font-mono disabled:opacity-50"
                 />
             </label>
             <button
                 type="submit"
-                disabled={pending || draft === String(value)}
+                disabled={!canUpdate || pending || draft === String(value)}
                 className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
             >
                 保存间隔
@@ -1099,12 +1101,14 @@ function ActionIcon({
     icon: typeof ArrowUp;
     danger?: boolean;
 }) {
+    const { hasAnyPermission } = useAdminPermissions();
+    const canAct = hasAnyPermission([danger ? 'DeleteStorefrontContent' : 'UpdateStorefrontContent']);
     return (
         <button
             type="button"
             title={label}
             aria-label={label}
-            disabled={disabled}
+            disabled={disabled || !canAct}
             onClick={onClick}
             className={`rounded-md p-1.5 disabled:opacity-30 ${danger ? 'text-rose-500 hover:bg-rose-50' : 'text-slate-500 hover:bg-slate-100'}`}
         >

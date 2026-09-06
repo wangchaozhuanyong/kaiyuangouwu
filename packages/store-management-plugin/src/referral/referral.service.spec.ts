@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { ReferralPosterTemplate } from '../entities/referral-poster-template.entity';
 import { ReferralWallet } from '../entities/referral-wallet.entity';
 
+import { referralPosterCopy } from './referral-poster-presets';
 import { ReferralPosterView } from './referral-poster-view';
 import { ReferralService, supportsReferralPessimisticLock } from './referral.service';
 
@@ -30,6 +31,103 @@ describe('referral program optimistic concurrency', () => {
         expect(() => (service as any).assertExpectedUpdatedAt(current, '2026-08-27T10:00:00.000Z')).toThrow(
             /CONCURRENT_MODIFICATION/,
         );
+    });
+});
+
+describe('referral poster stale editor regression', () => {
+    function fixture() {
+        const record = {
+            ...referralPosterCopy,
+            id: 'poster-1',
+            channelId: 'channel-1',
+            name: 'Poster',
+            enabled: true,
+            position: 0,
+            layoutVariant: 'STANDARD_CENTER',
+            posterBackgroundAssetId: null,
+            shareBackgroundAssetId: null,
+            foregroundColor: '#152c49',
+            accentColor: '#2565ae',
+            overlayOpacity: 0,
+        };
+        const config = {
+            id: 'config-1',
+            updatedAt: new Date('2026-09-06T10:00:01Z'),
+            posterTemplates: ['BRAND_MINIMAL'],
+            defaultPosterTemplate: 'BRAND_MINIMAL',
+        };
+        const repository = {
+            findOne: vi.fn(() => Promise.resolve({ ...record })),
+            find: vi.fn(() => Promise.resolve([{ ...record }])),
+            save: vi.fn(value => {
+                Object.assign(record, value);
+                return Promise.resolve(value);
+            }),
+        };
+        const service = Object.assign(Object.create(ReferralService.prototype), {
+            connection: {
+                getRepository: (_ctx: unknown, entity: { name: string }) =>
+                    entity.name === 'ReferralPosterTemplate'
+                        ? repository
+                        : { save: (value: unknown) => Promise.resolve(value) },
+            },
+            getOrCreateConfig: () => Promise.resolve(config),
+            lockConfigOrThrow: () => Promise.resolve(config),
+            configView: () => Promise.resolve(config),
+            posterTemplateById: () => Promise.resolve(record),
+            eventBus: { publish: vi.fn() },
+            posters: new ReferralPosterView({ getRepository: () => repository } as never, {} as never),
+        }) as ReferralService;
+        const { enabled: _enabled, ...content } = record;
+        return { service, record, config, repository, content };
+    }
+
+    it('rejects an editor opened before another administrator disabled the template', async () => {
+        const { service, config, record, content } = fixture();
+        const snapshot = { ...content, expectedUpdatedAt: config.updatedAt, name: 'Old editor' };
+        await service.setPosterTemplateEnabled(
+            { channelId: 'channel-1' } as never,
+            record.id,
+            false,
+            config.updatedAt,
+        );
+        await expect(
+            service.updatePosterTemplate({ channelId: 'channel-1' } as never, snapshot),
+        ).rejects.toThrow('CONCURRENT_MODIFICATION');
+        expect(record).toMatchObject({ enabled: false, name: 'Poster' });
+    });
+
+    it('preserves disabled state during a current content edit and rejects an older content snapshot', async () => {
+        const { service, config, record, content } = fixture();
+        await service.setPosterTemplateEnabled(
+            { channelId: 'channel-1' } as never,
+            record.id,
+            false,
+            config.updatedAt,
+        );
+        const snapshot = { ...content, expectedUpdatedAt: config.updatedAt, name: 'New copy' };
+        await service.updatePosterTemplate({ channelId: 'channel-1' } as never, snapshot);
+        expect(record).toMatchObject({ enabled: false, name: 'New copy' });
+        await expect(
+            service.updatePosterTemplate({ channelId: 'channel-1' } as never, {
+                ...snapshot,
+                name: 'Old copy',
+            }),
+        ).rejects.toThrow('CONCURRENT_MODIFICATION');
+        expect(record.name).toBe('New copy');
+    });
+
+    it('rejects missing versions and attempts to smuggle status through content editing', async () => {
+        const { service, config, content } = fixture();
+        await expect(
+            service.updatePosterTemplate({ channelId: 'channel-1' } as never, content as never),
+        ).rejects.toThrow('CONCURRENT_MODIFICATION');
+        await expect(
+            service.updatePosterTemplate(
+                { channelId: 'channel-1' } as never,
+                { ...content, expectedUpdatedAt: config.updatedAt, enabled: false } as never,
+            ),
+        ).rejects.toThrow('启停操作');
     });
 });
 
@@ -116,8 +214,8 @@ describe('referral poster template channel isolation', () => {
         await expect(
             service.updatePosterTemplate({ channelId: 'channel-1' } as any, {
                 id: 'template-from-another-channel',
+                expectedUpdatedAt: new Date(),
                 name: '超市海报',
-                enabled: true,
                 position: 0,
                 layoutVariant: 'STANDARD_CENTER',
                 posterBackgroundAssetId: null,

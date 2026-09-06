@@ -57,8 +57,12 @@ export interface SaveReferralPosterTemplateInput {
     overlayOpacity: number;
 }
 
-export interface UpdateReferralPosterTemplateInput extends SaveReferralPosterTemplateInput {
+export interface UpdateReferralPosterTemplateInput extends Omit<
+    SaveReferralPosterTemplateInput,
+    'enabled' | 'expectedUpdatedAt'
+> {
     id: ID;
+    expectedUpdatedAt: Date;
 }
 
 export function normalizeReferralPosterInput(input: SaveReferralPosterTemplateInput) {

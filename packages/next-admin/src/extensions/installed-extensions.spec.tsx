@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { getRequiredPermissionsForAdminPath, hasAnyAdminPermission } from '../utils/admin-permissions';
 import {
     getNextAdminExtensionLegacyRoutes,
     getNextAdminExtensionNavItems,
@@ -9,6 +10,22 @@ import {
 import { STORE_CURRENCY_COMPATIBILITY_TARGET } from './installed-extensions';
 
 describe('installed next-admin extensions', () => {
+    it.each([
+        ['/marketing/referrals', 'ReadReferral'],
+        ['/marketing/sharing', 'ReadReferral'],
+        ['/storefront/decoration', 'ReadStorefrontContent'],
+        ['/storefront/content', 'ReadStorefrontContent'],
+    ])('aligns %s with the backend module permission and fallback route', (path, permission) => {
+        const route = getNextAdminExtensionRoutes().find(item => item.path === path)!;
+        expect(route.permissions).toEqual([permission]);
+        expect(getRequiredPermissionsForAdminPath(path)).toEqual(route.permissions);
+        expect(hasAnyAdminPermission([permission], route.permissions!)).toBe(true);
+        expect(
+            hasAnyAdminPermission(['ReadPromotion', 'ReadSettings', 'ReadCatalog'], route.permissions!),
+        ).toBe(false);
+        expect(hasAnyAdminPermission([], route.permissions!)).toBe(false);
+        expect(hasAnyAdminPermission(['SuperAdmin'], route.permissions!)).toBe(true);
+    });
     it('registers all eight local plugins through the shared extension API', () => {
         expect(getNextAdminExtensions().map(extension => extension.id)).toEqual([
             'image-generation-plugin',

@@ -596,6 +596,8 @@ export function WithdrawalsPanel({
     onAction: (action: WithdrawalAction) => void;
     onRetry: () => void;
 }) {
+    const { hasAnyPermission } = useAdminPermissions();
+    const canManage = hasAnyPermission(['ManageReferralWithdrawal']);
     if (loading && !data) return <LoadingState />;
     if (error) return <ErrorState message={error} onRetry={onRetry} />;
     const q = search.trim().toLowerCase();
@@ -678,7 +680,7 @@ export function WithdrawalsPanel({
                             </Td>
                             <Td>
                                 <div className="flex flex-nowrap gap-1 whitespace-nowrap">
-                                    {item.status === 'PENDING' && (
+                                    {canManage && item.status === 'PENDING' && (
                                         <>
                                             <ActionButton
                                                 onClick={() => onAction({ item, status: 'APPROVED' })}
@@ -695,7 +697,7 @@ export function WithdrawalsPanel({
                                             />
                                         </>
                                     )}
-                                    {item.status === 'APPROVED' && (
+                                    {canManage && item.status === 'APPROVED' && (
                                         <>
                                             <ActionButton
                                                 onClick={() => onAction({ item, status: 'PAID' })}
@@ -712,8 +714,10 @@ export function WithdrawalsPanel({
                                             />
                                         </>
                                     )}
-                                    {!['PENDING', 'APPROVED'].includes(item.status) && (
-                                        <span className="text-slate-400">已结束</span>
+                                    {(!canManage || !['PENDING', 'APPROVED'].includes(item.status)) && (
+                                        <span className="text-slate-400">
+                                            {canManage ? '已结束' : '只读'}
+                                        </span>
                                     )}
                                 </div>
                             </Td>
