@@ -17,7 +17,7 @@ import {
     Trash2,
     X,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { channelRequestContext } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
@@ -36,6 +36,8 @@ import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { StorefrontBlockEditor } from './StorefrontBlockEditor';
+import { StorefrontFloorList } from './StorefrontFloorList';
+import { StorefrontVisualPresetPanel } from './StorefrontVisualPresetPanel';
 import {
     blockTranslation,
     errorText,
@@ -46,6 +48,7 @@ import {
 import { contentPublicationLabels, contentPublicationStatus } from './storefront-publication';
 
 import {
+    dropHomepageRow,
     homepageOrderIds,
     isHomepageBlock,
     moveCarouselSlide,
@@ -190,6 +193,8 @@ export function StorefrontModule() {
     const saveOrder = async (ids: string[] | null, message: string) => {
         if (!ids || pending || !canUpdate) return;
         setActionPending(true);
+        setNotice('');
+        setActionError('');
         try {
             await reorderBlocks({ variables: { ids } });
             showNotice(message);
@@ -271,6 +276,7 @@ export function StorefrontModule() {
             </header>
 
             <main className="mx-auto grid w-full max-w-[1600px] flex-1 gap-5 overflow-y-auto p-5 sm:p-8 xl:grid-cols-[minmax(440px,620px)_minmax(0,1fr)]">
+                <StorefrontVisualPresetPanel />
                 <div className="space-y-4">
                     {notice && !carouselOpen && (
                         <Message kind="success" onClose={() => setNotice('')}>
@@ -311,7 +317,7 @@ export function StorefrontModule() {
                                     />
                                 </h2>
                                 <p className="mt-1 text-[11px] text-slate-400">
-                                    上下移动会立即更新客户端顺序
+                                    拖动左侧手柄调整顺序，松开后自动保存；首页轮播整组移动
                                 </p>
                             </div>
                         </div>
@@ -320,42 +326,53 @@ export function StorefrontModule() {
                         ) : query.error ? (
                             <ErrorState message={query.error.message} onRetry={() => void query.refetch()} />
                         ) : (
-                            <div className="divide-y divide-slate-100">
-                                {homepageRows.map((row, index) =>
-                                    row.key === 'carousel' ? (
-                                        <CarouselRow
-                                            key={row.key}
-                                            blocks={row.blocks}
-                                            index={index}
-                                            count={homepageRows.length}
-                                            pending={pending}
-                                            onManage={() => setCarouselOpen(true)}
-                                            onMove={direction =>
-                                                void saveOrder(
-                                                    moveHomepageRow(allBlocks, row.key, direction),
-                                                    '首页轮播位置已更新',
-                                                )
-                                            }
-                                        />
-                                    ) : (
-                                        <BlockRow
-                                            key={row.key}
-                                            block={row.blocks[0]}
-                                            index={index}
-                                            count={homepageRows.length}
-                                            pending={pending}
-                                            onEdit={() => openEditor(row.blocks[0])}
-                                            onToggle={() => void toggleBlock(row.blocks[0])}
-                                            onMove={direction =>
-                                                void saveOrder(
-                                                    moveHomepageRow(allBlocks, row.key, direction),
-                                                    '首页楼层顺序已更新',
-                                                )
-                                            }
-                                            onDelete={() => setDeleting(row.blocks[0])}
-                                        />
-                                    ),
-                                )}
+                            <div>
+                                <StorefrontFloorList
+                                    key={query.data?.activeChannel.id}
+                                    rows={homepageRows}
+                                    disabled={pending || !canUpdate}
+                                    onReorder={(source, target, placement) =>
+                                        void saveOrder(
+                                            dropHomepageRow(allBlocks, source, target, placement),
+                                            '首页楼层顺序已保存',
+                                        )
+                                    }
+                                    renderRow={(row, index, handle) =>
+                                        row.key === 'carousel' ? (
+                                            <CarouselRow
+                                                dragHandle={handle}
+                                                blocks={row.blocks}
+                                                index={index}
+                                                count={homepageRows.length}
+                                                pending={pending}
+                                                onManage={() => setCarouselOpen(true)}
+                                                onMove={direction =>
+                                                    void saveOrder(
+                                                        moveHomepageRow(allBlocks, row.key, direction),
+                                                        '首页轮播位置已更新',
+                                                    )
+                                                }
+                                            />
+                                        ) : (
+                                            <BlockRow
+                                                dragHandle={handle}
+                                                block={row.blocks[0]}
+                                                index={index}
+                                                count={homepageRows.length}
+                                                pending={pending}
+                                                onEdit={() => openEditor(row.blocks[0])}
+                                                onToggle={() => void toggleBlock(row.blocks[0])}
+                                                onMove={direction =>
+                                                    void saveOrder(
+                                                        moveHomepageRow(allBlocks, row.key, direction),
+                                                        '首页楼层顺序已更新',
+                                                    )
+                                                }
+                                                onDelete={() => setDeleting(row.blocks[0])}
+                                            />
+                                        )
+                                    }
+                                />
                                 {!homepageBlocks.length && (
                                     <div className="p-10 text-center">
                                         <LayoutGrid className="mx-auto h-8 w-8 text-slate-300" />
@@ -534,6 +551,7 @@ function CarouselRow({
     pending,
     onManage,
     onMove,
+    dragHandle,
 }: {
     blocks: StorefrontContentBlock[];
     index: number;
@@ -541,12 +559,14 @@ function CarouselRow({
     pending: boolean;
     onManage: () => void;
     onMove: (direction: -1 | 1) => void;
+    dragHandle?: ReactNode;
 }) {
     const { hasAnyPermission } = useAdminPermissions();
     const canUpdate = hasAnyPermission(['UpdateStorefrontContent']);
     const visible = blocks.filter(block => contentPublicationStatus(block) === 'PUBLISHED').length;
     return (
         <article aria-label="首页轮播" className="flex flex-wrap items-center gap-3 p-4 hover:bg-slate-50">
+            {dragHandle}
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
                 <ImageIcon className="h-5 w-5" />
             </div>
@@ -827,6 +847,7 @@ function BlockRow({
     onToggle,
     onMove,
     onDelete,
+    dragHandle,
 }: {
     block: StorefrontContentBlock;
     index: number;
@@ -836,6 +857,7 @@ function BlockRow({
     onToggle: () => void;
     onMove: (direction: -1 | 1) => void;
     onDelete: () => void;
+    dragHandle?: ReactNode;
 }) {
     const { hasAnyPermission } = useAdminPermissions();
     const canUpdate = hasAnyPermission(['UpdateStorefrontContent']);
@@ -845,9 +867,10 @@ function BlockRow({
     const scheduled = status !== 'PUBLISHED' && block.enabled;
     return (
         <article
-            aria-label={translation.title || block.internalName}
+            aria-label={block.internalName || block.code}
             className="flex flex-wrap items-center gap-3 p-4 hover:bg-slate-50"
         >
+            {dragHandle}
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
                 {block.imageAsset?.preview || block.imageUrl ? (
                     <img
@@ -861,8 +884,11 @@ function BlockRow({
             </div>
             <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="truncate text-xs font-bold text-slate-900">
-                        {translation.title || block.internalName}
+                    <h3
+                        title={block.internalName || block.code}
+                        className="truncate text-xs font-bold text-slate-900"
+                    >
+                        {block.internalName || block.code}
                     </h3>
                     <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[9px] text-slate-500">
                         {block.type}
@@ -874,7 +900,7 @@ function BlockRow({
                     </span>
                 </div>
                 <p className="mt-1 truncate text-[10px] text-slate-400">
-                    {block.internalName} · {block.items.length} 个子项
+                    前台标题：{translation.title || '未填写'} · {block.items.length} 个子项
                 </p>
             </div>
             <div className="ml-auto flex shrink-0 gap-0.5">
@@ -1098,6 +1124,7 @@ function Message({
     const success = kind === 'success';
     return (
         <div
+            role={success ? 'status' : 'alert'}
             className={`flex items-center gap-2 rounded-xl border p-3 text-xs ${success ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-rose-200 bg-rose-50 text-rose-800'}`}
         >
             {success ? (

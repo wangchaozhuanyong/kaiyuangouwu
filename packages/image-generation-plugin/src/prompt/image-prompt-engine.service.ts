@@ -356,7 +356,7 @@ export class ImagePromptEngineService {
             .findAndCount({
                 where: { channelId: ctx.channelId },
                 relations: { customer: true },
-                order: { createdAt: 'DESC' },
+                order: { createdAt: 'DESC', id: 'DESC' },
                 skip: Math.max(0, Math.floor(skip || 0)),
                 take: Math.min(100, Math.max(1, Math.floor(take || 50))),
             });

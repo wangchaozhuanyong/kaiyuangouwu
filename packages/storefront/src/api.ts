@@ -136,6 +136,10 @@ export class ShopApi {
         return this.contentReviewsApi.storefrontConfig(signal);
     }
 
+    async storefrontVisualPreset(signal?: AbortSignal) {
+        return this.contentReviewsApi.storefrontVisualPreset(signal);
+    }
+
     async storefrontContent(signal?: AbortSignal): Promise<StorefrontContentResponse> {
         return this.contentReviewsApi.storefrontContent(signal);
     }

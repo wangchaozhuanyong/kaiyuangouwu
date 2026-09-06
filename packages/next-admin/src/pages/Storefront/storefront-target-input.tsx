@@ -23,7 +23,7 @@ export function TargetValueInput({
         variables: {
             options: {
                 take: 20,
-                sort: { name: 'ASC' },
+                sort: { name: 'ASC', id: 'ASC' },
                 filter: deferredLookupSearch ? { name: { contains: deferredLookupSearch } } : {},
             },
         },
@@ -37,7 +37,7 @@ export function TargetValueInput({
             options: {
                 topLevelOnly: false,
                 take: 20,
-                sort: { name: 'ASC' },
+                sort: { name: 'ASC', id: 'ASC' },
                 filter: deferredLookupSearch ? { name: { contains: deferredLookupSearch } } : {},
             },
         },

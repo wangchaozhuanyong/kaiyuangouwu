@@ -13,6 +13,24 @@ const state = () => page.evaluate(() => window.carouselFixture.state());
 const manager = () => page.getByRole('dialog', { name: '首页轮播图', exact: true });
 const floors = () => page.getByRole('region', { name: '首页楼层', exact: true });
 const editor = () => page.getByRole('dialog', { name: /店铺楼层区块/ });
+const floorOrder = () =>
+    floors()
+        .getByRole('article')
+        .evaluateAll(items => items.map(item => item.getAttribute('aria-label')));
+const reorderCount = () =>
+    page.evaluate(
+        () =>
+            window.carouselFixture.operations.filter(item => item.name === 'NextAdminReorderStorefrontBlocks')
+                .length,
+    );
+const floorHandle = name => floors().getByRole('button', { name: `拖动${name}排序`, exact: true });
+async function dragFloor(source, target, placement) {
+    const row = floors().getByRole('article', { name: target, exact: true });
+    const box = await row.boundingBox();
+    await floorHandle(source).dragTo(row, {
+        targetPosition: { x: box.width / 2, y: placement === 'before' ? 2 : box.height - 2 },
+    });
+}
 try {
     await page.goto(base);
     await expect(floors().getByRole('article')).toHaveCount(3);
@@ -80,7 +98,9 @@ try {
     await editor().getByLabel('跳转目标', { exact: true }).fill('https://example.com/study');
     await editor().getByRole('button', { name: '保存并生效' }).click();
     await expect(editor()).toHaveCount(0);
-    await expect(manager().getByRole('article', { name: '留学与签证', exact: true })).toBeVisible();
+    await expect(manager().getByRole('article', { name: '留学服务', exact: true })).toContainText(
+        '前台标题：留学与签证',
+    );
     expect((await state()).blocks.find(block => block.id === 'hero-b').targetValue).toBe(
         'https://example.com/study',
     );
@@ -134,7 +154,7 @@ try {
     );
 
     await manager()
-        .getByRole('article', { name: '新增轮播测试', exact: true })
+        .getByRole('article', { name: '首页轮播图 3', exact: true })
         .getByRole('button', { name: '编辑', exact: true })
         .click();
     await editor().getByLabel('中文标题 *', { exact: true }).fill('保存失败保留草稿');
@@ -165,6 +185,99 @@ try {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: `${output}/homepage-mobile.png`, fullPage: true });
 
+    // Homepage floors must use the full reorder API and move every carousel slide as one group.
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto(`${base}?sharing-records`);
+    await expect(floorHandle('服务公告')).toBeEnabled();
+    const originalIds = (await state()).blocks.map(block => block.id);
+    await dragFloor('服务公告', '热门商品', 'after');
+    await expect.poll(floorOrder).toEqual(['首页轮播', '热门商品', '服务公告']);
+    await expect.poll(reorderCount).toBe(1);
+    expect((await state()).blocks.map(block => block.id)).toEqual([
+        'hero-a',
+        'hero-b',
+        'hero-c',
+        'products',
+        'notice',
+        'legal',
+        'sharing-poster',
+    ]);
+    await page.getByRole('button', { name: '刷新', exact: true }).click();
+    await expect(floorHandle('首页轮播')).toBeEnabled();
+    expect(await floorOrder()).toEqual(['首页轮播', '热门商品', '服务公告']);
+
+    await dragFloor('首页轮播', '服务公告', 'after');
+    await expect.poll(floorOrder).toEqual(['热门商品', '服务公告', '首页轮播']);
+    expect((await state()).blocks.map(block => block.id)).toEqual([
+        'products',
+        'notice',
+        'hero-a',
+        'hero-b',
+        'hero-c',
+        'legal',
+        'sharing-poster',
+    ]);
+    expect(new Set((await state()).blocks.map(block => block.id))).toEqual(new Set(originalIds));
+
+    await page.evaluate(() => {
+        window.carouselFixture.faults.write = true;
+        window.carouselFixture.faults.delayMs = 700;
+    });
+    const beforeFailure = await reorderCount();
+    await dragFloor('服务公告', '热门商品', 'before');
+    await expect(floorHandle('服务公告')).toBeDisabled();
+    await expect(page.getByRole('alert')).toContainText('模拟保存失败');
+    await expect(floorHandle('服务公告')).toBeEnabled();
+    expect(await floorOrder()).toEqual(['热门商品', '服务公告', '首页轮播']);
+    expect(await reorderCount()).toBe(beforeFailure + 1);
+    await page.evaluate(() => {
+        window.carouselFixture.faults.write = false;
+        window.carouselFixture.faults.delayMs = 80;
+    });
+    await floorHandle('服务公告').focus();
+    await page.keyboard.press('ArrowUp');
+    await expect.poll(floorOrder).toEqual(['服务公告', '热门商品', '首页轮播']);
+    await expect(floorHandle('服务公告')).toBeFocused();
+    await expect(page.getByRole('alert')).toHaveCount(0);
+
+    const beforeNoop = await reorderCount();
+    await dragFloor('服务公告', '热门商品', 'before');
+    expect(await reorderCount()).toBe(beforeNoop);
+    await expect(page.locator('[data-drop-position]')).toHaveCount(0);
+
+    // Actual mouse drag: show the insertion line, then cancel with Escape without saving.
+    const handleBox = await floorHandle('服务公告').boundingBox();
+    const destination = await floors().getByRole('article', { name: '首页轮播', exact: true }).boundingBox();
+    await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(handleBox.x + 12, handleBox.y + 12, { steps: 3 });
+    await page.mouse.move(destination.x + 100, destination.y + destination.height - 3, { steps: 10 });
+    await page.mouse.move(destination.x + 100, destination.y + destination.height - 2);
+    await expect(page.locator('[data-drop-position="after"]')).toBeVisible();
+    await page.evaluate(() => document.documentElement.classList.add('dark'));
+    await page.screenshot({ path: `${output}/floor-drag-insertion-desktop.png`, fullPage: true });
+    await page.keyboard.press('Escape');
+    await page.mouse.up();
+    await expect(page.locator('[data-drop-position]')).toHaveCount(0);
+    expect(await reorderCount()).toBe(beforeNoop);
+    expect(await floorOrder()).toEqual(['服务公告', '热门商品', '首页轮播']);
+    await floors()
+        .getByRole('article', { name: '服务公告', exact: true })
+        .getByRole('button', { name: '编辑', exact: true })
+        .click();
+    await expect(editor().getByLabel('内部管理名称 *', { exact: true })).toHaveValue('服务公告');
+    await editor().getByRole('button', { name: '关闭编辑器' }).click();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await floors().evaluate(element => element.scrollIntoView({ block: 'start' }));
+    await expect(floorHandle('服务公告')).toBeVisible();
+    await floors()
+        .getByRole('article', { name: '服务公告', exact: true })
+        .getByRole('button', { name: '下移', exact: true })
+        .click();
+    await expect.poll(floorOrder).toEqual(['热门商品', '服务公告', '首页轮播']);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: `${output}/floor-drag-mobile.png` });
+
     await page.goto(`${base}?empty`);
     await page.getByRole('button', { name: '首页轮播图', exact: true }).click();
     await expect(manager().getByRole('heading', { name: '还没有轮播图' })).toBeVisible();
@@ -192,6 +305,11 @@ try {
                 status: 'PASS',
                 source: 'isolated in-memory GraphQL fixture',
                 checks: [
+                    'mouse drag across multiple floors and refresh persistence',
+                    'drag whole carousel preserves slide order and non-homepage records',
+                    'reorder saving lock and failure recovery',
+                    'keyboard handle sorting and unchanged drop no-op',
+                    'visible insertion line and Escape cancellation',
                     'grouped floor and preview',
                     'interval save and validation',
                     'slide and floor order persistence',

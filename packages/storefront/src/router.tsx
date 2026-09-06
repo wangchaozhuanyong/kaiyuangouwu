@@ -42,6 +42,7 @@ export const router = createRouter({
     defaultPendingMinMs: 320,
     defaultPendingComponent: StorefrontPendingPage,
     scrollRestoration: true,
+    scrollToTopSelectors: ['[data-scroll-restoration-id="category-results"]'],
     getScrollRestorationKey: getStorefrontScrollRestorationKey,
 });
 

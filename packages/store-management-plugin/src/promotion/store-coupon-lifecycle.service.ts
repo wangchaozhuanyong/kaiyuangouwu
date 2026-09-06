@@ -431,7 +431,7 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
                 ...(options.eventType ? { eventType: options.eventType } : {}),
             },
             relations: { customerCoupon: true, customer: true, order: true, refund: true },
-            order: { createdAt: 'DESC' },
+            order: { createdAt: 'DESC', id: 'DESC' },
             skip,
             take,
         });

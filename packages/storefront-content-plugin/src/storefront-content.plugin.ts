@@ -11,6 +11,11 @@ import { StorefrontContentSettings } from './entities/storefront-content-setting
 import { StorefrontContentAdminResolver, StorefrontContentShopResolver } from './storefront-content.resolver';
 import { StorefrontContentService } from './storefront-content.service';
 import { StorefrontExternalImageService } from './storefront-external-image.service';
+import {
+    StorefrontVisualPresetAdminResolver,
+    StorefrontVisualPresetShopResolver,
+} from './storefront-visual-preset.resolver';
+import { StorefrontVisualPresetService } from './storefront-visual-preset.service';
 
 @VendurePlugin({
     imports: [PluginCommonModule, ContentTranslationPlugin],
@@ -21,18 +26,18 @@ import { StorefrontExternalImageService } from './storefront-external-image.serv
         StorefrontContentItemTranslation,
         StorefrontContentSettings,
     ],
-    providers: [StorefrontContentService, StorefrontExternalImageService],
+    providers: [StorefrontContentService, StorefrontExternalImageService, StorefrontVisualPresetService],
     configuration: config => {
         config.authOptions.customPermissions.push(storefrontContentPermission);
         return config;
     },
     adminApiExtensions: {
         schema: adminApiExtensions,
-        resolvers: [StorefrontContentAdminResolver],
+        resolvers: [StorefrontContentAdminResolver, StorefrontVisualPresetAdminResolver],
     },
     shopApiExtensions: {
         schema: shopApiExtensions,
-        resolvers: [StorefrontContentShopResolver],
+        resolvers: [StorefrontContentShopResolver, StorefrontVisualPresetShopResolver],
     },
     dashboard: '../src/dashboard/index.tsx',
     compatibility: '^3.7.0',

@@ -27,7 +27,7 @@ export class ReferralReportQuery {
             .findAndCount({
                 where: { channelId: ctx.channelId },
                 relations: { inviterCustomer: true, inviteeCustomer: true },
-                order: { boundAt: 'DESC' },
+                order: { boundAt: 'DESC', id: 'DESC' },
                 skip: Math.max(0, skip),
                 take: pageSize(take),
             });
@@ -106,7 +106,7 @@ export class ReferralReportQuery {
             .findAndCount({
                 where: { channelId: ctx.channelId },
                 relations: { customer: true },
-                order: { createdAt: 'DESC' },
+                order: { createdAt: 'DESC', id: 'DESC' },
                 skip: Math.max(0, skip),
                 take: pageSize(take),
             });
@@ -124,7 +124,7 @@ export class ReferralReportQuery {
         const [items, totalItems] = await this.connection.getRepository(ctx, ReferralReward).findAndCount({
             where: { channelId: ctx.channelId },
             relations: { inviterCustomer: true, inviteeCustomer: true, order: true },
-            order: { earnedAt: 'DESC' },
+            order: { earnedAt: 'DESC', id: 'DESC' },
             skip: Math.max(0, skip),
             take: pageSize(take),
         });
@@ -148,7 +148,7 @@ export class ReferralReportQuery {
             .findAndCount({
                 where: { channelId: ctx.channelId },
                 relations: { customer: true },
-                order: { createdAt: 'DESC' },
+                order: { createdAt: 'DESC', id: 'DESC' },
                 skip: Math.max(0, skip),
                 take: pageSize(take),
             });

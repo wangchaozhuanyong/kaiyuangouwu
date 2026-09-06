@@ -1,3 +1,5 @@
+import { ChevronRight } from 'lucide-react';
+
 import { productAvailability, productAvailabilityLabel } from '../../product-availability';
 import {
     prefetchProductAsset,
@@ -90,12 +92,14 @@ export function ProductRow({
     locale,
     language,
     onOpen,
+    layout = 'row',
 }: {
     product: Product;
     market: MarketConfig;
     locale: string;
     language: StorefrontLanguage;
     onOpen: () => void;
+    layout?: 'row' | 'catalog';
 }) {
     const isZh = language === 'zh';
     const variant = product.variants[0];
@@ -103,7 +107,7 @@ export function ProductRow({
     const smartInfo = buildProductRowSmartInfo(product, language);
     return (
         <article
-            className="product-row"
+            className={`product-row${layout === 'catalog' ? ' product-catalog-card' : ''}`}
             onPointerEnter={() => prefetchProductAsset(product)}
             onPointerDown={() => prefetchProductAsset(product)}
             onFocus={() => prefetchProductAsset(product)}
@@ -141,6 +145,12 @@ export function ProductRow({
                     </span>
                 </div>
             </div>
+            {layout === 'catalog' ? (
+                <span className="product-catalog-action">
+                    {isZh ? '查看详情' : 'View details'}
+                    <ChevronRight aria-hidden="true" />
+                </span>
+            ) : null}
         </article>
     );
 }

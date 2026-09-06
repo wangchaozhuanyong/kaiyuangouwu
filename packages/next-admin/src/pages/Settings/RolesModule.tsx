@@ -50,9 +50,9 @@ export function RolesModule() {
     const loadingAllRecordsRef = useRef(false);
     const query = useQuery<TeamManagementResult>(TEAM_MANAGEMENT_QUERY, {
         variables: {
-            administratorOptions: { skip: 0, take: 100, sort: { createdAt: 'DESC' } },
-            roleOptions: { skip: 0, take: 100, sort: { createdAt: 'ASC' } },
-            channelOptions: { skip: 0, take: 100, sort: { code: 'ASC' } },
+            administratorOptions: { skip: 0, take: 100, sort: { createdAt: 'DESC', id: 'DESC' } },
+            roleOptions: { skip: 0, take: 100, sort: { createdAt: 'ASC', id: 'ASC' } },
+            channelOptions: { skip: 0, take: 100, sort: { code: 'ASC', id: 'ASC' } },
         },
         fetchPolicy: 'cache-and-network',
     });
@@ -84,9 +84,13 @@ export function RolesModule() {
         ];
         void fetchMoreTeamData({
             variables: {
-                administratorOptions: { skip: administratorCount, take: 100, sort: { createdAt: 'DESC' } },
-                roleOptions: { skip: roleCount, take: 100, sort: { createdAt: 'ASC' } },
-                channelOptions: { skip: channelCount, take: 100, sort: { code: 'ASC' } },
+                administratorOptions: {
+                    skip: administratorCount,
+                    take: 100,
+                    sort: { createdAt: 'DESC', id: 'DESC' },
+                },
+                roleOptions: { skip: roleCount, take: 100, sort: { createdAt: 'ASC', id: 'ASC' } },
+                channelOptions: { skip: channelCount, take: 100, sort: { code: 'ASC', id: 'ASC' } },
             },
             updateQuery: (previous, { fetchMoreResult }) => ({
                 ...previous,

@@ -19,7 +19,9 @@ function browserEnvironment(): BuildRecoveryEnvironment {
         currentUrl: () => window.location.href,
         now: () => Date.now(),
         replace: url => window.location.replace(url),
-        storage: window.sessionStorage,
+        get storage() {
+            return window.sessionStorage;
+        },
     };
 }
 

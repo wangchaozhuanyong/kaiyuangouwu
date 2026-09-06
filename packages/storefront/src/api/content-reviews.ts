@@ -12,11 +12,36 @@ import type {
 } from '../types';
 import type { StorefrontContentQueryResult } from './helpers';
 
+import {
+    normalizeStorefrontVisualPreset,
+    type StorefrontVisualPresetConfig,
+} from '../../../storefront-content-plugin/src/visual-presets';
+
 import { BaseDomainApi } from './base-domain-api';
 import { isSupportedContentSchemaFallback } from './content-compatibility';
 import { afterSalesFields, storefrontReviewFields } from './fragments';
 
 export class ContentReviewsApi extends BaseDomainApi {
+    async storefrontVisualPreset(signal?: AbortSignal): Promise<StorefrontVisualPresetConfig> {
+        try {
+            const result = await this.request<{ storefrontVisualPreset: StorefrontVisualPresetConfig }>(
+                'query StorefrontVisualPreset { storefrontVisualPreset { channelId presetId revision } }',
+                undefined,
+                signal,
+            );
+            return {
+                ...result.storefrontVisualPreset,
+                presetId: normalizeStorefrontVisualPreset(result.storefrontVisualPreset?.presetId),
+            };
+        } catch (error) {
+            // During a rolling release, an older API keeps its existing appearance.
+            if (error instanceof Error && /Cannot query field "storefrontVisualPreset"/.test(error.message)) {
+                return { channelId: '', presetId: 'classic', revision: 'default' };
+            }
+            throw error;
+        }
+    }
+
     async storefrontConfig(signal?: AbortSignal): Promise<StorefrontConfig> {
         const result = await this.request<{
             activeChannel: Omit<StorefrontConfig, 'availableCountries' | 'logoUrl' | 'description'>;

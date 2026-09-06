@@ -191,7 +191,7 @@ export class ProductPackagingService {
         return this.connection.getRepository(ctx, PackagingUnpackEvent).find({
             where: { ruleId: rule.id, channelId: ctx.channelId },
             relations: ['stockLocation', 'order'],
-            order: { createdAt: 'DESC' },
+            order: { createdAt: 'DESC', id: 'DESC' },
             take: Math.min(Math.max(take, 1), 100),
         });
     }

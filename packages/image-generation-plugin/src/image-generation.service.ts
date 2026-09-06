@@ -466,7 +466,7 @@ export class ImageGenerationService {
         const options = {
             where: { channelId: ctx.channelId, customerId: customer.id, customerDeletedAt: IsNull() },
             relations: { outputs: { asset: true }, referenceAsset: true },
-            order: { createdAt: 'DESC', outputs: { outputIndex: 'ASC' } },
+            order: { createdAt: 'DESC', id: 'DESC', outputs: { outputIndex: 'ASC' } },
             skip: Math.max(0, Math.floor(skip || 0)),
             take: Math.min(50, Math.max(1, Math.floor(take || 20))),
         } as const;
@@ -582,7 +582,7 @@ export class ImageGenerationService {
             .findAndCount({
                 where: { channelId: ctx.channelId, ...(state ? { state } : {}) },
                 relations: { outputs: { asset: true }, referenceAsset: true, customer: true },
-                order: { createdAt: 'DESC', outputs: { outputIndex: 'ASC' } },
+                order: { createdAt: 'DESC', id: 'DESC', outputs: { outputIndex: 'ASC' } },
                 skip: Math.max(0, Math.floor(skip || 0)),
                 take: Math.min(100, Math.max(1, Math.floor(take || 50))),
             });

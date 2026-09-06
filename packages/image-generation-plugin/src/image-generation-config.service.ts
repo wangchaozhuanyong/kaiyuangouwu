@@ -191,7 +191,7 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
                 createdAt: MoreThanOrEqual(new Date(Date.now() - 24 * 60 * 60 * 1_000)),
                 ...(ctx ? { channelId: ctx.channelId } : {}),
             },
-            order: { createdAt: 'DESC' },
+            order: { createdAt: 'DESC', id: 'DESC' },
             take: 1_000,
         });
         const recentSuccesses = recentCosts.filter(cost => cost.outcome === 'SUCCEEDED').length;
@@ -251,7 +251,7 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
         const availableModels = readiness.filter(item => item.available).map(item => item.model);
         const promptModels = await this.connection.getRepository(ctx, ImagePromptModelConfig).find({
             where: { enabled: true, healthStatus: 'HEALTHY', archivedAt: IsNull() },
-            order: { priority: 'ASC' },
+            order: { priority: 'ASC', id: 'ASC' },
         });
         const promptOptimizerModelIds = [...new Set(promptModels.map(m => m.modelId.trim()).filter(Boolean))];
         const optimizerAvailable = promptOptimizerModelIds.length > 0;
@@ -770,7 +770,7 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
 
     skillReleases(ctx: RequestContext): Promise<ImagePromptSkillRelease[]> {
         return this.connection.getRepository(ctx, ImagePromptSkillRelease).find({
-            order: { createdAt: 'DESC' },
+            order: { createdAt: 'DESC', id: 'DESC' },
             select: {
                 id: true,
                 createdAt: true,

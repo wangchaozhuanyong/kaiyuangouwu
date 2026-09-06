@@ -56,7 +56,7 @@ export class StorefrontReviewService {
         const [[items, totalItems], averageRating] = await Promise.all([
             repository.findAndCount({
                 where,
-                order: { moderatedAt: 'DESC', createdAt: 'DESC' },
+                order: { moderatedAt: 'DESC', createdAt: 'DESC', id: 'DESC' },
                 skip,
                 take,
             }),
@@ -73,7 +73,7 @@ export class StorefrontReviewService {
         const customer = await this.activeCustomerOrThrow(ctx);
         const reviews = await this.connection.getRepository(ctx, StorefrontReview).find({
             where: { channelId: ctx.channelId, customerId: customer.id },
-            order: { createdAt: 'DESC' },
+            order: { createdAt: 'DESC', id: 'DESC' },
         });
         return reviews.map(review => this.localizeMerchantResponse(review, ctx));
     }
@@ -155,7 +155,7 @@ export class StorefrontReviewService {
         const [[items, totalItems], averageRating] = await Promise.all([
             repository.findAndCount({
                 where,
-                order: { createdAt: 'DESC' },
+                order: { createdAt: 'DESC', id: 'DESC' },
                 skip,
                 take,
             }),

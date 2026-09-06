@@ -70,10 +70,10 @@ export function BusinessBasicsPanel({
     );
     const query = useQuery<BusinessSettingsResult>(businessSettingsDocument, {
         variables: {
-            zoneOptions: { skip: 0, take: 100, sort: { name: 'ASC' } },
-            countryOptions: { skip: 0, take: 100, sort: { name: 'ASC' } },
-            taxCategoryOptions: { skip: 0, take: 100, sort: { name: 'ASC' } },
-            taxRateOptions: { skip: 0, take: 100, sort: { name: 'ASC' } },
+            zoneOptions: { skip: 0, take: 100, sort: { name: 'ASC', id: 'ASC' } },
+            countryOptions: { skip: 0, take: 100, sort: { name: 'ASC', id: 'ASC' } },
+            taxCategoryOptions: { skip: 0, take: 100, sort: { name: 'ASC', id: 'ASC' } },
+            taxRateOptions: { skip: 0, take: 100, sort: { name: 'ASC', id: 'ASC' } },
         },
         fetchPolicy: 'cache-and-network',
     });
@@ -106,10 +106,10 @@ export function BusinessBasicsPanel({
         loadingAllBusinessSettingsRef.current = true;
         void fetchMoreBusinessSettings({
             variables: {
-                zoneOptions: { skip: zoneCount, take: 100, sort: { name: 'ASC' } },
-                countryOptions: { skip: countryCount, take: 100, sort: { name: 'ASC' } },
-                taxCategoryOptions: { skip: categoryCount, take: 100, sort: { name: 'ASC' } },
-                taxRateOptions: { skip: rateCount, take: 100, sort: { name: 'ASC' } },
+                zoneOptions: { skip: zoneCount, take: 100, sort: { name: 'ASC', id: 'ASC' } },
+                countryOptions: { skip: countryCount, take: 100, sort: { name: 'ASC', id: 'ASC' } },
+                taxCategoryOptions: { skip: categoryCount, take: 100, sort: { name: 'ASC', id: 'ASC' } },
+                taxRateOptions: { skip: rateCount, take: 100, sort: { name: 'ASC', id: 'ASC' } },
             },
             updateQuery: (previous, { fetchMoreResult }) => ({
                 ...previous,

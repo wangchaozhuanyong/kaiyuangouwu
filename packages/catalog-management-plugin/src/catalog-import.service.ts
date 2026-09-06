@@ -138,7 +138,7 @@ export class CatalogImportService {
                 // must not block a deliberate re-import of the same file.
                 state: In(reusableCatalogImportStates),
             },
-            order: { createdAt: 'DESC' },
+            order: { createdAt: 'DESC', id: 'DESC' },
         });
         if (existing) return this.findJob(ctx, existing.id);
 
@@ -351,7 +351,7 @@ export class CatalogImportService {
                 fileHash: parsed.fileHash,
                 state: In(reusableCatalogImportStates),
             },
-            order: { createdAt: 'DESC' },
+            order: { createdAt: 'DESC', id: 'DESC' },
         });
         if (existing) return this.findJob(ctx, existing.id);
 
@@ -503,7 +503,7 @@ export class CatalogImportService {
         const [items, totalItems] = await this.connection.getRepository(ctx, CatalogImportJob).findAndCount({
             where: { channelId: ctx.channelId },
             relations: ['stockLocation'],
-            order: { createdAt: 'DESC' },
+            order: { createdAt: 'DESC', id: 'DESC' },
             skip: Math.max(skip, 0),
             take: safeTake,
         });

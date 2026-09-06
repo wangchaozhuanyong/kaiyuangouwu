@@ -180,9 +180,14 @@ export function CategoriesModule() {
 
     const { data, loading, error, refetch, fetchMore } = useQuery<CatalogTaxonomyData>(taxonomyDocument, {
         variables: {
-            collectionOptions: { topLevelOnly: false, skip: 0, take: 100, sort: { position: 'ASC' } },
-            optionGroupOptions: { skip: 0, take: 100, sort: { updatedAt: 'DESC' } },
-            facetOptions: { skip: 0, take: 100, sort: { updatedAt: 'DESC' } },
+            collectionOptions: {
+                topLevelOnly: false,
+                skip: 0,
+                take: 100,
+                sort: { position: 'ASC', id: 'ASC' },
+            },
+            optionGroupOptions: { skip: 0, take: 100, sort: { updatedAt: 'DESC', id: 'DESC' } },
+            facetOptions: { skip: 0, take: 100, sort: { updatedAt: 'DESC', id: 'DESC' } },
         },
         fetchPolicy: 'cache-and-network',
         notifyOnNetworkStatusChange: true,
@@ -208,10 +213,14 @@ export function CategoriesModule() {
                     topLevelOnly: false,
                     skip: collectionCount,
                     take: 100,
-                    sort: { position: 'ASC' },
+                    sort: { position: 'ASC', id: 'ASC' },
                 },
-                optionGroupOptions: { skip: optionGroupCount, take: 100, sort: { updatedAt: 'DESC' } },
-                facetOptions: { skip: facetCount, take: 100, sort: { updatedAt: 'DESC' } },
+                optionGroupOptions: {
+                    skip: optionGroupCount,
+                    take: 100,
+                    sort: { updatedAt: 'DESC', id: 'DESC' },
+                },
+                facetOptions: { skip: facetCount, take: 100, sort: { updatedAt: 'DESC', id: 'DESC' } },
             },
             updateQuery: (previous, { fetchMoreResult }) => ({
                 ...previous,
@@ -1163,7 +1172,7 @@ function CollectionFiltersEditor({
                         inheritFilters,
                         filters: collectionFilterInput(values, definitions),
                     },
-                    options: { take: 20, sort: { name: 'ASC' } },
+                    options: { take: 20, sort: { name: 'ASC', id: 'ASC' } },
                 },
             });
         } catch (cause) {

@@ -37,6 +37,7 @@ export class CatalogSupplierService {
         const [items, totalItems] = await query
             .orderBy('supplier.enabled', 'DESC')
             .addOrderBy('supplier.name', 'ASC')
+            .addOrderBy('supplier.id', 'ASC')
             .skip(skip)
             .take(take)
             .getManyAndCount();
@@ -201,7 +202,7 @@ export class CatalogSupplierService {
                     'variant.product',
                     'variant.product.translations',
                 ],
-                order: { createdAt: 'DESC' },
+                order: { createdAt: 'DESC', id: 'DESC' },
                 skip: Math.max(0, skip),
                 take: Math.min(Math.max(1, take), 200),
             });

@@ -3,7 +3,6 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import {
     Bell,
-    CheckCircle2,
     ChevronRight,
     CircleCheck,
     ClipboardList,
@@ -12,7 +11,6 @@ import {
     Heart,
     MapPin,
     Megaphone,
-    Navigation,
     Package,
     RotateCcw,
     Settings,
@@ -27,6 +25,7 @@ import type { CSSProperties } from 'react';
 import type { RouteState } from '../storefront-router';
 
 import { ShopApi } from '../api';
+import { useDesktopLayout } from '../desktop-layout';
 import { compactUiCopy, languageCodeFor } from '../i18n';
 import { PUBLIC_QUERY_GC_TIME, ROUTE_QUERY_STALE_TIME, storefrontQueryKeys } from '../query-client';
 import { isReferralClientFeatureEnabled } from '../referral-client-feature';
@@ -63,8 +62,7 @@ export interface AccountPageProps {
     onLogout: () => void;
 }
 
-const accountSectionClass =
-    'mx-3 mt-2 rounded-[14px] border border-slate-200/90 bg-white px-3.5 py-2.5 shadow-[0_2px_8px_-2px_rgba(15,23,42,0.03)] lg:m-0 lg:w-full lg:rounded-2xl lg:px-5 lg:py-[18px]';
+const accountSectionClass = 'account-panel account-section lg:m-0 lg:w-full';
 const compactSectionHeaderClass =
     '[&_.section-header]:mb-1 [&_.section-header]:min-h-0 [&_.section-header]:items-center [&_.section-header-title-row_h2]:m-0 [&_.section-header-title-row_h2]:text-[15px] [&_.section-header-title-row_h2]:font-extrabold [&_.section-header-title-row_h2]:leading-[1.2] [&_.section-header-action-btn]:min-h-0 [&_.section-header-action-btn]:p-0 [&_.section-header-action-btn]:text-[12.5px] [&_.section-header-action-btn]:leading-[1.2] [&_.section-header-action-btn]:text-slate-500 hover:[&_.section-header-action-btn]:text-[var(--accent)] [&_.section-header-action-btn_svg]:size-3.5';
 
@@ -87,6 +85,7 @@ export function AccountPage() {
         onLogout,
     } = AccountPageContext.useValue();
     const isZh = language === 'zh';
+    const desktop = useDesktopLayout();
     const compactCopy = compactUiCopy[language];
     const orders = customer?.orders.items ?? [];
     const countsQuery = useQuery({
@@ -146,6 +145,7 @@ export function AccountPage() {
                 line.productVariant.customFields.fulfillmentType !== 'digital',
         ),
     );
+    const latestOrder = orders[0];
     const recentVariants = Array.from(
         new Map(
             orders.flatMap(order => order.lines).map(line => [line.productVariant.id, line.productVariant]),
@@ -156,15 +156,15 @@ export function AccountPage() {
         : '';
 
     return (
-        <main className="page lg:grid lg:content-start lg:gap-4 lg:px-6 lg:pb-8 lg:pt-[88px]">
+        <main className="page account-page lg:grid lg:content-start lg:gap-4 lg:px-6 lg:pb-8 lg:pt-[88px]">
             <section
-                className="relative m-0 overflow-hidden bg-[#090d16] bg-[radial-gradient(ellipse_90%_70%_at_85%_-10%,rgba(217,119,6,0.18)_0%,transparent_60%),radial-gradient(ellipse_80%_60%_at_15%_100%,rgba(30,58,138,0.22)_0%,transparent_60%),linear-gradient(145deg,#090d16_0%,#0f172a_50%,#1e293b_100%)] px-3 pb-5 pt-4 text-white shadow-[inset_0_-1px_0_rgba(255,255,255,0.08)] before:pointer-events-none before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_80%_15%,rgba(251,191,36,0.12)_0%,transparent_50%),radial-gradient(circle_at_20%_80%,rgba(255,255,255,0.04)_0%,transparent_40%)] before:content-[''] lg:col-span-full lg:rounded-2xl lg:border lg:border-white/10 lg:px-7 lg:py-6"
+                className="account-hero lg:col-span-full"
                 aria-labelledby={customer ? undefined : 'guest-account-title'}
             >
                 {customer ? (
-                    <div className="relative z-[1] flex flex-col items-center rounded-[18px] border border-white/90 bg-white/95 px-3.5 pb-3.5 pt-4 text-center shadow-[0_20px_40px_-12px_rgba(0,0,0,0.45),0_4px_16px_rgba(0,0,0,0.15)] backdrop-blur-xl">
+                    <div className="account-hero-content">
                         <button
-                            className="absolute right-3 top-3 z-[2] grid size-[34px] shrink-0 place-items-center rounded-full border border-slate-200/90 bg-white p-0 text-slate-600 shadow-[0_2px_6px_rgba(15,23,42,0.04)] transition-all duration-200 hover:rotate-[30deg] hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 [&_svg]:size-4"
+                            className="account-hero-settings"
                             type="button"
                             title={isZh ? '账户与安全' : 'Account and security'}
                             aria-label={isZh ? '账户与安全' : 'Account and security'}
@@ -173,21 +173,23 @@ export function AccountPage() {
                             <Settings aria-hidden="true" />
                         </button>
 
-                        <div className="flex w-full items-center gap-3.5 px-1 pb-1 pt-0.5 text-left">
-                            <div className="mb-0 shrink-0 rounded-full bg-[linear-gradient(135deg,rgba(255,255,255,0.95),rgba(245,158,11,0.5),rgba(255,255,255,0.95))] p-[2.5px] shadow-[0_0_14px_rgba(245,158,11,0.25),0_3px_10px_rgba(15,23,42,0.08)]">
+                        <div className="account-hero-identity">
+                            <div className="account-hero-avatar-wrap">
                                 <button
-                                    className="block rounded-full border-0 bg-transparent p-0"
+                                    className="account-hero-avatar-button"
                                     type="button"
                                     onClick={() => navigateTo({ name: 'account-security' })}
                                     aria-label={isZh ? '个人信息与安全' : 'Profile and security'}
                                 >
-                                    <span className="grid size-[54px] shrink-0 place-items-center rounded-full border-[2.5px] border-white bg-[linear-gradient(135deg,#3b82f6_0%,#2563eb_50%,#1d4ed8_100%)] text-[22px] font-extrabold text-white lg:size-16 lg:text-[26px]">
+                                    <span className="account-hero-avatar">
                                         {customer.avatar?.preview ? (
                                             <img
                                                 className="size-full rounded-full object-cover"
                                                 src={customer.avatar.preview}
                                                 alt=""
                                             />
+                                        ) : desktop ? (
+                                            <UserRound aria-hidden="true" />
                                         ) : (
                                             customerName.slice(0, 1).toUpperCase()
                                         )}
@@ -195,77 +197,67 @@ export function AccountPage() {
                                 </button>
                             </div>
 
-                            <div className="flex min-w-0 flex-1 flex-col items-start gap-[3px] text-left">
-                                <h1 className="m-0 flex max-w-full items-center gap-1.5 text-[17px] font-extrabold tracking-[-0.01em] text-slate-900">
+                            <div className="account-hero-details">
+                                <h1 className="account-hero-name">
                                     <span className="overflow-hidden text-ellipsis whitespace-nowrap">
                                         {customerName}
                                     </span>
-                                    <CheckCircle2
-                                        className="size-4 shrink-0 fill-blue-50 text-blue-600"
-                                        aria-hidden="true"
-                                    />
                                 </h1>
-                                <div className="flex max-w-full items-center gap-1 overflow-hidden text-ellipsis whitespace-nowrap text-[11.5px] font-medium text-slate-500 [&_svg]:size-3 [&_svg]:shrink-0 [&_svg]:text-slate-400">
-                                    <MapPin aria-hidden="true" />
-                                    <span>
-                                        {isZh ? '尊贵会员' : 'Premium Member'} · {customer.emailAddress}
-                                    </span>
-                                </div>
+                                <button
+                                    className="account-hero-profile"
+                                    type="button"
+                                    onClick={() => navigateTo({ name: 'account-security' })}
+                                >
+                                    {isZh ? '查看个人资料' : 'View profile'}
+                                    <ChevronRight aria-hidden="true" />
+                                </button>
                             </div>
                         </div>
 
                         <div
-                            className={`mt-3 grid w-full ${referralEnabled ? 'grid-cols-4' : 'grid-cols-3'} gap-2`}
+                            className={`account-hero-assets grid ${referralEnabled ? 'grid-cols-4' : 'grid-cols-3'}`}
                             role="group"
-                            aria-label={isZh ? '账户资产' : 'Account assets'}
+                            aria-label={isZh ? '账户快捷入口' : 'Account shortcuts'}
                         >
                             <button
                                 type="button"
-                                className="flex flex-col items-center gap-0.5 rounded-xl border border-[#eef2f6] bg-slate-50 px-1 pb-1.5 pt-2 shadow-[0_1px_3px_rgba(15,23,42,0.02)] transition-all duration-150 hover:border-slate-300 hover:bg-white hover:shadow-[0_2px_6px_rgba(15,23,42,0.05)] active:scale-95"
+                                className="account-hero-asset"
                                 onClick={() => navigateTo({ name: 'favorites' })}
                             >
-                                <span className="relative grid size-8 place-items-center rounded-[10px] border border-slate-200/90 bg-white text-blue-500 shadow-[0_1px_4px_rgba(15,23,42,0.04)] [&_svg]:size-4">
+                                <span className="account-hero-asset-icon">
                                     <Heart aria-hidden="true" />
                                 </span>
-                                <b className="mt-[3px] text-[17px] font-extrabold leading-[1.1] tabular-nums text-slate-900">
-                                    {favoriteProductCount}
-                                </b>
-                                <span className="text-[11px] font-semibold tracking-[0.01em] text-slate-500">
+                                <span className="sr-only">{favoriteProductCount} </span>
+                                <span className="account-hero-asset-label">
                                     {isZh ? '我的收藏' : 'Favorites'}
                                 </span>
                             </button>
 
                             <button
                                 type="button"
-                                className="flex flex-col items-center gap-0.5 rounded-xl border border-[#eef2f6] bg-slate-50 px-1 pb-1.5 pt-2 shadow-[0_1px_3px_rgba(15,23,42,0.02)] transition-all duration-150 hover:border-slate-300 hover:bg-white hover:shadow-[0_2px_6px_rgba(15,23,42,0.05)] active:scale-95"
+                                className="account-hero-asset"
                                 onClick={() => navigateTo({ name: 'coupons' })}
                             >
-                                <span className="relative grid size-8 place-items-center rounded-[10px] border border-slate-200/90 bg-white text-blue-500 shadow-[0_1px_4px_rgba(15,23,42,0.04)] [&_svg]:size-4">
+                                <span className="account-hero-asset-icon">
                                     <TicketPercent aria-hidden="true" />
-                                    {couponCount > 0 && (
-                                        <span className="absolute -right-0.5 -top-0.5 size-[7px] rounded-full bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.6)]" />
-                                    )}
+                                    {couponCount > 0 && <span className="account-hero-unread" />}
                                 </span>
-                                <b className="mt-[3px] text-[17px] font-extrabold leading-[1.1] tabular-nums text-slate-900">
-                                    {couponCount}
-                                </b>
-                                <span className="text-[11px] font-semibold tracking-[0.01em] text-slate-500">
+                                <span className="sr-only">{couponCount} </span>
+                                <span className="account-hero-asset-label">
                                     {isZh ? '优惠券' : 'Coupons'}
                                 </span>
                             </button>
 
                             <button
                                 type="button"
-                                className="flex flex-col items-center gap-0.5 rounded-xl border border-[#eef2f6] bg-slate-50 px-1 pb-1.5 pt-2 shadow-[0_1px_3px_rgba(15,23,42,0.02)] transition-all duration-150 hover:border-slate-300 hover:bg-white hover:shadow-[0_2px_6px_rgba(15,23,42,0.05)] active:scale-95"
+                                className="account-hero-asset"
                                 onClick={() => navigateTo({ name: 'announcements' })}
                             >
-                                <span className="relative grid size-8 place-items-center rounded-[10px] border border-slate-200/90 bg-white text-blue-500 shadow-[0_1px_4px_rgba(15,23,42,0.04)] [&_svg]:size-4">
+                                <span className="account-hero-asset-icon">
                                     <Megaphone aria-hidden="true" />
                                 </span>
-                                <b className="mt-[3px] text-[17px] font-extrabold leading-[1.1] tabular-nums text-slate-900">
-                                    {announcementCount}
-                                </b>
-                                <span className="text-[11px] font-semibold tracking-[0.01em] text-slate-500">
+                                <span className="sr-only">{announcementCount} </span>
+                                <span className="account-hero-asset-label">
                                     {isZh ? '网站公告' : 'Notices'}
                                 </span>
                             </button>
@@ -273,13 +265,13 @@ export function AccountPage() {
                             {referralEnabled && (
                                 <button
                                     type="button"
-                                    className="flex min-w-0 flex-col items-center gap-0.5 rounded-xl border border-[#eef2f6] bg-slate-50 px-1 pb-1.5 pt-2 shadow-[0_1px_3px_rgba(15,23,42,0.02)] transition-all duration-150 hover:border-slate-300 hover:bg-white hover:shadow-[0_2px_6px_rgba(15,23,42,0.05)] active:scale-95"
+                                    className="account-hero-asset"
                                     onClick={() => navigateTo({ name: 'referral' })}
                                 >
-                                    <span className="relative grid size-8 place-items-center rounded-[10px] border border-amber-200/90 bg-amber-50 text-amber-600 shadow-[0_1px_4px_rgba(15,23,42,0.04)] [&_svg]:size-4">
+                                    <span className="account-hero-asset-icon">
                                         <Gift aria-hidden="true" />
                                     </span>
-                                    <b className="mt-[3px] max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-[14px] font-extrabold leading-[1.3] tabular-nums text-slate-900">
+                                    <span className="sr-only">
                                         {referralOverviewQuery.isLoading
                                             ? '…'
                                             : formatMoney(
@@ -287,8 +279,8 @@ export function AccountPage() {
                                                   market.currencyCode,
                                                   locale,
                                               )}
-                                    </b>
-                                    <span className="whitespace-nowrap text-[10.5px] font-semibold tracking-[0.01em] text-slate-500">
+                                    </span>
+                                    <span className="account-hero-asset-label">
                                         {isZh ? '邀请返利' : 'Referral'}
                                     </span>
                                 </button>
@@ -296,23 +288,20 @@ export function AccountPage() {
                         </div>
                     </div>
                 ) : (
-                    <div className="relative z-[1] flex flex-col items-center gap-2.5 rounded-[18px] border border-white/90 bg-white/95 px-3.5 pb-3.5 pt-4 text-center shadow-[0_20px_40px_-12px_rgba(0,0,0,0.45),0_4px_16px_rgba(0,0,0,0.15)] backdrop-blur-xl">
-                        <div className="flex w-full items-center gap-3.5 px-1 pb-1 pt-0.5 text-left">
-                            <div className="mb-0 shrink-0 rounded-full bg-[linear-gradient(135deg,rgba(255,255,255,0.95),rgba(245,158,11,0.5),rgba(255,255,255,0.95))] p-[2.5px] shadow-[0_0_14px_rgba(245,158,11,0.25),0_3px_10px_rgba(15,23,42,0.08)]">
-                                <span className="grid size-[54px] shrink-0 place-items-center rounded-full border-[2.5px] border-white bg-[linear-gradient(135deg,#94a3b8_0%,#64748b_100%)] text-white lg:size-16 [&_svg]:size-[26px]">
+                    <div className="account-hero-content account-hero-guest">
+                        <div className="account-hero-identity">
+                            <div className="account-hero-avatar-wrap">
+                                <span className="account-hero-avatar">
                                     <UserRound aria-hidden="true" />
                                 </span>
                             </div>
-                            <div className="flex min-w-0 flex-1 flex-col items-start gap-[3px] text-left">
-                                <h1
-                                    id="guest-account-title"
-                                    className="m-0 flex max-w-full items-center gap-1.5 text-[17px] font-extrabold tracking-[-0.01em] text-slate-900"
-                                >
+                            <div className="account-hero-details">
+                                <h1 id="guest-account-title" className="account-hero-name">
                                     <span className="overflow-hidden text-ellipsis whitespace-nowrap">
                                         {isZh ? `欢迎来到 ${storefrontName}` : `Welcome to ${storefrontName}`}
                                     </span>
                                 </h1>
-                                <div className="flex max-w-full items-center gap-1 overflow-hidden text-ellipsis whitespace-nowrap text-[11.5px] font-medium text-slate-500">
+                                <div className="account-hero-meta">
                                     <span>
                                         {isZh
                                             ? '登录后享受会员特权与专属优惠'
@@ -321,17 +310,17 @@ export function AccountPage() {
                                 </div>
                             </div>
                         </div>
-                        <div className="mt-2 grid w-full grid-cols-2 gap-2 [&_button]:h-10 [&_button]:rounded-full [&_button]:text-[13.5px] [&_button]:font-bold [&_button]:transition-all [&_button]:duration-200">
+                        <div className="account-hero-guest-actions">
                             <button
                                 type="button"
-                                className="border-0 bg-[var(--accent)] text-white shadow-[0_4px_14px_rgba(211,60,48,0.28)] hover:bg-[var(--accent-hover)]"
+                                className="account-hero-signin"
                                 onClick={() => navigateTo({ name: 'login' })}
                             >
                                 {isZh ? '立即登录' : 'Sign in'}
                             </button>
                             <button
                                 type="button"
-                                className="border border-slate-300 bg-white text-slate-900 shadow-[0_2px_6px_rgba(15,23,42,0.04)] hover:border-slate-400 hover:bg-slate-50"
+                                className="account-hero-register"
                                 onClick={() => navigateTo({ name: 'register' })}
                             >
                                 {isZh ? '免费注册' : 'Register'}
@@ -342,7 +331,7 @@ export function AccountPage() {
             </section>
 
             <section
-                className={`${accountSectionClass} ${compactSectionHeaderClass} [&_nav]:mt-1 [&_nav]:grid [&_nav]:grid-cols-5 [&_nav]:gap-0.5 [&_nav>button]:flex [&_nav>button]:min-h-[52px] [&_nav>button]:min-w-0 [&_nav>button]:flex-col [&_nav>button]:items-center [&_nav>button]:justify-center [&_nav>button]:gap-1 [&_nav>button]:rounded-lg [&_nav>button]:border-0 [&_nav>button]:bg-transparent [&_nav>button]:px-0.5 [&_nav>button]:py-1 hover:[&_nav>button]:bg-[var(--soft)] [&_nav>button>span]:relative [&_nav>button>span]:grid [&_nav>button>span]:size-[26px] [&_nav>button>span]:place-items-center [&_nav>button>span]:text-slate-800 [&_nav>button>span_svg]:size-5 [&_nav>button>span_svg]:stroke-[1.8] [&_nav>button>span_b]:absolute [&_nav>button>span_b]:-right-2 [&_nav>button>span_b]:-top-1 [&_nav>button>span_b]:grid [&_nav>button>span_b]:h-4 [&_nav>button>span_b]:min-w-4 [&_nav>button>span_b]:place-items-center [&_nav>button>span_b]:rounded-full [&_nav>button>span_b]:border-2 [&_nav>button>span_b]:border-white [&_nav>button>span_b]:bg-[var(--danger)] [&_nav>button>span_b]:px-1 [&_nav>button>span_b]:text-[10px] [&_nav>button>span_b]:font-semibold [&_nav>button>span_b]:leading-3 [&_nav>button>span_b]:text-white [&_nav>button_small]:max-w-full [&_nav>button_small]:whitespace-nowrap [&_nav>button_small]:text-[10.5px] [&_nav>button_small]:font-medium [&_nav>button_small]:tracking-[-0.01em] [&_nav>button_small]:text-[var(--text)] min-[371px]:[&_nav>button_small]:text-xs [&_nav>button:nth-child(1)>span_svg]:text-amber-500 [&_nav>button:nth-child(2)>span_svg]:text-sky-600 [&_nav>button:nth-child(3)>span_svg]:text-indigo-600 [&_nav>button:nth-child(4)>span_svg]:text-rose-600 [&_nav>button:nth-child(5)>span_svg]:text-teal-600`}
+                className={`account-orders ${accountSectionClass} ${compactSectionHeaderClass} [&_nav]:mt-1 [&_nav]:grid [&_nav]:grid-cols-5 [&_nav]:gap-0.5 [&_nav>button]:flex [&_nav>button]:min-h-[52px] [&_nav>button]:min-w-0 [&_nav>button]:flex-col [&_nav>button]:items-center [&_nav>button]:justify-center [&_nav>button]:gap-1 [&_nav>button]:rounded-lg [&_nav>button]:border-0 [&_nav>button]:bg-transparent [&_nav>button]:px-0.5 [&_nav>button]:py-1 hover:[&_nav>button]:bg-[var(--soft)] [&_nav>button>span]:relative [&_nav>button>span]:grid [&_nav>button>span]:size-[26px] [&_nav>button>span]:place-items-center [&_nav>button>span]:text-slate-800 [&_nav>button>span_svg]:size-5 [&_nav>button>span_svg]:stroke-[1.8] [&_nav>button>span_b]:absolute [&_nav>button>span_b]:-right-2 [&_nav>button>span_b]:-top-1 [&_nav>button>span_b]:grid [&_nav>button>span_b]:h-4 [&_nav>button>span_b]:min-w-4 [&_nav>button>span_b]:place-items-center [&_nav>button>span_b]:rounded-full [&_nav>button>span_b]:border-2 [&_nav>button>span_b]:border-white [&_nav>button>span_b]:bg-[var(--danger)] [&_nav>button>span_b]:px-1 [&_nav>button>span_b]:text-[10px] [&_nav>button>span_b]:font-semibold [&_nav>button>span_b]:leading-3 [&_nav>button>span_b]:text-white [&_nav>button_small]:max-w-full [&_nav>button_small]:whitespace-nowrap [&_nav>button_small]:text-[10.5px] [&_nav>button_small]:font-medium [&_nav>button_small]:tracking-[-0.01em] [&_nav>button_small]:text-[var(--text)] min-[371px]:[&_nav>button_small]:text-xs [&_nav>button:nth-child(1)>span_svg]:text-amber-500 [&_nav>button:nth-child(2)>span_svg]:text-sky-600 [&_nav>button:nth-child(3)>span_svg]:text-indigo-600 [&_nav>button:nth-child(4)>span_svg]:text-rose-600 [&_nav>button:nth-child(5)>span_svg]:text-teal-600`}
             >
                 <SectionHeader
                     title={compactCopy.orders.title}
@@ -351,47 +340,86 @@ export function AccountPage() {
                 />
                 <nav className="account-order-shortcuts">
                     <AccountShortcut
+                        inlineCount={desktop}
                         icon={<WalletCards />}
                         label={compactCopy.orders.unpaid}
-                        count={counts.pending}
+                        count={desktop ? countsQuery.data?.pending : counts.pending}
                         onClick={() => navigateTo({ name: 'orders', tab: 'pending' })}
                     />
                     <AccountShortcut
+                        inlineCount={desktop}
                         icon={<Package />}
                         label={compactCopy.orders.processing}
-                        count={counts.shipping}
+                        count={desktop ? countsQuery.data?.shipping : counts.shipping}
                         onClick={() => navigateTo({ name: 'orders', tab: 'shipping' })}
                     />
                     <AccountShortcut
+                        inlineCount={desktop}
                         icon={<Truck />}
                         label={compactCopy.orders.shipped}
-                        count={counts.receiving}
+                        count={desktop ? countsQuery.data?.receiving : counts.receiving}
                         onClick={() => navigateTo({ name: 'orders', tab: 'receiving' })}
                     />
                     <AccountShortcut
+                        inlineCount={desktop}
                         icon={<RotateCcw />}
                         label={compactCopy.orders.returns}
-                        count={activeAfterSalesCount}
+                        count={desktop && !afterSalesQuery.data ? undefined : activeAfterSalesCount}
                         onClick={() => navigateTo({ name: 'orders', tab: 'service' })}
                     />
                     <AccountShortcut
+                        inlineCount={desktop}
                         icon={<ClipboardList />}
                         label={compactCopy.orders.all}
-                        count={0}
+                        count={desktop ? customer?.orders.totalItems : 0}
                         onClick={() => navigateTo({ name: 'orders', tab: 'all' })}
                     />
                 </nav>
             </section>
 
-            {customer && (
+            {desktop && latestOrder ? (
+                <article className="desktop-account-latest-order">
+                    <button
+                        type="button"
+                        className="desktop-account-order-product"
+                        onClick={() => navigateTo({ name: 'order-detail', id: latestOrder.id })}
+                    >
+                        <OrderImage order={latestOrder} />
+                        <span>
+                            <strong>
+                                {latestOrder.lines[0]?.productVariant.name ||
+                                    (isZh ? '订单商品' : 'Order item')}
+                            </strong>
+                            {latestOrder.lines.length > 1 && (
+                                <small>
+                                    {isZh
+                                        ? `另有 ${latestOrder.lines.length - 1} 种商品，详情中可查看`
+                                        : `${latestOrder.lines.length - 1} more products in order details`}
+                                </small>
+                            )}
+                        </span>
+                    </button>
+                    <span>
+                        {isZh ? `共 ${latestOrder.totalQuantity} 件` : `${latestOrder.totalQuantity} items`}
+                    </span>
+                    <strong>{formatMoney(latestOrder.totalWithTax, latestOrder.currencyCode, locale)}</strong>
+                    <span>{orderStateLabel(latestOrder.state, language)}</span>
+                    <button
+                        type="button"
+                        className="desktop-outline-button"
+                        onClick={() => navigateTo({ name: 'order-detail', id: latestOrder.id })}
+                    >
+                        {isZh ? '查看订单' : 'View order'}
+                    </button>
+                </article>
+            ) : null}
+
+            {customer && !desktop && (
                 <section
                     className={`${accountSectionClass} [&>header]:mb-1 [&>header]:flex [&>header]:min-h-[26px] [&>header]:items-center [&>header]:justify-between [&>header>span]:flex [&>header>span]:items-center [&>header>span]:gap-1.5 [&>header>span]:text-[13.5px] [&>header_strong]:font-bold [&>header_strong]:text-[var(--text)] [&>button]:grid [&>button]:min-h-[52px] [&>button]:w-full [&>button]:grid-cols-[40px_minmax(0,1fr)_14px] [&>button]:items-center [&>button]:gap-2.5 [&>button]:rounded-[10px] [&>button]:border [&>button]:border-[var(--line)] [&>button]:bg-[var(--soft)] [&>button]:px-2.5 [&>button]:py-1.5 [&>button]:text-left hover:[&>button]:border-[var(--accent)] [&>button>img]:size-10 [&>button>.responsive-picture>img]:size-10 [&>button>.image-placeholder]:size-10 [&>button>img]:rounded-md [&>button>.responsive-picture>img]:rounded-md [&>button>.image-placeholder]:rounded-md [&>button>span_strong]:text-[12.5px] [&>button>span_strong]:font-semibold [&>button>span_strong]:text-emerald-500 [&>button>span_small]:mt-0.5 [&>button>span_small]:block [&>button>span_small]:text-[11.5px] [&>button>span_small]:text-[var(--muted)]`}
                 >
                     <header>
-                        <span>
-                            <Navigation />
-                            <strong>{isZh ? '最新物流' : 'Latest delivery'}</strong>
-                        </span>
+                        <h2>{isZh ? '最新物流' : 'Latest delivery'}</h2>
                         <button
                             className="inline-flex min-h-[26px] items-center gap-0.5 border-0 bg-transparent py-0 pl-2 pr-0 text-[12.5px] text-[var(--muted)] hover:text-[var(--accent)]"
                             type="button"
@@ -418,8 +446,8 @@ export function AccountPage() {
                             <ChevronRight />
                         </button>
                     ) : (
-                        <div className="flex min-h-11 items-center gap-2 py-1 text-[12.5px] text-[var(--muted)] [&>svg]:size-6 [&>svg]:rounded-md [&>svg]:bg-[var(--soft)] [&>svg]:p-1 [&>svg]:text-[var(--muted)] [&_small]:block">
-                            <Package aria-hidden="true" />
+                        <div className="account-logistics-empty">
+                            <Truck aria-hidden="true" />
                             <span>
                                 <strong>{isZh ? '暂无物流动态' : 'No delivery updates'}</strong>
                                 <small>
@@ -433,33 +461,43 @@ export function AccountPage() {
                 </section>
             )}
 
-            <section className={accountSectionClass} aria-label={isZh ? '常用服务' : 'Services'}>
+            <section
+                className={`account-services ${accountSectionClass}`}
+                aria-label={isZh ? '常用服务' : 'Services'}
+            >
+                <h2 className="account-services-title">{isZh ? '常用服务' : 'Services'}</h2>
                 <div className="account-service-grid grid grid-cols-4 gap-x-1 gap-y-1.5 lg:gap-4 [&>button]:flex [&>button]:min-h-14 [&>button]:min-w-0 [&>button]:flex-col [&>button]:items-center [&>button]:justify-center [&>button]:gap-1 [&>button]:rounded-lg [&>button]:border-0 [&>button]:bg-transparent [&>button]:px-0.5 [&>button]:py-1 hover:[&>button]:bg-[var(--soft)] [&>button>span]:relative [&>button>span]:grid [&>button>span]:size-[34px] [&>button>span]:place-items-center [&>button>span]:rounded-[10px] [&>button>span]:bg-[var(--soft)] [&>button>span]:text-[var(--text)] [&>button>span]:transition-all hover:[&>button>span]:-translate-y-0.5 hover:[&>button>span]:shadow-[0_4px_10px_rgba(0,0,0,0.08)] [&>button>span_svg]:size-5 [&>button:nth-child(1)>span]:bg-rose-50 [&>button:nth-child(1)>span]:text-rose-500 [&>button:nth-child(2)>span]:bg-red-50 [&>button:nth-child(2)>span]:text-red-500 [&>button:nth-child(3)>span]:bg-amber-50 [&>button:nth-child(3)>span]:text-amber-500 [&>button:nth-child(4)>span]:bg-emerald-50 [&>button:nth-child(4)>span]:text-emerald-500 [&>button:nth-child(5)>span]:bg-sky-50 [&>button:nth-child(5)>span]:text-sky-500 [&>button:nth-child(6)>span]:bg-indigo-50 [&>button:nth-child(6)>span]:text-indigo-500 [&>button:nth-child(7)>span]:bg-violet-50 [&>button:nth-child(7)>span]:text-violet-500 [&>button:nth-child(8)>span]:bg-slate-100 [&>button:nth-child(8)>span]:text-slate-600 [&>button>span_em]:absolute [&>button>span_em]:-right-2 [&>button>span_em]:-top-[5px] [&>button>span_em]:grid [&>button>span_em]:h-4 [&>button>span_em]:min-w-5 [&>button>span_em]:place-items-center [&>button>span_em]:rounded-full [&>button>span_em]:border-[1.5px] [&>button>span_em]:border-white [&>button>span_em]:bg-[var(--accent)] [&>button>span_em]:px-1 [&>button>span_em]:text-[9px] [&>button>span_em]:font-semibold [&>button>span_em]:not-italic [&>button>span_em]:leading-[13px] [&>button>span_em]:text-white [&>button>b]:max-w-full [&>button>b]:overflow-hidden [&>button>b]:text-ellipsis [&>button>b]:whitespace-nowrap [&>button>b]:text-xs [&>button>b]:font-medium [&>button>b]:text-[var(--text)]">
-                    <ServiceButton
-                        icon={<Heart />}
-                        label={compactCopy.services.favorites}
-                        badge={favoriteProductCount > 0 ? String(favoriteProductCount) : undefined}
-                        onClick={() => navigateTo({ name: 'favorites' })}
-                    />
-                    <ServiceButton
-                        icon={<TicketPercent />}
-                        label={compactCopy.services.coupons}
-                        badge={couponCount > 0 ? String(couponCount) : undefined}
-                        onClick={() => navigateTo({ name: 'coupons' })}
-                    />
+                    {!desktop && (
+                        <ServiceButton
+                            icon={<Heart />}
+                            label={compactCopy.services.favorites}
+                            badge={favoriteProductCount > 0 ? String(favoriteProductCount) : undefined}
+                            onClick={() => navigateTo({ name: 'favorites' })}
+                        />
+                    )}
+                    {!desktop && (
+                        <ServiceButton
+                            icon={<TicketPercent />}
+                            label={compactCopy.services.coupons}
+                            badge={couponCount > 0 ? String(couponCount) : undefined}
+                            onClick={() => navigateTo({ name: 'coupons' })}
+                        />
+                    )}
                     <ServiceButton
                         icon={<Megaphone />}
                         label={compactCopy.services.announcements}
                         badge={announcementCount > 0 ? String(announcementCount) : undefined}
                         onClick={() => navigateTo({ name: 'announcements' })}
                     />
-                    <ServiceButton
-                        icon={<MapPin />}
-                        label={compactCopy.services.addresses}
-                        onClick={() =>
-                            customer ? navigateTo({ name: 'addresses' }) : navigateTo({ name: 'login' })
-                        }
-                    />
+                    {!desktop && (
+                        <ServiceButton
+                            icon={<MapPin />}
+                            label={compactCopy.services.addresses}
+                            onClick={() =>
+                                customer ? navigateTo({ name: 'addresses' }) : navigateTo({ name: 'login' })
+                            }
+                        />
+                    )}
                     <ServiceButton
                         icon={<Bell />}
                         label={compactCopy.services.messages}
@@ -485,7 +523,7 @@ export function AccountPage() {
 
             {!!recentVariants.length && (
                 <section
-                    className={`${accountSectionClass} ${compactSectionHeaderClass} pt-0 lg:pt-0 [&>.section-header]:mb-0 [&>.section-header]:min-h-11 lg:[&>.section-header]:min-h-[52px] [&>div>article]:grid [&>div>article]:min-h-[68px] [&>div>article]:grid-cols-[54px_minmax(0,1fr)_auto] [&>div>article]:items-center [&>div>article]:gap-2.5 [&>div>article]:border-t [&>div>article]:border-[var(--line)] [&>div>article]:py-[7px] [&_article>img]:size-[54px] [&_article>.responsive-picture>img]:size-[54px] [&_article>.image-placeholder]:size-[54px] [&_article>img]:rounded-[7px] [&_article>.responsive-picture>img]:rounded-[7px] [&_article>.image-placeholder]:rounded-[7px] [&_article>img]:object-contain [&_article_strong]:block [&_article_strong]:overflow-hidden [&_article_strong]:text-ellipsis [&_article_strong]:whitespace-nowrap [&_article_small]:mt-1 [&_article_small]:block [&_article_small]:text-[var(--muted)] [&_article>button]:min-h-9 [&_article>button]:rounded-md [&_article>button]:border [&_article>button]:border-[var(--accent)] [&_article>button]:bg-white [&_article>button]:px-2.5 [&_article>button]:text-[var(--accent)]`}
+                    className={`account-recent-purchases ${accountSectionClass} ${compactSectionHeaderClass} pt-0 lg:pt-0 [&>.section-header]:mb-0 [&>.section-header]:min-h-11 lg:[&>.section-header]:min-h-[52px] [&>div>article]:grid [&>div>article]:min-h-[68px] [&>div>article]:grid-cols-[54px_minmax(0,1fr)_auto] [&>div>article]:items-center [&>div>article]:gap-2.5 [&>div>article]:border-t [&>div>article]:border-[var(--line)] [&>div>article]:py-[7px] [&_article>img]:size-[54px] [&_article>.responsive-picture>img]:size-[54px] [&_article>.image-placeholder]:size-[54px] [&_article>img]:rounded-[7px] [&_article>.responsive-picture>img]:rounded-[7px] [&_article>.image-placeholder]:rounded-[7px] [&_article>img]:object-contain [&_article_strong]:block [&_article_strong]:overflow-hidden [&_article_strong]:text-ellipsis [&_article_strong]:whitespace-nowrap [&_article_small]:mt-1 [&_article_small]:block [&_article_small]:text-[var(--muted)] [&_article>button]:min-h-9 [&_article>button]:rounded-md [&_article>button]:border [&_article>button]:border-[var(--accent)] [&_article>button]:bg-white [&_article>button]:px-2.5 [&_article>button]:text-[var(--accent)]`}
                 >
                     <SectionHeader
                         title={isZh ? '最近买过' : 'Recently purchased'}
@@ -511,20 +549,22 @@ export function AccountPage() {
                 </section>
             )}
 
-            <ProductSection
-                centerLabel={isZh ? '专属推荐' : 'Just for you'}
-                className="lg:col-span-full [&_.section-header]:relative [&_.section-header]:grid [&_.section-header]:min-h-[70px] [&_.section-header]:grid-cols-1 [&_.section-header]:place-items-center [&_.section-header]:overflow-hidden [&_.section-header-center-label]:grid [&_.section-header-center-label]:min-h-[70px] [&_.section-header-center-label]:w-full [&_.section-header-center-label]:place-items-center [&_.section-header-center-label]:bg-[image:var(--account-recommendation-image)] [&_.section-header-center-label]:bg-[length:min(100%,330px)_auto] [&_.section-header-center-label]:bg-center [&_.section-header-center-label]:bg-no-repeat [&_.section-header-center-label]:text-[16px] [&_.section-header-center-label]:font-semibold [&_.section-header-center-label]:tracking-[0.16em] [&_.section-header-center-label]:text-[var(--accent-ink)] [&_.section-header-center-label]:[text-indent:0.16em]"
-                style={
-                    {
-                        '--account-recommendation-image': `url(${JSON.stringify(ACCOUNT_RECOMMENDATION_CREST_IMAGE)})`,
-                    } as CSSProperties
-                }
-                products={products.slice(0, 4)}
-                market={market}
-                locale={locale}
-                language={language}
-                onProduct={product => navigateTo({ name: 'product', id: product.id })}
-            />
+            {!desktop && (
+                <ProductSection
+                    centerLabel={isZh ? '专属推荐' : 'Just for you'}
+                    className="lg:col-span-full [&_.section-header]:relative [&_.section-header]:grid [&_.section-header]:min-h-[70px] [&_.section-header]:grid-cols-1 [&_.section-header]:place-items-center [&_.section-header]:overflow-hidden [&_.section-header-center-label]:grid [&_.section-header-center-label]:min-h-[70px] [&_.section-header-center-label]:w-full [&_.section-header-center-label]:place-items-center [&_.section-header-center-label]:bg-[image:var(--account-recommendation-image)] [&_.section-header-center-label]:bg-[length:min(100%,330px)_auto] [&_.section-header-center-label]:bg-center [&_.section-header-center-label]:bg-no-repeat [&_.section-header-center-label]:text-[16px] [&_.section-header-center-label]:font-semibold [&_.section-header-center-label]:tracking-[0.16em] [&_.section-header-center-label]:text-[var(--accent-ink)] [&_.section-header-center-label]:[text-indent:0.16em]"
+                    style={
+                        {
+                            '--account-recommendation-image': `url(${JSON.stringify(ACCOUNT_RECOMMENDATION_CREST_IMAGE)})`,
+                        } as CSSProperties
+                    }
+                    products={products.slice(0, 4)}
+                    market={market}
+                    locale={locale}
+                    language={language}
+                    onProduct={product => navigateTo({ name: 'product', id: product.id })}
+                />
+            )}
             <LegalFooter
                 storefrontName={storefrontName}
                 language={language}

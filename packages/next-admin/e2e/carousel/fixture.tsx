@@ -55,7 +55,7 @@ if (params.has('sharing-records')) {
 }
 let revision = 0;
 const operations: Array<{ name: string; variables: unknown }> = [];
-const faults = { read: params.has('read-error'), write: false, delete: false };
+const faults = { read: params.has('read-error'), write: false, delete: false, delayMs: 80 };
 Object.assign(window, { carouselFixture: { operations, faults, state: () => ({ blocks, interval }) } });
 const settings = () => ({
     __typename: 'StorefrontContentSettings',
@@ -161,7 +161,7 @@ const client = new ApolloClient({
                     } catch (error) {
                         observer.error(error);
                     }
-                }, 80);
+                }, faults.delayMs);
                 return () => clearTimeout(timer);
             }),
     ),

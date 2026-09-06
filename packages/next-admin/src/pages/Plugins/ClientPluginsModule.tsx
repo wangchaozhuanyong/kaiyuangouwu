@@ -100,14 +100,14 @@ export function ClientPluginsModule() {
         variables: {
             options: {
                 take: 50,
-                sort: { name: 'ASC' },
+                sort: { name: 'ASC', id: 'ASC' },
                 filter: deferredCollectionSearch
                     ? { name: { contains: deferredCollectionSearch } }
                     : undefined,
             },
             selectedOptions: {
                 take: Math.max(1, selectedCollectionIds.length),
-                sort: { name: 'ASC' },
+                sort: { name: 'ASC', id: 'ASC' },
                 filter: {
                     id: selectedCollectionIds.length
                         ? { in: selectedCollectionIds }

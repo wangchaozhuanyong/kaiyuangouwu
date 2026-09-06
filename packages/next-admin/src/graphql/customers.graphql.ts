@@ -18,7 +18,9 @@ const CUSTOMER_LIST_FIELDS = gql`
             verified
             lastLogin
         }
-        orders(options: { take: 1, sort: { orderPlacedAt: DESC }, filter: { active: { eq: false } } }) {
+        orders(
+            options: { take: 1, sort: { orderPlacedAt: DESC, id: DESC }, filter: { active: { eq: false } } }
+        ) {
             totalItems
             items {
                 id
@@ -114,7 +116,13 @@ export const CUSTOMER_DETAIL_QUERY = gql`
                 defaultShippingAddress
                 defaultBillingAddress
             }
-            orders(options: { take: 100, sort: { orderPlacedAt: DESC }, filter: { active: { eq: false } } }) {
+            orders(
+                options: {
+                    take: 100
+                    sort: { orderPlacedAt: DESC, id: DESC }
+                    filter: { active: { eq: false } }
+                }
+            ) {
                 totalItems
                 items {
                     id
@@ -125,7 +133,7 @@ export const CUSTOMER_DETAIL_QUERY = gql`
                     currencyCode
                 }
             }
-            history(options: { take: 30, sort: { createdAt: DESC } }) {
+            history(options: { take: 30, sort: { createdAt: DESC, id: DESC } }) {
                 totalItems
                 items {
                     id
@@ -146,7 +154,7 @@ export const CUSTOMER_DETAIL_QUERY = gql`
 
 export const CUSTOMER_ADDRESS_COUNTRIES_QUERY = gql`
     query AdminCustomerAddressCountries {
-        countries(options: { take: 250, sort: { name: ASC }, filter: { enabled: { eq: true } } }) {
+        countries(options: { take: 250, sort: { name: ASC, id: ASC }, filter: { enabled: { eq: true } } }) {
             items {
                 id
                 code

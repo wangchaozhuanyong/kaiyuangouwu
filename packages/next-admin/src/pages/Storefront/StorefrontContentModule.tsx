@@ -398,11 +398,13 @@ function PageBlockList({
                                         : '待配置'}
                                 </span>
                             </div>
-                            <h3 className="mt-4 text-sm font-bold text-slate-900">{descriptor.name}</h3>
+                            <h3 className="mt-4 break-words text-sm font-bold text-slate-900">
+                                {block?.internalName || descriptor.name}
+                            </h3>
                             <p className="mt-1 text-xs leading-5 text-slate-500">{descriptor.description}</p>
                             {copy?.title && (
                                 <div className="mt-3 truncate rounded-lg bg-slate-50 px-3 py-2 text-[11px] text-slate-600">
-                                    当前：{copy.title}
+                                    前台标题：{copy.title}
                                 </div>
                             )}
                             <div className="mt-auto flex gap-2 pt-5">

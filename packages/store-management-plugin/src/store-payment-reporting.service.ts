@@ -192,6 +192,7 @@ export class StorePaymentReportingService {
             .addGroupBy('payment.transactionId')
             .addGroupBy('payment.createdAt')
             .orderBy('payment.createdAt', 'DESC')
+            .addOrderBy('payment.id', 'DESC')
             .offset(normalized.skip)
             .limit(normalized.take);
         if (channelId != null) query.andWhere('channel.id = :channelId', { channelId });
