@@ -1,9 +1,15 @@
-import 'dotenv/config';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { isLocalApiOrigin } from './sync-auth-visuals.mjs';
+// Standalone maintenance entry: credentials are injected by the reviewed server shell.
+function isLocalApiOrigin(value) {
+    const url = new URL(value);
+    return (
+        ['http:', 'https:'].includes(url.protocol) &&
+        (['localhost', '127.0.0.1', '[::1]'].includes(url.hostname) || url.hostname.endsWith('.localhost'))
+    );
+}
 
 // Reviewed, settings-only repair. Never invoke the whole-store publisher for this correction.
 export const heroOverlayRepairCodes = [
