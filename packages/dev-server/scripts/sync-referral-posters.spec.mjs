@@ -420,6 +420,7 @@ test('origin normalization keeps unrelated hosts, dimensions, asset IDs and copy
     });
     const expected = comparablePoster(poster(adminOrigin), adminOrigin);
     assert.deepEqual(comparablePoster(poster(shopOrigin), shopOrigin), expected);
+    assert.deepEqual(comparablePoster(poster(shopOrigin), adminOrigin, shopOrigin), expected);
     assert.notDeepEqual(comparablePoster(poster('https://unrelated.example'), shopOrigin), expected);
     for (const field of ['id', 'width', 'height']) {
         const changed = poster(shopOrigin);

@@ -143,7 +143,8 @@ function expectedCopy(block) {
     );
 }
 
-export function comparablePoster(template, requestOrigin) {
+export function comparablePoster(template, requestOrigin, peerOrigin = requestOrigin) {
+    const requestOrigins = new Set([new URL(requestOrigin).origin, new URL(peerOrigin).origin]);
     const result = { ...template };
     for (const field of ['posterBackgroundAsset', 'shareBackgroundAsset']) {
         if (!template[field]) continue;
@@ -152,12 +153,11 @@ export function comparablePoster(template, requestOrigin) {
             if (typeof template[field][key] !== 'string') continue;
             const url = new URL(template[field][key], requestOrigin);
             assert.ok(['http:', 'https:'].includes(url.protocol) && !url.username && !url.password);
-            // AssetServer derives same-origin URLs from each API request. Only remove that
-            // verified request origin; an unrelated/CDN host must still match exactly.
-            result[field][key] =
-                url.origin === new URL(requestOrigin).origin
-                    ? `${url.pathname}${url.search}${url.hash}`
-                    : url.href;
+            // AssetServer may use each request origin or one fixed public origin. Only
+            // normalize the two verified API origins; other/CDN hosts still match exactly.
+            result[field][key] = requestOrigins.has(url.origin)
+                ? `${url.pathname}${url.search}${url.hash}`
+                : url.href;
         }
     }
     return result;
@@ -359,11 +359,11 @@ export async function syncReferralPosters({
             );
             assert.deepEqual(
                 shop.referralProgram.posterTemplateConfigs.map(item =>
-                    comparablePoster(item, channel.shopOrigin || origin),
+                    comparablePoster(item, channel.shopOrigin || origin, origin),
                 ),
                 admin.referralProgram.posterTemplateConfigs
                     .filter(item => item.enabled)
-                    .map(item => comparablePoster(item, origin)),
+                    .map(item => comparablePoster(item, origin, channel.shopOrigin || origin)),
             );
             for (const preset of referralPosterPresets) {
                 const block = current.storefrontContentBlocks.find(
@@ -396,10 +396,12 @@ export async function syncReferralPosters({
                     comparablePoster(
                         shop.referralProgram.systemPosterTemplateConfigs.find(item => item.id === preset.id),
                         channel.shopOrigin || origin,
+                        origin,
                     ),
                     comparablePoster(
                         admin.referralProgram.systemPosterTemplateConfigs.find(item => item.id === preset.id),
                         origin,
+                        channel.shopOrigin || origin,
                     ),
                 );
             }
