@@ -206,28 +206,40 @@ export async function captureStorefrontConfiguration({
     );
     let auth = '';
     async function query(document, { variables = {}, channel = '', locale = 'zh_Hans', shop = false } = {}) {
-        const response = await request(
-            `${origin.origin}/${shop ? 'shop-api' : 'admin-api'}?languageCode=${locale}`,
-            {
-                method: 'POST',
-                signal: AbortSignal.timeout(30_000),
-                headers: {
-                    'content-type': 'application/json',
-                    'language-code': locale,
-                    ...(channel ? { 'vendure-token': channel } : {}),
-                    ...(!shop && auth ? { authorization: `Bearer ${auth}` } : {}),
+        const operation = document.match(/(?:query|mutation)\s+(ConfigurationGuard\w+)/u)?.[1];
+        assert.ok(operation, 'Configuration query must have a fixed operation name');
+        let failure = 'REQUEST_FAILED';
+        try {
+            const response = await request(
+                `${origin.origin}/${shop ? 'shop-api' : 'admin-api'}?languageCode=${locale}`,
+                {
+                    method: 'POST',
+                    signal: AbortSignal.timeout(60_000),
+                    headers: {
+                        'content-type': 'application/json',
+                        'language-code': locale,
+                        ...(channel ? { 'vendure-token': channel } : {}),
+                        ...(!shop && auth ? { authorization: `Bearer ${auth}` } : {}),
+                    },
+                    body: JSON.stringify({ query: document, variables }),
                 },
-                body: JSON.stringify({ query: document, variables }),
-            },
-        );
-        assert.ok(response.ok, `Configuration query failed with HTTP ${response.status}`);
-        const result = await response.json();
-        assert.ok(
-            !result.errors?.length && result.data,
-            'Configuration API returned an error; no data changed',
-        );
-        auth ||= response.headers.get('vendure-auth-token') ?? '';
-        return result.data;
+            );
+            failure = 'HTTP_ERROR';
+            assert.ok(response.ok, `Configuration query failed with HTTP ${response.status}`);
+            failure = 'INVALID_JSON';
+            const result = await response.json();
+            failure = 'API_ERROR';
+            assert.ok(
+                !result.errors?.length && result.data,
+                'Configuration API returned an error; no data changed',
+            );
+            auth ||= response.headers.get('vendure-auth-token') ?? '';
+            return result.data;
+        } catch (error) {
+            const reason = error?.name === 'TimeoutError' ? 'TIMEOUT' : failure;
+            // Operation names and fixed reason codes are safe; API/transport messages may contain secrets.
+            throw new Error(`STOREFRONT_CONFIGURATION_QUERY_FAILED operation=${operation} reason=${reason}`);
+        }
     }
     const { login } = await query(
         `mutation ConfigurationGuardLogin($username: String!, $password: String!) {
