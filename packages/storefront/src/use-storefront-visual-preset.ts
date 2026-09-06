@@ -1,14 +1,14 @@
 import { useQuery } from '@tanstack/react-query';
 import { useLayoutEffect } from 'react';
-import type { ShopApi } from './api';
-import type { MarketConfig } from './types';
 
 import {
     normalizeStorefrontDesktopLayout,
     normalizeStorefrontVisualPreset,
 } from '../../storefront-content-plugin/src/visual-presets';
 
+import { type ShopApi } from './api';
 import { storefrontQueryKeys } from './query-client';
+import { type MarketConfig } from './types';
 
 export function applyStorefrontVisualPreset(root: HTMLElement, value: unknown): () => void {
     const presetId = normalizeStorefrontVisualPreset(value);
