@@ -12,7 +12,7 @@ import {
     TransactionalConnection,
 } from '@vendure/core';
 import { createTestEnvironment, registerInitializer, SqljsInitializer, testConfig } from '@vendure/testing';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi, type MockInstance } from 'vitest';
@@ -32,6 +32,7 @@ import { NativeContentTranslationService } from '../src/native-content-translati
 import { GoogleCloudTranslationProvider } from '../src/providers/google-cloud-translation.provider';
 import { type ContentTranslationProvider } from '../src/types';
 
+const directory = mkdtempSync(join(tmpdir(), 'catalog-translation-'));
 let ready = false;
 let activeProvider: ContentTranslationProvider = {
     name: 'fixture',
@@ -112,10 +113,7 @@ async function preview(count: number, prefix: string) {
 
 describe('catalog import survives Google rate limits with a real isolated database', () => {
     beforeAll(async () => {
-        registerInitializer(
-            'sqljs',
-            new SqljsInitializer(mkdtempSync(join(tmpdir(), 'catalog-translation-'))),
-        );
+        registerInitializer('sqljs', new SqljsInitializer(directory));
         await server.init({
             initialData: {
                 ...initialData,
@@ -133,6 +131,8 @@ describe('catalog import survives Google rate limits with a real isolated databa
         imports.registerEnqueuer(() => Promise.resolve());
         ready = true;
         await server.app.get(NativeContentTranslationService).repairHistoricalTranslations();
+        // Initial country translations are unrelated to this import regression.
+        await connection.rawConnection.getRepository(ContentTranslationState).clear();
         activeProvider = new GoogleCloudTranslationProvider({ apiKey: 'test-only-placeholder' });
         fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(() =>
             Promise.resolve(
@@ -151,6 +151,7 @@ describe('catalog import survives Google rate limits with a real isolated databa
     afterAll(async () => {
         vi.restoreAllMocks();
         await server.destroy();
+        rmSync(directory, { recursive: true, force: true });
     });
 
     it('retries an existing failed import without changing its SKU or duplicating records', async () => {
@@ -179,10 +180,10 @@ describe('catalog import survives Google rate limits with a real isolated databa
         expect(await connection.rawConnection.getRepository(ProductVariant).countBy({ sku: 'RETRY-0' })).toBe(
             1,
         );
-        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(fetchMock).not.toHaveBeenCalled();
     }, 120_000);
 
-    it('persists 362 rows during the shared cooldown and fills English after recovery', async () => {
+    it('persists 362 rows without provider requests and fills English after background recovery', async () => {
         const before = await connection.rawConnection.getRepository(ProductVariant).count();
         const job = await preview(362, 'BATCH');
         await imports.queueExecution(ctx, job.id);
@@ -192,7 +193,7 @@ describe('catalog import survives Google rate limits with a real isolated databa
         expect(rows).toHaveLength(362);
         expect(rows.every(row => row.appliedAt && row.action === 'CREATE')).toBe(true);
         expect(await connection.rawConnection.getRepository(ProductVariant).count()).toBe(before + 362);
-        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(fetchMock).not.toHaveBeenCalled();
         const variant = await connection.rawConnection.getRepository(ProductVariant).findOneOrFail({
             where: { sku: 'BATCH-0' },
             relations: ['productVariantPrices', 'translations'],
@@ -229,21 +230,45 @@ describe('catalog import survives Google rate limits with a real isolated databa
             collections.find(item => item.translations.some(row => row.name === '测试文具'))?.id,
         );
 
+        // Only the worker contacts Google; its failure must not affect the completed import.
+        const deferred = await server.app.get(ContentTranslationRetryService).retryPending();
+        expect(deferred.deferred).toBeGreaterThan(0);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+
         // Simulate the provider's cooldown elapsing without delaying the real database or job queue.
         const recoveredAt = Date.now() + 60_001;
         const clock = vi.spyOn(Date, 'now').mockReturnValue(recoveredAt);
-        fetchMock.mockImplementation(() =>
-            Promise.resolve(
+        fetchMock.mockImplementation((_url, options) => {
+            if (typeof options?.body !== 'string') throw new Error('Expected a JSON translation request');
+            const request = JSON.parse(options.body) as { q: string[] };
+            return Promise.resolve(
                 new Response(
-                    JSON.stringify({ data: { translations: [{ translatedText: 'Recovered stationery' }] } }),
+                    JSON.stringify({
+                        data: {
+                            translations: request.q.map(() => ({ translatedText: 'Recovered stationery' })),
+                        },
+                    }),
                     { status: 200 },
                 ),
-            ),
-        );
+            );
+        });
         try {
-            const result = await server.app.get(ContentTranslationRetryService).retryPending();
-            expect(result.translated).toBeGreaterThan(0);
-            expect(result.scanned).toBeLessThanOrEqual(20);
+            let translated = 0;
+            // Unattempted rows run before previously throttled rows; advance the shared request interval
+            // between bounded sweeps instead of assuming this product belongs to the first batch.
+            for (let sweep = 0; sweep < 60; sweep++) {
+                clock.mockReturnValue(recoveredAt + sweep * 1001);
+                const result = await server.app.get(ContentTranslationRetryService).retryPending();
+                translated += result.translated;
+                expect(result.scanned).toBeLessThanOrEqual(100);
+                const state = await states.findOneByOrFail({
+                    entityType: 'Product',
+                    entityId: String(product.id),
+                    fieldPath: 'name',
+                });
+                if (state.status === 'AUTO_TRANSLATED') break;
+            }
+            expect(translated).toBeGreaterThan(0);
         } finally {
             clock.mockRestore();
         }

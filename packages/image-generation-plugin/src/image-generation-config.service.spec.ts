@@ -108,46 +108,54 @@ describe('ImageGenerationConfigService prompt Skill bootstrap', () => {
 });
 
 describe('ImageGenerationConfigService prompt provider availability', () => {
-    it('keeps prompt optimization available when only Gemini has a healthy prompt Key', async () => {
-        const service = new ImageGenerationConfigService(
-            {},
-            {
-                rawConnection: {},
-                getRepository: () => ({
-                    find: () => Promise.resolve([{ modelId: 'gemini-2.5-flash' }]),
-                }),
-            } as never,
-            {} as never,
-            {} as never,
-            {} as never,
-            {} as never,
-            { sourceHash: 'hash' } as never,
-        );
-        vi.spyOn(service as never, 'synchronizeActiveSkillRelease').mockResolvedValue(undefined);
-        vi.spyOn(service as never, 'getConfig').mockResolvedValue({
-            enabled: true,
-            promptOptimizationEnabled: true,
-            promptRateLimitPerMinute: 3,
-            promptDailyFreeLimit: 20,
-            promptDailyFreeUnlimited: false,
-            paidPromptOptimizationEnabled: false,
-            paidPromptOptimizationPrice: 0,
-            paidPromptOptimizationCurrencyCode: 'CNY',
-            defaultModelCode: 'GEMINI_FLASH',
-            termsVersion: 'test',
-            termsZh: 'test',
-            termsEn: 'test',
-        });
-        vi.spyOn(service as never, 'getOrCreateModels').mockResolvedValue([]);
+    it.each([
+        ['en', 'Previous reviewed terms', true],
+        ['en', '', false],
+        ['zh_Hans', '', true],
+    ] as const)(
+        'publishes usable existing English and waits only for missing English: %s %s',
+        async (languageCode, termsEn, expectedAvailable) => {
+            const service = new ImageGenerationConfigService(
+                {},
+                {
+                    rawConnection: {},
+                    getRepository: () => ({
+                        find: () => Promise.resolve([{ modelId: 'gemini-2.5-flash' }]),
+                    }),
+                } as never,
+                {} as never,
+                {} as never,
+                {} as never,
+                {} as never,
+                { sourceHash: 'hash' } as never,
+            );
+            vi.spyOn(service as never, 'synchronizeActiveSkillRelease').mockResolvedValue(undefined);
+            vi.spyOn(service as never, 'getConfig').mockResolvedValue({
+                enabled: true,
+                promptOptimizationEnabled: true,
+                promptRateLimitPerMinute: 3,
+                promptDailyFreeLimit: 20,
+                promptDailyFreeUnlimited: false,
+                paidPromptOptimizationEnabled: false,
+                paidPromptOptimizationPrice: 0,
+                paidPromptOptimizationCurrencyCode: 'CNY',
+                defaultModelCode: 'GEMINI_FLASH',
+                termsVersion: 'test',
+                termsZh: 'test',
+                termsEn,
+            });
+            vi.spyOn(service as never, 'getOrCreateModels').mockResolvedValue([]);
 
-        const result = await service.shopConfig({
-            currencyCode: 'CNY',
-            channel: { defaultCurrencyCode: 'CNY', customFields: {} },
-        } as never);
+            const result = await service.shopConfig({
+                languageCode,
+                currencyCode: 'CNY',
+                channel: { defaultCurrencyCode: 'CNY', customFields: {} },
+            } as never);
 
-        expect(result.promptOptimizationEnabled).toBe(true);
-        expect(result.promptOptimizerModelIds).toEqual(['gemini-2.5-flash']);
-    });
+            expect(result.promptOptimizationEnabled).toBe(expectedAvailable);
+            expect(result.promptOptimizerModelIds).toEqual(['gemini-2.5-flash']);
+        },
+    );
 
     it('returns model and prompt prices in the active settlement currency', async () => {
         const service = new ImageGenerationConfigService(

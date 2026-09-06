@@ -17,6 +17,7 @@ import {
     UPDATE_REFERRAL_POSTER_MUTATION,
 } from '../../graphql/marketing.graphql';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
+import { omitUnchangedEnglish } from '../../utils/english-edit-intent';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatMoney } from '../Sales/sales-utils';
 import { LoadingState, Modal } from '../Settings/settings-ui';
@@ -473,6 +474,7 @@ export function PosterEditor({
     const { hasAnyPermission } = useAdminPermissions();
     const canReadAssets = hasAnyPermission(['ReadAsset', 'ReadCatalog']);
     const [expectedUpdatedAt] = useState(programUpdatedAt);
+    const [originalDraft] = useState(() => posterDraft(source));
     const [draft, setDraft] = useState<PosterDraft>(() => posterDraft(source));
     const [assetSearch, setAssetSearch] = useState('');
     const [previewValidation, setPreviewValidation] = useState({ pending: true, error: '' });
@@ -520,10 +522,11 @@ export function PosterEditor({
     };
     const validation = posterDraftError(draft);
     const submit = async () => {
+        if (createState.loading || updateState.loading) return;
         if (validation || previewValidation.pending || previewValidation.error)
             return onError(validation || previewValidation.error || '请等待中英文排版检查');
         const input = {
-            ...draft,
+            ...omitUnchangedEnglish(draft, originalDraft),
             posterBackgroundAssetId: draft.posterBackgroundAssetId || null,
             shareBackgroundAssetId: draft.shareBackgroundAssetId || null,
         };
@@ -535,7 +538,7 @@ export function PosterEditor({
                 const { id: _id, ...createInput } = input;
                 await create({ variables: { input: createInput } });
             }
-            await onSaved(draft.id ? '海报模板已更新' : '海报模板已创建');
+            await onSaved('中文海报已保存，英文待同步');
         } catch (error) {
             onError(errorText(error));
         }

@@ -318,6 +318,23 @@ describe('StorefrontContentService input validation', () => {
 });
 
 describe('StorefrontContentService publication guard', () => {
+    it('publishes cleared auth copy in Chinese while nonempty English copy is pending', () => {
+        const block = {
+            type: 'AUTH_LOGIN',
+            enabled: true,
+            translations: [{ languageCode: 'zh_Hans', title: '', subtitle: '欢迎回来' }],
+            items: [{ enabled: true, translations: [{ languageCode: 'zh_Hans', label: '' }] }],
+        };
+        expect(contentPublicationStatus(block, Date.now(), 'zh_Hans')).toBe('PUBLISHED');
+        expect(contentPublicationStatus(block, Date.now(), 'en')).toBe('INCOMPLETE_TRANSLATION');
+        block.translations.push({ languageCode: 'en', title: '', subtitle: 'Welcome back' });
+        block.items[0].translations.push({ languageCode: 'en', label: '' });
+        expect(contentPublicationStatus(block, Date.now(), 'en')).toBe('PUBLISHED');
+        expect(contentPublicationStatus({ ...block, type: 'CORE_CATEGORIES' }, Date.now(), 'zh_Hans')).toBe(
+            'INCOMPLETE_TRANSLATION',
+        );
+    });
+
     it('requires matching Chinese and English customer-visible fields', () => {
         const service = new StorefrontContentService({} as never, {} as never, {} as never, {} as never);
         const block = new StorefrontContentBlock({

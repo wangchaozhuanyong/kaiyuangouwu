@@ -872,15 +872,15 @@ export const adminApiExtensions = gql`
         posterBackgroundAssetId: ID
         shareBackgroundAssetId: ID
         titleZh: String!
-        titleEn: String!
+        titleEn: String
         headlineZh: String!
-        headlineEn: String!
+        headlineEn: String
         rewardTextZh: String!
-        rewardTextEn: String!
+        rewardTextEn: String
         siteIntroZh: String!
-        siteIntroEn: String!
+        siteIntroEn: String
         serviceTextZh: String!
-        serviceTextEn: String!
+        serviceTextEn: String
         featureOneTitleZh: String
         featureOneTitleEn: String
         featureOneTextZh: String
@@ -927,15 +927,15 @@ export const adminApiExtensions = gql`
         posterBackgroundAssetId: ID
         shareBackgroundAssetId: ID
         titleZh: String!
-        titleEn: String!
+        titleEn: String
         headlineZh: String!
-        headlineEn: String!
+        headlineEn: String
         rewardTextZh: String!
-        rewardTextEn: String!
+        rewardTextEn: String
         siteIntroZh: String!
-        siteIntroEn: String!
+        siteIntroEn: String
         serviceTextZh: String!
-        serviceTextEn: String!
+        serviceTextEn: String
         featureOneTitleZh: String
         featureOneTitleEn: String
         featureOneTextZh: String

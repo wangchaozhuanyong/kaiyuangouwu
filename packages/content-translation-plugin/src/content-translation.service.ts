@@ -4,11 +4,9 @@ import { RequestContext, TransactionalConnection, UserInputError } from '@vendur
 import { createHash } from 'node:crypto';
 import { In, IsNull } from 'typeorm';
 
-export { containsHanContent, isUsableEnglishTranslation } from '@vendure/common/lib/translation-validation';
-
 import { CONTENT_TRANSLATION_OPTIONS } from './constants.js';
 import { ContentTranslationState } from './entities/content-translation-state.entity.js';
-import { TranslationProviderError } from './translation-provider-error.js';
+import { TranslationExecutionService } from './translation-execution.service.js';
 import {
     ContentTranslationPluginOptions,
     ContentTranslationRequest,
@@ -19,12 +17,18 @@ import {
     TranslationStateIdentity,
 } from './types.js';
 
+export { containsHanContent, isUsableEnglishTranslation } from '@vendure/common/lib/translation-validation';
+
 @Injectable()
 export class ContentTranslationService {
     constructor(
         private readonly connection: TransactionalConnection,
         @Inject(CONTENT_TRANSLATION_OPTIONS)
         private readonly options: Required<ContentTranslationPluginOptions>,
+        private readonly execution: TranslationExecutionService = new TranslationExecutionService(
+            connection,
+            options,
+        ),
     ) {}
 
     isConfigured(): boolean {
@@ -35,6 +39,8 @@ export class ContentTranslationService {
         return this.options.provider.name;
     }
 
+    // Keep the asynchronous API for all callers; this phase intentionally performs no network I/O.
+    // eslint-disable-next-line @typescript-eslint/require-await
     async prepareLocalizedFields(
         fields: LocalizedContentFieldInput[],
     ): Promise<PreparedLocalizedContentField[]> {
@@ -45,7 +51,8 @@ export class ContentTranslationService {
             if (field.required && !sourceText) {
                 throw new UserInputError(`Required Simplified Chinese field "${field.path}" is empty`);
             }
-            const normalizedTarget = field.targetText?.trim() ?? '';
+            const normalizedTarget =
+                (field.targetText ?? (field.manualLock ? field.existingTargetText : undefined))?.trim() ?? '';
             const normalizedExistingTarget = field.existingTargetText?.trim() ?? '';
             const sourceUnchanged =
                 field.existingSourceText != null && field.existingSourceText.trim() === sourceText;
@@ -130,69 +137,29 @@ export class ContentTranslationService {
             }
             segments.push({ key: field.path, text: sourceText, format: field.format ?? 'TEXT' });
         }
-        if (segments.length) {
-            try {
-                if (!this.isConfigured()) throw new TranslationProviderError('CONFIGURATION');
-                const result = await this.translate({ segments });
-                if (
-                    segments.some(
-                        segment =>
-                            !isUsableEnglishTranslation(
-                                result.translations.find(item => item.key === segment.key)?.text,
-                            ),
-                    )
-                ) {
-                    throw new TranslationProviderError('INVALID_RESPONSE');
-                }
-                for (const item of result.translations) {
-                    const source = fields.find(field => field.path === item.key);
-                    if (!source) continue;
-                    if (source.maxTargetLength && item.text.trim().length > source.maxTargetLength) {
-                        prepared.set(item.key, {
-                            path: item.key,
-                            sourceText: source.sourceText.trim(),
-                            translatedText: isUsableEnglishTranslation(source.existingTargetText)
-                                ? source.existingTargetText.trim()
-                                : '',
-                            status: 'PENDING',
-                            origin: 'AUTO',
-                            locked: false,
-                            error: new TranslationProviderError('TEXT_TOO_LONG').message,
-                        });
-                        continue;
-                    }
-                    prepared.set(item.key, {
-                        path: item.key,
-                        sourceText: source.sourceText.trim(),
-                        translatedText: item.text.trim(),
-                        status: 'AUTO_TRANSLATED',
-                        origin: 'AUTO',
-                        locked: false,
-                    });
-                }
-            } catch (error) {
-                if (!(error instanceof TranslationProviderError)) throw error;
-                for (const segment of segments) {
-                    const source = fields.find(field => field.path === segment.key);
-                    if (!source) throw new Error('Missing source field');
-                    prepared.set(segment.key, {
-                        path: segment.key,
-                        sourceText: segment.text,
-                        translatedText: isUsableEnglishTranslation(source.existingTargetText)
-                            ? source.existingTargetText.trim()
-                            : '',
-                        status: 'PENDING',
-                        origin: 'AUTO',
-                        locked: false,
-                        error: error.message,
-                    });
-                }
-            }
+        // Business saves never call the provider. The durable outbox is written by recordPreparedFields.
+        for (const segment of segments) {
+            const source = fields.find(field => field.path === segment.key);
+            if (!source) throw new UserInputError('待译字段定义不存在');
+            prepared.set(segment.key, {
+                path: segment.key,
+                sourceText: segment.text,
+                translatedText: isUsableEnglishTranslation(source.existingTargetText)
+                    ? source.existingTargetText.trim()
+                    : '',
+                status: 'PENDING',
+                origin: 'AUTO',
+                locked: false,
+            });
         }
         return fields.map(field => {
             const value = prepared.get(field.path);
             if (!value) throw new UserInputError(`Translation result is missing field "${field.path}"`);
-            return value;
+            return {
+                ...value,
+                clearLock: field.manualLock === false,
+                requestLock: field.manualLock === true,
+            };
         });
     }
 
@@ -203,13 +170,16 @@ export class ContentTranslationService {
     ): Promise<void> {
         for (const field of fields) {
             // Reusing unchanged English must not turn a failed automatic translation into a manual lock.
-            const existing = field.reusedTranslation
-                ? await this.connection
-                      .getRepository(ctx, ContentTranslationState)
-                      .findOne({ where: { stateKey: this.stateKey({ ...identity, fieldPath: field.path }) } })
-                : undefined;
+            const existing = await this.connection
+                .getRepository(ctx, ContentTranslationState)
+                .findOne({ where: { stateKey: this.stateKey({ ...identity, fieldPath: field.path }) } });
+            const retainLock =
+                existing?.locked &&
+                !field.clearLock &&
+                existing.translatedHash === hash(field.translatedText);
             const reuseState =
                 existing &&
+                !field.requestLock &&
                 existing.sourceHash === hash(field.sourceText) &&
                 existing.translatedHash === hash(field.translatedText);
             await this.recordState(ctx, {
@@ -217,9 +187,24 @@ export class ContentTranslationService {
                 fieldPath: field.path,
                 sourceText: field.sourceText,
                 translatedText: field.translatedText,
-                status: reuseState ? existing.status : field.status,
-                origin: reuseState ? existing.origin : field.origin,
-                locked: reuseState ? existing.locked : field.locked,
+                status:
+                    retainLock && !reuseState
+                        ? 'STALE'
+                        : reuseState && !field.clearLock
+                          ? existing.status
+                          : field.status,
+                origin: retainLock
+                    ? 'MANUAL'
+                    : reuseState && !field.clearLock
+                      ? existing.origin
+                      : field.origin,
+                locked: retainLock
+                    ? true
+                    : field.clearLock
+                      ? false
+                      : reuseState
+                        ? existing.locked
+                        : field.locked,
                 error: reuseState ? existing.error : field.error,
             });
         }
@@ -281,7 +266,7 @@ export class ContentTranslationService {
     async translate(
         request: Omit<ContentTranslationRequest, 'sourceLanguageCode' | 'targetLanguageCode' | 'glossary'>,
     ): Promise<ContentTranslationResult> {
-        return this.options.provider.translate({
+        return this.execution.translate({
             sourceLanguageCode: this.options.sourceLanguageCode,
             targetLanguageCode: this.options.targetLanguageCode,
             glossary: this.options.glossary,
@@ -296,6 +281,21 @@ export class ContentTranslationService {
         const repository = this.connection.getRepository(ctx, ContentTranslationState);
         const stateKey = this.stateKey(input);
         const existing = await repository.findOne({ where: { stateKey } });
+        const sourceHash = hash(input.sourceText);
+        const translatedHash = input.translatedText == null ? null : hash(input.translatedText);
+        const origin = input.origin ?? 'AUTO';
+        const locked = input.locked ?? existing?.locked ?? false;
+        if (
+            existing &&
+            existing.sourceHash === sourceHash &&
+            existing.translatedHash === translatedHash &&
+            existing.origin === origin &&
+            existing.locked === locked &&
+            (existing.status === input.status ||
+                (input.status === 'PENDING' &&
+                    ['PENDING', 'TRANSLATING', 'NOTIFY_PENDING', 'FAILED'].includes(existing.status)))
+        )
+            return existing;
         return repository.save(
             new ContentTranslationState({
                 ...existing,
@@ -306,20 +306,32 @@ export class ContentTranslationService {
                 fieldPath: input.fieldPath,
                 sourceLanguageCode: this.options.sourceLanguageCode,
                 targetLanguageCode: input.targetLanguageCode ?? this.options.targetLanguageCode,
-                sourceHash: hash(input.sourceText),
-                translatedHash: input.translatedText == null ? null : hash(input.translatedText),
+                sourceHash,
+                translatedHash,
+                origin,
+                locked,
                 status: input.status,
-                origin: input.origin ?? 'AUTO',
-                locked: input.locked ?? existing?.locked ?? false,
                 error: input.error ?? null,
+                revision: (existing?.revision ?? 0) + 1,
+                attempts: 0,
+                nextAttemptAt: input.status === 'PENDING' ? new Date(Date.now()) : null,
+                leaseToken: null,
+                leaseUntil: null,
+                lastErrorCode: null,
             }),
         );
     }
 
-    async findStates(ctx: RequestContext, identity: Omit<TranslationStateIdentity, 'fieldPath'>) {
+    async findStates(
+        ctx: RequestContext,
+        identity: Omit<TranslationStateIdentity, 'fieldPath'>,
+        sharedNative = false,
+    ) {
         return this.connection.getRepository(ctx, ContentTranslationState).find({
             where: {
-                channelId: identity.channelId == null ? IsNull() : String(identity.channelId),
+                ...(!sharedNative
+                    ? { channelId: identity.channelId == null ? IsNull() : String(identity.channelId) }
+                    : {}),
                 entityType: identity.entityType,
                 entityId: String(identity.entityId),
                 targetLanguageCode: identity.targetLanguageCode ?? this.options.targetLanguageCode,
@@ -333,9 +345,12 @@ export class ContentTranslationService {
             where: [
                 {
                     channelId: String(ctx.channelId),
-                    status: In(['STALE', 'PENDING', 'TRANSLATING', 'FAILED']),
+                    status: In(['STALE', 'PENDING', 'TRANSLATING', 'NOTIFY_PENDING', 'FAILED']),
                 },
-                { channelId: IsNull(), status: In(['STALE', 'PENDING', 'TRANSLATING', 'FAILED']) },
+                {
+                    channelId: IsNull(),
+                    status: In(['STALE', 'PENDING', 'TRANSLATING', 'NOTIFY_PENDING', 'FAILED']),
+                },
             ],
         });
     }
@@ -351,7 +366,7 @@ export class ContentTranslationService {
         const [states, allStatuses] = await Promise.all([
             repository.find({
                 ...(where ? { where } : {}),
-                order: { updatedAt: 'DESC', id: 'DESC' },
+                order: { updatedAt: 'DESC' },
                 take: 1_000,
             }),
             repository.find({

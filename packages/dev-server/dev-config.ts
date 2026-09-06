@@ -695,7 +695,7 @@ export const devConfig: VendureConfig = {
                 nullable: false,
                 defaultValue: 'Yunqiao Ai',
                 public: true,
-                validate: validateStorefrontName,
+                validate: (value: string) => (value.trim() ? validateStorefrontName(value) : undefined),
                 ui: { dashboard: false },
                 label: [
                     { languageCode: LanguageCode.zh_Hans, value: '英文网站名称' },

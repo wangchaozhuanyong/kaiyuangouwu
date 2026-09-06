@@ -14,6 +14,7 @@ export type StorefrontContentSettingsValue = Record<
 >;
 
 export interface StorefrontContentBlockTranslationInput {
+    updatedFields?: string[] | null;
     languageCode: LanguageCode;
     title: string;
     titleLocked?: boolean | null;
@@ -26,6 +27,7 @@ export interface StorefrontContentBlockTranslationInput {
 }
 
 export interface StorefrontContentItemTranslationInput {
+    updatedFields?: string[] | null;
     languageCode: LanguageCode;
     label: string;
     labelLocked?: boolean | null;

@@ -56,7 +56,7 @@ export interface SaveImageGenerationConfigInput {
     defaultModelCode: string;
     termsVersion: string;
     termsZh: string;
-    termsEn: string;
+    termsEn?: string | null;
     models?: SaveImageModelInput[];
 }
 
@@ -107,9 +107,9 @@ export interface SaveImageModelInput {
     code: string;
     enabled: boolean;
     displayNameZh: string;
-    displayNameEn: string;
+    displayNameEn?: string | null;
     descriptionZh: string;
-    descriptionEn: string;
+    descriptionEn?: string | null;
     providerModelId: string;
     protocol: ImageProviderProtocol;
     unitPrice: number;

@@ -47,6 +47,8 @@ const TRANSLATION_STATUS_LABELS: Readonly<Record<string, string>> = {
     MISSING: '缺少英文翻译',
     PENDING: '等待翻译',
     TRANSLATING: '翻译中',
+    NOTIFY_PENDING: '英文已保存，等待同步',
+    CANCELLED: '翻译任务已取消',
     AUTO_TRANSLATED: '已自动翻译',
     REVIEWED: '已人工复核',
     MANUAL_LOCKED: '人工翻译已锁定',

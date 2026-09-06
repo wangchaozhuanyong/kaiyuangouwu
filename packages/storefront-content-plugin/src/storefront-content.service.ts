@@ -99,7 +99,7 @@ export class StorefrontContentService {
             order: { position: 'ASC', createdAt: 'ASC', items: { position: 'ASC', createdAt: 'ASC' } },
         });
         return blocks
-            .filter(block => contentPublicationStatus(block, now.getTime()) === 'PUBLISHED')
+            .filter(block => contentPublicationStatus(block, now.getTime(), ctx.languageCode) === 'PUBLISHED')
             .map(block => this.translateBlock(block, ctx, true));
     }
 
@@ -530,8 +530,14 @@ export class StorefrontContentService {
             {
                 path: 'title',
                 sourceText: source.title,
-                targetText: target?.title,
-                manualLock: target?.titleLocked,
+                targetText:
+                    target?.updatedFields && !target.updatedFields.includes('title')
+                        ? undefined
+                        : target?.title,
+                manualLock:
+                    target?.updatedFields?.includes('title') && target.title === ''
+                        ? false
+                        : target?.titleLocked,
                 existingSourceText: existingSource?.title,
                 existingTargetText: existingTarget?.title,
                 required: !allowEmpty,
@@ -539,16 +545,28 @@ export class StorefrontContentService {
             {
                 path: 'subtitle',
                 sourceText: source.subtitle ?? '',
-                targetText: target?.subtitle,
-                manualLock: target?.subtitleLocked,
+                targetText:
+                    target?.updatedFields && !target.updatedFields.includes('subtitle')
+                        ? undefined
+                        : target?.subtitle,
+                manualLock:
+                    target?.updatedFields?.includes('subtitle') && target.subtitle === ''
+                        ? false
+                        : target?.subtitleLocked,
                 existingSourceText: existingSource?.subtitle,
                 existingTargetText: existingTarget?.subtitle,
             },
             {
                 path: 'body',
                 sourceText: source.body ?? '',
-                targetText: target?.body,
-                manualLock: target?.bodyLocked,
+                targetText:
+                    target?.updatedFields && !target.updatedFields.includes('body')
+                        ? undefined
+                        : target?.body,
+                manualLock:
+                    target?.updatedFields?.includes('body') && target.body === ''
+                        ? false
+                        : target?.bodyLocked,
                 existingSourceText: existingSource?.body,
                 existingTargetText: existingTarget?.body,
                 format: 'HTML',
@@ -556,8 +574,14 @@ export class StorefrontContentService {
             {
                 path: 'ctaLabel',
                 sourceText: source.ctaLabel ?? '',
-                targetText: target?.ctaLabel,
-                manualLock: target?.ctaLabelLocked,
+                targetText:
+                    target?.updatedFields && !target.updatedFields.includes('ctaLabel')
+                        ? undefined
+                        : target?.ctaLabel,
+                manualLock:
+                    target?.updatedFields?.includes('ctaLabel') && target.ctaLabel === ''
+                        ? false
+                        : target?.ctaLabelLocked,
                 existingSourceText: existingSource?.ctaLabel,
                 existingTargetText: existingTarget?.ctaLabel,
             },
@@ -616,8 +640,14 @@ export class StorefrontContentService {
             {
                 path: 'label',
                 sourceText: source.label,
-                targetText: target?.label,
-                manualLock: target?.labelLocked,
+                targetText:
+                    target?.updatedFields && !target.updatedFields.includes('label')
+                        ? undefined
+                        : target?.label,
+                manualLock:
+                    target?.updatedFields?.includes('label') && target.label === ''
+                        ? false
+                        : target?.labelLocked,
                 existingSourceText: existingSource?.label,
                 existingTargetText: existingTarget?.label,
                 required: !allowEmpty,
@@ -625,8 +655,14 @@ export class StorefrontContentService {
             {
                 path: 'description',
                 sourceText: source.description ?? '',
-                targetText: target?.description,
-                manualLock: target?.descriptionLocked,
+                targetText:
+                    target?.updatedFields && !target.updatedFields.includes('description')
+                        ? undefined
+                        : target?.description,
+                manualLock:
+                    target?.updatedFields?.includes('description') && target.description === ''
+                        ? false
+                        : target?.descriptionLocked,
                 existingSourceText: existingSource?.description,
                 existingTargetText: existingTarget?.description,
             },
@@ -983,7 +1019,10 @@ export class StorefrontContentService {
             }
             languageCodes.add(input.languageCode);
             const requiredValue = (input as unknown as Record<string, unknown>)[requiredKey];
-            if (typeof requiredValue !== 'string' || (!allowEmpty && !requiredValue.trim())) {
+            if (
+                input.languageCode === LanguageCode.zh_Hans &&
+                (typeof requiredValue !== 'string' || (!allowEmpty && !requiredValue.trim()))
+            ) {
                 throw new UserInputError(requiredKey === 'title' ? '区块标题不能为空' : '条目名称不能为空');
             }
         }

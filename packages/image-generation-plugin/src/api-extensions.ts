@@ -566,7 +566,7 @@ export const adminApiExtensions = gql`
         defaultModelCode: String!
         termsVersion: String!
         termsZh: String!
-        termsEn: String!
+        termsEn: String
         models: [SaveImageModelInput!]
     }
 
@@ -604,9 +604,9 @@ export const adminApiExtensions = gql`
         code: String!
         enabled: Boolean!
         displayNameZh: String!
-        displayNameEn: String!
+        displayNameEn: String
         descriptionZh: String!
-        descriptionEn: String!
+        descriptionEn: String
         providerModelId: String!
         protocol: ImageProviderProtocol!
         unitPrice: Money!

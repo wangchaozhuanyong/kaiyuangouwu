@@ -4,6 +4,8 @@ export type ContentTranslationStatus =
     | 'MISSING'
     | 'PENDING'
     | 'TRANSLATING'
+    | 'NOTIFY_PENDING'
+    | 'CANCELLED'
     | 'AUTO_TRANSLATED'
     | 'REVIEWED'
     | 'MANUAL_LOCKED'
@@ -82,4 +84,6 @@ export interface PreparedLocalizedContentField {
     locked: boolean;
     error?: string;
     reusedTranslation?: boolean;
+    clearLock?: boolean;
+    requestLock?: boolean;
 }

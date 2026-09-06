@@ -270,6 +270,7 @@
       "version": "0.1.0",
       "dependencies": {
         "@nestjs/common": "^11.0.12",
+        "@nestjs/core": "^11.0.12",
         "@nestjs/graphql": "~13.4.4",
         "@vendure/common": "3.7.2",
         "@vendure/core": "3.7.2",
@@ -603,6 +604,7 @@
         "@nestjs/common": "^11.0.12",
         "@nestjs/graphql": "~13.4.4",
         "@vendure/common": "3.7.2",
+        "@vendure/content-translation-plugin": "0.1.0",
         "@vendure/core": "3.7.2",
         "@vendure/store-management-plugin": "0.1.0",
         "file-type": "21.3.4",
