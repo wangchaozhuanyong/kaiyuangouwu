@@ -1,7 +1,6 @@
 import { Injectable, OnApplicationBootstrap } from '@nestjs/common';
 import {
     ConfigService,
-    Customer,
     EventBus,
     PaymentMethod,
     PaymentMethodEvent,
@@ -14,7 +13,6 @@ import {
     CONTROLLED_TEST_PAYMENT_HANDLER,
     CONTROLLED_TEST_PAYMENT_PREFIX,
     testPaymentArguments,
-    testPaymentCustomerIds,
 } from './controlled-test-payment';
 
 @Injectable()
@@ -74,18 +72,5 @@ export class ControlledTestPaymentConfigService implements OnApplicationBootstra
             );
         if (method.checker?.code !== CONTROLLED_TEST_PAYMENT_CHECKER)
             throw new UserInputError('测试支付必须使用测试资格检查器');
-        const customerIds = testPaymentCustomerIds(args.customerIds ?? '');
-        for (const id of customerIds) {
-            const customer = await this.connection.findOneInChannel(
-                ctx,
-                Customer,
-                (this.config.entityOptions.entityIdStrategy ?? this.config.entityIdStrategy).decodeId(id),
-                ctx.channelId,
-                { relations: ['user'] },
-            );
-            if (!customer?.user?.verified || customer.user.deletedAt) {
-                throw new UserInputError('测试客户必须属于本店，且已注册并验证邮箱');
-            }
-        }
     }
 }

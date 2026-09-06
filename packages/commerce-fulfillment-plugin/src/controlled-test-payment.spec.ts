@@ -1,25 +1,16 @@
-import {
-    ConfigService,
-    Customer,
-    Order,
-    OrderService,
-    PaymentMethod,
-    TransactionalConnection,
-} from '@vendure/core';
-import { StorefrontCartLifecycleService, StorefrontCartService } from '@vendure/storefront-cart-plugin';
+import { ConfigService, Order, TransactionalConnection } from '@vendure/core';
+import { StorefrontCartService } from '@vendure/storefront-cart-plugin';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createControlledTestPayment, testPaymentCustomerIds } from './controlled-test-payment';
+import { createControlledTestPayment } from './controlled-test-payment';
 
-describe('controlled test payment boundaries', () => {
+describe('test payments use the normal checkout workflow', () => {
     let order: any;
     let method: any;
     let ctx: any;
     let registered: ReturnType<typeof createControlledTestPayment>;
-    const lifecycle = { completeCheckoutForOrder: vi.fn() };
     const carts = { lockForOrder: vi.fn() };
     const lockOrder = vi.fn();
-    const orders = { getOrderPayments: vi.fn(), transitionToState: vi.fn() };
     const connection = {
         findOneInChannel: vi.fn(),
         getRepository: vi.fn(() => ({ update: lockOrder, findOne: vi.fn(() => Promise.resolve(method)) })),
@@ -30,9 +21,7 @@ describe('controlled test payment boundaries', () => {
             new Map<unknown, unknown>([
                 [TransactionalConnection, connection],
                 [ConfigService, config],
-                [OrderService, orders],
                 [StorefrontCartService, carts],
-                [StorefrontCartLifecycleService, lifecycle],
             ]).get(token),
     } as any;
 
@@ -53,79 +42,96 @@ describe('controlled test payment boundaries', () => {
             id: 3,
             enabled: true,
             code: 'controlled-test-payment-T_2',
-            handler: {
-                code: 'controlled-test-payment-handler',
-                args: [
-                    { name: 'channelId', value: 'T_2' },
-                    { name: 'customerIds', value: 'T_7' },
-                ],
-            },
+            handler: { code: 'controlled-test-payment-handler', args: [{ name: 'channelId', value: 'T_2' }] },
             checker: { code: 'controlled-test-payment-checker', args: [] },
         };
         connection.findOneInChannel.mockImplementation((_ctx, entity) =>
-            Promise.resolve(entity === Order ? order : entity === PaymentMethod ? method : { id: 7 }),
+            Promise.resolve(entity === Order ? order : method),
         );
         registered = createControlledTestPayment(true);
         await registered.handler.init(injector);
     });
 
-    const pay = () =>
+    const pay = (amount = 1000) =>
         registered.handler.createPayment(
             ctx,
             order,
-            1000,
+            amount,
             method.handler.args,
-            { public: { testPayment: false }, state: 'Settled', amount: 1 },
+            { public: { testPayment: false }, state: 'Authorized', amount: 1 },
             method,
         );
+    const transition = (amount = 1000) =>
+        registered.paymentProcess.onTransitionStart?.('Created', 'Settled', {
+            ctx,
+            order,
+            payment: { amount, method: method.code },
+        } as any);
 
-    it('accepts only a verified, owned, allowlisted account and overwrites client metadata', async () => {
+    it('settles the server amount and overwrites client-provided payment data', async () => {
         expect(await registered.checker.check(ctx, order, [], method)).toBe(true);
         const payment = await pay();
         expect(payment).toMatchObject({
             amount: 1000,
-            state: 'TestSettled',
+            state: 'Settled',
             metadata: { public: { testPayment: true } },
         });
         expect(payment.transactionId).toMatch(/^test-/);
-        expect(lifecycle.completeCheckoutForOrder).not.toHaveBeenCalled();
+        expect(await transition()).toBeUndefined();
+        expect(connection.findOneInChannel).toHaveBeenCalledWith(
+            ctx,
+            Order,
+            order.id,
+            ctx.channelId,
+            expect.objectContaining({ lock: { mode: 'pessimistic_write' }, relationLoadStrategy: 'join' }),
+        );
     });
 
-    it('accepts JSON text arguments sent by the admin configuration editor', async () => {
-        method.handler.args = method.handler.args.map((arg: { name: string; value: string }) => ({
-            ...arg,
-            value: JSON.stringify(arg.value),
-        }));
+    it.each([9, 10, 11, undefined])(
+        'does not require a test whitelist for checkout user %s',
+        async userId => {
+            ctx.activeUserId = userId;
+            order.customer = { id: userId ?? 20, user: userId ? { id: userId, verified: true } : null };
+            expect(await registered.checker.check(ctx, order, [], method)).toBe(true);
+            expect(await pay()).toMatchObject({ state: 'Settled' });
+            expect(registered.handler.args).not.toHaveProperty('customerIds');
+        },
+    );
+
+    it('accepts existing JSON-encoded channel arguments and ignores the retired whitelist', async () => {
+        method.handler.args = [
+            { name: 'channelId', value: JSON.stringify('T_2') },
+            { name: 'customerIds', value: 'old-customer' },
+        ];
         expect(await registered.checker.check(ctx, order, [], method)).toBe(true);
-        expect(await pay()).toMatchObject({ state: 'TestSettled' });
+        expect(await pay()).toMatchObject({ state: 'Settled' });
     });
 
-    it('rejects a concurrent completion even if the transaction still reads a payable snapshot', async () => {
+    it('supports discounted totals and settles only the remainder after previous payments and refunds', async () => {
+        order.couponCodes = ['DISCOUNT'];
+        order.payments = [
+            { state: 'Settled', amount: 400, refunds: [{ state: 'Settled', total: 100 }] },
+            { state: 'Declined', amount: 1000 },
+        ];
+        expect(await registered.checker.check(ctx, order, [], method)).toBe(true);
+        expect(await pay(700)).toMatchObject({ amount: 700, state: 'Settled' });
+        expect(await transition(700)).toBeUndefined();
+        await expect(pay(1000)).rejects.toThrow('金额');
+        expect(await transition(1000)).toContain('金额');
+    });
+
+    it('supports a zero-amount checkout after a full discount', async () => {
+        order.totalWithTax = 0;
+        expect(await pay(0)).toMatchObject({ amount: 0, state: 'Settled' });
+        expect(await transition(0)).toBeUndefined();
+    });
+
+    it('rejects concurrent completion inside the payment transaction', async () => {
         lockOrder.mockResolvedValue({ affected: 0 });
-        expect(await registered.checker.check(ctx, order, [], method)).toBe(true);
-        await expect(pay()).rejects.toThrow();
-        expect(
-            await registered.paymentProcess.onTransitionStart?.('Created', 'TestSettled', {
-                ctx,
-                order,
-                payment: { amount: 1000, method: method.code },
-            } as any),
-        ).toBeTruthy();
+        expect(await transition()).toBeTruthy();
     });
 
     it.each([
-        [
-            'guest',
-            () => {
-                ctx.activeUserId = undefined;
-            },
-        ],
-        [
-            'another logged-in user',
-            () => {
-                ctx.activeUserId = 10;
-            },
-        ],
         [
             'admin API',
             () => {
@@ -136,12 +142,6 @@ describe('controlled test payment boundaries', () => {
             'another channel',
             () => {
                 ctx.channelId = 4;
-            },
-        ],
-        [
-            'not allowlisted',
-            () => {
-                method.handler.args[1].value = 'T_8';
             },
         ],
         [
@@ -163,120 +163,68 @@ describe('controlled test payment boundaries', () => {
             },
         ],
         [
-            'unverified account',
+            'completed order',
             () => {
-                order.customer.user.verified = false;
+                order.active = false;
+                order.state = 'PaymentSettled';
             },
         ],
         [
-            'deleted account',
-            () => {
-                order.customer.user.deletedAt = new Date();
-            },
-        ],
-        [
-            'coupon',
-            () => {
-                order.couponCodes = ['REAL-COUPON'];
-            },
-        ],
-        [
-            'real balance mixed payment',
-            () => {
-                order.payments = [{ state: 'Settled', method: 'referral-balance' }];
-            },
-        ],
-        [
-            'USDT mixed payment',
-            () => {
-                order.payments = [{ state: 'Authorized', method: 'usdt-trc20' }];
-            },
-        ],
-        [
-            'duplicate test payment',
-            () => {
-                order.payments = [{ state: 'TestSettled' }];
-            },
-        ],
-        [
-            'already completed order',
+            'historical test order',
             () => {
                 order.active = false;
                 order.state = 'TestPaymentSettled';
             },
         ],
         [
-            'zero total',
+            'negative remaining amount',
             () => {
-                order.totalWithTax = 0;
+                order.payments = [{ state: 'Settled', amount: 1100 }];
             },
         ],
-    ] as const)('rejects %s through both eligibility and direct payment', async (_name, mutate) => {
-        mutate();
-        expect(await registered.checker.check(ctx, order, [], method)).toBe(false);
-        await expect(pay()).rejects.toThrow();
-    });
+    ] as const)(
+        'rejects %s through eligibility, creation and the payment transaction',
+        async (_name, mutate) => {
+            mutate();
+            expect(await registered.checker.check(ctx, order, [], method)).toBe(false);
+            await expect(pay()).rejects.toThrow();
+            expect(await transition()).toBeTruthy();
+        },
+    );
 
-    it('rejects a customer removed from the active channel', async () => {
+    it('rejects missing orders and disabled server configuration', async () => {
         connection.findOneInChannel.mockImplementation((_ctx, entity) =>
-            Promise.resolve(entity === Customer ? undefined : entity === Order ? order : method),
+            Promise.resolve(entity === Order ? undefined : method),
         );
-        expect(await registered.checker.check(ctx, order, [], method)).toBe(false);
         await expect(pay()).rejects.toThrow();
-    });
-
-    it('keeps saved methods ineligible when the server switch is off', async () => {
         registered = createControlledTestPayment(false);
         await registered.checker.init(injector);
         expect(await registered.checker.check(ctx, order, [], method)).toBe(false);
         await expect(pay()).rejects.toThrow();
     });
 
-    it('prevents fake order transitions and mixed payments from becoming a completed test', async () => {
-        orders.getOrderPayments.mockResolvedValue([{ method: method.code, amount: 1000, state: 'Settled' }]);
+    it('retains legacy terminal records but allows normal paid-order fulfillment', async () => {
         expect(
-            await registered.orderProcess.onTransitionStart?.('ArrangingPayment', 'TestPaymentSettled', {
+            await registered.paymentProcess.onTransitionStart?.('TestSettled', 'Settled', {
+                ctx,
+                order,
+            } as any),
+        ).toBeTruthy();
+        expect(
+            await registered.orderProcess.onTransitionStart?.('TestPaymentSettled', 'PaymentSettled', {
                 ctx,
                 order,
             }),
-        ).toBeTypeOf('string');
-        orders.getOrderPayments.mockResolvedValue([
-            { method: method.code, amount: 1000, state: 'TestSettled' },
-        ]);
-        expect(
-            await registered.orderProcess.onTransitionStart?.('ArrangingPayment', 'TestPaymentSettled', {
-                ctx,
-                order,
-            }),
-        ).toBeUndefined();
-    });
-
-    it('completes the cart without placing an order for accounting and rejects real fulfillment', async () => {
-        await registered.orderProcess.onTransitionEnd?.('ArrangingPayment', 'TestPaymentSettled', {
-            ctx,
-            order,
-        });
-        expect(order.active).toBe(false);
-        expect(order.orderPlacedAt).toBeUndefined();
-        expect(lifecycle.completeCheckoutForOrder).toHaveBeenCalledWith(ctx, order.id);
+        ).toBeTruthy();
         expect(
             registered.fulfillmentProcess.onTransitionStart?.('Created', 'Pending', {
                 orders: [{ state: 'TestPaymentSettled' }],
             } as any),
-        ).toBeTypeOf('string');
+        ).toBeTruthy();
         expect(
             registered.fulfillmentProcess.onTransitionStart?.('Created', 'Pending', {
                 orders: [{ state: 'PaymentSettled' }],
             } as any),
         ).toBeUndefined();
-    });
-
-    it('rejects malformed or unbounded allowlists', () => {
-        expect(() => testPaymentCustomerIds('')).toThrow();
-        expect(() => testPaymentCustomerIds('T_7;DROP')).toThrow();
-        expect(() =>
-            testPaymentCustomerIds(Array.from({ length: 101 }, (_, i) => String(i)).join(',')),
-        ).toThrow();
-        expect(testPaymentCustomerIds('T_7， T_8, T_7')).toEqual(['T_7', 'T_8']);
     });
 });
