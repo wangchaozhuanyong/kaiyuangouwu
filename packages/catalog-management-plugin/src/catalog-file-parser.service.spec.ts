@@ -128,6 +128,16 @@ describe('CatalogFileParserService', () => {
 
 function workbookBuffer(rows: unknown[][]): Buffer {
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(rows), 'Sheet1');
+    XLSX.utils.book_append_sheet(
+        workbook,
+        XLSX.utils.aoa_to_sheet(
+            rows.map((row, index) => [
+                ...row,
+                index === 0 ? '商品类型' : '实物',
+                index === 0 ? '导入商店' : 'test-store',
+            ]),
+        ),
+        'Sheet1',
+    );
     return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
 }

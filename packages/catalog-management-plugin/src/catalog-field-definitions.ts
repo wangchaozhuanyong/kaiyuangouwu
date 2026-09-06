@@ -7,8 +7,15 @@ export interface CatalogFieldDefinition {
 }
 
 export const CATALOG_FIELD_DEFINITIONS = [
+    {
+        value: 'channelCode',
+        label: '导入商店',
+        aliases: ['门店', '门店编码', '商店', '店铺', '目标商店', '商店编码'],
+    },
     { value: 'name', label: '名称', aliases: ['商品名称'] },
-    { value: 'category', label: '分类', aliases: ['商品分类'] },
+    { value: 'fulfillmentType', label: '商品类型', aliases: ['货品类型'] },
+    { value: 'category', label: '一级分类', aliases: ['分类', '商品分类'] },
+    { value: 'secondaryCategory', label: '二级分类', aliases: ['子分类'] },
     { value: 'sku', label: 'SKU', aliases: ['商品编码'] },
     { value: 'barcode', label: '条码', aliases: [] },
     { value: 'specification', label: '规格', aliases: [] },
@@ -33,7 +40,6 @@ export const CATALOG_FIELD_DEFINITIONS = [
     { value: 'lotCode', label: '批次号', aliases: [] },
     { value: 'lotQuantity', label: '批次数量', aliases: [] },
     { value: 'sourceCreatedAt', label: '创建日期', aliases: ['来源创建日期'] },
-    { value: 'channelCode', label: '门店', aliases: ['门店编码'] },
     { value: 'supplier', label: '供货商', aliases: ['供应商'] },
 ] as const satisfies readonly CatalogFieldDefinition[];
 
@@ -47,7 +53,9 @@ export const CATALOG_HEADER_ALIASES: Record<string, keyof NormalizedCatalogRow> 
 );
 
 export const CATALOG_REQUIRED_FIELDS: Array<keyof NormalizedCatalogRow> = [
+    'channelCode',
     'name',
+    'fulfillmentType',
     'category',
     'purchaseCost',
     'sellingPrice',
@@ -75,8 +83,11 @@ export const CATALOG_EXCLUDED_HEADERS = new Set([
 ]);
 
 export const CATALOG_CANONICAL_BUSINESS_HEADERS = [
+    '导入商店',
     '名称',
-    '分类',
+    '商品类型',
+    '一级分类',
+    '二级分类',
     '库存量',
     '进货价',
     '销售价',

@@ -1,7 +1,8 @@
 import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
 import { Permission } from '@vendure/common/lib/generated-types';
-import { Allow, Ctx, ID, RequestContext } from '@vendure/core';
+import { Allow, Ctx, ID, ListQueryOptions, Product, RequestContext } from '@vendure/core';
 
+import { CatalogChannelAssignmentsService } from './catalog-channel-assignments.service';
 import { CatalogImportService } from './catalog-import.service';
 import { CatalogOperationsService } from './catalog-operations.service';
 import {
@@ -42,7 +43,17 @@ export class CatalogManagementAdminResolver {
         private readonly operations: CatalogOperationsService,
         private readonly profit: CatalogProfitService,
         private readonly suppliers: CatalogSupplierService,
+        private readonly channelAssignments: CatalogChannelAssignmentsService,
     ) {}
+
+    @Query()
+    @Allow(Permission.ReadProduct)
+    catalogProductChannelAssignments(
+        @Ctx() ctx: RequestContext,
+        @Args('options') options?: ListQueryOptions<Product>,
+    ) {
+        return this.channelAssignments.list(ctx, options);
+    }
 
     @Query()
     @Allow(manageCatalogImportPermission.Read)

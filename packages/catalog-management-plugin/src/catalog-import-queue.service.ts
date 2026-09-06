@@ -9,6 +9,7 @@ import {
     User,
 } from '@vendure/core';
 
+import { safeMessage } from './catalog-import-helpers';
 import { CatalogImportService } from './catalog-import.service';
 import { CATALOG_IMPORT_QUEUE } from './constants';
 import { CatalogImportJob } from './entities/catalog-import-job.entity';
@@ -58,7 +59,17 @@ export class CatalogImportQueueService implements OnApplicationBootstrap {
             channelOrToken: importJob.channel,
             user: actor ?? undefined,
         });
-        await this.imports.executeJob(ctx, importJob.id, progress => job.setProgress(progress));
+        try {
+            await this.imports.executeJob(ctx, importJob.id, progress => job.setProgress(progress));
+        } catch (error) {
+            await this.connection.rawConnection
+                .getRepository(CatalogImportJob)
+                .update(
+                    { id: importJob.id, state: 'RUNNING' },
+                    { state: 'FAILED', errorMessage: safeMessage(error) },
+                );
+            throw error;
+        }
         return { importJobId: job.data.importJobId };
     }
 

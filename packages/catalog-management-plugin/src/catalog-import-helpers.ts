@@ -1,6 +1,8 @@
 import { normalizeString } from '@vendure/common/lib/normalize-string';
-import { FacetValue, UserInputError } from '@vendure/core';
+import { FacetValue, ProductService, RequestContext, UserInputError } from '@vendure/core';
 
+import { parseCatalogFulfillmentType, validateCatalogCategories } from './catalog-import-classification';
+import { parseCatalogImportStore } from './catalog-import-store';
 import { normalizeSupplierDisplayName } from './catalog-supplier.service';
 import { MAX_CATALOG_IMPORT_BYTES, MAX_CATALOG_IMPORT_ROWS } from './constants';
 import { BeginCatalogImportInput, NormalizedCatalogRow } from './types';
@@ -159,6 +161,8 @@ export function validateImportSource(input: BeginCatalogImportInput): void {
     const allowedMappings = new Set([
         'name',
         'category',
+        'secondaryCategory',
+        'fulfillmentType',
         'channelCode',
         'stockLocationCode',
         'currencyCode',
@@ -198,6 +202,15 @@ export function sanitizeCatalogRow(row: NormalizedCatalogRow, expectedRows: numb
     }
     const name = safeImportText(row.name, 255);
     const category = safeImportText(row.category, 255);
+    const secondaryCategory = safeImportText(row.secondaryCategory ?? '', 255);
+    let fulfillmentType: NormalizedCatalogRow['fulfillmentType'];
+    try {
+        fulfillmentType = parseCatalogFulfillmentType(row.fulfillmentType, row.rowNumber);
+        validateCatalogCategories(category, secondaryCategory, row.rowNumber);
+        parseCatalogImportStore(row.channelCode, row.rowNumber);
+    } catch (error) {
+        throw new UserInputError(safeMessage(error));
+    }
     const sku = safeImportText(row.sku, 255);
     const barcode = safeImportText(row.barcode, 255);
     if (!name && !sku && !barcode) {
@@ -241,6 +254,8 @@ export function sanitizeCatalogRow(row: NormalizedCatalogRow, expectedRows: numb
     const allowedFields = new Set([
         'name',
         'category',
+        'secondaryCategory',
+        'fulfillmentType',
         'channelCode',
         'stockLocationCode',
         'currencyCode',
@@ -274,7 +289,9 @@ export function sanitizeCatalogRow(row: NormalizedCatalogRow, expectedRows: numb
         sourceRecordKey: safeImportText(row.sourceRecordKey ?? '', 2_048) || undefined,
         name,
         category,
-        channelCode: safeImportText(row.channelCode, 255),
+        secondaryCategory,
+        fulfillmentType,
+        channelCode: parseCatalogImportStore(row.channelCode, row.rowNumber),
         stockLocationCode: safeImportText(row.stockLocationCode, 255),
         currencyCode: safeImportText(row.currencyCode, 3).toUpperCase(),
         specification: safeImportText(row.specification, 255),
@@ -370,4 +387,17 @@ export function sanitizeFieldMapping(value: Record<string, string>): Record<stri
             .map(([header, field]) => [safeImportText(header, 255), safeImportText(field, 80)])
             .filter(([header, field]) => Boolean(header && field)),
     );
+}
+
+export async function uniqueCatalogProductSlug(
+    ctx: RequestContext,
+    name: string,
+    productService: ProductService,
+): Promise<string> {
+    const base = normalizeString(name, '-').slice(0, 100) || `product-${shortCode(name)}`;
+    for (let index = 0; index < 100; index++) {
+        const slug = index === 0 ? base : `${base}-${index + 1}`;
+        if (!(await productService.findOneBySlug(ctx, slug))) return slug;
+    }
+    return `${base}-${Date.now()}`;
 }

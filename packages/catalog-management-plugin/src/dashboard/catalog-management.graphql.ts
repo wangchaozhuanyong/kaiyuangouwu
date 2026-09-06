@@ -249,6 +249,9 @@ export const catalogExportRowsQuery = gql`
                 productName
                 description
                 categories
+                importCategory
+                fulfillmentType
+                channelCode
                 brand
                 tags
                 productEnabled
@@ -446,6 +449,9 @@ export interface CatalogExportRowRecord {
     productName: string;
     description: string;
     categories: string[];
+    importCategory?: string | null;
+    fulfillmentType: 'digital' | 'physical';
+    channelCode: string;
     brand: string | null;
     tags: string[];
     productEnabled: boolean;

@@ -267,6 +267,9 @@ export const CATALOG_EXPORT_ROWS_QUERY = gql`
                 productName
                 description
                 categories
+                importCategory
+                fulfillmentType
+                channelCode
                 brand
                 tags
                 productEnabled

@@ -35,6 +35,7 @@ import {
 import { CatalogImportOptionsService } from './catalog-import-options.service';
 import {
     type PlannedRow,
+    assertCatalogImportContext,
     conflictPlan,
     effectiveStockLocation,
     emptyPlan,
@@ -121,7 +122,7 @@ export class CatalogImportService {
     }
 
     async beginImport(ctx: RequestContext, input: BeginCatalogImportInput): Promise<CatalogImportJob> {
-        this.assertContext(ctx, input.context);
+        assertCatalogImportContext(ctx, input.context);
         await this.operations.requireStockLocation(ctx, input.context.stockLocationId);
         validateImportSource(input);
 
@@ -336,7 +337,7 @@ export class CatalogImportService {
         file: Promise<UploadedCatalogFile>,
         input: CatalogImportContextInput,
     ): Promise<CatalogImportJob> {
-        this.assertContext(ctx, input);
+        assertCatalogImportContext(ctx, input);
         const targetStockLocation = await this.operations.requireStockLocation(ctx, input.stockLocationId);
         const parsed = await this.parser.parseUpload(file);
         const fileInfo = await file;
@@ -718,48 +719,59 @@ export class CatalogImportService {
                 variantByKey.set(variantExecutionKey(applied.normalizedData), applied.targetVariantId);
             }
         }
-        let processed = 0;
-        for (const row of rows) {
-            try {
-                if (row.appliedAt || row.action === 'SKIP_UNCHANGED' || row.action === 'ERROR') {
-                    processed++;
-                    continue;
+        await this.categories.withDeferredFilters(ctx, async () => {
+            let processed = 0;
+            let lastProgress = -1;
+            for (const row of rows) {
+                const previousRowState = { ...row };
+                try {
+                    if (row.appliedAt || row.action === 'SKIP_UNCHANGED' || row.action === 'ERROR') {
+                        processed++;
+                        continue;
+                    }
+                    if (row.action !== 'CREATE' && row.action !== 'UPDATE') {
+                        throw new UserInputError('存在未解决的冲突或警告');
+                    }
+                    await this.connection.withTransaction(ctx, async txCtx => {
+                        await this.applyRow(
+                            txCtx,
+                            job,
+                            row,
+                            productByKey,
+                            variantByKey,
+                            stockLocations,
+                            multiVariantProductKeys,
+                        );
+                    });
+                    if (row.targetProductId) productByKey.set(row.productKey, row.targetProductId);
+                    if (row.targetVariantId)
+                        variantByKey.set(variantExecutionKey(row.normalizedData), row.targetVariantId);
+                } catch (error) {
+                    Object.assign(row, previousRowState);
+                    row.action = 'ERROR';
+                    row.message = safeMessage(error);
+                    await this.connection.getRepository(ctx, CatalogImportRow).save(row);
                 }
-                if (row.action !== 'CREATE' && row.action !== 'UPDATE') {
-                    throw new UserInputError('存在未解决的冲突或警告');
+                processed++;
+                const progress = Math.round((processed / Math.max(rows.length, 1)) * 100);
+                if (progress !== lastProgress) {
+                    await repository.update(id, { progress });
+                    onProgress(progress);
+                    lastProgress = progress;
                 }
-                await this.connection.withTransaction(ctx, async txCtx => {
-                    await this.applyRow(
-                        txCtx,
-                        job,
-                        row,
-                        productByKey,
-                        variantByKey,
-                        stockLocations,
-                        multiVariantProductKeys,
-                    );
-                });
-            } catch (error) {
-                row.action = 'ERROR';
-                row.message = safeMessage(error);
-                await this.connection.getRepository(ctx, CatalogImportRow).save(row);
             }
-            processed++;
-            const progress = Math.round((processed / Math.max(rows.length, 1)) * 100);
-            await repository.update(id, { progress });
-            onProgress(progress);
-        }
+        });
         const errorCount = await this.connection.getRepository(ctx, CatalogImportRow).count({
             where: { jobId: id, action: In(['ERROR', 'CONFLICT', 'WARNING']) },
         });
         await this.refreshCounts(ctx, id);
+        await this.searchService.reindex(ctx);
         await repository.update(id, {
             state: errorCount > 0 ? 'COMPLETED_WITH_ERRORS' : 'COMPLETED',
             progress: 100,
             completedAt: new Date(),
             errorMessage: errorCount > 0 ? `${errorCount} 行未执行，请查看报告` : null,
         });
-        await this.searchService.reindex(ctx);
     }
 
     async rollback(ctx: RequestContext, id: ID): Promise<CatalogImportJob> {
@@ -870,14 +882,5 @@ export class CatalogImportService {
             .getRawMany<{ jobId: string; count: string }>();
         const countByJobId = new Map(counts.map(item => [String(item.jobId), Number(item.count)]));
         for (const job of jobs) job.receivedRows = countByJobId.get(String(job.id)) ?? 0;
-    }
-
-    private assertContext(ctx: RequestContext, input: CatalogImportContextInput): void {
-        if (String(input.channelId) !== String(ctx.channelId)) {
-            throw new UserInputError('目标门店必须与 Dashboard 当前选择的门店一致');
-        }
-        if (!ctx.channel.availableCurrencyCodes.includes(input.currencyCode)) {
-            throw new UserInputError('目标币种不属于当前门店');
-        }
     }
 }

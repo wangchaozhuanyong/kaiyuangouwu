@@ -8,6 +8,12 @@ import {
     CATALOG_REQUIRED_FIELDS,
     catalogFieldLabel,
 } from './catalog-field-definitions';
+import {
+    catalogCategoryPath,
+    parseCatalogFulfillmentType,
+    validateCatalogCategories,
+} from './catalog-import-classification';
+import { parseCatalogImportStore } from './catalog-import-store';
 import { assignCatalogSourceRecordKeys } from './catalog-row-identity';
 import { normalizeSupplierDisplayName } from './catalog-supplier.service';
 import { MAX_CATALOG_IMPORT_BYTES, MAX_CATALOG_IMPORT_ROWS } from './constants';
@@ -48,9 +54,17 @@ export class CatalogFileParserService {
         assertSupportedExtension(filename);
 
         let workbook: XLSX.WorkBook;
+        let fileData: Buffer | string = buffer;
+        if (filename.trim().toLowerCase().endsWith('.csv')) {
+            try {
+                fileData = new TextDecoder('utf-8', { fatal: true }).decode(buffer);
+            } catch {
+                /* Preserve legacy code-page detection for non-UTF-8 CSV. */
+            }
+        }
         try {
-            workbook = XLSX.read(buffer, {
-                type: 'buffer',
+            workbook = XLSX.read(fileData, {
+                type: typeof fileData === 'string' ? 'string' : 'buffer',
                 cellDates: true,
                 cellFormula: false,
                 cellHTML: false,
@@ -121,8 +135,12 @@ export class CatalogFileParserService {
     }
 }
 
-export function catalogProductKey(row: Pick<NormalizedCatalogRow, 'name' | 'category'>): string {
-    return sha256(`${normalizeIdentity(row.name)}\u001f${normalizeIdentity(row.category)}`);
+export function catalogProductKey(
+    row: Pick<NormalizedCatalogRow, 'name' | 'category' | 'secondaryCategory' | 'fulfillmentType'>,
+): string {
+    return sha256(
+        `${normalizeIdentity(row.name)}\u001f${normalizeIdentity(catalogCategoryPath(row))}\u001f${row.fulfillmentType ?? ''}`,
+    );
 }
 
 export function catalogSourceKey(
@@ -130,6 +148,7 @@ export function catalogSourceKey(
         NormalizedCatalogRow,
         | 'name'
         | 'category'
+        | 'secondaryCategory'
         | 'specification'
         | 'primaryUnit'
         | 'sku'
@@ -144,7 +163,7 @@ export function catalogSourceKey(
         ? `sku\u001f${normalizeIdentity(row.sku)}`
         : row.barcode
           ? `barcode\u001f${normalizeIdentity(row.barcode)}`
-          : [row.name, row.category, row.specification, row.primaryUnit]
+          : [row.name, catalogCategoryPath(row), row.specification, row.primaryUnit]
                 .map(normalizeIdentity)
                 .join('\u001f');
     const inventoryScope = [row.stockLocationCode, row.lotCode]
@@ -185,6 +204,9 @@ function normalizeRow(
     });
     const name = textValue(values.get('name'));
     const category = textValue(values.get('category'));
+    const secondaryCategory = textValue(values.get('secondaryCategory'));
+    const fulfillmentType = parseCatalogFulfillmentType(values.get('fulfillmentType'), rowNumber);
+    validateCatalogCategories(category, secondaryCategory, rowNumber);
     const sku = importSafeTextValue(values.get('sku'));
     const barcode = importSafeTextValue(values.get('barcode'));
     if (!name && !sku && !barcode) {
@@ -224,7 +246,9 @@ function normalizeRow(
         rowNumber,
         name,
         category,
-        channelCode: textValue(values.get('channelCode')),
+        secondaryCategory,
+        fulfillmentType,
+        channelCode: parseCatalogImportStore(importSafeTextValue(values.get('channelCode')), rowNumber),
         stockLocationCode: textValue(values.get('stockLocationCode')),
         currencyCode: textValue(values.get('currencyCode')).toUpperCase(),
         specification: textValue(values.get('specification')),

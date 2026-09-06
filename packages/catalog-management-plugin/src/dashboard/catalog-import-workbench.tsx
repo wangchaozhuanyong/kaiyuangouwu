@@ -52,6 +52,7 @@ import {
 import { ChangeEvent, useEffect, useRef, useState } from 'react';
 
 import { createCatalogImportBatches } from './catalog-import-batches';
+import { catalogImportTemplateCsv } from './catalog-import-template';
 import {
     CATALOG_BROWSER_PARSER_VERSION,
     CATALOG_FIELD_OPTIONS,
@@ -407,7 +408,7 @@ function CatalogImportWorkbench({
                                     }
                                     previewMutation.mutate();
                                 }}
-                                onDownloadTemplate={() => void downloadTemplate()}
+                                onDownloadTemplate={() => downloadTemplate(activeChannel?.code ?? '')}
                             />
                         ) : jobQuery.isLoading || !job ? (
                             <LoadingPreview />
@@ -585,7 +586,7 @@ function CatalogImportWorkbench({
                                                 <TableHead>行</TableHead>
                                                 <TableHead>结果</TableHead>
                                                 <TableHead>名称</TableHead>
-                                                <TableHead>分类</TableHead>
+                                                <TableHead>商店 / 商品类型 / 一级分类 / 二级分类</TableHead>
                                                 <TableHead>规格 / 单位</TableHead>
                                                 <TableHead>销售价 / 进货价 / 库存量</TableHead>
                                                 <TableHead>说明与处理</TableHead>
@@ -1022,7 +1023,16 @@ function ImportRow({
 }>) {
     const data = row.normalizedData;
     const name = displayValue(data.name);
-    const category = displayValue(data.category);
+    const category = [
+        displayValue(data.channelCode, '未填写商店'),
+        data.fulfillmentType === 'physical'
+            ? '实物'
+            : data.fulfillmentType === 'digital'
+              ? '虚拟货品'
+              : '未填写类型',
+        displayValue(data.category),
+        displayValue(data.secondaryCategory, '无二级分类'),
+    ].join(' / ');
     const specification = displayValue(data.specification);
     const unit = displayValue(data.primaryUnit);
     return (
@@ -1154,64 +1164,9 @@ function LoadingPreview() {
     );
 }
 
-function downloadTemplate(): void {
-    const rows = [
-        [
-            '名称',
-            '分类',
-            '门店',
-            '仓库',
-            '币种',
-            'SKU',
-            '条码',
-            '规格',
-            '销售单位',
-            '采购单位',
-            '包装换算',
-            '库存量',
-            '进货价',
-            '销售价',
-            '库存上限',
-            '库存下限',
-            '品牌',
-            '生产日期',
-            '保质期',
-            '批次号',
-            '商品状态',
-            '商品描述',
-            '标签',
-            '创建日期',
-            '供货商',
-        ],
-        [
-            '示例商品',
-            '示例分类',
-            '',
-            '',
-            '',
-            'SKU-001',
-            '',
-            '500ml',
-            '瓶',
-            '箱',
-            '12',
-            '10',
-            '3.125',
-            '5.00',
-            '100',
-            '10',
-            '',
-            '',
-            '365',
-            '',
-            '启用',
-            '',
-            '',
-            '',
-            '示例供货商',
-        ],
-    ];
-    downloadCsv(rows.map(row => row.map(csvCell).join(',')).join('\r\n'), '商品导入标准模板.csv');
+function downloadTemplate(channelCode: string): void {
+    if (!channelCode) return;
+    downloadCsv(catalogImportTemplateCsv(channelCode), '商品导入标准模板.csv');
 }
 
 async function downloadReport(job: CatalogImportJobRecord): Promise<void> {

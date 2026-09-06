@@ -1,5 +1,7 @@
 import * as XLSX from 'xlsx';
 
+import { splitCatalogCategoryPath } from '../catalog-import-classification';
+
 import { type CatalogExportFormat } from './catalog-export-file';
 import { type CatalogExportRowRecord } from './catalog-management.graphql';
 
@@ -34,7 +36,7 @@ function productSheet(rows: CatalogExportRowRecord[], stockLocationId?: string):
     const values = [
         [
             '名称',
-            '分类',
+            '一级分类',
             'SKU',
             '仓库',
             '库存量',
@@ -58,12 +60,15 @@ function productSheet(rows: CatalogExportRowRecord[], stockLocationId?: string):
             '创建日期',
             '系统创建时间',
             '供货商',
+            '商品类型',
+            '二级分类',
+            '导入商店',
         ],
         ...rows.map(row => {
             const stock = selectedStock(row, stockLocationId);
             return [
                 row.productName,
-                row.categories[0] ?? '',
+                splitCatalogCategoryPath(row.importCategory ?? row.categories[0] ?? '').category,
                 safeText(row.sku),
                 stock?.stockLocationName ?? '',
                 stock?.stockOnHand ?? null,
@@ -87,6 +92,9 @@ function productSheet(rows: CatalogExportRowRecord[], stockLocationId?: string):
                 dateCell(row.sourceCreatedAt),
                 dateCell(row.systemCreatedAt),
                 safeText(row.supplierName ?? ''),
+                row.fulfillmentType === 'physical' ? '实物' : '虚拟货品',
+                splitCatalogCategoryPath(row.importCategory ?? row.categories[0] ?? '').secondaryCategory,
+                safeText(row.channelCode),
             ];
         }),
     ];
@@ -154,9 +162,19 @@ function lotSheet(rows: CatalogExportRowRecord[]): XLSX.WorkSheet {
 function guideSheet(): XLSX.WorkSheet {
     const values = [
         ['工作表', '字段', '规则'],
+        ['商品与SKU', '商品类型', '必填：虚拟货品 / 实物；不能留空或自动推断'],
+        [
+            '商品与SKU',
+            '一级分类、二级分类',
+            '一级分类填写主分类；二级分类可空，留空表示仅归入一级分类（更新时也会移除旧二级分类）',
+        ],
         ['商品与SKU', 'SKU', '稳定更新键，后续维护时不应删除或修改；调整行顺序不影响匹配'],
         ['商品与SKU', '库存量', '以所选默认回导仓库为准，导入时按绝对数覆盖，不按增减量计算'],
-        ['商品与SKU', '空白单元格', '默认保留系统原值；只有明确启用高风险空白清除模式才会清空可清除字段'],
+        [
+            '商品与SKU',
+            '空白单元格',
+            '除二级分类外默认保留系统原值；只有明确启用高风险空白清除模式才会清空可清除字段',
+        ],
         ['商品与SKU', '缺失行', '文件中缺少的旧 SKU 保持不变，不会自动删除或禁用'],
         ['商品与SKU', '毛利率', '系统根据销售价和最新进货价计算，不作为导入权威值'],
         ['商品与SKU', '创建日期', '保存来源报表日期，不覆盖系统创建时间'],

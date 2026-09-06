@@ -140,7 +140,7 @@ export class CatalogImportRollback {
                                       },
                                   ],
                         customFields: {
-                            ...((variant.customFields ?? {}) as Record<string, unknown>),
+                            ...((variant.customFields ?? {}) as unknown as Record<string, unknown>),
                             barcode: before.barcode ?? null,
                             specification: before.specification ?? null,
                             saleUnit: before.saleUnit ?? null,
@@ -212,7 +212,10 @@ export class CatalogImportRollback {
                         typeof before.productEnabled === 'boolean' ? before.productEnabled : product.enabled,
                     facetValueIds: stringArray(before.productFacetValueIds).map(value => value as ID),
                     customFields: {
-                        ...((product.customFields ?? {}) as Record<string, unknown>),
+                        ...((product.customFields ?? {}) as unknown as Record<string, unknown>),
+                        ...(before.productFulfillmentType
+                            ? { fulfillmentType: before.productFulfillmentType }
+                            : {}),
                         sourceCreatedAt: dateValue(before.productSourceCreatedAt),
                     },
                     ...(translation
