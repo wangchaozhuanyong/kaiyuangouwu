@@ -21,7 +21,7 @@
 
 先执行 dev-server 中 `AddTranslationOutbox1788739200000`，再启动新版 API 和 worker。迁移只新增翻译状态字段、提供方状态表及索引；down 保留新增状态和内容。代码回退不会删除数据，但旧代码可能恢复同步翻译行为，需结合旧版本评估。没有运行 worker 时中文照常保存，英文队列等待 worker 恢复。
 
-本实现未提交、未创建 PR、未部署。上线仍需独立授权、备份、正式迁移及真实业务验收。
+生产上线需独立授权、备份、正式迁移及真实业务验收；普通 PR 的 Build & Test 不执行部署。
 
 ## 本地验证
 
@@ -48,3 +48,5 @@ TRANSLATION_TEST_POSTGRES=1 bunx vitest run --config vitest.config.mts migration
 ```
 
 未设置该测试开关时，一致性测试使用 SQL.js，两个独立进程测试单独跳过。进程测试包含并发争抢、SIGKILL 中断及持久化租约到期后的恢复；提供方为本地确定性测试实现。
+
+`Build & Test` 的 unit-tests 作业使用一次性 PostgreSQL 服务执行上述队列、跨进程恢复和迁移测试，并运行真实 Admin/Shop API 验收；提供方故障由测试夹具注入。

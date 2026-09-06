@@ -183,6 +183,17 @@ jobs:
             fail-fast: false
             matrix:
                 node: ${{ github.event_name == 'pull_request' && fromJSON('["22.x"]') || fromJSON('["20.x", "22.x", "24.x"]') }}
+        services:
+            translation-postgres:
+                image: postgres:16
+                env:
+                    POSTGRES_USER: postgres
+                    POSTGRES_DB: translation_outbox_e2e
+                    # Disposable runner service; tests are hard-bound to loopback and this database.
+                    POSTGRES_HOST_AUTH_METHOD: trust
+                ports:
+                    - 15492:5432
+                options: --health-cmd=pg_isready --health-interval=10s --health-timeout=5s --health-retries=3
         steps:
             - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
             - uses: ./.github/actions/setup
@@ -194,6 +205,21 @@ jobs:
               run: bun run --cwd packages/dev-server build:local-plugins
             - name: Unit tests
               run: bun run test
+            - name: Translation outbox PostgreSQL retry and process recovery
+              working-directory: packages/content-translation-plugin
+              env:
+                  TRANSLATION_TEST_POSTGRES: '1'
+              run: bunx vitest run src/content-translation-retry.service.spec.ts src/provider-process.spec.ts
+            - name: Translation outbox PostgreSQL migration
+              working-directory: packages/dev-server
+              env:
+                  TRANSLATION_TEST_POSTGRES: '1'
+              run: bunx vitest run migrations/translation-outbox.spec.ts
+            - name: Translation outbox Admin and Shop API acceptance
+              env:
+                  PACKAGE: storefront-content-plugin
+                  VENDURE_DISABLE_TELEMETRY: 'true'
+              run: bunx vitest run --config e2e-common/vitest.config.mts packages/storefront-content-plugin/e2e/translation-outbox.e2e-spec.ts
             - name: Operations dashboard regression tests
               run: bun run --cwd packages/operations-dashboard-plugin test
             - name: Install browser for storefront configuration acceptance
