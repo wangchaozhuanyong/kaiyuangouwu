@@ -195,17 +195,19 @@ describe('real Admin API saves and Shop API publication with the translation out
                     conflicted = true;
                 }
                 if (mode === 'rate-limit' || mode === 'recover') {
-                    translate.mockImplementation((request: any) => {
-                        if (mode === 'rate-limit')
-                            return Promise.reject(new TranslationProviderError('RATE_LIMIT'));
-                        return Promise.resolve({
-                            provider: 'outbox-e2e',
-                            translations: request.segments.map((item: any) => ({
-                                key: item.key,
-                                text: 'English category',
-                            })),
-                        });
-                    });
+                    if (mode === 'rate-limit') {
+                        translate.mockRejectedValue(new TranslationProviderError('RATE_LIMIT'));
+                    } else {
+                        translate.mockImplementation((request: any) =>
+                            Promise.resolve({
+                                provider: 'outbox-e2e',
+                                translations: request.segments.map((item: any) => ({
+                                    key: item.key,
+                                    text: 'English category',
+                                })),
+                            }),
+                        );
+                    }
                     await server.app.get(ContentTranslationRetryService).retryPending();
                 }
                 const audit = await server.app
