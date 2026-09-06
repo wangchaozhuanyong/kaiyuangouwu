@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/require-await -- Transport mocks deliberately preserve the asynchronous API contract. */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { StorefrontCart } from '../types';
+
+import { StorefrontCart } from '../types';
 
 import { CartController } from './cart-controller';
 import { cartView, type CartCommand, type CartCommandResult } from './cart-intents';
