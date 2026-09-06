@@ -257,7 +257,55 @@ void test('guard rejects remote targets, authentication errors and API errors be
             request: async () =>
                 new Response(JSON.stringify({ errors: [{ message: 'PRIVATE_SERVER_ERROR' }] })),
         }),
-        /Configuration API returned an error/u,
+        /operation=ConfigurationGuardLogin reason=API_ERROR/u,
+    );
+});
+
+void test('configuration failures identify the operation without leaking transport or API response details', async () => {
+    const sentinel = 'PRIVATE_PASSWORD_AND_QUERY_DETAILS';
+    for (const [request, reason] of [
+        [
+            async () => {
+                throw new DOMException(sentinel, 'TimeoutError');
+            },
+            'TIMEOUT',
+        ],
+        [
+            async () => {
+                throw new Error(sentinel);
+            },
+            'REQUEST_FAILED',
+        ],
+        [async () => new Response(sentinel, { status: 503 }), 'HTTP_ERROR'],
+        [async () => new Response(sentinel), 'INVALID_JSON'],
+        [async () => new Response(JSON.stringify({ errors: [{ message: sentinel }] })), 'API_ERROR'],
+    ]) {
+        await assert.rejects(
+            captureStorefrontConfiguration({ username: 'fixture', password: sentinel, request }),
+            error => {
+                assert.equal(
+                    error.message,
+                    `STOREFRONT_CONFIGURATION_QUERY_FAILED operation=ConfigurationGuardLogin reason=${reason}`,
+                );
+                assert.equal(error.message.includes(sentinel), false);
+                return true;
+            },
+        );
+    }
+    await assert.rejects(
+        captureStorefrontConfiguration({
+            username: 'fixture',
+            password: sentinel,
+            request: async (_url, options) => {
+                if (JSON.parse(options.body).query.includes('ConfigurationGuardProfiles'))
+                    throw new DOMException(sentinel, 'TimeoutError');
+                return new Response(
+                    JSON.stringify({ data: { login: { id: '1', channels: [{ id: '1' }] } } }),
+                    { headers: { 'vendure-auth-token': sentinel } },
+                );
+            },
+        }),
+        /operation=ConfigurationGuardProfiles reason=TIMEOUT/u,
     );
 });
 

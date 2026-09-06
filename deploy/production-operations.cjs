@@ -251,15 +251,45 @@ function diagnose(request) {
     return result;
 }
 
+function assertStorefrontInspectionRevision(
+    deployedSha,
+    sourceSha,
+    checkAncestry = (before, after) => {
+        // Refresh objects only; a diagnostic must never checkout or advance the server working tree.
+        for (const args of [
+            ['fetch', 'origin', 'main'],
+            ['merge-base', '--is-ancestor', before, after],
+        ]) {
+            execFileSync(
+                'sudo',
+                ['-n', '-H', '-u', 'ubuntu', 'git', '-C', '/var/www/kaiyuangouwu', ...args],
+                { timeout: 30000, stdio: ['ignore', 'pipe', 'pipe'] },
+            );
+        }
+    },
+) {
+    assert.match(deployedSha, /^[0-9a-f]{40}$/u);
+    assert.match(sourceSha, /^[0-9a-f]{40}$/u);
+    try {
+        checkAncestry(deployedSha, sourceSha);
+    } catch {
+        throw new Error('Running storefront revision is not an ancestor of the reviewed inspection source');
+    }
+}
+
+function storefrontInspectionFailure(result) {
+    const safeFailure = result.stderr?.match(
+        /^STOREFRONT_CONFIGURATION_QUERY_FAILED operation=ConfigurationGuard(?:Login|Profiles|Content|Published) reason=(?:TIMEOUT|REQUEST_FAILED|HTTP_ERROR|INVALID_JSON|API_ERROR)$/mu,
+    )?.[0];
+    return safeFailure || 'Read-only storefront configuration inspection failed';
+}
+
 function runLocked(environment = process.env) {
     const request = validateRequest(environment);
     if (request.operation === 'inspect-storefront-config') {
         const plan = inspectProductionReleases();
-        assert.equal(
-            plan.markerSha,
-            request.sourceSha,
-            'Storefront inspection requires the deployed source SHA',
-        );
+        // A failed deployment can leave the previous immutable runtime active. Inspect it without promoting it.
+        assertStorefrontInspectionRevision(plan.markerSha, request.sourceSha);
         const result = spawnSync(
             '/usr/bin/node',
             [
@@ -270,10 +300,13 @@ function runLocked(environment = process.env) {
             { encoding: 'utf8', timeout: 240000, maxBuffer: 65536, stdio: ['ignore', 'pipe', 'pipe'] },
         );
         // Forward only the allowlisted completed summary, never raw authentication/query errors.
-        assert.equal(result.status, 0, 'Read-only storefront configuration inspection failed');
+        assert.equal(result.status, 0, storefrontInspectionFailure(result));
         assert.ok(
             result.stdout.endsWith('STOREFRONT_CONFIGURATION_INSPECT_OK\n'),
             'Storefront evidence is incomplete',
+        );
+        process.stdout.write(
+            `STOREFRONT_CONFIGURATION_REVISIONS source=${request.sourceSha} runtime=${plan.markerSha}\n`,
         );
         process.stdout.write(result.stdout);
         process.stdout.write('PRODUCTION_OPERATIONS_COMPLETE operation=inspect-storefront-config\n');
@@ -379,11 +412,13 @@ if (require.main === module) {
 }
 
 module.exports = {
+    assertStorefrontInspectionRevision,
     encodeBeforeReport,
     inspectProductionReleases,
     inspectRepositoryState,
     planDigest,
     retainReviewedPlan,
+    storefrontInspectionFailure,
     validateRequest,
     withProductionLock,
 };

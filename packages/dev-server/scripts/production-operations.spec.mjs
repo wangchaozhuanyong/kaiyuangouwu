@@ -21,6 +21,41 @@ const operations = require('../../../deploy/production-operations.cjs');
 const retention = require('../../../deploy/systemd/vendure-production-release-retention.cjs');
 const sourceSha = 'a'.repeat(40);
 
+void test('read-only storefront inspection accepts an older running ancestor but rejects unrelated revisions', () => {
+    const deployedSha = 'b'.repeat(40);
+    const calls = [];
+    operations.assertStorefrontInspectionRevision(deployedSha, sourceSha, (...args) => calls.push(args));
+    assert.deepEqual(calls, [[deployedSha, sourceSha]]);
+    assert.throws(
+        () =>
+            operations.assertStorefrontInspectionRevision(deployedSha, sourceSha, () => {
+                throw new Error('PRIVATE_GIT_ERROR');
+            }),
+        /not an ancestor/u,
+    );
+    assert.throws(() =>
+        operations.assertStorefrontInspectionRevision('invalid', sourceSha, () =>
+            assert.fail('must not run'),
+        ),
+    );
+});
+
+void test('inspection forwards only fixed query failure codes and never raw stderr', () => {
+    const failure =
+        'STOREFRONT_CONFIGURATION_QUERY_FAILED operation=ConfigurationGuardContent reason=TIMEOUT';
+    assert.equal(operations.storefrontInspectionFailure({ stderr: `PRIVATE_ERROR\n${failure}\n` }), failure);
+    for (const stderr of [
+        'PRIVATE_ERROR',
+        `${failure} PRIVATE_SECRET`,
+        'STOREFRONT_CONFIGURATION_QUERY_FAILED operation=PRIVATE_SECRET reason=TIMEOUT',
+    ]) {
+        assert.equal(
+            operations.storefrontInspectionFailure({ stderr }),
+            'Read-only storefront configuration inspection failed',
+        );
+    }
+});
+
 void test('repository diagnostics distinguish tracked changes, renamed paths and untracked private files', t => {
     const root = mkdtempSync(path.join(os.tmpdir(), 'vendure-git-diagnosis-'));
     t.after(() => rmSync(root, { recursive: true, force: true }));
