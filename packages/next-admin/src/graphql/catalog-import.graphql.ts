@@ -115,7 +115,7 @@ export const CATALOG_IMPORT_CONTEXT_QUERY = gql`
             defaultCurrencyCode
             availableCurrencyCodes
         }
-        stockLocations(options: { take: 100, sort: { name: ASC } }) {
+        stockLocations(options: { take: 100, sort: { name: ASC, id: ASC } }) {
             items {
                 id
                 name

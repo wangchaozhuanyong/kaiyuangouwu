@@ -44,7 +44,7 @@ export function AssetPicker({
             options: {
                 skip: page * pageSize,
                 take: pageSize,
-                sort: { updatedAt: 'DESC' },
+                sort: { updatedAt: 'DESC', id: 'DESC' },
                 filter: {
                     type: { eq: 'IMAGE' },
                     ...(deferredSearch ? { name: { contains: deferredSearch } } : {}),

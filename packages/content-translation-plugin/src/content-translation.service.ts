@@ -241,7 +241,7 @@ export class ContentTranslationService {
         const [states, allStatuses] = await Promise.all([
             repository.find({
                 ...(where ? { where } : {}),
-                order: { updatedAt: 'DESC' },
+                order: { updatedAt: 'DESC', id: 'DESC' },
                 take: 1_000,
             }),
             repository.find({

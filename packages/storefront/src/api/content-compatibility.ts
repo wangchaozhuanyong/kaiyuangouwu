@@ -11,6 +11,8 @@ const fallbackFields = {
         'StorefrontContentItem.settings',
     ]),
     coupons: new Set(['Query.activeStorefrontCoupons']),
+    visualPreset: new Set(['Query.storefrontVisualPreset']),
+    desktopLayout: new Set(['StorefrontVisualPreset.desktopLayout']),
 };
 
 /** Only downgrade fields omitted by the documented legacy query. */

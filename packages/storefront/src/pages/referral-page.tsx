@@ -179,58 +179,45 @@ export function ReferralPage() {
                 />
             ) : (
                 <div className="mx-auto grid w-full min-w-0 max-w-5xl overflow-hidden gap-4 px-3 pb-10 pt-3 lg:grid-cols-[1.15fr_0.85fr] lg:px-6">
-                    <section className="relative overflow-hidden rounded-3xl border border-amber-500/20 bg-[radial-gradient(circle_at_90%_0%,rgba(245,158,11,0.38)_0%,transparent_50%),radial-gradient(circle_at_10%_95%,rgba(59,130,246,0.12)_0%,transparent_45%),linear-gradient(145deg,#090d16_0%,#111827_52%,#1e293b_100%)] p-5 text-white shadow-[0_22px_55px_-16px_rgba(0,0,0,0.75),0_0_30px_-8px_rgba(245,158,11,0.15)] before:pointer-events-none before:absolute before:inset-0 before:bg-[linear-gradient(120deg,rgba(255,255,255,0.06)_0%,transparent_40%)] lg:p-7">
-                        <h1 className="m-0 text-2xl font-black tracking-tight sm:text-3xl">
-                            <span className="bg-gradient-to-r from-amber-100 via-amber-200 to-yellow-300 bg-clip-text text-transparent">
-                                {isZh ? '邀请好友，获得奖励' : 'Invite friends, earn rewards'}
-                            </span>
+                    <section className="referral-invite">
+                        <h1 className="referral-invite-title">
+                            {isZh ? '邀请好友，获得奖励' : 'Invite friends, earn rewards'}
                         </h1>
-                        <p className="mb-0 mt-3 max-w-xl text-sm leading-6 text-slate-300">
+                        <p className="referral-invite-description">
                             {isZh
                                 ? `好友成功消费，你可获得 ${overview.rewardRate}% 奖励用于消费抵扣。`
                                 : `Earn ${overview.rewardRate}% in rewards when a friend makes a purchase.`}
                         </p>
-                        <div className="relative mt-6 rounded-2xl border border-amber-500/25 bg-black/40 p-4 shadow-[inset_0_1px_1px_rgba(255,255,255,0.08)] backdrop-blur-md">
-                            <div className="flex items-center justify-between">
-                                <small className="font-extrabold tracking-wider text-amber-400">
-                                    {isZh ? '我的邀请码' : 'MY INVITATION CODE'}
-                                </small>
-                                <span className="inline-flex items-center rounded-full border border-amber-500/30 bg-amber-400/10 px-2 py-0.5 text-[10px] font-bold text-amber-300">
-                                    {isZh ? '返现专享' : 'Exclusive'}
-                                </span>
-                            </div>
-                            <div className="mt-2 flex items-center gap-3">
-                                <strong className="min-w-0 flex-1 break-all font-mono text-2xl font-bold tracking-[0.18em] text-amber-300 drop-shadow-[0_2px_8px_rgba(245,158,11,0.25)]">
-                                    {overview.inviteCode}
-                                </strong>
+                        <div className="referral-invite-code">
+                            <small className="referral-invite-code-label">
+                                {isZh ? '我的邀请码' : 'MY INVITATION CODE'}
+                            </small>
+                            <div className="referral-invite-code-row">
+                                <strong className="referral-invite-code-value">{overview.inviteCode}</strong>
                                 <button
                                     type="button"
-                                    className="grid size-10 shrink-0 place-items-center rounded-xl border border-amber-400/30 bg-amber-400/15 text-amber-200 shadow-sm transition-all duration-150 hover:bg-amber-400/25 hover:text-white active:scale-95"
+                                    className="referral-invite-copy"
                                     onClick={() => void copyInvite()}
                                     aria-label={isZh ? '复制邀请码' : 'Copy invitation code'}
                                 >
-                                    {copied ? (
-                                        <Check className="size-4 text-emerald-400" />
-                                    ) : (
-                                        <Copy className="size-4" />
-                                    )}
+                                    {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
                                 </button>
                             </div>
-                            <p className="mb-0 mt-2 truncate font-mono text-xs text-slate-400">{shareUrl}</p>
+                            <p className="referral-invite-url">{shareUrl}</p>
                         </div>
-                        <div className="mt-4 grid grid-cols-2 gap-3">
+                        <div className="referral-invite-actions">
                             <button
                                 type="button"
-                                className="flex min-h-11 items-center justify-center gap-2 rounded-xl border-0 bg-[linear-gradient(135deg,#fde047_0%,#eab308_55%,#ca8a04_100%)] px-3 text-sm font-black text-slate-950 shadow-[0_6px_20px_-4px_rgba(234,179,8,0.45)] transition-all duration-150 hover:brightness-105 active:scale-98"
+                                className="referral-invite-share"
                                 onClick={() => void share()}
                             >
-                                <Share2 className="size-4 stroke-[2.5]" />
+                                <Share2 className="size-4" />
                                 {isZh ? '立即分享' : 'Share now'}
                             </button>
                             {hasPosterTemplates && (
                                 <button
                                     type="button"
-                                    className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/10 px-3 text-sm font-extrabold text-white backdrop-blur-sm transition-all duration-150 hover:border-white/35 hover:bg-white/15 active:scale-98"
+                                    className="referral-invite-poster"
                                     onClick={() => setShowPoster(true)}
                                 >
                                     <Image className="size-4" />

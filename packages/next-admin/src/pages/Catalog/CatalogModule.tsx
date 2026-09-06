@@ -190,7 +190,7 @@ export function CatalogModule() {
         collections: { items: CollectionFilterItem[]; totalItems: number };
     }>(GET_COLLECTIONS, {
         variables: {
-            options: { topLevelOnly: false, take: 250, sort: { name: 'ASC' } },
+            options: { topLevelOnly: false, take: 250, sort: { name: 'ASC', id: 'ASC' } },
         },
         fetchPolicy: 'cache-first',
     });
@@ -221,7 +221,7 @@ export function CatalogModule() {
                 skip: page * pageSize,
                 take: pageSize,
                 filter: Object.keys(filter).length > 0 ? filter : undefined,
-                sort: { updatedAt: 'DESC' as const },
+                sort: { updatedAt: 'DESC' as const, id: 'DESC' as const },
             },
         };
     }, [categoryId, deferredSearchTerm, statusFilter, page, pageSize]);
@@ -232,7 +232,7 @@ export function CatalogModule() {
         notifyOnNetworkStatusChange: true,
     });
     const activeChannelQuery = useQuery<GetCatalogChannelsData>(GET_CATALOG_CHANNELS, {
-        variables: { options: { skip: 0, take: 100, sort: { code: 'ASC' } } },
+        variables: { options: { skip: 0, take: 100, sort: { code: 'ASC', id: 'ASC' } } },
         fetchPolicy: 'cache-first',
     });
     const productIds = useMemo(() => data?.products.items.map(product => product.id) ?? [], [data]);
@@ -351,7 +351,7 @@ export function CatalogModule() {
                     </span>
                     <span className="text-[11px] text-blue-700">
                         {activeChannel && isDefaultChannelCode(activeChannel.code)
-                            ? '系统默认渠道汇总所有商店的商品；查看单店数据请切换到对应商店'
+                            ? '后台总目录汇总全部商品；商城只展示明确分配到该店铺的商品'
                             : '当前商店的商品、库存和价格'}
                     </span>
                 </div>

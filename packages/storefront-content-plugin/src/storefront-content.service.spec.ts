@@ -1,6 +1,7 @@
 import { LanguageCode } from '@vendure/common/lib/generated-types';
 import { isUsableEnglishTranslation } from '@vendure/common/lib/translation-validation';
 import 'reflect-metadata';
+import { Not } from 'typeorm';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createContentPublicationChecker } from './content-publication';
@@ -8,6 +9,7 @@ import { StorefrontContentBlock } from './entities/storefront-content-block.enti
 import { StorefrontContentSettings } from './entities/storefront-content-settings.entity';
 import { StorefrontContentService } from './storefront-content.service';
 import { CreateStorefrontContentBlockInput } from './types';
+import { STOREFRONT_VISUAL_PRESET_CODE } from './visual-presets';
 
 const contentPublicationStatus = createContentPublicationChecker(isUsableEnglishTranslation);
 
@@ -565,13 +567,62 @@ describe('StorefrontContentService Channel isolation', () => {
         ).resolves.toBeUndefined();
         expect(repository.findOne).toHaveBeenCalledWith(
             expect.objectContaining({
-                where: expect.objectContaining({ id: 'block-a', channelId: 'store-b' }),
+                where: { id: 'block-a', channelId: 'store-b', code: Not(STOREFRONT_VISUAL_PRESET_CODE) },
             }),
         );
     });
 });
 
 describe('StorefrontContentService carousel settings', () => {
+    it('keeps configured types stable across query plans and settings saves without reordering floors', async () => {
+        const floors = [
+            { id: 'notice', type: 'NOTICE', position: 0 },
+            { id: 'hero-b', type: 'HERO', position: 1 },
+            { id: 'hero-a', type: 'HERO', position: 2 },
+            { id: 'login', type: 'AUTH_LOGIN', position: 3 },
+        ];
+        const codeOrder = [floors[3], floors[2], floors[1], floors[0]];
+        const blockRepository = { find: vi.fn() };
+        const settings = new StorefrontContentSettings({
+            channelId: 'store-a',
+            heroAutoplayIntervalSeconds: 5,
+        });
+        const repository = {
+            findOne: vi.fn().mockResolvedValue(settings),
+            save: vi.fn((record: StorefrontContentSettings) => Promise.resolve(record)),
+        };
+        const connection = {
+            getRepository: vi.fn((_ctx, entity) =>
+                entity === StorefrontContentBlock ? blockRepository : repository,
+            ),
+        };
+        const service = new StorefrontContentService(
+            connection as never,
+            {} as never,
+            {} as never,
+            {} as never,
+        );
+        const context = { channelId: 'store-a', channel: { id: 'store-a' } } as never;
+        const expected = {
+            heroAutoplayIntervalSeconds: 5,
+            configuredBlockTypes: ['AUTH_LOGIN', 'HERO', 'NOTICE'],
+        };
+
+        for (const order of [floors, codeOrder]) {
+            blockRepository.find.mockResolvedValue(order);
+            await expect(service.getSettings(context)).resolves.toEqual(expected);
+            await expect(
+                service.updateSettings(context, { heroAutoplayIntervalSeconds: 5 }),
+            ).resolves.toEqual(expected);
+        }
+        expect(floors.map(floor => floor.id)).toEqual(['notice', 'hero-b', 'hero-a', 'login']);
+        expect(floors.map(floor => floor.position)).toEqual([0, 1, 2, 3]);
+        expect(blockRepository.find).toHaveBeenCalledWith({
+            where: { channelId: 'store-a', code: Not(STOREFRONT_VISUAL_PRESET_CODE) },
+            select: { type: true },
+        });
+    });
+
     it('returns the five-second default without creating a settings record', async () => {
         const repository = { findOne: vi.fn(() => Promise.resolve(null)) };
         const blockRepository = { find: vi.fn(() => Promise.resolve([])) };

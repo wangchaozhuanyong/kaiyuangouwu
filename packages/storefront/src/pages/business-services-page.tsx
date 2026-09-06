@@ -1,4 +1,4 @@
-import { ExternalLink, Puzzle, Sparkles } from 'lucide-react';
+import { ExternalLink, Puzzle, Waypoints } from 'lucide-react';
 
 import { ClientPluginSlot, resolveClientPlugins } from '../client-plugins/client-plugin-registry';
 import { resolveBottomNavigationItems } from '../components/common/bottom-navigation';
@@ -51,22 +51,22 @@ export function BusinessServicesPage() {
     const hero = (
         <section className="business-services-hero" aria-labelledby="business-services-heading">
             <span className="business-services-hero-icon" aria-hidden="true">
-                <Sparkles />
+                <Waypoints strokeWidth={1.8} />
             </span>
-            <div>
+            <div className="business-services-hero-copy">
                 <h2 id="business-services-heading">{heroTitle}</h2>
                 <p>{heroDescription}</p>
-                {heroLinkTarget ? (
-                    <button
-                        type="button"
-                        className="business-services-hero-link"
-                        onClick={() => onContentTarget('URL', heroLinkTarget)}
-                    >
-                        {isZh ? '访问链接' : 'Open link'}
-                        <ExternalLink aria-hidden="true" />
-                    </button>
-                ) : null}
             </div>
+            {heroLinkTarget ? (
+                <button
+                    type="button"
+                    className="business-services-hero-link"
+                    onClick={() => onContentTarget('URL', heroLinkTarget)}
+                >
+                    {isZh ? '点击前往' : 'Open link'}
+                    <ExternalLink aria-hidden="true" />
+                </button>
+            ) : null}
         </section>
     );
 

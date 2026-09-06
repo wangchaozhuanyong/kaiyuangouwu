@@ -179,7 +179,7 @@ function VariantSearch({
         variables: {
             options: {
                 take: 20,
-                sort: { name: 'ASC' },
+                sort: { name: 'ASC', id: 'ASC' },
                 filter: {
                     enabled: { eq: true },
                     _or: [{ name: { contains: query } }, { sku: { contains: query } }],
@@ -262,7 +262,7 @@ export function DraftOrderEditor() {
         variables: {
             options: {
                 take: 20,
-                sort: { createdAt: 'DESC' },
+                sort: { createdAt: 'DESC', id: 'DESC' },
                 filter: {
                     _or: [
                         { firstName: { contains: customerTerm } },

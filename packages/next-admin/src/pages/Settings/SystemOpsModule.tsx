@@ -87,11 +87,11 @@ export function SystemOpsModule() {
     const [pageSize, setPageSize] = usePageSize(setApiKeyPage);
     const query = useQuery<SystemOperationsResult>(systemOperationsDocument, {
         variables: {
-            jobOptions: { take: 100, sort: { createdAt: 'DESC' } },
+            jobOptions: { take: 100, sort: { createdAt: 'DESC', id: 'DESC' } },
             apiKeyOptions: {
                 skip: apiKeyPage * pageSize,
                 take: pageSize,
-                sort: { createdAt: 'DESC' },
+                sort: { createdAt: 'DESC', id: 'DESC' },
             },
         },
         fetchPolicy: 'cache-and-network',

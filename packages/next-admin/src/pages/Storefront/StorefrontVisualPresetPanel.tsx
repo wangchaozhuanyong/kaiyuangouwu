@@ -1,4 +1,5 @@
 import { useMutation, useQuery } from '@apollo/client/react';
+import { Monitor, Smartphone, X } from 'lucide-react';
 import { useState } from 'react';
 import {
     storefrontDesktopLayouts,
@@ -6,6 +7,7 @@ import {
     type StorefrontVisualPresetConfig,
 } from '../../../../storefront-content-plugin/src/visual-presets';
 import { channelRequestContext, getActiveChannelToken } from '../../apollo';
+import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
     STOREFRONT_VISUAL_PRESET_QUERY,
@@ -14,7 +16,9 @@ import {
 } from '../../graphql/storefront-visual-preset.graphql';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { useUnsavedChangesWarning } from '../../hooks/use-unsaved-changes-warning';
+import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
+import { storefrontVisualPreviewDocument } from './storefront-visual-preview';
 
 export function StorefrontVisualPresetPanel() {
     const query = useQuery<StorefrontVisualPresetResult>(STOREFRONT_VISUAL_PRESET_QUERY, {
@@ -26,11 +30,13 @@ export function StorefrontVisualPresetPanel() {
         { fetchPolicy: 'no-cache' },
     );
     const { hasAnyPermission } = useAdminPermissions();
+    const [preview, setPreview] = useState<'mobile' | 'desktop' | null>(null);
     const [draft, setDraft] = useState<StorefrontVisualPresetConfig | null>(null);
     const [notice, setNotice] = useState('');
     const [error, setError] = useState('');
     const [feedbackChannel, setFeedbackChannel] = useState<string | null>(null);
     const channel = query.data?.activeChannel;
+    const storeName = channel ? getChannelDisplayName(channel.code) : '当前店铺';
     const source = query.data?.storefrontVisualPreset;
     const consistent = Boolean(
         source &&
@@ -187,9 +193,81 @@ export function StorefrontVisualPresetPanel() {
             >
                 {mutation.loading ? '正在保存…' : '保存到当前店铺'}
             </button>
+            <div className="mt-3 flex gap-4 text-sm">
+                <button type="button" disabled={!consistent || busy} onClick={() => setPreview('mobile')}>
+                    预览效果
+                </button>
+                <button
+                    type="button"
+                    disabled={disabled || selected?.presetId === 'classic'}
+                    onClick={() => {
+                        if (selected) setDraft({ ...selected, presetId: 'classic' });
+                        setNotice('');
+                        setError('');
+                    }}
+                >
+                    恢复默认皮肤（保存后生效）
+                </button>
+            </div>
             <p className="mt-3 text-xs text-slate-500">
                 切换皮肤与布局会保留图片、文案、区块颜色、楼层顺序和开关。
             </p>
+            {preview && selected && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-3">
+                    <AccessibleDialogSurface
+                        accessibleName="店铺皮肤效果预览"
+                        onRequestClose={() => setPreview(null)}
+                        className="flex max-h-[94dvh] w-full max-w-[1280px] flex-col overflow-hidden rounded-xl bg-white"
+                    >
+                        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 p-4">
+                            <div>
+                                <h3 className="flex items-center gap-2 font-bold text-slate-900">
+                                    皮肤效果预览{' '}
+                                    <FeatureHelpButton
+                                        topic="storefront.visual-preset"
+                                        title="皮肤效果预览"
+                                    />
+                                </h3>
+                                <p className="text-xs text-slate-500">
+                                    组件示例 · 尚未应用的选择不会发布 · 窄屏可横向滑动
+                                </p>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <button
+                                    type="button"
+                                    aria-pressed={preview === 'mobile'}
+                                    onClick={() => setPreview('mobile')}
+                                    className="flex items-center gap-1 text-sm"
+                                >
+                                    <Smartphone className="h-4 w-4" />
+                                    手机
+                                </button>
+                                <button
+                                    type="button"
+                                    aria-pressed={preview === 'desktop'}
+                                    onClick={() => setPreview('desktop')}
+                                    className="flex items-center gap-1 text-sm"
+                                >
+                                    <Monitor className="h-4 w-4" />
+                                    电脑
+                                </button>
+                                <button type="button" aria-label="关闭预览" onClick={() => setPreview(null)}>
+                                    <X className="h-5 w-5" />
+                                </button>
+                            </div>
+                        </header>
+                        <div className="min-h-0 min-w-0 overflow-auto bg-slate-100 p-3">
+                            <iframe
+                                title="皮肤组件预览"
+                                sandbox=""
+                                className="mx-auto block h-[70dvh] max-w-none shrink-0 border-0 bg-white"
+                                style={{ width: preview === 'mobile' ? 390 : 1200 }}
+                                srcDoc={storefrontVisualPreviewDocument(selected.presetId, storeName)}
+                            />
+                        </div>
+                    </AccessibleDialogSurface>
+                </div>
+            )}
         </section>
     );
 }

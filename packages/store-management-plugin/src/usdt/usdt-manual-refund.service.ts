@@ -199,7 +199,7 @@ export class UsdtManualRefundService {
             .findAndCount({
                 where,
                 relations: { channel: true, payment: true, order: true, refund: true },
-                order: { createdAt: 'DESC' },
+                order: { createdAt: 'DESC', id: 'DESC' },
                 skip: normalized.skip,
                 take: normalized.take,
             });

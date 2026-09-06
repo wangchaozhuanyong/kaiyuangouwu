@@ -212,7 +212,7 @@ export function CustomersModule() {
         () => ({
             skip: page * pageSize,
             take: pageSize,
-            sort: { createdAt: 'DESC' },
+            sort: { createdAt: 'DESC', id: 'DESC' },
             filter: customerFilter(deferredSearchTerm),
         }),
         [deferredSearchTerm, page, pageSize],
@@ -229,7 +229,7 @@ export function CustomersModule() {
         fetchPolicy: 'cache-first',
     });
     const groupQuery = useQuery<CustomerGroupsResult>(CUSTOMER_GROUPS_QUERY, {
-        variables: { options: { skip: 0, take: 100, sort: { name: 'ASC' } } },
+        variables: { options: { skip: 0, take: 100, sort: { name: 'ASC', id: 'ASC' } } },
         fetchPolicy: 'cache-first',
     });
     const {
@@ -246,7 +246,7 @@ export function CustomersModule() {
         if (loadedCount >= result.totalItems) return;
         loadingAllGroupsRef.current = true;
         void fetchMoreGroups({
-            variables: { options: { skip: loadedCount, take: 100, sort: { name: 'ASC' } } },
+            variables: { options: { skip: loadedCount, take: 100, sort: { name: 'ASC', id: 'ASC' } } },
             updateQuery: (previous, { fetchMoreResult }) => ({
                 customerGroups: {
                     ...fetchMoreResult.customerGroups,

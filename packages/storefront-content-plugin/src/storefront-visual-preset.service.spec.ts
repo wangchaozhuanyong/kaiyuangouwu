@@ -92,6 +92,10 @@ describe('channel-scoped storefront visual presets', () => {
         ).rejects.toThrow(/其他管理员/);
         expect((await service.get(ctx('a'))).presetId).toBe('modern-oriental');
         expect(repository.save).toHaveBeenCalledTimes(1);
+        expect(repository.findOne).toHaveBeenCalledWith({
+            where: { channelId: 'a', code: STOREFRONT_VISUAL_PRESET_CODE },
+            lock: { mode: 'pessimistic_write' },
+        });
     });
 
     it('falls back for an unknown saved preset without rewriting the stored record', async () => {

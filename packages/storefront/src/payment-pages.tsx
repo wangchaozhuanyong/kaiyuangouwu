@@ -20,7 +20,7 @@ import { languageCodeFor } from './i18n';
 import { offlineLoadError } from './loading-state';
 import { formatDisplayMoney } from './money-display';
 import { orderStatusRefreshInterval } from './order-refresh';
-import { paymentAvailability } from './payment-readiness';
+import { isTestPaymentMethod, paymentAvailability } from './payment-readiness';
 import { PUBLIC_QUERY_GC_TIME, ROUTE_QUERY_STALE_TIME, storefrontQueryKeys } from './query-client';
 import { PageSkeleton } from './route-loading';
 import { routeNavigateOptions } from './storefront-router';
@@ -75,7 +75,6 @@ export function PaymentPage({
     const submissionLock = useRef(false);
     const usdtCompletionLock = useRef(false);
     const confirmationTokenRef = useRef('');
-    const isTestMode = import.meta.env.DEV;
     const isPending = cart?.state === 'PAYMENT_PENDING' && order?.state === 'ArrangingPayment';
     const methodsQuery = useQuery({
         queryKey: storefrontQueryKeys.paymentMethods(
@@ -158,9 +157,10 @@ export function PaymentPage({
         refetchInterval: 5_000,
     });
     const availability = paymentAvailability(isPending ? (methodsQuery.data ?? []) : [], {
-        allowTestMethods: isTestMode,
+        allowTestMethods: import.meta.env.DEV,
     });
     const methods = availability.methods;
+    const isTestMode = methods.some(method => method.code === selectedMethod && isTestPaymentMethod(method));
     const loading = isPending && methodsQuery.isLoading;
     const methodLoadError =
         methodsQuery.isPaused && methodsQuery.data === undefined
@@ -420,8 +420,8 @@ export function PaymentPage({
                                         : 'On-chain payment detection'
                                     : isTestMode
                                       ? isZh
-                                          ? '本地测试支付'
-                                          : 'Local test payment'
+                                          ? '测试支付'
+                                          : 'Test payment'
                                       : availability.status === 'READY'
                                         ? isZh
                                             ? '安全支付'
@@ -437,8 +437,8 @@ export function PaymentPage({
                                         : 'TRON is reconciled every minute and this page checks the order every 5 seconds.'
                                     : isTestMode
                                       ? isZh
-                                          ? '仅用于预览结账流程，不会产生真实扣款。'
-                                          : 'For previewing checkout only. No real charge will be made.'
+                                          ? '模拟付款成功，不真实扣款、发货或扣库存，也不产生收入和返利。'
+                                          : 'Simulates payment without a real charge, delivery, stock deduction, revenue or rewards.'
                                       : availability.status === 'READY'
                                         ? isZh
                                             ? '请确认订单和金额后选择支付方式。'
@@ -449,7 +449,7 @@ export function PaymentPage({
                             </span>
                         </div>
                     </section>
-                    {customer && referralProgramQuery.data?.enabled && (
+                    {!isTestMode && customer && referralProgramQuery.data?.enabled && (
                         <section className="payment-method-section">
                             <h2>{isZh ? '返利余额抵扣' : 'Referral balance'}</h2>
                             <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4">
@@ -554,10 +554,10 @@ export function PaymentPage({
                                             <small>
                                                 {method.isEligible
                                                     ? method.description ||
-                                                      (isTestMode
+                                                      (isTestPaymentMethod(method)
                                                           ? isZh
-                                                              ? '本地即时模拟支付'
-                                                              : 'Instant local payment simulation'
+                                                              ? '模拟付款，不真实扣款或交付'
+                                                              : 'Simulated payment without a real charge or delivery'
                                                           : isZh
                                                             ? '可用于当前订单'
                                                             : 'Available for this order')
@@ -745,6 +745,7 @@ export function OrderConfirmationPage({
         gcTime: PUBLIC_QUERY_GC_TIME,
     });
     const order = code ? (orderQuery.data ?? null) : null;
+    const isTestOrder = order?.state === 'TestPaymentSettled';
     const loading = Boolean(code && confirmationToken && orderQuery.isLoading);
     const loadError =
         orderQuery.isPaused && orderQuery.data === undefined
@@ -796,21 +797,21 @@ export function OrderConfirmationPage({
                 <span className="order-confirmation-icon">
                     <CircleCheck aria-hidden="true" />
                 </span>
-                <p>
-                    {import.meta.env.DEV
+                <p>{isTestOrder ? (isZh ? '测试订单' : 'Test order') : isZh ? '订单状态' : 'Order status'}</p>
+                <h1>
+                    {isTestOrder
                         ? isZh
-                            ? '本地测试订单'
-                            : 'Local test order'
+                            ? '测试支付成功'
+                            : 'Test payment complete'
                         : isZh
-                          ? '订单状态'
-                          : 'Order status'}
-                </p>
-                <h1>{isZh ? '订单提交成功' : 'Order confirmed'}</h1>
+                          ? '订单提交成功'
+                          : 'Order confirmed'}
+                </h1>
                 <span>
-                    {import.meta.env.DEV
+                    {isTestOrder
                         ? isZh
-                            ? '测试支付已完成，不会产生真实扣款。'
-                            : 'The test payment is complete. No real charge was made.'
+                            ? '测试付款和订单流程已完成，未真实扣款、发货或扣库存，不计入收入和返利。'
+                            : 'Test checkout is complete. No real charge, delivery, stock deduction, revenue or rewards.'
                         : isZh
                           ? '支付状态已更新，请保留订单号。'
                           : 'The payment status has been updated. Keep your order number.'}
@@ -827,10 +828,18 @@ export function OrderConfirmationPage({
                         <dd>{orderStateLabel(order.state, language)}</dd>
                     </div>
                     <div>
-                        <dt>{isZh ? '支付金额' : 'Payment total'}</dt>
+                        <dt>
+                            {isTestOrder
+                                ? isZh
+                                    ? '模拟金额'
+                                    : 'Simulated total'
+                                : isZh
+                                  ? '支付金额'
+                                  : 'Payment total'}
+                        </dt>
                         <dd>{formatMoney(order.totalWithTax, order.currencyCode, locale)}</dd>
                     </div>
-                    {order.checkoutShipping && (
+                    {!isTestOrder && order.checkoutShipping && (
                         <div>
                             <dt>{isZh ? '配送时效' : 'Delivery estimate'}</dt>
                             <dd>{shippingEstimate(order, language)}</dd>
@@ -843,7 +852,7 @@ export function OrderConfirmationPage({
                         : 'Keep your order number. Guest access through this link is available for a limited time.'}
                 </small>
             </section>
-            {!!order.digitalDeliveries?.length && (
+            {!isTestOrder && !!order.digitalDeliveries?.length && (
                 <section className="digital-delivery-panel order-confirmation-downloads">
                     <header>
                         <div>
@@ -883,7 +892,7 @@ export function OrderConfirmationPage({
                     </div>
                 </section>
             )}
-            {!!order.autoCardDeliveries?.length && (
+            {!isTestOrder && !!order.autoCardDeliveries?.length && (
                 <section className="digital-delivery-panel auto-card-delivery-panel">
                     <header>
                         <div>
@@ -917,7 +926,12 @@ export function OrderConfirmationPage({
                     {isZh ? '继续购物' : 'Continue shopping'}
                 </button>
                 {customer && (
-                    <button type="button" onClick={() => navigateTo({ name: 'orders', tab: 'shipping' })}>
+                    <button
+                        type="button"
+                        onClick={() =>
+                            navigateTo({ name: 'orders', tab: isTestOrder ? undefined : 'shipping' })
+                        }
+                    >
                         <Package aria-hidden="true" />
                         {isZh ? '查看我的订单' : 'View my orders'}
                     </button>
@@ -1077,6 +1091,7 @@ function usdtQuoteDescription(
         : `1 USDT = ${rate}, valid until ${expiry}`;
 }
 function orderStateLabel(state: string, language: StorefrontLanguage): string {
+    if (state === 'TestPaymentSettled') return language === 'zh' ? '测试已付款' : 'Test payment complete';
     const zh: Record<string, string> = {
         AddingItems: '待付款',
         ArrangingPayment: '待付款',

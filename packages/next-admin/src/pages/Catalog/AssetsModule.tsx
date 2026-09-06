@@ -130,7 +130,7 @@ export function AssetsModule() {
             options: {
                 skip: page * pageSize,
                 take: pageSize,
-                sort: { updatedAt: 'DESC' },
+                sort: { updatedAt: 'DESC', id: 'DESC' },
                 filter: assetFilter,
             },
         },

@@ -944,25 +944,30 @@ export function OrderDetailPage({
     const canRequestAfterSales =
         refundableLines.length > 0 &&
         ['PaymentSettled', 'PartiallyShipped', 'Shipped', 'Delivered'].includes(order.state);
-    const statusHint = readyDownloads.length
-        ? isZh
-            ? '数字商品已可下载，链接为短效安全链接'
-            : 'Your digital products are ready. Download links are short-lived.'
-        : pending
-          ? isZh
-              ? '订单等待支付，请在支付页完成付款'
-              : 'Complete payment to continue'
-          : inTransit
+    const statusHint =
+        order.state === 'TestPaymentSettled'
             ? isZh
-                ? '商品正在运输中，请留意物流更新'
-                : 'Your order is in transit'
-            : ['PaymentAuthorized', 'PaymentSettled'].includes(order.state)
+                ? '测试付款成功，未真实扣款或发货，不计入收入和返利'
+                : 'Test payment complete. No real charge, delivery, revenue or rewards.'
+            : readyDownloads.length
               ? isZh
-                  ? '商家正在准备你的商品'
-                  : 'The merchant is preparing your order'
-              : isZh
-                ? '订单状态已更新'
-                : 'Order status updated';
+                  ? '数字商品已可下载，链接为短效安全链接'
+                  : 'Your digital products are ready. Download links are short-lived.'
+              : pending
+                ? isZh
+                    ? '订单等待支付，请在支付页完成付款'
+                    : 'Complete payment to continue'
+                : inTransit
+                  ? isZh
+                      ? '商品正在运输中，请留意物流更新'
+                      : 'Your order is in transit'
+                  : ['PaymentAuthorized', 'PaymentSettled'].includes(order.state)
+                    ? isZh
+                        ? '商家正在准备你的商品'
+                        : 'The merchant is preparing your order'
+                    : isZh
+                      ? '订单状态已更新'
+                      : 'Order status updated';
     return (
         <main className={orderPageClassName('page subpage order-detail-page')}>
             <SubHeader title={isZh ? '订单详情' : 'Order details'} language={language} onBack={onBack} />
@@ -1544,7 +1549,7 @@ function OrderCard({
     const isPendingPayment = ['AddingItems', 'ArrangingPayment'].includes(order.state);
     const isPaidOrShipping = ['PaymentAuthorized', 'PaymentSettled'].includes(order.state);
     const isShipped = ['Shipped', 'PartiallyShipped'].includes(order.state);
-    const isDelivered = order.state === 'Delivered';
+    const isDelivered = order.state === 'Delivered' || order.state === 'TestPaymentSettled';
     const isCancelled = order.state === 'Cancelled';
 
     const stateModifier = isPendingPayment
@@ -2132,6 +2137,7 @@ function afterSalesReasonLabel(reason: AfterSalesReason, language: StorefrontLan
 }
 
 function orderStateLabel(state: string, language: StorefrontLanguage): string {
+    if (state === 'TestPaymentSettled') return language === 'zh' ? '测试已付款' : 'Test payment complete';
     const zh: Record<string, string> = {
         AddingItems: '待付款',
         ArrangingPayment: '待付款',

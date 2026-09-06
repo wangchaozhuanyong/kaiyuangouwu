@@ -29,7 +29,7 @@ export function CatalogBulkChannelAction() {
         variables: {
             options: {
                 take: 100,
-                sort: { updatedAt: 'DESC' },
+                sort: { updatedAt: 'DESC', id: 'DESC' },
                 ...(deferredSearch ? { filter: { name: { contains: deferredSearch } } } : {}),
             },
         },
@@ -51,7 +51,7 @@ export function CatalogBulkChannelAction() {
         item.channels.some(channel => channel.id === channelId);
     const eligible = (item: ProductChannelAssignment) =>
         Boolean(target) &&
-        !(mode === 'remove' && target?.isDefault) &&
+        !(mode === 'remove' && item.channels.length <= 1) &&
         (mode === 'assign' ? !belongsToTarget(item) : belongsToTarget(item));
     const items = (page?.items ?? []).filter(
         item =>
@@ -196,7 +196,6 @@ export function CatalogBulkChannelAction() {
                                         {page?.channels.map(channel => (
                                             <option key={channel.id} value={channel.id}>
                                                 {getChannelDisplayName(channel.code)}
-                                                {channel.isDefault ? '（系统自动关联）' : ''}
                                             </option>
                                         ))}
                                     </select>
@@ -217,14 +216,8 @@ export function CatalogBulkChannelAction() {
                                 )}
                             </div>
                             <p className="text-xs text-slate-500">
-                                已分配的商品会自动跳过，价格系数仅用于本次新增分配。仅显示你有权限查看的店铺。
+                                已分配的商品会自动跳过，价格系数仅用于本次新增分配。商品至少保留一个销售店铺。仅显示你有权限查看的店铺。
                             </p>
-                            {target?.isDefault && (
-                                <Notice
-                                    tone="info"
-                                    message="默认店铺目前由系统自动关联全部商品，不能在此移除。这里显示的是现有实际关联，并不代表手动分配记录。"
-                                />
-                            )}
                             <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
                                 <div className="relative">
                                     <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
@@ -325,7 +318,6 @@ export function CatalogBulkChannelAction() {
                                                             className="rounded border border-slate-200 px-1.5 py-0.5"
                                                         >
                                                             {getChannelDisplayName(channel.code)}
-                                                            {channel.isDefault ? '（系统关联）' : ''}
                                                         </span>
                                                     ))}
                                                     {!item.channels.length && (

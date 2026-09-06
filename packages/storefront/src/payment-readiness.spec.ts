@@ -16,14 +16,27 @@ function method(overrides: Partial<PaymentMethod> = {}): PaymentMethod {
 }
 
 describe('paymentAvailability', () => {
-    it('keeps test handlers in development and hides real handlers', () => {
+    it('keeps real handlers alongside legacy test handlers in development', () => {
         const result = paymentAvailability(
             [method(), method({ id: 'test', code: '测试支付', name: '测试支付' })],
             { allowTestMethods: true },
         );
 
         expect(result.status).toBe('READY');
-        expect(result.methods.map(item => item.id)).toEqual(['test']);
+        expect(result.methods.map(item => item.id)).toEqual(['payment-1', 'test']);
+    });
+
+    it('shows an eligible controlled test method in a production build alongside real payments', () => {
+        const test = method({ id: 'controlled', code: 'controlled-test-payment-2', name: '测试支付' });
+        const result = paymentAvailability([method(), test], { allowTestMethods: false });
+        expect(result.methods.map(item => item.id)).toEqual(['payment-1', 'controlled']);
+    });
+
+    it('hides controlled test payments for accounts rejected by the server in every build', () => {
+        const test = method({ code: 'controlled-test-payment-2', isEligible: false });
+        for (const allowTestMethods of [true, false]) {
+            expect(paymentAvailability([test], { allowTestMethods }).methods).toEqual([]);
+        }
     });
 
     it('keeps real handlers in production and excludes test handlers', () => {

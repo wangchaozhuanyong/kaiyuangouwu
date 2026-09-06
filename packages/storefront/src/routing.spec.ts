@@ -8,6 +8,24 @@ import {
 } from './storefront-router';
 
 describe('storefront routing', () => {
+    it('restores each category history entry independently of later filter changes', () => {
+        const category = { pathname: '/category', href: '/category?collectionId=one' };
+        expect(getStorefrontScrollRestorationKey({ ...category, state: { __TSR_key: 'browse-one' } })).toBe(
+            'browse-one',
+        );
+        expect(getStorefrontScrollRestorationKey({ ...category, state: { __TSR_key: 'browse-again' } })).toBe(
+            'browse-again',
+        );
+        expect(getStorefrontScrollRestorationKey({ ...category, state: {} })).toBe(category.href);
+        expect(
+            getStorefrontScrollRestorationKey({
+                pathname: '/category/',
+                href: '/category?collectionId=two',
+                state: {},
+            }),
+        ).toBe('/category?collectionId=two');
+    });
+
     it('builds browser-history URLs and reads their search state', () => {
         expect(routeHref({ name: 'product', id: '42' })).toBe('/product?id=42');
         expect(routeFromRouterLocation('/product', { id: 42 })).toMatchObject({

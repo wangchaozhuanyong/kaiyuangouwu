@@ -129,6 +129,8 @@ const rootPagePaths = new Set(rootPages.map(routePath));
 
 export function getStorefrontScrollRestorationKey(location: ScrollRestorationLocation): string {
     const pathname = location.pathname === '/' ? '/' : location.pathname.replace(/\/+$/, '');
+    // Each category/filter navigation starts at the top; back restores that history entry.
+    if (pathname === '/category') return location.state.__TSR_key ?? location.href;
     if (rootPagePaths.has(pathname)) return `root:${pathname}`;
     return location.state.__TSR_key ?? location.href;
 }

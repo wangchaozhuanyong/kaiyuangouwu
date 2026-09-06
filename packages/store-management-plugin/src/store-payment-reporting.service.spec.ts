@@ -126,6 +126,8 @@ describe('StorePaymentReportingService', () => {
         expect(detailsQuery.andWhere).toHaveBeenCalledWith('payment.createdAt >= :reportFrom', {
             reportFrom: new Date('2026-08-01T00:00:00.000Z'),
         });
+        expect(detailsQuery.orderBy).toHaveBeenCalledWith('payment.createdAt', 'DESC');
+        expect(detailsQuery.addOrderBy).toHaveBeenCalledWith('payment.id', 'DESC');
         expect(detailsQuery.offset).toHaveBeenCalledWith(50);
         expect(detailsQuery.limit).toHaveBeenCalledWith(100);
         expect(result).toEqual({
@@ -150,12 +152,13 @@ function queryBuilder(rows: unknown[], totalItems = rows.length) {
         'groupBy',
         'addGroupBy',
         'orderBy',
+        'addOrderBy',
         'offset',
         'limit',
     ]) {
         builder[method] = vi.fn(() => builder);
     }
-    builder.getRawMany = vi.fn(async () => rows);
-    builder.getRawOne = vi.fn(async () => ({ totalItems }));
+    builder.getRawMany = vi.fn(() => Promise.resolve(rows));
+    builder.getRawOne = vi.fn(() => Promise.resolve({ totalItems }));
     return builder;
 }

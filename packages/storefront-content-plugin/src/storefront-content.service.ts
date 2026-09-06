@@ -119,7 +119,8 @@ export class StorefrontContentService {
         return {
             heroAutoplayIntervalSeconds:
                 settings?.heroAutoplayIntervalSeconds ?? DEFAULT_HERO_AUTOPLAY_INTERVAL_SECONDS,
-            configuredBlockTypes: Array.from(new Set(blocks.map(block => block.type))),
+            // This is a capability set, not floor order; keep configuration reads independent of SQL row order.
+            configuredBlockTypes: Array.from(new Set(blocks.map(block => block.type))).sort(),
         };
     }
 
@@ -145,7 +146,7 @@ export class StorefrontContentService {
         ).map(block => block.type);
         const result = {
             heroAutoplayIntervalSeconds: saved.heroAutoplayIntervalSeconds,
-            configuredBlockTypes: Array.from(new Set(configuredBlockTypes)),
+            configuredBlockTypes: Array.from(new Set(configuredBlockTypes)).sort(),
         };
         await this.publishChanged(ctx, [saved.id]);
         return result;
@@ -761,6 +762,8 @@ export class StorefrontContentService {
 
     private validateBlockInput(input: CreateStorefrontContentBlockInput) {
         const code = input.code.trim().toLowerCase();
+        if (code === STOREFRONT_VISUAL_PRESET_CODE)
+            throw new UserInputError('请通过店铺皮肤设置修改视觉预设');
         if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(code)) {
             throw new UserInputError('区块编码只能使用小写字母、数字和短横线，最长 64 个字符');
         }
@@ -788,8 +791,6 @@ export class StorefrontContentService {
         ) {
             throw new UserInputError('登录注册页视觉必须使用对应的系统保留编码');
         }
-        if (code === STOREFRONT_VISUAL_PRESET_CODE)
-            throw new UserInputError('皮肤配置使用独立设置接口，不能作为装修区块修改');
         const internalName =
             input.internalName?.trim() ||
             input.translations

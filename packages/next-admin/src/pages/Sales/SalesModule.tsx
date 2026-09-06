@@ -189,7 +189,7 @@ export function SalesModule() {
             options: {
                 skip: page * pageSize,
                 take: pageSize,
-                sort: { orderPlacedAt: 'DESC' },
+                sort: { orderPlacedAt: 'DESC', id: 'DESC' },
                 filter: { _and: filters },
             },
         };

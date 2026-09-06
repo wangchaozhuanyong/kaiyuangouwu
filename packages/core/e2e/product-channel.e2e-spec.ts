@@ -5,13 +5,12 @@ import { fail } from 'assert';
 import gql from 'graphql-tag';
 import path from 'path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { FragmentOf, ResultOf } from './graphql/graphql-admin';
 
 import { initialData } from '../../../e2e-common/e2e-initial-data';
 import { TEST_SETUP_TIMEOUT_MS, testConfig } from '../../../e2e-common/test-config';
 
 import { channelFragment, productVariantFragment } from './graphql/fragments-admin';
-import { graphql } from './graphql/graphql-admin';
+import { graphql, type FragmentOf, type ResultOf } from './graphql/graphql-admin';
 import {
     addOptionGroupToProductDocument,
     assignProductToChannelDocument,
@@ -241,17 +240,17 @@ describe('ChannelAware Products and ProductVariants', () => {
             expect(product.name).toBe('Product Without Variants');
         });
 
-        it(
-            'throws if attempting to remove Product from default Channel',
-            assertThrowsWithMessage(async () => {
-                await adminClient.query(removeProductFromChannelDocument, {
-                    input: {
-                        productIds: [product1.id],
-                        channelId: 'T_1',
-                    },
-                });
-            }, 'Items cannot be removed from the default Channel'),
-        );
+        it('removes an explicitly shared Product from the default Channel', async () => {
+            await adminClient.asSuperAdmin();
+            adminClient.setChannelToken(E2E_DEFAULT_CHANNEL_TOKEN);
+            const removed = await adminClient.query(removeProductFromChannelDocument, {
+                input: { productIds: [product1.id], channelId: 'T_1' },
+            });
+            expect(Object.values(removed)[0][0].channels.map(c => c.id)).not.toContain('T_1');
+            await adminClient.query(assignProductToChannelDocument, {
+                input: { productIds: [product1.id], channelId: 'T_1' },
+            });
+        });
 
         it('removes Product from Channel', async () => {
             await adminClient.asSuperAdmin();
@@ -441,17 +440,17 @@ describe('ChannelAware Products and ProductVariants', () => {
             expect(assignProductVariantsToChannel[0].channels.map(c => c.id).sort()).toEqual(['T_1', 'T_3']);
         });
 
-        it(
-            'throws if attempting to remove ProductVariant from default Channel',
-            assertThrowsWithMessage(async () => {
-                await adminClient.query(removeProductVariantFromChannelDocument, {
-                    input: {
-                        productVariantIds: [product1.variants[0].id],
-                        channelId: 'T_1',
-                    },
-                });
-            }, 'Items cannot be removed from the default Channel'),
-        );
+        it('removes an explicitly shared ProductVariant from the default Channel', async () => {
+            await adminClient.asSuperAdmin();
+            adminClient.setChannelToken(E2E_DEFAULT_CHANNEL_TOKEN);
+            const removed = await adminClient.query(removeProductVariantFromChannelDocument, {
+                input: { productVariantIds: [product1.variants[0].id], channelId: 'T_1' },
+            });
+            expect(Object.values(removed)[0][0].channels.map(c => c.id)).not.toContain('T_1');
+            await adminClient.query(assignProductVariantToChannelDocument, {
+                input: { productVariantIds: [product1.variants[0].id], channelId: 'T_1' },
+            });
+        });
 
         it('removes ProductVariant but not Product from Channel', async () => {
             await adminClient.asSuperAdmin();
@@ -554,9 +553,9 @@ describe('ChannelAware Products and ProductVariants', () => {
             });
             productGuard.assertSuccess(product);
 
-            // from the default channel, all channels are visible
-            expect(product.channels.map(c => c.id).sort()).toEqual(['T_1', 'T_2']);
-            expect(product.variants[0].channels.map(c => c.id).sort()).toEqual(['T_1', 'T_2']);
+            // The aggregate can read the product without assigning it to the default storefront.
+            expect(product.channels.map(c => c.id).sort()).toEqual(['T_2']);
+            expect(product.variants[0].channels.map(c => c.id).sort()).toEqual(['T_2']);
         });
     });
 
@@ -597,21 +596,18 @@ describe('ChannelAware Products and ProductVariants', () => {
             testProduct = createProduct;
 
             // Create an option group with one option
-            const { createProductOptionGroup } = await adminClient.query(
-                createProductOptionGroupDocument,
-                {
-                    input: {
-                        code: 'test-color',
-                        translations: [{ languageCode: LanguageCode.en, name: 'Color' }],
-                        options: [
-                            {
-                                code: 'red',
-                                translations: [{ languageCode: LanguageCode.en, name: 'Red' }],
-                            },
-                        ],
-                    },
+            const { createProductOptionGroup } = await adminClient.query(createProductOptionGroupDocument, {
+                input: {
+                    code: 'test-color',
+                    translations: [{ languageCode: LanguageCode.en, name: 'Color' }],
+                    options: [
+                        {
+                            code: 'red',
+                            translations: [{ languageCode: LanguageCode.en, name: 'Red' }],
+                        },
+                    ],
                 },
-            );
+            });
             colorGroupId = createProductOptionGroup.id;
             redOptionId = createProductOptionGroup.options[0].id;
 
@@ -699,10 +695,7 @@ describe('ChannelAware Products and ProductVariants', () => {
 
             // Both variants should be visible in the third channel
             expect(product.variants).toHaveLength(2);
-            expect(product.variants.map(v => v.sku).sort()).toEqual([
-                'CHAN-VAR-BLUE',
-                'CHAN-VAR-RED',
-            ]);
+            expect(product.variants.map(v => v.sku).sort()).toEqual(['CHAN-VAR-BLUE', 'CHAN-VAR-RED']);
         });
 
         it('new variant has correct price in the tax-inclusive assigned channel', async () => {
@@ -715,11 +708,12 @@ describe('ChannelAware Products and ProductVariants', () => {
 
             const blueVariant = product.variants.find(v => v.sku === 'CHAN-VAR-BLUE');
             expect(blueVariant).toBeDefined();
+            if (!blueVariant) throw new Error('Missing expected variant');
             // Third channel has pricesIncludeTax: true and uses EUR.
             // assignProductVariantsToChannel writes the variant's net price (2000) as the
             // channel price; with 20% tax applied the gross priceWithTax is 2000 * 1.2 = 2400.
-            expect(blueVariant!.priceWithTax).toBe(2400);
-            expect(blueVariant!.currencyCode).toBe(CurrencyCode.EUR);
+            expect(blueVariant.priceWithTax).toBe(2400);
+            expect(blueVariant.currencyCode).toBe(CurrencyCode.EUR);
         });
 
         it('new variant has stock initialized in the assigned channel', async () => {
@@ -731,13 +725,14 @@ describe('ChannelAware Products and ProductVariants', () => {
             productGuard.assertSuccess(product);
             const blueVariant = product.variants.find(v => v.sku === 'CHAN-VAR-BLUE');
             expect(blueVariant).toBeDefined();
+            if (!blueVariant) throw new Error('Missing expected variant');
 
             // Assert on the channel-filtered `stockLevels` array (queried from the third
             // channel) rather than `stockOnHand` — this proves ensureStockLevelsForChannel
             // actually seeded a StockLevel row for the third channel's stock location,
             // which a `stockOnHand === 0` check alone could not distinguish from "no row".
             const { productVariants } = await adminClient.query(getVariantStockLevelsDocument, {
-                options: { filter: { id: { eq: blueVariant!.id } } },
+                options: { filter: { id: { eq: blueVariant.id } } },
             });
             const stockLevels = productVariants.items[0]?.stockLevels ?? [];
             expect(stockLevels.length).toBeGreaterThan(0);
@@ -754,13 +749,14 @@ describe('ChannelAware Products and ProductVariants', () => {
 
             const blueVariant = product.variants.find(v => v.sku === 'CHAN-VAR-BLUE');
             expect(blueVariant).toBeDefined();
+            if (!blueVariant) throw new Error('Missing expected variant');
             // The asset attached at creation time should be assigned to the third channel
             // (via assetService.assignToChannel inside assignProductVariantsToChannel)
             // and therefore visible/resolvable when querying from that channel.
-            expect(blueVariant!.assets).toHaveLength(1);
-            expect(blueVariant!.assets[0].id).toBe(assetId);
-            expect(blueVariant!.featuredAsset).toBeDefined();
-            expect(blueVariant!.featuredAsset!.id).toBe(assetId);
+            expect(blueVariant.assets).toHaveLength(1);
+            expect(blueVariant.assets[0].id).toBe(assetId);
+            expect(blueVariant.featuredAsset).toBeDefined();
+            expect(blueVariant.featuredAsset?.id).toBe(assetId);
         });
 
         it('new variant options and option groups are accessible in the assigned channel', async () => {
@@ -778,9 +774,10 @@ describe('ChannelAware Products and ProductVariants', () => {
             // The new variant's options should have valid group references
             const blueVariant = product.variants.find(v => v.sku === 'CHAN-VAR-BLUE');
             expect(blueVariant).toBeDefined();
-            expect(blueVariant!.options).toHaveLength(1);
-            expect(blueVariant!.options[0].code).toBe('blue');
-            expect(blueVariant!.options[0].groupId).toBe(product.optionGroups[0].id);
+            if (!blueVariant) throw new Error('Missing expected variant');
+            expect(blueVariant.options).toHaveLength(1);
+            expect(blueVariant.options[0].code).toBe('blue');
+            expect(blueVariant.options[0].groupId).toBe(product.optionGroups[0].id);
         });
 
         it(

@@ -1,4 +1,3 @@
-import type { StorefrontVisualPresetConfig } from '../../../storefront-content-plugin/src/visual-presets';
 import type {
     AfterSalesRequest,
     CreateAfterSalesRequestInput,
@@ -13,23 +12,49 @@ import type {
 } from '../types';
 import type { StorefrontContentQueryResult } from './helpers';
 
+import {
+    type StorefrontVisualPresetConfig,
+    normalizeStorefrontDesktopLayout,
+    normalizeStorefrontVisualPreset,
+} from '../../../storefront-content-plugin/src/visual-presets';
+
 import { BaseDomainApi } from './base-domain-api';
 import { isSupportedContentSchemaFallback } from './content-compatibility';
 import { afterSalesFields, storefrontReviewFields } from './fragments';
 
 export class ContentReviewsApi extends BaseDomainApi {
     async storefrontVisualPreset(signal?: AbortSignal): Promise<StorefrontVisualPresetConfig> {
-        const result = await this.request<{
+        type PresetResponse = {
             activeChannel: { id: string };
             storefrontVisualPreset: StorefrontVisualPresetConfig;
-        }>(
-            `query StorefrontVisualPreset { activeChannel { id } storefrontVisualPreset { channelId presetId desktopLayout revision } }`,
-            undefined,
-            signal,
-        );
+        };
+        let result: PresetResponse;
+        try {
+            try {
+                result = await this.request<PresetResponse>(
+                    `query StorefrontVisualPreset { activeChannel { id } storefrontVisualPreset { channelId presetId desktopLayout revision } }`,
+                    undefined,
+                    signal,
+                );
+            } catch (error) {
+                if (!isSupportedContentSchemaFallback(error, 'desktopLayout')) throw error;
+                result = await this.request<PresetResponse>(
+                    `query StorefrontVisualPreset { activeChannel { id } storefrontVisualPreset { channelId presetId revision } }`,
+                    undefined,
+                    signal,
+                );
+            }
+        } catch (error) {
+            if (!isSupportedContentSchemaFallback(error, 'visualPreset')) throw error;
+            return { channelId: '', presetId: 'classic', desktopLayout: 'classic', revision: 'default' };
+        }
         if (result.activeChannel.id !== result.storefrontVisualPreset.channelId)
             throw new Error('Storefront channel mismatch');
-        return result.storefrontVisualPreset;
+        return {
+            ...result.storefrontVisualPreset,
+            presetId: normalizeStorefrontVisualPreset(result.storefrontVisualPreset.presetId),
+            desktopLayout: normalizeStorefrontDesktopLayout(result.storefrontVisualPreset.desktopLayout),
+        };
     }
 
     async storefrontConfig(signal?: AbortSignal): Promise<StorefrontConfig> {

@@ -101,7 +101,7 @@ describe('bottom navigation configuration', () => {
     });
 
     it('mounts navigation outside storefront-app to prevent mobile Safari clipping traps', () => {
-        const appSource = readFileSync(new URL('./storefront-shell.tsx', import.meta.url), 'utf8');
+        const appSource = readFileSync(new URL('./StorefrontShell.tsx', import.meta.url), 'utf8');
         const source = new Project({ useInMemoryFileSystem: true }).createSourceFile('App.tsx', appSource);
         const navigation = source
             .getDescendantsOfKind(SyntaxKind.JsxSelfClosingElement)

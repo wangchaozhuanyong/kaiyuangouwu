@@ -1,13 +1,6 @@
 import { gql } from 'graphql-tag';
 
 const commonTypes = gql`
-    type StorefrontVisualPresetConfig {
-        channelId: ID!
-        presetId: String!
-        desktopLayout: String!
-        revision: String!
-    }
-
     enum StorefrontContentBlockType {
         HERO
         NOTICE
@@ -94,6 +87,13 @@ const commonTypes = gql`
         items: [StorefrontContentItem!]!
     }
 
+    type StorefrontVisualPreset {
+        channelId: ID!
+        presetId: String!
+        desktopLayout: String!
+        revision: String!
+    }
+
     type StorefrontContentSettings {
         heroAutoplayIntervalSeconds: Int!
         configuredBlockTypes: [StorefrontContentBlockType!]!
@@ -104,20 +104,13 @@ export const shopApiExtensions = gql`
     ${commonTypes}
 
     extend type Query {
+        storefrontVisualPreset: StorefrontVisualPreset!
         storefrontContent: [StorefrontContentBlock!]!
         storefrontContentSettings: StorefrontContentSettings!
-        storefrontVisualPreset: StorefrontVisualPresetConfig!
     }
 `;
 
 export const adminApiExtensions = gql`
-    input UpdateStorefrontVisualPresetInput {
-        channelId: ID!
-        presetId: String
-        desktopLayout: String
-        expectedRevision: String!
-    }
-
     ${commonTypes}
 
     type StorefrontContentBlockTranslation {
@@ -235,14 +228,21 @@ export const adminApiExtensions = gql`
     }
 
     extend type Query {
+        storefrontVisualPreset: StorefrontVisualPreset!
         storefrontContentBlocks: [StorefrontContentBlock!]!
         storefrontContentBlock(id: ID!): StorefrontContentBlock
         storefrontContentSettings: StorefrontContentSettings!
-        storefrontVisualPreset: StorefrontVisualPresetConfig!
+    }
+
+    input UpdateStorefrontVisualPresetInput {
+        channelId: ID!
+        presetId: String
+        desktopLayout: String
+        expectedRevision: String!
     }
 
     extend type Mutation {
-        updateStorefrontVisualPreset(input: UpdateStorefrontVisualPresetInput!): StorefrontVisualPresetConfig!
+        updateStorefrontVisualPreset(input: UpdateStorefrontVisualPresetInput!): StorefrontVisualPreset!
         createStorefrontContentBlock(input: CreateStorefrontContentBlockInput!): StorefrontContentBlock!
         updateStorefrontContentBlock(input: UpdateStorefrontContentBlockInput!): StorefrontContentBlock!
         applyStorefrontContentChanges(input: ApplyStorefrontContentChangesInput!): [StorefrontContentBlock!]!

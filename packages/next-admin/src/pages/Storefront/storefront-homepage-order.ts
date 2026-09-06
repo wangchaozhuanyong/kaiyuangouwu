@@ -43,6 +43,22 @@ export function moveHomepageRow(blocks: StorefrontContentBlock[], key: string, d
     return homepageOrderIds(blocks, rows);
 }
 
+export function dropHomepageRow(
+    blocks: StorefrontContentBlock[],
+    sourceKey: string,
+    targetKey: string,
+    placement: 'before' | 'after',
+) {
+    const rows = storefrontHomepageRows(blocks);
+    const source = rows.find(row => row.key === sourceKey);
+    if (!source || sourceKey === targetKey || !rows.some(row => row.key === targetKey)) return null;
+    const next = rows.filter(row => row !== source);
+    const targetIndex = next.findIndex(row => row.key === targetKey);
+    next.splice(targetIndex + (placement === 'after' ? 1 : 0), 0, source);
+    if (next.every((row, index) => row === rows[index])) return null;
+    return homepageOrderIds(blocks, next);
+}
+
 export function moveCarouselSlide(blocks: StorefrontContentBlock[], id: string, direction: -1 | 1) {
     const rows = storefrontHomepageRows(blocks);
     const carousel = rows.find(row => row.key === 'carousel');

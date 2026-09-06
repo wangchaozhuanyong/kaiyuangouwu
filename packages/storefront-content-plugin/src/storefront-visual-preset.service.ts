@@ -55,6 +55,7 @@ export class StorefrontVisualPresetService {
             throw new UserInputError('请提交需要修改的皮肤或布局');
 
         // Serialize first-time creation as well as updates for the active channel.
+        let supportsWriteLock = true;
         try {
             await this.connection
                 .getRepository(ctx, Channel)
@@ -69,9 +70,12 @@ export class StorefrontVisualPresetService {
             ) {
                 throw error;
             }
+            supportsWriteLock = false;
         }
         const repository = this.connection.getRepository(ctx, StorefrontContentBlock);
         const current = await repository.findOne({
+            // A locking read sees the latest revision even under repeatable-read isolation.
+            ...(supportsWriteLock ? { lock: { mode: 'pessimistic_write' as const } } : {}),
             where: { channelId: ctx.channelId, code: STOREFRONT_VISUAL_PRESET_CODE },
         });
         if (this.config(ctx, current).revision !== input.expectedRevision) {

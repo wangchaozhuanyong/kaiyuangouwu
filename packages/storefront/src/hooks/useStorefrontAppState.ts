@@ -816,6 +816,7 @@ export function useStorefrontAppState() {
     }, [
         api,
         cart,
+        cartState.pending,
         couponAutoSelectionAttemptKey,
         couponAutoSelectionScope,
         customer,

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { StorefrontBlockType } from '../../graphql/storefront.graphql';
 import { newContentBlock } from './storefront-content-utils';
 import {
+    dropHomepageRow,
     homepageOrderIds,
     moveCarouselSlide,
     moveHomepageRow,
@@ -25,6 +26,73 @@ const blocks = [
 ];
 
 describe('homepage carousel management order', () => {
+    it('inserts a dragged floor across multiple rows in either direction without swapping neighbors', () => {
+        const ids = dropHomepageRow(blocks, 'notice', 'custom-a', 'after')!;
+        expect(ids).toEqual([
+            'hero-a',
+            'hero-b',
+            'legal',
+            'hero-c',
+            'products',
+            'custom-a',
+            'notice',
+            'custom-b',
+            'support',
+        ]);
+        expect(dropHomepageRow(blocks, 'custom-b', 'notice', 'before')).toEqual([
+            'custom-b',
+            'notice',
+            'legal',
+            'hero-a',
+            'hero-b',
+            'hero-c',
+            'products',
+            'custom-a',
+            'support',
+        ]);
+        expect(blocks.map(item => item.id)).toEqual([
+            'notice',
+            'hero-a',
+            'legal',
+            'products',
+            'hero-b',
+            'hero-c',
+            'custom-a',
+            'custom-b',
+            'support',
+        ]);
+    });
+
+    it('drags all carousel slides together while retaining their order and hidden content slots', () => {
+        const poster = {
+            ...block('poster', 'CUSTOM', 9),
+            settings: { purpose: 'referral-system-poster' },
+        };
+        const records = [...blocks, poster];
+        for (const placement of ['before', 'after'] as const) {
+            const ids = dropHomepageRow(records, 'carousel', 'custom-b', placement)!;
+            expect(ids[2]).toBe('legal');
+            expect(ids[8]).toBe('support');
+            expect(ids[9]).toBe('poster');
+            expect(new Set(ids)).toEqual(new Set(records.map(item => item.id)));
+            const visibleIds = ids.filter(id => !['legal', 'support', 'poster'].includes(id));
+            const start = visibleIds.indexOf('hero-a');
+            expect(visibleIds.slice(start, start + 3)).toEqual(['hero-a', 'hero-b', 'hero-c']);
+            expect(visibleIds.indexOf('custom-b')).toBe(placement === 'before' ? start + 3 : start - 1);
+        }
+    });
+
+    it('does not save cancelled, unchanged, unknown or non-homepage drag targets', () => {
+        expect(dropHomepageRow(blocks, 'notice', 'notice', 'after')).toBeNull();
+        expect(dropHomepageRow(blocks, 'notice', 'carousel', 'before')).toBeNull();
+        expect(dropHomepageRow(blocks, 'carousel', 'notice', 'after')).toBeNull();
+        expect(dropHomepageRow(blocks, 'missing', 'notice', 'after')).toBeNull();
+        expect(dropHomepageRow(blocks, 'notice', 'missing', 'after')).toBeNull();
+        expect(dropHomepageRow(blocks, 'legal', 'notice', 'after')).toBeNull();
+        expect(dropHomepageRow(blocks, 'notice', 'legal', 'after')).toBeNull();
+        expect(dropHomepageRow([], 'notice', 'carousel', 'before')).toBeNull();
+    });
+
     it('excludes sharing records from floors and preserves their slots in a full reorder', () => {
         const poster = {
             ...block('poster', 'CUSTOM', 1),

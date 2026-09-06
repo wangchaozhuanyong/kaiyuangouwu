@@ -220,7 +220,7 @@ export const GET_SALES_ORDER = gql`
                     fulfillmentHandlerCode
                 }
             }
-            history(options: { take: 100, sort: { createdAt: DESC } }) {
+            history(options: { take: 100, sort: { createdAt: DESC, id: DESC } }) {
                 totalItems
                 items {
                     id

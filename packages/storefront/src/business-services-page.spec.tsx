@@ -165,7 +165,7 @@ describe('business services page', () => {
         linkedBlock.targetValue = 'https://example.com/services';
 
         expect(renderPage([linkedBlock])).toContain('business-services-hero-link');
-        expect(renderPage([linkedBlock])).toContain('访问链接');
+        expect(renderPage([linkedBlock])).toContain('点击前往');
         expect(renderPage([linkedBlock], 'en')).toContain('Open link');
     });
 

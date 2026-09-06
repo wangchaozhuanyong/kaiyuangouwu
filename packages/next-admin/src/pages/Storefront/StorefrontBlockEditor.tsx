@@ -68,7 +68,7 @@ export function StorefrontBlockEditor({
             productOptions: {
                 skip: productPage * productPageSize,
                 take: productPageSize,
-                sort: { name: 'ASC' },
+                sort: { name: 'ASC', id: 'ASC' },
                 filter: deferredProductSearch ? { name: { contains: deferredProductSearch } } : {},
             },
         },

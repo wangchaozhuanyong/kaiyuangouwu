@@ -151,6 +151,30 @@ void test('production PM2 config starts compiled runtime entries without the dev
     assert.doesNotMatch(config, /cli\.js/u);
 });
 
+void test('test payment opt-in is explicit and consistent for both production processes', () => {
+    for (const value of [undefined, 'false', 'true', 'TRUE', '1']) {
+        const env = { ...process.env, VENDURE_RUNTIME_DIR: '/tmp/vendure-runtime-fixture' };
+        delete env.CONTROLLED_TEST_PAYMENTS_ENABLED;
+        if (value !== undefined) env.CONTROLLED_TEST_PAYMENTS_ENABLED = value;
+        const result = spawnSync(
+            process.execPath,
+            [
+                '-e',
+                `const { apps } = require('./deploy/ecosystem.production.config.cjs');
+                process.stdout.write(JSON.stringify(apps.map(app => ({
+                    name: app.name, enabled: app.env.CONTROLLED_TEST_PAYMENTS_ENABLED
+                }))));`,
+            ],
+            { cwd: repositoryRoot, env, encoding: 'utf8' },
+        );
+        assert.equal(result.status, 0, result.stderr);
+        assert.deepEqual(JSON.parse(result.stdout), [
+            { name: 'vendure-worker', enabled: value === 'true' ? 'true' : 'false' },
+            { name: 'vendure-api', enabled: value === 'true' ? 'true' : 'false' },
+        ]);
+    }
+});
+
 void test('production runtime switch rebuilds PM2 definitions for an immutable release', async () => {
     const script = await readFile(path.join(repositoryRoot, 'deploy/switch-production-runtime.sh'), 'utf8');
 

@@ -1,7 +1,8 @@
 import { Headphones, KeyRound, TicketPercent, WandSparkles } from 'lucide-react';
-import type { ComponentType } from 'react';
-import type { RouteState } from '../storefront-router';
-import type { StorefrontContentBlock, StorefrontContentItem, StorefrontLanguage } from '../types';
+import { type ComponentType } from 'react';
+
+import { type RouteState } from '../storefront-router';
+import { type StorefrontContentBlock, type StorefrontContentItem, type StorefrontLanguage } from '../types';
 
 export const clientPluginPlacements = [
     'AFTER_HEADER',

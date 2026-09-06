@@ -1,4 +1,6 @@
 const COMMON_STATUS_LABELS: Readonly<Record<string, string>> = {
+    TestPaymentSettled: '测试已付款',
+    TestSettled: '测试付款成功',
     ALL: '全部状态',
     ACTIVE: '已启用',
     INACTIVE: '未启用',
