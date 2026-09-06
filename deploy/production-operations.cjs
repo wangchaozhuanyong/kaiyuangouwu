@@ -41,6 +41,7 @@ function validateRequest(environment) {
             'backup-two-factor-reviewed',
             'verify-two-factor-backup',
             'verify-security-dependencies',
+            'inspect-storefront-config',
         ].includes(operation),
         'Unsupported production operation',
     );
@@ -252,6 +253,32 @@ function diagnose(request) {
 
 function runLocked(environment = process.env) {
     const request = validateRequest(environment);
+    if (request.operation === 'inspect-storefront-config') {
+        const plan = inspectProductionReleases();
+        assert.equal(
+            plan.markerSha,
+            request.sourceSha,
+            'Storefront inspection requires the deployed source SHA',
+        );
+        const result = spawnSync(
+            '/usr/bin/node',
+            [
+                '--env-file=/var/www/kaiyuangouwu/packages/dev-server/.env',
+                path.join(__dirname, 'storefront-configuration-guard.mjs'),
+                'inspect',
+            ],
+            { encoding: 'utf8', timeout: 240000, maxBuffer: 65536, stdio: ['ignore', 'pipe', 'pipe'] },
+        );
+        // Forward only the allowlisted completed summary, never raw authentication/query errors.
+        assert.equal(result.status, 0, 'Read-only storefront configuration inspection failed');
+        assert.ok(
+            result.stdout.endsWith('STOREFRONT_CONFIGURATION_INSPECT_OK\n'),
+            'Storefront evidence is incomplete',
+        );
+        process.stdout.write(result.stdout);
+        process.stdout.write('PRODUCTION_OPERATIONS_COMPLETE operation=inspect-storefront-config\n');
+        return;
+    }
     if (request.operation === 'verify-security-dependencies') {
         const plan = inspectProductionReleases();
         assert.equal(
