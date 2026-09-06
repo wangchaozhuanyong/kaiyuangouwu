@@ -239,6 +239,7 @@ export function CategoryPage() {
         <main className="page category-page">
             <div className="category-navigation-shell">
                 <header className="topbar category-topbar">
+                    <h1 className="category-mobile-heading">{isZh ? '商品' : 'Products'}</h1>
                     <button
                         className="search-trigger"
                         type="button"

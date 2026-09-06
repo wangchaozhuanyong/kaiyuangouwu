@@ -1,0 +1,508 @@
+/* Decorative account artwork has a fixed palette, independent of the store skin. */
+.page.account-page {
+    background: #fafafd;
+}
+.account-hero {
+    position: relative;
+    margin: 0;
+    padding: 28px 18px 26px;
+    overflow: hidden;
+    border-radius: 0 0 50% 50% / 0 0 12px 12px;
+    background: #a8a8ee url('../assets/ui/account-refraction.webp') center / cover no-repeat;
+    color: #18145b;
+}
+.account-hero-content {
+    position: relative;
+    min-width: 0;
+}
+.account-hero-settings {
+    position: absolute;
+    top: -16px;
+    right: -8px;
+    display: grid;
+    width: 44px;
+    height: 44px;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: inherit;
+}
+.account-hero-settings svg {
+    width: 23px;
+    height: 23px;
+    stroke-width: 1.8;
+}
+.account-hero-identity {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    max-width: calc(100% - 48px);
+    min-width: 0;
+}
+.account-hero-avatar-wrap {
+    flex-shrink: 0;
+}
+.account-hero-avatar-button {
+    display: block;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+}
+.account-hero-avatar {
+    display: grid;
+    width: 64px;
+    height: 64px;
+    place-items: center;
+    overflow: hidden;
+    border: 2px solid rgb(255 255 255 / 90%);
+    border-radius: 50%;
+    background: #dddafb;
+    color: #312679;
+    font-size: 26px;
+    font-weight: 600;
+}
+.account-hero-details {
+    flex: 1;
+    min-width: 0;
+}
+.account-hero-name {
+    display: flex;
+    align-items: center;
+    margin: 0;
+    color: inherit;
+    font-size: 20px;
+    font-weight: 650;
+    line-height: 1.4;
+}
+.account-hero-profile {
+    display: inline-flex;
+    min-height: 32px;
+    max-width: 100%;
+    align-items: center;
+    gap: 3px;
+    padding: 0;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: inherit;
+    font-size: 12px;
+    text-align: left;
+}
+.account-hero-profile svg {
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+}
+.account-hero-meta {
+    margin-top: 6px;
+    color: #302967;
+    font-size: 12px;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+}
+.account-hero-assets {
+    gap: 6px;
+    margin-top: 28px;
+}
+.account-hero-asset {
+    display: flex;
+    min-width: 0;
+    min-height: 62px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 8px;
+    padding: 3px 0;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: inherit;
+}
+.account-hero-asset-icon {
+    position: relative;
+    display: grid;
+    width: 32px;
+    height: 32px;
+    place-items: center;
+    color: #fff;
+    filter: drop-shadow(0 1px 1px rgb(95 70 166 / 38%));
+}
+.account-hero-asset-icon svg {
+    width: 26px;
+    height: 26px;
+    stroke-width: 1.8;
+}
+.account-hero-asset-label {
+    max-width: 100%;
+    color: inherit;
+    font-size: 12px;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+.account-hero-unread {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 6px;
+    height: 6px;
+    border: 1px solid #fff;
+    border-radius: 50%;
+    background: #654bd3;
+}
+.account-hero-guest .account-hero-identity {
+    max-width: 100%;
+}
+.account-hero-guest .account-hero-name {
+    font-size: 18px;
+}
+.account-hero-guest-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 24px;
+}
+.account-hero-guest-actions button {
+    min-height: 44px;
+    padding: 8px 12px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+}
+.account-hero-signin {
+    border: 1px solid #443094;
+    background: #443094;
+    color: #fff;
+}
+.account-hero-register {
+    border: 1px solid #615397;
+    background: rgb(255 255 255 / 22%);
+    color: #221956;
+}
+.account-hero :is(.account-hero-asset, .account-hero-settings, .account-hero-profile, .account-hero-register):hover {
+    background: rgb(255 255 255 / 18%);
+}
+.account-hero button:focus-visible {
+    outline: 2px solid #332570;
+    outline-offset: 3px;
+}
+.account-page .account-section {
+    margin: 0 20px;
+    padding: 18px 0;
+    border: 0;
+    border-bottom: 1px solid #e4e5ef;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+}
+.account-page .account-section > header,
+.account-page .account-section .section-header {
+    min-height: 24px;
+    margin: 0 0 14px;
+}
+.account-page .account-section .section-header-icon-pill {
+    display: none;
+}
+.account-page .account-section .section-header-action-btn {
+    min-height: 24px;
+}
+.account-page .account-section > header:not(.section-header) {
+    margin-bottom: 6px;
+}
+.account-page .account-section h2 {
+    margin: 0;
+    color: #20203c;
+    font-size: 17px;
+    font-weight: 650;
+    line-height: 1.4;
+}
+.account-page .account-order-shortcuts {
+    margin-top: 6px;
+}
+.account-page .account-order-shortcuts > button {
+    min-height: 72px;
+    gap: 10px;
+}
+.account-page .account-order-shortcuts > button > span,
+.account-page .account-order-shortcuts > button > span svg {
+    width: 26px;
+    height: 26px;
+}
+.account-page .account-order-shortcuts > button small {
+    font-size: 12px;
+}
+.account-logistics-empty {
+    display: flex;
+    min-height: 52px;
+    align-items: center;
+    gap: 16px;
+    color: #20203c;
+    font-size: 13px;
+}
+.account-logistics-empty > svg {
+    flex-shrink: 0;
+    width: 42px;
+    height: 42px;
+    padding: 8px;
+    border-radius: 16px;
+    background: #ece8fc;
+    color: #7553f4;
+    stroke-width: 1.8;
+}
+.account-logistics-empty small {
+    display: block;
+    margin-top: 4px;
+    color: #7b8196;
+    font-size: 12px;
+    line-height: 1.5;
+}
+.account-page .account-section .account-services-title {
+    margin-bottom: 16px;
+}
+.account-page .account-service-grid {
+    gap: 14px 4px;
+}
+.account-page .account-service-grid > button {
+    min-height: 68px;
+    gap: 8px;
+}
+.account-page .account-service-grid > button > span {
+    width: 38px;
+    height: 38px;
+    border-radius: 15px;
+}
+.account-page .account-service-grid > button > span svg {
+    width: 24px;
+    height: 24px;
+    stroke-width: 1.8;
+}
+.account-page .account-service-grid > button > b {
+    color: #303047;
+    font-size: 12px;
+}
+.account-page .legal-footer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    column-gap: 12px;
+    margin-inline: 20px;
+    padding-top: 10px;
+    background: transparent;
+}
+.account-page .legal-footer strong {
+    color: #6d7286;
+    font-size: 12px;
+    font-weight: 400;
+}
+.account-page .legal-footer nav {
+    margin: 0;
+}
+.account-page .legal-footer nav button {
+    min-height: 28px;
+    color: #6d7286;
+    text-decoration: none;
+}
+.account-page .legal-footer > span {
+    flex-basis: 100%;
+    margin-top: 4px;
+    color: #afb0ca;
+    font-size: 11px;
+    line-height: 15px;
+    letter-spacing: 0.08em;
+}
+
+/* Invitation and catalog surfaces continue to follow the active storefront theme. */
+.referral-invite {
+    min-width: 0;
+    align-self: start;
+    padding: 24px 20px 20px;
+    border-radius: 20px;
+    background: var(--accent-soft);
+    color: var(--text);
+}
+.referral-invite-title {
+    margin: 0;
+    color: var(--accent-ink);
+    font-size: 23px;
+    font-weight: 700;
+    line-height: 1.4;
+    letter-spacing: -0.02em;
+}
+.referral-invite-description {
+    margin: 10px 0 0;
+    color: color-mix(in srgb, var(--text) 75%, var(--muted));
+    font-size: 13px;
+    line-height: 1.8;
+}
+.referral-invite-code {
+    margin-top: 22px;
+    padding-top: 18px;
+    border-top: 1px solid color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.referral-invite-code-label {
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+}
+.referral-invite-code-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 4px;
+}
+.referral-invite-code-value {
+    flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    color: var(--accent-ink);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 25px;
+    font-weight: 700;
+    line-height: 1.4;
+    letter-spacing: 0.12em;
+}
+.referral-invite-copy {
+    display: grid;
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--accent-ink);
+}
+.referral-invite-copy svg {
+    width: 20px;
+    height: 20px;
+}
+.referral-invite-url {
+    margin: 6px 0 0;
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.6;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.referral-invite-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 22px;
+}
+.referral-invite-actions button {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    min-height: 46px;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 8px;
+    border: 0;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+}
+.referral-invite-actions svg {
+    flex-shrink: 0;
+}
+.referral-invite-share {
+    background: var(--accent);
+    color: white;
+}
+.referral-invite-share:hover {
+    background: var(--accent-hover);
+}
+.referral-invite-poster {
+    background: rgb(255 255 255 / 65%);
+    color: var(--accent-ink);
+}
+.referral-invite-poster:hover,
+.referral-invite-copy:hover {
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.referral-invite button:focus-visible {
+    outline: 2px solid var(--accent-ink);
+    outline-offset: 3px;
+}
+
+.category-mobile-heading {
+    display: none;
+}
+@media (max-width: 1023px) {
+    .category-navigation-shell > .topbar.category-topbar {
+        height: auto;
+        min-height: 108px;
+        padding: 14px 10px 12px;
+        gap: 10px;
+        border-bottom: 0;
+        background: var(--accent-soft);
+    }
+    .category-mobile-heading {
+        display: block;
+        margin: 0;
+        padding-inline: 4px;
+        color: var(--text);
+        font-size: 18px;
+        font-weight: 700;
+        line-height: 24px;
+    }
+    .category-topbar > .search-trigger {
+        height: 48px;
+        gap: 8px;
+        padding: 5px 5px 5px 12px;
+        border-color: color-mix(in srgb, var(--accent) 16%, var(--paper));
+        border-radius: 12px;
+        background: var(--paper);
+        box-shadow: none;
+    }
+    .category-topbar .search-trigger-icon {
+        width: 20px;
+        height: 24px;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+    }
+    .category-topbar .search-trigger-icon svg {
+        width: 19px;
+        height: 19px;
+    }
+    .category-topbar .search-trigger-placeholder {
+        font-size: 13px;
+    }
+    .category-topbar .search-trigger-action {
+        height: 36px;
+        padding-inline: 16px;
+        border-radius: 8px;
+    }
+    .category-topbar .search-trigger:focus-visible {
+        outline: 2px solid var(--accent-ink);
+        outline-offset: 2px;
+    }
+}
+@media (min-width: 1024px) {
+    .account-page .account-section {
+        margin: 0;
+    }
+    .account-hero {
+        padding: 32px 28px;
+        border-radius: 20px;
+        background-size: auto 100%;
+        background-position: right center;
+    }
+    .account-hero-identity {
+        max-width: 640px;
+    }
+    .account-hero-assets {
+        max-width: 640px;
+    }
+    .referral-invite {
+        padding: 28px;
+    }
+}
