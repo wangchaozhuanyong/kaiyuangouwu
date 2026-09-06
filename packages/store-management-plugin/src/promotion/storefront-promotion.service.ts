@@ -26,9 +26,9 @@ interface StorefrontChannelFields {
 }
 
 const DEFAULT_PROMOTION_BRAND = {
-    zh: 'MOYAO AI｜模钥',
-    en: 'MOYAO AI',
-    logoUrl: '/storefront/moyao-ai/icon.webp',
+    zh: '店铺',
+    en: 'Store',
+    logoUrl: '/storefront/neutral-store.png',
 } as const;
 
 @Injectable()

@@ -126,6 +126,12 @@ export function useStorefrontAppState() {
         }
     }, []);
 
+    const visualConfig = useStorefrontVisualPreset(
+        api,
+        market,
+        vendureLanguageCode,
+        storefrontContextResolved,
+    );
     const queryContext = { api, market, language, vendureLanguageCode, storefrontContextResolved };
 
     const {
@@ -180,7 +186,6 @@ export function useStorefrontAppState() {
         }),
         [configQuery.data],
     );
-    useStorefrontVisualPreset(api, market, languageCodeFor(language));
     configureMoneyDisplay({
         displayCurrencyCode,
         cnyPerUsdtRate: configQuery.data?.currencyConfiguration?.cnyPerUsdtRate ?? null,
@@ -1097,6 +1102,7 @@ export function useStorefrontAppState() {
     );
 
     const storefrontContextValue = {
+        desktopLayout: visualConfig.desktopLayout,
         route,
         api,
         products,

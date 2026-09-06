@@ -1,9 +1,17 @@
-import { Kind, TypeNode } from 'graphql';
+import { DocumentNode, Kind, ObjectTypeExtensionNode, TypeNode } from 'graphql';
 import { describe, expect, it } from 'vitest';
 
 import { adminApiExtensions, shopApiExtensions } from './api-extensions';
 
 describe('store management API extensions', () => {
+    it('adds the channel-scoped branding preview only to the Admin API', () => {
+        const adminFields = queryExtension(adminApiExtensions).fields ?? [];
+        expect(adminFields.filter(field => field.name.value === 'storefrontPreviewBranding')).toHaveLength(1);
+        expect(queryExtension(shopApiExtensions).fields?.map(field => field.name.value)).not.toContain(
+            'storefrontPreviewBranding',
+        );
+    });
+
     it('exposes optional English locks on both profile update inputs', () => {
         for (const name of ['UpdateStoreProfileInput', 'UpdateMyStoreProfileInput']) {
             const definition = adminApiExtensions.definitions.find(
@@ -146,9 +154,7 @@ describe('store management API extensions', () => {
                 definition.kind === Kind.INPUT_OBJECT_TYPE_DEFINITION &&
                 definition.name.value === 'StoreCouponLedgerListOptions',
         );
-        const query = adminApiExtensions.definitions.find(
-            definition => definition.kind === Kind.OBJECT_TYPE_EXTENSION && definition.name.value === 'Query',
-        );
+        const query = queryExtension(adminApiExtensions);
 
         expect(ledgerOptions?.kind).toBe(Kind.INPUT_OBJECT_TYPE_DEFINITION);
         expect(legacyOptions).toBeUndefined();
@@ -175,9 +181,7 @@ describe('store management API extensions', () => {
     });
 
     it('exposes an admin query for a selected customer referral wallets', () => {
-        const query = adminApiExtensions.definitions.find(
-            definition => definition.kind === Kind.OBJECT_TYPE_EXTENSION && definition.name.value === 'Query',
-        );
+        const query = queryExtension(adminApiExtensions);
 
         expect(query?.kind).toBe(Kind.OBJECT_TYPE_EXTENSION);
         if (query?.kind !== Kind.OBJECT_TYPE_EXTENSION) {
@@ -232,9 +236,7 @@ describe('store management API extensions', () => {
     });
 
     it('exposes scoped announcements and Channel USDT administration only through the Admin API', () => {
-        const adminQuery = adminApiExtensions.definitions.find(
-            definition => definition.kind === Kind.OBJECT_TYPE_EXTENSION && definition.name.value === 'Query',
-        );
+        const adminQuery = queryExtension(adminApiExtensions);
         const adminMutation = adminApiExtensions.definitions.find(
             definition =>
                 definition.kind === Kind.OBJECT_TYPE_EXTENSION && definition.name.value === 'Mutation',
@@ -254,9 +256,7 @@ describe('store management API extensions', () => {
                 definition.kind === Kind.INPUT_OBJECT_TYPE_DEFINITION &&
                 definition.name.value === 'UpdateSystemAnnouncementInput',
         );
-        const shopQuery = shopApiExtensions.definitions.find(
-            definition => definition.kind === Kind.OBJECT_TYPE_EXTENSION && definition.name.value === 'Query',
-        );
+        const shopQuery = queryExtension(shopApiExtensions);
 
         if (
             adminQuery?.kind !== Kind.OBJECT_TYPE_EXTENSION ||
@@ -306,4 +306,14 @@ describe('store management API extensions', () => {
 function namedType(type: TypeNode): string {
     if (type.kind === Kind.NAMED_TYPE) return type.name.value;
     return namedType(type.type);
+}
+
+// GraphQL merges every extension of Query, including imported feature schemas.
+function queryExtension(document: DocumentNode): ObjectTypeExtensionNode {
+    const extensions = document.definitions.filter(
+        (definition): definition is ObjectTypeExtensionNode =>
+            definition.kind === Kind.OBJECT_TYPE_EXTENSION && definition.name.value === 'Query',
+    );
+    if (!extensions.length) throw new Error('Query extension is missing');
+    return { ...extensions[0], fields: extensions.flatMap(extension => extension.fields ?? []) };
 }

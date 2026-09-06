@@ -1,4 +1,12 @@
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
+
+import {
+    authOriginalImageUrl,
+    AuthVisual,
+    authVisualStyle,
+} from '../../storefront-content-plugin/src/shared/auth-visual';
 
 import {
     authVisualAccentColor,
@@ -105,5 +113,39 @@ describe('managed auth visuals', () => {
 
         expect(authVisualAccentColor(content, 'register')).toBe('#fdba74');
         expect(authVisualOverlayColor(content)).toBe('#16051f');
+    });
+});
+
+describe('shared auth presentation', () => {
+    it('replaces a cropping preset with the existing proportional preset', () => {
+        const url = new URL(
+            authOriginalImageUrl(
+                'https://example.test/assets/preview/banner.jpg?preset=storefront-hero-960&format=jpg&q=75',
+            ),
+        );
+        expect(url.searchParams.get('preset')).toBe('storefront-original-preview');
+        expect(url.searchParams.get('q')).toBe('90');
+        expect(authOriginalImageUrl('/assets/source/brand.svg')).toBe('/assets/source/brand.svg');
+        expect(authOriginalImageUrl('https://example.test/banner.jpg')).toBe(
+            'https://example.test/banner.jpg',
+        );
+    });
+    it('uses configured colors and inherits only unset fields without restoring deleted copy', () => {
+        const content = { ...block('AUTH_LOGIN'), title: '', subtitle: '', ctaLabel: '', items: [] };
+        const markup = renderToStaticMarkup(createElement(AuthVisual, { content, language: 'zh' }));
+        expect(markup).not.toContain('<h2');
+        expect(markup).not.toContain('<p');
+        expect(markup).not.toContain('MOYAO');
+        expect(authVisualStyle(content)).toMatchObject({
+            '--auth-visual-background': '#010203',
+            '--auth-visual-foreground': '#fefefe',
+            '--auth-accent': '#abcdef',
+        });
+        expect(
+            authVisualStyle({ ...content, backgroundColor: null, textColor: null, settings: {} }),
+        ).toMatchObject({
+            '--auth-visual-background': 'var(--auth-store-background, var(--skin-background, #f1f5f9))',
+            '--auth-accent': 'var(--accent, #635bff)',
+        });
     });
 });

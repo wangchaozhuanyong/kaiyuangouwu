@@ -1,4 +1,4 @@
-import { STOREFRONT_LOGO_IMAGE } from './storefront-images';
+import { NEUTRAL_STOREFRONT_IMAGE } from './storefront-images';
 import { DEFAULT_STOREFRONT_NAMES } from './storefront-utils';
 
 export type RouteSkeletonVariant =
@@ -153,7 +153,7 @@ export function RouteTransitionLoader({
             <div className="route-transition-card" aria-hidden="true">
                 <span className="route-transition-mark">
                     <img
-                        src={logoUrl || STOREFRONT_LOGO_IMAGE}
+                        src={logoUrl || NEUTRAL_STOREFRONT_IMAGE}
                         alt=""
                         width="160"
                         height="120"

@@ -12,7 +12,9 @@ import { LockNotSupportedOnGivenDriverError } from 'typeorm';
 import { StorefrontContentBlock } from './entities/storefront-content-block.entity';
 import { StorefrontContentChangedEvent } from './storefront-content-changed.event';
 import {
+    isStorefrontDesktopLayout,
     isStorefrontVisualPresetId,
+    normalizeStorefrontDesktopLayout,
     normalizeStorefrontVisualPreset,
     STOREFRONT_VISUAL_PRESET_CODE,
     StorefrontVisualPresetConfig,
@@ -20,7 +22,8 @@ import {
 
 export interface UpdateStorefrontVisualPresetInput {
     channelId: ID;
-    presetId: string;
+    presetId?: string;
+    desktopLayout?: string;
     expectedRevision: string;
 }
 
@@ -44,7 +47,12 @@ export class StorefrontVisualPresetService {
     ): Promise<StorefrontVisualPresetConfig> {
         if (String(ctx.channelId) !== String(input.channelId))
             throw new UserInputError('店铺已切换，请重新载入皮肤设置');
-        if (!isStorefrontVisualPresetId(input.presetId)) throw new UserInputError('请选择已发布的店铺皮肤');
+        if (input.presetId !== undefined && !isStorefrontVisualPresetId(input.presetId))
+            throw new UserInputError('请选择已发布的店铺皮肤');
+        if (input.desktopLayout !== undefined && !isStorefrontDesktopLayout(input.desktopLayout))
+            throw new UserInputError('请选择已发布的电脑端布局');
+        if (input.presetId === undefined && input.desktopLayout === undefined)
+            throw new UserInputError('请提交需要修改的皮肤或布局');
 
         // Serialize first-time creation as well as updates for the active channel.
         let supportsWriteLock = true;
@@ -73,7 +81,11 @@ export class StorefrontVisualPresetService {
         if (this.config(ctx, current).revision !== input.expectedRevision) {
             throw new UserInputError('皮肤设置已被其他管理员更新，请刷新后重试');
         }
-        if (current && current.settings?.presetId === input.presetId) {
+        if (
+            current &&
+            (input.presetId === undefined || current.settings?.presetId === input.presetId) &&
+            (input.desktopLayout === undefined || current.settings?.desktopLayout === input.desktopLayout)
+        ) {
             return this.config(ctx, current);
         }
         const block =
@@ -91,7 +103,11 @@ export class StorefrontVisualPresetService {
                 translations: [],
                 items: [],
             });
-        block.settings = { presetId: input.presetId };
+        block.settings = {
+            ...block.settings,
+            ...(input.presetId !== undefined ? { presetId: input.presetId } : {}),
+            ...(input.desktopLayout !== undefined ? { desktopLayout: input.desktopLayout } : {}),
+        };
         // Keep revisions strictly increasing even for two saves in the same millisecond.
         block.updatedAt = new Date(Math.max(Date.now(), (current?.updatedAt.getTime() ?? 0) + 1));
         const saved = await repository.save(block);
@@ -103,6 +119,7 @@ export class StorefrontVisualPresetService {
         return {
             channelId: String(ctx.channelId),
             presetId: normalizeStorefrontVisualPreset(block?.settings?.presetId),
+            desktopLayout: normalizeStorefrontDesktopLayout(block?.settings?.desktopLayout),
             revision: block ? `${String(block.id)}:${block.updatedAt.toISOString()}` : 'default',
         };
     }

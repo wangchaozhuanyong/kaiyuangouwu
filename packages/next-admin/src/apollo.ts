@@ -26,7 +26,7 @@ export const getServerHealthUrl = () => {
 
 const getAuthToken = () => sessionStorage.getItem(AUTH_TOKEN_KEY) || localStorage.getItem(AUTH_TOKEN_KEY);
 
-const getActiveChannelToken = () => localStorage.getItem(ACTIVE_CHANNEL_TOKEN_KEY);
+export const getActiveChannelToken = () => localStorage.getItem(ACTIVE_CHANNEL_TOKEN_KEY);
 
 export const hasActiveChannelSelection = () => Boolean(getActiveChannelToken());
 

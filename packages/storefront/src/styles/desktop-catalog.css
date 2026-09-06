@@ -619,9 +619,7 @@
         min-height: 0;
         padding: 0;
     }
-    .home-page.is-embedded .home-topbar,
-    .home-page.is-embedded .storefront-tagline,
-    .home-page.is-embedded .storefront-description {
+    .home-page.is-embedded .home-topbar {
         display: none;
     }
     .desktop-catalog-footer {

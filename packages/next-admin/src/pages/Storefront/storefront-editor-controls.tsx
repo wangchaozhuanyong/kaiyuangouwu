@@ -87,7 +87,7 @@ export function Field({ label, children }: { label: string; children: React.Reac
 
 export function ColorInput({ value, onChange }: { value: string; onChange: (value: string) => void }) {
     return (
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
             <input
                 type="color"
                 value={/^#[0-9a-f]{6}$/i.test(value) ? value : '#ffffff'}
@@ -97,8 +97,17 @@ export function ColorInput({ value, onChange }: { value: string; onChange: (valu
             <input
                 value={value}
                 onChange={event => onChange(event.target.value)}
-                className={`${inputClass} font-mono`}
+                placeholder="继承"
+                className={`${inputClass} min-w-0 flex-1 font-mono`}
             />
+            <button
+                type="button"
+                onClick={() => onChange('')}
+                disabled={!value}
+                className="shrink-0 text-xs text-blue-700 disabled:text-slate-400"
+            >
+                恢复继承
+            </button>
         </div>
     );
 }

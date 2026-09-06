@@ -1,13 +1,12 @@
 import { useMutation, useQuery } from '@apollo/client/react';
-import { Eye, Monitor, Palette, RefreshCw, RotateCcw, Smartphone, X } from 'lucide-react';
+import { Monitor, Smartphone, X } from 'lucide-react';
 import { useState } from 'react';
-
 import {
+    storefrontDesktopLayouts,
     storefrontVisualPresets,
     type StorefrontVisualPresetConfig,
-    type StorefrontVisualPresetId,
 } from '../../../../storefront-content-plugin/src/visual-presets';
-import { channelRequestContext } from '../../apollo';
+import { channelRequestContext, getActiveChannelToken } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
@@ -23,198 +22,196 @@ import { storefrontVisualPreviewDocument } from './storefront-visual-preview';
 
 export function StorefrontVisualPresetPanel() {
     const query = useQuery<StorefrontVisualPresetResult>(STOREFRONT_VISUAL_PRESET_QUERY, {
-        fetchPolicy: 'network-only',
+        fetchPolicy: 'no-cache',
         notifyOnNetworkStatusChange: true,
     });
-    const [draft, setDraft] = useState<StorefrontVisualPresetConfig | null>(null);
-    const [notice, setNotice] = useState('');
-    const [actionError, setActionError] = useState('');
-    const [preview, setPreview] = useState<'mobile' | 'desktop' | null>(null);
-    const { hasAnyPermission } = useAdminPermissions();
-    const canEdit = hasAnyPermission(['UpdateStorefrontContent']);
     const [save, mutation] = useMutation<{ updateStorefrontVisualPreset: StorefrontVisualPresetConfig }>(
         UPDATE_STOREFRONT_VISUAL_PRESET_MUTATION,
+        { fetchPolicy: 'no-cache' },
     );
-    const source = query.data?.storefrontVisualPreset;
+    const { hasAnyPermission } = useAdminPermissions();
+    const [preview, setPreview] = useState<'mobile' | 'desktop' | null>(null);
+    const [draft, setDraft] = useState<StorefrontVisualPresetConfig | null>(null);
+    const [notice, setNotice] = useState('');
+    const [error, setError] = useState('');
+    const [feedbackChannel, setFeedbackChannel] = useState<string | null>(null);
     const channel = query.data?.activeChannel;
-    const consistent = source && channel && source.channelId === channel.id;
-    const selected = consistent && draft?.channelId === source.channelId ? draft : source;
-    const dirty = Boolean(consistent && selected && selected.presetId !== source.presetId);
-    const busy = mutation.loading || query.loading;
-    const disabled = !canEdit || !consistent || busy || Boolean(query.error);
     const storeName = channel ? getChannelDisplayName(channel.code) : '当前店铺';
-    useUnsavedChangesWarning(dirty || mutation.loading, '皮肤选择尚未应用，离开后将放弃本次选择。');
-
-    const apply = async (presetId: StorefrontVisualPresetId) => {
-        if (disabled || !selected || !source || !channel) return;
+    const source = query.data?.storefrontVisualPreset;
+    const consistent = Boolean(
+        source &&
+        channel &&
+        source.channelId === channel.id &&
+        (!getActiveChannelToken() || channel.token === getActiveChannelToken()),
+    );
+    const selected = consistent && draft?.channelId === source?.channelId ? draft : source;
+    const dirty = Boolean(
+        consistent &&
+        selected &&
+        source &&
+        (selected.presetId !== source.presetId || selected.desktopLayout !== source.desktopLayout),
+    );
+    const busy = query.loading || mutation.loading;
+    const disabled =
+        !consistent || busy || Boolean(query.error) || !hasAnyPermission(['UpdateStorefrontContent']);
+    useUnsavedChangesWarning(dirty || mutation.loading, '皮肤或布局选择尚未保存，离开后将放弃本次选择。');
+    const reload = async () => {
+        const activeToken = getActiveChannelToken();
+        setFeedbackChannel(channel?.id ?? null);
+        setError('');
         setNotice('');
-        setActionError('');
-        let saved: StorefrontVisualPresetConfig;
-        try {
-            const result = await save({
-                context: channelRequestContext(channel.token),
-                variables: {
-                    input: { channelId: channel.id, presetId, expectedRevision: selected.revision },
-                },
-            });
-            const applied = result.data?.updateStorefrontVisualPreset;
-            if (!applied || applied.channelId !== channel.id || applied.presetId !== presetId)
-                throw new Error('保存结果不一致，请刷新后检查');
-            saved = applied;
-        } catch (error) {
-            setActionError(toUserFacingError(error, '皮肤保存失败，请刷新后重试'));
-            return;
-        }
-
-        // The mutation confirms persistence; a later read failure must not restore the old selection.
-        query.updateQuery((_previous, { complete, previousData }) => {
-            if (complete && previousData.activeChannel.id === saved.channelId) {
-                return { ...previousData, storefrontVisualPreset: saved };
-            }
-        });
-        setDraft(null);
-        setNotice(
-            `“${storeName}”已应用${storefrontVisualPresets.find(item => item.id === presetId)?.name}。`,
-        );
         try {
             await query.refetch();
-        } catch (error) {
-            setActionError(
-                `皮肤已保存，但重新读取失败。${toUserFacingError(error, '请点击重新载入进行确认')}`,
-            );
+            if (getActiveChannelToken() === activeToken) setDraft(null);
+        } catch (reason) {
+            if (getActiveChannelToken() === activeToken)
+                setError(toUserFacingError(reason, '配置读取失败，请重试'));
         }
     };
-
+    const apply = async () => {
+        if (disabled || !dirty || !source || !selected || !channel) return;
+        const token = channel.token;
+        const activeToken = getActiveChannelToken();
+        const stillCurrent = () => getActiveChannelToken() === activeToken;
+        setFeedbackChannel(channel.id);
+        setError('');
+        setNotice('');
+        try {
+            const result = await save({
+                context: channelRequestContext(token),
+                variables: {
+                    input: {
+                        channelId: channel.id,
+                        expectedRevision: selected.revision,
+                        ...(selected.presetId !== source.presetId ? { presetId: selected.presetId } : {}),
+                        ...(selected.desktopLayout !== source.desktopLayout
+                            ? { desktopLayout: selected.desktopLayout }
+                            : {}),
+                    },
+                },
+            });
+            if (!stillCurrent()) return;
+            const saved = result.data?.updateStorefrontVisualPreset;
+            if (
+                !saved ||
+                saved.channelId !== channel.id ||
+                saved.presetId !== selected.presetId ||
+                saved.desktopLayout !== selected.desktopLayout
+            )
+                throw new Error('保存结果不一致，请重新读取配置');
+            setDraft(saved);
+            setNotice('已保存到当前店铺。');
+            try {
+                const fresh = await query.refetch();
+                if (!stillCurrent()) return;
+                if (fresh.data?.storefrontVisualPreset.channelId !== channel.id)
+                    throw new Error('店铺已切换');
+                setDraft(null);
+            } catch (reason) {
+                if (stillCurrent())
+                    setError(toUserFacingError(reason, '配置已保存，重新读取失败，请刷新确认'));
+            }
+        } catch (reason) {
+            if (stillCurrent()) setError(toUserFacingError(reason, '保存失败，当前选择已保留'));
+        }
+    };
     return (
-        <section
-            className="rounded-xl border border-slate-200 bg-white p-5 xl:col-span-2"
-            aria-label="店铺皮肤"
-        >
-            <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                    <h2 className="flex items-center gap-2 text-base font-bold text-slate-900">
-                        <Palette className="h-4 w-4" />
-                        店铺皮肤
-                        <FeatureHelpButton topic="storefront.visual-preset" title="店铺皮肤" />
-                    </h2>
-                    <p className="mt-1 text-xs text-slate-500">
-                        为“{storeName}”选择商城视觉风格。选择后点击应用，仅影响当前店铺。
-                    </p>
-                </div>
+        <section className="rounded-xl border border-slate-200 bg-white p-5" aria-label="皮肤与电脑端布局">
+            <div className="flex items-center justify-between gap-3">
+                <h2 className="flex items-center gap-2 text-base font-bold text-slate-900">
+                    皮肤与电脑端布局
+                    <FeatureHelpButton topic="storefront.decoration" title="皮肤与电脑端布局" />
+                </h2>
                 <button
                     type="button"
-                    className="flex items-center gap-1 text-xs text-slate-600 disabled:opacity-50"
                     disabled={busy}
-                    onClick={() => {
-                        setDraft(null);
-                        setNotice('');
-                        setActionError('');
-                        void query.refetch().catch(() => undefined);
-                    }}
+                    onClick={() => void reload()}
+                    className="text-sm text-blue-700 disabled:opacity-40"
                 >
-                    <RefreshCw className="h-3.5 w-3.5" />
-                    重新载入
+                    重新读取
                 </button>
             </div>
-            {(actionError || query.error) && (
-                <p role="alert" className="mt-3 text-sm text-red-700">
-                    {actionError || toUserFacingError(query.error, '皮肤配置加载失败，请重新载入')}
+            <p className="mt-2 text-xs text-slate-500">
+                各店拥有相同选项，选择仅保存到当前店铺。区块颜色优先于品牌配色，未设置时继承皮肤。
+            </p>
+            {query.loading && (
+                <p role="status" className="mt-3 text-sm">
+                    正在读取当前店铺配置…
                 </p>
             )}
-            {notice && (
+            {((error && feedbackChannel === channel?.id) || query.error) && (
+                <p role="alert" className="mt-3 text-sm text-red-700">
+                    {(feedbackChannel === channel?.id && error) ||
+                        toUserFacingError(query.error, '配置加载失败')}
+                </p>
+            )}
+            {notice && consistent && feedbackChannel === channel?.id && (
                 <p role="status" className="mt-3 text-sm text-emerald-700">
                     {notice}
                 </p>
             )}
-            {query.loading && !source ? (
-                <p role="status" className="py-6 text-sm text-slate-500">
-                    正在加载店铺皮肤…
-                </p>
-            ) : (
-                <>
-                    <div
-                        className="mt-4 grid gap-3 sm:grid-cols-2"
-                        role="radiogroup"
-                        aria-label="选择店铺皮肤"
-                    >
-                        {storefrontVisualPresets.map(preset => (
-                            <label
-                                key={preset.id}
-                                className={`flex cursor-pointer gap-3 rounded-xl border p-4 ${selected?.presetId === preset.id ? 'border-blue-600 bg-blue-50' : 'border-slate-200'}`}
-                            >
-                                <input
-                                    type="radio"
-                                    name="storefront-visual-preset"
-                                    value={preset.id}
-                                    checked={selected?.presetId === preset.id}
-                                    disabled={disabled}
-                                    onChange={() => {
-                                        if (source) setDraft({ ...source, presetId: preset.id });
-                                        setNotice('');
-                                        setActionError('');
-                                    }}
-                                />
-                                <span className="min-w-0 flex-1">
-                                    <span className="flex items-center justify-between gap-2 font-bold text-slate-900">
-                                        {preset.name}
-                                        {source?.presetId === preset.id && (
-                                            <small className="font-normal text-slate-500">当前使用</small>
-                                        )}
+            {(['presetId', 'desktopLayout'] as const).map(field => (
+                <fieldset key={field} disabled={disabled} className="mt-4">
+                    <legend className="text-sm font-bold">
+                        {field === 'presetId' ? '皮肤' : '电脑端布局'}
+                    </legend>
+                    <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                        {(field === 'presetId' ? storefrontVisualPresets : storefrontDesktopLayouts).map(
+                            option => (
+                                <label
+                                    key={option.id}
+                                    className="flex gap-3 rounded-lg border border-slate-200 p-3"
+                                >
+                                    <input
+                                        type="radio"
+                                        name={field}
+                                        value={option.id}
+                                        checked={consistent && selected?.[field] === option.id}
+                                        onChange={() => {
+                                            if (selected) setDraft({ ...selected, [field]: option.id });
+                                            setNotice('');
+                                            setError('');
+                                        }}
+                                    />
+                                    <span>
+                                        <strong className="text-sm">{option.name}</strong>
+                                        <span className="mt-1 block text-xs text-slate-500">
+                                            {option.description}
+                                        </span>
                                     </span>
-                                    <span className="mt-1 block text-xs leading-5 text-slate-600">
-                                        {preset.description}
-                                    </span>
-                                    <span className="mt-3 flex gap-1.5" aria-hidden="true">
-                                        {preset.colors.map(color => (
-                                            <span
-                                                key={color}
-                                                className="h-5 w-7 rounded border border-black/10"
-                                                style={{ backgroundColor: color }}
-                                            />
-                                        ))}
-                                    </span>
-                                </span>
-                            </label>
-                        ))}
+                                </label>
+                            ),
+                        )}
                     </div>
-                    <div className="mt-4 flex flex-wrap items-center gap-3">
-                        <button
-                            type="button"
-                            disabled={disabled || !dirty}
-                            onClick={() => selected && void apply(selected.presetId)}
-                            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-40"
-                        >
-                            {mutation.loading ? '正在应用…' : '应用到当前店铺'}
-                        </button>
-                        <button
-                            type="button"
-                            disabled={!consistent || busy}
-                            onClick={() => setPreview('mobile')}
-                            className="flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:opacity-40"
-                        >
-                            <Eye className="h-4 w-4" />
-                            预览效果
-                        </button>
-                        <button
-                            type="button"
-                            disabled={disabled || source?.presetId === 'classic'}
-                            onClick={() => void apply('classic')}
-                            className="flex items-center gap-1.5 text-sm text-slate-600 disabled:opacity-40"
-                        >
-                            <RotateCcw className="h-3.5 w-3.5" />
-                            恢复默认皮肤
-                        </button>
-                    </div>
-                    {!canEdit && (
-                        <p className="mt-3 text-xs text-slate-500">
-                            当前账号可查看皮肤，需要装修内容编辑权限才能应用。
-                        </p>
-                    )}
-                    <p className="mt-3 text-xs leading-5 text-slate-500">
-                        皮肤统一商城的颜色、字体、圆角和阴影；图片与楼层布局继续在装修中管理，独立推广页使用其推广模板。
-                    </p>
-                </>
-            )}
+                </fieldset>
+            ))}
+            <button
+                type="button"
+                disabled={disabled || !dirty}
+                onClick={() => void apply()}
+                className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-40"
+            >
+                {mutation.loading ? '正在保存…' : '保存到当前店铺'}
+            </button>
+            <div className="mt-3 flex gap-4 text-sm">
+                <button type="button" disabled={!consistent || busy} onClick={() => setPreview('mobile')}>
+                    预览效果
+                </button>
+                <button
+                    type="button"
+                    disabled={disabled || selected?.presetId === 'classic'}
+                    onClick={() => {
+                        if (selected) setDraft({ ...selected, presetId: 'classic' });
+                        setNotice('');
+                        setError('');
+                    }}
+                >
+                    恢复默认皮肤（保存后生效）
+                </button>
+            </div>
+            <p className="mt-3 text-xs text-slate-500">
+                切换皮肤与布局会保留图片、文案、区块颜色、楼层顺序和开关。
+            </p>
             {preview && selected && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-3">
                     <AccessibleDialogSurface

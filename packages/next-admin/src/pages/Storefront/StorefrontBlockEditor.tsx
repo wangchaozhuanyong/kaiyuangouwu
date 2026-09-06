@@ -401,18 +401,7 @@ export function StorefrontBlockEditor({
                                     {['HERO', 'AUTH_LOGIN', 'AUTH_REGISTER'].includes(draft.type) && (
                                         <Field label="强调色">
                                             <ColorInput
-                                                value={stringSetting(
-                                                    draft.settings?.accentColor,
-                                                    draft.type === 'AUTH_REGISTER'
-                                                        ? '#8B5CF6'
-                                                        : draft.type === 'AUTH_LOGIN'
-                                                          ? '#22D3EE'
-                                                          : normalizedHeroThemePreset(
-                                                                  draft.settings?.themePreset,
-                                                              ) === 'warm'
-                                                            ? '#fbbf24'
-                                                            : '#67e8f9',
-                                                )}
+                                                value={stringSetting(draft.settings?.accentColor, '')}
                                                 onChange={value => updateSettings({ accentColor: value })}
                                             />
                                         </Field>
@@ -423,7 +412,7 @@ export function StorefrontBlockEditor({
                                                 <ColorInput
                                                     value={stringSetting(
                                                         draft.settings?.secondaryTextColor,
-                                                        '#cbd5e1',
+                                                        '',
                                                     )}
                                                     onChange={value =>
                                                         updateSettings({ secondaryTextColor: value })
@@ -434,11 +423,7 @@ export function StorefrontBlockEditor({
                                                 <ColorInput
                                                     value={stringSetting(
                                                         draft.settings?.accentSecondaryColor,
-                                                        normalizedHeroThemePreset(
-                                                            draft.settings?.themePreset,
-                                                        ) === 'warm'
-                                                            ? '#b45309'
-                                                            : '#0e7490',
+                                                        '',
                                                     )}
                                                     onChange={value =>
                                                         updateSettings({ accentSecondaryColor: value })
@@ -447,10 +432,7 @@ export function StorefrontBlockEditor({
                                             </Field>
                                             <Field label="按钮文字色">
                                                 <ColorInput
-                                                    value={stringSetting(
-                                                        draft.settings?.buttonTextColor,
-                                                        '#ffffff',
-                                                    )}
+                                                    value={stringSetting(draft.settings?.buttonTextColor, '')}
                                                     onChange={value =>
                                                         updateSettings({ buttonTextColor: value })
                                                     }
@@ -460,10 +442,7 @@ export function StorefrontBlockEditor({
                                     )}
                                     <Field label="背景色">
                                         <ColorInput
-                                            value={
-                                                draft.backgroundColor ??
-                                                (draft.type === 'HERO' ? '#090d16' : '#ffffff')
-                                            }
+                                            value={draft.backgroundColor ?? ''}
                                             onChange={value => setDraft({ ...draft, backgroundColor: value })}
                                         />
                                     </Field>
@@ -471,10 +450,7 @@ export function StorefrontBlockEditor({
                                         <>
                                             <Field label="文字色">
                                                 <ColorInput
-                                                    value={
-                                                        draft.textColor ??
-                                                        (draft.type === 'HERO' ? '#ffffff' : '#0f172a')
-                                                    }
+                                                    value={draft.textColor ?? ''}
                                                     onChange={value =>
                                                         setDraft({ ...draft, textColor: value })
                                                     }

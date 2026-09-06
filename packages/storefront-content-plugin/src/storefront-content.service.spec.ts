@@ -156,7 +156,7 @@ describe('StorefrontContentService input validation', () => {
         expect(() => validate({ ...authInput, code: 'another-login-visual' })).toThrow(/系统保留编码/);
         expect(() =>
             (service as any).validateAuthVisual(normalized, authInput.items?.slice(0, 2) ?? []),
-        ).toThrow(/三个顺序固定/);
+        ).not.toThrow();
         expect(() =>
             (service as any).validateAuthVisual(
                 { ...normalized, settings: { accentColor: 'cyan' } },

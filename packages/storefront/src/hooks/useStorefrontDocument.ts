@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
 
+import { configuredColor, readableColor } from '../../../storefront-content-plugin/src/shared/auth-visual';
 import { productDescriptionText } from '../rich-text';
-import { STOREFRONT_SOCIAL_IMAGE } from '../storefront-images';
+import { NEUTRAL_STOREFRONT_IMAGE, NEUTRAL_STOREFRONT_SOCIAL_IMAGE } from '../storefront-images';
 import { type RouteName, type RouteState } from '../storefront-router';
 import { productImage, setMetaContent, trimText } from '../storefront-utils';
 import { cacheLogoUrl } from '../StorefrontErrorBoundary';
@@ -10,9 +11,19 @@ import { type Product, type StorefrontConfig } from '../types';
 export function useStorefrontBrandColors(config: StorefrontConfig | undefined) {
     useEffect(() => {
         const root = document.documentElement;
+        const background = configuredColor(config?.brandBackgroundColor);
+        const primary = configuredColor(config?.brandPrimaryColor);
         const colors = {
+            '--bg': config?.brandBackgroundColor,
+            '--store-background': config?.brandBackgroundColor,
+            '--store-primary': config?.brandPrimaryColor,
+            '--store-highlight': config?.brandHighlightColor,
+            '--store-foreground': background ? readableColor(background) : undefined,
+            '--auth-store-background': config?.brandBackgroundColor,
             '--brand-background': config?.brandBackgroundColor,
             '--brand-primary': config?.brandPrimaryColor,
+            '--auth-store-foreground': background ? readableColor(background) : undefined,
+            '--accent-foreground': primary ? readableColor(primary) : undefined,
             '--brand-accent': config?.brandAccentColor,
             '--brand-highlight': config?.brandHighlightColor,
             '--accent': config?.brandPrimaryColor,
@@ -99,10 +110,7 @@ export function useStorefrontMetadata({
             route.name === 'product' && selectedProduct?.description.trim()
                 ? trimText(productDescriptionText(selectedProduct.description), 150)
                 : storeSummary;
-        const imagePath =
-            route.name === 'product' && selectedProduct
-                ? (productImage(selectedProduct) ?? STOREFRONT_SOCIAL_IMAGE)
-                : STOREFRONT_SOCIAL_IMAGE;
+        const imagePath = storefrontShareImage(route.name, selectedProduct, logoUrl);
         const image = new URL(imagePath, window.location.origin).href;
         const imageAlt =
             route.name === 'product' && selectedProduct
@@ -119,6 +127,8 @@ export function useStorefrontMetadata({
         setMetaContent('meta[property="og:title"]', title);
         setMetaContent('meta[property="og:description"]', description);
         setMetaContent('meta[property="og:image"]', image);
+        document.querySelector('meta[property="og:image:width"]')?.remove();
+        document.querySelector('meta[property="og:image:height"]')?.remove();
         setMetaContent('meta[property="og:image:alt"]', imageAlt);
         setMetaContent('meta[property="og:url"]', window.location.href);
         setMetaContent('meta[name="twitter:title"]', title);
@@ -132,15 +142,24 @@ export function useStorefrontMetadata({
             document.head.append(canonical);
         }
         canonical.href = window.location.href;
-    }, [isZh, route, selectedProduct, storefrontDescription, storefrontName]);
+    }, [isZh, route, selectedProduct, storefrontDescription, storefrontName, logoUrl]);
 
     useEffect(() => {
         cacheLogoUrl(logoUrl);
-        if (!logoUrl) return;
-        const link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
-        if (link) {
-            link.href = logoUrl;
-            link.type = '';
+        for (const rel of ['icon', 'apple-touch-icon']) {
+            const link = document.querySelector<HTMLLinkElement>(`link[rel="${rel}"]`);
+            if (link) {
+                link.href = logoUrl || NEUTRAL_STOREFRONT_IMAGE;
+                link.type = '';
+            }
         }
     }, [logoUrl]);
+}
+
+export function storefrontShareImage(
+    route: RouteName,
+    product: Product | null | undefined,
+    logoUrl: string | null,
+): string {
+    return (route === 'product' ? productImage(product) : null) || logoUrl || NEUTRAL_STOREFRONT_SOCIAL_IMAGE;
 }

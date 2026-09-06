@@ -52,6 +52,8 @@ import type {
     VendureLanguageCode,
 } from './types';
 
+import { type StorefrontVisualPresetConfig } from '../../storefront-content-plugin/src/visual-presets';
+
 import { AccountApi } from './api/account';
 import { CartCheckoutApi } from './api/cart-checkout';
 import { CatalogApi } from './api/catalog';
@@ -136,7 +138,7 @@ export class ShopApi {
         return this.contentReviewsApi.storefrontConfig(signal);
     }
 
-    async storefrontVisualPreset(signal?: AbortSignal) {
+    async storefrontVisualPreset(signal?: AbortSignal): Promise<StorefrontVisualPresetConfig> {
         return this.contentReviewsApi.storefrontVisualPreset(signal);
     }
 

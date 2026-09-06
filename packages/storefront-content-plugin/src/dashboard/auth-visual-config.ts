@@ -113,39 +113,29 @@ function defaultItem(
 }
 
 export function createAuthVisualDraft(type: AuthVisualBlockType, existing?: ContentBlock): ContentBlock {
+    if (existing) return JSON.parse(JSON.stringify(existing)) as ContentBlock;
     const definition = AUTH_VISUAL_DEFINITIONS[type];
     return {
-        id: existing?.id,
-        updatedAt: existing?.updatedAt,
         code: definition.code,
         internalName: definition.internalName,
         type,
         layoutVariant: 'HERO_OVERLAY',
-        enabled: existing?.enabled ?? true,
-        position: existing?.position ?? definition.position,
+        enabled: true,
+        position: definition.position,
         startsAt: null,
         endsAt: null,
-        imageAsset: existing?.imageAsset ?? null,
-        imageAssetId: existing?.imageAsset?.id ?? existing?.imageAssetId ?? null,
-        imageUrl: existing?.imageUrl ?? null,
-        backgroundColor: existing?.backgroundColor ?? definition.overlayColor,
-        textColor: existing?.textColor ?? definition.textColor,
+        imageAsset: null,
+        imageAssetId: null,
+        imageUrl: null,
+        backgroundColor: definition.overlayColor,
+        textColor: definition.textColor,
         targetType: 'NONE',
         targetValue: null,
-        settings: {
-            ...existing?.settings,
-            authVisualVersion: 1,
-            accentColor:
-                typeof existing?.settings?.accentColor === 'string'
-                    ? existing.settings.accentColor
-                    : definition.accentColor,
-        },
-        translations: (['zh_Hans', 'en'] as const).map(languageCode => ({
-            ...emptyTranslation(definition, languageCode),
-            ...existing?.translations.find(translation => translation.languageCode === languageCode),
-            languageCode,
-        })),
-        items: [0, 1, 2].map(position => defaultItem(definition, position, existing?.items[position])),
+        settings: { authVisualVersion: 1, accentColor: definition.accentColor },
+        translations: (['zh_Hans', 'en'] as const).map(languageCode =>
+            emptyTranslation(definition, languageCode),
+        ),
+        items: [0, 1, 2].map(position => defaultItem(definition, position)),
     };
 }
 
@@ -154,8 +144,13 @@ export function authVisualTranslation(
     languageCode: AuthVisualLanguageCode,
 ): ContentBlockTranslation {
     return (
-        block.translations.find(translation => translation.languageCode === languageCode) ??
-        emptyTranslation(AUTH_VISUAL_DEFINITIONS[block.type as AuthVisualBlockType], languageCode)
+        block.translations.find(translation => translation.languageCode === languageCode) ?? {
+            languageCode,
+            title: '',
+            subtitle: '',
+            body: '',
+            ctaLabel: '',
+        }
     );
 }
 
@@ -182,40 +177,36 @@ export function authVisualInput(block: ContentBlock) {
         targetType: 'NONE' as const,
         targetValue: null,
         settings: block.settings,
-        translations: block.translations
-            .map(({ languageCode, title, subtitle, body, ctaLabel }) => ({
-                languageCode,
-                title: title.trim(),
-                subtitle: subtitle.trim(),
-                body: body.trim(),
-                ctaLabel: ctaLabel.trim(),
-            }))
-            .filter(translation => Boolean(translation.title)),
+        translations: block.translations.map(({ languageCode, title, subtitle, body, ctaLabel }) => ({
+            languageCode,
+            title: title.trim(),
+            subtitle: subtitle.trim(),
+            body: body.trim(),
+            ctaLabel: ctaLabel.trim(),
+        })),
         items: block.items.map((item, position) => ({
             ...(item.id ? { id: item.id } : {}),
-            enabled: true,
+            enabled: item.enabled,
             position,
             imageAssetId: null,
             imageUrl: null,
             targetType: 'NONE' as const,
             targetValue: null,
             settings: null,
-            translations: item.translations
-                .map(({ languageCode, label }) => ({ languageCode, label: label.trim(), description: '' }))
-                .filter(translation => Boolean(translation.label)),
+            translations: item.translations.map(({ languageCode, label }) => ({
+                languageCode,
+                label: label.trim(),
+                description: '',
+            })),
         })),
     };
 }
 
 export function isAuthVisualValid(block: ContentBlock): boolean {
-    const source = authVisualTranslation(block, 'zh_Hans');
-    return Boolean(
-        source.ctaLabel.trim() &&
-        source.title.trim() &&
-        source.subtitle.trim() &&
-        block.items.length === 3 &&
+    return (
+        block.translations.some(translation => translation.languageCode === 'zh_Hans') &&
         block.items.every(item =>
-            item.translations.find(translation => translation.languageCode === 'zh_Hans')?.label.trim(),
-        ),
+            item.translations.some(translation => translation.languageCode === 'zh_Hans'),
+        )
     );
 }

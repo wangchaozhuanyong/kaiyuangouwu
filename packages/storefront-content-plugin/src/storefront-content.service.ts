@@ -498,7 +498,12 @@ export class StorefrontContentService {
             }
             const saved = await this.connection.getRepository(ctx, StorefrontContentItem).save(item);
             retained.add(String(saved.id));
-            await this.replaceItemTranslations(ctx, saved, input.translations);
+            await this.replaceItemTranslations(
+                ctx,
+                saved,
+                input.translations,
+                block.type === 'AUTH_LOGIN' || block.type === 'AUTH_REGISTER',
+            );
         }
 
         const removed = existing.filter(item => !retained.has(String(item.id)));
@@ -512,7 +517,8 @@ export class StorefrontContentService {
         block: StorefrontContentBlock,
         inputs: StorefrontContentBlockTranslationInput[],
     ): Promise<void> {
-        this.validateTranslations(inputs, 'title');
+        const allowEmpty = block.type === 'AUTH_LOGIN' || block.type === 'AUTH_REGISTER';
+        this.validateTranslations(inputs, 'title', allowEmpty);
         const repository = this.connection.getRepository(ctx, StorefrontContentBlockTranslation);
         const existing = await repository.find({ where: { base: { id: block.id } } });
         const source = inputs.find(input => input.languageCode === LanguageCode.zh_Hans);
@@ -528,7 +534,7 @@ export class StorefrontContentService {
                 manualLock: target?.titleLocked,
                 existingSourceText: existingSource?.title,
                 existingTargetText: existingTarget?.title,
-                required: true,
+                required: !allowEmpty,
             },
             {
                 path: 'subtitle',
@@ -596,8 +602,9 @@ export class StorefrontContentService {
         ctx: RequestContext,
         item: StorefrontContentItem,
         inputs: StorefrontContentItemTranslationInput[],
+        allowEmpty = false,
     ): Promise<void> {
-        this.validateTranslations(inputs, 'label');
+        this.validateTranslations(inputs, 'label', allowEmpty);
         const repository = this.connection.getRepository(ctx, StorefrontContentItemTranslation);
         const existing = await repository.find({ where: { base: { id: item.id } } });
         const source = inputs.find(input => input.languageCode === LanguageCode.zh_Hans);
@@ -613,7 +620,7 @@ export class StorefrontContentService {
                 manualLock: target?.labelLocked,
                 existingSourceText: existingSource?.label,
                 existingTargetText: existingTarget?.label,
-                required: true,
+                required: !allowEmpty,
             },
             {
                 path: 'description',
@@ -812,7 +819,11 @@ export class StorefrontContentService {
         if (startsAt && endsAt && startsAt >= endsAt) {
             throw new UserInputError('区块结束时间必须晚于开始时间');
         }
-        this.validateTranslations(input.translations, 'title');
+        this.validateTranslations(
+            input.translations,
+            'title',
+            input.type === 'AUTH_LOGIN' || input.type === 'AUTH_REGISTER',
+        );
         this.validateImageUrl(input.imageUrl, '区块图片');
         this.validateColor(input.backgroundColor, '背景颜色');
         this.validateColor(input.textColor, '文字颜色');
@@ -845,7 +856,11 @@ export class StorefrontContentService {
         if (!Number.isInteger(input.position) || input.position < 0) {
             throw new UserInputError('装修条目排序必须是非负整数');
         }
-        this.validateTranslations(input.translations, 'label');
+        this.validateTranslations(
+            input.translations,
+            'label',
+            blockType === 'AUTH_LOGIN' || blockType === 'AUTH_REGISTER',
+        );
         this.validateImageUrl(input.imageUrl, '条目图片');
         const targetType = input.targetType ?? 'NONE';
         this.normalizeTarget(targetType, input.targetValue);
@@ -865,23 +880,10 @@ export class StorefrontContentService {
         if (input.startsAt || input.endsAt) {
             throw new UserInputError('登录注册页视觉不能设置定时上下线');
         }
-        const source = input.translations.find(
-            translation => translation.languageCode === LanguageCode.zh_Hans,
-        );
-        if (!source?.ctaLabel?.trim() || !source.subtitle?.trim()) {
-            throw new UserInputError('登录注册页视觉必须填写中文顶部短句和说明文案');
-        }
-        if (
-            items.length !== 3 ||
-            new Set(items.map(item => item.position)).size !== 3 ||
-            items.some(item => item.position < 0 || item.position > 2)
-        ) {
-            throw new UserInputError('登录注册页视觉必须包含三个顺序固定的卖点标签');
-        }
         const accentColor = input.settings?.accentColor;
         if (
             accentColor != null &&
-            (typeof accentColor !== 'string' || !/^#[0-9a-f]{6}$/i.test(accentColor))
+            (typeof accentColor !== 'string' || (accentColor !== '' && !/^#[0-9a-f]{6}$/i.test(accentColor)))
         ) {
             throw new UserInputError('登录注册页标签强调色必须使用六位十六进制颜色');
         }
@@ -969,6 +971,7 @@ export class StorefrontContentService {
     private validateTranslations<T extends { languageCode: LanguageCode }>(
         inputs: T[],
         requiredKey: 'title' | 'label',
+        allowEmpty = false,
     ): void {
         if (!inputs.length) {
             throw new UserInputError('必须填写简体中文内容');
@@ -980,7 +983,7 @@ export class StorefrontContentService {
             }
             languageCodes.add(input.languageCode);
             const requiredValue = (input as unknown as Record<string, unknown>)[requiredKey];
-            if (typeof requiredValue !== 'string' || !requiredValue.trim()) {
+            if (typeof requiredValue !== 'string' || (!allowEmpty && !requiredValue.trim())) {
                 throw new UserInputError(requiredKey === 'title' ? '区块标题不能为空' : '条目名称不能为空');
             }
         }

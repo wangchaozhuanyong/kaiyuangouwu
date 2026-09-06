@@ -39,6 +39,7 @@ describe('channel-scoped storefront visual presets', () => {
         await expect(service.get(ctx('a'))).resolves.toEqual({
             channelId: 'a',
             presetId: 'classic',
+            desktopLayout: 'classic',
             revision: 'default',
         });
         expect(repository.save).not.toHaveBeenCalled();
@@ -117,5 +118,46 @@ describe('channel-scoped storefront visual presets', () => {
             expectedRevision: fallback.revision,
         });
         expect(rows.get('a')?.settings?.presetId).toBe('classic');
+    });
+    it('patches only submitted settings and rejects stale layout editors', async () => {
+        const { service, ctx, rows } = setup();
+        const skin = await service.update(ctx('a'), {
+            channelId: 'a',
+            presetId: 'modern-oriental',
+            expectedRevision: 'default',
+        });
+        const row = rows.get('a');
+        if (!row?.settings) throw new Error('Missing saved config');
+        row.settings.retained = 'keep';
+        const layout = await service.update(ctx('a'), {
+            channelId: 'a',
+            desktopLayout: 'catalog',
+            expectedRevision: skin.revision,
+        });
+        expect(layout).toMatchObject({ presetId: 'modern-oriental', desktopLayout: 'catalog' });
+        expect(rows.get('a')?.settings?.retained).toBe('keep');
+        await expect(
+            service.update(ctx('a'), {
+                channelId: 'a',
+                desktopLayout: 'classic',
+                expectedRevision: skin.revision,
+            }),
+        ).rejects.toThrow(/其他管理员/);
+        expect((await service.get(ctx('b'))).desktopLayout).toBe('classic');
+        const reset = await service.update(ctx('a'), {
+            channelId: 'a',
+            presetId: 'classic',
+            expectedRevision: layout.revision,
+        });
+        expect(reset.desktopLayout).toBe('catalog');
+    });
+    it('rejects missing, null and unsupported patch values', async () => {
+        const { service, ctx, repository } = setup();
+        for (const patch of [{}, { desktopLayout: 'custom' }, { presetId: null }, { desktopLayout: null }]) {
+            await expect(
+                service.update(ctx('a'), { channelId: 'a', expectedRevision: 'default', ...patch } as never),
+            ).rejects.toThrow();
+        }
+        expect(repository.save).not.toHaveBeenCalled();
     });
 });

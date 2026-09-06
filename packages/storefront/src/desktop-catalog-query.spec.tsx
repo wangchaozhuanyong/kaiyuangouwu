@@ -97,8 +97,10 @@ describe('desktop catalog navigation', () => {
         });
     });
 
-    it('keeps the layout scoped to the verified default Channel', () => {
-        expect(supportsDesktopCatalog('__default_channel__')).toBe(true);
+    it('enables the same saved catalog choice for any channel and defaults to classic', () => {
+        expect(supportsDesktopCatalog('catalog')).toBe(true);
+        expect(supportsDesktopCatalog('classic')).toBe(false);
+        expect(supportsDesktopCatalog('__default_channel__')).toBe(false);
         expect(supportsDesktopCatalog('my-malaysia')).toBe(false);
         expect(supportsDesktopCatalog('')).toBe(false);
         expect(supportsDesktopCatalog('unknown-store')).toBe(false);
