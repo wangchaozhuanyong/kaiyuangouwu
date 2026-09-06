@@ -1,31 +1,18 @@
 import { useNavigate, useRouter } from '@tanstack/react-router';
-import {
-    ChevronRight,
-    CircleCheck,
-    Heart,
-    Package,
-    RotateCcw,
-    Share2,
-    ShoppingCart,
-    Truck,
-} from 'lucide-react';
+import { ChevronRight, CircleCheck, Heart, RotateCcw, Share2, ShoppingCart, Truck } from 'lucide-react';
 import { Suspense, useEffect, useState } from 'react';
 
 import { ShopApi } from '../api';
 import { LazySharePosterModal } from '../lazy-storefront-pages';
 import { productAvailability, productAvailabilityLabel } from '../product-availability';
+import { productGalleryAssets } from '../product-media';
 import { ProductReviewsSection } from '../review-pages';
 import { productDescriptionText, sanitizeProductDescription } from '../rich-text';
 import { bestProductCouponPrice } from '../storefront-coupons';
 import { routeNavigateOptions, type RouteState } from '../storefront-router';
 import { SubHeader } from '../storefront-ui/page-shell';
-import {
-    formatMoney,
-    prefetchStorefrontImage,
-    productImage,
-    SafeImage,
-    scheduleIdleWork,
-} from '../storefront-ui/product-display';
+import { formatMoney, SafeImage } from '../storefront-ui/product-display';
+import { ProductGallery } from '../storefront-ui/product-gallery';
 import { ProductSection } from '../storefront-ui/product-section';
 import { useStorefront } from '../StorefrontContext';
 import {
@@ -102,7 +89,6 @@ export function ProductDetailPage() {
     } = useStorefront<ProductDetailPageProps>();
     const isZh = language === 'zh';
     const [variantId, setVariantId] = useState(product.variants[0]?.id ?? '');
-    const [activeImage, setActiveImage] = useState(0);
     const [headerScrolled, setHeaderScrolled] = useState(false);
     const variant = product.variants.find(item => item.id === variantId) ?? product.variants[0];
     const activeFlashItem = flashSaleItems.find(item => item.productVariantId === variant?.id);
@@ -120,11 +106,7 @@ export function ProductDetailPage() {
                   currencyCode: displayedCurrencyCode,
               })
             : null;
-    const assets = product.assets.length
-        ? product.assets
-        : product.featuredAsset
-          ? [product.featuredAsset]
-          : [];
+    const assets = productGalleryAssets(product);
     const isDigital =
         (product.customFields?.fulfillmentType ?? variant?.customFields.fulfillmentType) === 'digital';
     const digitalDeliveryMode: DigitalDeliveryMode =
@@ -157,15 +139,6 @@ export function ProductDetailPage() {
         return () => window.removeEventListener('scroll', updateHeader);
     }, []);
 
-    const prefetchAdjacentGalleryImages = () => {
-        scheduleIdleWork(() => {
-            for (const index of [activeImage - 1, activeImage + 1]) {
-                const asset = assets[index];
-                if (asset) prefetchStorefrontImage(asset.preview, 'detail');
-            }
-        });
-    };
-
     return (
         <main className="page subpage product-detail-page">
             <SubHeader
@@ -183,44 +156,7 @@ export function ProductDetailPage() {
                     </button>
                 }
             />
-            <section className="detail-gallery">
-                {assets[activeImage] ? (
-                    <SafeImage
-                        src={assets[activeImage].preview}
-                        alt={`${product.name} ${activeImage + 1}`}
-                        imageKind="detail"
-                        placeholderSrc={productImage(product) ?? undefined}
-                        loading="eager"
-                        fetchPriority="high"
-                        onLoad={prefetchAdjacentGalleryImages}
-                    />
-                ) : (
-                    <div className="image-placeholder" aria-hidden="true">
-                        <Package />
-                    </div>
-                )}
-                {assets.length > 1 && (
-                    <div className="gallery-dots">
-                        {assets.map((asset, index) => (
-                            <button
-                                type="button"
-                                key={asset.id}
-                                className={index === activeImage ? 'is-active' : undefined}
-                                onClick={() => setActiveImage(index)}
-                                aria-label={
-                                    isZh ? `查看第${index + 1}张商品图` : `View product image ${index + 1}`
-                                }
-                                aria-current={index === activeImage}
-                            />
-                        ))}
-                    </div>
-                )}
-                {!!assets.length && (
-                    <span className="gallery-count">
-                        {activeImage + 1} / {assets.length}
-                    </span>
-                )}
-            </section>
+            <ProductGallery product={product} language={language} />
             <section className="detail-summary">
                 <div className="detail-price-line">
                     <div className="detail-price-stack">

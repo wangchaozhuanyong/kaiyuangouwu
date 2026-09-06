@@ -6,6 +6,8 @@ import {
 import { scopedStorageKey } from './storefront-storage';
 import { MarketConfig, Product, StorefrontLanguage } from './types';
 
+export { productImage } from './product-media';
+
 export const STOREFRONT_NAME_MAX_DISPLAY_UNITS = 16;
 export const FAVORITE_PRODUCT_STORAGE_KEY = 'storefront-favorite-product-ids';
 export const RECENT_PRODUCT_STORAGE_KEY = 'storefront-recent-product-ids';
@@ -111,10 +113,6 @@ export function writeStoredSettlementCurrency(marketCode: string, currencyCode: 
 
 export function setMetaContent(selector: string, content: string): void {
     document.querySelector<HTMLMetaElement>(selector)?.setAttribute('content', content);
-}
-
-export function productImage(product?: Product | null): string | null {
-    return product?.featuredAsset?.preview ?? product?.assets?.[0]?.preview ?? null;
 }
 
 export function minimumProductPrice(product: Product): number {
