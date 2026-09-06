@@ -909,6 +909,20 @@
     background: var(--auth-hero-overlay-color);
 }
 
+/* SVG and image fallbacks use a span frame instead of picture. */
+.auth-page .auth-hero > .safe-image-frame {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.auth-page .auth-hero > .safe-image-frame > img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
 .page.auth-page .wide-action,
 .page.auth-page .wide-action:hover:not(:disabled) {
     background: var(--auth-accent);
