@@ -32,7 +32,11 @@ export function AuthPreviewFixture() {
     // The test asset middleware serves the persisted raw identifier on its loopback API.
     if (draft.imageAsset)
         draft.imageAsset.preview = `http://127.0.0.1:5299/assets/${draft.imageAsset.preview}`;
-    return <BlockPreview block={draft} language="zh_Hans" />;
+    return (
+        <div style={{ maxWidth: 340 }}>
+            <BlockPreview block={draft} language="zh_Hans" />
+        </div>
+    );
 }
 export function Fixture() {
     const stores = new URLSearchParams(location.search).get('stores')?.split(',') ?? [];

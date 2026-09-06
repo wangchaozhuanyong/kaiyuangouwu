@@ -1022,6 +1022,7 @@ describe('unified storefront Admin API to Shop API', () => {
                     background,
                 );
                 for (const viewport of ['手机', '电脑']) {
+                    await preview.setViewportSize({ width: viewport === '手机' ? 390 : 1440, height: 1000 });
                     await preview.getByRole('button', { name: viewport, exact: true }).click();
                     const img = preview.locator('.store-auth-image img');
                     await browserExpect
@@ -1029,6 +1030,21 @@ describe('unified storefront Admin API to Shop API', () => {
                             img.evaluate(
                                 (value: HTMLImageElement) => value.naturalWidth > 0 && value.clientHeight > 0,
                             ),
+                        )
+                        .toBe(true);
+                    await browserExpect
+                        .poll(() =>
+                            preview.locator('[data-auth-preview-viewport]').evaluate(host => {
+                                const canvas = host.querySelector('.store-auth-visual')?.parentElement;
+                                if (!canvas) return false;
+                                const bounds = host.getBoundingClientRect();
+                                const content = canvas.getBoundingClientRect();
+                                return (
+                                    content.left >= bounds.left - 1 &&
+                                    content.right <= bounds.right + 1 &&
+                                    content.bottom <= bounds.bottom + 1
+                                );
+                            }),
                         )
                         .toBe(true);
                     expect(
