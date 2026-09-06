@@ -74,7 +74,7 @@ export function AiImageAccessModule() {
                     <div className="space-y-4">
                         {query.data?.imageProviderAdminConfigs.map(provider => (
                             <ProviderCard
-                                key={`${provider.scope}-${provider.apiKeyLast4}-${provider.providerHealthStatus}-${provider.baseUrl}`}
+                                key={`${provider.id}-${provider.apiKeyLast4}-${provider.providerHealthStatus}-${provider.credentialEnabled}-${provider.baseUrl}-${provider.textModelId}`}
                                 value={provider}
                                 onSaved={async message => {
                                     setNotice(message);
@@ -110,15 +110,17 @@ function ProviderCard({
     const [testResult, setTestResult] = useState<{ ok: boolean; message: string; testedAt: string } | null>(
         null,
     );
-    const [save, saveState] = useMutation(SAVE_IMAGE_PROVIDER_MUTATION);
+    const [save, saveState] = useMutation<{ saveImageProviderCredential: ImageProviderRecord }>(
+        SAVE_IMAGE_PROVIDER_MUTATION,
+    );
     const [test, testState] = useMutation<{
-        testImageProviderConnection: { ok: boolean; message: string; testedAt: string };
+        testImageProviderCredential: { ok: boolean; message: string; testedAt: string };
     }>(TEST_IMAGE_PROVIDER_MUTATION);
     const validation = !baseUrl.trim()
         ? '请填写 API Base URL'
         : !validHttpUrl(baseUrl)
           ? 'Base URL 必须是有效的 HTTP(S) 网址'
-          : !textModelId.trim()
+          : value.purpose !== 'IMAGE' && !textModelId.trim()
             ? '请填写提示词优化模型 ID'
             : !value.credentialConfigured && !apiKey.trim()
               ? '首次配置必须填写 API Key'
@@ -131,29 +133,43 @@ function ProviderCard({
     const saveProvider = async () => {
         if (validation) return;
         try {
-            await save({
+            const result = await save({
                 variables: {
                     input: {
+                        id: value.id,
+                        code: value.code,
+                        name: value.name,
                         scope: value.scope,
+                        purpose: value.purpose,
+                        priority: value.priority,
+                        weight: value.weight,
+                        modelCodes: value.modelCodes,
                         baseUrl: baseUrl.trim(),
                         apiKey: apiKey.trim() || null,
                         textModelId: textModelId.trim(),
+                        orchestrationModelId: value.orchestrationModelId,
                         enabled,
                     },
                 },
             });
+            if (result.data) {
+                const saved = result.data.saveImageProviderCredential;
+                setBaseUrl(saved.baseUrl);
+                setTextModelId(saved.textModelId);
+                setEnabled(saved.credentialEnabled);
+            }
             setApiKey('');
             setTestResult(null);
-            await onSaved(`${providerName(value.scope)}凭据已加密保存，连接状态需要重新测试`);
+            await onSaved(`${value.name} 凭据已加密保存；修改连接信息后需测试通过，再启用凭据`);
         } catch (error) {
             onError(errorText(error));
         }
     };
     const testProvider = async () => {
         try {
-            const result = await test({ variables: { scope: value.scope } });
-            if (result.data) setTestResult(result.data.testImageProviderConnection);
-            await onSaved(`${providerName(value.scope)} 连通性测试已完成`);
+            const result = await test({ variables: { id: value.id } });
+            if (result.data) setTestResult(result.data.testImageProviderCredential);
+            await onSaved(`${value.name} 连通性测试已完成`);
         } catch (error) {
             onError(errorText(error));
         }
@@ -161,7 +177,10 @@ function ProviderCard({
     const health = testResult ? (testResult.ok ? 'HEALTHY' : 'UNHEALTHY') : value.providerHealthStatus;
     const healthMessage = testResult?.message ?? value.providerHealthMessage;
     return (
-        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-2xs">
+        <section
+            aria-label={value.name}
+            className="rounded-xl border border-slate-200 bg-white p-5 shadow-2xs"
+        >
             <div className="flex flex-col gap-3 border-b border-slate-100 pb-4 sm:flex-row sm:items-start sm:justify-between">
                 <div className="flex items-start gap-3">
                     <div
@@ -171,9 +190,12 @@ function ProviderCard({
                     </div>
                     <div>
                         <div className="flex flex-wrap items-center gap-2">
-                            <h2 className="text-sm font-bold text-slate-900">{providerName(value.scope)}</h2>
+                            <h2 className="text-sm font-bold text-slate-900">{value.name}</h2>
                             <HealthBadge status={health} />
                         </div>
+                        <p className="mt-1 text-[11px] text-slate-500">
+                            {providerName(value.scope)} · 优先级 {value.priority}
+                        </p>
                         <p className="mt-1 text-[11px] text-slate-400">
                             {value.credentialConfigured
                                 ? `已配置密钥 · 末 4 位 ${value.apiKeyLast4 || '未知'}`
@@ -232,7 +254,7 @@ function ProviderCard({
                         className={`${inputClass} font-mono`}
                     />
                 </Field>
-                <Field label="提示词优化模型 ID *">
+                <Field label={`提示词优化模型 ID ${value.purpose === 'IMAGE' ? '（可选）' : '*'}`}>
                     <input
                         value={textModelId}
                         onChange={event => setTextModelId(event.target.value)}
