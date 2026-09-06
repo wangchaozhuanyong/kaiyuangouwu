@@ -179,6 +179,33 @@ void test('published item list includes every enabled item in the saved order', 
     assert.throws(() => assertPublishedMatchesSaved(store), /enabled items/u);
 });
 
+void test('compares encoded and literal Unicode filenames for blocks and items without accepting another image', () => {
+    const store = storeFixture();
+    const name = '图片 2026年9月7日.svg';
+    store.blocks[0].imageAsset.source = `https://admin.example.test/assets/source/${encodeURIComponent(name)}`;
+    store.blocks[0].items = [
+        {
+            id: 'item-unicode',
+            enabled: true,
+            imageAsset: { mimeType: 'image/svg+xml', source: `source/${encodeURIComponent(name)}` },
+            translations: ['zh_Hans', 'en'].map(languageCode => ({
+                languageCode,
+                label: 'image',
+                description: '',
+            })),
+        },
+    ];
+    for (const blocks of Object.values(store.published)) {
+        blocks[0].imageUrl = `/assets/source/${name}`;
+        blocks[0].items = [
+            { id: 'item-unicode', label: 'image', description: '', imageUrl: `/assets/source/${name}` },
+        ];
+    }
+    assert.doesNotThrow(() => assertPublishedMatchesSaved(store));
+    store.published.en[0].items[0].imageUrl = '/assets/source/another.svg';
+    assert.throws(() => assertPublishedMatchesSaved(store), /Published item image differs/);
+});
+
 void test('all Channel reads use scoped tokens and both client locale inputs without exposing secrets', async () => {
     const fixtures = [storeFixture(), storeFixture('2')];
     const calls = [];
