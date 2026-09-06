@@ -1,3 +1,4 @@
+import type { SaveReferralPosterTemplateInput } from '../referral/referral-input';
 /* eslint-disable max-len -- Tailwind utility strings must remain intact for static extraction. */
 import {
     Alert,
@@ -78,6 +79,7 @@ import {
     referralProgramQuery,
     referralReportsQuery,
     referralTodayMetricsQuery,
+    setReferralPosterTemplateEnabledMutation,
     updateReferralPosterTemplateMutation,
     updateReferralProgramMutation,
 } from './referral.graphql';
@@ -276,6 +278,7 @@ function ReferralAdminPage() {
                                             }
                                         />
                                         <PosterTemplateManager
+                                            programUpdatedAt={program.data.referralProgram.updatedAt}
                                             templates={
                                                 program.data?.referralProgram.posterTemplateConfigs ?? []
                                             }
@@ -587,63 +590,21 @@ function ProgramSettings({
     );
 }
 
-interface PosterTemplateDraft {
+type PosterContentDraft = Omit<
+    SaveReferralPosterTemplateInput,
+    'posterBackgroundAssetId' | 'shareBackgroundAssetId' | 'expectedUpdatedAt' | 'layoutVariant'
+>;
+type PosterTemplateDraft = { [K in keyof PosterContentDraft]-?: NonNullable<PosterContentDraft[K]> } & {
     id?: string;
-    name: string;
-    enabled: boolean;
-    position: number;
+    expectedUpdatedAt?: string;
     layoutVariant: 'STANDARD_CENTER';
     posterBackgroundAsset: Asset | null;
     shareBackgroundAsset: Asset | null;
-    titleZh: string;
-    titleEn: string;
-    headlineZh: string;
-    headlineEn: string;
-    rewardTextZh: string;
-    rewardTextEn: string;
-    siteIntroZh: string;
-    siteIntroEn: string;
-    serviceTextZh: string;
-    serviceTextEn: string;
-    featureOneTitleZh: string;
-    featureOneTitleEn: string;
-    featureOneTextZh: string;
-    featureOneTextEn: string;
-    featureTwoTitleZh: string;
-    featureTwoTitleEn: string;
-    featureTwoTextZh: string;
-    featureTwoTextEn: string;
-    featureThreeTitleZh: string;
-    featureThreeTitleEn: string;
-    featureThreeTextZh: string;
-    featureThreeTextEn: string;
-    qrEyebrowZh: string;
-    qrEyebrowEn: string;
-    qrTitleZh: string;
-    qrTitleEn: string;
-    qrDescriptionZh: string;
-    qrDescriptionEn: string;
-    sceneOneZh: string;
-    sceneOneEn: string;
-    sceneTwoZh: string;
-    sceneTwoEn: string;
-    sceneThreeZh: string;
-    sceneThreeEn: string;
-    sceneFourZh: string;
-    sceneFourEn: string;
-    ctaTextZh: string;
-    ctaTextEn: string;
-    footerTitleZh: string;
-    footerTitleEn: string;
-    footerTextZh: string;
-    footerTextEn: string;
-    foregroundColor: string;
-    accentColor: string;
-    overlayOpacity: number;
-}
+};
 
 function PosterTemplateManager({
     templates,
+    programUpdatedAt,
     disabled,
     defaultTemplate,
     onMakeDefault,
@@ -652,6 +613,7 @@ function PosterTemplateManager({
     onChanged,
 }: {
     templates: ReferralPosterTemplateRecord[];
+    programUpdatedAt: string;
     disabled: boolean;
     defaultTemplate: string;
     onMakeDefault: (id: string) => void;
@@ -676,14 +638,28 @@ function PosterTemplateManager({
         onError: error => toast.error(errorMessage(error)),
     });
     const updateTemplate = useMutation({
-        mutationFn: (value: PosterTemplateDraft & { id: string }) =>
-            api.mutate<{ updateReferralPosterTemplate: ReferralPosterTemplateRecord }>(
+        mutationFn: (value: PosterTemplateDraft & { id: string }) => {
+            const { enabled: _enabled, ...contentInput } = posterTemplateInput(value);
+            return api.mutate<{ updateReferralPosterTemplate: ReferralPosterTemplateRecord }>(
                 updateReferralPosterTemplateMutation,
-                { input: { id: value.id, ...posterTemplateInput(value) } },
-            ),
+                { input: { id: value.id, ...contentInput, expectedUpdatedAt: value.expectedUpdatedAt } },
+            );
+        },
         onSuccess: () => {
             toast.success('海报模板已保存');
             setDraft(null);
+            onChanged();
+        },
+        onError: error => toast.error(errorMessage(error)),
+    });
+    const toggleTemplate = useMutation({
+        mutationFn: (value: { id: string; enabled: boolean }) =>
+            api.mutate(setReferralPosterTemplateEnabledMutation, {
+                ...value,
+                expectedUpdatedAt: programUpdatedAt,
+            }),
+        onSuccess: () => {
+            toast.success('海报状态已更新');
             onChanged();
         },
         onError: error => toast.error(errorMessage(error)),
@@ -875,12 +851,9 @@ function PosterTemplateManager({
                                     <span className="text-xs font-medium">在客户端显示</span>
                                     <Switch
                                         checked={template.enabled}
-                                        disabled={disabled || updateTemplate.isPending}
+                                        disabled={disabled || toggleTemplate.isPending}
                                         onCheckedChange={checked =>
-                                            updateTemplate.mutate({
-                                                ...posterTemplateDraft(template),
-                                                enabled: checked,
-                                            } as PosterTemplateDraft & { id: string })
+                                            toggleTemplate.mutate({ id: template.id, enabled: checked })
                                         }
                                     />
                                 </div>
@@ -890,7 +863,12 @@ function PosterTemplateManager({
                                         size="sm"
                                         variant="outline"
                                         disabled={disabled}
-                                        onClick={() => setDraft(posterTemplateDraft(template))}
+                                        onClick={() =>
+                                            setDraft({
+                                                ...posterTemplateDraft(template),
+                                                expectedUpdatedAt: programUpdatedAt,
+                                            })
+                                        }
                                     >
                                         <Pencil className="size-3.5" />
                                         编辑
@@ -1045,7 +1023,7 @@ function PosterTemplateEditor({
                     <BooleanField
                         label="启用模板"
                         checked={draft.enabled}
-                        disabled={disabled}
+                        disabled={disabled || Boolean(draft.id)}
                         onChange={value => update('enabled', value)}
                         description="关闭后客户端立即停止展示该模板。"
                     />
@@ -1502,7 +1480,13 @@ function posterTemplateDraft(template: ReferralPosterTemplateRecord): PosterTemp
 }
 
 function posterTemplateInput(draft: PosterTemplateDraft) {
-    const { id: _id, posterBackgroundAsset, shareBackgroundAsset, ...input } = draft;
+    const {
+        id: _id,
+        expectedUpdatedAt: _version,
+        posterBackgroundAsset,
+        shareBackgroundAsset,
+        ...input
+    } = draft;
     return {
         ...input,
         posterBackgroundAssetId: posterBackgroundAsset?.id ?? null,

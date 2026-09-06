@@ -32,7 +32,7 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
     { prefix: '/marketing/sharing', permissions: ['ReadReferral'] },
     {
         prefix: '/marketing/referrals',
-        permissions: ['ReadPromotion', 'ReadCustomer', 'ReadOrder'],
+        permissions: ['ReadReferral'],
     },
     { prefix: '/storefront', permissions: ['ReadStorefrontContent'] },
     { prefix: '/plugins/client-plugins', permissions: ['ReadStorefrontContent'] },

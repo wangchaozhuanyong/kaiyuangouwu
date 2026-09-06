@@ -58,6 +58,14 @@ const makeProgram = (id: string) => ({
     posterTemplateConfigs: params.has('empty') ? [] : [{ ...custom }],
 });
 const programs = { 'fixture-a': makeProgram('fixture-a'), 'fixture-b': makeProgram('fixture-b') };
+// Optional shared synthetic backend state for the two-window browser regression.
+const sharedState = params.has('shared')
+    ? new BroadcastChannel(`sharing-fixture-${params.get('shared')}`)
+    : null;
+sharedState?.addEventListener('message', event => {
+    const key = event.data.channelId as keyof typeof programs;
+    if (key in programs) Object.assign(programs[key], event.data.program);
+});
 const asset = {
     __typename: 'Asset',
     id: 'asset-1',
@@ -74,6 +82,12 @@ Object.assign(window, {
         operations,
         faults,
         state: () => programs[channelId as keyof typeof programs],
+        disableCustomConcurrently: () => {
+            const program = programs[channelId as keyof typeof programs];
+            program.posterTemplateConfigs[0].enabled = false;
+            program.updatedAt = stamp();
+            void client.refetchQueries({ include: ['AdminSharingSettings'] });
+        },
         switchChannel: () => {
             channelId = channelId === 'fixture-a' ? 'fixture-b' : 'fixture-a';
             void client.refetchQueries({ include: ['AdminSharingSettings'] });
@@ -122,8 +136,14 @@ const client = new ApolloClient({
                             name === 'AdminCreateReferralPoster' ||
                             name === 'AdminUpdateReferralPoster'
                         ) {
+                            const previous = program.posterTemplateConfigs.find(
+                                template => template.id === input.id,
+                            );
+                            if (input.id && input.expectedUpdatedAt !== program.updatedAt)
+                                throw new Error('CONCURRENT_MODIFICATION: 分享配置已被其他管理员更新');
+                            if (input.id && 'enabled' in input) throw new Error('Use the status action');
                             const next = {
-                                ...custom,
+                                ...(previous ?? custom),
                                 ...input,
                                 id: input.id || `custom-${++revision}`,
                                 updatedAt: stamp(),
@@ -133,11 +153,14 @@ const client = new ApolloClient({
                             program.posterTemplateConfigs = input.id
                                 ? program.posterTemplateConfigs.map(t => (t.id === input.id ? next : t))
                                 : [...program.posterTemplateConfigs, next];
+                            program.updatedAt = stamp();
                             data = {
                                 [input.id ? 'updateReferralPosterTemplate' : 'createReferralPosterTemplate']:
                                     next,
                             };
                         } else throw new Error(`Unexpected fixture operation: ${name}`);
+                        if (/Update|Create|SetReferral/.test(name))
+                            sharedState?.postMessage({ channelId, program: structuredClone(program) });
                         observer.next({ data: structuredClone(data) });
                         observer.complete();
                     } catch (error) {

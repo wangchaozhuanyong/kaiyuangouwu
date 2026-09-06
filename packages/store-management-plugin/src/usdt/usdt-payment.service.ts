@@ -11,7 +11,7 @@ import {
 } from '@vendure/core';
 import { AdminNotificationRequestedEvent } from '@vendure/operations-dashboard-plugin';
 import { createHash, randomInt } from 'node:crypto';
-import { LessThan, MoreThan, QueryFailedError } from 'typeorm';
+import { In, IsNull, LessThan, Not, Repository } from 'typeorm';
 
 import { StorefrontUsdtCheckoutQuote } from '../entities/storefront-usdt-checkout-quote.entity';
 import { StorefrontUsdtPaymentIntent } from '../entities/storefront-usdt-payment-intent.entity';
@@ -276,8 +276,11 @@ export class UsdtPaymentService {
                 wallet.receivingAddressFingerprint,
                 expectedUsdtAmount,
             );
-            try {
-                return await repository.save(
+            // ON CONFLICT DO NOTHING keeps a PostgreSQL transaction usable after a collision.
+            await repository
+                .createQueryBuilder()
+                .insert()
+                .values(
                     new StorefrontUsdtPaymentIntent({
                         channelId: quote.channelId,
                         orderId: quote.orderId,
@@ -288,6 +291,7 @@ export class UsdtPaymentService {
                         receivingAddress: wallet.receivingAddress,
                         receivingAddressFingerprint: wallet.receivingAddressFingerprint,
                         matchKey,
+                        activeMatchKey: matchKey,
                         baseUsdtAmount: baseAmount,
                         expectedUsdtAmount,
                         status: USDT_PAYMENT_INTENT_STATUS.pending,
@@ -301,12 +305,12 @@ export class UsdtPaymentService {
                         failureReason: null,
                         expiresAt: quote.expiresAt,
                     }),
-                );
-            } catch (error) {
-                if (!isUniqueConstraintViolation(error)) throw error;
-                const concurrent = await repository.findOne({ where: { quoteId: quote.id } });
-                if (concurrent) return concurrent;
-            }
+                )
+                .orIgnore()
+                .updateEntity(false)
+                .execute();
+            const allocated = await findIntentForQuote(repository, quote.id);
+            if (allocated) return allocated;
         }
         throw new Error('当前 USDT 专属付款金额已用完，请稍后重新生成报价');
     }
@@ -322,27 +326,21 @@ export class UsdtPaymentService {
         };
         const repository = this.connection.getRepository(ctx, StorefrontUsdtPaymentIntent);
         const expiryCutoff = new Date(now.getTime() - FINALITY_DISCOVERY_GRACE_MS);
-        const stale = await repository.find({
-            where: {
-                status: USDT_PAYMENT_INTENT_STATUS.pending,
-                expiresAt: LessThan(expiryCutoff),
-            },
-        });
-        if (stale.length) {
-            for (const intent of stale) intent.status = USDT_PAYMENT_INTENT_STATUS.expired;
-            await repository.save(stale, { reload: false });
-            result.expiredCount = stale.length;
-        }
-
+        // Scan old pending/expired windows before releasing them, including after worker downtime.
         const pending = await repository.find({
-            where: {
-                status: USDT_PAYMENT_INTENT_STATUS.pending,
-                expiresAt: MoreThan(expiryCutoff),
-            },
+            where: [
+                { status: USDT_PAYMENT_INTENT_STATUS.pending },
+                {
+                    status: In([USDT_PAYMENT_INTENT_STATUS.expired, USDT_PAYMENT_INTENT_STATUS.settled]),
+                    activeMatchKey: Not(IsNull()),
+                },
+            ],
             relations: { channel: true, quote: true },
             order: { createdAt: 'ASC' },
         });
-        result.pendingIntentCount = pending.length;
+        result.pendingIntentCount = pending.filter(
+            intent => intent.status === USDT_PAYMENT_INTENT_STATUS.pending,
+        ).length;
         result.configured = pending.length > 0;
         if (!pending.length) return result;
 
@@ -357,14 +355,23 @@ export class UsdtPaymentService {
                 (oldest, intent) => (intent.createdAt < oldest ? intent.createdAt : oldest),
                 addressIntents[0].createdAt,
             );
-            const transfers = await this.tronClient.incomingTransfers(
+            const scan = await this.tronClient.scanIncomingTransfers(
                 receivingAddress,
                 new Date(oldestCreatedAt.getTime() - PAYMENT_MATCH_GRACE_MS),
+                now,
             );
-            result.transferCount += transfers.length;
+            const claimed = scan.transfers.length
+                ? await repository.find({
+                      where: { transactionId: In(scan.transfers.map(transfer => transfer.transactionId)) },
+                  })
+                : [];
+            const claimedIds = new Set(claimed.map(intent => intent.transactionId));
+            const transfers = scan.transfers.filter(transfer => !claimedIds.has(transfer.transactionId));
+            result.transferCount += scan.transfers.length;
             const matches = new Map<string, ConfirmedTrc20Transfer>();
             const matchedTransactionIds = new Set<string>();
             for (const intent of addressIntents) {
+                if (intent.status === USDT_PAYMENT_INTENT_STATUS.settled) continue;
                 const transfer = findMatchingTransfer(intent, transfers);
                 if (!transfer) continue;
                 matches.set(String(intent.id), transfer);
@@ -376,31 +383,61 @@ export class UsdtPaymentService {
                 await this.publishAmountMismatch(ctx, addressIntents, transfer, solidified.blockNumber);
             }
             for (const intent of addressIntents) {
-                intent.lastCheckedAt = now;
                 const transfer = matches.get(String(intent.id));
-                if (!transfer) continue;
-                const solidified = await this.tronClient.solidifiedTransaction(transfer.transactionId);
-                if (!solidified) continue;
-                let status: string;
-                try {
-                    status = await this.settleMatchedIntent(intent, transfer, solidified.blockNumber, now);
-                } catch (error) {
-                    await this.publishManualReview(
-                        ctx,
-                        intent,
-                        `USDT 入账后未能完整落库：${safeError(error)}`,
-                        transfer,
-                        'payment-persistence',
-                    );
-                    throw error;
+                if (transfer) {
+                    const solidified = await this.tronClient.solidifiedTransaction(transfer.transactionId);
+                    // A transfer without finality still owns its old payment window.
+                    if (!solidified) continue;
+                    try {
+                        intent.status = await this.settleMatchedIntent(
+                            intent,
+                            transfer,
+                            solidified.blockNumber,
+                            now,
+                        );
+                    } catch (error) {
+                        await this.publishManualReview(
+                            ctx,
+                            intent,
+                            `USDT 入账后未能完整落库：${safeError(error)}`,
+                            transfer,
+                            'payment-persistence',
+                        );
+                        throw error;
+                    }
+                    if (intent.status === USDT_PAYMENT_INTENT_STATUS.settled) result.settledCount += 1;
+                    if (intent.status === USDT_PAYMENT_INTENT_STATUS.manualReview)
+                        result.manualReviewCount += 1;
                 }
-                intent.status = status as StorefrontUsdtPaymentIntent['status'];
-                if (status === USDT_PAYMENT_INTENT_STATUS.settled) result.settledCount += 1;
-                if (status === USDT_PAYMENT_INTENT_STATUS.manualReview) result.manualReviewCount += 1;
+                if (intent.status === USDT_PAYMENT_INTENT_STATUS.manualReview) continue;
+                const releasable = scan.complete && intent.expiresAt < expiryCutoff;
+                const status =
+                    releasable && intent.status === USDT_PAYMENT_INTENT_STATUS.pending
+                        ? USDT_PAYMENT_INTENT_STATUS.expired
+                        : intent.status;
+                // A stale worker snapshot must never overwrite a concurrent settlement or manual review.
+                const updated = await repository.update(
+                    {
+                        id: intent.id,
+                        status: intent.status,
+                        ...(releasable
+                            ? {
+                                  activeMatchKey: intent.activeMatchKey ?? IsNull(),
+                                  expiresAt: LessThan(expiryCutoff),
+                              }
+                            : {}),
+                    },
+                    { lastCheckedAt: now, ...(releasable ? { status, activeMatchKey: null } : {}) },
+                );
+                if (
+                    updated.affected &&
+                    status === USDT_PAYMENT_INTENT_STATUS.expired &&
+                    intent.status !== status
+                ) {
+                    result.expiredCount += 1;
+                }
             }
         }
-        const stillPending = pending.filter(intent => intent.status === USDT_PAYMENT_INTENT_STATUS.pending);
-        if (stillPending.length) await repository.save(stillPending, { reload: false });
         return result;
     }
 
@@ -409,7 +446,7 @@ export class UsdtPaymentService {
         transfer: ConfirmedTrc20Transfer,
         blockNumber: number,
         now: Date,
-    ): Promise<string> {
+    ): Promise<StorefrontUsdtPaymentIntent['status']> {
         const channelContext = await this.requestContextService.create({
             apiType: 'admin',
             channelOrToken: intent.channel,
@@ -417,8 +454,35 @@ export class UsdtPaymentService {
         return this.connection.withTransaction(channelContext, async ctx => {
             const repository = this.connection.getRepository(ctx, StorefrontUsdtPaymentIntent);
             const locked = await this.findLockedIntent(ctx, intent.id);
-            if (!locked || locked.status !== USDT_PAYMENT_INTENT_STATUS.pending) {
+            if (
+                !locked ||
+                ![USDT_PAYMENT_INTENT_STATUS.pending, USDT_PAYMENT_INTENT_STATUS.expired].includes(
+                    locked.status as 'PENDING' | 'EXPIRED',
+                ) ||
+                !locked.activeMatchKey
+            ) {
                 return locked?.status ?? USDT_PAYMENT_INTENT_STATUS.manualReview;
+            }
+            const claimed = await repository.findOne({ where: { transactionId: transfer.transactionId } });
+            if (claimed && String(claimed.id) !== String(locked.id)) return locked.status;
+            const history = await repository.findOne({
+                where: { matchKey: locked.matchKey, id: Not(locked.id) },
+            });
+            locked.transactionId = transfer.transactionId;
+            locked.senderAddress = transfer.from;
+            locked.receivedUsdtAmount = transfer.amount;
+            locked.blockNumber = blockNumber;
+            locked.blockTimestamp = transfer.blockTimestamp;
+            locked.lastCheckedAt = now;
+            // Claim the transaction before calling Vendure or notifying operators. The unique index
+            // also arbitrates different workers trying to attach one transfer to different intents.
+            await repository.save(locked, { reload: false });
+            if (history) {
+                locked.status = USDT_PAYMENT_INTENT_STATUS.manualReview;
+                locked.failureReason = '付款金额曾用于其他报价，需核实付款归属后处理';
+                await repository.save(locked, { reload: false });
+                await this.publishManualReview(ctx, locked, locked.failureReason, transfer, 'reused-amount');
+                return locked.status;
             }
             if (
                 locked.network !== USDT_TRC20_NETWORK ||
@@ -438,13 +502,6 @@ export class UsdtPaymentService {
                 );
                 return locked.status;
             }
-
-            locked.transactionId = transfer.transactionId;
-            locked.senderAddress = transfer.from;
-            locked.receivedUsdtAmount = transfer.amount;
-            locked.blockNumber = blockNumber;
-            locked.blockTimestamp = transfer.blockTimestamp;
-            locked.lastCheckedAt = now;
 
             const quote = await this.connection.getEntityOrThrow(
                 ctx,
@@ -645,15 +702,20 @@ function formatUsdtUnits(value: bigint): string {
     return `${whole}.${fractional}`;
 }
 
-function isUniqueConstraintViolation(error: unknown): boolean {
-    if (!(error instanceof QueryFailedError)) return false;
-    const driverError = error.driverError as { code?: string; errno?: number };
-    return (
-        driverError.code === '23505' ||
-        driverError.code === 'ER_DUP_ENTRY' ||
-        driverError.code === 'SQLITE_CONSTRAINT' ||
-        driverError.errno === 1062
-    );
+async function findIntentForQuote(
+    repository: Repository<StorefrontUsdtPaymentIntent>,
+    quoteId: StorefrontUsdtCheckoutQuote['id'],
+): Promise<StorefrontUsdtPaymentIntent | null> {
+    const query = repository.createQueryBuilder('intent').where('intent.quoteId = :quoteId', { quoteId });
+    const databaseType = repository.manager.connection.options.type;
+    if (
+        repository.manager.queryRunner?.isTransactionActive &&
+        ['mysql', 'mariadb', 'postgres'].includes(databaseType)
+    ) {
+        // A current read can see the concurrent insert even under MySQL REPEATABLE READ.
+        query.setLock('pessimistic_read');
+    }
+    return query.getOne();
 }
 
 function isLockUnsupported(error: unknown): boolean {

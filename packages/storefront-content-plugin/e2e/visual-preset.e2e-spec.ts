@@ -7,6 +7,7 @@ import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { initialData } from '../../../e2e-common/e2e-initial-data';
+import { createScopedAdminFixture } from '../../../e2e-common/scoped-admin-fixture';
 import { StorefrontContentPlugin } from '../src/storefront-content.plugin';
 import { type StorefrontVisualPresetConfig } from '../src/visual-presets';
 
@@ -47,6 +48,55 @@ describe('visual preset Admin API to Shop API persistence', () => {
     afterAll(async () => {
         await server.destroy();
         rmSync(tempPath, { recursive: true, force: true });
+    });
+
+    it.each([
+        { code: 'content-read', permissions: ['ReadStorefrontContent'], read: true, write: false },
+        {
+            code: 'content-edit',
+            permissions: ['ReadStorefrontContent', 'UpdateStorefrontContent'],
+            read: true,
+            write: true,
+        },
+        { code: 'content-other', permissions: ['ReadCatalog'], read: false, write: false },
+        { code: 'content-none', permissions: [], read: false, write: false },
+    ])('enforces the real Admin API role $code', async role => {
+        const credentials = await createScopedAdminFixture(adminClient, role.code, role.permissions);
+        const original = (await adminClient.query(read)).storefrontVisualPreset;
+        try {
+            await adminClient.asUserWithCredentials(credentials.emailAddress, credentials.password);
+            const request = adminClient.query(read);
+            if (role.read) {
+                expect((await request).storefrontVisualPreset).toEqual(original);
+                expect(
+                    (
+                        await adminClient.query(gql`
+                            query {
+                                storefrontContentBlocks {
+                                    id
+                                }
+                            }
+                        `)
+                    ).storefrontContentBlocks,
+                ).toEqual([]);
+            } else {
+                await expect(request).rejects.toThrow(/forbidden|authorized/i);
+            }
+            const mutation = adminClient.query(write, {
+                input: {
+                    channelId: original.channelId,
+                    presetId: 'classic',
+                    expectedRevision: original.revision,
+                },
+            });
+            if (role.write) {
+                expect((await mutation).updateStorefrontVisualPreset.presetId).toBe('classic');
+            } else {
+                await expect(mutation).rejects.toThrow(/forbidden|authorized/i);
+            }
+        } finally {
+            await adminClient.asSuperAdmin();
+        }
     });
 
     it('persists an encoded channel selection, hides system configuration from decoration, and restores classic', async () => {

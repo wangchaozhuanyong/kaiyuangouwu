@@ -920,8 +920,8 @@ export const adminApiExtensions = gql`
 
     input UpdateReferralPosterTemplateInput {
         id: ID!
+        expectedUpdatedAt: DateTime!
         name: String!
-        enabled: Boolean!
         position: Int!
         layoutVariant: String!
         posterBackgroundAssetId: ID
