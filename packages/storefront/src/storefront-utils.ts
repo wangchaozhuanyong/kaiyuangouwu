@@ -19,8 +19,8 @@ export const FAVORITE_PRODUCT_LIMIT = 100;
 export const RECENT_PRODUCT_LIMIT = 20;
 
 export const DEFAULT_STOREFRONT_NAMES: Record<StorefrontLanguage, string> = {
-    zh: 'MOYAO AI｜模钥',
-    en: 'MOYAO AI',
+    zh: '店铺',
+    en: 'Store',
 };
 
 export function storefrontNameDisplayUnits(value: string): number {

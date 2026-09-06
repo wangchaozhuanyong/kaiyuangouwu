@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { channelRequestContext } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
@@ -39,6 +40,7 @@ import {
     type SystemAnnouncementRecord,
 } from '../../graphql/storefront.graphql';
 import { useAccessibleDialog } from '../../hooks/use-accessible-dialog';
+import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { useUrlTab } from '../../hooks/use-url-tab';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import {
@@ -50,13 +52,19 @@ import {
     storefrontBlockInput,
     toLocalDateTime,
 } from './storefront-content-utils';
+import { contentPublicationLabels, contentPublicationStatus } from './storefront-publication';
 import { StorefrontBlockEditor } from './StorefrontBlockEditor';
 
 type ContentTab = 'PAGES' | 'ANNOUNCEMENTS' | 'LANDING';
 const CONTENT_TABS = { pages: 'PAGES', announcements: 'ANNOUNCEMENTS', landing: 'LANDING' } as const;
 
 export function StorefrontContentModule() {
-    const [tab, setTab] = useUrlTab<ContentTab>(CONTENT_TABS, 'pages');
+    const { hasAnyPermission } = useAdminPermissions();
+    const canCreate = hasAnyPermission(['CreateStorefrontContent']);
+    const canUpdate = hasAnyPermission(['UpdateStorefrontContent']);
+    const canManageAnnouncements = hasAnyPermission(['SuperAdmin']);
+    const [requestedTab, setTab] = useUrlTab<ContentTab>(CONTENT_TABS, 'pages');
+    const tab = requestedTab === 'ANNOUNCEMENTS' && !canManageAnnouncements ? 'PAGES' : requestedTab;
     const [searchParams, setSearchParams] = useSearchParams();
     const [editingBlock, setEditingBlock] = useState<StorefrontContentBlock | null>(null);
     const [editingAnnouncement, setEditingAnnouncement] = useState<SystemAnnouncementRecord | 'NEW' | null>(
@@ -71,7 +79,7 @@ export function StorefrontContentModule() {
     const announcements = useQuery<{ systemAnnouncements: SystemAnnouncementRecord[] }>(
         SYSTEM_ANNOUNCEMENTS_QUERY,
         {
-            skip: tab !== 'ANNOUNCEMENTS',
+            skip: tab !== 'ANNOUNCEMENTS' || !canManageAnnouncements,
             fetchPolicy: 'cache-and-network',
         },
     );
@@ -99,8 +107,11 @@ export function StorefrontContentModule() {
             { replace: true },
         );
     };
-    const [createBlock, createBlockState] = useMutation(CREATE_STOREFRONT_BLOCK_MUTATION);
-    const [updateBlock, updateBlockState] = useMutation(UPDATE_STOREFRONT_BLOCK_MUTATION);
+    const mutationOptions = content.data
+        ? { context: channelRequestContext(content.data.activeChannel.token) }
+        : {};
+    const [createBlock, createBlockState] = useMutation(CREATE_STOREFRONT_BLOCK_MUTATION, mutationOptions);
+    const [updateBlock, updateBlockState] = useMutation(UPDATE_STOREFRONT_BLOCK_MUTATION, mutationOptions);
     const [deleteAnnouncement, deleteAnnouncementState] = useMutation<{
         deleteSystemAnnouncement: { result: string; message?: string | null };
     }>(DELETE_SYSTEM_ANNOUNCEMENT_MUTATION);
@@ -118,6 +129,8 @@ export function StorefrontContentModule() {
     };
 
     const saveBlock = async (block: StorefrontContentBlock) => {
+        setActionError('');
+        if (content.loading || content.error || !(block.id ? canUpdate : canCreate)) return;
         try {
             if (block.id) {
                 if (!block.updatedAt) throw new Error('缺少内容版本，请刷新后重试');
@@ -134,7 +147,7 @@ export function StorefrontContentModule() {
                 await createBlock({ variables: { input: storefrontBlockInput(block) } });
             }
             setEditingBlock(null);
-            showNotice('店铺内容已保存并向客户端生效');
+            showNotice('店铺内容已保存，客户端按发布状态展示');
             await content.refetch();
         } catch (error) {
             showError(error);
@@ -142,7 +155,7 @@ export function StorefrontContentModule() {
     };
 
     const toggleBlock = async (block: StorefrontContentBlock) => {
-        if (!block.id || !block.updatedAt) return;
+        if (!block.id || !block.updatedAt || !canUpdate || content.loading || content.error) return;
         try {
             await updateBlock({
                 variables: {
@@ -211,12 +224,14 @@ export function StorefrontContentModule() {
                         icon={FileText}
                         label="固定内容"
                     />
-                    <TabButton
-                        active={tab === 'ANNOUNCEMENTS'}
-                        onClick={() => setTab('ANNOUNCEMENTS')}
-                        icon={Megaphone}
-                        label="系统公告"
-                    />
+                    {canManageAnnouncements && (
+                        <TabButton
+                            active={tab === 'ANNOUNCEMENTS'}
+                            onClick={() => setTab('ANNOUNCEMENTS')}
+                            icon={Megaphone}
+                            label="系统公告"
+                        />
+                    )}
                     <TabButton
                         active={tab === 'LANDING'}
                         onClick={() => setTab('LANDING')}
@@ -301,6 +316,7 @@ export function StorefrontContentModule() {
                 <StorefrontBlockEditor
                     key={editingBlock.id ?? editingBlock.code}
                     value={editingBlock}
+                    error={actionError}
                     saving={createBlockState.loading || updateBlockState.loading}
                     onClose={() => setEditingBlock(null)}
                     onSave={saveBlock}
@@ -347,6 +363,9 @@ function PageBlockList({
     onCreate: (descriptor: (typeof contentModuleDescriptors)[number]) => void;
     onToggle: (block: StorefrontContentBlock) => void;
 }) {
+    const { hasAnyPermission } = useAdminPermissions();
+    const canCreate = hasAnyPermission(['CreateStorefrontContent']);
+    const canUpdate = hasAnyPermission(['UpdateStorefrontContent']);
     return (
         <div>
             <div className="mb-4">
@@ -374,7 +393,9 @@ function PageBlockList({
                                 <span
                                     className={`rounded px-2 py-1 text-[10px] font-bold ${block?.enabled ? 'bg-emerald-50 text-emerald-700' : block ? 'bg-slate-100 text-slate-500' : 'bg-amber-50 text-amber-700'}`}
                                 >
-                                    {block?.enabled ? '前台已启用' : block ? '已停用' : '待配置'}
+                                    {block
+                                        ? contentPublicationLabels[contentPublicationStatus(block)]
+                                        : '待配置'}
                                 </span>
                             </div>
                             <h3 className="mt-4 text-sm font-bold text-slate-900">{descriptor.name}</h3>
@@ -389,6 +410,7 @@ function PageBlockList({
                                     <>
                                         <button
                                             type="button"
+                                            disabled={!canUpdate || pending}
                                             onClick={() => onEdit(block)}
                                             className="flex flex-1 items-center justify-center gap-1 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700"
                                         >
@@ -398,7 +420,7 @@ function PageBlockList({
                                         <button
                                             type="button"
                                             onClick={() => onToggle(block)}
-                                            disabled={pending}
+                                            disabled={pending || !canUpdate}
                                             className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-50"
                                         >
                                             {block.enabled ? '停用' : '启用'}
@@ -407,6 +429,7 @@ function PageBlockList({
                                 ) : (
                                     <button
                                         type="button"
+                                        disabled={!canCreate || pending}
                                         onClick={() => onCreate(descriptor)}
                                         className="flex w-full items-center justify-center gap-1 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700"
                                     >

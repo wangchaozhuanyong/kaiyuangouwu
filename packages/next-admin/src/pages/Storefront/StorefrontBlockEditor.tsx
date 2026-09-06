@@ -13,6 +13,12 @@ import {
     X,
 } from 'lucide-react';
 import { useDeferredValue, useRef, useState } from 'react';
+import {
+    heroThemePresets,
+    homepageVisualStyles,
+    normalizedHeroThemePreset,
+    normalizedHomepageVisualStyle,
+} from '../../../../storefront-content-plugin/src/content-visuals';
 import { uploadAdminFiles } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
@@ -83,11 +89,13 @@ const targetOptions: Array<[StorefrontTargetType, string]> = [
 export function StorefrontBlockEditor({
     value,
     saving,
+    error,
     onClose,
     onSave,
 }: {
     value: StorefrontContentBlock;
     saving: boolean;
+    error?: string;
     onClose: () => void;
     onSave: (value: StorefrontContentBlock) => Promise<void>;
 }) {
@@ -175,6 +183,14 @@ export function StorefrontBlockEditor({
                 </header>
 
                 <div className="flex-1 overflow-y-auto p-5 sm:p-7">
+                    {error && (
+                        <p
+                            role="alert"
+                            className="mb-5 rounded-xl border border-rose-200 bg-rose-50 p-4 text-xs text-rose-800"
+                        >
+                            {error}
+                        </p>
+                    )}
                     {options.error && (
                         <div
                             className="mx-auto mb-5 flex max-w-6xl flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900 sm:flex-row sm:items-center sm:justify-between"
@@ -364,9 +380,128 @@ export function StorefrontBlockEditor({
                                             />
                                         </div>
                                     )}
+                                    {['QUICK_LINKS', 'TRUST_BAR', 'CATEGORY_AD'].includes(draft.type) && (
+                                        <Field label="卡片样式">
+                                            <select
+                                                className={inputClass}
+                                                value={normalizedHomepageVisualStyle(
+                                                    draft.settings?.visualStyle,
+                                                )}
+                                                onChange={event =>
+                                                    updateSettings({ visualStyle: event.target.value })
+                                                }
+                                            >
+                                                {homepageVisualStyles.map(option => (
+                                                    <option key={option.value} value={option.value}>
+                                                        {option.label}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </Field>
+                                    )}
+                                    {draft.type === 'HERO' && (
+                                        <>
+                                            <Field label="轮播图样式">
+                                                <select
+                                                    className={inputClass}
+                                                    value={normalizedHeroThemePreset(
+                                                        draft.settings?.themePreset,
+                                                    )}
+                                                    onChange={event =>
+                                                        updateSettings({ themePreset: event.target.value })
+                                                    }
+                                                >
+                                                    {heroThemePresets.map(option => (
+                                                        <option key={option.value} value={option.value}>
+                                                            {option.label}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </Field>
+                                            <Field label="遮罩对比度">
+                                                <select
+                                                    className={inputClass}
+                                                    value={
+                                                        draft.settings?.contrastMode === 'high'
+                                                            ? 'high'
+                                                            : 'standard'
+                                                    }
+                                                    onChange={event =>
+                                                        updateSettings({ contrastMode: event.target.value })
+                                                    }
+                                                >
+                                                    <option value="standard">标准</option>
+                                                    <option value="high">高对比度</option>
+                                                </select>
+                                            </Field>
+                                        </>
+                                    )}
+                                    {['HERO', 'AUTH_LOGIN', 'AUTH_REGISTER'].includes(draft.type) && (
+                                        <Field label="强调色">
+                                            <ColorInput
+                                                value={stringSetting(
+                                                    draft.settings?.accentColor,
+                                                    draft.type === 'AUTH_REGISTER'
+                                                        ? '#8B5CF6'
+                                                        : draft.type === 'AUTH_LOGIN'
+                                                          ? '#22D3EE'
+                                                          : normalizedHeroThemePreset(
+                                                                  draft.settings?.themePreset,
+                                                              ) === 'warm'
+                                                            ? '#fbbf24'
+                                                            : '#67e8f9',
+                                                )}
+                                                onChange={value => updateSettings({ accentColor: value })}
+                                            />
+                                        </Field>
+                                    )}
+                                    {draft.type === 'HERO' && (
+                                        <>
+                                            <Field label="正文文字色">
+                                                <ColorInput
+                                                    value={stringSetting(
+                                                        draft.settings?.secondaryTextColor,
+                                                        '#cbd5e1',
+                                                    )}
+                                                    onChange={value =>
+                                                        updateSettings({ secondaryTextColor: value })
+                                                    }
+                                                />
+                                            </Field>
+                                            <Field label="按钮渐变色">
+                                                <ColorInput
+                                                    value={stringSetting(
+                                                        draft.settings?.accentSecondaryColor,
+                                                        normalizedHeroThemePreset(
+                                                            draft.settings?.themePreset,
+                                                        ) === 'warm'
+                                                            ? '#b45309'
+                                                            : '#0e7490',
+                                                    )}
+                                                    onChange={value =>
+                                                        updateSettings({ accentSecondaryColor: value })
+                                                    }
+                                                />
+                                            </Field>
+                                            <Field label="按钮文字色">
+                                                <ColorInput
+                                                    value={stringSetting(
+                                                        draft.settings?.buttonTextColor,
+                                                        '#ffffff',
+                                                    )}
+                                                    onChange={value =>
+                                                        updateSettings({ buttonTextColor: value })
+                                                    }
+                                                />
+                                            </Field>
+                                        </>
+                                    )}
                                     <Field label="背景色">
                                         <ColorInput
-                                            value={draft.backgroundColor ?? '#ffffff'}
+                                            value={
+                                                draft.backgroundColor ??
+                                                (draft.type === 'HERO' ? '#090d16' : '#ffffff')
+                                            }
                                             onChange={value => setDraft({ ...draft, backgroundColor: value })}
                                         />
                                     </Field>
@@ -374,7 +509,10 @@ export function StorefrontBlockEditor({
                                         <>
                                             <Field label="文字色">
                                                 <ColorInput
-                                                    value={draft.textColor ?? '#0f172a'}
+                                                    value={
+                                                        draft.textColor ??
+                                                        (draft.type === 'HERO' ? '#ffffff' : '#0f172a')
+                                                    }
                                                     onChange={value =>
                                                         setDraft({ ...draft, textColor: value })
                                                     }
@@ -1577,7 +1715,6 @@ function BlockPreview({
                         <div className="mt-4 grid grid-cols-2 gap-2">
                             {block.items
                                 .filter(item => item.enabled)
-                                .slice(0, 6)
                                 .map((item, index) => (
                                     <div
                                         key={item.id ?? index}
@@ -1712,6 +1849,8 @@ function moduleHasSettings(type: StorefrontContentBlock['type']) {
 function moduleUsesItems(type: StorefrontContentBlock['type']) {
     return [
         'HERO',
+        'AUTH_LOGIN',
+        'AUTH_REGISTER',
         'NOTICE',
         'QUICK_LINKS',
         'CORE_CATEGORIES',

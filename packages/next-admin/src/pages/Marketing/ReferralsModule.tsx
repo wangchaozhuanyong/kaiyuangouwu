@@ -2,7 +2,6 @@ import { useMutation, useQuery } from '@apollo/client/react';
 import {
     CircleDollarSign,
     Gift,
-    ImagePlus,
     Plus,
     RefreshCw,
     Save,
@@ -13,10 +12,10 @@ import {
     X,
 } from 'lucide-react';
 import { useState } from 'react';
+import { Link, Navigate, useSearchParams } from 'react-router-dom';
 import {
     REFERRAL_PROGRAM_QUERY,
     REFERRAL_REPORTS_QUERY,
-    ReferralPosterRecord,
     ReferralProgramRecord,
     ReferralProgramResult,
     ReferralReportsResult,
@@ -25,10 +24,9 @@ import {
 import { useUrlTab } from '../../hooks/use-url-tab';
 import { majorInputToMoney } from '../Sales/sales-utils';
 import { ErrorState, LoadingState, Message, TabButton } from '../Settings/settings-ui';
-import { FinancialDialog, PosterEditor, WithdrawalActionDialog } from './ReferralDialogs';
+import { FinancialDialog, WithdrawalActionDialog } from './ReferralDialogs';
 import {
     LedgerPanel,
-    PostersPanel,
     ProgramSettings,
     PromotersPanel,
     RewardsPanel,
@@ -44,10 +42,15 @@ const REFERRAL_TABS = {
     rewards: 'REWARDS',
     ledger: 'LEDGER',
     withdrawals: 'WITHDRAWALS',
-    posters: 'POSTERS',
 } as const;
 
 export function ReferralsModule() {
+    const [params] = useSearchParams();
+    if (params.get('tab') === 'posters') return <Navigate to="/marketing/sharing" replace />;
+    return <ReferralManagement />;
+}
+
+function ReferralManagement() {
     const [activeTab, setActiveTab] = useUrlTab<ReferralTab>(REFERRAL_TABS, 'settings');
     const [skips, setSkips] = useState<Record<ReportKey, number>>({
         summaries: 0,
@@ -62,7 +65,6 @@ export function ReferralsModule() {
     const [actionError, setActionError] = useState('');
     const [withdrawalAction, setWithdrawalAction] = useState<WithdrawalAction | null>(null);
     const [financialDialog, setFinancialDialog] = useState<'WITHDRAW' | 'ADJUST' | null>(null);
-    const [posterEditing, setPosterEditing] = useState<ReferralPosterRecord | 'NEW' | null>(null);
 
     const program = useQuery<ReferralProgramResult>(REFERRAL_PROGRAM_QUERY, {
         fetchPolicy: 'cache-and-network',
@@ -128,6 +130,12 @@ export function ReferralsModule() {
                 <div className="mx-auto flex w-full max-w-none flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <ReferralHeading />
                     <div className="flex flex-wrap gap-2">
+                        <Link
+                            to="/marketing/sharing"
+                            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700"
+                        >
+                            分享设置
+                        </Link>
                         <button
                             type="button"
                             onClick={() => void refreshAll()}
@@ -243,18 +251,8 @@ export function ReferralsModule() {
                                 >
                                     {`提款 ${reports.data?.referralWithdrawals.totalItems ?? 0}`}
                                 </TabButton>
-                                <TabButton
-                                    active={activeTab === 'POSTERS'}
-                                    onClick={() => {
-                                        setActiveTab('POSTERS');
-                                        setSearch('');
-                                    }}
-                                    icon={<ImagePlus className="h-3.5 w-3.5" />}
-                                >
-                                    分享海报
-                                </TabButton>
                             </nav>
-                            {activeTab !== 'SETTINGS' && activeTab !== 'POSTERS' && (
+                            {activeTab !== 'SETTINGS' && (
                                 <div className="relative max-w-md">
                                     <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                                     <input
@@ -281,7 +279,6 @@ export function ReferralsModule() {
                                     draft={draft}
                                     setDraft={setDraft}
                                     currencyCode={currencyCode}
-                                    program={program.data.referralProgram}
                                 />
                             )}
                             {activeTab === 'PROMOTERS' && (
@@ -329,17 +326,6 @@ export function ReferralsModule() {
                                     onRetry={() => void reports.refetch()}
                                 />
                             )}
-                            {activeTab === 'POSTERS' && (
-                                <PostersPanel
-                                    program={program.data.referralProgram}
-                                    onEdit={setPosterEditing}
-                                    onChanged={async message => {
-                                        setNotice(message);
-                                        await program.refetch();
-                                    }}
-                                    onError={setActionError}
-                                />
-                            )}
                         </>
                     )
                 )}
@@ -365,19 +351,6 @@ export function ReferralsModule() {
                         setFinancialDialog(null);
                         setNotice(message);
                         await reports.refetch();
-                    }}
-                    onError={setActionError}
-                />
-            )}
-            {posterEditing && program.data && (
-                <PosterEditor
-                    source={posterEditing}
-                    rewardRate={program.data.referralProgram.rewardRate}
-                    onClose={() => setPosterEditing(null)}
-                    onSaved={async message => {
-                        setPosterEditing(null);
-                        setNotice(message);
-                        await program.refetch();
                     }}
                     onError={setActionError}
                 />

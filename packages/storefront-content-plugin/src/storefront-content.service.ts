@@ -1,7 +1,8 @@
 import { Injectable, Optional } from '@nestjs/common';
 import { LanguageCode } from '@vendure/common/lib/generated-types';
 import { ID } from '@vendure/common/lib/shared-types';
-import { ContentTranslationService, isUsableEnglishTranslation } from '@vendure/content-translation-plugin';
+import { isUsableEnglishTranslation } from '@vendure/common/lib/translation-validation';
+import { ContentTranslationService } from '@vendure/content-translation-plugin';
 import {
     Asset,
     EntityNotFoundError,
@@ -31,6 +32,7 @@ import {
     storefrontContentTargetTypes,
     storefrontNavigationTargetPaths,
 } from './constants';
+import { createContentPublicationChecker } from './content-publication';
 import { StorefrontContentBlockTranslation } from './entities/storefront-content-block-translation.entity';
 import { StorefrontContentBlock } from './entities/storefront-content-block.entity';
 import { StorefrontContentItemTranslation } from './entities/storefront-content-item-translation.entity';
@@ -48,6 +50,8 @@ import {
     UpdateStorefrontContentBlockInput,
     UpdateStorefrontContentSettingsInput,
 } from './types';
+
+const contentPublicationStatus = createContentPublicationChecker(isUsableEnglishTranslation);
 
 interface ResolvedStorefrontImage {
     asset: Asset | null;
@@ -93,13 +97,9 @@ export class StorefrontContentService {
             },
             order: { position: 'ASC', createdAt: 'ASC', items: { position: 'ASC', createdAt: 'ASC' } },
         });
-        const published = blocks
-            .filter(
-                block => (!block.startsAt || block.startsAt <= now) && (!block.endsAt || block.endsAt > now),
-            )
-            .filter(block => this.hasCompletePublishedTranslations(block))
+        return blocks
+            .filter(block => contentPublicationStatus(block, now.getTime()) === 'PUBLISHED')
             .map(block => this.translateBlock(block, ctx, true));
-        return published.filter(block => block.type !== 'HERO' || this.hasPublishedImage(block));
     }
 
     async getSettings(ctx: RequestContext): Promise<{
@@ -677,40 +677,6 @@ export class StorefrontContentService {
         return translated;
     }
 
-    private hasCompletePublishedTranslations(block: StorefrontContentBlock): boolean {
-        const source = block.translations?.find(
-            translation => translation.languageCode === LanguageCode.zh_Hans,
-        );
-        const target = block.translations?.find(translation => translation.languageCode === LanguageCode.en);
-        if (!source?.title.trim() || !isUsableEnglishTranslation(target?.title)) return false;
-        const blockFields = ['subtitle', 'body', 'ctaLabel'] as const;
-        if (blockFields.some(field => !hasPublishableTranslationPair(source[field], target[field]))) {
-            return false;
-        }
-        return (block.items ?? [])
-            .filter(item => item.enabled)
-            .every(item => {
-                const itemSource = item.translations?.find(
-                    translation => translation.languageCode === LanguageCode.zh_Hans,
-                );
-                const itemTarget = item.translations?.find(
-                    translation => translation.languageCode === LanguageCode.en,
-                );
-                return (
-                    Boolean(itemSource?.label.trim()) &&
-                    isUsableEnglishTranslation(itemTarget?.label) &&
-                    hasPublishableTranslationPair(
-                        itemSource?.description ?? '',
-                        itemTarget?.description ?? '',
-                    )
-                );
-            });
-    }
-
-    private hasPublishedImage(block: StorefrontContentBlock): boolean {
-        return Boolean(block.imageUrl?.trim());
-    }
-
     private assertEnabledHeroHasImage(
         type: StorefrontContentBlockType,
         enabled: boolean,
@@ -1153,10 +1119,6 @@ export class StorefrontContentService {
     private optionalText(value: string | null | undefined): string | null {
         return value?.trim() || null;
     }
-}
-
-function hasPublishableTranslationPair(source: string, target: string): boolean {
-    return source.trim().length > 0 ? isUsableEnglishTranslation(target) : target.trim().length === 0;
 }
 
 function isLockNotSupportedError(error: unknown): boolean {

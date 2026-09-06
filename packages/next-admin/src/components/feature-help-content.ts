@@ -246,9 +246,15 @@ export const featureHelpContent = {
         example: '例如：将轮播图移到第一层，在其下方放置“本周推荐”商品楼层。',
         impact: '发布后会改变当前店铺首页的模块顺序与显示。',
     },
+    'storefront.carousel': {
+        purpose: '集中管理当前店铺的首页轮播图、播放顺序和轮播间隔。',
+        requirements: ['每张上线图片完成中英文内容和图片选择', '启停、排序及间隔保存后立即生效'],
+        example: '例如：新增两张轮播图片，将促销图片移到首位，并把轮播间隔设为 6 秒。',
+        impact: '全部图片组成一个首页轮播楼层；分享海报在营销的分享设置中管理。',
+    },
     'storefront.floor-order': {
         purpose: '调整已配置楼层的排序、启用状态和编辑入口。',
-        requirements: ['至少已添加一个楼层', '调整后点击保存首页'],
+        requirements: ['至少已添加一个楼层', '排序按钮会立即保存'],
         example: '例如：将“限时秒杀”移到“新品推荐”之前并启用。',
         impact: '影响当前店铺首页楼层顺序和可见性。',
     },
@@ -259,7 +265,7 @@ export const featureHelpContent = {
         impact: '添加后仅进入当前编辑草稿，完成保存后才生效。',
     },
     'storefront.structure-preview': {
-        purpose: '按当前草稿快速预览首页楼层结构，检查顺序和显隐。',
+        purpose: '按已保存内容和发布规则预览首页楼层结构，检查顺序、语言和显隐。',
         requirements: ['已加载当前店铺的楼层数据', '精确样式仍需到真实前台验收'],
         example: '例如：预览中确认轮播图、入口宫格和商品楼层的先后顺序。',
         impact: '预览本身不保存、不发布。',

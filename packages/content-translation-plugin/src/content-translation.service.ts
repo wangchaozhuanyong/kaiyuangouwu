@@ -1,7 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { containsHanContent } from '@vendure/common/lib/translation-validation';
 import { RequestContext, TransactionalConnection, UserInputError } from '@vendure/core';
 import { createHash } from 'node:crypto';
 import { IsNull } from 'typeorm';
+export { containsHanContent, isUsableEnglishTranslation } from '@vendure/common/lib/translation-validation';
 
 import { CONTENT_TRANSLATION_OPTIONS } from './constants.js';
 import { ContentTranslationState } from './entities/content-translation-state.entity.js';
@@ -275,14 +277,6 @@ export class ContentTranslationService {
 
 function hash(value: string): string {
     return createHash('sha256').update(value).digest('hex');
-}
-
-export function containsHanContent(value: string): boolean {
-    return /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/u.test(value);
-}
-
-export function isUsableEnglishTranslation(value: unknown): value is string {
-    return typeof value === 'string' && value.trim().length > 0 && !containsHanContent(value);
 }
 
 export const contentTranslationInternals = { hash, containsHanContent };

@@ -1,6 +1,6 @@
 import { ReferralReportsResult } from '../../graphql/marketing.graphql';
 
-export type ReferralTab = 'SETTINGS' | 'PROMOTERS' | 'REWARDS' | 'LEDGER' | 'WITHDRAWALS' | 'POSTERS';
+export type ReferralTab = 'SETTINGS' | 'PROMOTERS' | 'REWARDS' | 'LEDGER' | 'WITHDRAWALS';
 
 export type ReportKey = 'summaries' | 'relationships' | 'rewards' | 'ledger' | 'withdrawals';
 

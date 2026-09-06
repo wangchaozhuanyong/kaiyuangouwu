@@ -17,6 +17,7 @@ export const routeModuleLoaders = {
     customers: () => import('./pages/Customers/CustomersModule'),
     promotions: () => import('./pages/Marketing/PromotionsModule'),
     referrals: () => import('./pages/Marketing/ReferralsModule'),
+    sharing: () => import('./pages/Marketing/SharingModule'),
     storefront: () => import('./pages/Storefront/StorefrontModule'),
     storefrontContent: () => import('./pages/Storefront/StorefrontContentModule'),
     businessServicesCopy: () => import('./pages/Storefront/BusinessServicesCopyModule'),
@@ -54,6 +55,7 @@ export function getRouteModuleKey(target: string): RouteModuleKey | null {
     if (pathname.startsWith('/sales')) return 'sales';
     if (pathname.startsWith('/customers')) return 'customers';
     if (pathname === '/marketing/referrals') return 'referrals';
+    if (pathname === '/marketing/sharing') return 'sharing';
     if (pathname.startsWith('/marketing')) return 'promotions';
     if (pathname === '/storefront/content') return 'storefrontContent';
     if (pathname === '/storefront/business-services-copy') return 'businessServicesCopy';

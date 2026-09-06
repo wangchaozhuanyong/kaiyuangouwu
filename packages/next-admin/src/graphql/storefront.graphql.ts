@@ -16,6 +16,7 @@ const STOREFRONT_BLOCK_FIELDS = gql`
         imageAsset {
             id
             name
+            mimeType
             preview
             source
         }
@@ -44,6 +45,7 @@ const STOREFRONT_BLOCK_FIELDS = gql`
             imageAsset {
                 id
                 name
+                mimeType
                 preview
                 source
             }
@@ -305,6 +307,7 @@ export type StorefrontTargetType =
     'NONE' | 'URL' | 'PRODUCT' | 'COLLECTION' | 'CATEGORY' | 'SEARCH' | 'PAGE' | 'SUPPORT' | 'COUPON';
 
 export interface StorefrontAssetRef {
+    mimeType?: string;
     id: string;
     name: string;
     preview: string;

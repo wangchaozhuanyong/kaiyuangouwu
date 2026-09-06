@@ -11,6 +11,7 @@ import {
     SET_REFERRAL_POSTER_ENABLED_MUTATION,
     UPDATE_REFERRAL_PROGRAM_MUTATION,
 } from '../../graphql/marketing.graphql';
+import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { formatDateTime, formatMoney } from '../Sales/sales-utils';
 import { ErrorState, LoadingState, Message, Modal } from '../Settings/settings-ui';
 import {
@@ -76,12 +77,10 @@ export function ProgramSettings({
     draft,
     setDraft,
     currencyCode,
-    program,
 }: {
     draft: ProgramDraft;
     setDraft: (value: ProgramDraft) => void;
     currencyCode: string;
-    program: ReferralProgramRecord;
 }) {
     const validation = programDraftError(draft);
     return (
@@ -148,33 +147,6 @@ export function ProgramSettings({
                     onChange={attributionWindowDays => setDraft({ ...draft, attributionWindowDays })}
                     detail="客户打开邀请链接后，在该期限内注册自动归因。"
                 />
-                <label className="block text-[11px] font-bold text-slate-600">
-                    默认分享海报
-                    <select
-                        value={draft.defaultPosterTemplate}
-                        onChange={event => setDraft({ ...draft, defaultPosterTemplate: event.target.value })}
-                        className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-normal text-slate-900"
-                    >
-                        {draft.posterTemplates.length === 0 &&
-                            !program.posterTemplateConfigs.some(template => template.enabled) && (
-                                <option value="">全部隐藏，不提供海报</option>
-                            )}
-                        {program.systemPosterTemplateConfigs
-                            .filter(t => (draft.posterTemplates ?? []).includes(t.id))
-                            .map(template => (
-                                <option key={template.id} value={template.id}>
-                                    {template.name}（系统预置）
-                                </option>
-                            ))}
-                        {program.posterTemplateConfigs
-                            .filter(template => template.enabled)
-                            .map(template => (
-                                <option key={template.id} value={template.id}>
-                                    {template.name}
-                                </option>
-                            ))}
-                    </select>
-                </label>
             </div>
             {validation && <p className="mt-4 text-xs text-rose-600">{validation}</p>}
         </section>
@@ -732,16 +704,22 @@ export function WithdrawalsPanel({
 }
 
 export function PostersPanel({
+    disabled = false,
     program,
     onEdit,
     onChanged,
     onError,
 }: {
+    disabled?: boolean;
     program: ReferralProgramRecord;
     onEdit: (source: ReferralPosterRecord | 'NEW') => void;
     onChanged: (message: string) => Promise<void>;
     onError: (message: string) => void;
 }) {
+    const { hasAnyPermission } = useAdminPermissions();
+    const canCreate = !disabled && hasAnyPermission(['CreateReferral']);
+    const canUpdate = !disabled && hasAnyPermission(['UpdateReferral']);
+    const canDelete = !disabled && hasAnyPermission(['DeleteReferral']);
     const [deleting, setDeleting] = useState<ReferralPosterRecord | null>(null);
     const [remove, state] = useMutation<{
         deleteReferralPosterTemplate: { result: string; message?: string | null };
@@ -848,8 +826,7 @@ export function PostersPanel({
                         <FeatureHelpButton topic="marketing.poster-templates" title="系统预置海报模板" />
                     </h2>
                     <p className="mt-1 text-[11px] text-slate-500">
-                        系统内置 5
-                        款全屏移动端海报模板（1080×1920）。您可以通过“在客户端显示”开关自由选择哪些在买家端展示；开启的模板会自动与自定义模板一同在前台展示。
+                        全屏移动端海报模板（1080×1920）。您可以通过“在客户端分享面板显示”开关自由选择哪些在买家端展示；开启的模板会自动与自定义模板一同在前台展示。
                     </p>
                 </div>
                 <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -907,12 +884,12 @@ export function PostersPanel({
                                 <div className="p-3 pt-0 space-y-2">
                                     <label className="flex cursor-pointer items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5 text-xs">
                                         <span className="text-[11px] font-medium text-slate-700">
-                                            在客户端显示
+                                            在客户端分享面板显示
                                         </span>
                                         <input
                                             type="checkbox"
                                             checked={isEnabled}
-                                            disabled={isProgramBusy}
+                                            disabled={!canUpdate || isProgramBusy}
                                             onChange={e =>
                                                 void toggleSystemTemplate(sys.id, e.target.checked)
                                             }
@@ -921,7 +898,7 @@ export function PostersPanel({
                                     </label>
                                     <button
                                         type="button"
-                                        disabled={isProgramBusy || !isEnabled || isDefault}
+                                        disabled={!canUpdate || isProgramBusy || !isEnabled || isDefault}
                                         onClick={() => void makeDefaultTemplate(sys.id)}
                                         className="w-full rounded-lg border border-slate-200 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
                                     >
@@ -931,6 +908,7 @@ export function PostersPanel({
                                         type="button"
                                         className="w-full rounded-lg border border-slate-200 py-1.5 text-xs text-slate-700"
                                         onClick={() => onEdit({ ...sys, id: '', enabled: false })}
+                                        disabled={!canCreate || isProgramBusy}
                                     >
                                         基于此款创建本店模板
                                     </button>
@@ -959,6 +937,7 @@ export function PostersPanel({
                     </div>
                     <button
                         type="button"
+                        disabled={!canCreate || isProgramBusy}
                         onClick={() =>
                             onEdit(
                                 program.systemPosterTemplateConfigs[0]
@@ -1033,12 +1012,12 @@ export function PostersPanel({
                                 <div className="p-3 pt-0 space-y-2">
                                     <label className="flex cursor-pointer items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5 text-xs">
                                         <span className="text-[11px] font-medium text-slate-700">
-                                            在客户端显示
+                                            在客户端分享面板显示
                                         </span>
                                         <input
                                             type="checkbox"
                                             checked={template.enabled}
-                                            disabled={isProgramBusy}
+                                            disabled={!canUpdate || isProgramBusy}
                                             onChange={e =>
                                                 void toggleCustomTemplate(template, e.target.checked)
                                             }
@@ -1049,6 +1028,7 @@ export function PostersPanel({
                                         <button
                                             type="button"
                                             onClick={() => onEdit(template)}
+                                            disabled={!canUpdate || isProgramBusy}
                                             className="flex items-center justify-center gap-1 rounded-lg border border-slate-200 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
                                         >
                                             <Edit3 className="h-3 w-3" />
@@ -1056,7 +1036,9 @@ export function PostersPanel({
                                         </button>
                                         <button
                                             type="button"
-                                            disabled={isProgramBusy || !template.enabled || isDefault}
+                                            disabled={
+                                                !canUpdate || isProgramBusy || !template.enabled || isDefault
+                                            }
                                             onClick={() => void makeDefaultTemplate(template.id)}
                                             className="rounded-lg border border-slate-200 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
                                         >
@@ -1065,7 +1047,7 @@ export function PostersPanel({
                                         <button
                                             type="button"
                                             onClick={() => setDeleting(template)}
-                                            disabled={state.loading}
+                                            disabled={!canDelete || state.loading}
                                             className="flex items-center justify-center gap-1 rounded-lg border border-rose-200 py-1.5 text-xs font-medium text-rose-600 hover:bg-rose-50"
                                         >
                                             <Trash2 className="h-3 w-3" />
@@ -1086,14 +1068,14 @@ export function PostersPanel({
             {deleting && (
                 <Modal
                     title="删除海报模板"
-                    description={`确认删除“${deleting.name}”？如果它是默认模板，请先在功能设置中更换默认模板。`}
+                    description={`确认删除“${deleting.name}”？如果它是默认模板，请先在分享设置中更换默认模板。`}
                     onClose={() => setDeleting(null)}
                 >
                     <ModalFooter
                         onCancel={() => setDeleting(null)}
                         onConfirm={() => void deleteTemplate()}
                         pending={state.loading}
-                        disabled={false}
+                        disabled={!canDelete}
                         confirmLabel="确认删除"
                         danger
                     />

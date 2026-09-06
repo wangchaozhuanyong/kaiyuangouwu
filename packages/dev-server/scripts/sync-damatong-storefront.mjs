@@ -1,5 +1,4 @@
 import 'dotenv/config';
-
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
@@ -13,6 +12,35 @@ import {
     damatongCategories,
     damatongStorefront,
 } from './damatong-storefront-config.mjs';
+
+function canonical(value) {
+    if (Array.isArray(value)) return value.map(canonical);
+    if (value && typeof value === 'object') {
+        return Object.fromEntries(
+            Object.keys(value)
+                .sort()
+                .map(key => [key, canonical(value[key])]),
+        );
+    }
+    return value;
+}
+
+/** Binds a reviewed dry-run to the target, current versions, and intended changes. */
+export function storefrontPublishReviewHash(plan) {
+    return createHash('sha256')
+        .update(JSON.stringify(canonical(plan)))
+        .digest('hex');
+}
+
+export function assertReviewedStorefrontPublish(reviewHash, approvedHash) {
+    assert.equal(
+        approvedHash,
+        reviewHash,
+        'Storefront settings are managed in Dashboard. Review the dry-run and set ' +
+            'STOREFRONT_PUBLISH_REVIEW_SHA256 to its reviewHash before applying. ' +
+            'The target or saved configuration may have changed.',
+    );
+}
 
 const LANGUAGE_CODES = ['zh_Hans', 'en'];
 const ADOPT_EXISTING_TYPES = new Set([
@@ -1146,6 +1174,7 @@ export async function syncDamatongStorefront({
     apply = false,
     verify = false,
     allowRemote = false,
+    reviewedSnapshotHash = process.env.STOREFRONT_PUBLISH_REVIEW_SHA256,
     production = process.env.NODE_ENV === 'production',
     fetchImpl = fetch,
     assetManifest = damatongAssets,
@@ -1248,6 +1277,27 @@ export async function syncDamatongStorefront({
             ? 'noop'
             : 'update';
 
+    const reviewHash = storefrontPublishReviewHash({
+        scope: {
+            apiOrigin: normalizedApiOrigin,
+            shopOrigin: normalizedShopOrigin,
+            channelCode: channel.code,
+            sourceChannelCode,
+        },
+        before: { profile, content: currentContent, collections: [...currentCollections] },
+        intended: {
+            brand: brandPlanPreview,
+            categories: categoryPlanPreview,
+            content: contentPlanPreview,
+            settings: {
+                action: settingsAction,
+                heroAutoplayIntervalSeconds: damatongStorefront.heroAutoplayIntervalSeconds,
+            },
+            assets: assetActions,
+        },
+    });
+    if (apply) assertReviewedStorefrontPublish(reviewHash, reviewedSnapshotHash);
+
     if (verify) {
         assert.equal(brandPlanPreview.action, 'noop', 'Damatong brand Admin API verification failed');
         assert.ok(
@@ -1268,6 +1318,7 @@ export async function syncDamatongStorefront({
             previewBlocks,
         );
         return {
+            reviewHash,
             applied: false,
             verified: true,
             apiOrigin: normalizedApiOrigin,
@@ -1285,6 +1336,7 @@ export async function syncDamatongStorefront({
 
     if (!apply) {
         return {
+            reviewHash,
             applied: false,
             verified: false,
             apiOrigin: normalizedApiOrigin,
@@ -1432,6 +1484,7 @@ export async function syncDamatongStorefront({
     }
 
     return {
+        reviewHash,
         applied: true,
         apiOrigin: normalizedApiOrigin,
         shopOrigin: normalizedShopOrigin,

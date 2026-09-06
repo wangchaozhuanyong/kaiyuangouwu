@@ -1,5 +1,5 @@
 /* oxlint-disable react/only-export-components -- this module intentionally registers lazy extension components as import side effects */
-import { KeyRound, Puzzle, Sparkles, Terminal, Truck, WalletCards } from 'lucide-react';
+import { KeyRound, Puzzle, Share2, Sparkles, Terminal, Truck, WalletCards } from 'lucide-react';
 import { lazy, type ComponentType } from 'react';
 import { Navigate } from 'react-router-dom';
 
@@ -55,6 +55,9 @@ const PromotionsModule = lazy(() =>
 );
 const ReferralsModule = lazy(() =>
     routeModuleLoaders.referrals().then(module => ({ default: module.ReferralsModule })),
+);
+const SharingModule = lazy(() =>
+    routeModuleLoaders.sharing().then(module => ({ default: module.SharingModule })),
 );
 const StorefrontModule = lazy(() =>
     routeModuleLoaders.storefront().then(module => ({ default: module.StorefrontModule })),
@@ -255,7 +258,7 @@ defineNextAdminExtension({
             legacyPaths: ['/storefront-carousel', '/storefront-navigation'],
             title: '商城装修',
             component: StorefrontModule,
-            permissions: ['ReadSettings', 'ReadCatalog'],
+            permissions: ['ReadStorefrontContent'],
             preload: routeModuleLoaders.storefront,
         },
         {
@@ -269,7 +272,7 @@ defineNextAdminExtension({
             ],
             title: '内容与页面',
             component: StorefrontContentModule,
-            permissions: ['ReadSettings', 'ReadCatalog'],
+            permissions: ['ReadStorefrontContent'],
             preload: routeModuleLoaders.storefrontContent,
         },
         {
@@ -278,7 +281,7 @@ defineNextAdminExtension({
             legacyPaths: ['/storefront-client-plugins'],
             title: '客户端插件中心',
             component: ClientPluginsModule,
-            permissions: ['ReadSettings'],
+            permissions: ['ReadStorefrontContent'],
             navItem: {
                 label: '客户端插件中心',
                 sectionId: 'plugins',
@@ -293,7 +296,7 @@ defineNextAdminExtension({
             legacyPaths: ['/business-services-copy'],
             title: '商业服务页文案',
             component: BusinessServicesCopyModule,
-            permissions: ['ReadStorefrontContent', 'ReadSettings'],
+            permissions: ['ReadStorefrontContent'],
             navItem: {
                 label: '商业服务页文案',
                 sectionId: 'plugins',
@@ -307,7 +310,7 @@ defineNextAdminExtension({
             path: '/storefront/auth-visuals',
             title: '登录与注册视觉',
             component: redirectTo('/storefront/content?tab=pages'),
-            permissions: ['ReadSettings'],
+            permissions: ['ReadStorefrontContent'],
             commandPalette: false,
         },
         {
@@ -315,7 +318,7 @@ defineNextAdminExtension({
             path: '/storefront/carousel',
             title: '首页轮播图',
             component: redirectTo('/storefront/decoration'),
-            permissions: ['ReadSettings'],
+            permissions: ['ReadStorefrontContent'],
             commandPalette: false,
         },
         {
@@ -323,7 +326,7 @@ defineNextAdminExtension({
             path: '/storefront/navigation',
             title: '商城导航',
             component: redirectTo('/storefront/decoration'),
-            permissions: ['ReadSettings'],
+            permissions: ['ReadStorefrontContent'],
             commandPalette: false,
         },
     ],
@@ -452,6 +455,15 @@ defineNextAdminExtension({
             component: ReferralsModule,
             permissions: ['ReadPromotion', 'ReadCustomer', 'ReadOrder'],
             preload: routeModuleLoaders.referrals,
+        },
+        {
+            id: 'store-management-sharing',
+            path: '/marketing/sharing',
+            title: '分享设置',
+            component: SharingModule,
+            permissions: ['ReadReferral'],
+            navItem: { label: '分享设置', sectionId: 'marketing', icon: Share2, order: 30 },
+            preload: routeModuleLoaders.sharing,
         },
         {
             id: 'store-management-commerce-compatibility',

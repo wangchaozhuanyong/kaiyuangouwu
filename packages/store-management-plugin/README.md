@@ -22,6 +22,16 @@ Any existing Channel can be selected by a SuperAdmin as the base store. The
 `isStoreProvisioningTemplate` flag protects a permanent base template from suspension and deprovisioning;
 it is not required for copying configuration. The new store keeps its own merchant role and profile.
 
+## Shared capabilities, isolated configuration
+
+All Channels use the same homepage module catalog, client plugin catalog, editors and publication rules.
+Provisioning copies infrastructure defaults listed above; it does not clone another store's decoration,
+brand assets, navigation, login visuals or sharing templates. An empty store starts with no saved homepage
+floors and the common carousel interval default of five seconds. Configure its content in Dashboard.
+Do not initialize a new store by adding a Channel-specific renderer, copying a working tree or rerunning
+an old whole-store publisher against its current data. The [configuration contract](../storefront-content-plugin/CONFIGURATION_CONTRACT.md)
+describes the shared controls and the ownership of saved values.
+
 ## Operational sequence
 
 1. Provision the store from the Dashboard's `Provision store` page.

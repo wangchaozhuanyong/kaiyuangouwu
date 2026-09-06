@@ -980,6 +980,16 @@ export function AppShell() {
                             >
                                 分销与返利
                             </NavLink>
+                            {getNextAdminExtensionNavItems('marketing').map(route => (
+                                <NavLink
+                                    key={route.id}
+                                    allowed={canAccessPath(route.path)}
+                                    to={route.path}
+                                    className={navItemClass}
+                                >
+                                    {route.navItem?.label ?? route.title}
+                                </NavLink>
+                            ))}
                         </div>
                     </div>
 

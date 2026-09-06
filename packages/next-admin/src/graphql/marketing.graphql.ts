@@ -271,6 +271,156 @@ export const MARKETING_CUSTOMER_LOOKUP_QUERY = gql`
     }
 `;
 
+export const REFERRAL_PROGRAM_FRAGMENT = gql`
+    fragment AdminReferralProgramFields on ReferralProgram {
+        channelId
+        updatedAt
+        enabled
+        rewardRate
+        releaseDelayDays
+        minimumOrderAmount
+        maxRewardPerOrder
+        allowBalanceSpend
+        attributionWindowDays
+        defaultPosterTemplate
+        posterTemplates
+        posterTemplateConfigs {
+            design
+            id
+            createdAt
+            updatedAt
+            name
+            enabled
+            position
+            layoutVariant
+            posterBackgroundAsset {
+                id
+                name
+                preview
+                source
+            }
+            shareBackgroundAsset {
+                id
+                name
+                preview
+                source
+            }
+            titleZh
+            titleEn
+            headlineZh
+            headlineEn
+            rewardTextZh
+            rewardTextEn
+            siteIntroZh
+            siteIntroEn
+            serviceTextZh
+            serviceTextEn
+            featureOneTitleZh
+            featureOneTitleEn
+            featureOneTextZh
+            featureOneTextEn
+            featureTwoTitleZh
+            featureTwoTitleEn
+            featureTwoTextZh
+            featureTwoTextEn
+            featureThreeTitleZh
+            featureThreeTitleEn
+            featureThreeTextZh
+            featureThreeTextEn
+            qrEyebrowZh
+            qrEyebrowEn
+            qrTitleZh
+            qrTitleEn
+            qrDescriptionZh
+            qrDescriptionEn
+            sceneOneZh
+            sceneOneEn
+            sceneTwoZh
+            sceneTwoEn
+            sceneThreeZh
+            sceneThreeEn
+            sceneFourZh
+            sceneFourEn
+            ctaTextZh
+            ctaTextEn
+            footerTitleZh
+            footerTitleEn
+            footerTextZh
+            footerTextEn
+            foregroundColor
+            accentColor
+            overlayOpacity
+        }
+        systemPosterTemplateConfigs {
+            design
+            id
+            createdAt
+            updatedAt
+            name
+            enabled
+            position
+            layoutVariant
+            posterBackgroundAsset {
+                id
+                name
+                preview
+                source
+            }
+            shareBackgroundAsset {
+                id
+                name
+                preview
+                source
+            }
+            titleZh
+            titleEn
+            headlineZh
+            headlineEn
+            rewardTextZh
+            rewardTextEn
+            siteIntroZh
+            siteIntroEn
+            serviceTextZh
+            serviceTextEn
+            featureOneTitleZh
+            featureOneTitleEn
+            featureOneTextZh
+            featureOneTextEn
+            featureTwoTitleZh
+            featureTwoTitleEn
+            featureTwoTextZh
+            featureTwoTextEn
+            featureThreeTitleZh
+            featureThreeTitleEn
+            featureThreeTextZh
+            featureThreeTextEn
+            qrEyebrowZh
+            qrEyebrowEn
+            qrTitleZh
+            qrTitleEn
+            qrDescriptionZh
+            qrDescriptionEn
+            sceneOneZh
+            sceneOneEn
+            sceneTwoZh
+            sceneTwoEn
+            sceneThreeZh
+            sceneThreeEn
+            sceneFourZh
+            sceneFourEn
+            ctaTextZh
+            ctaTextEn
+            footerTitleZh
+            footerTitleEn
+            footerTextZh
+            footerTextEn
+            foregroundColor
+            accentColor
+            overlayOpacity
+        }
+    }
+`;
+
 export const REFERRAL_PROGRAM_QUERY = gql`
     query AdminReferralProgram {
         activeChannel {
@@ -279,151 +429,7 @@ export const REFERRAL_PROGRAM_QUERY = gql`
             defaultCurrencyCode
         }
         referralProgram {
-            channelId
-            updatedAt
-            enabled
-            rewardRate
-            releaseDelayDays
-            minimumOrderAmount
-            maxRewardPerOrder
-            allowBalanceSpend
-            attributionWindowDays
-            defaultPosterTemplate
-            posterTemplates
-            posterTemplateConfigs {
-                design
-                id
-                createdAt
-                updatedAt
-                name
-                enabled
-                position
-                layoutVariant
-                posterBackgroundAsset {
-                    id
-                    name
-                    preview
-                    source
-                }
-                shareBackgroundAsset {
-                    id
-                    name
-                    preview
-                    source
-                }
-                titleZh
-                titleEn
-                headlineZh
-                headlineEn
-                rewardTextZh
-                rewardTextEn
-                siteIntroZh
-                siteIntroEn
-                serviceTextZh
-                serviceTextEn
-                featureOneTitleZh
-                featureOneTitleEn
-                featureOneTextZh
-                featureOneTextEn
-                featureTwoTitleZh
-                featureTwoTitleEn
-                featureTwoTextZh
-                featureTwoTextEn
-                featureThreeTitleZh
-                featureThreeTitleEn
-                featureThreeTextZh
-                featureThreeTextEn
-                qrEyebrowZh
-                qrEyebrowEn
-                qrTitleZh
-                qrTitleEn
-                qrDescriptionZh
-                qrDescriptionEn
-                sceneOneZh
-                sceneOneEn
-                sceneTwoZh
-                sceneTwoEn
-                sceneThreeZh
-                sceneThreeEn
-                sceneFourZh
-                sceneFourEn
-                ctaTextZh
-                ctaTextEn
-                footerTitleZh
-                footerTitleEn
-                footerTextZh
-                footerTextEn
-                foregroundColor
-                accentColor
-                overlayOpacity
-            }
-            systemPosterTemplateConfigs {
-                design
-                id
-                createdAt
-                updatedAt
-                name
-                enabled
-                position
-                layoutVariant
-                posterBackgroundAsset {
-                    id
-                    name
-                    preview
-                    source
-                }
-                shareBackgroundAsset {
-                    id
-                    name
-                    preview
-                    source
-                }
-                titleZh
-                titleEn
-                headlineZh
-                headlineEn
-                rewardTextZh
-                rewardTextEn
-                siteIntroZh
-                siteIntroEn
-                serviceTextZh
-                serviceTextEn
-                featureOneTitleZh
-                featureOneTitleEn
-                featureOneTextZh
-                featureOneTextEn
-                featureTwoTitleZh
-                featureTwoTitleEn
-                featureTwoTextZh
-                featureTwoTextEn
-                featureThreeTitleZh
-                featureThreeTitleEn
-                featureThreeTextZh
-                featureThreeTextEn
-                qrEyebrowZh
-                qrEyebrowEn
-                qrTitleZh
-                qrTitleEn
-                qrDescriptionZh
-                qrDescriptionEn
-                sceneOneZh
-                sceneOneEn
-                sceneTwoZh
-                sceneTwoEn
-                sceneThreeZh
-                sceneThreeEn
-                sceneFourZh
-                sceneFourEn
-                ctaTextZh
-                ctaTextEn
-                footerTitleZh
-                footerTitleEn
-                footerTextZh
-                footerTextEn
-                foregroundColor
-                accentColor
-                overlayOpacity
-            }
+            ...AdminReferralProgramFields
         }
         referralTodayMetrics {
             businessDate
@@ -441,6 +447,7 @@ export const REFERRAL_PROGRAM_QUERY = gql`
             }
         }
     }
+    ${REFERRAL_PROGRAM_FRAGMENT}
 `;
 
 export const REFERRAL_REPORTS_QUERY = gql`

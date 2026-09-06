@@ -1,4 +1,3 @@
-import type { StorefrontContentBlock, StorefrontContentBlockType } from './types';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -7,6 +6,7 @@ import {
     findAuthVisualContent,
     resolveAuthVisualMessage,
 } from './auth-visual';
+import { StorefrontContentBlock, StorefrontContentBlockType } from './types';
 
 function block(type: StorefrontContentBlockType): StorefrontContentBlock {
     return {
@@ -58,21 +58,43 @@ describe('managed auth visuals', () => {
             description: '后台说明',
             tags: ['卖点1', '卖点2', '卖点3'],
             benefits: [
-                { title: '卖点1', description: '覆盖常用 AI 软件与服务' },
-                { title: '卖点2', description: '购买记录与状态清晰可查' },
-                { title: '卖点3', description: '售后入口与处理进度可查' },
+                { title: '卖点1', description: '' },
+                { title: '卖点2', description: '' },
+                { title: '卖点3', description: '' },
             ],
-            serviceTypes: ['AI 软件', '数字商品', '人工服务', '售后支持'],
+            serviceTypes: [],
         });
         expect(authVisualAccentColor(content, 'login')).toBe('#abcdef');
     });
 
     it('falls back safely when no managed content has been published', () => {
         expect(resolveAuthVisualMessage(undefined, 'register', 'zh')).toMatchObject({
-            title: '创建 MOYAO AI 账号',
+            title: '创建账号',
         });
         expect(authVisualAccentColor(undefined, 'register')).toBe('#8B5CF6');
         expect(authVisualOverlayColor(undefined)).toBe('#070B14');
+    });
+
+    it('preserves intentionally empty fields and every configured item', () => {
+        const content: StorefrontContentBlock = {
+            ...block('AUTH_LOGIN'),
+            subtitle: '',
+            ctaLabel: '',
+            items: [],
+        };
+        expect(resolveAuthVisualMessage(content, 'login', 'zh')).toMatchObject({
+            eyebrow: '',
+            description: '',
+            tags: [],
+            benefits: [],
+            serviceTypes: [],
+        });
+        content.items = Array.from({ length: 6 }, (_, i) => ({
+            ...block('AUTH_LOGIN').items[0],
+            id: String(i),
+            label: String(i),
+        }));
+        expect(resolveAuthVisualMessage(content, 'login', 'en').benefits).toHaveLength(6);
     });
 
     it('keeps managed colors authoritative after a media publish', () => {
