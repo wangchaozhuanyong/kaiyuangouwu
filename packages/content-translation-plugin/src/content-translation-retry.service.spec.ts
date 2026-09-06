@@ -85,7 +85,6 @@ beforeEach(async () => {
                   username: 'postgres',
                   database: 'translation_outbox_e2e',
                   schema: 'outbox_test',
-                  dropSchema: true,
               }
             : { type: 'sqljs' as const }),
         entities: [
@@ -98,8 +97,11 @@ beforeEach(async () => {
             ContentTranslationState,
             TranslationProviderState,
         ],
-        synchronize: true,
     }).initialize();
+    if (process.env.TRANSLATION_TEST_POSTGRES === '1') {
+        await db.query('CREATE SCHEMA IF NOT EXISTS outbox_test');
+    }
+    await db.synchronize(true);
     clock = Date.now();
     vi.spyOn(Date, 'now').mockImplementation(() => clock);
     translate = vi.fn((request: any) =>
