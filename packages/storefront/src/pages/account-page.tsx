@@ -36,6 +36,7 @@ import { orderStateLabel } from '../storefront-ui/order-ui';
 import { AccountShortcut, LegalFooter, SectionHeader, ServiceButton } from '../storefront-ui/page-shell';
 import { formatMoney, OrderImage, ProductVariantImage } from '../storefront-ui/product-display';
 import { ProductSection } from '../storefront-ui/product-section';
+import { StorefrontTrafficPreference } from '../storefront-ui/storefront-traffic-preference';
 import { useStorefront } from '../StorefrontContext';
 import {
     ActiveCustomer,
@@ -525,6 +526,7 @@ export function AccountPage() {
                 language={language}
                 onProduct={product => navigateTo({ name: 'product', id: product.id })}
             />
+            <StorefrontTrafficPreference language={language} />
             <LegalFooter
                 storefrontName={storefrontName}
                 language={language}

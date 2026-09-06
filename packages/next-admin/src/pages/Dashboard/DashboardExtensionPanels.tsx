@@ -17,7 +17,7 @@ export function ReferralTodayExtensionWidget() {
     const value = query.data?.referralTodayMetrics;
     const cards = value
         ? [
-              ['网站访客', value.visitorCount],
+              ['独立访客（估算）', value.visitorCount ?? '—'],
               ['新增注册', value.newCustomerCount],
               ['消费客户', value.consumerCount],
               ['首次消费', value.firstTimeConsumerCount],

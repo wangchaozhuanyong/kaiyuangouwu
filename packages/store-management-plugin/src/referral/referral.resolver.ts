@@ -4,6 +4,8 @@ import { CurrencyCode } from '@vendure/common/lib/generated-types';
 import { Allow, Ctx, ID, Permission, RequestContext, Transaction, UserInputError } from '@vendure/core';
 import type { Response } from 'express';
 
+import { StorefrontTrafficService } from '../traffic/storefront-traffic.service';
+
 import {
     adjustReferralBalancePermission,
     manageReferralWithdrawalPermission,
@@ -77,7 +79,10 @@ export class ReferralShopResolver {
 
 @Resolver()
 export class ReferralAdminResolver {
-    constructor(private readonly referralService: ReferralService) {}
+    constructor(
+        private readonly referralService: ReferralService,
+        private readonly traffic: StorefrontTrafficService,
+    ) {}
 
     @Query()
     @Allow(referralPermission.Read)
@@ -119,8 +124,12 @@ export class ReferralAdminResolver {
 
     @Query()
     @Allow(referralPermission.Read)
-    referralTodayMetrics(@Ctx() ctx: RequestContext) {
-        return this.referralService.todayMetrics(ctx);
+    async referralTodayMetrics(@Ctx() ctx: RequestContext) {
+        const [metrics, traffic] = await Promise.all([
+            this.referralService.todayMetrics(ctx),
+            this.traffic.report(ctx, 1),
+        ]);
+        return { ...metrics, visitorCount: traffic.days[0].visitorCount };
     }
 
     @Query()

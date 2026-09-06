@@ -6,6 +6,7 @@ import {
 import { mergeConfig, PaymentMethodHandler } from '@vendure/core';
 import { createTestEnvironment } from '@vendure/testing';
 import gql from 'graphql-tag';
+import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { initialData } from '../../../e2e-common/e2e-initial-data';
@@ -353,12 +354,15 @@ const ADMIN_REPORTS = gql`
 `;
 
 const RECORD_VISIT = gql`
-    mutation ReferralRecordVisitE2E($visitorId: String) {
-        recordStorefrontVisit(visitorId: $visitorId) {
+    mutation ReferralRecordVisitE2E($visitorId: String!, $eventId: String!) {
+        recordStorefrontPageView(input: { visitorId: $visitorId, eventId: $eventId, pageView: true }) {
             recorded
         }
     }
 `;
+
+const recordTrafficVisit = (visitorId: string) =>
+    shopClient.query(RECORD_VISIT, { visitorId, eventId: randomUUID() });
 
 const FIND_CUSTOMER = gql`
     query ReferralFindCustomerE2E($email: String!) {
@@ -468,11 +472,11 @@ describe('referral rebate closed loop', () => {
         expect(disabled.referralProgram.enabled).toBe(false);
         const adminProgram = await adminClient.query(PROGRAM);
 
-        await shopClient.query(RECORD_VISIT, { visitorId: 'referral-e2e-visitor-0001' });
-        await shopClient.query(RECORD_VISIT, { visitorId: 'referral-e2e-visitor-0002' });
+        await recordTrafficVisit('referral-e2e-visitor-0001');
+        await recordTrafficVisit('referral-e2e-visitor-0002');
 
-        await shopClient.query(RECORD_VISIT, { visitorId: 'referral-e2e-visitor-0001' });
-        await shopClient.query(RECORD_VISIT, { visitorId: 'referral-e2e-visitor-0002' });
+        await recordTrafficVisit('referral-e2e-visitor-0001');
+        await recordTrafficVisit('referral-e2e-visitor-0002');
 
         const updated = await adminClient.query(UPDATE_PROGRAM, {
             input: {
@@ -497,7 +501,7 @@ describe('referral rebate closed loop', () => {
 
         await register('invitee@example.com', inviteCode, 'POSTER');
         await shopClient.asUserWithCredentials('invitee@example.com', 'ReferralPass123!');
-        await shopClient.query(RECORD_VISIT, { visitorId: 'referral-e2e-visitor-0001' });
+        await recordTrafficVisit('referral-e2e-visitor-0001');
 
         const inviteeOrder = await createAndPayOrder();
         const eligibleAmount = inviteeOrder.totalWithTax - inviteeOrder.shippingWithTax;

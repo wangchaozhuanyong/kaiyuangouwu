@@ -78,6 +78,8 @@ import {
     StorefrontLegalIdentity,
 } from '../types';
 
+import { useStorefrontTraffic } from './useStorefrontTraffic';
+
 export function useStorefrontAppState() {
     const queryClient = useQueryClient();
     const router = useRouter();
@@ -311,10 +313,13 @@ export function useStorefrontAppState() {
         return () => controller.abort();
     }, [api, customer?.id, market, queryClient, storefrontContextResolved, vendureLanguageCode]);
 
-    useEffect(() => {
-        if (!storefrontContextResolved) return;
-        void api.recordStorefrontVisit().catch(() => undefined);
-    }, [api, storefrontContextResolved]);
+    useStorefrontTraffic({
+        api,
+        channel: market.code,
+        location: displayedRouterLocation.pathname + displayedRouterLocation.searchStr,
+        customerId: customer?.id ?? null,
+        enabled: storefrontContextResolved && !isNavigationPending,
+    });
     const customerCouponQueryKey = storefrontQueryKeys.customerCoupons(
         storefrontQueryKeys.market(market),
         vendureLanguageCode,

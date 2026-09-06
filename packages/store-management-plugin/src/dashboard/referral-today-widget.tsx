@@ -14,7 +14,7 @@ export function ReferralTodayWidget() {
     const value = query.data?.referralTodayMetrics;
     const cards = value
         ? [
-              ['网站访客', value.visitorCount],
+              ['独立访客（估算）', value.visitorCount ?? '—'],
               ['新增注册', value.newCustomerCount],
               ['消费客户', value.consumerCount],
               ['首次消费', value.firstTimeConsumerCount],
@@ -29,7 +29,7 @@ export function ReferralTodayWidget() {
         <DashboardBaseWidget
             id="referral-today-widget"
             title="今日客户与邀请数据"
-            description="北京时间口径；访客按账号或匿名设备去重"
+            description="北京时间口径；独立访客为估算，— 表示无新版采集记录"
             actions={
                 <div className="flex gap-1">
                     <Button
