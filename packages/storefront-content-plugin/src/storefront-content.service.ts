@@ -119,7 +119,8 @@ export class StorefrontContentService {
         return {
             heroAutoplayIntervalSeconds:
                 settings?.heroAutoplayIntervalSeconds ?? DEFAULT_HERO_AUTOPLAY_INTERVAL_SECONDS,
-            configuredBlockTypes: Array.from(new Set(blocks.map(block => block.type))),
+            // This is a capability set, not floor order; keep configuration reads independent of SQL row order.
+            configuredBlockTypes: Array.from(new Set(blocks.map(block => block.type))).sort(),
         };
     }
 
@@ -145,7 +146,7 @@ export class StorefrontContentService {
         ).map(block => block.type);
         const result = {
             heroAutoplayIntervalSeconds: saved.heroAutoplayIntervalSeconds,
-            configuredBlockTypes: Array.from(new Set(configuredBlockTypes)),
+            configuredBlockTypes: Array.from(new Set(configuredBlockTypes)).sort(),
         };
         await this.publishChanged(ctx, [saved.id]);
         return result;
