@@ -11,6 +11,7 @@ function fixture({
     ambiguous = false,
     lostResponse = false,
     distinctAssetHosts = false,
+    routeMismatch = false,
 } = {}) {
     const blocks = [...heroOverlayRepairCodes, 'unrelated-floor'].map((code, index) => ({
         id: String(index),
@@ -38,7 +39,7 @@ function fixture({
     const requests = [];
     const writes = [];
     let injected = false;
-    const channel = { id: 'channel-1', code: 'my-malaysia' };
+    const channel = { id: 'channel-1', code: '美宜佳' };
     const storeSettings = { heroAutoplayIntervalSeconds: 6, configuredBlockTypes: ['HERO', 'NOTICE'] };
     const fetchImpl = async (url, init) => {
         const { query, variables } = JSON.parse(init.body);
@@ -47,6 +48,13 @@ function fixture({
             new Response(JSON.stringify({ data }), {
                 headers: { 'vendure-auth-token': 'fixture-only-session' },
             });
+        if (query.includes('HeroRepairRoute')) {
+            assert.equal(init.headers.authorization, undefined);
+            assert.equal(init.headers['vendure-token'], undefined);
+            return response({
+                activeChannel: routeMismatch ? { id: 'wrong', code: 'another-store' } : channel,
+            });
+        }
         if (query.includes('HeroRepairLogin'))
             return response({ login: { channels: [{ ...channel, token: 'fixture-only-channel' }] } });
         if (query.includes('HeroRepairApply')) {
@@ -107,6 +115,7 @@ function fixture({
         run: (options = {}) =>
             repairHeroOverlay({
                 apiOrigin: 'http://localhost:3000',
+                shopOrigin: 'https://damatong.net',
                 username: 'fixture',
                 password: 'fixture',
                 channelCodes: ['my-malaysia'],
@@ -197,4 +206,16 @@ test('verifies the same asset binding across Admin and Shop URL origins', async 
     const f = fixture({ distinctAssetHosts: true });
     assert.equal((await f.run({ apply: true })).status, 'APPLIED_VERIFIED');
     assert.deepEqual(f.blocks()[0].imageAsset, f.before[0].imageAsset);
+});
+
+test('resolves the actual Channel from the public domain and rejects a mismatched route', async () => {
+    const f = fixture();
+    assert.equal((await f.run()).channel, '美宜佳');
+    assert.ok(f.requests[0].query.includes('HeroRepairRoute'));
+    const mismatch = fixture({ routeMismatch: true });
+    await assert.rejects(mismatch.run({ apply: true }), /matching Channel/);
+    assert.equal(mismatch.writes.length, 0);
+    const wrongOrigin = fixture();
+    await assert.rejects(wrongOrigin.run({ shopOrigin: 'https://moyaoai.com' }), /public origin/);
+    assert.equal(wrongOrigin.requests.length, 0);
 });

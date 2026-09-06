@@ -93,7 +93,12 @@ export async function repairHeroOverlay({
         apiOrigin && username && password,
         'API origin and administrator environment credentials required',
     );
-    assert.deepEqual(channelCodes, ['my-malaysia'], 'This repair requires exactly the my-malaysia Channel');
+    assert.deepEqual(channelCodes, ['my-malaysia'], 'This repair requires the reviewed my-malaysia selector');
+    assert.equal(
+        new URL(shopOrigin).origin,
+        'https://damatong.net',
+        'This repair requires the Damatong public origin',
+    );
     assert.ok(!(apply && verify), '--apply and --verify are mutually exclusive');
     if (apply && (production || !isLocalApiOrigin(apiOrigin))) {
         assert.ok(allowRemote, 'Production/remote writes require --apply --allow-remote');
@@ -113,6 +118,13 @@ export async function repairHeroOverlay({
         );
         return { data: result.data, response };
     };
+    const routed = (
+        await request(shopOrigin, 'shop-api', 'query HeroRepairRoute { activeChannel { id code } }')
+    ).data.activeChannel;
+    assert.ok(
+        routed?.id && routed?.code && routed.code !== '__default_channel__',
+        'Damatong must resolve a dedicated Channel',
+    );
     const login = await request(
         apiOrigin,
         'admin-api',
@@ -125,7 +137,9 @@ export async function repairHeroOverlay({
     assert.ok(!login.data.login.errorCode, 'Admin login failed');
     const session = login.response.headers.get('vendure-auth-token');
     assert.ok(session, 'Admin login did not return a session');
-    const matches = login.data.login.channels.filter(candidate => candidate.code === channelCodes[0]);
+    const matches = login.data.login.channels.filter(
+        candidate => candidate.id === routed.id && candidate.code === routed.code,
+    );
     assert.equal(matches.length, 1, 'Administrator must have exactly one matching Channel');
     const channel = matches[0];
     const channelHeaders = { 'vendure-token': channel.token };

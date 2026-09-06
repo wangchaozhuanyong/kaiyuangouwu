@@ -591,7 +591,9 @@ node deploy/verify-storefront-realtime.mjs \
 在授权的一次性维护中，使用已审查并合入 main 的不可变源码，复用服务器环境中的
 `SUPERADMIN_USERNAME` / `SUPERADMIN_PASSWORD`，不读取或输出凭据。明确设置
 `VENDURE_API_ORIGIN`、实际客户入口 `VENDURE_STOREFRONT_URL`，并在该维护进程中将
-`HOMEPAGE_CAROUSEL_CHANNEL_CODES` 设为 `my-malaysia`（不修改持久运行环境）。
+`HOMEPAGE_CAROUSEL_CHANNEL_CODES` 设为公开受审选择器 `my-malaysia`（不修改持久运行环境）。
+该选择器不是后台 Channel code；脚本先从 `https://damatong.net` 解析实际 Channel id/code，
+再与已认证管理员可访问的 Channel 精确匹配，真实 token 只保留在进程内。
 先运行 `node packages/dev-server/scripts/repair-hero-overlay.mjs --dry-run`，审查其三条字段差异；
 备份就绪后执行同一脚本 `--apply --allow-remote`，随后独立执行 `--verify`。
 默认及其他店铺不会被选入写入范围。脚本校验完整 Admin 内容快照与中英文 Shop 快照，
