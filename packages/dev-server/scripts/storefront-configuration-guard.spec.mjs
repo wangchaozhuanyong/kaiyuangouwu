@@ -283,4 +283,5 @@ void test('release plan, bootstrap and fixed inspection wire the new review and 
     assert.match(deploy, /storefront-configuration-guard\.mjs" verify/u);
     assert.match(deploy, /STOREFRONT_PUBLISH_REVIEW_SHA256="\$\{reviewed_damatong_publish_review\}"/u);
     assert.match(deploy, /storefront_configuration_guard=enabled/u);
+    assert.match(deploy, /typeof publisher\.assertReviewedStorefrontPublish !== "function"/u);
 });

@@ -372,6 +372,12 @@ if [[ "${reviewed_damatong_publish_review}" == "preserve-existing" ]]; then
 elif [[ "${reviewed_damatong_storefront}" == "true" ]]; then
     printf 'DAMATONG_PREFLIGHT_BEGIN token=%s\n' "${reviewed_damatong_channel_token}"
     cd "${candidate}"
+    node --input-type=module -e '
+        const publisher = await import("./packages/dev-server/scripts/sync-damatong-storefront.mjs");
+        if (typeof publisher.assertReviewedStorefrontPublish !== "function") {
+            throw new Error("Candidate publisher cannot enforce a reviewed configuration hash");
+        }
+    '
     VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
         VENDURE_STOREFRONT_URL=https://damatong.net \
         node packages/dev-server/scripts/sync-damatong-storefront.mjs --dry-run \
