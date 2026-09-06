@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import {
     chmodSync,
     chownSync,
@@ -20,6 +20,67 @@ const require = createRequire(import.meta.url);
 const operations = require('../../../deploy/production-operations.cjs');
 const retention = require('../../../deploy/systemd/vendure-production-release-retention.cjs');
 const sourceSha = 'a'.repeat(40);
+
+void test('repository diagnostics distinguish tracked changes, renamed paths and untracked private files', t => {
+    const root = mkdtempSync(path.join(os.tmpdir(), 'vendure-git-diagnosis-'));
+    t.after(() => rmSync(root, { recursive: true, force: true }));
+    const git = args =>
+        execFileSync('git', ['--no-optional-locks', '-C', root, ...args], {
+            encoding: 'utf8',
+            stdio: ['ignore', 'pipe', 'pipe'],
+        });
+    git(['init', '-b', 'main']);
+    git(['config', 'user.name', 'Diagnostic fixture']);
+    git(['config', 'user.email', 'fixture@example.test']);
+    writeFileSync(path.join(root, 'source.txt'), 'original\n');
+    writeFileSync(path.join(root, 'rename source.txt'), 'unchanged\n');
+    git(['add', '.']);
+    git(['commit', '-m', 'fixture']);
+    const head = git(['rev-parse', 'HEAD']).trim();
+    git(['update-ref', 'refs/remotes/origin/main', head]);
+    const clean = operations.inspectRepositoryState(head, git);
+    assert.equal(clean.clean, true);
+    assert.equal(clean.branch, 'main');
+    assert.equal(clean.headMatchesOperationsSource, true);
+    assert.equal(clean.originMainMatchesOperationsSource, true);
+    const sentinel = 'PRIVATE_PATH_MUST_NOT_APPEAR';
+    mkdirSync(path.join(root, sentinel));
+    writeFileSync(path.join(root, sentinel, '.env'), 'FAKE_CREDENTIAL');
+    writeFileSync(path.join(root, sentinel, 'line\nbreak.txt'), 'fixture');
+    const untracked = operations.inspectRepositoryState(head, git);
+    assert.equal(untracked.clean, false);
+    assert.equal(untracked.trackedClean, true);
+    assert.equal(untracked.untrackedFiles, 2);
+    git(['mv', 'rename source.txt', 'renamed\nfile.txt']);
+    writeFileSync(path.join(root, 'source.txt'), 'modified\n');
+    const dirty = operations.inspectRepositoryState(sourceSha, git);
+    assert.equal(dirty.trackedChanges, 2);
+    assert.equal(dirty.stagedChanges, 1);
+    assert.equal(dirty.unstagedChanges, 1);
+    assert.equal(dirty.untrackedFiles, 2);
+    assert.equal(dirty.conflicts, 0);
+    assert.equal(dirty.clean, false);
+    assert.equal(dirty.trackedClean, false);
+    assert.equal(dirty.headMatchesOperationsSource, false);
+    assert.equal(JSON.stringify(dirty).includes(sentinel), false);
+    assert.equal(JSON.stringify(dirty).includes('FAKE_CREDENTIAL'), false);
+    assert.equal(JSON.stringify(dirty).includes('source.txt'), false);
+});
+
+void test('failed and truncated Git results stay unavailable, never clean or exposing command errors', () => {
+    assert.deepEqual(
+        operations.inspectRepositoryState(sourceSha, () => {
+            throw new Error('FAKE_SECRET_IN_GIT_STDERR');
+        }),
+        { status: 'unavailable' },
+    );
+    const readGit = args => {
+        if (args[0] === 'status') return ' M incomplete-path';
+        if (args.includes('--abbrev-ref')) return 'main\n';
+        return `${sourceSha}\n`;
+    };
+    assert.deepEqual(operations.inspectRepositoryState(sourceSha, readGit), { status: 'unavailable' });
+});
 
 void test(
     'Linux root retains the existing foreign-owned lock without changing ownership',
