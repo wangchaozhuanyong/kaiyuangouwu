@@ -31,14 +31,6 @@ import {
 } from './referral-attribution';
 import { isReferralClientFeatureEnabled } from './referral-client-feature';
 import { storefrontWebpUrl } from './responsive-image';
-import {
-    AUTH_HERO_FALLBACK_IMAGE,
-    AUTH_HERO_IMAGE,
-    AUTH_LOGIN_HERO_FALLBACK_IMAGE,
-    AUTH_LOGIN_HERO_IMAGE,
-    AUTH_REGISTER_HERO_FALLBACK_IMAGE,
-    AUTH_REGISTER_HERO_IMAGE,
-} from './storefront-images';
 import { routeNavigateOptions } from './storefront-router';
 import { SafeImage } from './storefront-ui/product-display';
 import { StorefrontContentBlock, StorefrontContentTargetType, StorefrontLanguage } from './types';
@@ -1077,12 +1069,6 @@ function AuthLayout({
     onBack: () => void;
     children: ReactNode;
 }) {
-    const hero =
-        heroVariant === 'login'
-            ? { src: AUTH_LOGIN_HERO_IMAGE, fallbackSrc: AUTH_LOGIN_HERO_FALLBACK_IMAGE }
-            : heroVariant === 'register'
-              ? { src: AUTH_REGISTER_HERO_IMAGE, fallbackSrc: AUTH_REGISTER_HERO_FALLBACK_IMAGE }
-              : { src: AUTH_HERO_IMAGE, fallbackSrc: AUTH_HERO_FALLBACK_IMAGE };
     const authVisualVariant = heroVariant === 'login' || heroVariant === 'register' ? heroVariant : null;
     const heroMessage = authVisualVariant
         ? resolveAuthVisualMessage(heroContent, authVisualVariant, language)
@@ -1106,15 +1092,16 @@ function AuthLayout({
                 className={`auth-hero auth-hero-${heroVariant}${hasManagedHero ? ' auth-hero-managed' : ''}`}
                 style={heroStyle}
             >
-                <SafeImage
-                    src={managedHeroSrc || hero.src}
-                    fallbackSrc={hero.fallbackSrc}
-                    alt=""
-                    imageKind="hero"
-                    loading="eager"
-                    decoding="async"
-                    fetchPriority="high"
-                />
+                {managedHeroSrc && (
+                    <SafeImage
+                        src={managedHeroSrc}
+                        alt=""
+                        imageKind="hero"
+                        loading="eager"
+                        decoding="async"
+                        fetchPriority="high"
+                    />
+                )}
                 <div className="auth-hero-header">
                     <button
                         className="auth-back-button"
@@ -1146,11 +1133,7 @@ function AuthLayout({
                                     )}
                                     <strong>{storefrontName}</strong>
                                 </div>
-                                <small>
-                                    {language === 'zh'
-                                        ? '全球模型 · 一钥直达'
-                                        : 'Cloud intelligence · Bridging tomorrow'}
-                                </small>
+                                <small>{language === 'zh' ? '欢迎光临' : 'Welcome'}</small>
                             </div>
                         )}
                         {heroMessage && <span className="auth-hero-eyebrow">{heroMessage.eyebrow}</span>}

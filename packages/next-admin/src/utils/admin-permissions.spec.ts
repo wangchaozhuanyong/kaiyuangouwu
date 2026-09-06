@@ -7,6 +7,18 @@ import {
 } from './admin-permissions';
 
 describe('admin permissions', () => {
+    it('offers the same content routes to every merchant role with content access', () => {
+        for (const path of ['/storefront/decoration', '/storefront/content', '/plugins/client-plugins']) {
+            expect(canAccessAdminPath(path, ['ReadStorefrontContent', 'ReadCatalog'])).toBe(true);
+            expect(canAccessAdminPath(path, ['ReadStorefrontContent'])).toBe(true);
+            expect(canAccessAdminPath(path, ['ReadCatalog'])).toBe(false);
+            expect(canAccessAdminPath(path, ['ReadSettings'])).toBe(false);
+        }
+    });
+    it('uses sharing permissions independently of promotion and finance access', () => {
+        expect(canAccessAdminPath('/marketing/sharing', ['ReadReferral'])).toBe(true);
+        expect(canAccessAdminPath('/marketing/sharing', ['ReadPromotion', 'ReadOrder'])).toBe(false);
+    });
     it('allows unrestricted routes without a permission rule', () => {
         expect(canAccessAdminPath('/dashboard', [])).toBe(true);
         expect(canAccessAdminPath('/profile', [])).toBe(true);

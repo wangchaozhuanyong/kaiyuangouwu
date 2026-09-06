@@ -1,19 +1,12 @@
 import type { StorefrontContentBlock, StorefrontContentBlockType } from './types';
 
-export const fixedHomepageModuleTypes = [
-    'HERO',
-    'NOTICE',
-    'QUICK_LINKS',
-    'CORE_CATEGORIES',
-    'CATEGORY_AD',
-    'FEATURED_COLLECTION',
-    'COUPONS',
-    'FLASH_SALE',
-    'BEST_SELLERS',
-    'RECOMMENDATIONS',
-    'STORY',
-    'TRUST_BAR',
-] as const satisfies readonly StorefrontContentBlockType[];
+import { isSharingContent } from '../../storefront-content-plugin/src/content-purpose';
+import {
+    homepageModuleCatalog,
+    repeatableHomepageModuleTypes,
+} from '../../storefront-content-plugin/src/homepage-manifest';
+
+export const fixedHomepageModuleTypes = homepageModuleCatalog.map(module => module.type);
 
 export type FixedHomepageModuleType = (typeof fixedHomepageModuleTypes)[number];
 
@@ -32,34 +25,22 @@ const desktopIntroModuleTypes = [
     'QUICK_LINKS',
 ] as const satisfies readonly FixedHomepageModuleType[];
 
-const defaults: ReadonlyArray<{
-    type: FixedHomepageModuleType;
-    position: number;
-    enabled: boolean;
-}> = fixedHomepageModuleTypes.map((type, index) => ({
-    type,
-    position: (index + 1) * 10,
-    enabled: !['CORE_CATEGORIES', 'CATEGORY_AD', 'FEATURED_COLLECTION', 'STORY'].includes(type),
-}));
-
-/**
- * Produces the exact homepage render order from persisted content. A configured
- * type with no returned block is disabled; an unconfigured type uses the
- * backwards-compatible default visibility.
- */
+/** Render only persisted blocks returned by the publication API. */
 export function homepageModuleEntries(
     blocks: StorefrontContentBlock[],
-    configuredTypes: StorefrontContentBlockType[],
+    _configuredTypes: StorefrontContentBlockType[],
 ): HomepageModuleEntry[] {
-    const entries = defaults.flatMap<HomepageModuleEntry>(defaultModule => {
-        const matching = blocks
-            .filter(block => block.type === defaultModule.type)
+    const homepageBlocks = blocks.filter(block => !isSharingContent(block));
+    const entries = fixedHomepageModuleTypes.flatMap<HomepageModuleEntry>(type => {
+        if (repeatableHomepageModuleTypes.some(repeatable => repeatable === type)) return [];
+        const matching = homepageBlocks
+            .filter(block => block.type === type)
             .sort((a, b) => a.position - b.position || a.id.localeCompare(b.id));
         if (matching.length) {
             return [
                 {
-                    key: `fixed:${defaultModule.type}`,
-                    type: defaultModule.type,
+                    key: `fixed:${type}`,
+                    type,
                     block: matching[0],
                     blocks: matching,
                     position: matching[0].position,
@@ -67,24 +48,15 @@ export function homepageModuleEntries(
                 } satisfies HomepageModuleEntry,
             ];
         }
-        if (configuredTypes.includes(defaultModule.type) || !defaultModule.enabled) return [];
-        return [
-            {
-                key: `fixed:${defaultModule.type}`,
-                type: defaultModule.type,
-                blocks: [],
-                position: defaultModule.position,
-                virtual: true,
-            } satisfies HomepageModuleEntry,
-        ];
+        return [];
     });
-    const customEntries = blocks
-        .filter(block => block.type === 'CUSTOM')
+    const customEntries = homepageBlocks
+        .filter(block => repeatableHomepageModuleTypes.some(type => type === block.type))
         .map(
             block =>
                 ({
-                    key: `custom:${block.id}`,
-                    type: 'CUSTOM',
+                    key: `content:${block.id}`,
+                    type: block.type as HomepageModuleEntry['type'],
                     block,
                     blocks: [block],
                     position: block.position,

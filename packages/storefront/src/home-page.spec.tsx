@@ -125,7 +125,16 @@ const trustBarBlock: StorefrontContentBlock = {
     code: 'homepage-trust',
     type: 'TRUST_BAR',
     imageUrl: null,
-    items: [],
+    items: ['物流', '价格', '安全', '客服'].map((label, position) => ({
+        id: String(position),
+        label,
+        description: '',
+        position,
+        enabled: true,
+        imageUrl: null,
+        targetType: 'NONE',
+        targetValue: null,
+    })),
 };
 
 const couponBlock: StorefrontContentBlock = {
@@ -265,6 +274,34 @@ describe('HomePage hero carousel', () => {
         expect(markup).not.toContain('aria-roledescription="轮播"');
     });
 
+    it('preserves a saved title beginning with 首页轮播 and all eight saved hero facts', () => {
+        const markup = renderHome({
+            contentBlocks: [
+                {
+                    ...heroBlock,
+                    title: '首页轮播：后台原文',
+                    subtitle: '',
+                    body: '',
+                    ctaLabel: '',
+                    items: Array.from({ length: 8 }, (_, position) => ({
+                        id: String(position),
+                        enabled: true,
+                        position,
+                        label: `已保存卖点${position}`,
+                        description: `说明${position}`,
+                        targetType: 'NONE',
+                        targetValue: null,
+                        imageUrl: null,
+                    })),
+                },
+            ],
+        });
+        expect(markup).toContain('首页轮播：后台原文');
+        expect(markup.match(/class="hero-stat-badge/g)).toHaveLength(8);
+        expect(markup).toContain('已保存卖点7');
+        expect(markup).not.toContain('hero-rich-desc');
+    });
+
     it('renders the carousel when the backend returns managed hero content', () => {
         const markup = renderHome({ contentBlocks: [heroBlock] });
 
@@ -323,6 +360,24 @@ describe('HomePage hero carousel', () => {
 });
 
 describe('HomePage localized trust bar layout', () => {
+    it('keeps every saved trust item beyond the old four-item limit', () => {
+        const markup = renderHome({
+            contentBlocks: [
+                {
+                    ...trustBarBlock,
+                    items: Array.from({ length: 8 }, (_, position) => ({
+                        ...trustBarBlock.items[0],
+                        id: String(position),
+                        position,
+                        label: `服务${position}`,
+                    })),
+                },
+            ],
+        });
+        expect(markup.match(/class="home-trust-item"/g)).toHaveLength(8);
+        expect(markup).toContain('服务7');
+    });
+
     it('uses the compact single-row layout for short Chinese labels', () => {
         const markup = renderHome({ contentBlocks: [trustBarBlock] });
 
@@ -332,7 +387,15 @@ describe('HomePage localized trust bar layout', () => {
 
     it('uses professional compact English labels without forcing a wrapping layout', () => {
         const markup = renderHome({
-            contentBlocks: [trustBarBlock],
+            contentBlocks: [
+                {
+                    ...trustBarBlock,
+                    items: trustBarBlock.items.map((item, index) => ({
+                        ...item,
+                        label: ['Tracking', 'Pricing', 'Security', 'Support'][index],
+                    })),
+                },
+            ],
             language: 'en',
             locale: 'en-MY',
         });
@@ -738,6 +801,7 @@ describe('HomePage notices', () => {
     it('keeps a notice without a link clickable so the full content can be opened', () => {
         const markup = renderHome({
             configuredBlockTypes: baseProps.configuredBlockTypes.filter(type => type !== 'NOTICE'),
+            contentBlocks: [{ ...trustBarBlock, type: 'NOTICE', title: '', items: [] }],
             systemAnnouncements: [
                 {
                     id: 'notice-1',

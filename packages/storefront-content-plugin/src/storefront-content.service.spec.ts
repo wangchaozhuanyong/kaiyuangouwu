@@ -1,12 +1,15 @@
-import 'reflect-metadata';
-
 import { LanguageCode } from '@vendure/common/lib/generated-types';
+import { isUsableEnglishTranslation } from '@vendure/common/lib/translation-validation';
+import 'reflect-metadata';
 import { describe, expect, it, vi } from 'vitest';
 
+import { createContentPublicationChecker } from './content-publication';
 import { StorefrontContentBlock } from './entities/storefront-content-block.entity';
 import { StorefrontContentSettings } from './entities/storefront-content-settings.entity';
 import { StorefrontContentService } from './storefront-content.service';
 import { CreateStorefrontContentBlockInput } from './types';
+
+const contentPublicationStatus = createContentPublicationChecker(isUsableEnglishTranslation);
 
 function createInput(
     overrides: Partial<CreateStorefrontContentBlockInput> = {},
@@ -323,12 +326,12 @@ describe('StorefrontContentService publication guard', () => {
             items: [],
         });
 
-        expect((service as any).hasCompletePublishedTranslations(block)).toBe(false);
+        expect(contentPublicationStatus({ ...block, enabled: true }) === 'PUBLISHED').toBe(false);
         block.translations[1].title = 'Home';
-        expect((service as any).hasCompletePublishedTranslations(block)).toBe(true);
+        expect(contentPublicationStatus({ ...block, enabled: true }) === 'PUBLISHED').toBe(true);
 
         block.translations[1].title = '首页活动';
-        expect((service as any).hasCompletePublishedTranslations(block)).toBe(false);
+        expect(contentPublicationStatus({ ...block, enabled: true }) === 'PUBLISHED').toBe(false);
     });
 
     it('does not publish Chinese text stored in optional English fields', () => {
@@ -353,16 +356,30 @@ describe('StorefrontContentService publication guard', () => {
             items: [],
         });
 
-        expect((service as any).hasCompletePublishedTranslations(block)).toBe(false);
+        expect(contentPublicationStatus({ ...block, enabled: true }) === 'PUBLISHED').toBe(false);
     });
 
-    it('publishes hero blocks only when they resolve to a storefront image URL', () => {
-        const service = new StorefrontContentService({} as never, {} as never, {} as never, {} as never);
-        const block = new StorefrontContentBlock({ type: 'HERO', imageUrl: null });
-
-        expect((service as any).hasPublishedImage(block)).toBe(false);
+    it('uses the same image and translation publication reasons as the admin preview', () => {
+        const block = {
+            type: 'HERO',
+            enabled: true,
+            imageUrl: null as string | null,
+            items: [],
+            translations: [
+                { languageCode: 'zh_Hans', title: '图片' },
+                { languageCode: 'en', title: 'Image' },
+            ],
+        };
+        expect(contentPublicationStatus(block)).toBe('MISSING_IMAGE');
         block.imageUrl = '/assets/preview/hero.webp';
-        expect((service as any).hasPublishedImage(block)).toBe(true);
+        expect(contentPublicationStatus(block)).toBe('PUBLISHED');
+        expect(contentPublicationStatus({ ...block, enabled: false })).toBe('DISABLED');
+        expect(contentPublicationStatus({ ...block, startsAt: new Date(2000) }, 1000)).toBe('SCHEDULED');
+        expect(contentPublicationStatus({ ...block, endsAt: new Date(1000) }, 1000)).toBe('EXPIRED');
+        expect(contentPublicationStatus({ ...block, translations: [] })).toBe('INCOMPLETE_TRANSLATION');
+        expect(contentPublicationStatus({ ...block, imageUrl: 'https://unmanaged.invalid/hero.jpg' })).toBe(
+            'MISSING_IMAGE',
+        );
     });
 
     it('requires an enabled hero to have a resolved image but allows an offline draft', () => {
@@ -406,6 +423,53 @@ describe('StorefrontContentService publication guard', () => {
         );
 
         await expect(service.findPublished({ channelId: 'store-a' } as any)).resolves.toEqual([]);
+    });
+});
+
+describe('StorefrontContentService sharing content isolation', () => {
+    it('keeps sharing records available to admin but excludes them from published homepage content', async () => {
+        const blocks = [undefined, 'referral-system-poster', 'referral-custom-poster'].map(
+            (purpose, index) =>
+                new StorefrontContentBlock({
+                    id: `custom-${index}`,
+                    type: 'CUSTOM',
+                    enabled: true,
+                    settings: purpose ? { purpose } : {},
+                    startsAt: null,
+                    endsAt: null,
+                    translations: [
+                        {
+                            languageCode: LanguageCode.zh_Hans,
+                            title: '分享海报',
+                            subtitle: '',
+                            body: '',
+                            ctaLabel: '',
+                        },
+                        {
+                            languageCode: LanguageCode.en,
+                            title: 'Share poster',
+                            subtitle: '',
+                            body: '',
+                            ctaLabel: '',
+                        },
+                    ],
+                    items: [],
+                }),
+        );
+        const repository = { find: vi.fn().mockResolvedValue(blocks) };
+        const service = new StorefrontContentService(
+            { getRepository: vi.fn().mockReturnValue(repository) } as any,
+            { translate: vi.fn((value: StorefrontContentBlock) => value) } as any,
+            { storefrontUrl: vi.fn() } as any,
+            {} as any,
+        );
+        const ctx = { channelId: 'store-a' } as any;
+        expect((await service.findPublished(ctx)).map(block => block.id)).toEqual(['custom-0']);
+        expect((await service.findAllForAdmin(ctx)).map(block => block.id)).toEqual([
+            'custom-0',
+            'custom-1',
+            'custom-2',
+        ]);
     });
 });
 

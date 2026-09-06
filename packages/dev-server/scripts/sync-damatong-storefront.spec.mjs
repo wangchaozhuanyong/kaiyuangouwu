@@ -17,9 +17,15 @@ import {
     parseCliArguments,
     prepareDamatongAssets,
     preserveDashboardSupportContacts,
-    syncDamatongStorefront,
+    syncDamatongStorefront as publishDamatongStorefront,
     validateDamatongBrandNames,
 } from './sync-damatong-storefront.mjs';
+
+async function syncDamatongStorefront(options) {
+    if (!options.apply) return publishDamatongStorefront(options);
+    const dryRun = await publishDamatongStorefront({ ...options, apply: false });
+    return publishDamatongStorefront({ ...options, reviewedSnapshotHash: dryRun.reviewHash });
+}
 
 function assetIds() {
     return new Map(damatongAssets.map((asset, index) => [asset.key, `asset-${index + 1}`]));
@@ -441,7 +447,7 @@ test('publisher CLI is dry-run by default and recognizes guarded apply options',
 test('remote apply stays blocked unless the explicit remote-write gate is present', async () => {
     await assert.rejects(
         () =>
-            syncDamatongStorefront({
+            publishDamatongStorefront({
                 apiOrigin: 'https://damatong.net',
                 username: 'admin',
                 password: 'secret',
@@ -729,6 +735,19 @@ test('apply mode updates drift and verifies the same ids through Admin and Shop 
         throw new Error(`Unexpected GraphQL request: ${request.query}`);
     };
 
+    await assert.rejects(
+        () =>
+            publishDamatongStorefront({
+                apiOrigin: 'http://127.0.0.1:3000',
+                username: 'admin',
+                password: 'secret',
+                apply: true,
+                fetchImpl,
+            }),
+        /Storefront settings are managed in Dashboard/,
+    );
+    assert.equal(profileMutationCount, 0);
+    assert.equal(batchMutationCount, 0);
     const result = await syncDamatongStorefront({
         apiOrigin: 'http://127.0.0.1:3000',
         username: 'admin',

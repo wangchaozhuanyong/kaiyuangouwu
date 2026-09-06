@@ -1,21 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-    builtInHeroFallbackImage,
-    builtInHeroImage,
-    heroThemeStyle,
-    heroUsesImageOverlay,
-} from './hero-theme';
-import {
-    HERO_ACCOUNT_SERVICES_FALLBACK_IMAGE,
-    HERO_ACCOUNT_SERVICES_IMAGE,
-    HERO_CLOUD_BRIDGE_FALLBACK_IMAGE,
-    HERO_CLOUD_BRIDGE_IMAGE,
-    HERO_CODEX_TIERS_FALLBACK_IMAGE,
-    HERO_CODEX_TIERS_IMAGE,
-    HERO_TOKEN_TOPUP_FALLBACK_IMAGE,
-    HERO_TOKEN_TOPUP_IMAGE,
-} from './storefront-images';
+import { heroThemeStyle, heroUsesImageOverlay } from './hero-theme';
 import { StorefrontContentBlock } from './types';
 
 function hero(overrides: Partial<StorefrontContentBlock> = {}): StorefrontContentBlock {
@@ -55,7 +40,6 @@ describe('hero theme', () => {
                     buttonTextColor: '#F8FAFC',
                 },
             }),
-            false,
         );
 
         expect(style['--hero-overlay-color']).toBe('#312E81');
@@ -73,7 +57,6 @@ describe('hero theme', () => {
                 textColor: 'red',
                 settings: { accentColor: 'javascript:alert(1)' },
             }),
-            false,
         );
 
         expect(style['--hero-overlay-color']).toBe('#090d16');
@@ -81,26 +64,17 @@ describe('hero theme', () => {
         expect(style['--hero-accent-color']).toBe('#67e8f9');
     });
 
-    it('uses the cloud bridge project artwork when configured', () => {
-        const block = hero({ settings: { fallbackImage: 'cloudbridge-ai-hub' } });
-
-        expect(builtInHeroImage(block, false)).toBe(HERO_CLOUD_BRIDGE_IMAGE);
-        expect(builtInHeroFallbackImage(block, false)).toBe(HERO_CLOUD_BRIDGE_FALLBACK_IMAGE);
-    });
-
-    it.each([
-        ['moyao-token-topup-v1', HERO_TOKEN_TOPUP_IMAGE, HERO_TOKEN_TOPUP_FALLBACK_IMAGE],
-        ['moyao-codex-tiers-v1', HERO_CODEX_TIERS_IMAGE, HERO_CODEX_TIERS_FALLBACK_IMAGE],
-        ['moyao-account-services-v1', HERO_ACCOUNT_SERVICES_IMAGE, HERO_ACCOUNT_SERVICES_FALLBACK_IMAGE],
-    ])('maps %s to its bundled carousel fallback', (fallbackImage, image, fallback) => {
-        const block = hero({ settings: { fallbackImage } });
-
-        expect(builtInHeroImage(block, false)).toBe(image);
-        expect(builtInHeroFallbackImage(block, false)).toBe(fallback);
+    it('uses the saved theme independent of position or legacy artwork keys', () => {
+        const first = hero({ position: 0, settings: { fallbackImage: 'moyao-token-topup-v1' } });
+        const moved = { ...first, position: 1 };
+        expect(heroThemeStyle(first)).toEqual(heroThemeStyle(moved));
+        expect(heroThemeStyle(hero({ settings: { themePreset: 'warm' } }))['--hero-accent-color']).toBe(
+            '#fbbf24',
+        );
     });
 
     it('switches copy surfaces to a light treatment for the CloudBridge bright theme', () => {
-        const style = heroThemeStyle(hero({ backgroundColor: '#FFF7F5' }), false);
+        const style = heroThemeStyle(hero({ backgroundColor: '#FFF7F5' }));
 
         expect(style['--hero-stat-background']).toBe('rgba(255, 255, 255, 0.74)');
         expect(style['--hero-title-shadow']).toContain('rgba(255, 255, 255, 0.86)');
@@ -109,7 +83,6 @@ describe('hero theme', () => {
     it('strengthens the image overlay only when a managed hero opts into high contrast', () => {
         const style = heroThemeStyle(
             hero({ backgroundColor: '#0E241F', settings: { contrastMode: 'high' } }),
-            false,
         );
 
         expect(style['--hero-overlay-strong']).toBe('rgba(14, 36, 31, 0.97)');

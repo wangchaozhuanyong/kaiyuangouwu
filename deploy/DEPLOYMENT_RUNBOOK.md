@@ -53,6 +53,14 @@ previous_production_sha:
 verification_result:
 ```
 
+## 装修统一修复的发布边界
+
+日常店铺装修通过后台保存，同一套代码按 Channel 读取配置。不得为了更新代码重新运行整店模板覆盖商家当前内容。发布前逐店只读比较已保存的内容与候选 Shop API；旧的隐式默认楼层、未完成英文或缺少图片的轮播需要在后台按实际需求补齐。规则见 [店铺配置契约](../packages/storefront-content-plugin/CONFIGURATION_CONTRACT.md)。
+
+`sync-damatong-storefront.mjs --dry-run` 现在返回 `reviewHash`。`--apply` 额外要求 `STOREFRONT_PUBLISH_REVIEW_SHA256` 与本次重新读取目标、版本、计划内容和素材计算的摘要完全一致，缺失/过期时在任何上传和配置写入前停止。摘要不是凭据，不可从当前 dry-run 自动取值后直接 apply；必须先人工审核具体差异。它只适用于这次明确批准的整店操作，不是常驻自动覆盖许可。
+
+先单独上线并验证配置保护门禁，再发布装修功能修复。功能修复选择 `damatong_storefront=true`、公开选择器 `damatong_channel_token=my-malaysia` 和 `damatong_publish_review=preserve-existing`，保留各店已保存内容及图片绑定；其他内容发布范围关闭。只有明确审核整店内容覆盖时才改用本次 `reviewHash`。CI 同时运行三店 Admin/Shop API 与真实首页的中英文、移动端和桌面端回归。所有发布都必须使用已审核的不可变 main 制品，不能从本地工作区复制产物。
+
 ## 当前生产拓扑
 
 - 云平台：AWS EC2
@@ -411,6 +419,7 @@ VENDURE_API_ORIGIN=http://127.0.0.1:3002 VENDURE_STOREFRONT_URL=https://damatong
     node packages/dev-server/scripts/sync-damatong-storefront.mjs --dry-run \
     --channel-token my-malaysia --source-channel-code __default_channel__
 VENDURE_API_ORIGIN=http://127.0.0.1:3002 VENDURE_STOREFRONT_URL=https://damatong.net \
+    STOREFRONT_PUBLISH_REVIEW_SHA256="<reviewed-dry-run-reviewHash>" \
     node packages/dev-server/scripts/sync-damatong-storefront.mjs --apply --allow-remote \
     --channel-token my-malaysia --source-channel-code __default_channel__
 VENDURE_API_ORIGIN=http://127.0.0.1:3002 VENDURE_STOREFRONT_URL=https://damatong.net \

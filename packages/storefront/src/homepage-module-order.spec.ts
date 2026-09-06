@@ -30,13 +30,21 @@ function block(
 }
 
 describe('homepageModuleEntries', () => {
-    it('uses legacy defaults only for module types that have never been configured', () => {
-        const entries = homepageModuleEntries([], ['NOTICE', 'COUPONS']);
-
-        expect(entries.some(entry => entry.type === 'NOTICE')).toBe(false);
-        expect(entries.some(entry => entry.type === 'COUPONS')).toBe(false);
-        expect(entries.some(entry => entry.type === 'QUICK_LINKS')).toBe(true);
-        expect(entries.some(entry => entry.type === 'CATEGORY_AD')).toBe(false);
+    it('does not render sharing records even when an old payload includes enabled ones', () => {
+        const records = [
+            { ...block('CUSTOM', 1, 'system'), settings: { purpose: 'referral-system-poster' } },
+            { ...block('CUSTOM', 2, 'custom'), settings: { purpose: 'referral-custom-poster' } },
+            { ...block('CUSTOM', 3, 'ordinary'), title: '分享海报', settings: {} },
+        ];
+        expect(
+            homepageModuleEntries(records, [])
+                .filter(entry => entry.type === 'CUSTOM')
+                .map(entry => entry.block?.id),
+        ).toEqual(['ordinary']);
+    });
+    it('does not invent modules for a new, empty or fully disabled store', () => {
+        expect(homepageModuleEntries([], [])).toEqual([]);
+        expect(homepageModuleEntries([], ['HERO', 'QUICK_LINKS', 'NOTICE', 'COUPONS'])).toEqual([]);
     });
 
     it('follows persisted positions and keeps custom modules in the same order', () => {
@@ -56,6 +64,24 @@ describe('homepageModuleEntries', () => {
         );
 
         expect(entries.map(entry => entry.type)).toEqual(['FLASH_SALE', 'CUSTOM', 'COUPONS']);
+    });
+
+    it('keeps multiple story and category floors in their individually saved positions', () => {
+        const entries = homepageModuleEntries(
+            [
+                block('STORY', 1, 'story-a'),
+                block('CATEGORY_AD', 2, 'category-a'),
+                block('STORY', 3, 'story-b'),
+                block('CATEGORY_AD', 4, 'category-b'),
+            ],
+            [],
+        );
+        expect(entries.map(entry => entry.block?.id)).toEqual([
+            'story-a',
+            'category-a',
+            'story-b',
+            'category-b',
+        ]);
     });
 
     it('groups all carousel slides into one homepage module', () => {

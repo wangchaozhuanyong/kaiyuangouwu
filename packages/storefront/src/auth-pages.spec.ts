@@ -137,12 +137,12 @@ describe('auth password visibility controls', () => {
             }),
         );
 
-        expect(markup).toContain('auth-login-ai-campaign-v2-480.webp');
+        expect(markup).not.toContain('auth-login-ai-campaign-v2-480.webp');
         expect(markup).not.toContain('auth-register-ai-campaign-v2');
-        expect(markup).toContain('你的 AI 工具，一处购买与管理');
-        expect(markup).toContain('购买记录与状态清晰可查');
-        expect(markup).toContain('支持服务类型');
-        expect(markup).toContain('人工服务');
+        expect(markup).toContain('登录账号');
+        expect(markup).not.toContain('购买记录与状态清晰可查');
+        expect(markup).not.toContain('支持服务类型');
+        expect(markup).not.toContain('人工服务');
         expect(markup).toContain('class="auth-form-heading auth-form-heading-zh"');
         expect(markup).not.toContain('账户登录');
         expect(markup).toContain('auth-hero-header');
@@ -158,15 +158,15 @@ describe('auth password visibility controls', () => {
     it('renders independent password visibility buttons for registration and confirmation', () => {
         const markup = renderToStaticMarkup(createElement(RegisterPage, authPageProps));
 
-        expect(markup).toContain('auth-register-ai-campaign-v2-480.webp');
+        expect(markup).not.toContain('auth-register-ai-campaign-v2-480.webp');
         expect(markup).not.toContain('auth-login-ai-campaign-v2');
-        expect(markup).toContain('创建 MOYAO AI 账号');
-        expect(markup).toContain('验证邮箱即可开始使用');
-        expect(markup).toContain('订单与售后状态清晰可查');
+        expect(markup).toContain('创建账号');
+        expect(markup).not.toContain('验证邮箱即可开始使用');
+        expect(markup).not.toContain('订单与售后状态清晰可查');
         expect(markup).not.toContain('新账户');
         expect(markup).toContain('auth-hero-header');
         expect(markup).toContain('class="auth-route-tabs"');
-        expect(markup).toContain('全球模型 · 一钥直达');
+        expect(markup).not.toContain('全球模型 · 一钥直达');
         expect(markup).toContain('aria-label="注册表单"');
         expect(markup).toContain('密码需为 8–72 个字符');
         expect(markup.match(/aria-label="显示密码"/g)).toHaveLength(2);
@@ -227,13 +227,13 @@ describe('auth password visibility controls', () => {
         expect(markup).not.toContain('支持服务类型');
     });
 
-    it('reuses the login hero image and copy on the forgot-password page', () => {
+    it('uses neutral login visuals for password recovery when no store content exists', () => {
         const markup = renderToStaticMarkup(createElement(ForgotPasswordPage, authPageProps));
 
         expect(markup).toContain('auth-page-login');
-        expect(markup).toContain('auth-login-ai-campaign-v2-480.webp');
-        expect(markup).toContain('你的 AI 工具，一处购买与管理');
-        expect(markup).toContain('主流工具精选');
+        expect(markup).not.toContain('auth-login-ai-campaign-v2-480.webp');
+        expect(markup).toContain('登录账号');
+        expect(markup).not.toContain('主流工具精选');
         expect(markup).toContain('找回密码');
         expect(markup).not.toContain('auth-ai-bridge-hero');
     });

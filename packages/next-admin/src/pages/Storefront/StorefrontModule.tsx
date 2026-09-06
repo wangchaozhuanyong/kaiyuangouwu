@@ -17,7 +17,8 @@ import {
     Trash2,
     X,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
+import { channelRequestContext } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
@@ -29,7 +30,9 @@ import {
     UPDATE_STOREFRONT_SETTINGS_MUTATION,
     type StorefrontContentBlock,
     type StorefrontContentResult,
+    type StorefrontLanguageCode,
 } from '../../graphql/storefront.graphql';
+import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { StorefrontBlockEditor } from './StorefrontBlockEditor';
@@ -40,34 +43,78 @@ import {
     newContentBlock,
     storefrontBlockInput,
 } from './storefront-content-utils';
+import { contentPublicationLabels, contentPublicationStatus } from './storefront-publication';
+
+import {
+    homepageOrderIds,
+    isHomepageBlock,
+    moveCarouselSlide,
+    moveHomepageRow,
+    storefrontHomepageRows,
+} from './storefront-homepage-order';
 
 type Viewport = 'MOBILE' | 'DESKTOP';
 
 export function StorefrontModule() {
+    const { hasAnyPermission } = useAdminPermissions();
+    const canCreate = hasAnyPermission(['CreateStorefrontContent']);
+    const canUpdate = hasAnyPermission(['UpdateStorefrontContent']);
+    const canDelete = hasAnyPermission(['DeleteStorefrontContent']);
+    const [previewLanguage, setPreviewLanguage] = useState<StorefrontLanguageCode>('zh_Hans');
     const [viewport, setViewport] = useState<Viewport>('MOBILE');
+    const [carouselOpen, setCarouselOpen] = useState(false);
+    const [actionPending, setActionPending] = useState(false);
     const [editing, setEditing] = useState<StorefrontContentBlock | null>(null);
     const [deleting, setDeleting] = useState<StorefrontContentBlock | null>(null);
     const [notice, setNotice] = useState('');
     const [actionError, setActionError] = useState('');
     const query = useQuery<StorefrontContentResult>(STOREFRONT_CONTENT_QUERY, {
         fetchPolicy: 'cache-and-network',
+        notifyOnNetworkStatusChange: true,
     });
-    const [createBlock, createState] = useMutation(CREATE_STOREFRONT_BLOCK_MUTATION);
-    const [updateBlock, updateState] = useMutation(UPDATE_STOREFRONT_BLOCK_MUTATION);
-    const [reorderBlocks, reorderState] = useMutation(REORDER_STOREFRONT_BLOCKS_MUTATION);
+    const mutationOptions = query.data
+        ? { context: channelRequestContext(query.data.activeChannel.token) }
+        : {};
+    const [createBlock, createState] = useMutation(CREATE_STOREFRONT_BLOCK_MUTATION, mutationOptions);
+    const [updateBlock, updateState] = useMutation(UPDATE_STOREFRONT_BLOCK_MUTATION, mutationOptions);
+    const [reorderBlocks, reorderState] = useMutation(REORDER_STOREFRONT_BLOCKS_MUTATION, mutationOptions);
     const [deleteBlock, deleteState] = useMutation<{
         deleteStorefrontContentBlock: { result: string; message?: string | null };
-    }>(DELETE_STOREFRONT_BLOCK_MUTATION);
-    const [updateSettings] = useMutation(UPDATE_STOREFRONT_SETTINGS_MUTATION);
+    }>(DELETE_STOREFRONT_BLOCK_MUTATION, mutationOptions);
+    const [updateSettings, settingsState] = useMutation(UPDATE_STOREFRONT_SETTINGS_MUTATION, mutationOptions);
     const allBlocks = query.data?.storefrontContentBlocks ?? [];
-    const homepageTypes = useMemo(() => new Set(homepageModuleDescriptors.map(item => item.type)), []);
-    const homepageBlocks = allBlocks.filter(
-        block => homepageTypes.has(block.type) || block.type === 'CUSTOM',
-    );
+    const homepageRows = storefrontHomepageRows(allBlocks);
+    const homepageBlocks = homepageRows.flatMap(row => row.blocks);
     const configuredTypes = new Set(homepageBlocks.map(block => block.type));
-    const visibleBlocks = homepageBlocks.filter(block => block.enabled && isCurrentlyVisible(block));
-    const heroCount = homepageBlocks.filter(block => block.type === 'HERO').length;
-    const savePending = createState.loading || updateState.loading;
+    const visibleBlocks = allBlocks.filter(
+        block => isHomepageBlock(block) && contentPublicationStatus(block) === 'PUBLISHED',
+    );
+    const visibleRows = storefrontHomepageRows(visibleBlocks);
+    const heroes = homepageBlocks.filter(block => block.type === 'HERO');
+    const heroCount = heroes.length;
+    const savePending = createState.loading || updateState.loading || actionPending;
+    const pending =
+        savePending ||
+        reorderState.loading ||
+        deleteState.loading ||
+        settingsState.loading ||
+        query.loading ||
+        Boolean(query.error);
+
+    const openEditor = (block: StorefrontContentBlock) => {
+        if (!(block.id ? canUpdate : canCreate) || query.loading || query.error) return;
+        setActionError('');
+        setNotice('');
+        setEditing(block);
+    };
+    const addHero = () =>
+        openEditor(
+            newContentBlock(
+                'HERO',
+                Math.max(-1, ...allBlocks.map(block => block.position)) + 1,
+                `首页轮播图 ${heroCount + 1}`,
+            ),
+        );
 
     const showNotice = (message: string) => {
         setNotice(message);
@@ -79,6 +126,9 @@ export function StorefrontModule() {
     };
 
     const saveEditor = async (block: StorefrontContentBlock) => {
+        if (!(block.id ? canUpdate : canCreate) || query.loading || query.error) return;
+        setActionPending(true);
+        setActionError('');
         try {
             if (block.id) {
                 if (!block.updatedAt) throw new Error('缺少内容版本，请刷新后重试');
@@ -95,14 +145,34 @@ export function StorefrontModule() {
                 await createBlock({ variables: { input: storefrontBlockInput(block) } });
             }
             setEditing(null);
-            showNotice(block.id ? '楼层内容已保存并同步到前台' : '新楼层已创建');
-            await query.refetch();
+            showNotice(
+                block.type === 'HERO'
+                    ? '轮播图已保存'
+                    : block.id
+                      ? '楼层内容已保存，客户端按发布状态展示'
+                      : '新楼层已创建',
+            );
+            try {
+                const refreshed = await query.refetch();
+                if (!block.id && block.type === 'HERO' && canUpdate && refreshed.data) {
+                    const blocks = refreshed.data.storefrontContentBlocks;
+                    await reorderBlocks({
+                        variables: { ids: homepageOrderIds(blocks, storefrontHomepageRows(blocks)) },
+                    });
+                    await query.refetch();
+                }
+            } catch (error) {
+                setActionError(`内容已保存，但顺序整理或重新读取失败，请刷新检查。${errorText(error)}`);
+            }
         } catch (error) {
             showError(error);
+        } finally {
+            setActionPending(false);
         }
     };
 
     const toggleBlock = async (block: StorefrontContentBlock) => {
+        if (!canUpdate || query.loading || query.error) return;
         if (!block.id || !block.updatedAt) return;
         try {
             await updateBlock({
@@ -117,29 +187,22 @@ export function StorefrontModule() {
         }
     };
 
-    const moveBlock = async (block: StorefrontContentBlock, direction: -1 | 1) => {
-        if (!block.id) return;
-        const index = homepageBlocks.findIndex(item => item.id === block.id);
-        const target = homepageBlocks[index + direction];
-        if (!target?.id) return;
-        const ids = allBlocks.flatMap(item => (item.id ? [item.id] : []));
-        const from = ids.indexOf(block.id);
-        const to = ids.indexOf(target.id);
-        if (from < 0 || to < 0) return;
-        const next = [...ids];
-        const [moved] = next.splice(from, 1);
-        next.splice(to, 0, moved);
+    const saveOrder = async (ids: string[] | null, message: string) => {
+        if (!ids || pending || !canUpdate) return;
+        setActionPending(true);
         try {
-            await reorderBlocks({ variables: { ids: next } });
-            showNotice('首页楼层顺序已更新');
+            await reorderBlocks({ variables: { ids } });
+            showNotice(message);
             await query.refetch();
         } catch (error) {
             showError(error);
+        } finally {
+            setActionPending(false);
         }
     };
 
     const confirmDelete = async () => {
-        if (!deleting?.id) return;
+        if (!deleting?.id || pending || !canDelete) return;
         try {
             const response = await deleteBlock({ variables: { id: deleting.id } });
             const deletion = response.data?.deleteStorefrontContentBlock;
@@ -154,14 +217,21 @@ export function StorefrontModule() {
         }
     };
 
-    const changeHeroInterval = async (value: number) => {
-        const seconds = Math.max(3, Math.min(30, Math.round(value)));
+    const changeHeroInterval = async (seconds: number) => {
+        if (pending || !canUpdate) return;
+        if (!Number.isInteger(seconds) || seconds < 3 || seconds > 30) {
+            showError('轮播间隔请输入 3–30 的整数秒数');
+            return;
+        }
+        setActionPending(true);
         try {
             await updateSettings({ variables: { input: { heroAutoplayIntervalSeconds: seconds } } });
             showNotice(`轮播间隔已设为 ${seconds} 秒`);
             await query.refetch();
         } catch (error) {
             showError(error);
+        } finally {
+            setActionPending(false);
         }
     };
 
@@ -190,15 +260,11 @@ export function StorefrontModule() {
                         </button>
                         <button
                             type="button"
-                            onClick={() =>
-                                setEditing(
-                                    newContentBlock('HERO', allBlocks.length, `首页轮播图 ${heroCount + 1}`),
-                                )
-                            }
+                            onClick={() => setCarouselOpen(true)}
                             className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700"
                         >
-                            <Plus className="h-3.5 w-3.5" />
-                            新增轮播图
+                            <ImageIcon className="h-3.5 w-3.5" />
+                            首页轮播图
                         </button>
                     </div>
                 </div>
@@ -206,12 +272,12 @@ export function StorefrontModule() {
 
             <main className="mx-auto grid w-full max-w-[1600px] flex-1 gap-5 overflow-y-auto p-5 sm:p-8 xl:grid-cols-[minmax(440px,620px)_minmax(0,1fr)]">
                 <div className="space-y-4">
-                    {notice && (
+                    {notice && !carouselOpen && (
                         <Message kind="success" onClose={() => setNotice('')}>
                             {notice}
                         </Message>
                     )}
-                    {actionError && (
+                    {actionError && !carouselOpen && !editing && (
                         <Message kind="error" onClose={() => setActionError('')}>
                             {actionError}
                         </Message>
@@ -219,13 +285,13 @@ export function StorefrontModule() {
                     <section className="grid overflow-hidden rounded-xl border border-slate-200 bg-white sm:grid-cols-3">
                         <Metric
                             label="已配置楼层"
-                            value={`${homepageBlocks.length} 个`}
+                            value={`${homepageRows.length} 个`}
                             detail={`${configuredTypes.size} 种类型`}
                         />
                         <Metric
                             label="当前展示"
-                            value={`${visibleBlocks.length} 个`}
-                            detail="已排除停用和过期内容"
+                            value={`${visibleRows.length} 个`}
+                            detail="已按排期、双语内容和图片检查"
                         />
                         <Metric
                             label="当前店铺"
@@ -234,7 +300,7 @@ export function StorefrontModule() {
                         />
                     </section>
 
-                    <section className="rounded-xl border border-slate-200 bg-white">
+                    <section aria-label="首页楼层" className="rounded-xl border border-slate-200 bg-white">
                         <div className="flex items-center justify-between border-b border-slate-100 p-4">
                             <div>
                                 <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
@@ -248,30 +314,6 @@ export function StorefrontModule() {
                                     上下移动会立即更新客户端顺序
                                 </p>
                             </div>
-                            {query.data && (
-                                <label className="flex items-center gap-2 text-[11px] font-bold text-slate-600">
-                                    轮播间隔
-                                    <input
-                                        type="number"
-                                        min={3}
-                                        max={30}
-                                        defaultValue={
-                                            query.data.storefrontContentSettings.heroAutoplayIntervalSeconds
-                                        }
-                                        onBlur={event => {
-                                            const next = Number(event.target.value);
-                                            if (
-                                                next !==
-                                                query.data?.storefrontContentSettings
-                                                    .heroAutoplayIntervalSeconds
-                                            )
-                                                void changeHeroInterval(next);
-                                        }}
-                                        className="w-16 rounded-md border border-slate-300 px-2 py-1.5 font-mono"
-                                    />
-                                    秒
-                                </label>
-                            )}
                         </div>
                         {query.loading && !query.data ? (
                             <LoadingState />
@@ -279,19 +321,41 @@ export function StorefrontModule() {
                             <ErrorState message={query.error.message} onRetry={() => void query.refetch()} />
                         ) : (
                             <div className="divide-y divide-slate-100">
-                                {homepageBlocks.map((block, index) => (
-                                    <BlockRow
-                                        key={block.id ?? block.code}
-                                        block={block}
-                                        index={index}
-                                        count={homepageBlocks.length}
-                                        pending={updateState.loading || reorderState.loading}
-                                        onEdit={() => setEditing(block)}
-                                        onToggle={() => void toggleBlock(block)}
-                                        onMove={direction => void moveBlock(block, direction)}
-                                        onDelete={() => setDeleting(block)}
-                                    />
-                                ))}
+                                {homepageRows.map((row, index) =>
+                                    row.key === 'carousel' ? (
+                                        <CarouselRow
+                                            key={row.key}
+                                            blocks={row.blocks}
+                                            index={index}
+                                            count={homepageRows.length}
+                                            pending={pending}
+                                            onManage={() => setCarouselOpen(true)}
+                                            onMove={direction =>
+                                                void saveOrder(
+                                                    moveHomepageRow(allBlocks, row.key, direction),
+                                                    '首页轮播位置已更新',
+                                                )
+                                            }
+                                        />
+                                    ) : (
+                                        <BlockRow
+                                            key={row.key}
+                                            block={row.blocks[0]}
+                                            index={index}
+                                            count={homepageRows.length}
+                                            pending={pending}
+                                            onEdit={() => openEditor(row.blocks[0])}
+                                            onToggle={() => void toggleBlock(row.blocks[0])}
+                                            onMove={direction =>
+                                                void saveOrder(
+                                                    moveHomepageRow(allBlocks, row.key, direction),
+                                                    '首页楼层顺序已更新',
+                                                )
+                                            }
+                                            onDelete={() => setDeleting(row.blocks[0])}
+                                        />
+                                    ),
+                                )}
                                 {!homepageBlocks.length && (
                                     <div className="p-10 text-center">
                                         <LayoutGrid className="mx-auto h-8 w-8 text-slate-300" />
@@ -324,8 +388,9 @@ export function StorefrontModule() {
                                         <button
                                             key={descriptor.type}
                                             type="button"
+                                            disabled={pending || !(existing ? canUpdate : canCreate)}
                                             onClick={() =>
-                                                setEditing(
+                                                openEditor(
                                                     existing ??
                                                         newContentBlock(
                                                             descriptor.type,
@@ -364,10 +429,21 @@ export function StorefrontModule() {
                                 <FeatureHelpButton topic="storefront.structure-preview" title="结构预览" />
                             </h2>
                             <p className="mt-1 text-[10px] text-slate-400">
-                                显示真实楼层内容，不会伪造商品与价格
+                                按已保存的发布状态、顺序和语言预览；商品数据和精确样式以客户端为准
                             </p>
                         </div>
-                        <div className="flex rounded-lg bg-slate-100 p-1 text-[11px] font-bold">
+                        <div className="flex flex-wrap rounded-lg bg-slate-100 p-1 text-[11px] font-bold">
+                            <select
+                                aria-label="预览语言"
+                                value={previewLanguage}
+                                onChange={event =>
+                                    setPreviewLanguage(event.target.value as StorefrontLanguageCode)
+                                }
+                                className="rounded-md bg-white px-2 text-slate-700"
+                            >
+                                <option value="zh_Hans">中文</option>
+                                <option value="en">English</option>
+                            </select>
                             <button
                                 type="button"
                                 onClick={() => setViewport('MOBILE')}
@@ -386,29 +462,359 @@ export function StorefrontModule() {
                             </button>
                         </div>
                     </div>
-                    <StorefrontPreview blocks={visibleBlocks} viewport={viewport} />
+                    <StorefrontPreview
+                        blocks={visibleBlocks}
+                        viewport={viewport}
+                        language={previewLanguage}
+                    />
                 </section>
             </main>
 
+            {carouselOpen && (
+                <CarouselManager
+                    blocks={heroes}
+                    interval={query.data?.storefrontContentSettings.heroAutoplayIntervalSeconds}
+                    pending={pending}
+                    loading={query.loading && !query.data}
+                    error={query.error?.message}
+                    notice={notice}
+                    actionError={actionError}
+                    covered={Boolean(editing || deleting)}
+                    onClose={() => {
+                        if (!pending) setCarouselOpen(false);
+                    }}
+                    onRetry={() => void query.refetch()}
+                    onAdd={addHero}
+                    onEdit={openEditor}
+                    onToggle={block => void toggleBlock(block)}
+                    onDelete={block => {
+                        setActionError('');
+                        setDeleting(block);
+                    }}
+                    onMove={(block, direction) =>
+                        void saveOrder(
+                            moveCarouselSlide(allBlocks, block.id!, direction),
+                            '轮播图播放顺序已更新',
+                        )
+                    }
+                    onIntervalSave={changeHeroInterval}
+                />
+            )}
             {editing && (
                 <StorefrontBlockEditor
                     key={editing.id ?? editing.code}
                     value={editing}
                     saving={savePending}
-                    onClose={() => setEditing(null)}
+                    error={actionError}
+                    onClose={() => {
+                        setEditing(null);
+                        setActionError('');
+                    }}
                     onSave={saveEditor}
                 />
             )}
             {deleting && (
                 <ConfirmDialog
-                    title="删除首页楼层"
-                    description={`确认删除《${deleting.internalName}》？删除后客户端将立即移除该楼层。`}
+                    title={deleting.type === 'HERO' ? '删除轮播图' : '删除首页楼层'}
+                    description={`确认删除《${deleting.internalName}》？删除后客户端将立即移除${deleting.type === 'HERO' ? '这张轮播图' : '该楼层'}。`}
+                    error={actionError}
                     pending={deleteState.loading}
                     onClose={() => setDeleting(null)}
                     onConfirm={() => void confirmDelete()}
                 />
             )}
         </div>
+    );
+}
+
+function CarouselRow({
+    blocks,
+    index,
+    count,
+    pending,
+    onManage,
+    onMove,
+}: {
+    blocks: StorefrontContentBlock[];
+    index: number;
+    count: number;
+    pending: boolean;
+    onManage: () => void;
+    onMove: (direction: -1 | 1) => void;
+}) {
+    const { hasAnyPermission } = useAdminPermissions();
+    const canUpdate = hasAnyPermission(['UpdateStorefrontContent']);
+    const visible = blocks.filter(block => contentPublicationStatus(block) === 'PUBLISHED').length;
+    return (
+        <article aria-label="首页轮播" className="flex flex-wrap items-center gap-3 p-4 hover:bg-slate-50">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                <ImageIcon className="h-5 w-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+                <h3 className="text-xs font-bold text-slate-900">
+                    首页轮播 <FeatureHelpButton topic="storefront.carousel" title="首页轮播" />
+                </h3>
+                <p className="mt-1 text-[10px] text-slate-500">
+                    {blocks.length} 张轮播图 · {visible} 张展示中
+                </p>
+            </div>
+            <div className="ml-auto flex shrink-0 items-center gap-0.5">
+                <ActionIcon
+                    label="上移首页轮播"
+                    disabled={pending || !canUpdate || index === 0}
+                    onClick={() => onMove(-1)}
+                    icon={ArrowUp}
+                />
+                <ActionIcon
+                    label="下移首页轮播"
+                    disabled={pending || !canUpdate || index === count - 1}
+                    onClick={() => onMove(1)}
+                    icon={ArrowDown}
+                />
+                <button
+                    type="button"
+                    onClick={onManage}
+                    className="ml-2 rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700"
+                >
+                    管理轮播图
+                </button>
+            </div>
+        </article>
+    );
+}
+
+function CarouselManager({
+    blocks,
+    interval,
+    pending,
+    loading,
+    error,
+    notice,
+    actionError,
+    covered,
+    onClose,
+    onRetry,
+    onAdd,
+    onEdit,
+    onToggle,
+    onDelete,
+    onMove,
+    onIntervalSave,
+}: {
+    blocks: StorefrontContentBlock[];
+    interval?: number;
+    pending: boolean;
+    loading: boolean;
+    error?: string;
+    notice: string;
+    actionError: string;
+    covered: boolean;
+    onClose: () => void;
+    onRetry: () => void;
+    onAdd: () => void;
+    onEdit: (block: StorefrontContentBlock) => void;
+    onToggle: (block: StorefrontContentBlock) => void;
+    onDelete: (block: StorefrontContentBlock) => void;
+    onMove: (block: StorefrontContentBlock, direction: -1 | 1) => void;
+    onIntervalSave: (seconds: number) => Promise<void>;
+}) {
+    const { hasAnyPermission } = useAdminPermissions();
+    const canCreate = hasAnyPermission(['CreateStorefrontContent']);
+    const canUpdate = hasAnyPermission(['UpdateStorefrontContent']);
+    const disabled = pending || Boolean(error) || interval === undefined;
+    return (
+        <AccessibleDialogSurface
+            accessibleName="首页轮播图"
+            onRequestClose={onClose}
+            inert={covered}
+            className="fixed inset-0 z-40 flex justify-end bg-slate-950/45"
+        >
+            <div className="flex h-full w-full max-w-3xl flex-col bg-slate-50 shadow-2xl">
+                <header className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-200 bg-white px-5 py-4 sm:px-7">
+                    <div>
+                        <h2 className="text-base font-bold text-slate-900">
+                            首页轮播图 <FeatureHelpButton topic="storefront.carousel" title="首页轮播图" />
+                        </h2>
+                        <p className="mt-1 text-xs leading-5 text-slate-500">
+                            统一管理图片、文案、跳转链接、播放顺序和轮播间隔。
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        aria-label="关闭轮播图管理"
+                        disabled={pending}
+                        onClick={onClose}
+                        className="shrink-0 rounded-lg p-2 text-slate-500 hover:bg-slate-100 disabled:opacity-50"
+                    >
+                        <X className="h-5 w-5" />
+                    </button>
+                </header>
+                <div className="flex-1 space-y-4 overflow-y-auto p-4 sm:p-7">
+                    {notice && (
+                        <p
+                            role="status"
+                            className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800"
+                        >
+                            {notice}
+                        </p>
+                    )}
+                    {actionError && (
+                        <p
+                            role="alert"
+                            className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800"
+                        >
+                            {actionError}
+                        </p>
+                    )}
+                    {loading ? (
+                        <LoadingState />
+                    ) : error ? (
+                        <ErrorState message={error} onRetry={onRetry} />
+                    ) : (
+                        <>
+                            {interval !== undefined && (
+                                <CarouselInterval
+                                    key={interval}
+                                    value={interval}
+                                    pending={disabled || !canUpdate}
+                                    onSave={onIntervalSave}
+                                />
+                            )}
+                            <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 p-4">
+                                    <div>
+                                        <h3 className="text-sm font-bold text-slate-900">
+                                            轮播图片 · {blocks.length} 张{' '}
+                                            <FeatureHelpButton topic="storefront.carousel" title="轮播图片" />
+                                        </h3>
+                                        <p className="mt-1 text-[11px] leading-5 text-slate-500">
+                                            按从上到下的顺序播放；编辑可设置图片、文案、链接和排期。
+                                        </p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        disabled={disabled || !canCreate}
+                                        onClick={onAdd}
+                                        className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+                                    >
+                                        <Plus className="h-3.5 w-3.5" />
+                                        新增轮播图
+                                    </button>
+                                </div>
+                                <div className="divide-y divide-slate-100">
+                                    {blocks.map((block, index) => (
+                                        <BlockRow
+                                            key={block.id ?? block.code}
+                                            block={block}
+                                            index={index}
+                                            count={blocks.length}
+                                            pending={disabled}
+                                            onEdit={() => onEdit(block)}
+                                            onToggle={() => onToggle(block)}
+                                            onDelete={() => onDelete(block)}
+                                            onMove={direction => onMove(block, direction)}
+                                        />
+                                    ))}
+                                    {!blocks.length && (
+                                        <div className="p-10 text-center">
+                                            <ImageIcon className="mx-auto h-8 w-8 text-slate-300" />
+                                            <h3 className="mt-3 text-sm font-bold text-slate-800">
+                                                还没有轮播图
+                                            </h3>
+                                            <p className="mt-1 text-xs text-slate-500">
+                                                点击“新增轮播图”开始配置。
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
+                            </section>
+                            <p className="text-xs leading-5 text-slate-500">
+                                整组轮播在首页的位置，请回到“楼层顺序与状态”调整。
+                            </p>
+                        </>
+                    )}
+                </div>
+            </div>
+        </AccessibleDialogSurface>
+    );
+}
+
+function CarouselInterval({
+    value,
+    pending,
+    onSave,
+}: {
+    value: number;
+    pending: boolean;
+    onSave: (seconds: number) => Promise<void>;
+}) {
+    const [draft, setDraft] = useState(String(value));
+    return (
+        <form
+            className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-4"
+            onSubmit={event => {
+                event.preventDefault();
+                void onSave(Number(draft));
+            }}
+        >
+            <label className="flex-1 text-xs font-bold text-slate-700">
+                轮播间隔（秒）
+                <input
+                    type="number"
+                    required
+                    min={3}
+                    max={30}
+                    step={1}
+                    value={draft}
+                    disabled={pending}
+                    onChange={event => setDraft(event.target.value)}
+                    className="mt-2 block w-full min-w-24 rounded-lg border border-slate-300 px-3 py-2 font-mono disabled:opacity-50"
+                />
+            </label>
+            <button
+                type="submit"
+                disabled={pending || draft === String(value)}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
+            >
+                保存间隔
+            </button>
+            <p className="w-full text-[11px] text-slate-500">所有轮播图共用，支持 3–30 秒。</p>
+        </form>
+    );
+}
+
+function CarouselPreview({
+    blocks,
+    desktop,
+    language,
+}: {
+    blocks: StorefrontContentBlock[];
+    desktop: boolean;
+    language: StorefrontLanguageCode;
+}) {
+    const [selected, setSelected] = useState<string | null>(null);
+    const active = blocks.find(block => (block.id ?? block.code) === selected) ?? blocks[0];
+    return (
+        <section aria-label="首页轮播预览" className="space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+                <span className="text-[11px] font-bold text-slate-700">首页轮播 · {blocks.length} 张</span>
+                <div className="flex flex-wrap gap-1">
+                    {blocks.map((block, index) => (
+                        <button
+                            key={block.id ?? block.code}
+                            type="button"
+                            aria-label={`预览第 ${index + 1} 张轮播图`}
+                            aria-pressed={block === active}
+                            onClick={() => setSelected(block.id ?? block.code)}
+                            className={`min-h-7 min-w-7 rounded-md px-2 text-[10px] font-bold ${block === active ? 'bg-blue-600 text-white' : 'bg-white text-slate-600'}`}
+                        >
+                            {index + 1}
+                        </button>
+                    ))}
+                </div>
+            </div>
+            <PreviewBlock block={active} desktop={desktop} language={language} />
+        </section>
     );
 }
 
@@ -431,10 +837,17 @@ function BlockRow({
     onMove: (direction: -1 | 1) => void;
     onDelete: () => void;
 }) {
+    const { hasAnyPermission } = useAdminPermissions();
+    const canUpdate = hasAnyPermission(['UpdateStorefrontContent']);
+    const canDelete = hasAnyPermission(['DeleteStorefrontContent']);
     const translation = blockTranslation(block, 'zh_Hans');
-    const scheduled = !isCurrentlyVisible(block) && block.enabled;
+    const status = contentPublicationStatus(block);
+    const scheduled = status !== 'PUBLISHED' && block.enabled;
     return (
-        <article className="flex items-center gap-3 p-4 hover:bg-slate-50">
+        <article
+            aria-label={translation.title || block.internalName}
+            className="flex flex-wrap items-center gap-3 p-4 hover:bg-slate-50"
+        >
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
                 {block.imageAsset?.preview || block.imageUrl ? (
                     <img
@@ -457,40 +870,54 @@ function BlockRow({
                     <span
                         className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${block.enabled ? (scheduled ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700') : 'bg-slate-100 text-slate-400'}`}
                     >
-                        {block.enabled ? (scheduled ? '排期中' : '展示中') : '已停用'}
+                        {contentPublicationLabels[status]}
                     </span>
                 </div>
                 <p className="mt-1 truncate text-[10px] text-slate-400">
                     {block.internalName} · {block.items.length} 个子项
                 </p>
             </div>
-            <div className="flex shrink-0 gap-0.5">
+            <div className="ml-auto flex shrink-0 gap-0.5">
                 <ActionIcon
                     label="上移"
-                    disabled={pending || index === 0}
+                    disabled={pending || !canUpdate || index === 0}
                     onClick={() => onMove(-1)}
                     icon={ArrowUp}
                 />
                 <ActionIcon
                     label="下移"
-                    disabled={pending || index === count - 1}
+                    disabled={pending || !canUpdate || index === count - 1}
                     onClick={() => onMove(1)}
                     icon={ArrowDown}
                 />
                 <ActionIcon
                     label={block.enabled ? '停用' : '启用'}
-                    disabled={pending}
+                    disabled={pending || !canUpdate}
                     onClick={onToggle}
                     icon={block.enabled ? EyeOff : Eye}
                 />
-                <ActionIcon label="编辑" disabled={pending} onClick={onEdit} icon={Pencil} />
-                <ActionIcon label="删除" disabled={pending} onClick={onDelete} icon={Trash2} danger />
+                <ActionIcon label="编辑" disabled={pending || !canUpdate} onClick={onEdit} icon={Pencil} />
+                <ActionIcon
+                    label="删除"
+                    disabled={pending || !canDelete}
+                    onClick={onDelete}
+                    icon={Trash2}
+                    danger
+                />
             </div>
         </article>
     );
 }
 
-function StorefrontPreview({ blocks, viewport }: { blocks: StorefrontContentBlock[]; viewport: Viewport }) {
+function StorefrontPreview({
+    blocks,
+    viewport,
+    language,
+}: {
+    blocks: StorefrontContentBlock[];
+    viewport: Viewport;
+    language: StorefrontLanguageCode;
+}) {
     return (
         <div className="flex min-h-[620px] justify-center overflow-y-auto p-5 sm:p-8">
             <div
@@ -502,13 +929,23 @@ function StorefrontPreview({ blocks, viewport }: { blocks: StorefrontContentBloc
                     {viewport === 'MOBILE' ? '当前店铺' : '商城首页楼层结构'}
                 </div>
                 <div className="space-y-2 bg-slate-50 p-2">
-                    {blocks.map(block => (
-                        <PreviewBlock
-                            key={block.id ?? block.code}
-                            block={block}
-                            desktop={viewport === 'DESKTOP'}
-                        />
-                    ))}
+                    {storefrontHomepageRows(blocks).map(row =>
+                        row.key === 'carousel' ? (
+                            <CarouselPreview
+                                key={row.key}
+                                blocks={row.blocks}
+                                desktop={viewport === 'DESKTOP'}
+                                language={language}
+                            />
+                        ) : (
+                            <PreviewBlock
+                                key={row.key}
+                                block={row.blocks[0]}
+                                desktop={viewport === 'DESKTOP'}
+                                language={language}
+                            />
+                        ),
+                    )}
                     {!blocks.length && (
                         <div className="flex min-h-96 flex-col items-center justify-center text-center">
                             <LayoutGrid className="h-8 w-8 text-slate-300" />
@@ -524,8 +961,16 @@ function StorefrontPreview({ blocks, viewport }: { blocks: StorefrontContentBloc
     );
 }
 
-function PreviewBlock({ block, desktop }: { block: StorefrontContentBlock; desktop: boolean }) {
-    const copy = blockTranslation(block, 'zh_Hans');
+function PreviewBlock({
+    block,
+    desktop,
+    language,
+}: {
+    block: StorefrontContentBlock;
+    desktop: boolean;
+    language: StorefrontLanguageCode;
+}) {
+    const copy = blockTranslation(block, language);
     const image = block.imageAsset?.preview ?? block.imageUrl;
     const productAutomation = ['COUPONS', 'FLASH_SALE', 'BEST_SELLERS', 'RECOMMENDATIONS'].includes(
         block.type,
@@ -540,7 +985,7 @@ function PreviewBlock({ block, desktop }: { block: StorefrontContentBlock; deskt
                 {image && (
                     <img
                         src={image}
-                        alt={copy.title || block.internalName}
+                        alt={copy.title}
                         className={`${desktop ? 'max-h-64 min-w-0 flex-1' : 'max-h-44 w-full'} rounded-lg object-cover`}
                     />
                 )}
@@ -554,7 +999,7 @@ function PreviewBlock({ block, desktop }: { block: StorefrontContentBlock; deskt
                         )}
                     </div>
                     <h3 className={`${desktop ? 'mt-3 text-xl' : 'mt-2 text-sm'} font-bold text-slate-900`}>
-                        {copy.title || block.internalName}
+                        {copy.title}
                     </h3>
                     {copy.subtitle && <p className="mt-1 text-xs text-slate-500">{copy.subtitle}</p>}
                     {copy.body && (
@@ -566,12 +1011,11 @@ function PreviewBlock({ block, desktop }: { block: StorefrontContentBlock; deskt
                         <div className={`mt-3 grid gap-2 ${desktop ? 'grid-cols-4' : 'grid-cols-2'}`}>
                             {block.items
                                 .filter(item => item.enabled)
-                                .slice(0, desktop ? 8 : 4)
                                 .map((item, index) => (
                                     <div key={item.id ?? index} className="rounded-lg bg-slate-50 p-2">
                                         <div className="truncate text-[10px] font-bold text-slate-700">
-                                            {item.translations.find(value => value.languageCode === 'zh_Hans')
-                                                ?.label || `子项 ${index + 1}`}
+                                            {item.translations.find(value => value.languageCode === language)
+                                                ?.label ?? ''}
                                         </div>
                                     </div>
                                 ))}
@@ -583,12 +1027,6 @@ function PreviewBlock({ block, desktop }: { block: StorefrontContentBlock; deskt
     );
 }
 
-function isCurrentlyVisible(block: StorefrontContentBlock) {
-    const now = Date.now();
-    const start = block.startsAt ? new Date(block.startsAt).getTime() : null;
-    const end = block.endsAt ? new Date(block.endsAt).getTime() : null;
-    return (!start || start <= now) && (!end || end > now);
-}
 function Metric({ label, value, detail }: { label: string; value: string; detail: string }) {
     return (
         <div className="border-b border-slate-100 p-4 last:border-0 sm:border-b-0 sm:border-r sm:last:border-r-0">
@@ -678,12 +1116,14 @@ function ConfirmDialog({
     title,
     description,
     pending,
+    error,
     onClose,
     onConfirm,
 }: {
     title: string;
     description: string;
     pending: boolean;
+    error?: string;
     onClose: () => void;
     onConfirm: () => void;
 }) {
@@ -691,7 +1131,9 @@ function ConfirmDialog({
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/50 p-4">
             <AccessibleDialogSurface
                 accessibleName={title}
-                onRequestClose={onClose}
+                onRequestClose={() => {
+                    if (!pending) onClose();
+                }}
                 role="alertdialog"
                 className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl"
             >
@@ -700,6 +1142,11 @@ function ConfirmDialog({
                 </div>
                 <h2 className="mt-4 font-bold text-slate-900">{title}</h2>
                 <p className="mt-2 text-xs leading-5 text-slate-500">{description}</p>
+                {error && (
+                    <p role="alert" className="mt-3 text-xs text-rose-600">
+                        {error}
+                    </p>
+                )}
                 <div className="mt-5 flex justify-end gap-2">
                     <button
                         type="button"

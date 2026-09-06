@@ -6,6 +6,7 @@ describe('getRouteModuleKey', () => {
         expect(getRouteModuleKey('/catalog/list?search=shirt')).toBe('catalog');
         expect(getRouteModuleKey('/sales/orders?tab=to-fulfill')).toBe('sales');
         expect(getRouteModuleKey('/customers/list?group=vip')).toBe('customers');
+        expect(getRouteModuleKey('/marketing/sharing')).toBe('sharing');
     });
 
     it('resolves detail routes before their list fallback', () => {

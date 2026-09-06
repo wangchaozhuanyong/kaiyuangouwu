@@ -196,6 +196,14 @@ jobs:
               run: bun run test
             - name: Operations dashboard regression tests
               run: bun run --cwd packages/operations-dashboard-plugin test
+            - name: Install browser for storefront configuration acceptance
+              run: bunx playwright install --with-deps chromium
+            - name: Verify saved configuration across stores and real homepage
+              env:
+                  PACKAGE: storefront-content-plugin
+                  VENDURE_DISABLE_TELEMETRY: 'true'
+                  STOREFRONT_TEST_OUTPUT: ${{ runner.temp }}/storefront-unification
+              run: bunx vitest run --config e2e-common/vitest.config.mts packages/storefront-content-plugin/e2e/storefront-unification.e2e-spec.ts
     dashboard-i18n:
         name: dashboard i18n sync
         needs: detect-changes

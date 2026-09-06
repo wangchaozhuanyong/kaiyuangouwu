@@ -34,22 +34,19 @@ import {
     useState,
 } from 'react';
 
+import {
+    normalizedHeroThemePreset,
+    normalizedHomepageVisualStyle,
+} from '../../../storefront-content-plugin/src/content-visuals';
 import { ProductCard } from '../components/common/product-card';
 import { claimableCouponCampaigns } from '../coupon-center-state';
 import { heroIndexAfterManualMove, isCompletedHeroSwipe } from '../hero-carousel';
-import {
-    builtInHeroFallbackImage,
-    builtInHeroImage,
-    heroThemeStyle,
-    heroUsesImageOverlay,
-} from '../hero-theme';
+import { heroThemeStyle, heroUsesImageOverlay } from '../hero-theme';
 import { selectCategoryPromotionProducts, selectManagedProducts } from '../home-merchandising';
 import { desktopIntroModuleOrder, homepageModuleEntries } from '../homepage-module-order';
-import { compactUiCopy } from '../i18n';
 import { resolveManagedContentCopy } from '../managed-content-copy';
 import { PageSkeleton } from '../route-loading';
 import { couponCardsFromCampaigns, StorefrontCouponCard } from '../storefront-coupons';
-import { DEFAULT_HERO_FALLBACK_IMAGE } from '../storefront-images';
 import { routeNavigateOptions, type RouteState } from '../storefront-router';
 import {
     BrandLogo,
@@ -67,7 +64,6 @@ import {
     Subpage,
 } from '../storefront-ui/page-shell';
 import {
-    collectionImage,
     contentNumberSetting,
     contentStringArraySetting,
     decodeStorefrontImage,
@@ -110,10 +106,8 @@ interface HomepageCouponHubProps {
 }
 
 const homepageSectionShellClassName = 'homepage-module-shell is-section-start';
-const homepageQuickLinkLimit = 6;
-
-function isDamatongMarketplaceVisualStyle(value: unknown): boolean {
-    return value === 'damatong-colorful' || value === 'damatong-balanced';
+function isColorfulHomepageStyle(value: unknown) {
+    return normalizedHomepageVisualStyle(value) === 'colorful';
 }
 
 export interface HomeNoticeItem {
@@ -479,7 +473,6 @@ export function HomePage() {
     const navigateTo = (route: RouteState) => void navigate(routeNavigateOptions(route) as never);
     const {
         products,
-        collections,
         contentBlocks,
         managedContentProducts,
         heroAutoplayIntervalSeconds,
@@ -502,7 +495,6 @@ export function HomePage() {
         storefrontTagline,
         logoUrl,
         couponLoading,
-        onCategorySelect,
         onToggleLanguage,
         availableCurrencyCodes,
         currencySelectorEnabled,
@@ -518,7 +510,6 @@ export function HomePage() {
         onRetry,
     } = useStorefront<HomePageProps>();
     const isZh = language === 'zh';
-    const compactCopy = compactUiCopy[language];
     const noticeBlock = contentBlocks.find(block => block.type === 'NOTICE');
     const managedHeroes = useMemo(
         () => contentBlocks.filter(block => block.type === 'HERO' && Boolean(block.imageUrl?.trim())),
@@ -532,11 +523,11 @@ export function HomePage() {
     const trustBlock = contentBlocks.find(block => block.type === 'TRUST_BAR');
     const coreCategoriesBlock = contentBlocks.find(block => block.type === 'CORE_CATEGORIES');
     const legalBlock = contentBlocks.find(block => block.type === 'LEGAL');
-    const bestSellersTitle = bestSellersBlock?.title || (isZh ? '热门商品' : 'Best sellers');
+    const bestSellersTitle = resolveManagedContentCopy(bestSellersBlock, 'title', '');
     const homepageModules = homepageModuleEntries(contentBlocks, configuredBlockTypes);
     const homepageModuleOrder = (type: StorefrontContentBlock['type'], blockId?: string) =>
-        homepageModules.findIndex(entry =>
-            type === 'CUSTOM' ? entry.type === 'CUSTOM' && entry.block?.id === blockId : entry.type === type,
+        homepageModules.findIndex(
+            entry => entry.type === type && (blockId === undefined || entry.block?.id === blockId),
         );
     const hasHomepageModule = (type: StorefrontContentBlock['type']) => homepageModuleOrder(type) >= 0;
     const managedSections = homepageModules.flatMap(entry =>
@@ -567,19 +558,15 @@ export function HomePage() {
     const heroCount = managedHeroes.length;
     const desktopIntroOrder = heroCount > 0 ? desktopIntroModuleOrder(homepageModules) : null;
     const managedHero = managedHeroes[heroIndex];
-    const isVipTheme = heroIndex % 2 !== 0;
+    const isVipTheme = normalizedHeroThemePreset(managedHero?.settings?.themePreset) === 'warm';
     const managedHeroProduct =
         managedHero?.targetType === 'PRODUCT'
             ? managedContentProductPool.find(product => product.id === managedHero.targetValue)
             : undefined;
     const hero = managedHeroProduct;
-    const heroImage = managedHero?.imageUrl ?? (managedHero ? builtInHeroImage(managedHero, isVipTheme) : '');
-    const heroFallbackImage =
-        productImage(managedHeroProduct ?? hero) ??
-        (managedHero ? builtInHeroFallbackImage(managedHero, isVipTheme) : DEFAULT_HERO_FALLBACK_IMAGE);
-    const heroStyle = managedHero ? heroThemeStyle(managedHero, isVipTheme) : undefined;
+    const heroImage = managedHero?.imageUrl ?? '';
+    const heroStyle = managedHero ? heroThemeStyle(managedHero) : undefined;
     const showHeroImageOverlay = managedHero ? heroUsesImageOverlay(managedHero) : false;
-    const quickCollections = collections.slice(0, homepageQuickLinkLimit);
     const noticeItems = buildHomeNoticeItems(systemAnnouncements, noticeBlock, language);
     const defaultNoticeItem: HomeNoticeItem = {
         id: 'default-notice',
@@ -632,11 +619,11 @@ export function HomePage() {
             const nextHero = managedHeroes[nextIndex];
             if (!nextHero) return;
             const transitionId = ++heroTransitionRef.current;
-            const nextImage = nextHero.imageUrl ?? builtInHeroImage(nextHero, nextIndex % 2 !== 0);
+            const nextImage = nextHero.imageUrl ?? '';
             try {
                 await decodeStorefrontImage(nextImage, 'hero');
             } catch {
-                // SafeImage will try the configured fallback if the preferred source fails.
+                // SafeImage shows an unavailable-image placeholder when the saved image fails.
             }
             if (heroTransitionRef.current === transitionId) setHeroIndex(nextIndex);
         },
@@ -706,7 +693,7 @@ export function HomePage() {
         const nextIndex = heroIndexAfterManualMove(heroIndex, heroCount, 1);
         const nextHero = managedHeroes[nextIndex];
         if (!nextHero) return;
-        const nextImage = nextHero.imageUrl ?? builtInHeroImage(nextHero, nextIndex % 2 !== 0);
+        const nextImage = nextHero.imageUrl ?? '';
         void decodeStorefrontImage(nextImage, 'hero').catch(() => undefined);
     }, [heroCount, heroIndex, managedHeroes]);
 
@@ -808,61 +795,18 @@ export function HomePage() {
         icon: ReactNode;
         disabled?: boolean;
         onClick: () => void;
-    }> = quickBlock?.items.length
-        ? quickBlock.items.slice(0, homepageQuickLinkLimit).map((item, index) => ({
-              id: item.id,
-              label: item.label,
-              icon: renderColorfulQuickIcon(item.label, index, item.imageUrl),
-              disabled: item.targetType === 'NONE' || !item.targetValue,
-              onClick: () => onContentTarget(item.targetType, item.targetValue),
-          }))
-        : [
-              ...quickCollections.map((collection, index) => {
-                  const image = collectionImage(collection);
-                  return {
-                      id: collection.id,
-                      label: collection.name,
-                      icon: renderColorfulQuickIcon(collection.name, index, image),
-                      onClick: () => onCategorySelect(collection),
-                  };
-              }),
-              {
-                  id: 'all-products',
-                  label: compactCopy.home.catalog,
-                  icon: renderColorfulQuickIcon(compactCopy.home.catalog, 0),
-                  onClick: () => navigateTo({ name: 'category' }),
-              },
-              ...(hero
-                  ? [
-                        {
-                            id: 'weekly-edit',
-                            label: compactCopy.home.featured,
-                            icon: renderColorfulQuickIcon(compactCopy.home.featured, 1),
-                            onClick: () => navigateTo({ name: 'product', id: hero.id }),
-                        },
-                    ]
-                  : []),
-              {
-                  id: 'cart-shortcut',
-                  label: compactCopy.home.cart,
-                  icon: renderColorfulQuickIcon(compactCopy.home.cart, 2),
-                  onClick: () => navigateTo({ name: 'cart' }),
-              },
-              {
-                  id: 'my-orders',
-                  label: compactCopy.home.orders,
-                  icon: renderColorfulQuickIcon(compactCopy.home.orders, 3),
-                  onClick: () => navigateTo({ name: 'orders', tab: 'all' }),
-              },
-          ].slice(0, homepageQuickLinkLimit);
+    }> = (quickBlock?.items ?? []).map((item, index) => ({
+        id: item.id,
+        label: item.label,
+        icon: renderColorfulQuickIcon(item.label, index, item.imageUrl),
+        disabled: item.targetType === 'NONE' || !item.targetValue,
+        onClick: () => onContentTarget(item.targetType, item.targetValue),
+    }));
     const trustIcons = [ShieldCheck, Zap, Lock, Headphones];
-    const defaultTrustLabels = Object.values(compactCopy.trust);
-    const trustItems = trustBlock?.items.length
-        ? trustBlock.items.slice(0, 4).map(item => item.label)
-        : defaultTrustLabels;
+    const trustItems = (trustBlock?.items ?? []).map(item => item.label);
     const trustBarHasLongCopy = trustItems.some(label => Array.from(label.trim()).length > (isZh ? 4 : 10));
-    const colorfulTrustBar = isDamatongMarketplaceVisualStyle(trustBlock?.settings?.visualStyle);
-    const colorfulQuickLinks = isDamatongMarketplaceVisualStyle(quickBlock?.settings?.visualStyle);
+    const colorfulTrustBar = isColorfulHomepageStyle(trustBlock?.settings?.visualStyle);
+    const colorfulQuickLinks = isColorfulHomepageStyle(quickBlock?.settings?.visualStyle);
 
     return (
         <main className="page home-page">
@@ -955,7 +899,7 @@ export function HomePage() {
             ) : (
                 <>
                     <div className="homepage-modules">
-                        {hasHomepageModule('NOTICE') ? (
+                        {hasHomepageModule('NOTICE') && noticeItems.length > 0 ? (
                             <button
                                 className="notice-strip"
                                 style={{ order: homepageModuleOrder('NOTICE') }}
@@ -1001,7 +945,7 @@ export function HomePage() {
                                     onPointerCancel={event => finishHeroSwipe(event, true)}
                                     onDragStart={event => event.preventDefault()}
                                 >
-                                    {/* Full-bleed Rich 3D High-End Visual Background with Fallback */}
+                                    {/* Render the image saved for this carousel slide. */}
                                     <button
                                         type="button"
                                         className="hero-rich-image-link"
@@ -1012,7 +956,6 @@ export function HomePage() {
                                     >
                                         <SafeImage
                                             src={heroImage}
-                                            fallbackSrc={heroFallbackImage}
                                             alt={
                                                 managedHero?.title ||
                                                 (isZh
@@ -1029,87 +972,68 @@ export function HomePage() {
                                         <div className="hero-rich-overlay-shade" />
                                     ) : null}
 
-                                    {/* Dynamic Content Overlay with 3D Cyber Layout */}
+                                    {/* Saved copy and display settings. */}
                                     {(() => {
-                                        const defaultTitle = hero?.name || storefrontName;
-                                        const title =
-                                            managedHero?.title && !/^首页(图片)?轮播/i.test(managedHero.title)
-                                                ? managedHero.title
-                                                : defaultTitle;
-
-                                        const defaultSubtitle = isZh
-                                            ? '本店精选商品'
-                                            : 'Selected by this store';
-                                        const subtitle = managedHero?.subtitle || defaultSubtitle;
-
-                                        const defaultDesc = isZh
-                                            ? '商品价格、库存和交付信息以详情页与结算页为准'
-                                            : 'See the product and checkout pages for current price, stock and delivery details';
-                                        const body =
-                                            managedHero?.body ||
-                                            trimText(hero?.description, 45) ||
-                                            defaultDesc;
-
-                                        const defaultCta = isZh ? '查看详情' : 'View details';
-                                        const ctaLabel = managedHero?.ctaLabel || defaultCta;
-                                        const defaultStats = [
-                                            {
-                                                value: String(products.length),
-                                                label: isZh ? '本页精选' : 'Featured now',
-                                            },
-                                            {
-                                                value: String(hero?.variants.length ?? 0),
-                                                label: isZh ? '可选规格' : 'Options',
-                                            },
-                                            {
-                                                value: isZh ? '实时' : 'Live',
-                                                label: isZh ? '价格库存' : 'Price & stock',
-                                            },
-                                        ];
-                                        const stats = managedHero?.items.length
-                                            ? managedHero.items.slice(0, 3).map(item => ({
-                                                  value: item.label,
-                                                  label: item.description,
-                                              }))
-                                            : defaultStats;
+                                        const title = resolveManagedContentCopy(managedHero, 'title', '');
+                                        const subtitle = resolveManagedContentCopy(
+                                            managedHero,
+                                            'subtitle',
+                                            '',
+                                        );
+                                        const body = resolveManagedContentCopy(managedHero, 'body', '');
+                                        const ctaLabel = resolveManagedContentCopy(
+                                            managedHero,
+                                            'ctaLabel',
+                                            '',
+                                        );
+                                        const stats = (managedHero?.items ?? []).map(item => ({
+                                            value: item.label,
+                                            label: item.description,
+                                        }));
 
                                         return (
                                             <div
                                                 className={`hero-rich-content ${isVipTheme ? 'is-vip' : ''}`}
                                             >
-                                                <div
-                                                    className={`hero-rich-pill ${isVipTheme ? 'is-vip-pill' : ''}`}
-                                                >
-                                                    {isVipTheme ? (
-                                                        <ShieldCheck aria-hidden="true" />
-                                                    ) : (
-                                                        <Zap aria-hidden="true" />
-                                                    )}
-                                                    <span>{subtitle}</span>
-                                                </div>
+                                                {subtitle && (
+                                                    <div
+                                                        className={`hero-rich-pill ${isVipTheme ? 'is-vip-pill' : ''}`}
+                                                    >
+                                                        {isVipTheme ? (
+                                                            <ShieldCheck aria-hidden="true" />
+                                                        ) : (
+                                                            <Zap aria-hidden="true" />
+                                                        )}
+                                                        <span>{subtitle}</span>
+                                                    </div>
+                                                )}
                                                 <h1 className="hero-rich-title">{title}</h1>
-                                                <p className="hero-rich-desc">{body}</p>
+                                                {body && <p className="hero-rich-desc">{body}</p>}
 
-                                                <div className="hero-rich-stats-row">
-                                                    {stats.map((stat, index) => (
-                                                        <div
-                                                            className={`hero-stat-badge${isVipTheme ? ' is-vip' : ''}`}
-                                                            key={`${stat.value}-${index}`}
-                                                        >
-                                                            <span className="stat-num">{stat.value}</span>
-                                                            <span className="stat-lbl">{stat.label}</span>
-                                                        </div>
-                                                    ))}
-                                                </div>
+                                                {stats.length > 0 && (
+                                                    <div className="hero-rich-stats-row">
+                                                        {stats.map((stat, index) => (
+                                                            <div
+                                                                className={`hero-stat-badge${isVipTheme ? ' is-vip' : ''}`}
+                                                                key={`${stat.value}-${index}`}
+                                                            >
+                                                                <span className="stat-num">{stat.value}</span>
+                                                                <span className="stat-lbl">{stat.label}</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
 
-                                                <button
-                                                    type="button"
-                                                    className={`hero-rich-cta-btn ${isVipTheme ? 'is-vip-btn' : ''}`}
-                                                    onClick={openActiveHero}
-                                                >
-                                                    {ctaLabel}
-                                                    <ChevronRight aria-hidden="true" />
-                                                </button>
+                                                {ctaLabel && managedHero?.targetType !== 'NONE' && (
+                                                    <button
+                                                        type="button"
+                                                        className={`hero-rich-cta-btn ${isVipTheme ? 'is-vip-btn' : ''}`}
+                                                        onClick={openActiveHero}
+                                                    >
+                                                        {ctaLabel}
+                                                        <ChevronRight aria-hidden="true" />
+                                                    </button>
+                                                )}
                                             </div>
                                         );
                                     })()}
@@ -1147,7 +1071,7 @@ export function HomePage() {
                                 </section>
                             )}
 
-                            {hasHomepageModule('TRUST_BAR') ? (
+                            {hasHomepageModule('TRUST_BAR') && trustItems.length > 0 ? (
                                 <div
                                     className={`home-trust-bar${trustBarHasLongCopy ? ' has-long-copy' : ''}${colorfulTrustBar ? ' is-color-marketplace' : ''}`}
                                     style={{ order: homepageModuleOrder('TRUST_BAR') }}
@@ -1165,7 +1089,7 @@ export function HomePage() {
                                 </div>
                             ) : null}
 
-                            {hasHomepageModule('QUICK_LINKS') ? (
+                            {hasHomepageModule('QUICK_LINKS') && quickLinks.length > 0 ? (
                                 <nav
                                     className={`quick-grid quick-grid-${quickLinks.length}${colorfulQuickLinks ? ' is-color-marketplace' : ''}`}
                                     style={{ order: homepageModuleOrder('QUICK_LINKS') }}
@@ -1772,7 +1696,7 @@ function CategoryPromotionSection({
     });
     const productGridCount = Math.max(1, Math.min(4, categoryProducts.length));
     const hasSupportingContent = categoryProducts.length > 0 || block.items.length > 0;
-    const colorfulMarketplace = isDamatongMarketplaceVisualStyle(block.settings?.visualStyle);
+    const colorfulMarketplace = isColorfulHomepageStyle(block.settings?.visualStyle);
     const sectionClassName = `content-section managed-content-section managed-content-category_ad category-promotion-section${
         colorfulMarketplace ? ' is-color-marketplace' : ''
     }`;

@@ -9,6 +9,8 @@ import {
 } from '@vendure/core';
 import { Readable, Transform } from 'node:stream';
 
+import { storefrontAssetUrl } from './content-image';
+
 const SUPPORTED_IMAGE_EXTENSIONS = new Set(['avif', 'gif', 'jpeg', 'jpg', 'png', 'webp']);
 const MIME_TYPE_EXTENSIONS: Record<string, string> = {
     'image/avif': 'avif',
@@ -52,17 +54,7 @@ export class StorefrontExternalImageService {
     }
 
     storefrontUrl(asset: Asset): string {
-        const identifier = (
-            asset.mimeType === 'image/svg+xml' ? asset.source : asset.preview || asset.source
-        ).trim();
-        if (!identifier) return '';
-        try {
-            const url = new URL(identifier);
-            return url.pathname.includes('/assets/') ? `${url.pathname}${url.search}${url.hash}` : '';
-        } catch {
-            const path = identifier.replace(/^\/+/, '');
-            return path.startsWith('assets/') ? `/${path}` : `/assets/${path}`;
-        }
+        return storefrontAssetUrl(asset);
     }
 
     private assertContentLength(stream: RemoteImageStream, maxBytes: number): void {

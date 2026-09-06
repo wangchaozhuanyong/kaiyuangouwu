@@ -17,6 +17,12 @@ import {
     X,
 } from 'lucide-react';
 import { useDeferredValue, useEffect, useMemo, useState } from 'react';
+import {
+    storefrontClientPluginCatalog as catalog,
+    type StorefrontClientPluginPlacement as Placement,
+    type StorefrontClientPluginDefinition as PluginDefinition,
+} from '../../../../storefront-content-plugin/src/client-plugin-manifest';
+import { channelRequestContext } from '../../apollo';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
     CREATE_STOREFRONT_BLOCK_MUTATION,
@@ -27,6 +33,7 @@ import {
     type StorefrontContentItem,
     type StorefrontContentResult,
 } from '../../graphql/storefront.graphql';
+import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { resolveVersionedDraft } from '../../utils/versioned-draft';
@@ -37,23 +44,7 @@ import {
     storefrontBlockInput,
 } from '../Storefront/storefront-content-utils';
 
-type Placement =
-    | 'AFTER_HEADER'
-    | 'AFTER_CATEGORY_NAVIGATION'
-    | 'BEFORE_PRODUCT_LIST'
-    | 'AFTER_PRODUCT_LIST'
-    | 'BUSINESS_SERVICES_MAIN';
 type CategoryScope = 'ALL' | 'SELECTED';
-
-interface PluginDefinition {
-    code: string;
-    name: string;
-    englishName: string;
-    description: string;
-    englishDescription: string;
-    version: string;
-    defaultPlacement: Placement;
-}
 
 interface CollectionResult {
     collections: {
@@ -66,36 +57,6 @@ interface CollectionResult {
     };
 }
 
-const catalog: PluginDefinition[] = [
-    {
-        code: 'category-coupon-entry',
-        name: '优惠券快捷入口',
-        englishName: 'Coupon shortcut',
-        description: '在商品分类页或商业服务页展示优惠券快捷入口。',
-        englishDescription: 'Shows a coupon shortcut on category or business-services pages.',
-        version: '1.0.0',
-        defaultPlacement: 'BEFORE_PRODUCT_LIST',
-    },
-    {
-        code: 'category-support-entry',
-        name: '客服快捷入口',
-        englishName: 'Support shortcut',
-        description: '在商品分类页或商业服务页展示客服快捷入口。',
-        englishDescription: 'Shows a support shortcut on category or business-services pages.',
-        version: '1.0.0',
-        defaultPlacement: 'AFTER_PRODUCT_LIST',
-    },
-    {
-        code: 'ai-image-studio-entry',
-        name: 'AI 图片工坊',
-        englishName: 'AI Image Studio',
-        description: '在商业服务页提供提示词优化、文生图和单参考图生图入口。',
-        englishDescription: 'Adds prompt optimization, text-to-image, and reference-image generation.',
-        version: '1.0.0',
-        defaultPlacement: 'BUSINESS_SERVICES_MAIN',
-    },
-];
-
 const placementOptions: Array<[Placement, string, string]> = [
     ['AFTER_HEADER', '分类页标题下方', '显示在页面标题和搜索框下方'],
     ['AFTER_CATEGORY_NAVIGATION', '分类导航下方', '显示在一级分类切换区之后'],
@@ -105,6 +66,7 @@ const placementOptions: Array<[Placement, string, string]> = [
 ];
 
 export function ClientPluginsModule() {
+    const { hasAnyPermission } = useAdminPermissions();
     const [notice, setNotice] = useState('');
     const [actionError, setActionError] = useState('');
     const [collectionSearch, setCollectionSearch] = useState('');
@@ -115,9 +77,9 @@ export function ClientPluginsModule() {
         block => block.type === 'CLIENT_PLUGINS' && block.code === 'storefront-client-plugins',
     );
     const sourceSignature = sourceBlock
-        ? `${sourceBlock.id}:${sourceBlock.updatedAt}`
+        ? `${content.data?.activeChannel.id}:${sourceBlock.id}:${sourceBlock.updatedAt}`
         : content.data
-          ? 'empty'
+          ? `${content.data.activeChannel.id}:empty`
           : '';
     const [storedDraft, setDraft] = useState<StorefrontContentBlock | null>(() =>
         sourceSignature ? createDraft(sourceBlock) : null,
@@ -178,14 +140,16 @@ export function ClientPluginsModule() {
     ];
     const dirty = Boolean(draft && JSON.stringify(draft) !== JSON.stringify(createDraft(sourceBlock)));
     const validation = draft ? validateDraft(draft) : '配置尚未加载';
+    const canSave = hasAnyPermission([sourceBlock ? 'UpdateStorefrontContent' : 'CreateStorefrontContent']);
     const pending = createState.loading || updateState.loading;
 
     const save = async () => {
-        if (!draft || validation) return;
+        if (!draft || validation || !canSave || content.loading || content.error || !content.data) return;
         try {
             if (draft.id) {
                 if (!draft.updatedAt) throw new Error('缺少配置版本，请刷新后重试');
                 await update({
+                    context: channelRequestContext(content.data.activeChannel.token),
                     variables: {
                         input: {
                             id: draft.id,
@@ -195,7 +159,10 @@ export function ClientPluginsModule() {
                     },
                 });
             } else {
-                await create({ variables: { input: storefrontBlockInput(draft) } });
+                await create({
+                    context: channelRequestContext(content.data.activeChannel.token),
+                    variables: { input: storefrontBlockInput(draft) },
+                });
             }
             setNotice('客户端插件配置已保存');
             setActionError('');
@@ -234,7 +201,15 @@ export function ClientPluginsModule() {
                         <button
                             type="button"
                             onClick={() => void save()}
-                            disabled={pending || !dirty || Boolean(validation) || Boolean(collections.error)}
+                            disabled={
+                                pending ||
+                                !canSave ||
+                                content.loading ||
+                                Boolean(content.error) ||
+                                !dirty ||
+                                Boolean(validation) ||
+                                Boolean(collections.error)
+                            }
                             className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
                         >
                             <Save className="h-3.5 w-3.5" />

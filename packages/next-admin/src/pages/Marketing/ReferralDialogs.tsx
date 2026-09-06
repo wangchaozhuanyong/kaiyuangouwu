@@ -458,12 +458,14 @@ export function PosterEditor({
     onClose,
     onSaved,
     onError,
+    error,
 }: {
     source: ReferralPosterRecord | 'NEW';
     rewardRate: number;
     onClose: () => void;
     onSaved: (message: string) => Promise<void>;
     onError: (message: string) => void;
+    error?: string;
 }) {
     const [draft, setDraft] = useState<PosterDraft>(() => posterDraft(source));
     const [assetSearch, setAssetSearch] = useState('');
@@ -535,6 +537,11 @@ export function PosterEditor({
             description="按固定区域编辑中英文文案。店名、网址、二维码自动读取当前店铺；奖励比例使用 {rewardRate}。背景请使用无字的 1080×1920 图片。"
             onClose={onClose}
         >
+            {error && (
+                <p role="alert" className="mb-4 rounded-lg bg-rose-50 p-3 text-xs text-rose-700">
+                    {error}
+                </p>
+            )}
             <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_260px]">
                 <div className="grid min-w-0 gap-4 sm:grid-cols-2">
                     <h3 className="sm:col-span-2 text-xs font-bold text-slate-700">

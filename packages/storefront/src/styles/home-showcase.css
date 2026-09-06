@@ -87,6 +87,7 @@
 
 .hero-rich-stats-row {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 6px;
     margin: 4px 0 2px;

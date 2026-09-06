@@ -1,19 +1,7 @@
 import type { CSSProperties } from 'react';
 
-import {
-    HERO_ACCOUNT_SERVICES_FALLBACK_IMAGE,
-    HERO_ACCOUNT_SERVICES_IMAGE,
-    HERO_CLOUD_BRIDGE_FALLBACK_IMAGE,
-    HERO_CLOUD_BRIDGE_IMAGE,
-    HERO_CODEX_TIERS_FALLBACK_IMAGE,
-    HERO_CODEX_TIERS_IMAGE,
-    HERO_GATEWAY_FALLBACK_IMAGE,
-    HERO_GATEWAY_IMAGE,
-    HERO_TOKEN_TOPUP_FALLBACK_IMAGE,
-    HERO_TOKEN_TOPUP_IMAGE,
-    HERO_VIP_FALLBACK_IMAGE,
-    HERO_VIP_IMAGE,
-} from './storefront-images';
+import { normalizedHeroThemePreset } from '../../storefront-content-plugin/src/content-visuals';
+
 import { StorefrontContentBlock } from './types';
 
 const HEX_COLOR_PATTERN = /^#[0-9a-f]{6}$/i;
@@ -40,8 +28,9 @@ function isLightColor(color: string): boolean {
     return (red * 299 + green * 587 + blue * 114) / 255_000 >= 0.72;
 }
 
-export function heroThemeStyle(block: StorefrontContentBlock, vipTheme: boolean): HeroThemeStyle {
+export function heroThemeStyle(block: StorefrontContentBlock): HeroThemeStyle {
     const settings = block.settings ?? {};
+    const vipTheme = normalizedHeroThemePreset(settings.themePreset) === 'warm';
     const defaultAccent = vipTheme ? '#fbbf24' : '#67e8f9';
     const defaultAccentSecondary = vipTheme ? '#b45309' : '#0e7490';
     const overlayColor = normalizedColor(block.backgroundColor, '#090d16');
@@ -90,38 +79,5 @@ export function heroThemeStyle(block: StorefrontContentBlock, vipTheme: boolean)
 }
 
 export function heroUsesImageOverlay(block: StorefrontContentBlock): boolean {
-    const themePreset = typeof block.settings?.themePreset === 'string' ? block.settings.themePreset : '';
-    return !['cloudbridge-bright', 'marketplace-bright'].includes(themePreset);
-}
-
-export function builtInHeroImage(block: StorefrontContentBlock, vipTheme: boolean): string {
-    if (block.settings?.fallbackImage === 'moyao-token-topup-v1') {
-        return HERO_TOKEN_TOPUP_IMAGE;
-    }
-    if (block.settings?.fallbackImage === 'moyao-codex-tiers-v1') {
-        return HERO_CODEX_TIERS_IMAGE;
-    }
-    if (block.settings?.fallbackImage === 'moyao-account-services-v1') {
-        return HERO_ACCOUNT_SERVICES_IMAGE;
-    }
-    if (block.settings?.fallbackImage === 'cloudbridge-ai-hub') {
-        return HERO_CLOUD_BRIDGE_IMAGE;
-    }
-    return vipTheme ? HERO_VIP_IMAGE : HERO_GATEWAY_IMAGE;
-}
-
-export function builtInHeroFallbackImage(block: StorefrontContentBlock, vipTheme: boolean): string {
-    if (block.settings?.fallbackImage === 'moyao-token-topup-v1') {
-        return HERO_TOKEN_TOPUP_FALLBACK_IMAGE;
-    }
-    if (block.settings?.fallbackImage === 'moyao-codex-tiers-v1') {
-        return HERO_CODEX_TIERS_FALLBACK_IMAGE;
-    }
-    if (block.settings?.fallbackImage === 'moyao-account-services-v1') {
-        return HERO_ACCOUNT_SERVICES_FALLBACK_IMAGE;
-    }
-    if (block.settings?.fallbackImage === 'cloudbridge-ai-hub') {
-        return HERO_CLOUD_BRIDGE_FALLBACK_IMAGE;
-    }
-    return vipTheme ? HERO_VIP_FALLBACK_IMAGE : HERO_GATEWAY_FALLBACK_IMAGE;
+    return normalizedHeroThemePreset(block.settings?.themePreset) !== 'bright';
 }
