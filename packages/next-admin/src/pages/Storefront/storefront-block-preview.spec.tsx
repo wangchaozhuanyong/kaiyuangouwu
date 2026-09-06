@@ -3,6 +3,7 @@
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { FeatureHelpProvider } from '../../components/FeatureHelp';
 import { BlockPreview } from './storefront-block-preview';
 import { newContentBlock } from './storefront-content-utils';
 import { contentPublicationLabels, contentPublicationStatus } from './storefront-publication';
@@ -47,7 +48,13 @@ async function preview() {
         { languageCode: 'en', title: 'Draft title', subtitle: 'Preview', body: '', ctaLabel: '' },
     ];
     const render = async (language: 'zh_Hans' | 'en' = 'zh_Hans') => {
-        await act(async () => root.render(<BlockPreview block={block} language={language} />));
+        await act(async () =>
+            root.render(
+                <FeatureHelpProvider>
+                    <BlockPreview block={block} language={language} />
+                </FeatureHelpProvider>,
+            ),
+        );
         return new DOMParser().parseFromString(container.querySelector('iframe')!.srcdoc, 'text/html');
     };
     cleanups.push(() => root.unmount());

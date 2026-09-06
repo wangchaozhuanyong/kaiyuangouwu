@@ -1,6 +1,7 @@
 import { useQuery } from '@apollo/client/react';
 import { Image as ImageIcon } from 'lucide-react';
 import { useDeferredValue, useState } from 'react';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { GET_ASSETS } from '../../graphql/catalog.graphql';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { usePageSize } from '../../hooks/use-page-size';
@@ -49,7 +50,10 @@ export function CategoryImageField({
 
     return (
         <section aria-label="分类图片" className="space-y-3">
-            <h4 className="text-xs font-bold text-slate-700">分类图片</h4>
+            <h4 className="flex items-center gap-2 text-xs font-bold text-slate-700">
+                分类图片
+                <FeatureHelpButton topic="catalog.category-image" title="分类图片" />
+            </h4>
             <div className="flex items-center gap-3 rounded-lg border border-slate-200 p-3">
                 {value ? (
                     <img

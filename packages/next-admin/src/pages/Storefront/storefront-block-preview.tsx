@@ -311,7 +311,10 @@ function HeroBlockPreview({
             aria-label="轮播效果预览"
         >
             <div className="flex items-center justify-between border-b border-slate-100 p-3">
-                <h3 className="text-xs font-bold">轮播效果预览</h3>
+                <h3 className="flex items-center gap-2 text-xs font-bold">
+                    轮播效果预览
+                    <FeatureHelpButton topic="storefront.hero-preview" title="轮播效果预览" />
+                </h3>
                 <div className="flex gap-2">
                     {(['mobile', 'desktop'] as const).map(value => (
                         <button
