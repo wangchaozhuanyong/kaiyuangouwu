@@ -29,6 +29,13 @@ test('responsive derivatives are accepted only when their original is classified
 test('client bypasses are rejected while tests may use fixture URLs', () => {
     assert.equal(
         findForbiddenClientMediaReferences(
+            "import image from '../../dev-server/assets/referral-posters/v2/01-clear-blue.png';",
+            'packages/storefront/src/home.tsx',
+        ).length,
+        1,
+    );
+    assert.equal(
+        findForbiddenClientMediaReferences(
             "import image from './assets/storefront/new-banner.png';",
             'packages/storefront/src/home.tsx',
         ).length,

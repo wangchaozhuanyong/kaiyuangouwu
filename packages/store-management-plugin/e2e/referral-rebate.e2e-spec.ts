@@ -10,6 +10,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { initialData } from '../../../e2e-common/e2e-initial-data';
 import { TEST_SETUP_TIMEOUT_MS, testConfig } from '../../../e2e-common/test-config';
+import { referralPosterCopy } from '../src/referral/referral-poster-presets';
 import { StoreManagementPlugin } from '../src/store-management.plugin';
 
 const externalPaymentHandler = new PaymentMethodHandler({
@@ -692,6 +693,245 @@ describe('referral rebate closed loop', () => {
             expect(String(rejected[0].reason)).toContain('CONCURRENT_MODIFICATION');
         },
     );
+    it('preserves poster copy, keeps defaults enabled and persists an explicit all-hidden configuration', async () => {
+        const posterProgram = gql`
+            query PosterProgramRegression {
+                referralProgram {
+                    updatedAt
+                    enabled
+                    rewardRate
+                    defaultPosterTemplate
+                    posterTemplates
+                    systemPosterTemplateConfigs {
+                        id
+                        name
+                        enabled
+                        headlineZh
+                        qrTitleZh
+                    }
+                    posterTemplateConfigs {
+                        id
+                        name
+                        enabled
+                        featureOneTitleZh
+                        qrTitleZh
+                        footerTextEn
+                    }
+                }
+            }
+        `;
+        const read = async () => (await adminClient.query(posterProgram)).referralProgram;
+        const original = await read();
+        expect(original.systemPosterTemplateConfigs.map((t: any) => t.id)).toEqual([
+            'BRAND_MINIMAL',
+            'BENEFIT_RED_GOLD',
+            'PRODUCT_STORY',
+            'PREMIUM_DARK',
+            'CLOUD_BRIDGE_ORBIT',
+        ]);
+        expect(JSON.stringify(original.systemPosterTemplateConfigs)).not.toMatch(
+            /CloudBridge|云桥|模钥|热门 AI/,
+        );
+        const input = {
+            ...referralPosterCopy,
+            name: 'Poster regression fixture',
+            enabled: true,
+            position: 0,
+            layoutVariant: 'STANDARD_CENTER',
+            posterBackgroundAssetId: null,
+            shareBackgroundAssetId: null,
+            foregroundColor: '#152c49',
+            accentColor: '#2565ae',
+            overlayOpacity: 0,
+            featureOneTitleZh: '保留本店独特卖点',
+            qrTitleZh: '保留本店扫码说明',
+            footerTextEn: 'Retain this exact footer',
+        };
+        const created = await adminClient.query(
+            gql`
+                mutation CreatePosterRegression($input: CreateReferralPosterTemplateInput!) {
+                    createReferralPosterTemplate(input: $input) {
+                        id
+                    }
+                }
+            `,
+            { input },
+        );
+        const id = created.createReferralPosterTemplate.id;
+        await expect(
+            adminClient.query(
+                gql`
+                    mutation RejectStalePosterCreate($input: CreateReferralPosterTemplateInput!) {
+                        createReferralPosterTemplate(input: $input) {
+                            id
+                        }
+                    }
+                `,
+                { input: { ...input, expectedUpdatedAt: original.updatedAt } },
+            ),
+        ).rejects.toThrow(/CONCURRENT_MODIFICATION/);
+        expect((await read()).defaultPosterTemplate).toBe(original.defaultPosterTemplate);
+        const toggle = async (enabled: boolean, expectedUpdatedAt?: string) =>
+            adminClient.query(
+                gql`
+                    mutation TogglePosterRegression(
+                        $id: ID!
+                        $enabled: Boolean!
+                        $expectedUpdatedAt: DateTime!
+                    ) {
+                        setReferralPosterTemplateEnabled(
+                            id: $id
+                            enabled: $enabled
+                            expectedUpdatedAt: $expectedUpdatedAt
+                        ) {
+                            defaultPosterTemplate
+                        }
+                    }
+                `,
+                { id, enabled, expectedUpdatedAt: expectedUpdatedAt ?? (await read()).updatedAt },
+            );
+        const staleVersion = (await read()).updatedAt;
+        await toggle(false);
+        let state = await read();
+        expect(state.posterTemplateConfigs.find((t: any) => t.id === id)).toMatchObject({
+            enabled: false,
+            featureOneTitleZh: input.featureOneTitleZh,
+            qrTitleZh: input.qrTitleZh,
+            footerTextEn: input.footerTextEn,
+        });
+        await expect(toggle(true, staleVersion)).rejects.toThrow('CONCURRENT_MODIFICATION');
+        await toggle(true);
+        // Legacy clients omit advanced fields. Their basic edit must retain current detailed copy.
+        const legacyInput = Object.fromEntries(
+            Object.entries(input).filter(
+                ([key]) =>
+                    !key.startsWith('feature') &&
+                    !key.startsWith('qr') &&
+                    !key.startsWith('scene') &&
+                    !key.startsWith('cta') &&
+                    !key.startsWith('footer'),
+            ),
+        );
+        await adminClient.query(
+            gql`
+                mutation LegacyPosterRegression($input: UpdateReferralPosterTemplateInput!) {
+                    updateReferralPosterTemplate(input: $input) {
+                        id
+                    }
+                }
+            `,
+            { input: { ...legacyInput, id, name: 'Renamed only' } },
+        );
+        state = await read();
+        expect(state.posterTemplateConfigs.find((t: any) => t.id === id)).toMatchObject({
+            featureOneTitleZh: input.featureOneTitleZh,
+            qrTitleZh: input.qrTitleZh,
+            footerTextEn: input.footerTextEn,
+        });
+        await adminClient.query(UPDATE_PROGRAM, {
+            input: {
+                expectedUpdatedAt: state.updatedAt,
+                enabled: true,
+                rewardRate: 10,
+                releaseDelayDays: 0,
+                minimumOrderAmount: 0,
+                maxRewardPerOrder: null,
+                allowBalanceSpend: true,
+                attributionWindowDays: 30,
+                posterTemplates: [],
+                defaultPosterTemplate: id,
+            },
+        });
+        await toggle(false);
+        const hidden = (await shopClient.query(posterProgram)).referralProgram;
+        expect(hidden.posterTemplates).toEqual([]);
+        expect(hidden.posterTemplateConfigs).toEqual([]);
+        expect(hidden.defaultPosterTemplate).toBe('');
+        expect(hidden.systemPosterTemplateConfigs.every((t: any) => !t.enabled)).toBe(true);
+        expect((await read()).posterTemplates).toEqual([]);
+        // Re-enabling a system template after all were hidden must select a valid default.
+        const systemInput = {
+            enabled: true,
+            rewardRate: 10,
+            releaseDelayDays: 0,
+            minimumOrderAmount: 0,
+            maxRewardPerOrder: null,
+            allowBalanceSpend: true,
+            attributionWindowDays: 30,
+        };
+        await adminClient.query(UPDATE_PROGRAM, {
+            input: {
+                ...systemInput,
+                expectedUpdatedAt: (await read()).updatedAt,
+                posterTemplates: ['PRODUCT_STORY'],
+                defaultPosterTemplate: '',
+            },
+        });
+        expect((await read()).defaultPosterTemplate).toBe('PRODUCT_STORY');
+        await adminClient.query(UPDATE_PROGRAM, {
+            input: {
+                ...systemInput,
+                expectedUpdatedAt: (await read()).updatedAt,
+                posterTemplates: [],
+                defaultPosterTemplate: 'PRODUCT_STORY',
+            },
+        });
+        expect((await read()).defaultPosterTemplate).toBe('');
+        await toggle(true);
+        expect((await read()).defaultPosterTemplate).toBe(id);
+
+        const channelState = await adminClient.query(gql`
+            query PosterChannelFixture {
+                activeChannel {
+                    token
+                    defaultTaxZone {
+                        id
+                    }
+                    defaultShippingZone {
+                        id
+                    }
+                }
+            }
+        `);
+        const primary = channelState.activeChannel;
+        const other = await adminClient.query(
+            gql`
+                mutation PosterOtherChannel($input: CreateChannelInput!) {
+                    createChannel(input: $input) {
+                        ... on Channel {
+                            id
+                            token
+                        }
+                        ... on ErrorResult {
+                            message
+                        }
+                    }
+                }
+            `,
+            {
+                input: {
+                    code: 'poster-isolation-fixture',
+                    token: 'poster-isolation-fixture',
+                    defaultLanguageCode: LanguageCode.en,
+                    defaultCurrencyCode: 'CNY',
+                    pricesIncludeTax: false,
+                    defaultTaxZoneId: primary.defaultTaxZone.id,
+                    defaultShippingZoneId: primary.defaultShippingZone.id,
+                },
+            },
+        );
+        expect(other.createChannel.id).toBeTruthy();
+        try {
+            adminClient.setChannelToken(other.createChannel.token);
+            const isolated = await read();
+            expect(isolated.posterTemplateConfigs).toEqual([]);
+            expect(isolated.posterTemplates).toHaveLength(5);
+            await expect(toggle(false)).rejects.toThrow('找不到该邀请海报模板');
+        } finally {
+            adminClient.setChannelToken(primary.token);
+        }
+        expect((await read()).defaultPosterTemplate).toBe(id);
+    }, 30_000);
 });
 
 async function register(emailAddress: string, inviteCode?: string, source?: string): Promise<void> {

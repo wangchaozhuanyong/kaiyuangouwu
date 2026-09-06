@@ -52,6 +52,7 @@ function serviceWith(repository: any, customerService: any = {}) {
         {} as any,
         {} as any,
         {} as any,
+        {} as any,
         { signingSecret } as any,
     );
 }

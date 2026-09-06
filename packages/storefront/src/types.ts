@@ -1,3 +1,4 @@
+import type { PosterDesign } from './referral-poster-layout';
 export type MarketCode = string;
 export type StorefrontLanguage = 'zh' | 'en';
 export type VendureLanguageCode = 'zh_Hans' | 'en';
@@ -420,6 +421,7 @@ export interface ReferralProgram {
     defaultPosterTemplate: string;
     posterTemplates: string[];
     posterTemplateConfigs?: ReferralPosterTemplate[];
+    systemPosterTemplateConfigs?: ReferralPosterTemplate[];
 }
 
 export interface ReferralPosterAsset {
@@ -431,6 +433,8 @@ export interface ReferralPosterAsset {
 }
 
 export interface ReferralPosterTemplate {
+    updatedAt?: string;
+    design?: PosterDesign | null;
     id: string;
     name: string;
     enabled: boolean;

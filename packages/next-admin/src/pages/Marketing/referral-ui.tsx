@@ -347,49 +347,65 @@ export function programDraftError(draft: ProgramDraft) {
     return '';
 }
 export function posterDraft(source: ReferralPosterRecord | 'NEW'): PosterDraft {
-    if (source === 'NEW')
-        return {
-            name: '',
-            enabled: true,
-            position: 0,
-            layoutVariant: 'STANDARD_CENTER',
-            posterBackgroundAssetId: '',
-            shareBackgroundAssetId: '',
-            titleZh: '邀请好友，一起发现好物',
-            titleEn: 'Invite friends and discover more',
-            headlineZh: '好友成功消费，你可获得奖励',
-            headlineEn: 'Earn rewards when friends shop',
-            rewardTextZh: '最高可获得 {rewardRate}% 奖励用于消费抵扣',
-            rewardTextEn: 'Earn up to {rewardRate}% in shopping rewards',
-            siteIntroZh: '精选商品与可靠服务',
-            siteIntroEn: 'Curated products and reliable service',
-            serviceTextZh: '注册后自动绑定邀请关系',
-            serviceTextEn: 'Referral is linked automatically after signup',
-            foregroundColor: '#FFFFFF',
-            accentColor: '#2563EB',
-            overlayOpacity: 28,
-        };
+    const copyFields = [
+        'titleZh',
+        'titleEn',
+        'headlineZh',
+        'headlineEn',
+        'siteIntroZh',
+        'siteIntroEn',
+        'featureOneTitleZh',
+        'featureOneTitleEn',
+        'featureOneTextZh',
+        'featureOneTextEn',
+        'featureTwoTitleZh',
+        'featureTwoTitleEn',
+        'featureTwoTextZh',
+        'featureTwoTextEn',
+        'featureThreeTitleZh',
+        'featureThreeTitleEn',
+        'featureThreeTextZh',
+        'featureThreeTextEn',
+        'qrEyebrowZh',
+        'qrEyebrowEn',
+        'qrTitleZh',
+        'qrTitleEn',
+        'qrDescriptionZh',
+        'qrDescriptionEn',
+        'rewardTextZh',
+        'rewardTextEn',
+        'sceneOneZh',
+        'sceneOneEn',
+        'sceneTwoZh',
+        'sceneTwoEn',
+        'sceneThreeZh',
+        'sceneThreeEn',
+        'sceneFourZh',
+        'sceneFourEn',
+        'ctaTextZh',
+        'ctaTextEn',
+        'footerTitleZh',
+        'footerTitleEn',
+        'footerTextZh',
+        'footerTextEn',
+        'serviceTextZh',
+        'serviceTextEn',
+    ] as const;
+    const copy = Object.fromEntries(
+        copyFields.map(field => [field, source === 'NEW' ? '' : source[field]]),
+    ) as Pick<PosterDraft, (typeof copyFields)[number]>;
     return {
-        id: source.id,
-        name: source.name,
-        enabled: source.enabled,
-        position: source.position,
-        layoutVariant: source.layoutVariant,
-        posterBackgroundAssetId: source.posterBackgroundAsset?.id ?? '',
-        shareBackgroundAssetId: source.shareBackgroundAsset?.id ?? '',
-        titleZh: source.titleZh,
-        titleEn: source.titleEn,
-        headlineZh: source.headlineZh,
-        headlineEn: source.headlineEn,
-        rewardTextZh: source.rewardTextZh,
-        rewardTextEn: source.rewardTextEn,
-        siteIntroZh: source.siteIntroZh,
-        siteIntroEn: source.siteIntroEn,
-        serviceTextZh: source.serviceTextZh,
-        serviceTextEn: source.serviceTextEn,
-        foregroundColor: source.foregroundColor,
-        accentColor: source.accentColor,
-        overlayOpacity: source.overlayOpacity,
+        ...copy,
+        id: source === 'NEW' ? undefined : source.id || undefined,
+        name: source === 'NEW' ? '' : source.id ? source.name : `${source.name} · 本店`,
+        enabled: source === 'NEW' ? false : source.enabled,
+        position: source === 'NEW' ? 0 : source.position,
+        layoutVariant: 'STANDARD_CENTER',
+        posterBackgroundAssetId: source === 'NEW' ? '' : (source.posterBackgroundAsset?.id ?? ''),
+        shareBackgroundAssetId: source === 'NEW' ? '' : (source.shareBackgroundAsset?.id ?? ''),
+        foregroundColor: source === 'NEW' ? '#152c49' : source.foregroundColor,
+        accentColor: source === 'NEW' ? '#2565ae' : source.accentColor,
+        overlayOpacity: source === 'NEW' ? 0 : source.overlayOpacity,
     };
 }
 export function posterDraftError(draft: PosterDraft) {
@@ -404,12 +420,11 @@ export function posterDraftError(draft: PosterDraft) {
             draft.rewardTextEn,
             draft.siteIntroZh,
             draft.siteIntroEn,
-            draft.serviceTextZh,
-            draft.serviceTextEn,
         ].every(value => value.trim())
     )
         return '模板名称和中英文文案均不能为空';
-    if (!Number.isInteger(draft.position)) return '排序必须是整数';
+    if (!Number.isInteger(draft.position) || draft.position < 0 || draft.position > 100_000)
+        return '排序必须是0到100000的整数';
     if (!Number.isInteger(draft.overlayOpacity) || draft.overlayOpacity < 0 || draft.overlayOpacity > 80)
         return '遮罩透明度必须是0到80的整数';
     return '';
@@ -436,17 +451,11 @@ export function statusLabel(value: string) {
         )[value] ?? getStatusLabel(value)
     );
 }
-export function posterLabel(value: string) {
+export function posterLabel(value: string, program?: ReferralProgramRecord) {
     return (
-        (
-            {
-                BRAND_MINIMAL: '模钥简约',
-                BENEFIT_RED_GOLD: '冰川蓝光',
-                PRODUCT_STORY: '青空流线',
-                PREMIUM_DARK: '深海科技',
-                CLOUD_BRIDGE_ORBIT: '模钥轨道',
-            } as Record<string, string>
-        )[value] ?? value
+        [...(program?.systemPosterTemplateConfigs ?? []), ...(program?.posterTemplateConfigs ?? [])].find(
+            template => template.id === value,
+        )?.name ?? value
     );
 }
 export function withdrawalActionLabel(status: WithdrawalAction['status']) {

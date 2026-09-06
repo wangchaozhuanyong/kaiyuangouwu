@@ -21,6 +21,7 @@ import { ShopApi } from '../api';
 import { languageCodeFor } from '../i18n';
 import { PUBLIC_QUERY_GC_TIME, ROUTE_QUERY_STALE_TIME, storefrontQueryKeys } from '../query-client';
 import { referralShareUrl } from '../referral-attribution';
+import { availablePosterTemplates } from '../referral-poster-layout';
 import { ReferralPosterModal } from '../referral-poster-modal';
 import { PageSkeleton } from '../route-loading';
 import { EmptyState, Subpage } from '../storefront-ui/page-shell';
@@ -67,6 +68,14 @@ export function ReferralPage() {
         staleTime: ROUTE_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
     });
+    const hasPosterTemplates = Boolean(
+        programQuery.data &&
+        availablePosterTemplates(
+            programQuery.data.posterTemplates,
+            programQuery.data.systemPosterTemplateConfigs ?? [],
+            programQuery.data.posterTemplateConfigs ?? [],
+        ).length,
+    );
     const overview = overviewQuery.data;
     const wallet = overview?.wallets.find(item => item.currencyCode === market.currencyCode);
     const rewardSummary = overview?.rewardSummaries.find(item => item.currencyCode === market.currencyCode);
@@ -218,14 +227,16 @@ export function ReferralPage() {
                                 <Share2 className="size-4 stroke-[2.5]" />
                                 {isZh ? '立即分享' : 'Share now'}
                             </button>
-                            <button
-                                type="button"
-                                className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/10 px-3 text-sm font-extrabold text-white backdrop-blur-sm transition-all duration-150 hover:border-white/35 hover:bg-white/15 active:scale-98"
-                                onClick={() => setShowPoster(true)}
-                            >
-                                <Image className="size-4" />
-                                {isZh ? '生成海报' : 'Create poster'}
-                            </button>
+                            {hasPosterTemplates && (
+                                <button
+                                    type="button"
+                                    className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/10 px-3 text-sm font-extrabold text-white backdrop-blur-sm transition-all duration-150 hover:border-white/35 hover:bg-white/15 active:scale-98"
+                                    onClick={() => setShowPoster(true)}
+                                >
+                                    <Image className="size-4" />
+                                    {isZh ? '生成海报' : 'Create poster'}
+                                </button>
+                            )}
                         </div>
                     </section>
 
@@ -386,13 +397,15 @@ export function ReferralPage() {
                     </section>
                 </div>
             )}
-            {showPoster && overview && programQuery.data && (
+            {showPoster && hasPosterTemplates && overview && programQuery.data && (
                 <ReferralPosterModal
                     inviteCode={overview.inviteCode}
                     storefrontName={storefrontName}
                     logoUrl={logoUrl}
                     language={language}
                     rewardRate={overview.rewardRate}
+                    channelId={programQuery.data.channelId}
+                    systemTemplateConfigs={programQuery.data.systemPosterTemplateConfigs ?? []}
                     templates={programQuery.data.posterTemplates}
                     templateConfigs={programQuery.data.posterTemplateConfigs ?? []}
                     defaultTemplate={programQuery.data.defaultPosterTemplate}

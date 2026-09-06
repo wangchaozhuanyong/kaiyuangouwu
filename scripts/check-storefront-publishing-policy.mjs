@@ -5,7 +5,11 @@ import { fileURLToPath } from 'node:url';
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const defaultRepositoryRoot = path.resolve(scriptDirectory, '..');
-const managedRoots = ['packages/storefront/src/assets/storefront', 'packages/storefront/src/assets/brand'];
+const managedRoots = [
+    'packages/storefront/src/assets/storefront',
+    'packages/storefront/src/assets/brand',
+    'packages/dev-server/assets/referral-posters/v2',
+];
 const mediaExtension = /\.(?:avif|gif|jpe?g|png|svg|webp)$/iu;
 const designOnlyAssets = new Set([
     'packages/storefront/src/assets/brand/moyao-ai/icon-monochrome.svg',
@@ -58,7 +62,7 @@ export function findForbiddenClientMediaReferences(source, relativePath) {
     if (/\.(?:spec|test)\.[cm]?[jt]sx?$/u.test(relativePath)) return [];
     const issues = [];
     if (relativePath !== 'packages/storefront/src/storefront-images.ts') {
-        if (/assets\/(?:storefront|brand)\//u.test(source)) {
+        if (/assets\/(?:storefront|brand|referral-posters)\//u.test(source)) {
             issues.push(
                 `${relativePath}: managed media must be registered through storefront-images.ts, not imported directly`,
             );
@@ -125,6 +129,20 @@ export async function auditStorefrontPublishingPolicy(repositoryRoot = defaultRe
         'brandAssetDirectory',
     )) {
         classifiedPaths.add(toPosix(path.relative(repositoryRoot, absolutePath)));
+    }
+
+    // Publisher-owned poster files are classified from the reviewed manifest;
+    // dynamic text, domains and QR codes are never part of these backgrounds.
+    const posterManifest = JSON.parse(
+        await readFile(path.join(repositoryRoot, managedRoots[2], 'manifest.json'), 'utf8'),
+    );
+    await readFile(
+        path.join(repositoryRoot, 'packages/dev-server/scripts/sync-referral-posters.mjs'),
+        'utf8',
+    );
+    for (const entry of [...posterManifest.systemFiles, posterManifest.custom]) {
+        assert.equal(path.basename(entry.file), entry.file, 'Poster manifest must use local filenames');
+        classifiedPaths.add(`${managedRoots[2]}/${entry.file}`);
     }
 
     const issues = [];

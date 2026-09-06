@@ -1,8 +1,10 @@
 import { useMutation, useQuery } from '@apollo/client/react';
 import { AlertCircle, ChevronRight, LoaderCircle, Search } from 'lucide-react';
 import { useDeferredValue, useState } from 'react';
+import { posterLayoutFields, type PosterCopyField } from '../../../../storefront/src/referral-poster-layout';
 import { sensitiveActionContext } from '../../apollo';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { GET_ASSETS } from '../../graphql/catalog.graphql';
 import {
     ADJUST_REFERRAL_BALANCE_MUTATION,
@@ -32,6 +34,7 @@ import {
     withdrawalActionLabel,
     withdrawalSuccess,
 } from './referral-ui';
+import { ReferralPosterPreview } from './ReferralPosterPreview';
 import { PosterAssetChoice, PosterAssetLookupResult, PosterDraft, WithdrawalAction } from './referrals-types';
 
 export function WithdrawalActionDialog({
@@ -451,17 +454,20 @@ export function FinancialDialog({
 
 export function PosterEditor({
     source,
+    rewardRate,
     onClose,
     onSaved,
     onError,
 }: {
     source: ReferralPosterRecord | 'NEW';
+    rewardRate: number;
     onClose: () => void;
     onSaved: (message: string) => Promise<void>;
     onError: (message: string) => void;
 }) {
     const [draft, setDraft] = useState<PosterDraft>(() => posterDraft(source));
     const [assetSearch, setAssetSearch] = useState('');
+    const [previewValidation, setPreviewValidation] = useState({ pending: true, error: '' });
     const [knownAssets, setKnownAssets] = useState<PosterAssetChoice[]>(() => {
         if (source === 'NEW') return [];
         const selected: PosterAssetChoice[] = [];
@@ -505,7 +511,8 @@ export function PosterEditor({
     };
     const validation = posterDraftError(draft);
     const submit = async () => {
-        if (validation) return onError(validation);
+        if (validation || previewValidation.pending || previewValidation.error)
+            return onError(validation || previewValidation.error || '请等待中英文排版检查');
         const input = {
             ...draft,
             posterBackgroundAssetId: draft.posterBackgroundAssetId || null,
@@ -525,160 +532,182 @@ export function PosterEditor({
     return (
         <Modal
             title={draft.id ? '编辑分享海报模板' : '新建分享海报模板'}
-            description="中文与英文内容分别填写；{rewardRate} 会在客户端替换为实时返利比例。"
+            description="按固定区域编辑中英文文案。店名、网址、二维码自动读取当前店铺；奖励比例使用 {rewardRate}。背景请使用无字的 1080×1920 图片。"
             onClose={onClose}
         >
-            <div className="grid gap-4 sm:grid-cols-2">
-                <TextField
-                    label="模板名称 *"
-                    value={draft.name}
-                    onChange={name => setDraft({ ...draft, name })}
-                />
-                <TextField
-                    label="排序"
-                    type="number"
-                    value={String(draft.position)}
-                    onChange={value => setDraft({ ...draft, position: Number(value) })}
-                />
-                <div className="sm:col-span-2">
+            <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_260px]">
+                <div className="grid min-w-0 gap-4 sm:grid-cols-2">
+                    <h3 className="sm:col-span-2 text-xs font-bold text-slate-700">
+                        01 · 基本信息与背景{' '}
+                        <FeatureHelpButton topic="marketing.poster-templates" title="海报基本信息与背景" />
+                    </h3>
                     <TextField
-                        label="搜索全部图片素材"
-                        value={assetSearch}
-                        onChange={setAssetSearch}
-                        placeholder="输入素材名称"
+                        label="模板名称 *"
+                        value={draft.name}
+                        onChange={name => setDraft({ ...draft, name })}
                     />
-                    <div className="mt-1 flex min-h-4 items-center justify-between gap-3 text-[10px] text-slate-400">
-                        {assetQuery.loading ? (
-                            <span className="flex items-center gap-1" role="status">
-                                <LoaderCircle className="h-3 w-3 animate-spin" />
-                                正在查询素材库…
-                            </span>
-                        ) : assetQuery.error ? (
-                            <span className="text-rose-600" role="alert">
-                                素材读取失败，请重试
-                            </span>
-                        ) : (
-                            <span>
-                                匹配 {assetQuery.data?.assets.totalItems ?? 0} 张图片，当前显示前 30 张
-                            </span>
-                        )}
-                        {assetQuery.error && (
-                            <button
-                                type="button"
-                                onClick={() => void assetQuery.refetch()}
-                                className="font-bold text-blue-600 hover:text-blue-700"
-                            >
-                                重新加载
-                            </button>
-                        )}
+                    <TextField
+                        label="排序"
+                        type="number"
+                        value={String(draft.position)}
+                        onChange={value => setDraft({ ...draft, position: Number(value) })}
+                    />
+                    <div className="sm:col-span-2">
+                        <TextField
+                            label="搜索全部图片素材"
+                            value={assetSearch}
+                            onChange={setAssetSearch}
+                            placeholder="输入素材名称"
+                        />
+                        <div className="mt-1 flex min-h-4 items-center justify-between gap-3 text-[10px] text-slate-400">
+                            {assetQuery.loading ? (
+                                <span className="flex items-center gap-1" role="status">
+                                    <LoaderCircle className="h-3 w-3 animate-spin" />
+                                    正在查询素材库…
+                                </span>
+                            ) : assetQuery.error ? (
+                                <span className="text-rose-600" role="alert">
+                                    素材读取失败，请重试
+                                </span>
+                            ) : (
+                                <span>
+                                    匹配 {assetQuery.data?.assets.totalItems ?? 0} 张图片，当前显示前 30 张
+                                </span>
+                            )}
+                            {assetQuery.error && (
+                                <button
+                                    type="button"
+                                    onClick={() => void assetQuery.refetch()}
+                                    className="font-bold text-blue-600 hover:text-blue-700"
+                                >
+                                    重新加载
+                                </button>
+                            )}
+                        </div>
                     </div>
+                    <FormSelect
+                        label="海报背景图"
+                        value={draft.posterBackgroundAssetId}
+                        onChange={posterBackgroundAssetId =>
+                            selectAsset('posterBackgroundAssetId', posterBackgroundAssetId)
+                        }
+                        options={[['', '不使用图片'], ...assets.map(asset => [asset.id, asset.name])]}
+                    />
+                    <FormSelect
+                        label="分享背景图"
+                        value={draft.shareBackgroundAssetId}
+                        onChange={shareBackgroundAssetId =>
+                            selectAsset('shareBackgroundAssetId', shareBackgroundAssetId)
+                        }
+                        options={[['', '不使用图片'], ...assets.map(asset => [asset.id, asset.name])]}
+                    />
+                    {posterLayoutFields
+                        .filter(field => field.field.endsWith('Zh'))
+                        .flatMap(field => {
+                            const groups: Partial<Record<string, string>> = {
+                                tag: '02 · 主标题与介绍',
+                                feature1: '03 · 服务卖点',
+                                qrlabel: '04 · 扫码与邀请奖励',
+                                scene1: '05 · 场景标签',
+                                cta: '06 · 行动引导与页脚',
+                            };
+                            return [
+                                groups[field.id] ? (
+                                    <h3
+                                        key={`group-${field.id}`}
+                                        className="sm:col-span-2 border-t border-slate-200 pt-4 text-xs font-bold text-slate-700"
+                                    >
+                                        {groups[field.id]}
+                                        <FeatureHelpButton
+                                            topic="marketing.poster-templates"
+                                            title={groups[field.id]!}
+                                        />
+                                    </h3>
+                                ) : null,
+                                ...(['Zh', 'En'] as const).map(locale => {
+                                    const key = field.field.replace(/Zh$/, locale) as PosterCopyField;
+                                    return (
+                                        <label
+                                            key={key}
+                                            className="block text-[11px] font-bold text-slate-600"
+                                        >
+                                            {field.label} · {locale === 'Zh' ? '中文' : 'English'}（最多{' '}
+                                            {field.lines} 行）
+                                            <textarea
+                                                value={draft[key]}
+                                                rows={field.lines}
+                                                onChange={event =>
+                                                    setDraft(current => ({
+                                                        ...current,
+                                                        [key]: event.target.value,
+                                                    }))
+                                                }
+                                                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-normal text-slate-900"
+                                            />
+                                        </label>
+                                    );
+                                }),
+                            ];
+                        })}
+                    <h3 className="sm:col-span-2 border-t border-slate-200 pt-4 text-xs font-bold text-slate-700">
+                        07 · 样式与显示
+                        <FeatureHelpButton topic="marketing.poster-templates" title="海报样式与显示" />
+                    </h3>
+                    <details className="sm:col-span-2 text-xs text-slate-500">
+                        <summary>历史服务说明字段（保留兼容，不占用卖点区）</summary>
+                        <TextField
+                            label="中文服务说明"
+                            value={draft.serviceTextZh}
+                            onChange={serviceTextZh => setDraft({ ...draft, serviceTextZh })}
+                        />
+                        <TextField
+                            label="English service text"
+                            value={draft.serviceTextEn}
+                            onChange={serviceTextEn => setDraft({ ...draft, serviceTextEn })}
+                        />
+                    </details>
+                    <TextField
+                        label="前景色"
+                        type="color"
+                        value={draft.foregroundColor}
+                        onChange={foregroundColor => setDraft({ ...draft, foregroundColor })}
+                    />
+                    <TextField
+                        label="强调色"
+                        type="color"
+                        value={draft.accentColor}
+                        onChange={accentColor => setDraft({ ...draft, accentColor })}
+                    />
+                    <NumberField
+                        label="遮罩透明度 (%)"
+                        value={draft.overlayOpacity}
+                        min={0}
+                        max={80}
+                        step={1}
+                        onChange={overlayOpacity => setDraft({ ...draft, overlayOpacity })}
+                    />
+                    <ToggleField
+                        label="启用模板"
+                        detail="停用后客户端不会提供该模板。"
+                        checked={draft.enabled}
+                        onChange={enabled => setDraft({ ...draft, enabled })}
+                    />
                 </div>
-                <FormSelect
-                    label="海报背景图"
-                    value={draft.posterBackgroundAssetId}
-                    onChange={posterBackgroundAssetId =>
-                        selectAsset('posterBackgroundAssetId', posterBackgroundAssetId)
-                    }
-                    options={[['', '不使用图片'], ...assets.map(asset => [asset.id, asset.name])]}
-                />
-                <FormSelect
-                    label="分享背景图"
-                    value={draft.shareBackgroundAssetId}
-                    onChange={shareBackgroundAssetId =>
-                        selectAsset('shareBackgroundAssetId', shareBackgroundAssetId)
-                    }
-                    options={[['', '不使用图片'], ...assets.map(asset => [asset.id, asset.name])]}
-                />
-                <TextField
-                    label="中文标题 *"
-                    value={draft.titleZh}
-                    onChange={titleZh => setDraft({ ...draft, titleZh })}
-                />
-                <TextField
-                    label="English title *"
-                    value={draft.titleEn}
-                    onChange={titleEn => setDraft({ ...draft, titleEn })}
-                />
-                <TextField
-                    label="中文主文案 *"
-                    value={draft.headlineZh}
-                    onChange={headlineZh => setDraft({ ...draft, headlineZh })}
-                />
-                <TextField
-                    label="English headline *"
-                    value={draft.headlineEn}
-                    onChange={headlineEn => setDraft({ ...draft, headlineEn })}
-                />
-                <TextField
-                    label="中文奖励说明 *"
-                    value={draft.rewardTextZh}
-                    onChange={rewardTextZh => setDraft({ ...draft, rewardTextZh })}
-                />
-                <TextField
-                    label="English reward text *"
-                    value={draft.rewardTextEn}
-                    onChange={rewardTextEn => setDraft({ ...draft, rewardTextEn })}
-                />
-                <TextField
-                    label="中文站点介绍 *"
-                    value={draft.siteIntroZh}
-                    onChange={siteIntroZh => setDraft({ ...draft, siteIntroZh })}
-                />
-                <TextField
-                    label="English site intro *"
-                    value={draft.siteIntroEn}
-                    onChange={siteIntroEn => setDraft({ ...draft, siteIntroEn })}
-                />
-                <TextField
-                    label="中文服务说明 *"
-                    value={draft.serviceTextZh}
-                    onChange={serviceTextZh => setDraft({ ...draft, serviceTextZh })}
-                />
-                <TextField
-                    label="English service text *"
-                    value={draft.serviceTextEn}
-                    onChange={serviceTextEn => setDraft({ ...draft, serviceTextEn })}
-                />
-                <TextField
-                    label="前景色"
-                    type="color"
-                    value={draft.foregroundColor}
-                    onChange={foregroundColor => setDraft({ ...draft, foregroundColor })}
-                />
-                <TextField
-                    label="强调色"
-                    type="color"
-                    value={draft.accentColor}
-                    onChange={accentColor => setDraft({ ...draft, accentColor })}
-                />
-                <NumberField
-                    label="遮罩透明度 (%)"
-                    value={draft.overlayOpacity}
-                    min={0}
-                    max={80}
-                    step={1}
-                    onChange={overlayOpacity => setDraft({ ...draft, overlayOpacity })}
-                />
-                <ToggleField
-                    label="启用模板"
-                    detail="停用后客户端不会提供该模板。"
-                    checked={draft.enabled}
-                    onChange={enabled => setDraft({ ...draft, enabled })}
-                />
+                <aside className="min-w-0 md:sticky md:top-0 md:self-start">
+                    <ReferralPosterPreview
+                        draft={draft}
+                        assets={assets}
+                        rewardRate={rewardRate}
+                        onValidation={setPreviewValidation}
+                    />
+                </aside>
             </div>
-            {draft.posterBackgroundAssetId && (
-                <img
-                    src={assets.find(asset => asset.id === draft.posterBackgroundAssetId)?.preview}
-                    alt="海报背景预览"
-                    className="mt-4 h-36 w-full rounded-xl object-cover"
-                />
-            )}
             {validation && <p className="mt-3 text-xs text-rose-600">{validation}</p>}
             <ModalFooter
                 onCancel={onClose}
                 onConfirm={() => void submit()}
                 pending={createState.loading || updateState.loading}
-                disabled={Boolean(validation)}
+                disabled={Boolean(validation || previewValidation.error || previewValidation.pending)}
                 confirmLabel="保存海报模板"
             />
         </Modal>

@@ -1,8 +1,9 @@
 import { Inject, Injectable, OnApplicationBootstrap } from '@nestjs/common';
 import { RegisterCustomerInput } from '@vendure/common/lib/generated-shop-types';
-import { CurrencyCode } from '@vendure/common/lib/generated-types';
+import { CurrencyCode, LanguageCode } from '@vendure/common/lib/generated-types';
 import {
     Asset,
+    ConfigService,
     Customer,
     CustomerService,
     EventBus,
@@ -18,8 +19,9 @@ import {
     TransactionalConnection,
     UserInputError,
 } from '@vendure/core';
+import { StorefrontContentBlock } from '@vendure/storefront-content-plugin';
 import { createHash, createHmac, randomBytes } from 'node:crypto';
-import { LessThanOrEqual, LockNotSupportedOnGivenDriverError } from 'typeorm';
+import { In, LessThanOrEqual, LockNotSupportedOnGivenDriverError } from 'typeorm';
 
 import { STOREFRONT_PROMOTION_OPTIONS } from '../constants';
 import { ReferralAccount } from '../entities/referral-account.entity';
@@ -32,6 +34,7 @@ import { ReferralReward } from '../entities/referral-reward.entity';
 import { ReferralWallet } from '../entities/referral-wallet.entity';
 import { ReferralWithdrawal } from '../entities/referral-withdrawal.entity';
 import { StorefrontDailyVisitor } from '../entities/storefront-daily-visitor.entity';
+import { StorefrontDataChangedEvent } from '../realtime/storefront-data-changed.event';
 import { convertChannelAmount } from '../store-currency-price-selection-strategy';
 import { StorefrontPromotionPluginOptions } from '../types';
 
@@ -41,8 +44,21 @@ import {
     calculateReferralReward,
     referralRewardStatusAfterClawback,
 } from './referral-calculation';
+import {
+    normalizeReferralPosterInput,
+    requiredText,
+    SaveReferralPosterTemplateInput,
+    UpdateReferralPosterTemplateInput,
+} from './referral-input';
 import { REFERRAL_METRIC_SETTLED_ORDER_STATES, settledOrderNetTotal } from './referral-metrics';
 import { createReferralPaymentProof } from './referral-payment-proof';
+import {
+    effectivePosterDefault,
+    enabledPosterIds,
+    referralPosterContentCode,
+    referralPosterCopy,
+    referralPosterPresets,
+} from './referral-poster-presets';
 import {
     REFERRAL_BALANCE_PAYMENT_METHOD_CODE,
     referralPosterTemplates,
@@ -66,63 +82,7 @@ export interface UpdateReferralProgramInput {
     posterTemplates?: string[] | null;
 }
 
-export interface SaveReferralPosterTemplateInput {
-    name: string;
-    enabled: boolean;
-    position: number;
-    layoutVariant: string;
-    posterBackgroundAssetId?: ID | null;
-    shareBackgroundAssetId?: ID | null;
-    titleZh: string;
-    titleEn: string;
-    headlineZh: string;
-    headlineEn: string;
-    rewardTextZh: string;
-    rewardTextEn: string;
-    siteIntroZh: string;
-    siteIntroEn: string;
-    serviceTextZh: string;
-    serviceTextEn: string;
-    featureOneTitleZh?: string;
-    featureOneTitleEn?: string;
-    featureOneTextZh?: string;
-    featureOneTextEn?: string;
-    featureTwoTitleZh?: string;
-    featureTwoTitleEn?: string;
-    featureTwoTextZh?: string;
-    featureTwoTextEn?: string;
-    featureThreeTitleZh?: string;
-    featureThreeTitleEn?: string;
-    featureThreeTextZh?: string;
-    featureThreeTextEn?: string;
-    qrEyebrowZh?: string;
-    qrEyebrowEn?: string;
-    qrTitleZh?: string;
-    qrTitleEn?: string;
-    qrDescriptionZh?: string;
-    qrDescriptionEn?: string;
-    sceneOneZh?: string;
-    sceneOneEn?: string;
-    sceneTwoZh?: string;
-    sceneTwoEn?: string;
-    sceneThreeZh?: string;
-    sceneThreeEn?: string;
-    sceneFourZh?: string;
-    sceneFourEn?: string;
-    ctaTextZh?: string;
-    ctaTextEn?: string;
-    footerTitleZh?: string;
-    footerTitleEn?: string;
-    footerTextZh?: string;
-    footerTextEn?: string;
-    foregroundColor: string;
-    accentColor: string;
-    overlayOpacity: number;
-}
-
-export interface UpdateReferralPosterTemplateInput extends SaveReferralPosterTemplateInput {
-    id: ID;
-}
+export type { SaveReferralPosterTemplateInput, UpdateReferralPosterTemplateInput } from './referral-input';
 
 export interface CreateReferralWithdrawalInput {
     customerId: ID;
@@ -163,6 +123,7 @@ export class ReferralService implements OnApplicationBootstrap {
         private readonly customerService: CustomerService,
         private readonly orderService: OrderService,
         private readonly eventBus: EventBus,
+        private readonly configService: ConfigService,
         private readonly requestContextService: RequestContextService,
         @Inject(STOREFRONT_PROMOTION_OPTIONS)
         private readonly promotionOptions: Required<StorefrontPromotionPluginOptions>,
@@ -204,14 +165,31 @@ export class ReferralService implements OnApplicationBootstrap {
 
     async updateProgram(ctx: RequestContext, input: UpdateReferralProgramInput) {
         this.validateProgramInput(input);
-        const enabledDefaultTemplates =
-            input.posterTemplates != null
-                ? input.posterTemplates.filter(id => referralPosterTemplates.includes(id as never))
-                : undefined;
-        await this.validateDefaultPosterTemplate(ctx, input.defaultPosterTemplate, enabledDefaultTemplates);
-        const existing = await this.getOrCreateConfig(ctx);
-        const config = await this.lockConfigOrThrow(ctx, existing.id);
+        const config = await this.lockConfigOrThrow(ctx, (await this.getOrCreateConfig(ctx)).id);
         this.assertExpectedUpdatedAt(config.updatedAt, input.expectedUpdatedAt);
+        const systemIds =
+            input.posterTemplates == null
+                ? (config.posterTemplates ?? [...referralPosterTemplates])
+                : [
+                      ...new Set(
+                          input.posterTemplates.filter(id => referralPosterTemplates.includes(id as never)),
+                      ),
+                  ];
+        const custom = await this.connection.getRepository(ctx, ReferralPosterTemplate).find({
+            where: { channelId: ctx.channelId },
+            order: { position: 'ASC', id: 'ASC' },
+        });
+        const enabledIds = enabledPosterIds(systemIds, custom);
+        // This String field mixes stable system keys and entity IDs, so GraphQL's ID codec
+        // cannot transform it automatically. Persist raw IDs and compare the public encoding.
+        const defaultId =
+            custom
+                .find(template => this.publicPosterId(String(template.id)) === input.defaultPosterTemplate)
+                ?.id.toString() ?? input.defaultPosterTemplate;
+        // An empty enabled set is intentional. Never re-enable a hidden fallback.
+        if (enabledIds.length && defaultId && !enabledIds.includes(defaultId)) {
+            throw new UserInputError('默认海报模板无效或已停用');
+        }
         Object.assign(config, {
             enabled: input.enabled,
             rewardRateBps: Math.round(input.rewardRate * 100),
@@ -221,75 +199,84 @@ export class ReferralService implements OnApplicationBootstrap {
             currencyCode: ctx.channel.defaultCurrencyCode,
             allowBalanceSpend: input.allowBalanceSpend,
             attributionWindowDays: input.attributionWindowDays,
-            defaultPosterTemplate: input.defaultPosterTemplate,
-            ...(enabledDefaultTemplates != null ? { posterTemplates: enabledDefaultTemplates } : {}),
+            defaultPosterTemplate: effectivePosterDefault(defaultId, enabledIds),
+            posterTemplates: systemIds,
         });
         await this.connection.getRepository(ctx, ReferralProgramConfig).save(config, { reload: false });
+        await this.posterConfigurationChanged(ctx);
         return this.configView(ctx, config, true);
     }
 
     async createPosterTemplate(ctx: RequestContext, input: SaveReferralPosterTemplateInput) {
+        const config = await this.lockConfigOrThrow(ctx, (await this.getOrCreateConfig(ctx)).id);
+        if (input.expectedUpdatedAt) this.assertExpectedUpdatedAt(config.updatedAt, input.expectedUpdatedAt);
         const repository = this.connection.getRepository(ctx, ReferralPosterTemplate);
-        const existingTemplateCount = await repository.count({ where: { channelId: ctx.channelId } });
-        const values = await this.normalizePosterTemplateInput(ctx, input);
         const saved = await repository.save(
             repository.create({
-                ...values,
+                ...(await this.normalizePosterTemplateInput(ctx, input)),
                 channelId: ctx.channelId,
             }),
         );
-        if (existingTemplateCount === 0 && saved.enabled) {
-            const config = await this.getOrCreateConfig(ctx);
-            config.defaultPosterTemplate = saved.id.toString();
-            await this.connection.getRepository(ctx, ReferralProgramConfig).save(config, { reload: false });
-        }
+        await this.reconcilePosterDefault(ctx, config);
+        await this.posterConfigurationChanged(ctx);
         return this.posterTemplateById(ctx, saved.id);
     }
 
     async updatePosterTemplate(ctx: RequestContext, input: UpdateReferralPosterTemplateInput) {
+        const config = await this.lockConfigOrThrow(ctx, (await this.getOrCreateConfig(ctx)).id);
         const repository = this.connection.getRepository(ctx, ReferralPosterTemplate);
-        const template = await repository.findOne({
-            where: { id: input.id, channelId: ctx.channelId },
-        });
+        const template = await repository.findOne({ where: { id: input.id, channelId: ctx.channelId } });
         if (!template) throw new UserInputError('找不到该邀请海报模板');
-        Object.assign(template, await this.normalizePosterTemplateInput(ctx, input));
+        Object.assign(template, await this.normalizePosterTemplateInput(ctx, input, template));
         await repository.save(template, { reload: false });
-        if (!template.enabled) {
-            const config = await this.getOrCreateConfig(ctx);
-            if (config.defaultPosterTemplate === template.id.toString()) {
-                const replacement = await repository
-                    .createQueryBuilder('posterTemplate')
-                    .where('posterTemplate.channelId = :channelId', { channelId: ctx.channelId })
-                    .andWhere('posterTemplate.enabled = :enabled', { enabled: true })
-                    .andWhere('posterTemplate.id != :id', { id: template.id })
-                    .orderBy('posterTemplate.position', 'ASC')
-                    .addOrderBy('posterTemplate.id', 'ASC')
-                    .getOne();
-                config.defaultPosterTemplate = replacement?.id.toString() ?? 'BRAND_MINIMAL';
-                await this.connection
-                    .getRepository(ctx, ReferralProgramConfig)
-                    .save(config, { reload: false });
-            }
-        }
+        await this.reconcilePosterDefault(ctx, config);
+        await this.posterConfigurationChanged(ctx);
         return this.posterTemplateById(ctx, template.id);
     }
 
+    async setPosterTemplateEnabled(ctx: RequestContext, id: ID, enabled: boolean, expectedUpdatedAt: Date) {
+        const config = await this.lockConfigOrThrow(ctx, (await this.getOrCreateConfig(ctx)).id);
+        this.assertExpectedUpdatedAt(config.updatedAt, expectedUpdatedAt);
+        const repository = this.connection.getRepository(ctx, ReferralPosterTemplate);
+        const template = await repository.findOne({ where: { id, channelId: ctx.channelId } });
+        if (!template) throw new UserInputError('找不到该邀请海报模板');
+        // A status operation must not normalize or overwrite any copy or media fields.
+        template.enabled = enabled;
+        await repository.save(template, { reload: false });
+        await this.reconcilePosterDefault(ctx, config);
+        await this.posterConfigurationChanged(ctx);
+        return this.configView(ctx, config, true);
+    }
+
     async deletePosterTemplate(ctx: RequestContext, id: ID) {
+        const config = await this.lockConfigOrThrow(ctx, (await this.getOrCreateConfig(ctx)).id);
         const repository = this.connection.getRepository(ctx, ReferralPosterTemplate);
         const template = await repository.findOne({ where: { id, channelId: ctx.channelId } });
         if (!template) return { result: 'NOT_DELETED', message: '找不到该邀请海报模板' };
-        const config = await this.getOrCreateConfig(ctx);
-        const wasDefault = config.defaultPosterTemplate === template.id.toString();
         await repository.remove(template);
-        if (wasDefault) {
-            const replacement = await repository.findOne({
-                where: { channelId: ctx.channelId, enabled: true },
-                order: { position: 'ASC', id: 'ASC' },
-            });
-            config.defaultPosterTemplate = replacement?.id.toString() ?? 'BRAND_MINIMAL';
-            await this.connection.getRepository(ctx, ReferralProgramConfig).save(config, { reload: false });
-        }
+        await this.reconcilePosterDefault(ctx, config);
+        await this.posterConfigurationChanged(ctx);
         return { result: 'DELETED' };
+    }
+
+    private async reconcilePosterDefault(ctx: RequestContext, config: ReferralProgramConfig) {
+        const custom = await this.connection.getRepository(ctx, ReferralPosterTemplate).find({
+            where: { channelId: ctx.channelId },
+            order: { position: 'ASC', id: 'ASC' },
+        });
+        config.defaultPosterTemplate = effectivePosterDefault(
+            config.defaultPosterTemplate,
+            enabledPosterIds(config.posterTemplates ?? [...referralPosterTemplates], custom),
+        );
+        // Bump the program version even when the effective default stays unchanged.
+        config.updatedAt = new Date(Math.max(Date.now(), config.updatedAt.getTime() + 1));
+        await this.connection.getRepository(ctx, ReferralProgramConfig).save(config, { reload: false });
+    }
+
+    private async posterConfigurationChanged(ctx: RequestContext) {
+        await this.eventBus.publish(
+            new StorefrontDataChangedEvent(ctx, ['referral'], { entityType: 'ReferralPosterTemplate' }),
+        );
     }
 
     async validateInviteCode(ctx: RequestContext, code?: string | null): Promise<boolean> {
@@ -1472,10 +1459,75 @@ export class ReferralService implements OnApplicationBootstrap {
             maxRewardPerOrder,
             allowBalanceSpend: config.allowBalanceSpend,
             attributionWindowDays: config.attributionWindowDays,
-            defaultPosterTemplate: config.defaultPosterTemplate,
+            defaultPosterTemplate: this.publicPosterId(
+                effectivePosterDefault(
+                    config.defaultPosterTemplate,
+                    enabledPosterIds(posterTemplates, posterTemplateConfigs),
+                ),
+            ),
             posterTemplates,
+            systemPosterTemplateConfigs: await this.systemPosterTemplates(ctx, posterTemplates),
             posterTemplateConfigs,
         };
+    }
+
+    private publicPosterId(id: string): string {
+        if (!id || referralPosterTemplates.includes(id as never)) return id;
+        const strategy =
+            this.configService.entityOptions.entityIdStrategy ?? this.configService.entityIdStrategy;
+        const entityId = strategy.primaryKeyType === 'increment' ? Number(id) : id;
+        return String(strategy.encodeId(entityId));
+    }
+
+    private async systemPosterTemplates(ctx: RequestContext, enabledIds: string[]) {
+        // The content plugin is optional in minimal test environments.
+        const blocks = this.connection.rawConnection.hasMetadata(StorefrontContentBlock)
+            ? await this.connection.getRepository(ctx, StorefrontContentBlock).find({
+                  where: {
+                      channelId: ctx.channelId,
+                      code: In(referralPosterPresets.map(preset => referralPosterContentCode(preset.id))),
+                  },
+                  relations: { imageAsset: true },
+              })
+            : [];
+        return referralPosterPresets.map((preset, position) => {
+            const block = blocks.find(item => item.code === referralPosterContentCode(preset.id));
+            const settings = block?.settings as Record<string, any> | undefined;
+            const configured =
+                settings?.purpose === 'referral-system-poster' && settings?.templateId === preset.id;
+            const copy = Object.fromEntries(
+                Object.entries(referralPosterCopy).map(([field, fallback]) => [
+                    field,
+                    configured && typeof settings?.copy?.[field] === 'string'
+                        ? settings.copy[field]
+                        : fallback,
+                ]),
+            );
+            return {
+                ...copy,
+                id: preset.id,
+                createdAt: block?.createdAt ?? new Date(0),
+                updatedAt: block?.updatedAt ?? new Date(0),
+                name:
+                    ctx.languageCode === LanguageCode.zh_Hans || ctx.languageCode === LanguageCode.zh_Hant
+                        ? preset.nameZh
+                        : preset.nameEn,
+                enabled: enabledIds.includes(preset.id),
+                position,
+                layoutVariant: 'STANDARD_CENTER',
+                posterBackgroundAsset: configured ? (block?.imageAsset ?? null) : null,
+                shareBackgroundAsset: null,
+                foregroundColor: configured
+                    ? block?.textColor || preset.foregroundColor
+                    : preset.foregroundColor,
+                accentColor:
+                    configured && typeof settings?.accentColor === 'string'
+                        ? settings.accentColor
+                        : preset.accentColor,
+                overlayOpacity: 0,
+                design: configured ? { ...preset.design, ...settings.design } : preset.design,
+            };
+        });
     }
 
     private validateProgramInput(input: UpdateReferralProgramInput): void {
@@ -1507,96 +1559,22 @@ export class ReferralService implements OnApplicationBootstrap {
         }
     }
 
-    private async validateDefaultPosterTemplate(
+    private async normalizePosterTemplateInput(
         ctx: RequestContext,
-        id: string,
-        enabledDefaultTemplates?: string[],
-    ): Promise<void> {
-        const allowedDefaults = enabledDefaultTemplates ?? referralPosterTemplates;
-        if (allowedDefaults.includes(id as never)) return;
-        const template = await this.connection.getRepository(ctx, ReferralPosterTemplate).findOne({
-            where: { id, channelId: ctx.channelId, enabled: true },
-        });
-        if (!template) throw new UserInputError('默认海报模板无效或已停用');
-    }
-
-    private async normalizePosterTemplateInput(ctx: RequestContext, input: SaveReferralPosterTemplateInput) {
-        if (!Number.isInteger(input.position) || input.position < 0 || input.position > 100_000) {
-            throw new UserInputError('模板排序必须是0至100000之间的整数');
-        }
-        if (input.layoutVariant !== 'STANDARD_CENTER') {
-            throw new UserInputError('海报版式无效');
-        }
-        if (
-            !Number.isInteger(input.overlayOpacity) ||
-            input.overlayOpacity < 0 ||
-            input.overlayOpacity > 80
-        ) {
-            throw new UserInputError('遮罩透明度必须在0至80之间');
-        }
+        input: SaveReferralPosterTemplateInput,
+        existing?: ReferralPosterTemplate,
+    ) {
+        input = {
+            ...existing,
+            ...Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined)),
+        } as SaveReferralPosterTemplateInput;
+        const normalized = normalizeReferralPosterInput(input);
         const posterBackgroundAsset = await this.assetForChannel(ctx, input.posterBackgroundAssetId);
         const shareBackgroundAsset = await this.assetForChannel(ctx, input.shareBackgroundAssetId);
         return {
-            name: requiredText(input.name, '模板名称', 128),
-            enabled: input.enabled,
-            position: input.position,
-            layoutVariant: input.layoutVariant,
+            ...normalized,
             posterBackgroundAssetId: posterBackgroundAsset?.id ?? null,
             shareBackgroundAssetId: shareBackgroundAsset?.id ?? null,
-            titleZh: requiredText(input.titleZh, '中文小标题', 80),
-            titleEn: requiredText(input.titleEn, '英文小标题', 80),
-            headlineZh: requiredText(input.headlineZh, '中文主标题', 180),
-            headlineEn: requiredText(input.headlineEn, '英文主标题', 180),
-            rewardTextZh: requiredText(input.rewardTextZh, '中文奖励文案', 220),
-            rewardTextEn: requiredText(input.rewardTextEn, '英文奖励文案', 220),
-            siteIntroZh: clippedText(input.siteIntroZh, 260),
-            siteIntroEn: clippedText(input.siteIntroEn, 260),
-            serviceTextZh: clippedText(input.serviceTextZh, 260),
-            serviceTextEn: clippedText(input.serviceTextEn, 260),
-            featureOneTitleZh: clippedText(input.featureOneTitleZh ?? '热门工具汇集', 100),
-            featureOneTitleEn: clippedText(input.featureOneTitleEn ?? '精选 AI tools', 100),
-            featureOneTextZh: clippedText(input.featureOneTextZh ?? '多种 AI 工具任你选', 160),
-            featureOneTextEn: clippedText(input.featureOneTextEn ?? 'A curated set of AI tools', 160),
-            featureTwoTitleZh: clippedText(input.featureTwoTitleZh ?? '便捷开通服务', 100),
-            featureTwoTitleEn: clippedText(input.featureTwoTitleEn ?? 'Fast activation', 100),
-            featureTwoTextZh: clippedText(input.featureTwoTextZh ?? '快速开通 省时省心', 160),
-            featureTwoTextEn: clippedText(input.featureTwoTextEn ?? 'Get started in a few clicks', 160),
-            featureThreeTitleZh: clippedText(input.featureThreeTitleZh ?? '专属售后支持', 100),
-            featureThreeTitleEn: clippedText(input.featureThreeTitleEn ?? 'Dedicated support', 100),
-            featureThreeTextZh: clippedText(input.featureThreeTextZh ?? '专业客服 贴心服务', 160),
-            featureThreeTextEn: clippedText(
-                input.featureThreeTextEn ?? 'Friendly help when you need it',
-                160,
-            ),
-            qrEyebrowZh: clippedText(input.qrEyebrowZh ?? '扫码访问 MOYAO AI 模钥', 100),
-            qrEyebrowEn: clippedText(input.qrEyebrowEn ?? 'Scan MOYAO AI', 100),
-            qrTitleZh: clippedText(input.qrTitleZh ?? '发现更多实用 AI 服务', 140),
-            qrTitleEn: clippedText(input.qrTitleEn ?? 'Discover practical AI services', 140),
-            qrDescriptionZh: clippedText(input.qrDescriptionZh ?? '满足多种 AI 使用场景', 140),
-            qrDescriptionEn: clippedText(
-                input.qrDescriptionEn ?? 'Tools for work, creativity, learning and code',
-                140,
-            ),
-            sceneOneZh: clippedText(input.sceneOneZh ?? '办公提效', 48),
-            sceneOneEn: clippedText(input.sceneOneEn ?? 'Work', 48),
-            sceneTwoZh: clippedText(input.sceneTwoZh ?? '内容创作', 48),
-            sceneTwoEn: clippedText(input.sceneTwoEn ?? 'Create', 48),
-            sceneThreeZh: clippedText(input.sceneThreeZh ?? '学习辅助', 48),
-            sceneThreeEn: clippedText(input.sceneThreeEn ?? 'Learn', 48),
-            sceneFourZh: clippedText(input.sceneFourZh ?? '智能编程', 48),
-            sceneFourEn: clippedText(input.sceneFourEn ?? 'Code', 48),
-            ctaTextZh: clippedText(input.ctaTextZh ?? '长按识别二维码，立即进入 MOYAO AI 模钥', 140),
-            ctaTextEn: clippedText(input.ctaTextEn ?? 'Press and hold to enter MOYAO AI', 140),
-            footerTitleZh: clippedText(input.footerTitleZh ?? '让好用的 AI，真正为你所用', 160),
-            footerTitleEn: clippedText(input.footerTitleEn ?? 'AI that works for you', 160),
-            footerTextZh: clippedText(input.footerTextZh ?? '热门 AI 工具与数字服务一站式平台', 220),
-            footerTextEn: clippedText(
-                input.footerTextEn ?? 'One-stop platform for AI tools and digital services',
-                220,
-            ),
-            foregroundColor: posterColor(input.foregroundColor, '主文字颜色'),
-            accentColor: posterColor(input.accentColor, '强调颜色'),
-            overlayOpacity: input.overlayOpacity,
         };
     }
 
@@ -1829,29 +1807,9 @@ function withdrawalCode(): string {
     return `RW-${time}-${randomBytes(3).toString('hex').toUpperCase()}`;
 }
 
-function requiredText(value: string, label: string, maxLength: number): string {
-    const normalized = value.trim();
-    if (!normalized || normalized.length > maxLength) {
-        throw new UserInputError(`${label}不能为空且不能超过${maxLength}个字符`);
-    }
-    return normalized;
-}
-
 function optionalText(value: string | null | undefined, maxLength: number): string | null {
     const normalized = value?.trim() ?? '';
     return normalized ? normalized.slice(0, maxLength) : null;
-}
-
-function clippedText(value: string | null | undefined, maxLength: number): string {
-    return (value?.trim() ?? '').slice(0, maxLength);
-}
-
-function posterColor(value: string, label: string): string {
-    const normalized = value.trim().toUpperCase();
-    if (!/^#[0-9A-F]{6}$/.test(normalized)) {
-        throw new UserInputError(`${label}必须使用 #RRGGBB 格式`);
-    }
-    return normalized;
 }
 
 function pageSize(value: number): number {

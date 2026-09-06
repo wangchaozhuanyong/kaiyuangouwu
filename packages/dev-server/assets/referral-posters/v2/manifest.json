@@ -1,0 +1,80 @@
+{
+    "version": 2,
+    "canvas": {
+        "width": 1080,
+        "height": 1920
+    },
+    "systemFiles": [
+        {
+            "id": "BRAND_MINIMAL",
+            "file": "01-clear-blue.png"
+        },
+        {
+            "id": "BENEFIT_RED_GOLD",
+            "file": "02-warm-paper.png"
+        },
+        {
+            "id": "PRODUCT_STORY",
+            "file": "03-jade-form.png"
+        },
+        {
+            "id": "PREMIUM_DARK",
+            "file": "04-champagne-arc.png"
+        },
+        {
+            "id": "CLOUD_BRIDGE_ORBIT",
+            "file": "05-lilac-prism.png"
+        }
+    ],
+    "custom": {
+        "key": "referral-ai-core-v2",
+        "file": "06-ai-core.png",
+        "name": "极光芯核 · AI 专属",
+        "copy": {
+            "titleZh": "AI 工具与充值服务",
+            "headlineZh": "AI 账号服务\nToken 按需充值",
+            "siteIntroZh": "ChatGPT · Gemini · Codex 等热门 AI 服务\n账号订阅、额度充值，一站了解与选购。",
+            "featureOneTitleZh": "AI 账号与订阅",
+            "featureOneTextZh": "选购适合自己的 AI 服务",
+            "featureTwoTitleZh": "Token 额度充值",
+            "featureTwoTextZh": "按使用需求选择额度",
+            "featureThreeTitleZh": "订单与售后支持",
+            "featureThreeTextZh": "选购、订单问题均可咨询",
+            "qrEyebrowZh": "发现适合你的 AI 服务",
+            "qrTitleZh": "扫码查看服务",
+            "qrDescriptionZh": "查看商品与服务详情\n选择适合你的方案",
+            "rewardTextZh": "邀请好友消费，可获 {rewardRate}% 奖励\n奖励按店铺规则使用",
+            "sceneOneZh": "办公提效",
+            "sceneTwoZh": "内容创作",
+            "sceneThreeZh": "代码开发",
+            "sceneFourZh": "学习探索",
+            "ctaTextZh": "长按识别二维码，进入店铺",
+            "footerTitleZh": "让 AI，成为你的日常生产力",
+            "footerTextZh": "账号订阅 · Token 充值 · 服务支持",
+            "serviceTextZh": "账号订阅 · Token 充值 · 服务支持",
+            "titleEn": "AI tools & top-ups",
+            "headlineEn": "AI subscriptions\nTokens when you need them",
+            "siteIntroEn": "ChatGPT, Gemini, Codex and more AI services.\nExplore subscriptions and token top-up options.",
+            "featureOneTitleEn": "AI subscriptions",
+            "featureOneTextEn": "Find an AI service that suits you",
+            "featureTwoTitleEn": "Token top-ups",
+            "featureTwoTextEn": "Choose the amount you need",
+            "featureThreeTitleEn": "Order support",
+            "featureThreeTextEn": "Help with shopping and aftercare",
+            "qrEyebrowEn": "Discover your next AI service",
+            "qrTitleEn": "Explore AI services",
+            "qrDescriptionEn": "See products and service details\nFind an option that suits you",
+            "rewardTextEn": "Invite friends and earn {rewardRate}% rewards\nRewards follow this store’s rules",
+            "sceneOneEn": "Work",
+            "sceneTwoEn": "Create",
+            "sceneThreeEn": "Code",
+            "sceneFourEn": "Learn",
+            "ctaTextEn": "Scan the QR code to visit the store",
+            "footerTitleEn": "Make AI part of your everyday",
+            "footerTextEn": "Subscriptions · Token top-ups · Support",
+            "serviceTextEn": "Subscriptions · Token top-ups · Support"
+        },
+        "foregroundColor": "#f4f7ff",
+        "accentColor": "#6254ff"
+    }
+}

@@ -43,6 +43,7 @@ describe('referral admin customer wallets', () => {
             {} as any,
             {} as any,
             {} as any,
+            {} as any,
             { signingSecret: 'test-storefront-visitor-hash-secret' } as any,
         );
 
@@ -59,6 +60,7 @@ describe('referral admin customer wallets', () => {
 
 describe('referral program attribution window validation', () => {
     const service = new ReferralService(
+        {} as any,
         {} as any,
         {} as any,
         {} as any,
@@ -102,8 +104,12 @@ describe('referral poster template channel isolation', () => {
             {} as any,
             {} as any,
             {} as any,
+            {} as any,
             { signingSecret: 'test-storefront-visitor-hash-secret' } as any,
         );
+
+        (service as any).getOrCreateConfig = vi.fn().mockResolvedValue({ id: 'config-1' });
+        (service as any).lockConfigOrThrow = vi.fn().mockResolvedValue({ id: 'config-1' });
 
         await expect(
             service.updatePosterTemplate({ channelId: 'channel-1' } as any, {
@@ -155,6 +161,7 @@ describe('referral poster template channel isolation', () => {
         const find = vi.fn().mockResolvedValue([]);
         const findOne = vi.fn().mockResolvedValue(null);
         const connection = {
+            rawConnection: { hasMetadata: () => false },
             getRepository: vi.fn().mockImplementation((_ctx: any, entity: any) => {
                 if (entity.name === 'ReferralPosterTemplate') {
                     return { find, findOne };
@@ -168,8 +175,10 @@ describe('referral poster template channel isolation', () => {
             {} as any,
             {} as any,
             {} as any,
+            {} as any,
             { signingSecret: 'test-storefront-visitor-hash-secret' } as any,
         );
+        (service as any).eventBus = { publish: vi.fn().mockResolvedValue(undefined) };
         (service as any).getOrCreateConfig = vi.fn().mockResolvedValue(configRecord);
         (service as any).lockConfigOrThrow = vi.fn().mockResolvedValue(configRecord);
 
@@ -214,5 +223,49 @@ describe('referral poster template channel isolation', () => {
         expect(configRecord.defaultPosterTemplate).toBe('BENEFIT_RED_GOLD');
         expect(configRecord.posterTemplates).toEqual(['BRAND_MINIMAL', 'BENEFIT_RED_GOLD']);
         expect(result.posterTemplates).toEqual(['BRAND_MINIMAL', 'BENEFIT_RED_GOLD']);
+    });
+});
+
+describe('managed system poster content', () => {
+    it('reads only active Channel blocks and ignores blocks with a conflicting purpose', async () => {
+        const find = vi.fn().mockResolvedValue([
+            {
+                code: 'referral-poster-brand-minimal',
+                imageAsset: { id: 'shop-a-asset' },
+                textColor: '#173452',
+                settings: {
+                    purpose: 'referral-system-poster',
+                    templateId: 'BRAND_MINIMAL',
+                    copy: { headlineZh: '本店独有标题' },
+                },
+            },
+            {
+                code: 'referral-poster-product-story',
+                imageAsset: { id: 'unrelated-asset' },
+                settings: {
+                    purpose: 'unrelated-purpose',
+                    templateId: 'PRODUCT_STORY',
+                    copy: { headlineZh: '不应显示的内容' },
+                },
+            },
+        ]);
+        const service = Object.create(ReferralService.prototype);
+        service.connection = {
+            rawConnection: { hasMetadata: () => true },
+            getRepository: vi.fn().mockReturnValue({ find }),
+        };
+        const result = await service.systemPosterTemplates({ channelId: 'shop-a', languageCode: 'zh_Hans' }, [
+            'BRAND_MINIMAL',
+        ]);
+        expect(find.mock.calls[0][0].where.channelId).toBe('shop-a');
+        expect(result[0]).toMatchObject({
+            id: 'BRAND_MINIMAL',
+            enabled: true,
+            headlineZh: '本店独有标题',
+            posterBackgroundAsset: { id: 'shop-a-asset' },
+        });
+        expect(result[2].enabled).toBe(false);
+        expect(result[2].posterBackgroundAsset).toBeNull();
+        expect(result[2].headlineZh).not.toBe('不应显示的内容');
     });
 });

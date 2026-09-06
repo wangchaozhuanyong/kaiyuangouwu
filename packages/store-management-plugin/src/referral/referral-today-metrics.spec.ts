@@ -86,6 +86,7 @@ describe('referral today metrics queries', () => {
             {} as any,
             {} as any,
             {} as any,
+            {} as any,
             { signingSecret: 'test-storefront-visitor-hash-secret' } as any,
         );
 
@@ -138,6 +139,7 @@ describe('referral today metrics queries', () => {
             {} as any,
             eventBus as any,
             {} as any,
+            {} as any,
             { signingSecret: 'test-storefront-visitor-hash-secret' } as any,
         );
         const rewardSettledOrder = vi
@@ -187,6 +189,7 @@ describe('referral today metrics queries', () => {
             connection as any,
             {} as any,
             orderService as any,
+            {} as any,
             {} as any,
             {} as any,
             { signingSecret: 'test-storefront-visitor-hash-secret' } as any,
