@@ -55,7 +55,7 @@ export class AfterSalesService {
         const requests = await this.connection.getRepository(ctx, AfterSalesRequest).find({
             where: { channelId: ctx.channelId, customerId: customer.id },
             relations: { items: true, events: true, order: true, refund: true },
-            order: { createdAt: 'DESC', events: { createdAt: 'ASC' } },
+            order: { createdAt: 'DESC', id: 'DESC', events: { createdAt: 'ASC' } },
         });
         return requests.map(request => this.normalizeRelations(request, ctx));
     }
@@ -103,7 +103,7 @@ export class AfterSalesService {
         const [items, totalItems] = await this.connection.getRepository(ctx, AfterSalesRequest).findAndCount({
             where,
             relations: { items: true, events: true, order: true, refund: true },
-            order: { createdAt: 'DESC', events: { createdAt: 'ASC' } },
+            order: { createdAt: 'DESC', id: 'DESC', events: { createdAt: 'ASC' } },
             skip,
             take,
         });

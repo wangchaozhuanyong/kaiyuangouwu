@@ -12,7 +12,7 @@ import {
     TranslatorService,
     UserInputError,
 } from '@vendure/core';
-import { LockNotSupportedOnGivenDriverError } from 'typeorm';
+import { LockNotSupportedOnGivenDriverError, Not } from 'typeorm';
 
 import {
     authVisualCodeByType,
@@ -50,6 +50,7 @@ import {
     UpdateStorefrontContentBlockInput,
     UpdateStorefrontContentSettingsInput,
 } from './types';
+import { STOREFRONT_VISUAL_PRESET_CODE } from './visual-presets';
 
 const contentPublicationStatus = createContentPublicationChecker(isUsableEnglishTranslation);
 
@@ -70,7 +71,7 @@ export class StorefrontContentService {
 
     async findAllForAdmin(ctx: RequestContext): Promise<StorefrontContentBlock[]> {
         const blocks = await this.connection.getRepository(ctx, StorefrontContentBlock).find({
-            where: { channelId: ctx.channelId },
+            where: { channelId: ctx.channelId, code: Not(STOREFRONT_VISUAL_PRESET_CODE) },
             relations: {
                 imageAsset: true,
                 items: { imageAsset: true, translations: true },
@@ -89,7 +90,7 @@ export class StorefrontContentService {
     async findPublished(ctx: RequestContext): Promise<StorefrontContentBlock[]> {
         const now = new Date();
         const blocks = await this.connection.getRepository(ctx, StorefrontContentBlock).find({
-            where: { channelId: ctx.channelId, enabled: true },
+            where: { channelId: ctx.channelId, enabled: true, code: Not(STOREFRONT_VISUAL_PRESET_CODE) },
             relations: {
                 imageAsset: true,
                 items: { imageAsset: true, translations: true },
@@ -111,7 +112,7 @@ export class StorefrontContentService {
                 where: { channelId: ctx.channelId },
             }),
             this.connection.getRepository(ctx, StorefrontContentBlock).find({
-                where: { channelId: ctx.channelId },
+                where: { channelId: ctx.channelId, code: Not(STOREFRONT_VISUAL_PRESET_CODE) },
                 select: { type: true },
             }),
         ]);
@@ -138,7 +139,7 @@ export class StorefrontContentService {
         const saved = await repository.save(settings);
         const configuredBlockTypes = (
             await this.connection.getRepository(ctx, StorefrontContentBlock).find({
-                where: { channelId: ctx.channelId },
+                where: { channelId: ctx.channelId, code: Not(STOREFRONT_VISUAL_PRESET_CODE) },
                 select: { type: true },
             })
         ).map(block => block.type);
@@ -322,7 +323,7 @@ export class StorefrontContentService {
             throw new UserInputError('装修区块排序包含重复项');
         }
         const blocks = await this.connection.getRepository(ctx, StorefrontContentBlock).find({
-            where: { channelId: ctx.channelId },
+            where: { channelId: ctx.channelId, code: Not(STOREFRONT_VISUAL_PRESET_CODE) },
         });
         if (blocks.length !== ids.length || blocks.some(block => !uniqueIds.has(String(block.id)))) {
             throw new UserInputError('排序必须包含当前店铺的全部装修区块');
@@ -363,7 +364,7 @@ export class StorefrontContentService {
         }
 
         const currentBlocks = await this.connection.getRepository(ctx, StorefrontContentBlock).find({
-            where: { channelId: ctx.channelId },
+            where: { channelId: ctx.channelId, code: Not(STOREFRONT_VISUAL_PRESET_CODE) },
         });
         if (
             currentBlocks.length !== expectedBlocks.length ||
@@ -395,7 +396,7 @@ export class StorefrontContentService {
             throw new UserInputError('装修区块排序包含重复编码');
         }
         const blocks = await this.connection.getRepository(ctx, StorefrontContentBlock).find({
-            where: { channelId: ctx.channelId },
+            where: { channelId: ctx.channelId, code: Not(STOREFRONT_VISUAL_PRESET_CODE) },
         });
         const blocksByCode = new Map(blocks.map(block => [block.code.toLowerCase(), block]));
         if (
@@ -728,7 +729,7 @@ export class StorefrontContentService {
         withRelations: boolean,
     ): Promise<StorefrontContentBlock | null> {
         return this.connection.getRepository(ctx, StorefrontContentBlock).findOne({
-            where: { id, channelId: ctx.channelId },
+            where: { id, channelId: ctx.channelId, code: Not(STOREFRONT_VISUAL_PRESET_CODE) },
             ...(withRelations
                 ? {
                       relations: {
@@ -753,6 +754,8 @@ export class StorefrontContentService {
 
     private validateBlockInput(input: CreateStorefrontContentBlockInput) {
         const code = input.code.trim().toLowerCase();
+        if (code === STOREFRONT_VISUAL_PRESET_CODE)
+            throw new UserInputError('请通过店铺皮肤设置修改视觉预设');
         if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(code)) {
             throw new UserInputError('区块编码只能使用小写字母、数字和短横线，最长 64 个字符');
         }

@@ -59,7 +59,7 @@ export function CardPoolModule() {
         variables: {
             options: {
                 take: VARIANT_LOOKUP_SIZE,
-                sort: { name: 'ASC' },
+                sort: { name: 'ASC', id: 'ASC' },
                 filter: {
                     _and: [
                         { fulfillmentType: { eq: 'digital' } },

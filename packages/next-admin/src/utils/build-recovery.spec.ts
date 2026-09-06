@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
     buildRecoveryUrl,
@@ -27,6 +27,46 @@ function createEnvironment(initialRecoveryAt: string | null = null) {
 }
 
 describe('build recovery', () => {
+    afterEach(() => vi.unstubAllGlobals());
+
+    function blockBrowserStorage() {
+        const replace = vi.fn();
+        const storage = vi.fn(() => {
+            throw new Error('SecurityError: session storage access is blocked');
+        });
+        vi.stubGlobal('window', {
+            location: { href: 'https://console.example.test/dashboard/catalog?tab=products#list', replace },
+            get sessionStorage() {
+                return storage();
+            },
+        });
+        return { replace, storage };
+    }
+
+    it('leaves the error boundary available when the browser rejects storage access', () => {
+        const { replace, storage } = blockBrowserStorage();
+        expect(tryRecoverFromBuildError(new Error('ChunkLoadError'))).toBe(false);
+        expect(storage).toHaveBeenCalledOnce();
+        expect(replace).not.toHaveBeenCalled();
+    });
+
+    it('does not read browser storage for an unrelated error', () => {
+        const { storage } = blockBrowserStorage();
+        expect(tryRecoverFromBuildError(new Error('GraphQL request failed'))).toBe(false);
+        expect(storage).not.toHaveBeenCalled();
+    });
+
+    it('keeps the manual reload action usable when browser storage is blocked', () => {
+        const { replace, storage } = blockBrowserStorage();
+        loadLatestBuild();
+        expect(storage).not.toHaveBeenCalled();
+        const url = new URL(replace.mock.calls[0][0]);
+        expect(url.pathname).toBe('/dashboard/catalog');
+        expect(url.searchParams.get('tab')).toBe('products');
+        expect(Number(url.searchParams.get('__vendure_admin_build'))).toBeGreaterThan(0);
+        expect(url.hash).toBe('#list');
+    });
+
     it('recognizes stale chunks and the observed Apollo transform failure', () => {
         expect(isRecoverableBuildError(new Error('Failed to fetch dynamically imported module'))).toBe(true);
         expect(

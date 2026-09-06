@@ -26,8 +26,9 @@ import {
     StoreUsdtRateScheduleMode,
     UpdateStoreCurrencyConfigurationInput,
 } from './types';
-import { UsdtOtcRateService } from './usdt-otc-rate.service';
 import { UsdtPaymentService } from './usdt/usdt-payment.service';
+// Checkout quotes and external OTC rates use separate providers.
+import { UsdtOtcRateService } from './usdt-otc-rate.service';
 
 const SUPPORTED_CURRENCIES = [CurrencyCode.CNY, CurrencyCode.MYR] as const;
 const BNM_EXCHANGE_RATE_URL = 'https://api.bnm.gov.my/public/exchange-rate/CNY?session=1200&quote=rm';
@@ -184,7 +185,7 @@ export class StoreCurrencySettingsService {
                 fiatAmount,
                 expiresAt: MoreThan(new Date()),
             },
-            order: { createdAt: 'DESC' },
+            order: { createdAt: 'DESC', id: 'DESC' },
         });
         if (current) {
             const existingIntent = await this.ensureCheckoutPaymentIntent(ctx, current);

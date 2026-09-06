@@ -1,0 +1,109 @@
+import { Injectable } from '@nestjs/common';
+import {
+    Channel,
+    EventBus,
+    ID,
+    RequestContext,
+    TransactionalConnection,
+    UserInputError,
+} from '@vendure/core';
+import { LockNotSupportedOnGivenDriverError } from 'typeorm';
+
+import { StorefrontContentBlock } from './entities/storefront-content-block.entity';
+import { StorefrontContentChangedEvent } from './storefront-content-changed.event';
+import {
+    isStorefrontVisualPresetId,
+    normalizeStorefrontVisualPreset,
+    STOREFRONT_VISUAL_PRESET_CODE,
+    StorefrontVisualPresetConfig,
+} from './visual-presets';
+
+export interface UpdateStorefrontVisualPresetInput {
+    channelId: ID;
+    presetId: string;
+    expectedRevision: string;
+}
+
+@Injectable()
+export class StorefrontVisualPresetService {
+    constructor(
+        private readonly connection: TransactionalConnection,
+        private readonly eventBus: EventBus,
+    ) {}
+
+    async get(ctx: RequestContext): Promise<StorefrontVisualPresetConfig> {
+        const block = await this.connection.getRepository(ctx, StorefrontContentBlock).findOne({
+            where: { channelId: ctx.channelId, code: STOREFRONT_VISUAL_PRESET_CODE },
+        });
+        return this.config(ctx, block);
+    }
+
+    async update(
+        ctx: RequestContext,
+        input: UpdateStorefrontVisualPresetInput,
+    ): Promise<StorefrontVisualPresetConfig> {
+        if (String(ctx.channelId) !== String(input.channelId))
+            throw new UserInputError('店铺已切换，请重新载入皮肤设置');
+        if (!isStorefrontVisualPresetId(input.presetId)) throw new UserInputError('请选择已发布的店铺皮肤');
+
+        // Serialize first-time creation as well as updates for the active channel.
+        let supportsWriteLock = true;
+        try {
+            await this.connection
+                .getRepository(ctx, Channel)
+                .createQueryBuilder('channel')
+                .setLock('pessimistic_write')
+                .where('channel.id = :id', { id: ctx.channelId })
+                .getOne();
+        } catch (error) {
+            if (
+                !(error instanceof LockNotSupportedOnGivenDriverError) &&
+                !(error instanceof Error && error.name === 'LockNotSupportedOnGivenDriverError')
+            ) {
+                throw error;
+            }
+            supportsWriteLock = false;
+        }
+        const repository = this.connection.getRepository(ctx, StorefrontContentBlock);
+        const current = await repository.findOne({
+            // A locking read sees the latest revision even under repeatable-read isolation.
+            ...(supportsWriteLock ? { lock: { mode: 'pessimistic_write' as const } } : {}),
+            where: { channelId: ctx.channelId, code: STOREFRONT_VISUAL_PRESET_CODE },
+        });
+        if (this.config(ctx, current).revision !== input.expectedRevision) {
+            throw new UserInputError('皮肤设置已被其他管理员更新，请刷新后重试');
+        }
+        if (current && current.settings?.presetId === input.presetId) {
+            return this.config(ctx, current);
+        }
+        const block =
+            current ??
+            new StorefrontContentBlock({
+                channelId: ctx.channelId,
+                channel: ctx.channel,
+                code: STOREFRONT_VISUAL_PRESET_CODE,
+                internalName: '店铺视觉预设',
+                type: 'CUSTOM',
+                layoutVariant: 'CUSTOM',
+                enabled: false,
+                position: 0,
+                targetType: 'NONE',
+                translations: [],
+                items: [],
+            });
+        block.settings = { presetId: input.presetId };
+        // Keep revisions strictly increasing even for two saves in the same millisecond.
+        block.updatedAt = new Date(Math.max(Date.now(), (current?.updatedAt.getTime() ?? 0) + 1));
+        const saved = await repository.save(block);
+        await this.eventBus.publish(new StorefrontContentChangedEvent(ctx, [saved.id]));
+        return this.config(ctx, saved);
+    }
+
+    private config(ctx: RequestContext, block: StorefrontContentBlock | null): StorefrontVisualPresetConfig {
+        return {
+            channelId: String(ctx.channelId),
+            presetId: normalizeStorefrontVisualPreset(block?.settings?.presetId),
+            revision: block ? `${String(block.id)}:${block.updatedAt.toISOString()}` : 'default',
+        };
+    }
+}

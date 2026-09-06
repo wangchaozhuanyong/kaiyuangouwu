@@ -1,6 +1,7 @@
 import { LanguageCode } from '@vendure/common/lib/generated-types';
 import { isUsableEnglishTranslation } from '@vendure/common/lib/translation-validation';
 import 'reflect-metadata';
+import { Not } from 'typeorm';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createContentPublicationChecker } from './content-publication';
@@ -8,6 +9,7 @@ import { StorefrontContentBlock } from './entities/storefront-content-block.enti
 import { StorefrontContentSettings } from './entities/storefront-content-settings.entity';
 import { StorefrontContentService } from './storefront-content.service';
 import { CreateStorefrontContentBlockInput } from './types';
+import { STOREFRONT_VISUAL_PRESET_CODE } from './visual-presets';
 
 const contentPublicationStatus = createContentPublicationChecker(isUsableEnglishTranslation);
 
@@ -564,7 +566,9 @@ describe('StorefrontContentService Channel isolation', () => {
             service.findOneForAdmin({ channelId: 'store-b' } as any, 'block-a'),
         ).resolves.toBeUndefined();
         expect(repository.findOne).toHaveBeenCalledWith(
-            expect.objectContaining({ where: { id: 'block-a', channelId: 'store-b' } }),
+            expect.objectContaining({
+                where: { id: 'block-a', channelId: 'store-b', code: Not(STOREFRONT_VISUAL_PRESET_CODE) },
+            }),
         );
     });
 });

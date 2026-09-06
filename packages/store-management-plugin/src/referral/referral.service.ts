@@ -351,12 +351,12 @@ export class ReferralService implements OnApplicationBootstrap {
                 relationshipRepository.find({
                     where: { channelId: ctx.channelId, inviterCustomerId: customer.id },
                     relations: { inviteeCustomer: true },
-                    order: { boundAt: 'DESC' },
+                    order: { boundAt: 'DESC', id: 'DESC' },
                     take: 100,
                 }),
                 this.connection.getRepository(ctx, ReferralLedgerEntry).find({
                     where: { channelId: ctx.channelId, customerId: customer.id },
-                    order: { createdAt: 'DESC' },
+                    order: { createdAt: 'DESC', id: 'DESC' },
                     take: 100,
                 }),
                 this.connection

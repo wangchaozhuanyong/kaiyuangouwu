@@ -165,7 +165,7 @@ export function DashboardModule() {
             },
             options: {
                 take: 8,
-                sort: { orderPlacedAt: 'DESC' },
+                sort: { orderPlacedAt: 'DESC', id: 'DESC' },
                 filter: { active: { eq: false } },
             },
         },

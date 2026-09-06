@@ -190,7 +190,7 @@ export function CatalogModule() {
         collections: { items: CollectionFilterItem[]; totalItems: number };
     }>(GET_COLLECTIONS, {
         variables: {
-            options: { topLevelOnly: false, take: 250, sort: { name: 'ASC' } },
+            options: { topLevelOnly: false, take: 250, sort: { name: 'ASC', id: 'ASC' } },
         },
         fetchPolicy: 'cache-first',
     });
@@ -221,7 +221,7 @@ export function CatalogModule() {
                 skip: page * pageSize,
                 take: pageSize,
                 filter: Object.keys(filter).length > 0 ? filter : undefined,
-                sort: { updatedAt: 'DESC' as const },
+                sort: { updatedAt: 'DESC' as const, id: 'DESC' as const },
             },
         };
     }, [categoryId, deferredSearchTerm, statusFilter, page, pageSize]);
@@ -232,7 +232,7 @@ export function CatalogModule() {
         notifyOnNetworkStatusChange: true,
     });
     const activeChannelQuery = useQuery<GetCatalogChannelsData>(GET_CATALOG_CHANNELS, {
-        variables: { options: { skip: 0, take: 100, sort: { code: 'ASC' } } },
+        variables: { options: { skip: 0, take: 100, sort: { code: 'ASC', id: 'ASC' } } },
         fetchPolicy: 'cache-first',
     });
     const productIds = useMemo(() => data?.products.items.map(product => product.id) ?? [], [data]);

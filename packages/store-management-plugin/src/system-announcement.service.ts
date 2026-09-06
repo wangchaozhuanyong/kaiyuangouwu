@@ -27,7 +27,7 @@ export class SystemAnnouncementService {
     findAll(ctx: RequestContext): Promise<SystemAnnouncement[]> {
         return this.connection.getRepository(ctx, SystemAnnouncement).find({
             relations: { channels: true },
-            order: { priority: 'DESC', createdAt: 'DESC' },
+            order: { priority: 'DESC', createdAt: 'DESC', id: 'DESC' },
         });
     }
 
@@ -47,6 +47,7 @@ export class SystemAnnouncementService {
             .distinct(true)
             .orderBy('announcement.priority', 'DESC')
             .addOrderBy('announcement.createdAt', 'DESC')
+            .addOrderBy('announcement.id', 'DESC')
             .take(20)
             .getMany();
         const isZh = String(ctx.languageCode).toLowerCase().startsWith('zh');

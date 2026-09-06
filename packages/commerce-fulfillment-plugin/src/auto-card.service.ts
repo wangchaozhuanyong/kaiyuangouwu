@@ -351,7 +351,7 @@ export class AutoCardService {
         const [items, totalItems] = await repository.findAndCount({
             where: { configId: config.id, ...(options.state ? { state: options.state } : {}) },
             relations: { delivery: true },
-            order: { sequence: 'ASC' },
+            order: { sequence: 'ASC', id: 'ASC' },
             skip,
             take,
         });
@@ -411,7 +411,7 @@ export class AutoCardService {
                     : {}),
             },
             relations: { order: true, orderLine: true, poolItems: true, events: true, config: true },
-            order: { createdAt: 'DESC', events: { createdAt: 'ASC' } },
+            order: { createdAt: 'DESC', id: 'DESC', events: { createdAt: 'ASC' } },
             skip,
             take,
         });

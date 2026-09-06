@@ -25,6 +25,7 @@ import type { CSSProperties } from 'react';
 import type { RouteState } from '../storefront-router';
 
 import { ShopApi } from '../api';
+import { useDesktopLayout } from '../desktop-layout';
 import { compactUiCopy, languageCodeFor } from '../i18n';
 import { PUBLIC_QUERY_GC_TIME, ROUTE_QUERY_STALE_TIME, storefrontQueryKeys } from '../query-client';
 import { isReferralClientFeatureEnabled } from '../referral-client-feature';
@@ -61,7 +62,7 @@ export interface AccountPageProps {
     onLogout: () => void;
 }
 
-const accountSectionClass = 'account-section lg:m-0 lg:w-full';
+const accountSectionClass = 'account-panel account-section lg:m-0 lg:w-full';
 const compactSectionHeaderClass =
     '[&_.section-header]:mb-1 [&_.section-header]:min-h-0 [&_.section-header]:items-center [&_.section-header-title-row_h2]:m-0 [&_.section-header-title-row_h2]:text-[15px] [&_.section-header-title-row_h2]:font-extrabold [&_.section-header-title-row_h2]:leading-[1.2] [&_.section-header-action-btn]:min-h-0 [&_.section-header-action-btn]:p-0 [&_.section-header-action-btn]:text-[12.5px] [&_.section-header-action-btn]:leading-[1.2] [&_.section-header-action-btn]:text-slate-500 hover:[&_.section-header-action-btn]:text-[var(--accent)] [&_.section-header-action-btn_svg]:size-3.5';
 
@@ -84,6 +85,7 @@ export function AccountPage() {
         onLogout,
     } = AccountPageContext.useValue();
     const isZh = language === 'zh';
+    const desktop = useDesktopLayout();
     const compactCopy = compactUiCopy[language];
     const orders = customer?.orders.items ?? [];
     const countsQuery = useQuery({
@@ -143,6 +145,7 @@ export function AccountPage() {
                 line.productVariant.customFields.fulfillmentType !== 'digital',
         ),
     );
+    const latestOrder = orders[0];
     const recentVariants = Array.from(
         new Map(
             orders.flatMap(order => order.lines).map(line => [line.productVariant.id, line.productVariant]),
@@ -185,6 +188,8 @@ export function AccountPage() {
                                                 src={customer.avatar.preview}
                                                 alt=""
                                             />
+                                        ) : desktop ? (
+                                            <UserRound aria-hidden="true" />
                                         ) : (
                                             customerName.slice(0, 1).toUpperCase()
                                         )}
@@ -326,7 +331,7 @@ export function AccountPage() {
             </section>
 
             <section
-                className={`${accountSectionClass} ${compactSectionHeaderClass} [&_nav]:mt-1 [&_nav]:grid [&_nav]:grid-cols-5 [&_nav]:gap-0.5 [&_nav>button]:flex [&_nav>button]:min-h-[52px] [&_nav>button]:min-w-0 [&_nav>button]:flex-col [&_nav>button]:items-center [&_nav>button]:justify-center [&_nav>button]:gap-1 [&_nav>button]:rounded-lg [&_nav>button]:border-0 [&_nav>button]:bg-transparent [&_nav>button]:px-0.5 [&_nav>button]:py-1 hover:[&_nav>button]:bg-[var(--soft)] [&_nav>button>span]:relative [&_nav>button>span]:grid [&_nav>button>span]:size-[26px] [&_nav>button>span]:place-items-center [&_nav>button>span]:text-slate-800 [&_nav>button>span_svg]:size-5 [&_nav>button>span_svg]:stroke-[1.8] [&_nav>button>span_b]:absolute [&_nav>button>span_b]:-right-2 [&_nav>button>span_b]:-top-1 [&_nav>button>span_b]:grid [&_nav>button>span_b]:h-4 [&_nav>button>span_b]:min-w-4 [&_nav>button>span_b]:place-items-center [&_nav>button>span_b]:rounded-full [&_nav>button>span_b]:border-2 [&_nav>button>span_b]:border-white [&_nav>button>span_b]:bg-[var(--danger)] [&_nav>button>span_b]:px-1 [&_nav>button>span_b]:text-[10px] [&_nav>button>span_b]:font-semibold [&_nav>button>span_b]:leading-3 [&_nav>button>span_b]:text-white [&_nav>button_small]:max-w-full [&_nav>button_small]:whitespace-nowrap [&_nav>button_small]:text-[10.5px] [&_nav>button_small]:font-medium [&_nav>button_small]:tracking-[-0.01em] [&_nav>button_small]:text-[var(--text)] min-[371px]:[&_nav>button_small]:text-xs [&_nav>button:nth-child(1)>span_svg]:text-amber-500 [&_nav>button:nth-child(2)>span_svg]:text-sky-600 [&_nav>button:nth-child(3)>span_svg]:text-indigo-600 [&_nav>button:nth-child(4)>span_svg]:text-rose-600 [&_nav>button:nth-child(5)>span_svg]:text-teal-600`}
+                className={`account-orders ${accountSectionClass} ${compactSectionHeaderClass} [&_nav]:mt-1 [&_nav]:grid [&_nav]:grid-cols-5 [&_nav]:gap-0.5 [&_nav>button]:flex [&_nav>button]:min-h-[52px] [&_nav>button]:min-w-0 [&_nav>button]:flex-col [&_nav>button]:items-center [&_nav>button]:justify-center [&_nav>button]:gap-1 [&_nav>button]:rounded-lg [&_nav>button]:border-0 [&_nav>button]:bg-transparent [&_nav>button]:px-0.5 [&_nav>button]:py-1 hover:[&_nav>button]:bg-[var(--soft)] [&_nav>button>span]:relative [&_nav>button>span]:grid [&_nav>button>span]:size-[26px] [&_nav>button>span]:place-items-center [&_nav>button>span]:text-slate-800 [&_nav>button>span_svg]:size-5 [&_nav>button>span_svg]:stroke-[1.8] [&_nav>button>span_b]:absolute [&_nav>button>span_b]:-right-2 [&_nav>button>span_b]:-top-1 [&_nav>button>span_b]:grid [&_nav>button>span_b]:h-4 [&_nav>button>span_b]:min-w-4 [&_nav>button>span_b]:place-items-center [&_nav>button>span_b]:rounded-full [&_nav>button>span_b]:border-2 [&_nav>button>span_b]:border-white [&_nav>button>span_b]:bg-[var(--danger)] [&_nav>button>span_b]:px-1 [&_nav>button>span_b]:text-[10px] [&_nav>button>span_b]:font-semibold [&_nav>button>span_b]:leading-3 [&_nav>button>span_b]:text-white [&_nav>button_small]:max-w-full [&_nav>button_small]:whitespace-nowrap [&_nav>button_small]:text-[10.5px] [&_nav>button_small]:font-medium [&_nav>button_small]:tracking-[-0.01em] [&_nav>button_small]:text-[var(--text)] min-[371px]:[&_nav>button_small]:text-xs [&_nav>button:nth-child(1)>span_svg]:text-amber-500 [&_nav>button:nth-child(2)>span_svg]:text-sky-600 [&_nav>button:nth-child(3)>span_svg]:text-indigo-600 [&_nav>button:nth-child(4)>span_svg]:text-rose-600 [&_nav>button:nth-child(5)>span_svg]:text-teal-600`}
             >
                 <SectionHeader
                     title={compactCopy.orders.title}
@@ -335,39 +340,81 @@ export function AccountPage() {
                 />
                 <nav className="account-order-shortcuts">
                     <AccountShortcut
+                        inlineCount={desktop}
                         icon={<WalletCards />}
                         label={compactCopy.orders.unpaid}
-                        count={counts.pending}
+                        count={desktop ? countsQuery.data?.pending : counts.pending}
                         onClick={() => navigateTo({ name: 'orders', tab: 'pending' })}
                     />
                     <AccountShortcut
+                        inlineCount={desktop}
                         icon={<Package />}
                         label={compactCopy.orders.processing}
-                        count={counts.shipping}
+                        count={desktop ? countsQuery.data?.shipping : counts.shipping}
                         onClick={() => navigateTo({ name: 'orders', tab: 'shipping' })}
                     />
                     <AccountShortcut
+                        inlineCount={desktop}
                         icon={<Truck />}
                         label={compactCopy.orders.shipped}
-                        count={counts.receiving}
+                        count={desktop ? countsQuery.data?.receiving : counts.receiving}
                         onClick={() => navigateTo({ name: 'orders', tab: 'receiving' })}
                     />
                     <AccountShortcut
+                        inlineCount={desktop}
                         icon={<RotateCcw />}
                         label={compactCopy.orders.returns}
-                        count={activeAfterSalesCount}
+                        count={desktop && !afterSalesQuery.data ? undefined : activeAfterSalesCount}
                         onClick={() => navigateTo({ name: 'orders', tab: 'service' })}
                     />
                     <AccountShortcut
+                        inlineCount={desktop}
                         icon={<ClipboardList />}
                         label={compactCopy.orders.all}
-                        count={0}
+                        count={desktop ? customer?.orders.totalItems : 0}
                         onClick={() => navigateTo({ name: 'orders', tab: 'all' })}
                     />
                 </nav>
             </section>
 
-            {customer && (
+            {desktop && latestOrder ? (
+                <article className="desktop-account-latest-order">
+                    <button
+                        type="button"
+                        className="desktop-account-order-product"
+                        onClick={() => navigateTo({ name: 'order-detail', id: latestOrder.id })}
+                    >
+                        <OrderImage order={latestOrder} />
+                        <span>
+                            <strong>
+                                {latestOrder.lines[0]?.productVariant.name ||
+                                    (isZh ? '订单商品' : 'Order item')}
+                            </strong>
+                            {latestOrder.lines.length > 1 && (
+                                <small>
+                                    {isZh
+                                        ? `另有 ${latestOrder.lines.length - 1} 种商品，详情中可查看`
+                                        : `${latestOrder.lines.length - 1} more products in order details`}
+                                </small>
+                            )}
+                        </span>
+                    </button>
+                    <span>
+                        {isZh ? `共 ${latestOrder.totalQuantity} 件` : `${latestOrder.totalQuantity} items`}
+                    </span>
+                    <strong>{formatMoney(latestOrder.totalWithTax, latestOrder.currencyCode, locale)}</strong>
+                    <span>{orderStateLabel(latestOrder.state, language)}</span>
+                    <button
+                        type="button"
+                        className="desktop-outline-button"
+                        onClick={() => navigateTo({ name: 'order-detail', id: latestOrder.id })}
+                    >
+                        {isZh ? '查看订单' : 'View order'}
+                    </button>
+                </article>
+            ) : null}
+
+            {customer && !desktop && (
                 <section
                     className={`${accountSectionClass} [&>header]:mb-1 [&>header]:flex [&>header]:min-h-[26px] [&>header]:items-center [&>header]:justify-between [&>header>span]:flex [&>header>span]:items-center [&>header>span]:gap-1.5 [&>header>span]:text-[13.5px] [&>header_strong]:font-bold [&>header_strong]:text-[var(--text)] [&>button]:grid [&>button]:min-h-[52px] [&>button]:w-full [&>button]:grid-cols-[40px_minmax(0,1fr)_14px] [&>button]:items-center [&>button]:gap-2.5 [&>button]:rounded-[10px] [&>button]:border [&>button]:border-[var(--line)] [&>button]:bg-[var(--soft)] [&>button]:px-2.5 [&>button]:py-1.5 [&>button]:text-left hover:[&>button]:border-[var(--accent)] [&>button>img]:size-10 [&>button>.responsive-picture>img]:size-10 [&>button>.image-placeholder]:size-10 [&>button>img]:rounded-md [&>button>.responsive-picture>img]:rounded-md [&>button>.image-placeholder]:rounded-md [&>button>span_strong]:text-[12.5px] [&>button>span_strong]:font-semibold [&>button>span_strong]:text-emerald-500 [&>button>span_small]:mt-0.5 [&>button>span_small]:block [&>button>span_small]:text-[11.5px] [&>button>span_small]:text-[var(--muted)]`}
                 >
@@ -414,34 +461,43 @@ export function AccountPage() {
                 </section>
             )}
 
-            <section className={accountSectionClass} aria-label={isZh ? '常用服务' : 'Services'}>
+            <section
+                className={`account-services ${accountSectionClass}`}
+                aria-label={isZh ? '常用服务' : 'Services'}
+            >
                 <h2 className="account-services-title">{isZh ? '常用服务' : 'Services'}</h2>
                 <div className="account-service-grid grid grid-cols-4 gap-x-1 gap-y-1.5 lg:gap-4 [&>button]:flex [&>button]:min-h-14 [&>button]:min-w-0 [&>button]:flex-col [&>button]:items-center [&>button]:justify-center [&>button]:gap-1 [&>button]:rounded-lg [&>button]:border-0 [&>button]:bg-transparent [&>button]:px-0.5 [&>button]:py-1 hover:[&>button]:bg-[var(--soft)] [&>button>span]:relative [&>button>span]:grid [&>button>span]:size-[34px] [&>button>span]:place-items-center [&>button>span]:rounded-[10px] [&>button>span]:bg-[var(--soft)] [&>button>span]:text-[var(--text)] [&>button>span]:transition-all hover:[&>button>span]:-translate-y-0.5 hover:[&>button>span]:shadow-[0_4px_10px_rgba(0,0,0,0.08)] [&>button>span_svg]:size-5 [&>button:nth-child(1)>span]:bg-rose-50 [&>button:nth-child(1)>span]:text-rose-500 [&>button:nth-child(2)>span]:bg-red-50 [&>button:nth-child(2)>span]:text-red-500 [&>button:nth-child(3)>span]:bg-amber-50 [&>button:nth-child(3)>span]:text-amber-500 [&>button:nth-child(4)>span]:bg-emerald-50 [&>button:nth-child(4)>span]:text-emerald-500 [&>button:nth-child(5)>span]:bg-sky-50 [&>button:nth-child(5)>span]:text-sky-500 [&>button:nth-child(6)>span]:bg-indigo-50 [&>button:nth-child(6)>span]:text-indigo-500 [&>button:nth-child(7)>span]:bg-violet-50 [&>button:nth-child(7)>span]:text-violet-500 [&>button:nth-child(8)>span]:bg-slate-100 [&>button:nth-child(8)>span]:text-slate-600 [&>button>span_em]:absolute [&>button>span_em]:-right-2 [&>button>span_em]:-top-[5px] [&>button>span_em]:grid [&>button>span_em]:h-4 [&>button>span_em]:min-w-5 [&>button>span_em]:place-items-center [&>button>span_em]:rounded-full [&>button>span_em]:border-[1.5px] [&>button>span_em]:border-white [&>button>span_em]:bg-[var(--accent)] [&>button>span_em]:px-1 [&>button>span_em]:text-[9px] [&>button>span_em]:font-semibold [&>button>span_em]:not-italic [&>button>span_em]:leading-[13px] [&>button>span_em]:text-white [&>button>b]:max-w-full [&>button>b]:overflow-hidden [&>button>b]:text-ellipsis [&>button>b]:whitespace-nowrap [&>button>b]:text-xs [&>button>b]:font-medium [&>button>b]:text-[var(--text)]">
-                    <ServiceButton
-                        icon={<Heart />}
-                        label={compactCopy.services.favorites}
-                        badge={favoriteProductCount > 0 ? String(favoriteProductCount) : undefined}
-                        onClick={() => navigateTo({ name: 'favorites' })}
-                    />
-                    <ServiceButton
-                        icon={<TicketPercent />}
-                        label={compactCopy.services.coupons}
-                        badge={couponCount > 0 ? String(couponCount) : undefined}
-                        onClick={() => navigateTo({ name: 'coupons' })}
-                    />
+                    {!desktop && (
+                        <ServiceButton
+                            icon={<Heart />}
+                            label={compactCopy.services.favorites}
+                            badge={favoriteProductCount > 0 ? String(favoriteProductCount) : undefined}
+                            onClick={() => navigateTo({ name: 'favorites' })}
+                        />
+                    )}
+                    {!desktop && (
+                        <ServiceButton
+                            icon={<TicketPercent />}
+                            label={compactCopy.services.coupons}
+                            badge={couponCount > 0 ? String(couponCount) : undefined}
+                            onClick={() => navigateTo({ name: 'coupons' })}
+                        />
+                    )}
                     <ServiceButton
                         icon={<Megaphone />}
                         label={compactCopy.services.announcements}
                         badge={announcementCount > 0 ? String(announcementCount) : undefined}
                         onClick={() => navigateTo({ name: 'announcements' })}
                     />
-                    <ServiceButton
-                        icon={<MapPin />}
-                        label={compactCopy.services.addresses}
-                        onClick={() =>
-                            customer ? navigateTo({ name: 'addresses' }) : navigateTo({ name: 'login' })
-                        }
-                    />
+                    {!desktop && (
+                        <ServiceButton
+                            icon={<MapPin />}
+                            label={compactCopy.services.addresses}
+                            onClick={() =>
+                                customer ? navigateTo({ name: 'addresses' }) : navigateTo({ name: 'login' })
+                            }
+                        />
+                    )}
                     <ServiceButton
                         icon={<Bell />}
                         label={compactCopy.services.messages}
@@ -467,7 +523,7 @@ export function AccountPage() {
 
             {!!recentVariants.length && (
                 <section
-                    className={`${accountSectionClass} ${compactSectionHeaderClass} pt-0 lg:pt-0 [&>.section-header]:mb-0 [&>.section-header]:min-h-11 lg:[&>.section-header]:min-h-[52px] [&>div>article]:grid [&>div>article]:min-h-[68px] [&>div>article]:grid-cols-[54px_minmax(0,1fr)_auto] [&>div>article]:items-center [&>div>article]:gap-2.5 [&>div>article]:border-t [&>div>article]:border-[var(--line)] [&>div>article]:py-[7px] [&_article>img]:size-[54px] [&_article>.responsive-picture>img]:size-[54px] [&_article>.image-placeholder]:size-[54px] [&_article>img]:rounded-[7px] [&_article>.responsive-picture>img]:rounded-[7px] [&_article>.image-placeholder]:rounded-[7px] [&_article>img]:object-contain [&_article_strong]:block [&_article_strong]:overflow-hidden [&_article_strong]:text-ellipsis [&_article_strong]:whitespace-nowrap [&_article_small]:mt-1 [&_article_small]:block [&_article_small]:text-[var(--muted)] [&_article>button]:min-h-9 [&_article>button]:rounded-md [&_article>button]:border [&_article>button]:border-[var(--accent)] [&_article>button]:bg-white [&_article>button]:px-2.5 [&_article>button]:text-[var(--accent)]`}
+                    className={`account-recent-purchases ${accountSectionClass} ${compactSectionHeaderClass} pt-0 lg:pt-0 [&>.section-header]:mb-0 [&>.section-header]:min-h-11 lg:[&>.section-header]:min-h-[52px] [&>div>article]:grid [&>div>article]:min-h-[68px] [&>div>article]:grid-cols-[54px_minmax(0,1fr)_auto] [&>div>article]:items-center [&>div>article]:gap-2.5 [&>div>article]:border-t [&>div>article]:border-[var(--line)] [&>div>article]:py-[7px] [&_article>img]:size-[54px] [&_article>.responsive-picture>img]:size-[54px] [&_article>.image-placeholder]:size-[54px] [&_article>img]:rounded-[7px] [&_article>.responsive-picture>img]:rounded-[7px] [&_article>.image-placeholder]:rounded-[7px] [&_article>img]:object-contain [&_article_strong]:block [&_article_strong]:overflow-hidden [&_article_strong]:text-ellipsis [&_article_strong]:whitespace-nowrap [&_article_small]:mt-1 [&_article_small]:block [&_article_small]:text-[var(--muted)] [&_article>button]:min-h-9 [&_article>button]:rounded-md [&_article>button]:border [&_article>button]:border-[var(--accent)] [&_article>button]:bg-white [&_article>button]:px-2.5 [&_article>button]:text-[var(--accent)]`}
                 >
                     <SectionHeader
                         title={isZh ? '最近买过' : 'Recently purchased'}
@@ -493,20 +549,22 @@ export function AccountPage() {
                 </section>
             )}
 
-            <ProductSection
-                centerLabel={isZh ? '专属推荐' : 'Just for you'}
-                className="lg:col-span-full [&_.section-header]:relative [&_.section-header]:grid [&_.section-header]:min-h-[70px] [&_.section-header]:grid-cols-1 [&_.section-header]:place-items-center [&_.section-header]:overflow-hidden [&_.section-header-center-label]:grid [&_.section-header-center-label]:min-h-[70px] [&_.section-header-center-label]:w-full [&_.section-header-center-label]:place-items-center [&_.section-header-center-label]:bg-[image:var(--account-recommendation-image)] [&_.section-header-center-label]:bg-[length:min(100%,330px)_auto] [&_.section-header-center-label]:bg-center [&_.section-header-center-label]:bg-no-repeat [&_.section-header-center-label]:text-[16px] [&_.section-header-center-label]:font-semibold [&_.section-header-center-label]:tracking-[0.16em] [&_.section-header-center-label]:text-[var(--accent-ink)] [&_.section-header-center-label]:[text-indent:0.16em]"
-                style={
-                    {
-                        '--account-recommendation-image': `url(${JSON.stringify(ACCOUNT_RECOMMENDATION_CREST_IMAGE)})`,
-                    } as CSSProperties
-                }
-                products={products.slice(0, 4)}
-                market={market}
-                locale={locale}
-                language={language}
-                onProduct={product => navigateTo({ name: 'product', id: product.id })}
-            />
+            {!desktop && (
+                <ProductSection
+                    centerLabel={isZh ? '专属推荐' : 'Just for you'}
+                    className="lg:col-span-full [&_.section-header]:relative [&_.section-header]:grid [&_.section-header]:min-h-[70px] [&_.section-header]:grid-cols-1 [&_.section-header]:place-items-center [&_.section-header]:overflow-hidden [&_.section-header-center-label]:grid [&_.section-header-center-label]:min-h-[70px] [&_.section-header-center-label]:w-full [&_.section-header-center-label]:place-items-center [&_.section-header-center-label]:bg-[image:var(--account-recommendation-image)] [&_.section-header-center-label]:bg-[length:min(100%,330px)_auto] [&_.section-header-center-label]:bg-center [&_.section-header-center-label]:bg-no-repeat [&_.section-header-center-label]:text-[16px] [&_.section-header-center-label]:font-semibold [&_.section-header-center-label]:tracking-[0.16em] [&_.section-header-center-label]:text-[var(--accent-ink)] [&_.section-header-center-label]:[text-indent:0.16em]"
+                    style={
+                        {
+                            '--account-recommendation-image': `url(${JSON.stringify(ACCOUNT_RECOMMENDATION_CREST_IMAGE)})`,
+                        } as CSSProperties
+                    }
+                    products={products.slice(0, 4)}
+                    market={market}
+                    locale={locale}
+                    language={language}
+                    onProduct={product => navigateTo({ name: 'product', id: product.id })}
+                />
+            )}
             <LegalFooter
                 storefrontName={storefrontName}
                 language={language}

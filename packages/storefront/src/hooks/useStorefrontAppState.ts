@@ -51,6 +51,7 @@ import {
     StorefrontLanguage,
     StorefrontLegalIdentity,
 } from '../types';
+import { useStorefrontVisualPreset } from '../use-storefront-visual-preset';
 
 import { useStorefrontCustomerData } from './useStorefrontCustomerData';
 import { useStorefrontBrandColors, useStorefrontMetadata } from './useStorefrontDocument';
@@ -179,6 +180,7 @@ export function useStorefrontAppState() {
         }),
         [configQuery.data],
     );
+    useStorefrontVisualPreset(api, market, languageCodeFor(language));
     configureMoneyDisplay({
         displayCurrencyCode,
         cnyPerUsdtRate: configQuery.data?.currencyConfiguration?.cnyPerUsdtRate ?? null,
@@ -809,6 +811,7 @@ export function useStorefrontAppState() {
     }, [
         api,
         cart,
+        cartState.pending,
         couponAutoSelectionAttemptKey,
         couponAutoSelectionScope,
         customer,

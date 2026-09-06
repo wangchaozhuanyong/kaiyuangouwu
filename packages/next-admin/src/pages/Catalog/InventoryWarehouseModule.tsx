@@ -211,7 +211,7 @@ export function InventoryWarehouseModule() {
             variantOptions: {
                 skip: page * pageSize,
                 take: pageSize,
-                sort: { updatedAt: 'DESC' },
+                sort: { updatedAt: 'DESC', id: 'DESC' },
                 filter: deferredSearchTerm
                     ? {
                           _or: [
@@ -226,7 +226,7 @@ export function InventoryWarehouseModule() {
         notifyOnNetworkStatusChange: true,
     });
     const locationQuery = useQuery<StockLocationsData>(GET_STOCK_LOCATIONS, {
-        variables: { options: { skip: 0, take: 100, sort: { name: 'ASC' } } },
+        variables: { options: { skip: 0, take: 100, sort: { name: 'ASC', id: 'ASC' } } },
         fetchPolicy: 'cache-and-network',
     });
     const {
@@ -251,7 +251,7 @@ export function InventoryWarehouseModule() {
         if (loadedCount >= result.totalItems) return;
         loadingAllLocationsRef.current = true;
         void fetchMoreLocations({
-            variables: { options: { skip: loadedCount, take: 100, sort: { name: 'ASC' } } },
+            variables: { options: { skip: loadedCount, take: 100, sort: { name: 'ASC', id: 'ASC' } } },
             updateQuery: (previous, { fetchMoreResult }) => ({
                 stockLocations: {
                     ...fetchMoreResult.stockLocations,
