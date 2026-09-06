@@ -7,7 +7,9 @@ import { restorePublicQueryCache, storefrontQueryClient, watchPublicQueryCache }
 import { router } from './router';
 import { StorefrontErrorBoundary } from './StorefrontErrorBoundary';
 import './styles.css';
+import './styles/desktop-catalog.css';
 import './styles/desktop-layout.css';
+import './styles/visual-presets.css';
 
 const rootElement = document.getElementById('root');
 

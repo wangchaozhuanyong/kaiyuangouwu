@@ -104,7 +104,7 @@ export function useProductEditorData({
             options: {
                 skip: facetPage * facetPageSize,
                 take: facetPageSize,
-                sort: { name: 'ASC' },
+                sort: { name: 'ASC', id: 'ASC' },
                 filter: deferredFacetSearch ? { name: { contains: deferredFacetSearch } } : {},
             },
         },
@@ -123,7 +123,7 @@ export function useProductEditorData({
                 topLevelOnly: true,
                 skip: 0,
                 take: 100,
-                sort: { position: 'ASC' },
+                sort: { position: 'ASC', id: 'ASC' },
             },
         },
         fetchPolicy: 'cache-first',
@@ -147,7 +147,7 @@ export function useProductEditorData({
                     topLevelOnly: true,
                     skip: loadedCount,
                     take: 100,
-                    sort: { position: 'ASC' },
+                    sort: { position: 'ASC', id: 'ASC' },
                 },
             },
             updateQuery: (previous, { fetchMoreResult }) => ({
@@ -182,7 +182,7 @@ export function useProductEditorData({
         activeChannel: CatalogChannel;
         channels: { items: CatalogChannel[]; totalItems: number };
     }>(GET_CATALOG_CHANNELS, {
-        variables: { options: { skip: 0, take: 100, sort: { code: 'ASC' } } },
+        variables: { options: { skip: 0, take: 100, sort: { code: 'ASC', id: 'ASC' } } },
         fetchPolicy: 'cache-and-network',
     });
 
@@ -199,7 +199,7 @@ export function useProductEditorData({
         if (loadedCount >= channels.totalItems) return;
         loadingAllCatalogChannelsRef.current = true;
         void fetchMoreCatalogChannels({
-            variables: { options: { skip: loadedCount, take: 100, sort: { code: 'ASC' } } },
+            variables: { options: { skip: loadedCount, take: 100, sort: { code: 'ASC', id: 'ASC' } } },
             updateQuery: (previous, { fetchMoreResult }) => ({
                 ...previous,
                 channels: {
@@ -239,7 +239,7 @@ export function useProductEditorData({
             options: {
                 skip: assetPage * assetPageSize,
                 take: assetPageSize,
-                sort: { updatedAt: 'DESC' },
+                sort: { updatedAt: 'DESC', id: 'DESC' },
                 filter: {
                     type: { eq: 'IMAGE' },
                     ...(deferredAssetSearch ? { name: { contains: deferredAssetSearch } } : {}),
@@ -262,7 +262,7 @@ export function useProductEditorData({
             options: {
                 skip: optionGroupPage * optionGroupPageSize,
                 take: optionGroupPageSize,
-                sort: { name: 'ASC' },
+                sort: { name: 'ASC', id: 'ASC' },
                 filter: deferredOptionGroupSearch ? { name: { contains: deferredOptionGroupSearch } } : {},
             },
         },

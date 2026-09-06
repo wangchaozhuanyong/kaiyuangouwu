@@ -306,16 +306,22 @@ export function BusinessServicesCopyModule() {
                                 <span className="text-[10px] font-bold uppercase tracking-[0.24em] text-violet-300">
                                     Business services
                                 </span>
-                                <h3 className="mt-4 text-2xl font-bold leading-tight">
-                                    {preview.title || '—'}
-                                </h3>
-                                <p className="mt-3 text-sm leading-6 text-slate-300">{preview.body || '—'}</p>
-                                {linkValue.trim() && linkIsValid ? (
-                                    <span className="mt-5 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-xs font-bold text-white">
-                                        {previewLanguage === 'zh_Hans' ? '访问链接' : 'Open link'}
-                                        <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-                                    </span>
-                                ) : null}
+                                <div className="mt-4 flex items-center gap-4">
+                                    <div className="min-w-0 flex-1 [overflow-wrap:anywhere]">
+                                        <h3 className="text-2xl font-bold leading-tight">
+                                            {preview.title || '—'}
+                                        </h3>
+                                        <p className="mt-3 text-sm leading-6 text-slate-300">
+                                            {preview.body || '—'}
+                                        </p>
+                                    </div>
+                                    {linkValue.trim() && linkIsValid ? (
+                                        <span className="inline-flex min-h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-white/10 px-3 py-1.5 text-xs font-bold text-white">
+                                            {previewLanguage === 'zh_Hans' ? '点击前往' : 'Open link'}
+                                            <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+                                        </span>
+                                    ) : null}
+                                </div>
                             </div>
                         </section>
                     </div>

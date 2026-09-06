@@ -118,7 +118,7 @@ export class UsdtPaymentService {
         const intents = await this.connection.getRepository(ctx, StorefrontUsdtPaymentIntent).find({
             where: { channelId: ctx.channelId },
             relations: { order: true, channel: true, quote: true },
-            order: { createdAt: 'DESC' },
+            order: { createdAt: 'DESC', id: 'DESC' },
             take: 100,
         });
         return intents.map(intent => this.toIntentView(intent));
@@ -131,7 +131,7 @@ export class UsdtPaymentService {
         const intents = await this.connection.getRepository(ctx, StorefrontUsdtPaymentIntent).find({
             ...(channelId ? { where: { channelId } } : {}),
             relations: { order: true, channel: true, quote: true },
-            order: { createdAt: 'DESC' },
+            order: { createdAt: 'DESC', id: 'DESC' },
             take: 200,
         });
         return intents.map(intent => this.toIntentView(intent));

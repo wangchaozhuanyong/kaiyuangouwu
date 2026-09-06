@@ -43,7 +43,7 @@ export class StoreDomainService {
         return this.connection.getRepository(ctx, StoreDomain).find({
             where: { channelId },
             relations: { channel: true },
-            order: { isPrimary: 'DESC', createdAt: 'ASC' },
+            order: { isPrimary: 'DESC', createdAt: 'ASC', id: 'ASC' },
         });
     }
 

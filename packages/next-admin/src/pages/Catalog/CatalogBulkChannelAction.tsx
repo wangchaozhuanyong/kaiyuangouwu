@@ -29,7 +29,7 @@ export function CatalogBulkChannelAction() {
         variables: {
             options: {
                 take: 100,
-                sort: { updatedAt: 'DESC' },
+                sort: { updatedAt: 'DESC', id: 'DESC' },
                 ...(deferredSearch ? { filter: { name: { contains: deferredSearch } } } : {}),
             },
         },

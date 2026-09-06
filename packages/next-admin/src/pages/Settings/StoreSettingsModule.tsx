@@ -17,6 +17,7 @@ import { type StoreManagementResult, type StoreProfileRecord } from '../../graph
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { useUrlTab } from '../../hooks/use-url-tab';
 import { getChannelDisplayName } from '../../utils/channel-display';
+import { dataTableSortPolicy } from '../../utils/data-table-sort-policy';
 import { toUserFacingError } from '../../utils/user-facing-error';
 
 import { BusinessBasicsPanel } from './BusinessSettingsPanels';
@@ -47,6 +48,8 @@ import {
 import { CurrencyAndRatesPanel, StoreUsdtPanel } from './StoreFinancePanel';
 import { CommerceModePanel, DomainsPanel, SellersPanel, StoresPanel } from './StorePanels';
 
+const directoryOptions = (skip: number) => ({ skip, take: 100, sort: dataTableSortPolicy.newestCreated });
+
 export function StoreSettingsModule() {
     const { hasAnyPermission } = useAdminPermissions();
     const { document, paymentMethodCustomFields, sellerCustomFields, shippingMethodCustomFields } =
@@ -63,9 +66,9 @@ export function StoreSettingsModule() {
     const loadingAllStoreSettingsRef = useRef(false);
     const query = useQuery<StoreManagementResult>(document, {
         variables: {
-            sellerOptions: { skip: 0, take: 100, sort: { createdAt: 'DESC' } },
-            paymentMethodOptions: { skip: 0, take: 100, sort: { createdAt: 'DESC' } },
-            shippingMethodOptions: { skip: 0, take: 100, sort: { createdAt: 'DESC' } },
+            sellerOptions: directoryOptions(0),
+            paymentMethodOptions: directoryOptions(0),
+            shippingMethodOptions: directoryOptions(0),
         },
         fetchPolicy: 'cache-and-network',
     });
@@ -95,9 +98,9 @@ export function StoreSettingsModule() {
         loadingAllStoreSettingsRef.current = true;
         void fetchMoreStoreSettings({
             variables: {
-                sellerOptions: { skip: sellerCount, take: 100, sort: { createdAt: 'DESC' } },
-                paymentMethodOptions: { skip: paymentCount, take: 100, sort: { createdAt: 'DESC' } },
-                shippingMethodOptions: { skip: shippingCount, take: 100, sort: { createdAt: 'DESC' } },
+                sellerOptions: directoryOptions(sellerCount),
+                paymentMethodOptions: directoryOptions(paymentCount),
+                shippingMethodOptions: directoryOptions(shippingCount),
             },
             updateQuery: (previous, { fetchMoreResult }) => ({
                 ...previous,

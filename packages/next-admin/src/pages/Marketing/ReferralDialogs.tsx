@@ -487,7 +487,7 @@ export function PosterEditor({
         variables: {
             options: {
                 take: 30,
-                sort: { updatedAt: 'DESC' },
+                sort: { updatedAt: 'DESC', id: 'DESC' },
                 filter: {
                     type: { eq: 'IMAGE' },
                     ...(deferredAssetSearch ? { name: { contains: deferredAssetSearch } } : {}),

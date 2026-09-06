@@ -622,12 +622,12 @@ function QuickQueryCard({
 
 function SecurityNotice() {
     return (
-        <aside className="rounded-xl border border-emerald-200 bg-emerald-50 p-5 text-xs leading-5 text-emerald-950">
+        <aside className="rounded-xl border border-emerald-200 bg-emerald-50 p-5 text-xs leading-5 text-emerald-900">
             <div className="flex items-center gap-2 font-bold">
                 <ShieldCheck className="h-4 w-4 text-emerald-700" aria-hidden="true" />
                 密钥安全说明
             </div>
-            <ul className="mt-3 space-y-2 text-[11px] text-emerald-900/80">
+            <ul className="mt-3 space-y-2">
                 <li>• 账号仅属于当前登录管理员，其他员工无法读取。</li>
                 <li>• 密钥由后端使用 AES-256-GCM 加密保存。</li>
                 <li>• 动态码在当前浏览器通过 Web Crypto 生成。</li>

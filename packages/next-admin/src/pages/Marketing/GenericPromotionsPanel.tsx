@@ -50,7 +50,7 @@ const emptyDraft = (): PromotionDraft => ({
 
 export function GenericPromotionsPanel() {
     const query = useQuery<GenericPromotionsData>(GENERIC_PROMOTIONS_QUERY, {
-        variables: { options: { take: 100, sort: { createdAt: 'DESC' } } },
+        variables: { options: { take: 100, sort: { createdAt: 'DESC', id: 'DESC' } } },
         fetchPolicy: 'cache-and-network',
     });
     const [editingId, setEditingId] = useState<string | 'new' | null>(null);

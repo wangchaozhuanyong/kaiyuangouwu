@@ -1,4 +1,4 @@
-import { keepPreviousData, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { ArrowUpDown, ChevronUp, LayoutGrid, Search, SlidersHorizontal, WifiOff } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -9,16 +9,13 @@ import { ShopApi } from '../api';
 import { minimumProductPrice, priceInputToMinorUnits, sortCategoryProducts } from '../catalog-page-utils';
 import { centeredHorizontalScrollLeft } from '../category-navigation';
 import { CategoryClientPluginSlot } from '../client-plugins/client-plugin-registry';
+import { CategoryPaginationStatus } from '../components/common/category-pagination-status';
 import { ProductRow } from '../components/common/product-row';
+import { useCategoryPagination } from '../hooks/useCategoryPagination';
 import { languageCodeFor } from '../i18n';
 import { offlineLoadError } from '../loading-state';
 import { productAvailability } from '../product-availability';
-import {
-    PUBLIC_QUERY_GC_TIME,
-    PUBLIC_QUERY_STALE_TIME,
-    publicQueryMeta,
-    storefrontQueryKeys,
-} from '../query-client';
+import { PUBLIC_QUERY_STALE_TIME, publicQueryMeta, storefrontQueryKeys } from '../query-client';
 import { CategoryPageContext } from '../storefront-page-contexts';
 import { routeNavigateOptions } from '../storefront-router';
 import { EmptyState, ListSkeleton, Sheet } from '../storefront-ui/page-shell';
@@ -135,26 +132,17 @@ export function CategoryPage() {
         minPriceWithTax: priceInputToMinorUnits(minimumPriceInput),
         maxPriceWithTax: priceInputToMinorUnits(maximumPriceInput),
     };
-    const catalogQuery = useInfiniteQuery({
-        queryKey: storefrontQueryKeys.catalog(
-            storefrontQueryKeys.market(market),
-            vendureLanguageCode,
-            catalogInput,
-        ),
-        queryFn: ({ pageParam, signal }) =>
-            api.catalog({ ...catalogInput, skip: pageParam, take: 12 }, signal),
-        initialPageParam: 0,
-        getNextPageParam: (lastPage, pages) => {
-            const loaded = pages.reduce((total, page) => total + page.items.length, 0);
-            return loaded < lastPage.totalItems ? loaded : undefined;
-        },
-        enabled: collections.length > 0 && !!selectedCollectionId && selectedCollectionId !== 'all',
-        staleTime: PUBLIC_QUERY_STALE_TIME,
-        gcTime: PUBLIC_QUERY_GC_TIME,
-        refetchOnMount: false,
-        placeholderData: keepPreviousData,
-        meta: publicQueryMeta(),
+    const catalogEnabled = collections.length > 0 && !!selectedCollectionId && selectedCollectionId !== 'all';
+    const pagination = useCategoryPagination({
+        api,
+        market,
+        languageCode: vendureLanguageCode,
+        language,
+        input: catalogInput,
+        enabled: catalogEnabled,
+        suspended: filterOpen || allCategoriesOpen,
     });
+    const catalogQuery = pagination.query;
 
     const matchesFilters = useCallback(
         (
@@ -184,16 +172,10 @@ export function CategoryPage() {
         sortMode,
         locale,
     );
-    const categoryProducts = collections.length
-        ? (catalogQuery.data?.pages.flatMap(page => page.items) ?? [])
-        : fallbackProducts;
+    const categoryProducts = collections.length ? pagination.products : fallbackProducts;
     const visibleProducts = categoryProducts;
-    const totalItems = collections.length
-        ? (catalogQuery.data?.pages[0]?.totalItems ?? 0)
-        : fallbackProducts.length;
-    const remainingItems = Math.max(totalItems - categoryProducts.length, 0);
+    const totalItems = collections.length ? pagination.totalItems : fallbackProducts.length;
     const categoryLoading = collections.length ? catalogQuery.isLoading : loading;
-    const loadingMore = catalogQuery.isFetchingNextPage;
     const categoryError = collections.length
         ? catalogQuery.isPaused && catalogQuery.data === undefined
             ? offlineLoadError(language)
@@ -241,7 +223,6 @@ export function CategoryPage() {
         };
     }, [allCategoriesOpen]);
 
-    const loadMore = () => catalogQuery.fetchNextPage();
     const draftResultCount = products.filter(product => {
         const collectionMatch =
             !collections.length ||
@@ -445,7 +426,11 @@ export function CategoryPage() {
                     </aside>
                 )}
 
-                <section className="category-results">
+                <section
+                    className="category-results"
+                    ref={pagination.resultsRef}
+                    data-scroll-restoration-id="category-results"
+                >
                     <nav
                         className="sort-bar sort-bar-five"
                         aria-label={isZh ? '排序和筛选' : 'Sort and filter'}
@@ -528,29 +513,28 @@ export function CategoryPage() {
                                     />
                                 ))}
                             </div>
-                            {categoryError && (
-                                <div className="search-load-error" role="alert">
-                                    <span>{categoryError}</span>
-                                    <button type="button" onClick={() => void loadMore()}>
-                                        {isZh ? '重试' : 'Retry'}
-                                    </button>
-                                </div>
-                            )}
-                            {remainingItems > 0 && (
-                                <button
-                                    className="load-more-button"
-                                    type="button"
-                                    disabled={loadingMore}
-                                    onClick={() => void loadMore()}
-                                >
-                                    {loadingMore
-                                        ? isZh
-                                            ? '加载中'
-                                            : 'Loading'
-                                        : isZh
-                                          ? `加载更多（剩余 ${remainingItems} 件）`
-                                          : `Load more (${remainingItems} remaining)`}
-                                </button>
+                            {catalogEnabled && (
+                                <CategoryPaginationStatus
+                                    sentinelRef={pagination.sentinelRef}
+                                    language={language}
+                                    state={
+                                        !pagination.online || catalogQuery.isPaused
+                                            ? 'offline'
+                                            : catalogQuery.isPlaceholderData ||
+                                                (catalogQuery.isFetching && !catalogQuery.isFetchingNextPage)
+                                              ? 'updating'
+                                              : catalogQuery.isFetchingNextPage
+                                                ? 'loading'
+                                                : catalogQuery.isError
+                                                  ? 'error'
+                                                  : !catalogQuery.hasNextPage
+                                                    ? 'done'
+                                                    : pagination.automaticSupported
+                                                      ? 'idle'
+                                                      : 'manual'
+                                    }
+                                    onContinue={() => void pagination.loadMore()}
+                                />
                             )}
                         </>
                     ) : (

@@ -468,7 +468,8 @@ export interface HomePageProps {
     onRetry: () => void;
 }
 
-export function HomePage() {
+export function HomePage({ embedded = false }: { embedded?: boolean } = {}) {
+    const PageTag = embedded ? 'section' : 'main';
     const navigate = useNavigate();
     const navigateTo = (route: RouteState) => void navigate(routeNavigateOptions(route) as never);
     const {
@@ -809,7 +810,7 @@ export function HomePage() {
     const colorfulQuickLinks = isColorfulHomepageStyle(quickBlock?.settings?.visualStyle);
 
     return (
-        <main className="page home-page">
+        <PageTag className={`page home-page${embedded ? ' is-embedded' : ''}`}>
             <header className="topbar home-topbar">
                 <button
                     className="brand"
@@ -1252,7 +1253,7 @@ export function HomePage() {
                     ) : null}
                 </>
             )}
-        </main>
+        </PageTag>
     );
 }
 

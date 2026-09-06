@@ -136,7 +136,7 @@ export class AdminNotificationService {
         const where = options.status ? { deliveryStatus: options.status } : {};
         const [items, totalItems] = await this.connection.rawConnection
             .getRepository(AdminNotificationDelivery)
-            .findAndCount({ where, order: { createdAt: 'DESC' }, skip, take });
+            .findAndCount({ where, order: { createdAt: 'DESC', id: 'DESC' }, skip, take });
         return { items, totalItems };
     }
 
