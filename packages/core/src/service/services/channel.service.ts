@@ -11,7 +11,7 @@ import {
 import { DEFAULT_CHANNEL_CODE } from '@vendure/common/lib/shared-constants';
 import { ID, PaginatedList, Type } from '@vendure/common/lib/shared-types';
 import { unique } from '@vendure/common/lib/unique';
-import { FindOptionsWhere } from 'typeorm';
+import { FindOptionsWhere, LockNotSupportedOnGivenDriverError } from 'typeorm';
 
 import { RelationPaths } from '../../api';
 import { RequestContext } from '../../api/common/request-context';
@@ -29,6 +29,7 @@ import { ChannelAware, ListQueryOptions } from '../../common/types/common-types'
 import { assertFound, idsAreEqual } from '../../common/utils';
 import { ConfigService } from '../../config/config.service';
 import { TransactionalConnection } from '../../connection/transactional-connection';
+import { Product } from '../../entity';
 import { VendureEntity } from '../../entity/base/base.entity';
 import { Channel } from '../../entity/channel/channel.entity';
 import { Order } from '../../entity/order/order.entity';
@@ -113,14 +114,17 @@ export class ChannelService {
      * @description
      * Assigns a ChannelAware entity to the default Channel as well as any channel
      * specified in the RequestContext. This method will not save the entity to the database, but
-     * assigns the `channels` property of the entity.
+     * assigns the `channels` property of the entity. Products and variants pass `false` for
+     * `includeDefaultChannel`: sales membership must always be explicit.
      */
     async assignToCurrentChannel<T extends ChannelAware & VendureEntity>(
         entity: T,
         ctx: RequestContext,
+        includeDefaultChannel = true,
     ): Promise<T> {
-        const defaultChannel = await this.getDefaultChannel(ctx);
-        const channelIds = unique([ctx.channelId, defaultChannel.id]);
+        const channelIds = includeDefaultChannel
+            ? unique([ctx.channelId, (await this.getDefaultChannel(ctx)).id])
+            : [ctx.channelId];
         entity.channels = channelIds.map(id => ({ id })) as any;
         await this.eventBus.publish(new ChangeChannelEvent(ctx, entity, [ctx.channelId], 'assigned'));
         return entity;
@@ -141,6 +145,7 @@ export class ChannelService {
         ctx: RequestContext,
         entityType: Type<T>,
         entityId: T['id'],
+        lock = false,
     ): Promise<Array<{ channelId: ID }>> {
         const repository = this.connection.getRepository(ctx, entityType);
 
@@ -162,13 +167,16 @@ export class ChannelService {
             );
         }
 
-        return await this.connection
+        const query = this.connection
             .getRepository(ctx, entityType)
             .manager.createQueryBuilder()
             .select(`channel.${inverseJunctionColumnName}`, 'channelId')
             .from(junctionTableName, 'channel')
-            .where(`channel.${junctionColumnName} = :entityId`, { entityId })
-            .execute();
+            .where(`channel.${junctionColumnName} = :entityId`, { entityId });
+        if (lock && ['mysql', 'mariadb', 'postgres'].includes(this.connection.rawConnection.options.type)) {
+            query.setLock('pessimistic_write');
+        }
+        return query.execute();
     }
 
     /**
@@ -230,6 +238,29 @@ export class ChannelService {
         entityId: ID,
         channelIds: ID[],
     ): Promise<T | undefined> {
+        const isCatalogEntity =
+            (entityType as Type<VendureEntity>) === Product ||
+            (entityType as Type<VendureEntity>) === ProductVariant;
+        if (
+            isCatalogEntity &&
+            !this.connection.getRepository(ctx, entityType).manager.queryRunner?.isTransactionActive
+        ) {
+            return this.connection.withTransaction(ctx, txCtx =>
+                this.removeFromChannels(txCtx, entityType, entityId, channelIds),
+            );
+        }
+        if (isCatalogEntity) {
+            try {
+                await this.connection
+                    .getRepository(ctx, entityType)
+                    .createQueryBuilder('entity')
+                    .where('entity.id = :id', { id: entityId })
+                    .setLock('pessimistic_write')
+                    .getOne();
+            } catch (error) {
+                if (!(error instanceof LockNotSupportedOnGivenDriverError)) throw error;
+            }
+        }
         const entity = await this.connection.getRepository(ctx, entityType).findOne({
             loadEagerRelations: false,
             relationLoadStrategy: 'query',
@@ -240,14 +271,22 @@ export class ChannelService {
         if (!entity) {
             return;
         }
-        const assignedChannels = await this.getAssignedEntityChannels(ctx, entityType, entityId);
-
-        const existingChannelIds = channelIds.filter(id =>
-            assignedChannels.some(ec => idsAreEqual(ec.channelId, id)),
+        const assignedChannels = await this.getAssignedEntityChannels(
+            ctx,
+            entityType,
+            entityId,
+            isCatalogEntity,
         );
+
+        const existingChannelIds = assignedChannels
+            .filter(assigned => channelIds.some(id => idsAreEqual(assigned.channelId, id)))
+            .map(assigned => assigned.channelId);
 
         if (!existingChannelIds.length) {
             return;
+        }
+        if (isCatalogEntity && assignedChannels.length === existingChannelIds.length) {
+            throw new UserInputError('商品必须至少保留一个销售店铺，请先分配到其他店铺');
         }
         await this.connection
             .getRepository(ctx, entityType)

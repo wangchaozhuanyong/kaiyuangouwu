@@ -351,7 +351,7 @@ export function CatalogModule() {
                     </span>
                     <span className="text-[11px] text-blue-700">
                         {activeChannel && isDefaultChannelCode(activeChannel.code)
-                            ? '系统默认渠道汇总所有商店的商品；查看单店数据请切换到对应商店'
+                            ? '后台总目录汇总全部商品；商城只展示明确分配到该店铺的商品'
                             : '当前商店的商品、库存和价格'}
                     </span>
                 </div>

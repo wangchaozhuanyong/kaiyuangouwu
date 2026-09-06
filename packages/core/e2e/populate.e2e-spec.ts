@@ -3,6 +3,7 @@ import { CurrencyCode, LanguageCode } from '@vendure/common/lib/generated-types'
 import { User } from '@vendure/core';
 import { populate } from '@vendure/core/cli';
 import { createTestEnvironment, E2E_DEFAULT_CHANNEL_TOKEN } from '@vendure/testing';
+import gql from 'graphql-tag';
 import path from 'path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -15,6 +16,7 @@ import { FragmentOf } from './graphql/graphql-admin';
 import {
     createChannelDocument,
     getAssetListDocument,
+    getChannelsDocument,
     getCollectionsDocument,
     getProductListDocument,
     getProductWithVariantsDocument,
@@ -24,7 +26,16 @@ type ChannelFragment = FragmentOf<typeof channelFragment>;
 
 describe('populate() function', () => {
     let channel2: ChannelFragment;
-    const { server, adminClient } = createTestEnvironment({
+    const channel2Input = {
+        code: 'Channel 2',
+        token: 'channel-2',
+        currencyCode: CurrencyCode.EUR,
+        defaultLanguageCode: LanguageCode.en,
+        defaultShippingZoneId: 'T_1',
+        defaultTaxZoneId: 'T_2',
+        pricesIncludeTax: true,
+    };
+    const { server, adminClient, shopClient } = createTestEnvironment({
         ...testConfig(),
         // logger: new DefaultLogger(),
         customFields: {
@@ -64,17 +75,7 @@ describe('populate() function', () => {
             customerCount: 1,
         });
         await adminClient.asSuperAdmin();
-        const { createChannel } = await adminClient.query(createChannelDocument, {
-            input: {
-                code: 'Channel 2',
-                token: 'channel-2',
-                currencyCode: CurrencyCode.EUR,
-                defaultLanguageCode: LanguageCode.en,
-                defaultShippingZoneId: 'T_1',
-                defaultTaxZoneId: 'T_2',
-                pricesIncludeTax: true,
-            },
-        });
+        const { createChannel } = await adminClient.query(createChannelDocument, { input: channel2Input });
         channel2 = createChannel as ChannelFragment;
         await server.destroy();
     }, TEST_SETUP_TIMEOUT_MS);
@@ -152,6 +153,18 @@ describe('populate() function', () => {
             app = await populate(
                 async () => {
                     await server.bootstrap();
+                    // Sql.js restores its seed on bootstrap, so recreate the target if the earlier
+                    // test-only Channel was not persisted. Otherwise an unknown token falls back
+                    // to the sole default Channel and the test never exercises a store import.
+                    adminClient.setChannelToken(E2E_DEFAULT_CHANNEL_TOKEN);
+                    await adminClient.asSuperAdmin();
+                    const { channels } = await adminClient.query(getChannelsDocument);
+                    if (!channels.items.some(channel => channel.token === channel2.token)) {
+                        const { createChannel } = await adminClient.query(createChannelDocument, {
+                            input: channel2Input,
+                        });
+                        channel2 = createChannel as ChannelFragment;
+                    }
                     return server.app;
                 },
                 initialDataForPopulate,
@@ -182,10 +195,27 @@ describe('populate() function', () => {
             expect(collections.items.map(i => i.name).sort()).toEqual(['Collection 2']);
         });
 
-        it('product also assigned to default channel', async () => {
-            adminClient.setChannelToken(E2E_DEFAULT_CHANNEL_TOKEN);
+        it('retains the admin aggregate without assigning imported products to the default storefront', async () => {
+            adminClient.setChannelToken(channel2.token);
             const { products } = await adminClient.query(getProductListDocument);
-            expect(products.items.map(i => i.name).includes('Model Hand')).toBe(true);
+            const imported = products.items.find(item => item.name === 'Model Hand');
+            if (!imported) throw new Error('Imported product missing from target channel');
+            adminClient.setChannelToken(E2E_DEFAULT_CHANNEL_TOKEN);
+            const { product } = await adminClient.query(getProductWithVariantsDocument, { id: imported.id });
+            expect(product?.channels.map(channel => channel.id)).toEqual([channel2.id]);
+            expect(product?.variants[0].channels.map(channel => channel.id)).toEqual([channel2.id]);
+            const query = gql`
+                query ($id: ID!) {
+                    product(id: $id) {
+                        id
+                    }
+                }
+            `;
+            shopClient.setChannelToken(E2E_DEFAULT_CHANNEL_TOKEN);
+            expect((await shopClient.query(query, { id: imported.id })).product).toBeNull();
+            shopClient.setChannelToken(channel2.token);
+            expect((await shopClient.query(query, { id: imported.id })).product.id).toBe(imported.id);
+            shopClient.setChannelToken(E2E_DEFAULT_CHANNEL_TOKEN);
         });
     });
 

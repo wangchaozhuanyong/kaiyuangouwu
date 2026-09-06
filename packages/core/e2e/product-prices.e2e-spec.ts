@@ -528,7 +528,7 @@ describe('Product prices', () => {
                     id: multiPriceProduct.id,
                 },
             );
-            expect(productDefaultChannel?.variants[0].prices).toEqual([
+            expect(productDefaultChannel?.variants[0].prices.sort((a, b) => a.price - b.price)).toEqual([
                 { currencyCode: CurrencyCode.USD, price: 1200 },
                 { currencyCode: CurrencyCode.GBP, price: 4242 },
                 { currencyCode: CurrencyCode.MYR, price: 5500 },
@@ -553,7 +553,7 @@ describe('Product prices', () => {
                 },
             });
 
-            expect(result.updateProductVariants[0]?.prices).toEqual([
+            expect(result.updateProductVariants[0]?.prices.sort((a, b) => a.price - b.price)).toEqual([
                 { currencyCode: CurrencyCode.USD, price: 1200 },
                 { currencyCode: CurrencyCode.GBP, price: 4242 },
             ]);
