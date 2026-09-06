@@ -1,7 +1,6 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { ReferralPosterTemplate } from './types';
 
 import {
     availablePosterTemplates,
@@ -13,6 +12,7 @@ import {
 } from './referral-poster-layout';
 import { ReferralPosterModal } from './referral-poster-modal';
 import { readStorefrontStylesheet } from './test-stylesheet';
+import { type ReferralPosterTemplate } from './types';
 
 function template(id: string, name: string, enabled = true): ReferralPosterTemplate {
     const copy = Object.fromEntries(
