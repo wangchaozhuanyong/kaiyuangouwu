@@ -41,6 +41,7 @@ import { ObjectLiteral, ObjectType, Repository } from 'typeorm';
 
 import { contentTranslationLoggerCtx } from './constants.js';
 import { ContentTranslationService, contentTranslationInternals } from './content-translation.service.js';
+import { TranslationProviderError } from './translation-provider-error.js';
 import { ContentTranslationFormat } from './types.js';
 
 type TranslationField = {
@@ -363,7 +364,15 @@ export class NativeContentTranslationService implements OnApplicationBootstrap {
                     continue;
                 }
                 try {
-                    await this.translateEntity(ctx, entity, { translations: [source] });
+                    const translated = await this.translateEntity(ctx, entity, { translations: [source] });
+                    if (translated === false) {
+                        result.failed++;
+                        if (result.errors.length < 50)
+                            result.errors.push(
+                                `${entity.constructor.name}#${entity.id}: 中文已保存，英文等待自动重试`,
+                            );
+                        continue;
+                    }
                     await this.refreshProductSearchIndex(ctx, entity);
                     result.processed++;
                 } catch (error) {
@@ -383,7 +392,7 @@ export class NativeContentTranslationService implements OnApplicationBootstrap {
         return result;
     }
 
-    async translateEntity(ctx: RequestContext, entity: NativeEntity, input: any): Promise<void> {
+    async translateEntity(ctx: RequestContext, entity: NativeEntity, input: any): Promise<void | false> {
         const definition = definitions.get(entity.constructor);
         if (!definition) return;
         const entityType = entity.constructor.name;
@@ -462,15 +471,24 @@ export class NativeContentTranslationService implements OnApplicationBootstrap {
                 text: String(source[field.path]),
                 format: field.format ?? 'TEXT',
             }));
-        if (segments.length && !this.translations.isConfigured()) {
-            throw new UserInputError(
-                'English content could not be generated because the translation provider is not configured',
-            );
+        let failure: TranslationProviderError | undefined;
+        let generated: { translations: Array<{ key: string; text: string }> } = { translations: [] };
+        try {
+            if (segments.length) {
+                if (!this.translations.isConfigured()) throw new TranslationProviderError('CONFIGURATION');
+                generated = await this.translations.translate({ segments });
+                if (
+                    segments.some(segment => {
+                        const text = generated.translations.find(item => item.key === segment.key)?.text;
+                        return !text?.trim() || contentTranslationInternals.containsHanContent(text);
+                    })
+                )
+                    throw new TranslationProviderError('INVALID_RESPONSE');
+            }
+        } catch (error) {
+            if (!(error instanceof TranslationProviderError)) throw error;
+            failure = error;
         }
-
-        const generated = segments.length
-            ? await this.translations.translate({ segments })
-            : { provider: this.translations.providerName(), translations: [] };
         const generatedByField = new Map(generated.translations.map(item => [item.key, item.text]));
         const nextTarget =
             target ??
@@ -480,6 +498,15 @@ export class NativeContentTranslationService implements OnApplicationBootstrap {
             });
         for (const field of definition.fields) {
             if (manualFields.has(field.path) || currentAutoFields.has(field.path)) continue;
+            if (failure && (field.deriveFrom || segments.some(segment => segment.key === field.path))) {
+                const previous = String(target?.[field.path] ?? '');
+                nextTarget[field.path] = contentTranslationInternals.containsHanContent(previous)
+                    ? ''
+                    : previous;
+                if (field.deriveFrom && !nextTarget[field.path])
+                    nextTarget[field.path] = `${entityType.toLowerCase()}-${entity.id}`;
+                continue;
+            }
             if (field.deriveFrom) {
                 const seed = String(
                     generatedByField.get(field.deriveFrom) ??
@@ -494,7 +521,7 @@ export class NativeContentTranslationService implements OnApplicationBootstrap {
             }
         }
         for (const field of definition.fields) {
-            if (field.required && !String(nextTarget[field.path] ?? '').trim()) {
+            if (!failure && field.required && !String(nextTarget[field.path] ?? '').trim()) {
                 throw new UserInputError(
                     `Cannot save ${entityType}: automatic English translation for required field "${field.path}" is empty`,
                 );
@@ -505,6 +532,12 @@ export class NativeContentTranslationService implements OnApplicationBootstrap {
         for (const field of definition.fields) {
             const isManual = manualFields.has(field.path);
             const isStale = staleFields.has(field.path);
+            const pending =
+                failure &&
+                !field.deriveFrom &&
+                !isManual &&
+                !currentAutoFields.has(field.path) &&
+                segments.some(segment => segment.key === field.path);
             await this.translations.recordState(ctx, {
                 channelId: ctx.channelId,
                 entityType,
@@ -512,11 +545,19 @@ export class NativeContentTranslationService implements OnApplicationBootstrap {
                 fieldPath: field.path,
                 sourceText: String(source[field.path] ?? ''),
                 translatedText: String(nextTarget[field.path] ?? ''),
-                status: isStale ? 'STALE' : isManual ? 'MANUAL_LOCKED' : 'AUTO_TRANSLATED',
+                status: pending
+                    ? 'PENDING'
+                    : isStale
+                      ? 'STALE'
+                      : isManual
+                        ? 'MANUAL_LOCKED'
+                        : 'AUTO_TRANSLATED',
                 origin: isManual ? 'MANUAL' : 'AUTO',
                 locked: isManual,
+                error: pending ? failure?.message : null,
             });
         }
+        if (failure) return false;
     }
 
     private translationRepository(
@@ -531,7 +572,7 @@ export class NativeContentTranslationService implements OnApplicationBootstrap {
         return this.connection.getRepository(ctx, translationsRelation.inverseEntityMetadata.target);
     }
 
-    private async refreshProductSearchIndex(ctx: RequestContext, entity: NativeEntity): Promise<void> {
+    async refreshProductSearchIndex(ctx: RequestContext, entity: NativeEntity): Promise<void> {
         if (!(entity instanceof Product) && !(entity instanceof ProductVariant)) return;
         const requestContextService = this.requestContextService;
         const contexts =

@@ -70,6 +70,7 @@ export interface LocalizedContentFieldInput {
     existingLocked?: boolean | null;
     format?: ContentTranslationFormat;
     required?: boolean;
+    maxTargetLength?: number;
 }
 
 export interface PreparedLocalizedContentField {
@@ -79,4 +80,6 @@ export interface PreparedLocalizedContentField {
     status: ContentTranslationStatus;
     origin: ContentTranslationOrigin;
     locked: boolean;
+    error?: string;
+    reusedTranslation?: boolean;
 }
