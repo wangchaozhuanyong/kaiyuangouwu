@@ -1,5 +1,5 @@
 import { ApolloProvider } from '@apollo/client/react';
-import { StrictMode, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import { ShopApi } from '../../../storefront/src/api';
@@ -46,7 +46,7 @@ export function StorefrontFixture() {
 }
 
 createRoot(document.getElementById('root')!).render(
-    <StrictMode>
+    <React.StrictMode>
         {new URL(location.href).searchParams.get('mode') === 'shop' ? (
             <StorefrontFixture />
         ) : (
@@ -62,5 +62,5 @@ createRoot(document.getElementById('root')!).render(
                 </main>
             </ApolloProvider>
         )}
-    </StrictMode>,
+    </React.StrictMode>,
 );

@@ -80,6 +80,7 @@
 - `packages/storefront/src/storefront-traffic.spec.ts`
 - `packages/storefront/src/storefront-ui/storefront-traffic-preference.tsx`
 - `packages/storefront/src/pages/account-page.tsx`
+- `packages/store-management-plugin/src/traffic/traffic-api.schema.ts`
 - `packages/store-management-plugin/STOREFRONT_TRAFFIC_IMPLEMENTATION.md`（本文）
 
 ## 当前发布分支验证（2026-09-06）
@@ -88,7 +89,7 @@
 - 本机独立 MySQL 8.4：迁移测试 5 项（含真实 SQLJS/MySQL 创建、重复执行、唯一约束和旧记录保留）；服务测试 11 项（含跨日重试、跨店隔离、登录关联、并发去重）；真实 Shop/Admin API 与 Chromium 桌面/手机报表联调 6 项通过；后台与店铺使用不同测试域名，验证排除设置确实保存于店铺域名。
 - 修复 MySQL 重复事件 `INSERT IGNORE` 没有新 ID 时的 TypeORM 自动回填错误；仍通过数据库唯一索引实现幂等，并读取原事件验证归属。
 - Storefront 相关 73 项、服务相关 27 项、Next Admin 相关 14 项通过；前台/后台构建、服务构建和类型检查、仓库规定的 lint/架构/发布策略检查通过。
-- 既有返利配置并发回归仍有失败，已定位到主干旧实现的事务快照读取；由独立并发修复 PR 解决后再重跑，不能将该失败隐藏为通过。
+- 合入独立并发修复 PR #152 后，真实 MySQL 返利集成 3 项全部通过；访问统计 API 与浏览器联调 6 项重新通过。测试夹具使用明确的 React 入口，不依赖导入整理前的偶然状态。
 - 运行凭据均为本机临时测试夹具，不读取生产凭据；未把测试数字当作线上访客。
 
 ## 原开发阶段验证（2026-09-05，历史记录）

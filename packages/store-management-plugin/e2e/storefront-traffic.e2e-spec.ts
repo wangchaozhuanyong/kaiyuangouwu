@@ -227,7 +227,17 @@ describe('storefront traffic Shop/Admin API integration', () => {
             const automatedErrors: string[] = [];
             automated.on('pageerror', error => automatedErrors.push(error.message));
             await automated.goto(`${url}?mode=shop`);
-            await browserExpect(automated.getByRole('heading', { name: '采集联调测试页' })).toBeVisible();
+            try {
+                await browserExpect(automated.getByRole('heading', { name: '采集联调测试页' })).toBeVisible();
+            } catch (error) {
+                process.stdout.write(
+                    JSON.stringify({
+                        fixtureErrors: automatedErrors,
+                        body: await automated.locator('body').innerText(),
+                    }) + '\n',
+                );
+                throw error;
+            }
             expect(automatedErrors).toEqual([]);
             expect(
                 (await adminClient.query(REPORT, { days: 1 })).storefrontTraffic.days[0].pageViewCount,
