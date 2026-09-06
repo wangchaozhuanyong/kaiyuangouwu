@@ -480,7 +480,15 @@ function AuthBlockPreview({
                             }
                         >
                             <AuthVisual content={content} language={isZh ? 'zh' : 'en'} />
-                            <div style={{ padding: 32, color: '#172033', display: 'grid', gap: 16 }}>
+                            <div
+                                style={{
+                                    padding: 32,
+                                    background: '#ffffff',
+                                    color: '#172033',
+                                    display: 'grid',
+                                    gap: 16,
+                                }}
+                            >
                                 <h3 style={{ margin: 0 }}>
                                     {block.type === 'AUTH_LOGIN'
                                         ? isZh
