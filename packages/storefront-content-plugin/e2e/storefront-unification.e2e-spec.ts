@@ -1008,6 +1008,15 @@ describe('unified storefront Admin API to Shop API', () => {
                     });
                 await page.goto(pageUrl);
                 await preview.goto(previewUrl);
+                await preview.evaluate(() => document.documentElement.classList.add('dark'));
+                await browserExpect(preview.locator('.store-auth-visual + div')).toHaveCSS(
+                    'background-color',
+                    'rgb(255, 255, 255)',
+                );
+                await browserExpect(preview.locator('.store-auth-visual + div')).toHaveCSS(
+                    'color',
+                    'rgb(23, 32, 51)',
+                );
                 await browserExpect(page.locator('html')).toHaveAttribute(
                     'data-storefront-preset',
                     'modern-oriental',
