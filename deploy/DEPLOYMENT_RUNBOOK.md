@@ -146,6 +146,8 @@ bun run --cwd packages/dev-server build:production-runtime -- --require-platform
 
 配置读取的单次请求最多等待 60 秒；超时或接口失败仅报告固定操作名和错误类别，不输出请求、响应或凭据。只读核对允许检查仍运行的旧 main 祖先版本，并同时记录核对工具 SHA 与运行版本 SHA，便于诊断失败发布。运行目录、版本标记、PM2 和祖先关系仍须验证；此能力不放宽任何发布或配置保留检查。
 
+配置核对访问本机 Shop API 时，必须使用认证 Admin API 返回的 `StoreProfile.primaryDomain` 作为 Host，并验证返回的 `activeChannel.id`。生产 `require-domain` 路由不会接受仅靠 Channel token 的 localhost 请求。Admin 凭据只用于本机 Admin API，Shop 请求不携带管理员会话；缺失已验证主域名时停止，不能绕过域名路由。
+
 大马通整店受管内容使用独立的 `damatong_storefront` 与 `damatong_channel_token` 发布范围，不复用容易混淆 Channel code 与 token 的通用字段。生产只接受公开的受审选择器 `damatong_channel_token=my-malaysia`；该字段不是生产 Channel 凭据。发布脚本先从 `damatong.net` 的 Shop API 读取域名实际路由的 Channel code，再在已认证的 Admin Channel 列表中精确匹配，并只在进程内使用真实 token，日志不得输出该 token。首次启用必须先单独发布本工作流和服务器保护逻辑，且该门禁引导版本不得携带大马通内容或勾选发布范围；确认生产已安装新保护逻辑后，第二个正式版本才可携带发布器、图片与内容并勾选该范围。
 
 制品工作流成功后，`Deploy Production Runtime` 会自动接管手动制品任务和仅由上述 Skill 路径触发的 `main` push 发布。它使用 GitHub OIDC 临时凭证承担
