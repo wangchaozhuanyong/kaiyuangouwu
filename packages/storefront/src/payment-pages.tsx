@@ -437,8 +437,8 @@ export function PaymentPage({
                                         : 'TRON is reconciled every minute and this page checks the order every 5 seconds.'
                                     : isTestMode
                                       ? isZh
-                                          ? '模拟付款成功，不真实扣款、发货或扣库存，也不产生收入和返利。'
-                                          : 'Simulates payment without a real charge, delivery, stock deduction, revenue or rewards.'
+                                          ? '按订单应付金额模拟付款成功，确认后正常下单，无需真实转账。'
+                                          : 'Simulates successful payment of the amount due and completes checkout without a real transfer.'
                                       : availability.status === 'READY'
                                         ? isZh
                                             ? '请确认订单和金额后选择支付方式。'
@@ -449,7 +449,7 @@ export function PaymentPage({
                             </span>
                         </div>
                     </section>
-                    {!isTestMode && customer && referralProgramQuery.data?.enabled && (
+                    {customer && referralProgramQuery.data?.enabled && (
                         <section className="payment-method-section">
                             <h2>{isZh ? '返利余额抵扣' : 'Referral balance'}</h2>
                             <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4">
