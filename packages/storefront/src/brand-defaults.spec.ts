@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import type { Product } from './types';
 
 import { storefrontShareImage } from './hooks/useStorefrontDocument';
 import {
@@ -9,6 +8,7 @@ import {
     STOREFRONT_WORDMARK_IMAGE,
 } from './storefront-images';
 import { DEFAULT_STOREFRONT_NAMES } from './storefront-utils';
+import { type Product } from './types';
 
 describe('neutral store defaults', () => {
     it('keeps neutral public fallback names while retaining historical artwork', () => {

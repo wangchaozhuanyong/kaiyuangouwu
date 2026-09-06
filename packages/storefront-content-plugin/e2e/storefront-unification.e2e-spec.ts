@@ -631,7 +631,7 @@ describe('unified storefront Admin API to Shop API', () => {
                         translations: copy('覆盖', 'Overwrite'),
                     },
                 }),
-            ).rejects.toThrow(/独立设置接口/);
+            ).rejects.toThrow(/请通过店铺皮肤设置/);
         }
         adminClient.setChannelToken(stores[0].token);
         await expect(
@@ -733,7 +733,7 @@ describe('unified storefront Admin API to Shop API', () => {
             await browserExpect(stale.locator('input[name="desktopLayout"][value="catalog"]')).toBeChecked();
             await first.locator('input[name="presetId"][value="classic"]').check();
             await first.getByRole('button', { name: '保存到当前店铺' }).click();
-            await browserExpect(first.getByRole('status')).toContainText('已保存');
+            await browserExpect(first.getByRole('status').filter({ hasText: '已保存' })).toBeVisible();
             await stale.locator('input[name="desktopLayout"][value="classic"]').check();
             await stale.getByRole('button', { name: '保存到当前店铺' }).click();
             await browserExpect(stale.getByRole('alert')).toContainText('其他管理员');

@@ -1,4 +1,3 @@
-import type { StorefrontVisualPresetConfig } from '../../storefront-content-plugin/src/visual-presets';
 import type { ShopApiContext } from './api/client-context';
 import type { CartController } from './cart/cart-controller';
 import type { StorefrontPageViewInput } from './storefront-traffic';
@@ -52,6 +51,8 @@ import type {
     SubmitStorefrontReviewInput,
     VendureLanguageCode,
 } from './types';
+
+import { type StorefrontVisualPresetConfig } from '../../storefront-content-plugin/src/visual-presets';
 
 import { AccountApi } from './api/account';
 import { CartCheckoutApi } from './api/cart-checkout';

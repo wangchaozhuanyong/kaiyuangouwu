@@ -1,7 +1,8 @@
-import type { CSSProperties } from 'react';
-import type { StorefrontContentBlock } from './types';
+import { type CSSProperties } from 'react';
 
 import { configuredColor } from '../../storefront-content-plugin/src/shared/auth-visual';
+
+import { type StorefrontContentBlock } from './types';
 
 export function managedContentStyle(block: StorefrontContentBlock): CSSProperties {
     const foreground = configuredColor(block.textColor);

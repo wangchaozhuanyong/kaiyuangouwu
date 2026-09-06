@@ -2,7 +2,8 @@
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { Product, StorefrontConfig } from '../types';
+
+import { type Product, type StorefrontConfig } from '../types';
 
 import { useStorefrontBrandColors, useStorefrontMetadata } from './useStorefrontDocument';
 
