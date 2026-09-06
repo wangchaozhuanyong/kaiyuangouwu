@@ -1,21 +1,11 @@
 import type { ContentBlock, ContentBlockType } from './storefront-content.graphql';
 
-export const fixedHomepageModuleTypes = [
-    'HERO',
-    'NOTICE',
-    'QUICK_LINKS',
-    'CORE_CATEGORIES',
-    'CATEGORY_AD',
-    'FEATURED_COLLECTION',
-    'COUPONS',
-    'FLASH_SALE',
-    'BEST_SELLERS',
-    'RECOMMENDATIONS',
-    'STORY',
-    'TRUST_BAR',
-] as const satisfies readonly ContentBlockType[];
-
-export type FixedHomepageModuleType = (typeof fixedHomepageModuleTypes)[number];
+import {
+    fixedHomepageModuleTypes,
+    homepageModuleDefaults,
+    type FixedHomepageModuleType,
+} from '../homepage-module-definitions';
+export { fixedHomepageModuleTypes, type FixedHomepageModuleType } from '../homepage-module-definitions';
 
 export interface HomepageModuleDescriptor {
     type: FixedHomepageModuleType;
@@ -31,15 +21,15 @@ export interface HomepageModuleDescriptor {
     allowsMultipleRecords?: boolean;
 }
 
-export const homepageModuleRegistry: readonly HomepageModuleDescriptor[] = [
+const homepageModuleLabels: ReadonlyArray<
+    Omit<HomepageModuleDescriptor, 'defaultPosition' | 'defaultEnabled'>
+> = [
     {
         type: 'HERO',
         labelZh: '首页主视觉',
         labelEn: 'Homepage hero',
         descriptionZh: '固定轮播版式，单独管理图片、文案、跳转和播放速度。',
         descriptionEn: 'Fixed carousel layout with dedicated slide and autoplay settings.',
-        defaultPosition: 10,
-        defaultEnabled: true,
         settingsPath: '/storefront-carousel',
         settingsLabelZh: '管理轮播',
         settingsLabelEn: 'Manage carousel',
@@ -51,8 +41,6 @@ export const homepageModuleRegistry: readonly HomepageModuleDescriptor[] = [
         labelEn: 'Notice',
         descriptionZh: '固定公告条样式，可设置多条公告和滚动间隔。',
         descriptionEn: 'Fixed notice strip with multiple messages and rotation timing.',
-        defaultPosition: 20,
-        defaultEnabled: true,
     },
     {
         type: 'QUICK_LINKS',
@@ -60,8 +48,6 @@ export const homepageModuleRegistry: readonly HomepageModuleDescriptor[] = [
         labelEn: 'Quick links',
         descriptionZh: '固定快捷入口样式，可设置入口名称、图标和跳转。',
         descriptionEn: 'Fixed shortcut layout with configurable labels, icons and targets.',
-        defaultPosition: 30,
-        defaultEnabled: true,
     },
     {
         type: 'CORE_CATEGORIES',
@@ -69,8 +55,6 @@ export const homepageModuleRegistry: readonly HomepageModuleDescriptor[] = [
         labelEn: 'Core category cards',
         descriptionZh: '固定双卡片版式，选择两个核心分类或集合。',
         descriptionEn: 'Fixed two-card layout for key categories or collections.',
-        defaultPosition: 40,
-        defaultEnabled: false,
     },
     {
         type: 'CATEGORY_AD',
@@ -79,8 +63,6 @@ export const homepageModuleRegistry: readonly HomepageModuleDescriptor[] = [
         descriptionZh: '固定“分类主视觉 + 商品卡”版式，配置图片、分类跳转并选择最多 4 个商品。',
         descriptionEn:
             'Fixed category visual plus product-card layout with an image, category destination and up to four products.',
-        defaultPosition: 50,
-        defaultEnabled: false,
     },
     {
         type: 'FEATURED_COLLECTION',
@@ -89,8 +71,6 @@ export const homepageModuleRegistry: readonly HomepageModuleDescriptor[] = [
         descriptionZh: '独立策展版式：左侧展示集合主题与入口，右侧横向陈列管理员精选的商品。',
         descriptionEn:
             'Editorial collection layout with a themed introduction and a horizontal rail of selected products.',
-        defaultPosition: 60,
-        defaultEnabled: false,
     },
     {
         type: 'COUPONS',
@@ -98,8 +78,6 @@ export const homepageModuleRegistry: readonly HomepageModuleDescriptor[] = [
         labelEn: 'Coupon area',
         descriptionZh: '固定优惠券票面，自动同步当前可领取的优惠券活动。',
         descriptionEn: 'Fixed coupon cards synchronized with currently claimable campaigns.',
-        defaultPosition: 70,
-        defaultEnabled: true,
         settingsPath: '/store-coupons',
         settingsLabelZh: '管理优惠券',
         settingsLabelEn: 'Manage coupons',
@@ -110,8 +88,6 @@ export const homepageModuleRegistry: readonly HomepageModuleDescriptor[] = [
         labelEn: 'Flash sale',
         descriptionZh: '固定秒杀版式，自动同步当前进行中的秒杀活动。',
         descriptionEn: 'Fixed flash-sale layout synchronized with active sale campaigns.',
-        defaultPosition: 80,
-        defaultEnabled: true,
         settingsPath: '/store-flash-sales',
         settingsLabelZh: '管理秒杀',
         settingsLabelEn: 'Manage flash sales',
@@ -127,8 +103,6 @@ export const homepageModuleRegistry: readonly HomepageModuleDescriptor[] = [
             'Pinned items come first; remaining slots use cumulative sales from placed, non-cancelled orders in this store.',
             'If all sales are zero, order is randomized daily; out-of-stock items can appear.',
         ].join(' '),
-        defaultPosition: 90,
-        defaultEnabled: true,
     },
     {
         type: 'RECOMMENDATIONS',
@@ -143,8 +117,6 @@ export const homepageModuleRegistry: readonly HomepageModuleDescriptor[] = [
             'Purchased categories outrank viewed categories, unseen products come first,',
             'and no-history results are randomized daily. Manual product selection is not currently supported.',
         ].join(' '),
-        defaultPosition: 100,
-        defaultEnabled: true,
     },
     {
         type: 'STORY',
@@ -153,8 +125,6 @@ export const homepageModuleRegistry: readonly HomepageModuleDescriptor[] = [
         descriptionZh: '独立图文叙事版式：大幅场景图搭配标题、正文和阅读入口，用于品牌与服务介绍。',
         descriptionEn:
             'Editorial split layout pairing a large visual with story copy and a reading destination.',
-        defaultPosition: 110,
-        defaultEnabled: false,
     },
     {
         type: 'TRUST_BAR',
@@ -162,10 +132,16 @@ export const homepageModuleRegistry: readonly HomepageModuleDescriptor[] = [
         labelEn: 'Service guarantees',
         descriptionZh: '固定服务保障样式，可设置保障项目文案。',
         descriptionEn: 'Fixed service guarantee strip with configurable messages.',
-        defaultPosition: 120,
-        defaultEnabled: true,
     },
 ];
+
+export const homepageModuleRegistry: readonly HomepageModuleDescriptor[] = homepageModuleDefaults.map(
+    module => {
+        const descriptor = homepageModuleLabels.find(item => item.type === module.type);
+        if (!descriptor) throw new Error('Missing homepage module descriptor: ' + module.type);
+        return { ...descriptor, defaultPosition: module.position, defaultEnabled: module.enabled };
+    },
+);
 
 export interface HomepageLayoutEntry {
     key: string;

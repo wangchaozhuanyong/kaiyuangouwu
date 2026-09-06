@@ -3,12 +3,12 @@ import { Check, ChevronRight, Minus, Package, ShoppingBag, TicketPercent } from 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { appliedCouponLabel } from '../storefront-coupons';
+import { CartPageContext } from '../storefront-page-contexts';
 import { routeHref, routeNavigateOptions, type RouteState } from '../storefront-router';
 import { CartGroup, CouponSheet } from '../storefront-ui/cart-ui';
 import { EmptyState, InlineError, ListSkeleton } from '../storefront-ui/page-shell';
 import { formatMoney } from '../storefront-ui/product-display';
 import { ProductSection } from '../storefront-ui/product-section';
-import { useStorefront } from '../StorefrontContext';
 import {
     ActiveCustomer,
     MarketConfig,
@@ -20,7 +20,7 @@ import {
 
 // TODO: Fix internal imports later
 
-interface CartPageProps {
+export interface CartPageProps {
     isActive?: boolean;
     cart: StorefrontCart | null;
     customer: ActiveCustomer | null;
@@ -81,7 +81,7 @@ export function CartPage() {
         onRetry,
         onApplyCoupon,
         onRemoveCoupon,
-    } = useStorefront<CartPageProps>();
+    } = CartPageContext.useValue();
     const isZh = language === 'zh';
     const lines = cart?.lines ?? [];
     const [invalidOpen, setInvalidOpen] = useState(false);

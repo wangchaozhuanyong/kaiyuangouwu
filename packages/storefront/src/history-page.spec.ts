@@ -7,7 +7,7 @@ import { ShopApi } from './api';
 import { BrowsingHistoryPage } from './pages/browsing-history-page';
 import { FavoriteProductsPage } from './pages/favorite-products-page';
 import { createStorefrontQueryClient, storefrontQueryKeys } from './query-client';
-import { StorefrontContext } from './StorefrontContext';
+import { BrowsingHistoryPageContext, FavoriteProductsPageContext } from './storefront-page-contexts';
 import { MarketConfig, Product } from './types';
 
 vi.mock('@tanstack/react-router', async importOriginal => ({
@@ -51,7 +51,7 @@ function renderHistory(cachedProducts?: Product[]) {
         );
     }
     const page = createElement(
-        StorefrontContext.Provider,
+        BrowsingHistoryPageContext.Provider,
         {
             value: {
                 api: { productsByIds: vi.fn() } as unknown as ShopApi,
@@ -59,8 +59,6 @@ function renderHistory(cachedProducts?: Product[]) {
                 market,
                 locale: market.locale,
                 language: 'zh' as const,
-                addingVariantId: null,
-                onAdd: vi.fn(),
                 onClear: vi.fn(),
             },
         },
@@ -83,7 +81,7 @@ function renderFavorites(cachedProducts?: Product[]) {
         );
     }
     const page = createElement(
-        StorefrontContext.Provider,
+        FavoriteProductsPageContext.Provider,
         {
             value: {
                 api: { productsByIds: vi.fn() } as unknown as ShopApi,
@@ -91,8 +89,6 @@ function renderFavorites(cachedProducts?: Product[]) {
                 market,
                 locale: market.locale,
                 language: 'zh' as const,
-                addingVariantId: null,
-                onAdd: vi.fn(),
                 onRemove: vi.fn(),
                 onClear: vi.fn(),
             },

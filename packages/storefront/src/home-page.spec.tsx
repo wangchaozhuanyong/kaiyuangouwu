@@ -1,9 +1,15 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
-import { buildHomeNoticeItems, CurrencySelectionSheet, HomePage, NoticeDetailSheet } from './pages/home-page';
+import {
+    buildHomeNoticeItems,
+    CurrencySelectionSheet,
+    HomePage,
+    NoticeDetailSheet,
+    type HomePageProps,
+} from './pages/home-page';
+import { HomePageContext } from './storefront-page-contexts';
 import { FlashSalePage } from './storefront-ui/content-ui';
-import { StorefrontContext } from './StorefrontContext';
 import { readStorefrontStylesheet } from './test-stylesheet';
 import {
     MarketConfig,
@@ -178,7 +184,7 @@ const couponCampaign: StorefrontCouponCampaign = {
     claimable: true,
 };
 
-const baseProps = {
+const baseProps: HomePageProps = {
     products: [product],
     collections: [],
     contentBlocks: [],
@@ -211,12 +217,16 @@ const baseProps = {
     language: 'zh' as const,
     storefrontName: '测试店铺',
     storefrontDescription: '',
+    storefrontTagline: '',
+    availableCurrencyCodes: ['CNY'],
+    currencySelectorEnabled: false,
+    displayCurrencyCode: 'CNY',
+    currencyLoading: false,
+    onCurrencyChange: vi.fn(),
     logoUrl: null,
     logoOnLightUrl: null,
-    addingVariantId: null,
     couponLoading: false,
     onCategorySelect: vi.fn(),
-    onAdd: vi.fn(),
     onToggleLanguage: vi.fn(),
     onNotifications: vi.fn(),
     onClaimCoupon: vi.fn().mockResolvedValue(null),
@@ -226,11 +236,11 @@ const baseProps = {
     onRetry: vi.fn(),
 };
 
-function renderHome(overrides: Record<string, unknown> = {}) {
+function renderHome(overrides: Partial<HomePageProps> = {}) {
     return renderToStaticMarkup(
-        <StorefrontContext.Provider value={{ ...baseProps, ...overrides }}>
+        <HomePageContext.Provider value={{ ...baseProps, ...overrides }}>
             <HomePage />
-        </StorefrontContext.Provider>,
+        </HomePageContext.Provider>,
     );
 }
 

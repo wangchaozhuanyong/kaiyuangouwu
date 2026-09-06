@@ -18,8 +18,9 @@ import {
 import { useDeferredValue, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
-import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
+import { PageSizeSelect } from '../../components/PageSizeSelect';
 import {
     AUTO_CARD_VARIANTS_QUERY,
     AUTO_CARD_WORKSPACE_QUERY,
@@ -32,6 +33,7 @@ import {
     type AutoCardVariantsResult,
     type AutoCardWorkspaceResult,
 } from '../../graphql/fulfillment.graphql';
+import { usePageSize } from '../../hooks/use-page-size';
 import { useUrlTab } from '../../hooks/use-url-tab';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatDateTime, getOrderStateLabel } from './sales-utils';
@@ -39,8 +41,6 @@ import { formatDateTime, getOrderStateLabel } from './sales-utils';
 type Tab = 'POOL' | 'DELIVERIES';
 const CARD_POOL_TABS = { pool: 'POOL', deliveries: 'DELIVERIES' } as const;
 const VARIANT_LOOKUP_SIZE = 50;
-const POOL_PAGE_SIZE = 50;
-const DELIVERY_PAGE_SIZE = 30;
 
 export function CardPoolModule() {
     const [selectedVariantId, setSelectedVariantId] = useState('');
@@ -49,7 +49,9 @@ export function CardPoolModule() {
     const [search, setSearch] = useState('');
     const [variantSearch, setVariantSearch] = useState('');
     const [poolPage, setPoolPage] = useState(0);
+    const [poolPageSize, setPoolPageSize] = usePageSize(setPoolPage);
     const [deliveryPage, setDeliveryPage] = useState(0);
+    const [deliveryPageSize, setDeliveryPageSize] = usePageSize(setDeliveryPage);
     const [notice, setNotice] = useState('');
     const [actionError, setActionError] = useState('');
     const deferredVariantSearch = useDeferredValue(variantSearch.trim());
@@ -84,14 +86,14 @@ export function CardPoolModule() {
         variables: {
             productVariantId: selectedVariant?.id ?? '',
             poolOptions: {
-                skip: poolPage * POOL_PAGE_SIZE,
-                take: POOL_PAGE_SIZE,
+                skip: poolPage * poolPageSize,
+                take: poolPageSize,
                 state: poolState === 'ALL' ? null : poolState,
             },
             deliveryOptions: {
                 productVariantId: selectedVariant?.id ?? '',
-                skip: deliveryPage * DELIVERY_PAGE_SIZE,
-                take: DELIVERY_PAGE_SIZE,
+                skip: deliveryPage * deliveryPageSize,
+                take: deliveryPageSize,
             },
         },
         skip: !selectedVariant,
@@ -321,7 +323,8 @@ export function CardPoolModule() {
                                 />
                                 <Pagination
                                     page={poolPage}
-                                    pageSize={POOL_PAGE_SIZE}
+                                    pageSize={poolPageSize}
+                                    onPageSizeChange={setPoolPageSize}
                                     totalItems={workspaceQuery.data?.autoCardPoolItems.totalItems ?? 0}
                                     loading={workspaceQuery.loading}
                                     onPageChange={setPoolPage}
@@ -336,7 +339,8 @@ export function CardPoolModule() {
                                 />
                                 <Pagination
                                     page={deliveryPage}
-                                    pageSize={DELIVERY_PAGE_SIZE}
+                                    pageSize={deliveryPageSize}
+                                    onPageSizeChange={setDeliveryPageSize}
                                     totalItems={workspaceQuery.data?.autoCardDeliveries.totalItems ?? 0}
                                     loading={workspaceQuery.loading}
                                     onPageChange={setDeliveryPage}
@@ -849,23 +853,26 @@ function Metric({
 function Pagination({
     page,
     pageSize,
+    onPageSizeChange,
     totalItems,
     loading,
     onPageChange,
 }: {
     page: number;
     pageSize: number;
+    onPageSizeChange: (size: number) => void;
     totalItems: number;
     loading: boolean;
     onPageChange: (page: number) => void;
 }) {
     const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
     return (
-        <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 text-[10px] text-slate-500">
+        <div className="flex flex-wrap gap-y-3 gap-x-4 items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 text-[10px] text-slate-500">
             <span>
                 共 {totalItems} 条，第 {Math.min(page + 1, totalPages)} / {totalPages} 页
             </span>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+                <PageSizeSelect pageSize={pageSize} onPageSizeChange={onPageSizeChange} disabled={loading} />
                 <button
                     type="button"
                     onClick={() => onPageChange(Math.max(0, page - 1))}

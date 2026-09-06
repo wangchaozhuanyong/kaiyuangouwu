@@ -16,7 +16,9 @@ import {
 import { useState } from 'react';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
+import { PageSizeSelect } from '../../components/PageSizeSelect';
 import { GET_STOREFRONT_REVIEWS, MODERATE_STOREFRONT_REVIEW } from '../../graphql/sales.graphql';
+import { usePageSize } from '../../hooks/use-page-size';
 import { useUrlTab } from '../../hooks/use-url-tab';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatDateTime } from '../Sales/sales-utils';
@@ -51,7 +53,6 @@ interface ReviewData {
     };
 }
 
-const PAGE_SIZE = 20;
 const EMPTY_REVIEWS: StorefrontReviewItem[] = [];
 const tabs: Array<{ id: ReviewState; label: string }> = [
     { id: 'PENDING', label: '待审核' },
@@ -72,6 +73,7 @@ const stateClasses: Record<ReviewState, string> = {
 export function ReviewsModule() {
     const [activeTab, setActiveTab] = useUrlTab<ReviewState>(REVIEW_TABS, 'pending');
     const [page, setPage] = useState(0);
+    const [pageSize, setPageSize] = usePageSize(setPage);
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedReview, setSelectedReview] = useState<StorefrontReviewItem | null>(null);
     const [decision, setDecision] = useState<'APPROVED' | 'REJECTED'>('APPROVED');
@@ -82,8 +84,8 @@ export function ReviewsModule() {
     const { data, loading, error, refetch } = useQuery<ReviewData>(GET_STOREFRONT_REVIEWS, {
         variables: {
             options: {
-                skip: page * PAGE_SIZE,
-                take: PAGE_SIZE,
+                skip: page * pageSize,
+                take: pageSize,
                 state: activeTab,
                 ...(searchTerm.trim() ? { search: searchTerm.trim() } : {}),
             },
@@ -101,7 +103,7 @@ export function ReviewsModule() {
     const reviews = data?.storefrontReviews.items ?? EMPTY_REVIEWS;
     const totalItems = data?.storefrontReviews.totalItems ?? 0;
     const averageRating = data?.storefrontReviews.averageRating ?? 0;
-    const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
+    const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
 
     const showNotice = (message: string) => {
         setNotification(message);
@@ -432,15 +434,20 @@ export function ReviewsModule() {
                                 </div>
                             )
                         )}
-                        <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50/60 px-4 py-3 text-xs text-slate-500">
+                        <div className="flex flex-wrap gap-y-3 gap-x-4 items-center justify-between border-t border-slate-200 bg-slate-50/60 px-4 py-3 text-xs text-slate-500">
                             <span>
                                 第 {page + 1} / {totalPages} 页，共 {totalItems} 条
                             </span>
-                            <div className="flex gap-1.5">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                                <PageSizeSelect
+                                    pageSize={pageSize}
+                                    onPageSizeChange={setPageSize}
+                                    disabled={loading}
+                                />
                                 <button
                                     type="button"
                                     onClick={() => setPage(current => Math.max(0, current - 1))}
-                                    disabled={page === 0}
+                                    disabled={loading || page === 0}
                                     className="rounded-lg border border-slate-300 bg-white p-1.5 disabled:opacity-40"
                                     aria-label="上一页"
                                 >
@@ -449,7 +456,7 @@ export function ReviewsModule() {
                                 <button
                                     type="button"
                                     onClick={() => setPage(current => Math.min(totalPages - 1, current + 1))}
-                                    disabled={page >= totalPages - 1}
+                                    disabled={loading || page >= totalPages - 1}
                                     className="rounded-lg border border-slate-300 bg-white p-1.5 disabled:opacity-40"
                                     aria-label="下一页"
                                 >

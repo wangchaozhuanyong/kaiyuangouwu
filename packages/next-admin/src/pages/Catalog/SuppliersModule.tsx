@@ -2,6 +2,8 @@ import { useMutation, useQuery } from '@apollo/client/react';
 import { ChevronLeft, ChevronRight, Pencil, Plus, RefreshCw, Search, Truck, X } from 'lucide-react';
 import { useDeferredValue, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { PageSizeSelect } from '../../components/PageSizeSelect';
+import { usePageSize } from '../../hooks/use-page-size';
 
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
@@ -13,8 +15,6 @@ import {
     type CatalogSupplierRecord,
 } from '../../graphql/catalog-operations.graphql';
 import { toUserFacingError } from '../../utils/user-facing-error';
-
-const PAGE_SIZE = 50;
 
 interface SupplierListResult {
     catalogSuppliers: { items: CatalogSupplierRecord[]; totalItems: number };
@@ -48,6 +48,7 @@ export function SuppliersModule() {
     const deferredSearch = useDeferredValue(search.trim());
     const [enabled, setEnabled] = useState<'ALL' | 'ENABLED' | 'DISABLED'>('ALL');
     const [page, setPage] = useState(0);
+    const [pageSize, setPageSize] = usePageSize(setPage);
     const [draft, setDraft] = useState<SupplierDraft | null>(null);
     const [viewing, setViewing] = useState<CatalogSupplierRecord | null>(null);
     const [notice, setNotice] = useState('');
@@ -55,8 +56,8 @@ export function SuppliersModule() {
     const query = useQuery<SupplierListResult>(CATALOG_SUPPLIERS_QUERY, {
         variables: {
             options: {
-                skip: page * PAGE_SIZE,
-                take: PAGE_SIZE,
+                skip: page * pageSize,
+                take: pageSize,
                 text: deferredSearch || null,
                 enabled: enabled === 'ALL' ? null : enabled === 'ENABLED',
             },
@@ -64,7 +65,7 @@ export function SuppliersModule() {
         fetchPolicy: 'cache-and-network',
     });
     const result = query.data?.catalogSuppliers;
-    const totalPages = Math.max(1, Math.ceil((result?.totalItems ?? 0) / PAGE_SIZE));
+    const totalPages = Math.max(1, Math.ceil((result?.totalItems ?? 0) / pageSize));
 
     const openEdit = (supplier: CatalogSupplierRecord) =>
         setDraft({
@@ -234,22 +235,27 @@ export function SuppliersModule() {
                                 </table>
                             </div>
                         )}
-                        {result && result.totalItems > 0 && (
-                            <div className="flex items-center justify-between border-t px-4 py-3 text-xs text-slate-500">
+                        {result && (
+                            <div className="flex flex-wrap gap-y-3 gap-x-4 items-center justify-between border-t px-4 py-3 text-xs text-slate-500">
                                 <span>
                                     共 {result.totalItems} 条 · 第 {page + 1}/{totalPages} 页
                                 </span>
-                                <div className="flex gap-2">
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <PageSizeSelect
+                                        pageSize={pageSize}
+                                        onPageSizeChange={setPageSize}
+                                        disabled={query.loading}
+                                    />
                                     <PagerButton
                                         label="上一页"
-                                        disabled={page === 0}
+                                        disabled={query.loading || page === 0}
                                         onClick={() => setPage(value => Math.max(0, value - 1))}
                                     >
                                         <ChevronLeft className="h-4 w-4" />
                                     </PagerButton>
                                     <PagerButton
                                         label="下一页"
-                                        disabled={page + 1 >= totalPages}
+                                        disabled={query.loading || page + 1 >= totalPages}
                                         onClick={() => setPage(value => value + 1)}
                                     >
                                         <ChevronRight className="h-4 w-4" />

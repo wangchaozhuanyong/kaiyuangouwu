@@ -1,8 +1,10 @@
+import type { RequestContext } from '@vendure/core';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ReferralPosterTemplate } from '../entities/referral-poster-template.entity';
 import { ReferralWallet } from '../entities/referral-wallet.entity';
 
+import { ReferralPosterView } from './referral-poster-view';
 import { ReferralService, supportsReferralPessimisticLock } from './referral.service';
 
 describe('referral database locking', () => {
@@ -249,14 +251,15 @@ describe('managed system poster content', () => {
                 },
             },
         ]);
-        const service = Object.create(ReferralService.prototype);
-        service.connection = {
+        const connection = {
             rawConnection: { hasMetadata: () => true },
             getRepository: vi.fn().mockReturnValue({ find }),
         };
-        const result = await service.systemPosterTemplates({ channelId: 'shop-a', languageCode: 'zh_Hans' }, [
-            'BRAND_MINIMAL',
-        ]);
+        const service = new ReferralPosterView(connection as any, {} as any);
+        const result = await service.systemPosterTemplates(
+            { channelId: 'shop-a', languageCode: 'zh_Hans' } as RequestContext,
+            ['BRAND_MINIMAL'],
+        );
         expect(find.mock.calls[0][0].where.channelId).toBe('shop-a');
         expect(result[0]).toMatchObject({
             id: 'BRAND_MINIMAL',
@@ -266,6 +269,6 @@ describe('managed system poster content', () => {
         });
         expect(result[2].enabled).toBe(false);
         expect(result[2].posterBackgroundAsset).toBeNull();
-        expect(result[2].headlineZh).not.toBe('不应显示的内容');
+        expect(result[2]).not.toMatchObject({ headlineZh: '不应显示的内容' });
     });
 });

@@ -6,7 +6,6 @@ import { toUserFacingError } from '../../utils/user-facing-error';
 import { LookupPager } from './LookupPager';
 import { ProductAutoCardSetupPanel } from './ProductAutoCardSetupPanel';
 import { useProductEditor } from './ProductEditorContext';
-import { LOOKUP_PAGE_SIZE } from './product-editor-types';
 
 export function ProductVariantsTab() {
     const {
@@ -25,8 +24,11 @@ export function ProductVariantsTab() {
         optionGroupSearch,
         setOptionGroupSearch,
         optionGroupPage,
+        optionGroupPageSize,
+        setOptionGroupPageSize,
         setOptionGroupPage,
         optionGroupsData,
+        optionGroupsLoading,
         optionGroupsError,
         refetchOptionGroups,
         catalogChannelsData,
@@ -206,7 +208,9 @@ export function ProductVariantsTab() {
                     )}
                     <LookupPager
                         page={optionGroupPage}
-                        pageSize={LOOKUP_PAGE_SIZE}
+                        loading={optionGroupsLoading}
+                        pageSize={optionGroupPageSize}
+                        onPageSizeChange={setOptionGroupPageSize}
                         totalItems={optionGroupsData?.productOptionGroups.totalItems ?? 0}
                         onPageChange={setOptionGroupPage}
                     />

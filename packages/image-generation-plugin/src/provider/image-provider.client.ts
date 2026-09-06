@@ -1,9 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import { request as httpRequest } from 'node:http';
-import { request as httpsRequest } from 'node:https';
 
-import { IMAGE_GENERATION_DELIVERY_TIMEOUT_MS } from '../constants';
 import { ImageProviderCredential } from '../entities/image-provider-credential.entity';
 import { ImageProviderCipherService } from '../security/image-provider-cipher.service';
 import { SafeProviderUrlService } from '../security/safe-provider-url.service';
@@ -15,53 +12,39 @@ import {
     ProviderTelemetry,
 } from '../types';
 
-const REQUEST_TIMEOUT_MS = 120_000;
-const MAX_PROVIDER_IMAGE_BYTES = 25 * 1024 * 1024;
-const MAX_PROVIDER_BASE64_CHARACTERS = Math.ceil(MAX_PROVIDER_IMAGE_BYTES / 3) * 4;
-const MAX_PROVIDER_JSON_BYTES = 40 * 1024 * 1024;
-const MAX_PROMPT_RESPONSE_BYTES = 1024 * 1024;
-const MAX_MODEL_RESPONSE_BYTES = 1024 * 1024;
-const OPENAI_IMAGE_QUALITY = 'medium';
-const IMAGE_GENERATION_TIMEOUT_MESSAGE = '中转站在 10 分钟内未返回完整生图结果';
+import { MAX_MODEL_RESPONSE_BYTES, MAX_PROMPT_RESPONSE_BYTES } from './image-provider-constants';
+import { DefinitiveImageProviderError } from './image-provider-errors';
+import { readResponseText } from './image-provider-io';
+import { ImageProviderProtocols } from './image-provider-protocols';
+import {
+    collectModelIdentifiers,
+    geminiResponseText,
+    objectAt,
+    sameModelIdentifier,
+} from './image-provider-response';
+import { ImageProviderResultReader } from './image-provider-result-reader';
+import { safeError } from './image-provider-telemetry';
+import { ImageProviderTransport } from './image-provider-transport';
 
-export type ImageProviderErrorDetails = ProviderTelemetry;
-
-class ImageProviderError extends Error {
-    constructor(
-        message: string,
-        readonly details: ImageProviderErrorDetails = {},
-    ) {
-        super(message);
-        this.name = new.target.name;
-    }
-}
-
-export class RetryableImageProviderError extends ImageProviderError {}
-export class AmbiguousImageProviderError extends ImageProviderError {}
-export class DefinitiveImageProviderError extends ImageProviderError {}
-
-export class LocalImageProcessingError extends DefinitiveImageProviderError {
-    constructor(
-        message: string,
-        details: ImageProviderErrorDetails,
-        readonly sourceErrorName: string,
-    ) {
-        super(message, details);
-    }
-}
-
-interface ProviderJsonResponse {
-    payload: unknown;
-    telemetry: ProviderTelemetry;
-}
-
+export {
+    AmbiguousImageProviderError,
+    DefinitiveImageProviderError,
+    LocalImageProcessingError,
+    RetryableImageProviderError,
+    type ImageProviderErrorDetails,
+} from './image-provider-errors';
 @Injectable()
 export class ImageProviderClient {
+    private readonly transport = new ImageProviderTransport();
+    private readonly resultReader: ImageProviderResultReader;
+    private readonly protocols: ImageProviderProtocols;
     constructor(
         private readonly cipher: ImageProviderCipherService,
         private readonly safeUrls: SafeProviderUrlService,
-    ) {}
-
+    ) {
+        this.resultReader = new ImageProviderResultReader(safeUrls);
+        this.protocols = new ImageProviderProtocols(safeUrls, this.transport, this.resultReader);
+    }
     async generate(
         credential: ImageProviderCredential,
         protocol: ImageProviderProtocol,
@@ -71,18 +54,20 @@ export class ImageProviderClient {
         const baseUrl = await this.safeUrls.validate(credential.baseUrl);
         const apiKey = this.cipher.decrypt(credential.encryptedApiKey);
         if (protocol === 'OPENAI_RESPONSES_IMAGE') {
-            return this.openAiResponsesImage(
+            return this.protocols.openAiResponsesImage(
                 baseUrl,
                 apiKey,
                 credential.orchestrationModelId || credential.textModelId,
                 input,
             );
         }
-        if (protocol === 'OPENAI_IMAGES') return this.openAiImages(baseUrl, apiKey, input);
-        if (protocol === 'OPENAI_COMPATIBLE_CHAT') return this.openAiChat(baseUrl, apiKey, input);
-        if (protocol === 'GEMINI_INTERACTIONS') return this.geminiInteractions(baseUrl, apiKey, input);
-        if (protocol === 'GEMINI_NATIVE') return this.geminiNative(baseUrl, apiKey, input);
-        if (protocol === 'GEMINI_NATIVE_STREAM') return this.geminiNativeStream(baseUrl, apiKey, input);
+        if (protocol === 'OPENAI_IMAGES') return this.protocols.openAiImages(baseUrl, apiKey, input);
+        if (protocol === 'OPENAI_COMPATIBLE_CHAT') return this.protocols.openAiChat(baseUrl, apiKey, input);
+        if (protocol === 'GEMINI_INTERACTIONS')
+            return this.protocols.geminiInteractions(baseUrl, apiKey, input);
+        if (protocol === 'GEMINI_NATIVE') return this.protocols.geminiNative(baseUrl, apiKey, input);
+        if (protocol === 'GEMINI_NATIVE_STREAM')
+            return this.protocols.geminiNativeStream(baseUrl, apiKey, input);
         throw new DefinitiveImageProviderError('不支持的生图协议');
     }
 
@@ -100,7 +85,7 @@ export class ImageProviderClient {
         const apiKey = this.cipher.decrypt(credential.encryptedApiKey);
         if (credential.scope === 'GEMINI') {
             const modelId = configuredModelId.replace(/^models\//iu, '');
-            const { payload: geminiResponse, telemetry: geminiTelemetry } = await this.requestJson(
+            const { payload: geminiResponse, telemetry: geminiTelemetry } = await this.transport.requestJson(
                 this.safeUrls.endpoint(baseUrl, `models/${encodeURIComponent(modelId)}:generateContent`),
                 apiKey,
                 {
@@ -119,7 +104,7 @@ export class ImageProviderClient {
             if (!geminiContent) throw new DefinitiveImageProviderError('Gemini 提示词模型未返回文本');
             return { text: geminiContent, telemetry: geminiTelemetry };
         }
-        const { payload: openAiResponse, telemetry: openAiTelemetry } = await this.requestJson(
+        const { payload: openAiResponse, telemetry: openAiTelemetry } = await this.transport.requestJson(
             this.safeUrls.endpoint(baseUrl, 'chat/completions'),
             apiKey,
             {
@@ -146,10 +131,10 @@ export class ImageProviderClient {
         try {
             const baseUrl = await this.safeUrls.validate(credential.baseUrl);
             const apiKey = this.cipher.decrypt(credential.encryptedApiKey);
-            const response = await this.request(this.safeUrls.endpoint(baseUrl, 'models'), {
+            const response = await this.transport.request(this.safeUrls.endpoint(baseUrl, 'models'), {
                 method: 'GET',
                 headers: {
-                    ...this.headers(apiKey),
+                    ...this.transport.headers(apiKey),
                     'x-goog-api-key': apiKey,
                 },
             });
@@ -177,10 +162,6 @@ export class ImageProviderClient {
         }
     }
 
-    /**
-     * Verifies a relay model mapping through read-only model metadata endpoints.
-     * This never invokes image generation and therefore should not consume image credits.
-     */
     async testModel(
         credential: ImageProviderCredential,
         providerModelId: string,
@@ -190,9 +171,9 @@ export class ImageProviderClient {
             if (!target) return { ok: false, message: '中转站模型 ID 不能为空' };
             const baseUrl = await this.safeUrls.validate(credential.baseUrl);
             const apiKey = this.cipher.decrypt(credential.encryptedApiKey);
-            const headers = { ...this.headers(apiKey), 'x-goog-api-key': apiKey };
+            const headers = { ...this.transport.headers(apiKey), 'x-goog-api-key': apiKey };
 
-            const exactResponse = await this.request(
+            const exactResponse = await this.transport.request(
                 this.safeUrls.endpoint(baseUrl, `models/${encodeURIComponent(target)}`),
                 { method: 'GET', headers },
             );
@@ -204,7 +185,7 @@ export class ImageProviderClient {
                 return { ok: false, message: `模型验证失败：中转站返回 HTTP ${exactResponse.status}` };
             }
 
-            const listResponse = await this.request(this.safeUrls.endpoint(baseUrl, 'models'), {
+            const listResponse = await this.transport.request(this.safeUrls.endpoint(baseUrl, 'models'), {
                 method: 'GET',
                 headers,
             });
@@ -229,1082 +210,10 @@ export class ImageProviderClient {
             return { ok: false, message: safeError(error) };
         }
     }
-
-    private async openAiImages(
-        baseUrl: URL,
-        apiKey: string,
-        input: ProviderGenerationInput,
-    ): Promise<ProviderGenerationResult> {
-        const size = openAiSize(input.aspectRatio, input.resolution ?? '1K', input.providerModelId);
-        const references = providerReferences(input);
-        let response: ProviderJsonResponse;
-        if (references.length) {
-            const form = new FormData();
-            form.set('model', input.providerModelId);
-            form.set('prompt', input.prompt);
-            form.set('size', size);
-            form.set('quality', OPENAI_IMAGE_QUALITY);
-            form.set('n', '1');
-            references.forEach((reference, index) => {
-                const fieldName = references.length === 1 ? 'image' : 'image[]';
-                form.append(
-                    fieldName,
-                    new Blob([new Uint8Array(reference.bytes)], { type: reference.mimeType }),
-                    `reference-${index + 1}.png`,
-                );
-            });
-            response = await this.requestGenerationJson(
-                this.safeUrls.endpoint(baseUrl, 'images/edits'),
-                apiKey,
-                form,
-                input.idempotencyKey,
-            );
-        } else {
-            response = await this.requestGenerationJson(
-                this.safeUrls.endpoint(baseUrl, 'images/generations'),
-                apiKey,
-                {
-                    model: input.providerModelId,
-                    prompt: input.prompt,
-                    size,
-                    quality: OPENAI_IMAGE_QUALITY,
-                    n: 1,
-                    response_format: 'b64_json',
-                },
-                input.idempotencyKey,
-            );
-        }
-        return this.imageResult(response.payload, response.telemetry);
-    }
-
-    private async openAiResponsesImage(
-        baseUrl: URL,
-        apiKey: string,
-        orchestrationModelId: string,
-        input: ProviderGenerationInput,
-    ): Promise<ProviderGenerationResult> {
-        if (!orchestrationModelId.trim()) {
-            throw new DefinitiveImageProviderError('OpenAI Responses 编排模型尚未配置');
-        }
-        const content: Array<Record<string, unknown>> = [
-            {
-                type: 'input_text',
-                text: `${input.prompt}\nAspect ratio: ${input.aspectRatio}`,
-            },
-        ];
-        const references = providerReferences(input);
-        for (const reference of references) {
-            content.push({
-                type: 'input_image',
-                image_url: `data:${reference.mimeType};base64,${reference.bytes.toString('base64')}`,
-            });
-        }
-        const response = await this.requestGenerationJson(
-            this.safeUrls.endpoint(baseUrl, 'responses'),
-            apiKey,
-            {
-                model: orchestrationModelId.trim(),
-                input: [{ role: 'user', content }],
-                tools: [
-                    {
-                        type: 'image_generation',
-                        model: input.providerModelId,
-                        quality: OPENAI_IMAGE_QUALITY,
-                        size: openAiSize(input.aspectRatio, input.resolution ?? '1K', input.providerModelId),
-                        output_format: 'png',
-                        action: references.length ? 'edit' : 'generate',
-                    },
-                ],
-                tool_choice: { type: 'image_generation' },
-                store: false,
-            },
-            input.idempotencyKey,
-        );
-        return this.imageResult(response.payload, response.telemetry);
-    }
-
-    private async openAiChat(
-        baseUrl: URL,
-        apiKey: string,
-        input: ProviderGenerationInput,
-    ): Promise<ProviderGenerationResult> {
-        const content: Array<Record<string, unknown>> = [
-            { type: 'text', text: `${input.prompt}\nAspect ratio: ${input.aspectRatio}` },
-        ];
-        for (const reference of providerReferences(input)) {
-            content.push({
-                type: 'image_url',
-                image_url: {
-                    url: `data:${reference.mimeType};base64,${reference.bytes.toString('base64')}`,
-                },
-            });
-        }
-        const response = await this.requestGenerationJson(
-            this.safeUrls.endpoint(baseUrl, 'chat/completions'),
-            apiKey,
-            {
-                model: input.providerModelId,
-                messages: [{ role: 'user', content }],
-                modalities: ['text', 'image'],
-            },
-            input.idempotencyKey,
-        );
-        return this.imageResult(response.payload, response.telemetry);
-    }
-
-    private async geminiNative(
-        baseUrl: URL,
-        apiKey: string,
-        input: ProviderGenerationInput,
-    ): Promise<ProviderGenerationResult> {
-        const parts = geminiParts(input);
-        const endpoint = this.safeUrls.endpoint(
-            baseUrl,
-            `models/${encodeURIComponent(input.providerModelId)}:generateContent`,
-        );
-        const response = await this.requestGenerationJson(
-            endpoint,
-            apiKey,
-            {
-                contents: [{ role: 'user', parts }],
-                generationConfig: {
-                    responseModalities: ['TEXT', 'IMAGE'],
-                    imageConfig: { aspectRatio: input.aspectRatio, imageSize: input.resolution ?? '1K' },
-                },
-            },
-            input.idempotencyKey,
-            { 'x-goog-api-key': apiKey },
-        );
-        return this.imageResult(response.payload, response.telemetry);
-    }
-
-    private async geminiNativeStream(
-        baseUrl: URL,
-        apiKey: string,
-        input: ProviderGenerationInput,
-    ): Promise<ProviderGenerationResult> {
-        const parts = geminiParts(input);
-        const endpoint = this.safeUrls.endpoint(
-            baseUrl,
-            `models/${encodeURIComponent(input.providerModelId)}:streamGenerateContent`,
-        );
-        endpoint.searchParams.set('alt', 'sse');
-        const deadline = Date.now() + IMAGE_GENERATION_DELIVERY_TIMEOUT_MS;
-        const response = await this.request(
-            endpoint,
-            {
-                method: 'POST',
-                redirect: 'manual',
-                headers: {
-                    ...this.headers(apiKey),
-                    accept: 'text/event-stream',
-                    'content-type': 'application/json',
-                    'idempotency-key': input.idempotencyKey,
-                    'x-goog-api-key': apiKey,
-                },
-                body: JSON.stringify({
-                    contents: [{ role: 'user', parts }],
-                    generationConfig: {
-                        responseModalities: ['TEXT', 'IMAGE'],
-                        imageConfig: { aspectRatio: input.aspectRatio, imageSize: input.resolution ?? '1K' },
-                    },
-                }),
-            },
-            IMAGE_GENERATION_DELIVERY_TIMEOUT_MS,
-            IMAGE_GENERATION_TIMEOUT_MESSAGE,
-        );
-        const details = responseErrorDetails(response);
-        let text: string;
-        try {
-            text = await readResponseText(
-                response,
-                MAX_PROVIDER_JSON_BYTES,
-                remainingTimeout(deadline),
-                IMAGE_GENERATION_TIMEOUT_MESSAGE,
-            );
-        } catch (error) {
-            throw withProviderTelemetry(error, details);
-        }
-        if (response.status === 429) throw new RetryableImageProviderError('中转站限流，请稍后重试', details);
-        if (response.status >= 300 && response.status < 400) {
-            throw new DefinitiveImageProviderError('中转站重定向已被安全策略拒绝', details);
-        }
-        if (!response.ok) {
-            throw httpFailure(response.status, details);
-        }
-        let payload: unknown;
-        try {
-            payload = parseGeminiStreamResponse(text);
-        } catch (error) {
-            throw withProviderTelemetry(error, details);
-        }
-        return this.imageResult(payload, responseTelemetry(response, payload));
-    }
-
-    private async geminiInteractions(
-        baseUrl: URL,
-        apiKey: string,
-        input: ProviderGenerationInput,
-    ): Promise<ProviderGenerationResult> {
-        const interactionInput: Array<Record<string, unknown>> = [{ type: 'text', text: input.prompt }];
-        for (const reference of providerReferences(input)) {
-            interactionInput.push({
-                type: 'image',
-                mime_type: reference.mimeType,
-                data: reference.bytes.toString('base64'),
-            });
-        }
-        const response = await this.requestGenerationJson(
-            this.safeUrls.endpoint(baseUrl, 'interactions'),
-            apiKey,
-            {
-                model: input.providerModelId.replace(/^models\//iu, ''),
-                input: interactionInput,
-                response_format: {
-                    type: 'image',
-                    mime_type: 'image/png',
-                    aspect_ratio: input.aspectRatio,
-                    image_size: input.resolution ?? '1K',
-                },
-            },
-            input.idempotencyKey,
-            { 'x-goog-api-key': apiKey },
-        );
-        return this.imageResult(response.payload, response.telemetry);
-    }
-
-    private async imageResult(
+    private imageResult(
         response: unknown,
         requestTelemetry: ProviderTelemetry = {},
     ): Promise<ProviderGenerationResult> {
-        try {
-            const providerRequestId =
-                stringAt(response, ['id']) ??
-                stringAt(response, ['responseId']) ??
-                findStringByKey(response, new Set(['responseId', 'requestId']), value =>
-                    Boolean(value.trim()),
-                ) ??
-                requestTelemetry.providerRequestId;
-            const revisedPrompt = stringAt(response, ['data', 0, 'revised_prompt']);
-            const inlineImage =
-                structuredInlineImage(response) ??
-                findGenericInlineImage(response) ??
-                findEmbeddedInlineImage(response);
-            if (inlineImage) {
-                const dataUrl = extractImageDataUrl(inlineImage.data);
-                const encoded = dataUrl?.data ?? inlineImage.data;
-                const mimeType =
-                    normalizedImageMimeType(inlineImage.mimeType ?? dataUrl?.mimeType) ?? 'image/png';
-                const bytes = decodeBase64Image(encoded, requestTelemetry);
-                return {
-                    bytes,
-                    mimeType,
-                    providerRequestId,
-                    revisedPrompt,
-                    metadata: safeProviderMetadata(providerRequestId, revisedPrompt, mimeType, 'inline'),
-                    telemetry: { ...requestTelemetry, providerRequestId },
-                };
-            }
-            const imageUrl = findRemoteImageUrl(response);
-            if (!imageUrl) {
-                throw new DefinitiveImageProviderError('中转站响应中没有可识别的图片', requestTelemetry);
-            }
-            const downloaded = await this.downloadImage(imageUrl);
-            return {
-                ...downloaded,
-                providerRequestId,
-                revisedPrompt,
-                metadata: safeProviderMetadata(
-                    providerRequestId,
-                    revisedPrompt,
-                    downloaded.mimeType,
-                    'remote-url',
-                ),
-                telemetry: { ...requestTelemetry, providerRequestId },
-            };
-        } catch (error) {
-            throw withImageProcessingTelemetry(error, requestTelemetry);
-        }
+        return this.resultReader.imageResult(response, requestTelemetry);
     }
-
-    private async downloadImage(rawUrl: string): Promise<{ bytes: Buffer; mimeType: string }> {
-        const resolved = await this.safeUrls.resolveRemoteImage(rawUrl);
-        return pinnedImageDownload(resolved);
-    }
-
-    private requestGenerationJson(
-        url: URL,
-        apiKey: string,
-        body: Record<string, unknown> | FormData,
-        idempotencyKey: string,
-        extraHeaders: Record<string, string> = {},
-    ): Promise<ProviderJsonResponse> {
-        return this.requestJson(
-            url,
-            apiKey,
-            body,
-            idempotencyKey,
-            extraHeaders,
-            MAX_PROVIDER_JSON_BYTES,
-            IMAGE_GENERATION_DELIVERY_TIMEOUT_MS,
-            IMAGE_GENERATION_TIMEOUT_MESSAGE,
-        );
-    }
-
-    private async requestJson(
-        url: URL,
-        apiKey: string,
-        body: Record<string, unknown> | FormData,
-        idempotencyKey: string,
-        extraHeaders: Record<string, string> = {},
-        maxResponseBytes = MAX_PROVIDER_JSON_BYTES,
-        timeoutMs = REQUEST_TIMEOUT_MS,
-        timeoutMessage = '中转站响应超时',
-    ): Promise<ProviderJsonResponse> {
-        const isForm = body instanceof FormData;
-        const deadline = Date.now() + timeoutMs;
-        const response = await this.request(
-            url,
-            {
-                method: 'POST',
-                redirect: 'manual',
-                headers: {
-                    ...this.headers(apiKey),
-                    ...(!isForm ? { 'content-type': 'application/json' } : {}),
-                    'idempotency-key': idempotencyKey,
-                    ...extraHeaders,
-                },
-                body: isForm ? body : JSON.stringify(body),
-            },
-            timeoutMs,
-            timeoutMessage,
-        );
-        const details = responseErrorDetails(response);
-        let text: string;
-        try {
-            text = await readResponseText(
-                response,
-                maxResponseBytes,
-                remainingTimeout(deadline),
-                timeoutMessage,
-            );
-        } catch (error) {
-            throw withProviderTelemetry(error, details);
-        }
-        if (response.status === 429) throw new RetryableImageProviderError('中转站限流，请稍后重试', details);
-        if (response.status >= 300 && response.status < 400) {
-            throw new DefinitiveImageProviderError('中转站重定向已被安全策略拒绝', details);
-        }
-        if (!response.ok) {
-            throw httpFailure(response.status, details);
-        }
-        try {
-            const payload = JSON.parse(text) as unknown;
-            return { payload, telemetry: responseTelemetry(response, payload) };
-        } catch {
-            throw new DefinitiveImageProviderError('中转站返回了无效 JSON', details);
-        }
-    }
-
-    private async request(
-        url: URL,
-        init: RequestInit,
-        timeoutMs = REQUEST_TIMEOUT_MS,
-        timeoutMessage = '中转站响应超时',
-    ): Promise<Response> {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), timeoutMs);
-        try {
-            return await fetch(url, {
-                ...init,
-                signal: controller.signal,
-                redirect: init.redirect ?? 'manual',
-            });
-        } catch (error) {
-            throw new AmbiguousImageProviderError(
-                error instanceof Error && error.name === 'AbortError'
-                    ? timeoutMessage
-                    : `中转站网络错误：${safeError(error)}`,
-            );
-        } finally {
-            clearTimeout(timeout);
-        }
-    }
-
-    private headers(apiKey: string): Record<string, string> {
-        return { authorization: `Bearer ${apiKey}`, accept: 'application/json' };
-    }
-}
-
-async function pinnedImageDownload(input: {
-    url: URL;
-    address: string;
-    family: number;
-}): Promise<{ bytes: Buffer; mimeType: string }> {
-    return new Promise((resolve, reject) => {
-        const transport = input.url.protocol === 'https:' ? httpsRequest : httpRequest;
-        const request = transport(
-            {
-                protocol: input.url.protocol,
-                hostname: input.address,
-                family: input.family,
-                port: input.url.port || undefined,
-                method: 'GET',
-                path: `${input.url.pathname}${input.url.search}`,
-                servername: input.url.protocol === 'https:' ? input.url.hostname : undefined,
-                headers: { host: input.url.host, accept: 'image/jpeg,image/png,image/webp' },
-                timeout: REQUEST_TIMEOUT_MS,
-            },
-            response => {
-                const status = response.statusCode ?? 0;
-                if (status < 200 || status >= 300) {
-                    response.resume();
-                    reject(
-                        new DefinitiveImageProviderError(`下载中转站图片失败（HTTP ${status}）`, {
-                            httpStatus: status,
-                        }),
-                    );
-                    return;
-                }
-                const declared = Number(response.headers['content-length'] ?? 0);
-                if (declared > MAX_PROVIDER_IMAGE_BYTES) {
-                    response.destroy();
-                    reject(new DefinitiveImageProviderError('中转站图片超过 25MB'));
-                    return;
-                }
-                const chunks: Buffer[] = [];
-                let total = 0;
-                response.on('data', (chunk: Buffer | string) => {
-                    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-                    total += buffer.length;
-                    if (total > MAX_PROVIDER_IMAGE_BYTES) {
-                        response.destroy(new DefinitiveImageProviderError('中转站图片超过 25MB'));
-                        return;
-                    }
-                    chunks.push(buffer);
-                });
-                response.on('end', () => {
-                    if (!total) {
-                        reject(new DefinitiveImageProviderError('中转站图片大小无效'));
-                        return;
-                    }
-                    const contentType = Array.isArray(response.headers['content-type'])
-                        ? response.headers['content-type'][0]
-                        : response.headers['content-type'];
-                    resolve({
-                        bytes: Buffer.concat(chunks, total),
-                        mimeType: contentType?.split(';')[0] ?? 'image/png',
-                    });
-                });
-                response.on('error', error =>
-                    reject(new AmbiguousImageProviderError(`读取中转站图片失败：${safeError(error)}`)),
-                );
-            },
-        );
-        request.on('timeout', () => request.destroy(new AmbiguousImageProviderError('下载中转站图片超时')));
-        request.on('error', error =>
-            reject(
-                error instanceof ImageProviderError
-                    ? error
-                    : new AmbiguousImageProviderError(`下载中转站图片网络错误：${safeError(error)}`),
-            ),
-        );
-        request.end();
-    });
-}
-
-function openAiSize(aspectRatio: string, resolution: string, providerModelId: string): string {
-    if (
-        providerModelId
-            .trim()
-            .replace(/^models\//iu, '')
-            .toLowerCase() === 'gpt-image-2'
-    ) {
-        const sizes: Record<string, Record<string, string>> = {
-            '1K': {
-                '1:1': '1024x1024',
-                '3:4': '768x1024',
-                '4:3': '1024x768',
-                '9:16': '624x1104',
-                '16:9': '1104x624',
-            },
-            '2K': {
-                '1:1': '2048x2048',
-                '3:4': '1536x2048',
-                '4:3': '2048x1536',
-                '9:16': '1152x2048',
-                '16:9': '2048x1152',
-            },
-            '4K': {
-                '9:16': '2160x3840',
-                '16:9': '3840x2160',
-            },
-        };
-        const size = sizes[resolution]?.[aspectRatio];
-        if (!size) throw new DefinitiveImageProviderError('GPT Image 2 不支持所选画幅的原生清晰度');
-        return size;
-    }
-    if (['3:4', '9:16'].includes(aspectRatio)) return '1024x1536';
-    if (['4:3', '16:9'].includes(aspectRatio)) return '1536x1024';
-    return '1024x1024';
-}
-
-function geminiParts(input: ProviderGenerationInput): Array<Record<string, unknown>> {
-    const parts: Array<Record<string, unknown>> = [
-        { text: `${input.prompt}\nAspect ratio: ${input.aspectRatio}` },
-    ];
-    for (const reference of providerReferences(input)) {
-        parts.push({
-            inlineData: {
-                mimeType: reference.mimeType,
-                data: reference.bytes.toString('base64'),
-            },
-        });
-    }
-    return parts;
-}
-
-function providerReferences(input: ProviderGenerationInput): Array<{ bytes: Buffer; mimeType: string }> {
-    if (input.references?.length) return input.references;
-    return input.reference ? [input.reference] : [];
-}
-
-function parseGeminiStreamResponse(text: string): unknown {
-    const normalized = text.replace(/\r\n?/gu, '\n').trim();
-    const events: unknown[] = [];
-    for (const block of normalized.split(/\n\n+/gu)) {
-        const data = block
-            .split('\n')
-            .filter(line => line.startsWith('data:'))
-            .map(line => line.slice(5).trimStart())
-            .join('\n')
-            .trim();
-        if (!data || data === '[DONE]') continue;
-        try {
-            events.push(JSON.parse(data) as unknown);
-        } catch {
-            throw new DefinitiveImageProviderError('中转站返回了无效的 Gemini 流式数据');
-        }
-    }
-    if (events.length) return events;
-    try {
-        return JSON.parse(normalized) as unknown;
-    } catch {
-        throw new DefinitiveImageProviderError('中转站没有返回可识别的 Gemini 流式数据');
-    }
-}
-
-interface InlineImagePayload {
-    data: string;
-    mimeType?: string;
-}
-
-function structuredInlineImage(value: unknown): InlineImagePayload | undefined {
-    return (
-        openAiResponsesInlineImage(value) ??
-        inlineImageAt(value, ['data', 0], ['b64_json'], ['mime_type', 'mimeType']) ??
-        inlineImageAt(value, ['output_image'], ['data'], ['mime_type', 'mimeType']) ??
-        geminiInlineImage(value)
-    );
-}
-
-function openAiResponsesInlineImage(value: unknown): InlineImagePayload | undefined {
-    const output = objectAt(value, ['output']);
-    if (!Array.isArray(output)) return;
-    for (const item of output) {
-        if (objectAt(item, ['type']) !== 'image_generation_call') continue;
-        const data = rawStringAt(item, ['result']);
-        if (!data) continue;
-        const mimeType = normalizedImageMimeType(stringAt(item, ['mime_type']));
-        return { data, ...(mimeType ? { mimeType } : {}) };
-    }
-}
-
-function geminiInlineImage(value: unknown): InlineImagePayload | undefined {
-    const events = Array.isArray(value) ? value : [value];
-    for (const event of events) {
-        const candidates = objectAt(event, ['candidates']);
-        if (!Array.isArray(candidates)) continue;
-        for (const candidate of candidates) {
-            const parts = objectAt(candidate, ['content', 'parts']);
-            if (!Array.isArray(parts)) continue;
-            for (const part of parts) {
-                const inlineData = objectAt(part, ['inlineData']) ?? objectAt(part, ['inline_data']);
-                const image = inlineImageFromObject(inlineData, ['data'], ['mimeType', 'mime_type']);
-                if (image) return image;
-            }
-        }
-    }
-}
-
-function inlineImageAt(
-    value: unknown,
-    path: Array<string | number>,
-    dataKeys: string[],
-    mimeTypeKeys: string[],
-): InlineImagePayload | undefined {
-    return inlineImageFromObject(objectAt(value, path), dataKeys, mimeTypeKeys);
-}
-
-function inlineImageFromObject(
-    value: unknown,
-    dataKeys: string[],
-    mimeTypeKeys: string[],
-): InlineImagePayload | undefined {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return;
-    const object = value as Record<string, unknown>;
-    const data = dataKeys.map(key => object[key]).find(child => typeof child === 'string' && child.length);
-    if (typeof data !== 'string') return;
-    const mimeType = mimeTypeKeys
-        .map(key => normalizedImageMimeType(object[key]))
-        .find((child): child is string => Boolean(child));
-    return { data, ...(mimeType ? { mimeType } : {}) };
-}
-
-function findGenericInlineImage(value: unknown, depth = 0): InlineImagePayload | undefined {
-    if (depth > 8 || !value || typeof value !== 'object') return;
-    const object = value as Record<string, unknown>;
-    for (const key of ['b64_json', 'data', 'result']) {
-        const child = object[key];
-        if (typeof child !== 'string' || !looksLikeBase64ImageData(child)) continue;
-        const mimeType =
-            normalizedImageMimeType(object.mimeType) ?? normalizedImageMimeType(object.mime_type);
-        return { data: child, ...(mimeType ? { mimeType } : {}) };
-    }
-    for (const child of Object.values(object)) {
-        const nested = findGenericInlineImage(child, depth + 1);
-        if (nested) return nested;
-    }
-}
-
-function findEmbeddedInlineImage(value: unknown, depth = 0): InlineImagePayload | undefined {
-    if (depth > 8) return;
-    if (typeof value === 'string') return extractImageDataUrl(value, true);
-    if (!value || typeof value !== 'object') return;
-    for (const child of Object.values(value as Record<string, unknown>)) {
-        const nested = findEmbeddedInlineImage(child, depth + 1);
-        if (nested) return nested;
-    }
-}
-
-function extractImageDataUrl(value: string, embedded = false): InlineImagePayload | undefined {
-    const markerIndex = embedded
-        ? asciiCaseInsensitiveIndexOf(value, 'data:image/')
-        : asciiCaseInsensitiveIndexOf(value, 'data:image/', 0, true);
-    if (markerIndex < 0) return;
-    const mimeStart = markerIndex + 'data:'.length;
-    const separatorIndex = asciiCaseInsensitiveIndexOf(value, ';base64,', mimeStart);
-    if (separatorIndex < 0 || separatorIndex - mimeStart > 64) return;
-    const mimeType = normalizedImageMimeType(value.slice(mimeStart, separatorIndex));
-    if (!mimeType) return;
-    const dataStart = separatorIndex + ';base64,'.length;
-    let dataEnd = dataStart;
-    while (dataEnd < value.length && isBase64OrWhitespaceCharacter(value.charCodeAt(dataEnd))) {
-        dataEnd += 1;
-    }
-    if (dataEnd === dataStart) return;
-    return { data: value.slice(dataStart, dataEnd), mimeType };
-}
-
-function decodeBase64Image(value: string, telemetry: ProviderTelemetry): Buffer {
-    const inspection = inspectBase64(value);
-    if (inspection === 'TOO_LARGE') {
-        throw new DefinitiveImageProviderError('中转站图片超过 25MB', telemetry);
-    }
-    if (inspection !== 'VALID') {
-        throw new DefinitiveImageProviderError('中转站返回了无效的图片编码', telemetry);
-    }
-    const bytes = Buffer.from(value, 'base64');
-    if (!bytes.length) {
-        throw new DefinitiveImageProviderError('中转站返回的图片大小无效', telemetry);
-    }
-    if (bytes.length > MAX_PROVIDER_IMAGE_BYTES) {
-        throw new DefinitiveImageProviderError('中转站图片超过 25MB', telemetry);
-    }
-    return bytes;
-}
-
-function looksLikeBase64ImageData(value: string): boolean {
-    if (value.length < 128) return false;
-    const dataUrl = extractImageDataUrl(value);
-    return inspectBase64(dataUrl?.data ?? value) !== 'INVALID';
-}
-
-function inspectBase64(value: string): 'VALID' | 'INVALID' | 'TOO_LARGE' {
-    let characterCount = 0;
-    let paddingCount = 0;
-    let paddingStarted = false;
-    for (let index = 0; index < value.length; index += 1) {
-        const code = value.charCodeAt(index);
-        if (isAsciiWhitespace(code)) continue;
-        characterCount += 1;
-        if (characterCount > MAX_PROVIDER_BASE64_CHARACTERS) return 'TOO_LARGE';
-        if (code === 61) {
-            paddingStarted = true;
-            paddingCount += 1;
-            if (paddingCount > 2) return 'INVALID';
-            continue;
-        }
-        if (paddingStarted || !isBase64Character(code)) return 'INVALID';
-    }
-    if (!characterCount || characterCount % 4 === 1) return 'INVALID';
-    if (paddingCount && characterCount % 4 !== 0) return 'INVALID';
-    return 'VALID';
-}
-
-function isBase64OrWhitespaceCharacter(code: number): boolean {
-    return isBase64Character(code) || code === 61 || isAsciiWhitespace(code);
-}
-
-function isBase64Character(code: number): boolean {
-    return (
-        (code >= 65 && code <= 90) ||
-        (code >= 97 && code <= 122) ||
-        (code >= 48 && code <= 57) ||
-        code === 43 ||
-        code === 47
-    );
-}
-
-function isAsciiWhitespace(code: number): boolean {
-    return code === 9 || code === 10 || code === 13 || code === 32;
-}
-
-function normalizedImageMimeType(value: unknown): string | undefined {
-    if (typeof value !== 'string' || value.length > 64 || !/^image\/[a-z0-9.+-]+$/iu.test(value)) return;
-    return value.toLowerCase();
-}
-
-function findRemoteImageUrl(value: unknown, depth = 0): string | undefined {
-    if (depth > 8) return;
-    if (typeof value === 'string') return extractHttpUrl(value);
-    if (!value || typeof value !== 'object') return;
-    const object = value as Record<string, unknown>;
-    for (const key of ['url', 'image_url']) {
-        const child = object[key];
-        if (typeof child !== 'string') continue;
-        const imageUrl = extractHttpUrl(child);
-        if (imageUrl) return imageUrl;
-    }
-    for (const child of Object.values(object)) {
-        const nested = findRemoteImageUrl(child, depth + 1);
-        if (nested) return nested;
-    }
-}
-
-function extractHttpUrl(value: string): string | undefined {
-    const httpIndex = asciiCaseInsensitiveIndexOf(value, 'http://');
-    const httpsIndex = asciiCaseInsensitiveIndexOf(value, 'https://');
-    const start = httpIndex < 0 ? httpsIndex : httpsIndex < 0 ? httpIndex : Math.min(httpIndex, httpsIndex);
-    if (start < 0) return;
-    let end = start;
-    const maximumEnd = Math.min(value.length, start + 4_096);
-    while (end < maximumEnd && !isUrlTerminator(value.charCodeAt(end))) end += 1;
-    return end > start ? value.slice(start, end) : undefined;
-}
-
-function isUrlTerminator(code: number): boolean {
-    return isAsciiWhitespace(code) || code === 34 || code === 39 || code === 41;
-}
-
-function asciiCaseInsensitiveIndexOf(
-    value: string,
-    needle: string,
-    fromIndex = 0,
-    requireAtStart = false,
-): number {
-    const lastStart = requireAtStart ? fromIndex : value.length - needle.length;
-    for (let start = fromIndex; start <= lastStart; start += 1) {
-        let offset = 0;
-        while (offset < needle.length) {
-            const code = value.charCodeAt(start + offset);
-            const folded = code >= 65 && code <= 90 ? code + 32 : code;
-            if (folded !== needle.charCodeAt(offset)) break;
-            offset += 1;
-        }
-        if (offset === needle.length) return start;
-        if (requireAtStart) return -1;
-    }
-    return -1;
-}
-
-function objectAt(value: unknown, path: Array<string | number>): unknown {
-    return path.reduce<unknown>((current, key) => {
-        if (Array.isArray(current) && typeof key === 'number') return current[key];
-        if (current && typeof current === 'object' && typeof key === 'string')
-            return (current as Record<string, unknown>)[key];
-        return undefined;
-    }, value);
-}
-
-function stringAt(value: unknown, path: Array<string | number>): string | undefined {
-    const found = objectAt(value, path);
-    return typeof found === 'string' && found.trim() ? found : undefined;
-}
-
-function rawStringAt(value: unknown, path: Array<string | number>): string | undefined {
-    const found = objectAt(value, path);
-    return typeof found === 'string' && found.length ? found : undefined;
-}
-
-function geminiResponseText(value: unknown): string | undefined {
-    const parts = objectAt(value, ['candidates', 0, 'content', 'parts']);
-    if (!Array.isArray(parts)) return;
-    const text = parts
-        .map(part => stringAt(part, ['text']))
-        .filter((part): part is string => Boolean(part))
-        .join('\n')
-        .trim();
-    return text || undefined;
-}
-
-function findStringByKey(
-    value: unknown,
-    keys: Set<string>,
-    predicate: (value: string) => boolean,
-    depth = 0,
-): string | undefined {
-    if (depth > 8 || !value || typeof value !== 'object') return;
-    for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
-        if (keys.has(key) && typeof child === 'string' && predicate(child)) return child;
-        const nested = findStringByKey(child, keys, predicate, depth + 1);
-        if (nested) return nested;
-    }
-}
-
-function safeError(error: unknown): string {
-    return error instanceof Error ? error.message.slice(0, 300) : String(error).slice(0, 300);
-}
-
-function httpFailure(status: number, details: ImageProviderErrorDetails): ImageProviderError {
-    const message = `中转站返回 HTTP ${status}`;
-    if ([408, 425, 500, 502, 503, 504].includes(status)) {
-        return new AmbiguousImageProviderError(`${message}，结果暂时无法确认`, details);
-    }
-    return new DefinitiveImageProviderError(message, details);
-}
-
-function withProviderTelemetry(error: unknown, telemetry: ProviderTelemetry): ImageProviderError {
-    const message = safeError(error);
-    if (error instanceof LocalImageProcessingError) {
-        return new LocalImageProcessingError(
-            message,
-            { ...telemetry, ...error.details },
-            error.sourceErrorName,
-        );
-    }
-    if (error instanceof RetryableImageProviderError) {
-        return new RetryableImageProviderError(message, { ...telemetry, ...error.details });
-    }
-    if (error instanceof AmbiguousImageProviderError) {
-        return new AmbiguousImageProviderError(message, { ...telemetry, ...error.details });
-    }
-    if (error instanceof DefinitiveImageProviderError) {
-        return new DefinitiveImageProviderError(message, { ...telemetry, ...error.details });
-    }
-    return new DefinitiveImageProviderError(message, telemetry);
-}
-
-function withImageProcessingTelemetry(error: unknown, telemetry: ProviderTelemetry): ImageProviderError {
-    if (error instanceof ImageProviderError) return withProviderTelemetry(error, telemetry);
-    return new LocalImageProcessingError(
-        '中转站返回的图片无法解析',
-        telemetry,
-        error instanceof Error ? error.name.slice(0, 100) : typeof error,
-    );
-}
-
-function responseErrorDetails(response: Response): ImageProviderErrorDetails {
-    const retryAfter = Number(response.headers.get('retry-after'));
-    return {
-        httpStatus: response.status,
-        providerRequestId:
-            response.headers.get('x-request-id') ??
-            response.headers.get('request-id') ??
-            response.headers.get('x-goog-request-id') ??
-            undefined,
-        ...(Number.isFinite(retryAfter) && retryAfter > 0 ? { retryAfterSeconds: retryAfter } : {}),
-    };
-}
-
-function responseTelemetry(response: Response, payload: unknown): ProviderTelemetry {
-    const headerRequestId = responseErrorDetails(response).providerRequestId;
-    const providerRequestId =
-        stringAt(payload, ['id']) ??
-        stringAt(payload, ['responseId']) ??
-        findStringByKey(payload, new Set(['responseId', 'requestId']), value => Boolean(value.trim())) ??
-        headerRequestId;
-    const usageSource = findObjectByKey(payload, new Set(['usage', 'usageMetadata', 'billing'])) ?? undefined;
-    const usage = usageSource ? sanitizeUsage(usageSource) : undefined;
-    const costValue =
-        numericValue(objectAt(usageSource, ['total_cost'])) ??
-        numericValue(objectAt(usageSource, ['totalCost'])) ??
-        numericValue(objectAt(usageSource, ['cost'])) ??
-        numericValue(findValueByKey(payload, new Set(['actual_cost', 'actualCost', 'total_cost'])));
-    const currency =
-        stringAt(usageSource, ['currency']) ??
-        stringAt(payload, ['currency']) ??
-        (costValue == null ? undefined : 'USD');
-    return {
-        httpStatus: response.status,
-        providerRequestId,
-        ...(costValue != null && costValue >= 0 && costValue <= 2_000
-            ? { actualCostMicrounits: Math.round(costValue * 1_000_000) }
-            : {}),
-        ...(currency && /^[A-Za-z]{3}$/u.test(currency) ? { costCurrency: currency.toUpperCase() } : {}),
-        ...(usage && Object.keys(usage).length ? { usage } : {}),
-    };
-}
-
-function numericValue(value: unknown): number | undefined {
-    if (typeof value === 'number' && Number.isFinite(value)) return value;
-    if (typeof value === 'string' && value.trim() && Number.isFinite(Number(value))) return Number(value);
-}
-
-function findObjectByKey(value: unknown, keys: Set<string>, depth = 0): Record<string, unknown> | undefined {
-    if (depth > 6 || !value || typeof value !== 'object') return;
-    for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
-        if (keys.has(key) && child && typeof child === 'object' && !Array.isArray(child)) {
-            return child as Record<string, unknown>;
-        }
-        const nested = findObjectByKey(child, keys, depth + 1);
-        if (nested) return nested;
-    }
-}
-
-function findValueByKey(value: unknown, keys: Set<string>, depth = 0): unknown {
-    if (depth > 6 || !value || typeof value !== 'object') return;
-    for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
-        if (keys.has(key)) return child;
-        const nested = findValueByKey(child, keys, depth + 1);
-        if (nested !== undefined) return nested;
-    }
-}
-
-function sanitizeUsage(value: Record<string, unknown>, depth = 0): Record<string, any> {
-    if (depth > 4) return {};
-    const entries = Object.entries(value).slice(0, 40);
-    const sanitized: Record<string, any> = {};
-    for (const [key, child] of entries) {
-        if (!/^[A-Za-z0-9_.-]{1,64}$/u.test(key)) continue;
-        if (typeof child === 'number' || typeof child === 'boolean' || child == null) {
-            sanitized[key] = child;
-        } else if (Array.isArray(child)) {
-            sanitized[key] = child.slice(0, 20).filter(item => ['number', 'boolean'].includes(typeof item));
-        } else if (typeof child === 'object') {
-            sanitized[key] = sanitizeUsage(child as Record<string, unknown>, depth + 1);
-        }
-    }
-    return sanitized;
-}
-
-function collectModelIdentifiers(value: unknown, depth = 0): string[] {
-    if (depth > 6 || value == null) return [];
-    if (Array.isArray(value)) {
-        return value.flatMap(item => collectModelIdentifiers(item, depth + 1));
-    }
-    if (typeof value !== 'object') return [];
-    const identifiers: string[] = [];
-    for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
-        if (['id', 'name', 'model', 'modelId'].includes(key) && typeof child === 'string') {
-            identifiers.push(child);
-        } else if (typeof child === 'object' && child != null) {
-            identifiers.push(...collectModelIdentifiers(child, depth + 1));
-        }
-    }
-    return identifiers;
-}
-
-function sameModelIdentifier(left: string, right: string): boolean {
-    const normalize = (value: string) =>
-        value
-            .trim()
-            .replace(/^models\//iu, '')
-            .toLowerCase();
-    return normalize(left) === normalize(right);
-}
-
-async function readResponseText(
-    response: Response,
-    maxBytes: number,
-    timeoutMs = REQUEST_TIMEOUT_MS,
-    timeoutMessage = '中转站响应体超时',
-): Promise<string> {
-    return (await readResponseBytes(response, maxBytes, timeoutMs, timeoutMessage)).toString('utf8');
-}
-
-async function readResponseBytes(
-    response: Response,
-    maxBytes: number,
-    timeoutMs: number,
-    timeoutMessage: string,
-): Promise<Buffer> {
-    const declared = Number(response.headers.get('content-length') ?? 0);
-    if (declared > maxBytes) throw new DefinitiveImageProviderError('中转站响应超过安全大小限制');
-    if (!response.body) return Buffer.alloc(0);
-    const reader = response.body.getReader();
-    const chunks: Buffer[] = [];
-    let total = 0;
-    const deadline = Date.now() + timeoutMs;
-    while (true) {
-        const remainingMs = deadline - Date.now();
-        if (remainingMs <= 0) {
-            await reader.cancel().catch(() => undefined);
-            throw new AmbiguousImageProviderError(timeoutMessage);
-        }
-        let chunk: ReadableStreamReadResult<Uint8Array>;
-        try {
-            chunk = await readChunkWithTimeout(reader, remainingMs, timeoutMessage);
-        } catch (error) {
-            await reader.cancel().catch(() => undefined);
-            throw error;
-        }
-        const { done, value } = chunk;
-        if (done) break;
-        total += value.byteLength;
-        if (total > maxBytes) {
-            await reader.cancel().catch(() => undefined);
-            throw new DefinitiveImageProviderError('中转站响应超过安全大小限制');
-        }
-        chunks.push(Buffer.from(value));
-    }
-    return Buffer.concat(chunks, total);
-}
-
-async function readChunkWithTimeout(
-    reader: ReadableStreamDefaultReader<Uint8Array>,
-    timeoutMs: number,
-    timeoutMessage: string,
-): Promise<ReadableStreamReadResult<Uint8Array>> {
-    return new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => reject(new AmbiguousImageProviderError(timeoutMessage)), timeoutMs);
-        reader.read().then(
-            value => {
-                clearTimeout(timeout);
-                resolve(value);
-            },
-            error => {
-                clearTimeout(timeout);
-                reject(new AmbiguousImageProviderError(`读取中转站响应失败：${safeError(error)}`));
-            },
-        );
-    });
-}
-
-function remainingTimeout(deadline: number): number {
-    return Math.max(1, deadline - Date.now());
-}
-
-function safeProviderMetadata(
-    providerRequestId: string | undefined,
-    revisedPrompt: string | undefined,
-    mimeType: string,
-    delivery: 'inline' | 'remote-url',
-): Record<string, string> {
-    return {
-        delivery,
-        mimeType: mimeType.slice(0, 64),
-        ...(providerRequestId ? { providerRequestId: providerRequestId.slice(0, 200) } : {}),
-        ...(revisedPrompt ? { revisedPrompt: revisedPrompt.slice(0, 2_000) } : {}),
-    };
 }

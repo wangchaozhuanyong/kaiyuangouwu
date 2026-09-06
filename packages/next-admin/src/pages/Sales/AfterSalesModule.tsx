@@ -17,7 +17,9 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
+import { PageSizeSelect } from '../../components/PageSizeSelect';
 import { GET_AFTER_SALES_REQUESTS, TRANSITION_AFTER_SALES_REQUEST } from '../../graphql/sales.graphql';
+import { usePageSize } from '../../hooks/use-page-size';
 import { useUrlTab } from '../../hooks/use-url-tab';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import {
@@ -105,7 +107,6 @@ interface AfterSalesData {
     afterSalesRequests: { items: AfterSalesRequest[]; totalItems: number };
 }
 
-const PAGE_SIZE = 20;
 const EMPTY_REQUESTS: AfterSalesRequest[] = [];
 const tabs: Array<{ id: AfterSalesTab; label: string }> = [
     { id: 'ALL', label: '全部工单' },
@@ -146,6 +147,7 @@ export function AfterSalesModule() {
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useUrlTab<AfterSalesTab>(AFTER_SALES_TABS, 'all');
     const [page, setPage] = useState(0);
+    const [pageSize, setPageSize] = usePageSize(setPage);
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedRequest, setSelectedRequest] = useState<AfterSalesRequest | null>(null);
     const [resolution, setResolution] = useState('');
@@ -157,8 +159,8 @@ export function AfterSalesModule() {
     const { data, loading, error, refetch } = useQuery<AfterSalesData>(GET_AFTER_SALES_REQUESTS, {
         variables: {
             options: {
-                skip: page * PAGE_SIZE,
-                take: PAGE_SIZE,
+                skip: page * pageSize,
+                take: pageSize,
                 ...(activeTab === 'ALL' ? {} : { state: activeTab }),
                 ...(searchTerm.trim() ? { search: searchTerm.trim() } : {}),
             },
@@ -172,7 +174,7 @@ export function AfterSalesModule() {
 
     const requests = data?.afterSalesRequests.items ?? EMPTY_REQUESTS;
     const totalItems = data?.afterSalesRequests.totalItems ?? 0;
-    const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
+    const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
     const visibleRequests = requests;
     const settledRefunds = useMemo(
         () =>
@@ -512,15 +514,20 @@ export function AfterSalesModule() {
                                 </div>
                             )
                         )}
-                        <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50/60 px-4 py-3 text-xs text-slate-500">
+                        <div className="flex flex-wrap gap-y-3 gap-x-4 items-center justify-between border-t border-slate-200 bg-slate-50/60 px-4 py-3 text-xs text-slate-500">
                             <span>
                                 第 {page + 1} / {totalPages} 页，共 {totalItems} 笔
                             </span>
-                            <div className="flex gap-1.5">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                                <PageSizeSelect
+                                    pageSize={pageSize}
+                                    onPageSizeChange={setPageSize}
+                                    disabled={loading}
+                                />
                                 <button
                                     type="button"
                                     onClick={() => setPage(current => Math.max(0, current - 1))}
-                                    disabled={page === 0}
+                                    disabled={loading || page === 0}
                                     className="rounded-lg border border-slate-300 bg-white p-1.5 disabled:opacity-40"
                                     aria-label="上一页"
                                 >
@@ -529,7 +536,7 @@ export function AfterSalesModule() {
                                 <button
                                     type="button"
                                     onClick={() => setPage(current => Math.min(totalPages - 1, current + 1))}
-                                    disabled={page >= totalPages - 1}
+                                    disabled={loading || page >= totalPages - 1}
                                     className="rounded-lg border border-slate-300 bg-white p-1.5 disabled:opacity-40"
                                     aria-label="下一页"
                                 >

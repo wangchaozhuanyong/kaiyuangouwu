@@ -10,15 +10,15 @@ import { languageCodeFor } from '../i18n';
 import { offlineLoadError } from '../loading-state';
 import { PUBLIC_QUERY_GC_TIME, ROUTE_QUERY_STALE_TIME, storefrontQueryKeys } from '../query-client';
 import { PageSkeleton } from '../route-loading';
+import { NotificationsPageContext } from '../storefront-page-contexts';
 import { routeNavigateOptions } from '../storefront-router';
 import { afterSalesNotification, orderNotification } from '../storefront-ui/order-ui';
 import { EmptyState, Subpage } from '../storefront-ui/page-shell';
-import { useStorefront } from '../StorefrontContext';
 import { ActiveCustomer, MarketConfig, StorefrontLanguage } from '../types';
 
 // TODO: Fix internal imports later
 
-interface NotificationsPageProps {
+export interface NotificationsPageProps {
     api: ShopApi;
     customer: ActiveCustomer | null;
     market: MarketConfig;
@@ -31,7 +31,7 @@ export function NotificationsPage() {
     const navigateTo = (route: RouteState) => void navigate(routeNavigateOptions(route) as never);
     const router = useRouter();
     const goBack = () => router.history.back();
-    const { api, customer, market, locale, language } = useStorefront<NotificationsPageProps>();
+    const { api, customer, market, locale, language } = NotificationsPageContext.useValue();
     const isZh = language === 'zh';
     const orders = customer?.orders.items ?? [];
     const afterSalesQuery = useQuery({

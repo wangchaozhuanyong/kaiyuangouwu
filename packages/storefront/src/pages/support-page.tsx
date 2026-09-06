@@ -8,8 +8,8 @@ import qqIcon from '../assets/support/qq.svg';
 import telegramIcon from '../assets/support/telegram.svg';
 import wechatIcon from '../assets/support/wechat.svg';
 import whatsappIcon from '../assets/support/whatsapp.svg';
+import { SupportPageContext } from '../storefront-page-contexts';
 import { EmptyState, Sheet, Subpage } from '../storefront-ui/page-shell';
-import { useStorefront } from '../StorefrontContext';
 import {
     StorefrontSupportChannel,
     SupportChannelKey,
@@ -22,7 +22,7 @@ import { StorefrontContentBlock, StorefrontLanguage } from '../types';
 
 // TODO: Fix internal imports later
 
-interface SupportPageProps {
+export interface SupportPageProps {
     content?: StorefrontContentBlock;
     language: StorefrontLanguage;
 }
@@ -38,7 +38,7 @@ const channelIcons: Record<SupportChannelKey, string> = {
 export function SupportPage() {
     const router = useRouter();
     const goBack = () => router.history.back();
-    const { content, language } = useStorefront<SupportPageProps>();
+    const { content, language } = SupportPageContext.useValue();
     const isZh = language === 'zh';
     return (
         <Subpage

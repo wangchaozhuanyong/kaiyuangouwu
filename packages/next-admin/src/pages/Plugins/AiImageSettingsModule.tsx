@@ -19,6 +19,7 @@ import {
 import { useState } from 'react';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
+import { PageSizeSelect } from '../../components/PageSizeSelect';
 import {
     ACTIVATE_IMAGE_SKILL_MUTATION,
     IMAGE_GENERATION_ADMIN_QUERY,
@@ -33,6 +34,7 @@ import {
     type ImageModelRecord,
     type ImageProviderProtocol,
 } from '../../graphql/plugins.graphql';
+import { usePageSize } from '../../hooks/use-page-size';
 import { useUrlTab } from '../../hooks/use-url-tab';
 import { getStatusLabel } from '../../utils/status-labels';
 import { toUserFacingError } from '../../utils/user-facing-error';
@@ -46,7 +48,6 @@ type OutputAction =
 type JobStateFilter =
     'ALL' | 'QUEUED' | 'RUNNING' | 'PARTIAL_SUCCESS' | 'SUCCEEDED' | 'FAILED' | 'UNKNOWN' | 'CANCELLED';
 
-const JOB_PAGE_SIZE = 20;
 const JOB_STATE_OPTIONS: Array<[JobStateFilter, string]> = [
     ['ALL', '全部状态'],
     ['QUEUED', '排队中'],
@@ -65,11 +66,12 @@ export function AiImageSettingsModule() {
     const [outputAction, setOutputAction] = useState<OutputAction | null>(null);
     const [activateRelease, setActivateRelease] = useState<{ id: string; version: number } | null>(null);
     const [jobPage, setJobPage] = useState(0);
+    const [pageSize, setPageSize] = usePageSize(setJobPage);
     const [jobState, setJobState] = useState<JobStateFilter>('ALL');
     const query = useQuery<ImageGenerationAdminResult>(IMAGE_GENERATION_ADMIN_QUERY, {
         variables: {
-            skip: jobPage * JOB_PAGE_SIZE,
-            take: JOB_PAGE_SIZE,
+            skip: jobPage * pageSize,
+            take: pageSize,
             state: jobState === 'ALL' ? null : jobState,
         },
         fetchPolicy: 'cache-and-network',
@@ -81,7 +83,7 @@ export function AiImageSettingsModule() {
     const config = query.data?.imageGenerationAdminConfig;
     const jobs = query.data?.imageGenerationJobs.items ?? [];
     const jobTotal = query.data?.imageGenerationJobs.totalItems ?? 0;
-    const jobTotalPages = Math.max(1, Math.ceil(jobTotal / JOB_PAGE_SIZE));
+    const jobTotalPages = Math.max(1, Math.ceil(jobTotal / pageSize));
     const unknownCount = jobs.flatMap(job => job.outputs).filter(output => output.state === 'UNKNOWN').length;
 
     const showNotice = (message: string) => {
@@ -198,6 +200,8 @@ export function AiImageSettingsModule() {
                     />
                 ) : tab === 'JOBS' ? (
                     <JobsPanel
+                        pageSize={pageSize}
+                        onPageSizeChange={setPageSize}
                         jobs={jobs}
                         total={jobTotal}
                         page={jobPage}
@@ -648,6 +652,8 @@ function ModelEditor({
 }
 
 function JobsPanel({
+    pageSize,
+    onPageSizeChange,
     jobs,
     total,
     page,
@@ -658,6 +664,8 @@ function JobsPanel({
     onStateChange,
     onAction,
 }: {
+    pageSize: number;
+    onPageSizeChange: (size: number) => void;
     jobs: ImageGenerationJobRecord[];
     total: number;
     page: number;
@@ -830,11 +838,16 @@ function JobsPanel({
                             </tbody>
                         </table>
                     </div>
-                    <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50/60 px-4 py-3 text-xs text-slate-500">
+                    <div className="flex flex-wrap gap-y-3 gap-x-4 items-center justify-between border-t border-slate-200 bg-slate-50/60 px-4 py-3 text-xs text-slate-500">
                         <span>
                             共 {total} 条，第 {page + 1}/{totalPages} 页
                         </span>
-                        <div className="flex gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <PageSizeSelect
+                                pageSize={pageSize}
+                                onPageSizeChange={onPageSizeChange}
+                                disabled={loading}
+                            />
                             <button
                                 type="button"
                                 disabled={page === 0 || loading}

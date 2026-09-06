@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import { HomePage } from '../../src/pages/home-page';
-import { StorefrontContext } from '../../src/StorefrontContext';
+import { HomePageContext } from '../../src/storefront-page-contexts';
 import '../../src/styles.css';
 import '../../src/styles/desktop-layout.css';
 import { StorefrontContentBlock, StorefrontContentSettings } from '../../src/types';
@@ -58,7 +58,7 @@ function Fixture() {
         imageUrl: block.imageUrl ? apiOrigin + block.imageUrl : null,
     }));
     return (
-        <StorefrontContext.Provider
+        <HomePageContext.Provider
             value={{
                 products: [],
                 collections: [],
@@ -107,7 +107,7 @@ function Fixture() {
             }}
         >
             <HomePage />
-        </StorefrontContext.Provider>
+        </HomePageContext.Provider>
     );
 }
 const router = createRouter({

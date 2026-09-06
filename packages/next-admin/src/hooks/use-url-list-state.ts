@@ -1,15 +1,38 @@
 import { useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { DEFAULT_PAGE_SIZE, normalizePageSize } from '../utils/pagination';
 
 function readPage(searchParams: URLSearchParams, parameter: string) {
     const parsedPage = Number.parseInt(searchParams.get(parameter) ?? '1', 10);
     return Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage - 1 : 0;
 }
 
-export function useUrlListState(searchParameter = 'search', pageParameter = 'page') {
+export function useUrlListState(
+    searchParameter = 'search',
+    pageParameter = 'page',
+    pageSizeParameter = 'pageSize',
+) {
     const [searchParams, setSearchParams] = useSearchParams();
     const searchTerm = searchParams.get(searchParameter) ?? '';
     const page = readPage(searchParams, pageParameter);
+    const pageSize = normalizePageSize(searchParams.get(pageSizeParameter));
+
+    const setPageSize = useCallback(
+        (value: number) => {
+            setSearchParams(
+                current => {
+                    const next = new URLSearchParams(current);
+                    const size = normalizePageSize(value);
+                    if (size === DEFAULT_PAGE_SIZE) next.delete(pageSizeParameter);
+                    else next.set(pageSizeParameter, String(size));
+                    next.delete(pageParameter);
+                    return next;
+                },
+                { replace: true },
+            );
+        },
+        [pageParameter, pageSizeParameter, setSearchParams],
+    );
 
     const setSearchTerm = useCallback(
         (value: string) => {
@@ -58,5 +81,5 @@ export function useUrlListState(searchParameter = 'search', pageParameter = 'pag
         [pageParameter, setSearchParams],
     );
 
-    return { page, searchParams, searchTerm, setFilter, setPage, setSearchTerm };
+    return { page, pageSize, searchParams, searchTerm, setFilter, setPage, setPageSize, setSearchTerm };
 }

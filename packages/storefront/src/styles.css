@@ -1,12 +1,12 @@
 @import 'tailwindcss';
 @import './styles/home-showcase.css';
 @import './styles/ai-product-covers.css';
+@import './styles/cart-layout.css';
 @import './styles/account-security.css';
 @import './styles/logistics.css';
 @import './styles/auth-flow.css';
 @import './styles/auth-overrides.css';
 @import './styles/brand-shell.css';
-
 :root {
     color: #0f172a;
     background: #f1f5f9;
@@ -560,6 +560,12 @@ img {
     --page-bottom-fixed-height: 0px;
     --page-end-gap: var(--subpage-end-gap);
     overflow-x: clip;
+}
+
+.page.category-page {
+    /* The page reserves the navigation; its inner columns only need an end gap. */
+    --page-end-gap: 0px;
+    --page-surface: var(--paper);
 }
 
 .product-detail-page {

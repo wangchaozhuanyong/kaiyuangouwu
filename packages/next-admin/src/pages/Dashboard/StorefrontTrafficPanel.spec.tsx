@@ -68,11 +68,12 @@ describe('storefront traffic panel', () => {
         expect(html).not.toContain('今日浏览量');
     });
 
-    it('provides date controls and points to the shop-domain privacy preference', () => {
+    it('provides date controls without pointing to a hidden storefront setting', () => {
         const html = renderToStaticMarkup(<StorefrontTrafficPanel />);
         expect(html).toContain('最近 7 天');
         expect(html).toContain('最近 30 天');
-        expect(html).toContain('我的 → 访问统计');
+        expect(html).toContain('后台页面本身不采集访问');
+        expect(html).not.toContain('我的 → 访问统计');
         expect(html).not.toContain('已排除本浏览器访问');
     });
 });

@@ -19,10 +19,10 @@ import {
     publicQueryMeta,
     storefrontQueryKeys,
 } from '../query-client';
+import { CategoryPageContext } from '../storefront-page-contexts';
 import { routeNavigateOptions } from '../storefront-router';
 import { EmptyState, ListSkeleton, Sheet } from '../storefront-ui/page-shell';
 import { collectionImage, productImage, SafeImage } from '../storefront-ui/product-display';
-import { useStorefront } from '../StorefrontContext';
 import {
     CollectionSummary,
     FulfillmentType,
@@ -34,7 +34,7 @@ import {
 
 // TODO: Fix internal imports later
 
-interface CategoryPageProps {
+export interface CategoryPageProps {
     api: ShopApi;
     products: Product[];
     collections: CollectionSummary[];
@@ -90,7 +90,7 @@ export function CategoryPage() {
         onFilterChange,
         onNotify,
         onRetry,
-    } = useStorefront<CategoryPageProps>();
+    } = CategoryPageContext.useValue();
     const queryClient = useQueryClient();
     const isZh = language === 'zh';
     const clientPluginBlock = contentBlocks.find(block => block.type === 'CLIENT_PLUGINS');

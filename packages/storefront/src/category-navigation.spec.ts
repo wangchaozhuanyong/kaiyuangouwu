@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { readStorefrontStylesheet } from './test-stylesheet';
 
 import { categoryTargetSelection, centeredHorizontalScrollLeft } from './category-navigation';
+import { readStorefrontStylesheet } from './test-stylesheet';
 
 describe('content category target navigation', () => {
     const collections = [
@@ -106,9 +106,7 @@ describe('category navigation responsive spacing', () => {
     });
 
     it('aligns the mobile all-category row with the sort toolbar', () => {
-        expect(stylesheet).toMatch(
-            /\.category-subcat-sidebar\s*\{[^}]*padding:\s*0 0 calc\(var\(--bottom-navigation-height, 66px\) \+ 24px\);/,
-        );
+        expect(stylesheet).toMatch(/\.category-subcat-sidebar\s*\{[^}]*padding:\s*0 0 12px;/);
         expect(stylesheet).toMatch(
             /\.subcat-side-all\s*\{[^}]*height:\s*38px;[^}]*min-height:\s*38px;[^}]*padding-block:\s*0;[^}]*flex-shrink:\s*0;/,
         );

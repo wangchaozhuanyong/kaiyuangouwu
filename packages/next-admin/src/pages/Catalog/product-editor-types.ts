@@ -15,8 +15,6 @@ export const PRODUCT_EDITOR_TABS = {
     attributes: 'FACETS_COLLECTIONS',
 } as const;
 export const SOURCE_LANGUAGE_CODE = 'zh_Hans';
-export const LOOKUP_PAGE_SIZE = 30;
-export const ASSET_PAGE_SIZE = 40;
 export const PRODUCT_MANAGED_CUSTOM_FIELDS = [
     'fulfillmentType',
     'refundPolicy',
@@ -211,4 +209,10 @@ export const variantFulfillmentInput = (variant: ProductVariantState, fulfillmen
             digitalStockPolicy,
         },
     };
+};
+
+export type ProductEditorFormErrors = {
+    name?: string;
+    description?: string;
+    variants?: Record<number, { sku?: string; price?: string; stock?: string }>;
 };

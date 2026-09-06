@@ -498,6 +498,23 @@ describe('ShopApi storefront mutations', () => {
         expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 
+    it('does not hide a permission error after an optional schema error', async () => {
+        const fetchMock = vi.fn().mockResolvedValue(
+            new Response(
+                JSON.stringify({
+                    errors: [
+                        { message: 'Cannot query field "activeStorefrontFlashSales" on type "Query".' },
+                        { message: 'Forbidden' },
+                    ],
+                }),
+                { status: 200, headers: { 'content-type': 'application/json' } },
+            ),
+        );
+        vi.stubGlobal('fetch', fetchMock);
+        await expect(new ShopApi(market).storefrontContent()).rejects.toThrow('activeStorefrontFlashSales');
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
     it('does not hide non-schema storefront content failures behind the legacy fallback', async () => {
         const fetchMock = vi.fn().mockResolvedValue(
             new Response(JSON.stringify({ errors: [{ message: 'Internal server error' }] }), {

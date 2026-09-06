@@ -63,8 +63,8 @@ import {
     calculateStorefrontRealtimeRetry,
     createRequestSignal,
     ErrorResult,
-    GraphQlResponse,
     isStorefrontQuery,
+    parseShopApiResponse,
     readSessionAuthToken,
     SEND_CLIENT_CHANNEL_TOKEN,
     SHOP_API_QUERY_TIMEOUT_MS,
@@ -585,20 +585,7 @@ export class ShopApi {
         } finally {
             timeout.cleanup();
         }
-        let body: GraphQlResponse<T>;
-        try {
-            body = JSON.parse(rawBody) as GraphQlResponse<T>;
-        } catch {
-            throw new Error(
-                rawBody.trim()
-                    ? `Shop API returned an invalid response (${response.status})`
-                    : `Shop API did not respond (${response.status})`,
-            );
-        }
-        if (!response.ok || body.errors?.length || !body.data) {
-            throw new Error(body.errors?.[0]?.message ?? `Shop API request failed (${response.status})`);
-        }
-        return body.data;
+        return parseShopApiResponse<T>(rawBody, response.status, response.ok);
     }
 
     private captureAuthToken(response: Response): void {
