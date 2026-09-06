@@ -88,9 +88,9 @@ import {
 } from './order-confirmation-email';
 import { resolveRuntimeAdminCredentials } from './runtime-admin-credentials';
 import { StorefrontNativeAuthenticationStrategy } from './storefront-native-authentication-strategy';
-// import { FieldTestPlugin } from './test-plugins/field-test/field-test-plugin';
 
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+const testPaymentsEnabled = process.env.CONTROLLED_TEST_PAYMENTS_ENABLED === 'true';
 const IS_INSTRUMENTED = process.env.IS_INSTRUMENTED === 'true';
 const BOOTSTRAP_BASE_SCHEMA = process.env.VENDURE_BOOTSTRAP_BASE_SCHEMA === 'true';
 const runtimeAdminCredentials = resolveRuntimeAdminCredentials(process.env, IS_PRODUCTION);
@@ -980,7 +980,7 @@ export const devConfig: VendureConfig = {
                       },
                   }),
                   StorefrontCartPlugin,
-                  CommerceFulfillmentPlugin,
+                  CommerceFulfillmentPlugin.init({ testPaymentsEnabled }),
                   CatalogManagementPlugin,
                   StoreManagementPlugin.init({
                       enabled: storefrontPromotionGateEnabled,

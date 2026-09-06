@@ -4,6 +4,7 @@ import {
     ConfigService,
     LanguageCode,
     mergeConfig,
+    Order,
     OrderService,
     PaymentMethodHandler,
     RequestContextService,
@@ -73,7 +74,7 @@ const config = mergeConfig(testConfig(), {
             enabled: false,
             signingSecret: 'cart-qa-signing-secret-not-for-production',
         }),
-        CommerceFulfillmentPlugin,
+        CommerceFulfillmentPlugin.init({ testPaymentsEnabled: true }),
     ],
 });
 const { server, adminClient, shopClient } = createTestEnvironment(config);
@@ -617,4 +618,368 @@ describe('complete cart domain on MySQL', () => {
         expect(prepared.status, prepared.message).toBe('APPLIED');
         expect(prepared.cart.state).toBe('PAYMENT_PENDING');
     });
+});
+
+// Controlled checkout uses the real cart, payment, fulfillment and store plugins against a disposable DB.
+describe('controlled test payments', () => {
+    it('restricts accounts, completes a synthetic order, and leaves real goods and money untouched', async () => {
+        const client = new SimpleGraphQLClient(config, `http://127.0.0.1:${config.apiOptions.port}/shop-api`);
+        const guest = new SimpleGraphQLClient(config, `http://127.0.0.1:${config.apiOptions.port}/shop-api`);
+        const other = new SimpleGraphQLClient(config, `http://127.0.0.1:${config.apiOptions.port}/shop-api`);
+        const channel = (
+            await adminClient.query(gql`
+                query {
+                    activeChannel {
+                        id
+                    }
+                }
+            `)
+        ).activeChannel;
+        const createCustomer = gql`
+            mutation ($input: CreateCustomerInput!) {
+                createCustomer(input: $input, password: "local-controlled-test-only") {
+                    ... on Customer {
+                        id
+                        user {
+                            id
+                            verified
+                        }
+                    }
+                    ... on ErrorResult {
+                        message
+                    }
+                }
+            }
+        `;
+        const created = await adminClient.query(createCustomer, {
+            input: {
+                firstName: 'Controlled',
+                lastName: 'Test',
+                emailAddress: 'controlled-payment@example.test',
+            },
+        });
+        await adminClient.query(createCustomer, {
+            input: { firstName: 'Outside', lastName: 'Test', emailAddress: 'outside-payment@example.test' },
+        });
+        const customer = created.createCustomer;
+        expect(customer.user?.verified, customer.message).toBe(true);
+        const code = `controlled-test-payment-${channel.id}`;
+        const input = {
+            code,
+            enabled: false,
+            translations: [
+                { languageCode: 'zh_Hans', name: '测试支付', description: '仅用于测试，不真实扣款或交付' },
+            ],
+            checker: { code: 'controlled-test-payment-checker', arguments: [] },
+            handler: {
+                code: 'controlled-test-payment-handler',
+                arguments: [
+                    { name: 'channelId', value: JSON.stringify(channel.id) },
+                    { name: 'customerIds', value: JSON.stringify(customer.id) },
+                ],
+            },
+        };
+        const createMethod = gql`
+            mutation ($input: CreatePaymentMethodInput!) {
+                createPaymentMethod(input: $input) {
+                    id
+                    enabled
+                }
+            }
+        `;
+        const updateMethod = gql`
+            mutation ($input: UpdatePaymentMethodInput!) {
+                updatePaymentMethod(input: $input) {
+                    id
+                    enabled
+                    checker {
+                        code
+                    }
+                }
+            }
+        `;
+        await expect(adminClient.query(createMethod, { input: { ...input, checker: null } })).rejects.toThrow(
+            '测试',
+        );
+        const method = (await adminClient.query(createMethod, { input })).createPaymentMethod;
+        const storedMethod = (
+            await adminClient.query(
+                gql`
+                    query ($id: ID!) {
+                        paymentMethod(id: $id) {
+                            checker {
+                                code
+                            }
+                            handler {
+                                code
+                                args {
+                                    name
+                                    value
+                                }
+                            }
+                        }
+                    }
+                `,
+                { id: method.id },
+            )
+        ).paymentMethod;
+        expect(storedMethod.checker?.code, JSON.stringify(storedMethod)).toBe(
+            'controlled-test-payment-checker',
+        );
+        const eligible = gql`
+            query {
+                eligiblePaymentMethods {
+                    code
+                    isEligible
+                }
+            }
+        `;
+        const pay = gql`
+            mutation ($method: String!) {
+                addPaymentToOrder(
+                    input: { method: $method, metadata: { state: "Settled", public: { testPayment: false } } }
+                ) {
+                    ... on Order {
+                        id
+                        code
+                        active
+                        state
+                        orderPlacedAt
+                        payments {
+                            id
+                            state
+                            amount
+                            metadata
+                        }
+                        lines {
+                            id
+                            quantity
+                        }
+                    }
+                    ... on ErrorResult {
+                        message
+                        errorCode
+                    }
+                }
+            }
+        `;
+        const readClient = async (c: SimpleGraphQLClient) => (await c.query(query)).storefrontCart;
+        const commandFor = async (c: SimpleGraphQLClient, operation: object) => {
+            const cart = await readClient(c);
+            const result = (
+                await c.query(mutation, {
+                    input: {
+                        commandId: randomUUID(),
+                        cartId: cart.id,
+                        expectedRevision: cart.revision,
+                        ...operation,
+                    },
+                })
+            ).applyStorefrontCartCommand;
+            expect(result.status, result.message).toBe('APPLIED');
+            return result.cart;
+        };
+        const prepare = async (c: SimpleGraphQLClient, email: string) => {
+            await commandFor(c, { changes: { add: [{ productVariantId: variants[0], quantity: 1 }] } });
+            await commandFor(c, { beginCheckout: true });
+            if (c === guest)
+                await c.query(
+                    gql`
+                        mutation ($input: CreateCustomerInput!) {
+                            setCustomerForOrder(input: $input) {
+                                ... on Order {
+                                    id
+                                }
+                                ... on ErrorResult {
+                                    message
+                                }
+                            }
+                        }
+                    `,
+                    {
+                        input: { firstName: 'Guest', lastName: 'Test', emailAddress: email },
+                    },
+                );
+            await commandFor(c, { deliveryEmail: { emailAddress: email, confirmEmailAddress: email } });
+            return commandFor(c, { preparePayment: true });
+        };
+        await client.asUserWithCredentials('controlled-payment@example.test', 'local-controlled-test-only');
+        const before = await prepare(client, 'controlled-payment@example.test');
+        expect((await client.query(eligible)).eligiblePaymentMethods.some((m: any) => m.code === code)).toBe(
+            false,
+        );
+        await expect(client.query(pay, { method: code })).rejects.toThrow();
+        await adminClient.query(updateMethod, { input: { id: method.id, enabled: true } });
+        await expect(
+            adminClient.query(updateMethod, { input: { id: method.id, checker: null } }),
+        ).rejects.toThrow('测试');
+        expect(
+            (await client.query(eligible)).eligiblePaymentMethods.find((m: any) => m.code === code)
+                ?.isEligible,
+        ).toBe(true);
+
+        // Guest ownership alone must not authorize a test payment.
+        await prepare(guest, 'guest-test@example.test');
+        expect(
+            (await guest.query(eligible)).eligiblePaymentMethods.find((m: any) => m.code === code)
+                ?.isEligible,
+        ).toBe(false);
+        const deniedGuest = (await guest.query(pay, { method: code })).addPaymentToOrder;
+        expect(deniedGuest.errorCode).toBe('INELIGIBLE_PAYMENT_METHOD_ERROR');
+        await other.asUserWithCredentials('outside-payment@example.test', 'local-controlled-test-only');
+        await prepare(other, 'outside-payment@example.test');
+        expect(
+            (await other.query(eligible)).eligiblePaymentMethods.find((m: any) => m.code === code)
+                ?.isEligible,
+        ).toBe(false);
+        expect((await other.query(pay, { method: code })).addPaymentToOrder.errorCode).toBe(
+            'INELIGIBLE_PAYMENT_METHOD_ERROR',
+        );
+
+        const connection = server.app.get(TransactionalConnection);
+        const snapshot = async () => {
+            const names = [
+                'stock_movement',
+                'auto_card_delivery',
+                'manual_digital_delivery',
+                'referral_reward',
+                'referral_ledger_entry',
+            ];
+            const result: Record<string, unknown> = {};
+            for (const table of names)
+                result[table] = await connection.rawConnection.query(
+                    `SELECT COUNT(*) AS count FROM ${table}`,
+                );
+            result.stock = await connection.rawConnection.query(
+                'SELECT id, stockOnHand, stockAllocated FROM stock_level ORDER BY id',
+            );
+            return result;
+        };
+        const baseline = await snapshot();
+        const token = (
+            await client.query(gql`
+                mutation {
+                    createStorefrontOrderConfirmationToken {
+                        token
+                    }
+                }
+            `)
+        ).createStorefrontOrderConfirmationToken.token;
+        const paid = (await client.query(pay, { method: code })).addPaymentToOrder;
+        expect(paid.state, paid.message).toBe('TestPaymentSettled');
+        expect(paid.active).toBe(false);
+        expect(paid.orderPlacedAt).toBeNull();
+        expect(paid.payments).toHaveLength(1);
+        expect(paid.payments[0].state).toBe('TestSettled');
+        expect(paid.payments[0].metadata.public.testPayment).toBe(true);
+        expect(await snapshot()).toEqual(baseline);
+        const cartAfter = await readClient(client);
+        expect(cartAfter.state).toBe('OPEN');
+        expect(cartAfter.lines).toHaveLength(0);
+        const confirmation = await client.query(
+            gql`
+                query ($token: String!) {
+                    storefrontOrderByConfirmationToken(token: $token) {
+                        code
+                        state
+                    }
+                }
+            `,
+            { token },
+        );
+        expect(confirmation.storefrontOrderByConfirmationToken.state).toBe('TestPaymentSettled');
+        const repeated = await client.query(pay, { method: code });
+        expect(repeated.addPaymentToOrder.state).not.toBe('TestPaymentSettled');
+        const runtimeConfig = server.app.get(ConfigService);
+        const idStrategy = runtimeConfig.entityOptions.entityIdStrategy ?? runtimeConfig.entityIdStrategy;
+        const decoded = idStrategy.decodeId(paid.id);
+        const saved = await connection.rawConnection
+            .getRepository(Order)
+            .findOneOrFail({ where: { id: decoded }, relations: ['payments'] });
+        expect(saved.payments).toHaveLength(1);
+        await expect(
+            adminClient.query(
+                gql`
+                    mutation ($id: ID!) {
+                        transitionOrderToState(id: $id, state: "PaymentSettled") {
+                            ... on Order {
+                                state
+                            }
+                            ... on ErrorResult {
+                                message
+                            }
+                        }
+                    }
+                `,
+                { id: paid.id },
+            ),
+        ).resolves.toMatchObject({ transitionOrderToState: { message: expect.any(String) } });
+        const fulfillment = await adminClient.query(
+            gql`
+                mutation ($input: FulfillOrderInput!) {
+                    addFulfillmentToOrder(input: $input) {
+                        ... on Fulfillment {
+                            id
+                            state
+                        }
+                        ... on ErrorResult {
+                            message
+                        }
+                    }
+                }
+            `,
+            {
+                input: {
+                    lines: [{ orderLineId: paid.lines[0].id, quantity: 1 }],
+                    handler: {
+                        code: 'manual-fulfillment',
+                        arguments: [
+                            { name: 'method', value: 'test' },
+                            { name: 'trackingCode', value: '' },
+                        ],
+                    },
+                },
+            },
+        );
+        expect(fulfillment.addFulfillmentToOrder.message).toBeTruthy();
+        expect(await snapshot()).toEqual(baseline);
+
+        // Concurrent submissions must produce exactly one simulated payment and no delivery.
+        const concurrentCart = await prepare(client, 'controlled-payment@example.test');
+        const submissions = await Promise.allSettled([
+            client.query(pay, { method: code }),
+            client.query(pay, { method: code }),
+        ]);
+        expect(
+            submissions.some(
+                result =>
+                    result.status === 'fulfilled' &&
+                    result.value.addPaymentToOrder.state === 'TestPaymentSettled',
+            ),
+        ).toBe(true);
+        const concurrentOrder = await connection.rawConnection.getRepository(Order).findOneOrFail({
+            where: {
+                id: idStrategy.decodeId(concurrentCart.checkoutOrder.id),
+            },
+            relations: ['payments'],
+        });
+        expect(concurrentOrder.state).toBe('TestPaymentSettled');
+        expect(concurrentOrder.payments).toHaveLength(1);
+        expect(await snapshot()).toEqual(baseline);
+
+        // A subsequent order still uses the normal settlement and manual delivery path.
+        await prepare(client, 'controlled-payment@example.test');
+        const regular = (await client.query(pay, { method: 'cart-local-fixture' })).addPaymentToOrder;
+        expect(regular.state, regular.message).toBe('PaymentSettled');
+        expect(regular.orderPlacedAt).not.toBeNull();
+        expect(regular.payments[0].state).toBe('Settled');
+        const deliveries = await connection.rawConnection.query(
+            'SELECT COUNT(*) AS count FROM manual_digital_delivery',
+        );
+        expect(Number(deliveries[0].count)).toBeGreaterThan(
+            Number((baseline.manual_digital_delivery as any[])[0].count),
+        );
+        await adminClient.query(updateMethod, { input: { id: method.id, enabled: false } });
+        expect(before.checkoutOrder.id).not.toBe(regular.id);
+    }, 60_000);
 });

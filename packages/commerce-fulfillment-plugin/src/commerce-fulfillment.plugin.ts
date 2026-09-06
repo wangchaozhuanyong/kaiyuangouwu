@@ -23,6 +23,8 @@ import {
     physicalSubtotalShippingCalculator,
     supportedDestinationEligibilityChecker,
 } from './commerce-shipping-options';
+import { createControlledTestPayment } from './controlled-test-payment';
+import { ControlledTestPaymentConfigService } from './controlled-test-payment-config.service';
 import { CustomerDeliveryEmailShopResolver } from './customer-delivery-email.resolver';
 import { CustomerDeliveryEmailService } from './customer-delivery-email.service';
 import { CustomerOrderCancellationService } from './customer-order-cancellation.service';
@@ -80,6 +82,7 @@ import './types';
     ],
     controllers: [DigitalDeliveryController],
     providers: [
+        ControlledTestPaymentConfigService,
         CartDeliveryCommandAdapter,
         AfterSalesService,
         AutoCardCipherService,
@@ -406,10 +409,32 @@ import './types';
             }),
         ];
         config.paymentOptions.process = [...(config.paymentOptions.process ?? []), commercePaymentProcess];
+        const testPayment = createControlledTestPayment(CommerceFulfillmentPlugin.testPaymentsEnabled);
+        config.orderOptions.process.push(testPayment.orderProcess);
+        config.paymentOptions.process.push(testPayment.paymentProcess);
+        config.shippingOptions.process = [
+            testPayment.fulfillmentProcess,
+            ...(config.shippingOptions.process ?? []),
+        ];
+        // Retain the checker when globally disabled so saved methods become ineligible without breaking checkout.
+        config.paymentOptions.paymentMethodEligibilityCheckers = [
+            ...(config.paymentOptions.paymentMethodEligibilityCheckers ?? []),
+            testPayment.checker,
+        ];
+        if (CommerceFulfillmentPlugin.testPaymentsEnabled) {
+            config.paymentOptions.paymentMethodHandlers.push(testPayment.handler);
+        }
         config.schedulerOptions.tasks.push(reconcileAutoCardDeliveriesTask);
         config.schedulerOptions.tasks.push(reconcileManualDigitalDeliveriesTask);
         return config;
     },
     compatibility: '^3.7.0',
 })
-export class CommerceFulfillmentPlugin {}
+export class CommerceFulfillmentPlugin {
+    static testPaymentsEnabled = false;
+
+    static init(options: { testPaymentsEnabled?: boolean }) {
+        this.testPaymentsEnabled = options.testPaymentsEnabled === true;
+        return CommerceFulfillmentPlugin;
+    }
+}

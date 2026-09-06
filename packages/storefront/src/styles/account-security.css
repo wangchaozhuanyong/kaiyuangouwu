@@ -1955,3 +1955,101 @@
     margin-top: 8px;
     color: var(--muted);
 }
+
+.order-confirmation-page {
+    color: var(--text);
+    padding: 24px 14px calc(28px + var(--safe-bottom));
+}
+
+.order-confirmation-hero,
+.order-confirmation-summary,
+.order-confirmation-actions {
+    max-width: 680px;
+    margin: 0 auto;
+}
+
+.order-confirmation-hero {
+    padding: 20px 0 24px;
+    text-align: center;
+}
+
+.order-confirmation-icon {
+    width: 56px;
+    height: 56px;
+    margin: 0 auto 12px;
+    border-radius: 50%;
+    background: #ecfdf5;
+    color: #047857;
+    display: grid;
+    place-items: center;
+}
+
+.order-confirmation-hero h1 {
+    margin: 6px 0 12px;
+    font-size: 26px;
+    font-weight: var(--font-weight-bold);
+}
+
+.order-confirmation-hero > p,
+.order-confirmation-hero > span:last-child,
+.order-confirmation-summary dt,
+.order-confirmation-summary > small {
+    color: var(--muted);
+    font-size: 14px;
+    line-height: var(--line-height-relaxed);
+}
+
+.order-confirmation-summary {
+    padding: 18px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    background: var(--paper);
+}
+
+.order-confirmation-summary dl > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 8px 0;
+}
+
+.order-confirmation-summary dd {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    text-align: right;
+    font-weight: var(--font-weight-semibold);
+}
+
+.order-confirmation-summary > small {
+    display: block;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--line);
+}
+
+.order-confirmation-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding-top: 20px;
+}
+
+.order-confirmation-actions button {
+    flex: 1 1 160px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 48px;
+    padding: 10px 16px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    background: var(--paper);
+    font-weight: var(--font-weight-semibold);
+}
+
+.order-confirmation-actions button.primary-action {
+    color: white;
+    background: var(--accent);
+    border-color: var(--accent);
+}
