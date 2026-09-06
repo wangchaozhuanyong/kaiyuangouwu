@@ -20,6 +20,7 @@ describe('visual preset Shop API compatibility', () => {
             new Response(
                 JSON.stringify({
                     data: {
+                        activeChannel: { id: 'store-a' },
                         storefrontVisualPreset: {
                             channelId: 'store-a',
                             presetId: 'future-skin',
@@ -33,6 +34,7 @@ describe('visual preset Shop API compatibility', () => {
         await expect(new ShopApi(market).storefrontVisualPreset()).resolves.toEqual({
             channelId: 'store-a',
             presetId: 'classic',
+            desktopLayout: 'classic',
             revision: '1',
         });
         expect(fetchMock.mock.calls[0][1].headers['vendure-token']).toBe(market.code);
@@ -52,6 +54,69 @@ describe('visual preset Shop API compatibility', () => {
         await expect(new ShopApi(market).storefrontVisualPreset()).resolves.toMatchObject({
             presetId: 'classic',
         });
+    });
+
+    it('retains the saved skin while an older API lacks the layout field', async () => {
+        const fetchMock = vi
+            .fn()
+            .mockResolvedValueOnce(
+                new Response(
+                    JSON.stringify({
+                        errors: [
+                            {
+                                message:
+                                    'Cannot query field "desktopLayout" on type "StorefrontVisualPreset".',
+                            },
+                        ],
+                    }),
+                ),
+            )
+            .mockResolvedValueOnce(
+                new Response(
+                    JSON.stringify({
+                        data: {
+                            activeChannel: { id: 'store-a' },
+                            storefrontVisualPreset: {
+                                channelId: 'store-a',
+                                presetId: 'modern-oriental',
+                                revision: '2',
+                            },
+                        },
+                    }),
+                ),
+            );
+        vi.stubGlobal('fetch', fetchMock);
+        await expect(new ShopApi(market).storefrontVisualPreset()).resolves.toEqual({
+            channelId: 'store-a',
+            presetId: 'modern-oriental',
+            desktopLayout: 'classic',
+            revision: '2',
+        });
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('rejects configuration returned for a different channel', async () => {
+        vi.stubGlobal(
+            'fetch',
+            vi.fn().mockResolvedValue(
+                new Response(
+                    JSON.stringify({
+                        data: {
+                            activeChannel: { id: 'store-b' },
+                            storefrontVisualPreset: {
+                                channelId: 'store-a',
+                                presetId: 'classic',
+                                desktopLayout: 'catalog',
+                                revision: '1',
+                            },
+                        },
+                    }),
+                ),
+            ),
+        );
+        await expect(new ShopApi(market).storefrontVisualPreset()).rejects.toThrow(
+            'Storefront channel mismatch',
+        );
     });
 
     it('surfaces a server failure instead of treating it as a saved default selection', async () => {

@@ -28,7 +28,7 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
         storefrontName,
     } = state;
 
-    const desktopCatalog = useDesktopCatalog(storefrontContextValue.storefrontCode);
+    const desktopCatalog = useDesktopCatalog(storefrontContextValue.desktopLayout);
 
     return (
         <DesktopLayoutContext.Provider value={desktopCatalog}>

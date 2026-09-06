@@ -21,3 +21,17 @@ export const storefrontBrandingSchema = gql`
         privacyEmail: String
     }
 `;
+
+export const storefrontPreviewBrandingSchema = gql`
+    type StorefrontPreviewBranding {
+        channelId: ID!
+        name: String!
+        backgroundColor: String
+        primaryColor: String
+        accentColor: String
+        highlightColor: String
+    }
+    extend type Query {
+        storefrontPreviewBranding: StorefrontPreviewBranding!
+    }
+`;

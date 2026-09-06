@@ -1,6 +1,6 @@
 import { useInfiniteQuery } from '@tanstack/react-query';
-import { ArrowRight, ChevronDown, Search, SlidersHorizontal, Sparkles, WifiOff } from 'lucide-react';
-import { FormEvent, ReactNode, useEffect, useState } from 'react';
+import { ArrowRight, Search, SlidersHorizontal, Sparkles, WifiOff } from 'lucide-react';
+import { FormEvent, useEffect, useState } from 'react';
 
 import { ShopApi } from '../api';
 import { matchesCatalogFilters } from '../api/helpers';
@@ -34,7 +34,7 @@ interface DesktopCatalogContext {
     navigate: (route: RouteState) => void;
 }
 
-export function DesktopCatalogPage({ children }: { children?: ReactNode }) {
+export function DesktopCatalogPage() {
     const runtime: DesktopCatalogContext = useStorefront();
     const { route, market, language, locale, collections, contentBlocks, navigate } = runtime;
     const isZh = language === 'zh';
@@ -74,7 +74,6 @@ export function DesktopCatalogPage({ children }: { children?: ReactNode }) {
     const [minimum, setMinimum] = useState(route.minPrice ?? '');
     const [maximum, setMaximum] = useState(route.maxPrice ?? '');
     const [fulfillment, setFulfillment] = useState(route.fulfillment ?? 'all');
-    const [showHighlights, setShowHighlights] = useState(false);
     useEffect(() => {
         setMinimum(route.minPrice ?? '');
         setMaximum(route.maxPrice ?? '');
@@ -347,18 +346,6 @@ export function DesktopCatalogPage({ children }: { children?: ReactNode }) {
                             onNavigate={navigate}
                         />
                     ))}
-                {children ? (
-                    <details
-                        className="desktop-store-highlights"
-                        onToggle={event => setShowHighlights(event.currentTarget.open)}
-                    >
-                        <summary>
-                            {isZh ? '店铺精选与公告' : 'Store highlights and announcements'}
-                            <ChevronDown aria-hidden="true" />
-                        </summary>
-                        {showHighlights ? children : null}
-                    </details>
-                ) : null}
             </div>
             <footer className="desktop-catalog-footer">
                 <span>{runtime.storefrontName}</span>

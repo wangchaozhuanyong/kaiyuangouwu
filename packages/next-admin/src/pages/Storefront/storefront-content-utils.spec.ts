@@ -121,6 +121,28 @@ describe('storefront support content editor', () => {
 
         expect(storefrontBlockValidation(block)).toContain('有效的 http(s) 网址');
     });
+    it('keeps cleared auth titles and selling points in the save payload', () => {
+        const draft = newContentBlock('AUTH_LOGIN', 0);
+        for (const translation of draft.translations) {
+            translation.title = '';
+            translation.subtitle = '';
+            translation.ctaLabel = '';
+        }
+        for (const item of draft.items) {
+            for (const translation of item.translations) translation.label = '';
+        }
+        expect(storefrontBlockValidation(draft)).toBeNull();
+        const input = storefrontBlockInput(draft);
+        expect(input.translations).toHaveLength(2);
+        expect(input.translations.every(translation => !translation.title)).toBe(true);
+        expect(
+            input.items.every(
+                item =>
+                    item.translations.length === 2 &&
+                    item.translations.every(translation => !translation.label),
+            ),
+        ).toBe(true);
+    });
 });
 
 it('only submits edited English fields and keeps cleared English explicit', () => {

@@ -56,12 +56,20 @@ const IMAGE_CONFIG_FIELDS = gql`
 
 const IMAGE_PROVIDER_FIELDS = gql`
     fragment NextAdminImageProviderFields on ImageProviderAdminConfig {
+        id
+        code
+        name
+        purpose
         scope
         credentialConfigured
         credentialEnabled
         baseUrl
         apiKeyLast4
         textModelId
+        orchestrationModelId
+        priority
+        weight
+        modelCodes
         providerHealthStatus
         providerHealthMessage
     }
@@ -86,8 +94,8 @@ export const SAVE_IMAGE_PROVIDER_MUTATION = gql`
 `;
 
 export const TEST_IMAGE_PROVIDER_MUTATION = gql`
-    mutation NextAdminTestImageProvider($scope: ImageProviderScope!) {
-        testImageProviderConnection(scope: $scope) {
+    mutation NextAdminTestImageProvider($id: ID!) {
+        testImageProviderCredential(id: $id) {
             ok
             message
             testedAt
@@ -285,12 +293,20 @@ export type ImageProviderProtocol =
     | 'GEMINI_NATIVE_STREAM';
 
 export interface ImageProviderRecord {
+    id: string;
+    code: string;
+    name: string;
+    purpose: 'IMAGE' | 'PROMPT' | 'BOTH';
     scope: ImageProviderScope;
     credentialConfigured: boolean;
     credentialEnabled: boolean;
     baseUrl: string;
     apiKeyLast4: string;
     textModelId: string;
+    orchestrationModelId: string;
+    priority: number;
+    weight: number;
+    modelCodes: string[];
     providerHealthStatus: string;
     providerHealthMessage: string | null;
 }

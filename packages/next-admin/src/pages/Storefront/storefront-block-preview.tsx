@@ -1,3 +1,14 @@
+import { gql } from '@apollo/client';
+import { useQuery } from '@apollo/client/react';
+import { useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
+import {
+    AuthVisual,
+    authVisualStyle,
+    configuredColor,
+    readableColor,
+    type AuthVisualData,
+} from '../../../../storefront-content-plugin/src/shared/auth-visual';
+import { getActiveChannelToken } from '../../apollo';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { type StorefrontContentBlock, type StorefrontLanguageCode } from '../../graphql/storefront.graphql';
 import { blockTranslation, itemTranslation } from './storefront-content-utils';
@@ -10,6 +21,8 @@ export function BlockPreview({
     block: StorefrontContentBlock;
     language: StorefrontLanguageCode;
 }) {
+    if (block.type === 'AUTH_LOGIN' || block.type === 'AUTH_REGISTER')
+        return <AuthBlockPreview block={block} language={language} />;
     const translation = blockTranslation(block, language);
     const image = block.imageAsset?.preview ?? block.imageUrl;
     if (block.type === 'SUPPORT') {
@@ -158,6 +171,195 @@ export function BlockPreview({
                                 ))}
                         </div>
                     )}
+                </div>
+            </div>
+        </section>
+    );
+}
+
+const PREVIEW_BRANDING = gql`
+    query StorefrontPreviewBranding {
+        storefrontVisualPreset {
+            presetId
+        }
+        activeChannel {
+            id
+            token
+        }
+        storefrontPreviewBranding {
+            channelId
+            name
+            backgroundColor
+            primaryColor
+            accentColor
+            highlightColor
+        }
+    }
+`;
+
+function AuthBlockPreview({
+    block,
+    language,
+}: {
+    block: StorefrontContentBlock;
+    language: StorefrontLanguageCode;
+}) {
+    const [viewport, setViewport] = useState<'mobile' | 'desktop'>('mobile');
+    const previewHost = useRef<HTMLDivElement>(null);
+    const previewCanvas = useRef<HTMLDivElement>(null);
+    const [previewSize, setPreviewSize] = useState({ width: 0, height: 0 });
+    const previewWidth = viewport === 'desktop' ? 1024 : 390;
+    const previewScale = Math.min(1, previewSize.width / previewWidth || 1);
+    useLayoutEffect(() => {
+        const host = previewHost.current;
+        const canvas = previewCanvas.current;
+        if (!host || !canvas) return;
+        const resize = () => {
+            const width = host.clientWidth;
+            const height = canvas.offsetHeight;
+            setPreviewSize(current =>
+                current.width === width && current.height === height ? current : { width, height },
+            );
+        };
+        const observer = new ResizeObserver(resize);
+        observer.observe(host);
+        observer.observe(canvas);
+        resize();
+        return () => observer.disconnect();
+    }, []);
+    const brandingQuery = useQuery<{
+        activeChannel: { id: string; token: string };
+        storefrontVisualPreset: { presetId: string };
+        storefrontPreviewBranding: {
+            channelId: string;
+            name: string;
+            backgroundColor?: string;
+            primaryColor?: string;
+        };
+    }>(PREVIEW_BRANDING, { fetchPolicy: 'no-cache' });
+    const branding =
+        brandingQuery.data?.storefrontPreviewBranding.channelId === brandingQuery.data?.activeChannel.id &&
+        (!getActiveChannelToken() || getActiveChannelToken() === brandingQuery.data?.activeChannel.token)
+            ? brandingQuery.data?.storefrontPreviewBranding
+            : undefined;
+    const oriental = Boolean(
+        branding && brandingQuery.data?.storefrontVisualPreset.presetId === 'modern-oriental',
+    );
+    const background = configuredColor(branding?.backgroundColor);
+    const accent = configuredColor(branding?.primaryColor);
+    const content: AuthVisualData = {
+        ...blockTranslation(block, language),
+        imageUrl: block.imageAsset?.preview ?? block.imageUrl,
+        backgroundColor: block.backgroundColor,
+        textColor: block.textColor,
+        settings: block.settings,
+        items: block.items.map(item => ({
+            ...itemTranslation(item, language),
+            id: item.id,
+            enabled: item.enabled,
+        })),
+    };
+    const isZh = language === 'zh_Hans';
+    return (
+        <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+            <div className="flex items-center justify-between border-b border-slate-100 p-3">
+                <h3 className="text-xs font-bold">{isZh ? '登录 / 注册预览' : 'Authentication preview'}</h3>
+                <div className="flex gap-2">
+                    {(['mobile', 'desktop'] as const).map(value => (
+                        <button
+                            type="button"
+                            key={value}
+                            aria-pressed={viewport === value}
+                            onClick={() => setViewport(value)}
+                            className="rounded border px-2 py-1 text-xs"
+                        >
+                            {value === 'mobile' ? '手机' : '电脑'}
+                        </button>
+                    ))}
+                </div>
+            </div>
+            {brandingQuery.error && (
+                <p role="alert" className="p-3 text-xs">
+                    品牌配色加载失败，请刷新预览。
+                </p>
+            )}
+            <div style={{ padding: 12 }}>
+                <div ref={previewHost} data-auth-preview-viewport>
+                    <div style={{ height: previewSize.height * previewScale }}>
+                        <div
+                            ref={previewCanvas}
+                            style={
+                                {
+                                    ...authVisualStyle(content),
+                                    '--auth-store-background':
+                                        background ?? (oriental ? '#f6f2ea' : '#f1f5f9'),
+                                    '--auth-store-foreground': background
+                                        ? readableColor(background)
+                                        : oriental
+                                          ? '#203346'
+                                          : '#172033',
+                                    '--accent': accent ?? (oriental ? '#a63d32' : '#635bff'),
+                                    '--accent-foreground': accent ? readableColor(accent) : '#ffffff',
+                                    width: previewWidth,
+                                    transform: `scale(${previewScale})`,
+                                    transformOrigin: 'top left',
+                                    display: 'grid',
+                                    gridTemplateColumns: viewport === 'desktop' ? '.9fr 1.1fr' : '1fr',
+                                    alignItems: 'start',
+                                } as CSSProperties
+                            }
+                        >
+                            <AuthVisual content={content} language={isZh ? 'zh' : 'en'} />
+                            <div
+                                style={{
+                                    padding: 32,
+                                    background: '#ffffff',
+                                    color: '#172033',
+                                    display: 'grid',
+                                    gap: 16,
+                                }}
+                            >
+                                <h3 style={{ margin: 0 }}>
+                                    {block.type === 'AUTH_LOGIN'
+                                        ? isZh
+                                            ? '登录'
+                                            : 'Sign in'
+                                        : isZh
+                                          ? '注册账户'
+                                          : 'Create account'}
+                                </h3>
+                                {block.type === 'AUTH_LOGIN' && (
+                                    <p>
+                                        {isZh
+                                            ? '登录后管理你的账户与订单'
+                                            : 'Sign in to manage your account and orders'}
+                                    </p>
+                                )}
+                                <div style={{ border: '1px solid #cbd5e1', padding: 12 }}>
+                                    {isZh ? '电子邮箱' : 'Email address'}
+                                </div>
+                                <div style={{ border: '1px solid #cbd5e1', padding: 12 }}>
+                                    {isZh ? '密码' : 'Password'}
+                                </div>
+                                <span
+                                    style={{
+                                        background: 'var(--auth-accent)',
+                                        color: 'var(--auth-button-foreground)',
+                                        padding: 12,
+                                        textAlign: 'center',
+                                    }}
+                                >
+                                    {block.type === 'AUTH_LOGIN'
+                                        ? isZh
+                                            ? '登录'
+                                            : 'Sign in'
+                                        : isZh
+                                          ? '注册账户'
+                                          : 'Create account'}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </section>

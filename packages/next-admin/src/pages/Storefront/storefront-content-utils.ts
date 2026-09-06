@@ -350,7 +350,12 @@ export function storefrontBlockInput(
                 body: body.trim(),
                 ctaLabel: ctaLabel.trim(),
             }))
-            .filter(translation => translation.languageCode === 'en' || Boolean(translation.title)),
+            .filter(
+                translation =>
+                    translation.languageCode === 'en' ||
+                    ['AUTH_LOGIN', 'AUTH_REGISTER'].includes(block.type) ||
+                    Boolean(translation.title),
+            ),
         items: block.items.map((item, position) => {
             const channel =
                 typeof item.settings?.supportChannel === 'string' ? item.settings.supportChannel : '';
@@ -395,7 +400,12 @@ export function storefrontBlockInput(
                         label: label.trim(),
                         description: description.trim(),
                     }))
-                    .filter(translation => translation.languageCode === 'en' || Boolean(translation.label)),
+                    .filter(
+                        translation =>
+                            translation.languageCode === 'en' ||
+                            ['AUTH_LOGIN', 'AUTH_REGISTER'].includes(block.type) ||
+                            Boolean(translation.label),
+                    ),
             };
         }),
     };
@@ -404,7 +414,11 @@ export function storefrontBlockInput(
 export function storefrontBlockValidation(block: StorefrontContentBlock): string | null {
     if (!block.internalName.trim()) return '请填写内部管理名称';
     if (!block.code.trim()) return '缺少区块编码';
-    if (!blockTranslation(block, 'zh_Hans').title.trim()) return '请填写中文标题';
+    if (
+        !['AUTH_LOGIN', 'AUTH_REGISTER'].includes(block.type) &&
+        !blockTranslation(block, 'zh_Hans').title.trim()
+    )
+        return '请填写中文标题';
     if (block.enabled && block.type === 'HERO' && !block.imageAsset && !block.imageUrl?.trim()) {
         return '启用首页主视觉前必须选择图片';
     }
@@ -429,7 +443,11 @@ export function storefrontBlockValidation(block: StorefrontContentBlock): string
         if (!block.items.some(item => item.enabled)) return '请至少启用一种客服联系方式';
     }
     for (const [index, item] of block.items.entries()) {
-        if (!(block.type === 'SUPPORT' && !item.enabled) && !itemTranslation(item, 'zh_Hans').label.trim()) {
+        if (
+            !['AUTH_LOGIN', 'AUTH_REGISTER'].includes(block.type) &&
+            !(block.type === 'SUPPORT' && !item.enabled) &&
+            !itemTranslation(item, 'zh_Hans').label.trim()
+        ) {
             return `请填写第 ${index + 1} 个子项的中文名称`;
         }
         if (block.type !== 'SUPPORT' && item.targetType !== 'NONE' && !item.targetValue?.trim()) {

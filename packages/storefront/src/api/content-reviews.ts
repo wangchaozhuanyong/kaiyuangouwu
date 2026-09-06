@@ -13,8 +13,9 @@ import type {
 import type { StorefrontContentQueryResult } from './helpers';
 
 import {
-    normalizeStorefrontVisualPreset,
     type StorefrontVisualPresetConfig,
+    normalizeStorefrontDesktopLayout,
+    normalizeStorefrontVisualPreset,
 } from '../../../storefront-content-plugin/src/visual-presets';
 
 import { BaseDomainApi } from './base-domain-api';
@@ -23,23 +24,37 @@ import { afterSalesFields, storefrontReviewFields } from './fragments';
 
 export class ContentReviewsApi extends BaseDomainApi {
     async storefrontVisualPreset(signal?: AbortSignal): Promise<StorefrontVisualPresetConfig> {
+        type PresetResponse = {
+            activeChannel: { id: string };
+            storefrontVisualPreset: StorefrontVisualPresetConfig;
+        };
+        let result: PresetResponse;
         try {
-            const result = await this.request<{ storefrontVisualPreset: StorefrontVisualPresetConfig }>(
-                'query StorefrontVisualPreset { storefrontVisualPreset { channelId presetId revision } }',
-                undefined,
-                signal,
-            );
-            return {
-                ...result.storefrontVisualPreset,
-                presetId: normalizeStorefrontVisualPreset(result.storefrontVisualPreset?.presetId),
-            };
-        } catch (error) {
-            // During a rolling release, an older API keeps its existing appearance.
-            if (error instanceof Error && /Cannot query field "storefrontVisualPreset"/.test(error.message)) {
-                return { channelId: '', presetId: 'classic', revision: 'default' };
+            try {
+                result = await this.request<PresetResponse>(
+                    `query StorefrontVisualPreset { activeChannel { id } storefrontVisualPreset { channelId presetId desktopLayout revision } }`,
+                    undefined,
+                    signal,
+                );
+            } catch (error) {
+                if (!isSupportedContentSchemaFallback(error, 'desktopLayout')) throw error;
+                result = await this.request<PresetResponse>(
+                    `query StorefrontVisualPreset { activeChannel { id } storefrontVisualPreset { channelId presetId revision } }`,
+                    undefined,
+                    signal,
+                );
             }
-            throw error;
+        } catch (error) {
+            if (!isSupportedContentSchemaFallback(error, 'visualPreset')) throw error;
+            return { channelId: '', presetId: 'classic', desktopLayout: 'classic', revision: 'default' };
         }
+        if (result.activeChannel.id !== result.storefrontVisualPreset.channelId)
+            throw new Error('Storefront channel mismatch');
+        return {
+            ...result.storefrontVisualPreset,
+            presetId: normalizeStorefrontVisualPreset(result.storefrontVisualPreset.presetId),
+            desktopLayout: normalizeStorefrontDesktopLayout(result.storefrontVisualPreset.desktopLayout),
+        };
     }
 
     async storefrontConfig(signal?: AbortSignal): Promise<StorefrontConfig> {

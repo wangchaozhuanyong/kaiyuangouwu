@@ -90,6 +90,7 @@ const commonTypes = gql`
     type StorefrontVisualPreset {
         channelId: ID!
         presetId: String!
+        desktopLayout: String!
         revision: String!
     }
 
@@ -237,7 +238,8 @@ export const adminApiExtensions = gql`
 
     input UpdateStorefrontVisualPresetInput {
         channelId: ID!
-        presetId: String!
+        presetId: String
+        desktopLayout: String
         expectedRevision: String!
     }
 

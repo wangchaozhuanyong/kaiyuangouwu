@@ -11,16 +11,15 @@ function subscribeToDesktopLayout(onChange: () => void) {
     return () => query.removeEventListener('change', onChange);
 }
 
-export function supportsDesktopCatalog(storefrontCode: string): boolean {
-    // The default Channel owns MOYAO's catalog layout. Other storefronts keep their own presentation.
-    return storefrontCode === '__default_channel__';
+export function supportsDesktopCatalog(layout: unknown): boolean {
+    return layout === 'catalog';
 }
 
-export function useDesktopCatalog(storefrontCode: string): boolean {
+export function useDesktopCatalog(layout: unknown): boolean {
     const desktop = useSyncExternalStore(
         subscribeToDesktopLayout,
         () => window.matchMedia(desktopQuery).matches,
         () => false,
     );
-    return desktop && supportsDesktopCatalog(storefrontCode);
+    return desktop && supportsDesktopCatalog(layout);
 }

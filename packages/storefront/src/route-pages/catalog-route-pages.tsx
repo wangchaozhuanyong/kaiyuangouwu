@@ -29,9 +29,10 @@ const SearchPage = lazyRouteComponent(() => import('../pages/search-page'), 'Sea
 export function HomeRoutePage() {
     const desktop = useDesktopLayout();
     return desktop ? (
-        <DesktopCatalogPage>
+        <>
             <HomeRouteContent embedded />
-        </DesktopCatalogPage>
+            <DesktopCatalogPage />
+        </>
     ) : (
         <HomeRouteContent />
     );

@@ -26,9 +26,9 @@ interface StorefrontChannelFields {
 }
 
 const DEFAULT_PROMOTION_BRAND = {
-    zh: 'MOYAO AI｜模钥',
-    en: 'MOYAO AI',
-    logoUrl: '/storefront/moyao-ai/icon.webp',
+    zh: '店铺',
+    en: 'Store',
+    logoUrl: '/storefront/neutral-store.png',
 } as const;
 
 @Injectable()
@@ -207,7 +207,7 @@ export class StorefrontPromotionService {
             null;
         const shareImageUrl = referralShareAsset
             ? this.mediaUrl(ctx.req, referralShareAsset.source)
-            : heroImageUrl;
+            : logoUrl;
         const shareTitle = referralShare
             ? isEnglish
                 ? firstUsableEnglish(referralShare.template.headlineEn) || name

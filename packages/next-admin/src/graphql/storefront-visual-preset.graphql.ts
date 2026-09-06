@@ -11,6 +11,7 @@ export const STOREFRONT_VISUAL_PRESET_QUERY = gql`
         storefrontVisualPreset {
             channelId
             presetId
+            desktopLayout
             revision
         }
     }
@@ -21,6 +22,7 @@ export const UPDATE_STOREFRONT_VISUAL_PRESET_MUTATION = gql`
         updateStorefrontVisualPreset(input: $input) {
             channelId
             presetId
+            desktopLayout
             revision
         }
     }

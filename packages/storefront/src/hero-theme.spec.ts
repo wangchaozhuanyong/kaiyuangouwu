@@ -59,9 +59,13 @@ describe('hero theme', () => {
             }),
         );
 
-        expect(style['--hero-overlay-color']).toBe('#090d16');
-        expect(style['--hero-title-color']).toBe('#ffffff');
-        expect(style['--hero-accent-color']).toBe('#67e8f9');
+        expect(style['--hero-overlay-color']).toBe(
+            'var(--store-background, var(--skin-hero-background, #090d16))',
+        );
+        expect(style['--hero-title-color']).toBe(
+            'var(--store-foreground, var(--skin-hero-foreground, #ffffff))',
+        );
+        expect(style['--hero-accent-color']).toBe('var(--store-primary, var(--skin-hero-accent, #67e8f9))');
     });
 
     it('uses the saved theme independent of position or legacy artwork keys', () => {
@@ -69,7 +73,7 @@ describe('hero theme', () => {
         const moved = { ...first, position: 1 };
         expect(heroThemeStyle(first)).toEqual(heroThemeStyle(moved));
         expect(heroThemeStyle(hero({ settings: { themePreset: 'warm' } }))['--hero-accent-color']).toBe(
-            '#fbbf24',
+            'var(--store-primary, var(--skin-hero-accent, #fbbf24))',
         );
     });
 

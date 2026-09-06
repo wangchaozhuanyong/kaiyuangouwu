@@ -39,7 +39,7 @@ describe('auth visual configuration', () => {
         expect(input.translations.map(translation => translation.languageCode)).toEqual(['zh_Hans', 'en']);
     });
 
-    it('requires a complete Chinese campaign before publishing', () => {
+    it('preserves deliberately cleared copy instead of refilling promotional defaults', () => {
         const draft = createAuthVisualDraft('AUTH_REGISTER');
         const chineseCampaign = draft.items[2].translations.find(
             translation => translation.languageCode === 'zh_Hans',
@@ -47,8 +47,31 @@ describe('auth visual configuration', () => {
         if (!chineseCampaign) {
             throw new Error('Expected the registration campaign to include a Chinese translation');
         }
-        chineseCampaign.label = '';
-
-        expect(isAuthVisualValid(draft)).toBe(false);
+        for (const translation of draft.translations) {
+            translation.title = '';
+            translation.subtitle = '';
+            translation.ctaLabel = '';
+        }
+        for (const item of draft.items) {
+            for (const translation of item.translations) translation.label = '';
+        }
+        draft.backgroundColor = null;
+        draft.textColor = null;
+        draft.settings = { accentColor: '' };
+        const restored = createAuthVisualDraft('AUTH_REGISTER', draft);
+        expect(restored).toEqual(draft);
+        expect(isAuthVisualValid(restored)).toBe(true);
+        const saved = authVisualInput(restored);
+        expect(saved.translations).toHaveLength(2);
+        expect(saved.translations.every(translation => !translation.title && !translation.ctaLabel)).toBe(
+            true,
+        );
+        expect(
+            saved.items.every(
+                item =>
+                    item.translations.length === 2 &&
+                    item.translations.every(translation => !translation.label),
+            ),
+        ).toBe(true);
     });
 });

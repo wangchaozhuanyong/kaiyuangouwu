@@ -118,6 +118,9 @@ export const HERO_CLOUD_BRIDGE_FALLBACK_IMAGE = heroCloudBridgeFallback;
 export const STOREFRONT_LOGO_IMAGE = moyaoAppIcon;
 export const STOREFRONT_WORDMARK_IMAGE = moyaoLogoOnLight;
 export const STOREFRONT_SOCIAL_IMAGE = '/storefront/moyao-ai/social-card.jpg';
+// Explicit empty-brand fallbacks; historical artwork above is retained for existing assets.
+export const NEUTRAL_STOREFRONT_IMAGE = '/storefront/neutral-store.png';
+export const NEUTRAL_STOREFRONT_SOCIAL_IMAGE = '/storefront/neutral-social.png';
 export const ACCOUNT_RECOMMENDATION_CREST_IMAGE = accountRecommendationCrest;
 
 const STATIC_IMAGE_SOURCES = new Map<string, StaticStorefrontImageSource>([

@@ -1,5 +1,12 @@
 /* Opt-in only. The classic preset deliberately has no overrides. */
 html[data-storefront-preset='modern-oriental'] {
+    --skin-background: #f6f2ea;
+    --skin-foreground: #203346;
+    --skin-hero-background: #203346;
+    --skin-hero-foreground: #fffdf8;
+    --skin-hero-body: #ede5d6;
+    --skin-hero-accent: #a63d32;
+    --skin-hero-secondary: #8b3027;
     --bg: #f6f2ea;
     --paper: #fffdf8;
     --surface: #fffdf8;
@@ -56,14 +63,6 @@ html[data-storefront-preset='modern-oriental']
 }
 
 html[data-storefront-preset='modern-oriental']
-    :is(.hero-rich-title, .section-header h2, .subpage-header h1, .auth-hero-message h2) {
-    font-family: var(--font-display);
-    font-weight: 600;
-    letter-spacing: 0.035em;
-    text-wrap: balance;
-}
-
-html[data-storefront-preset='modern-oriental']
     :is(
         .topbar,
         .subpage-header,
@@ -111,70 +110,10 @@ html[data-storefront-preset='modern-oriental'] :is(button, a, input, select, tex
     outline-offset: 3px;
 }
 
-html[data-storefront-preset='modern-oriental']
-    :is(
-        .primary-btn,
-        .primary-button,
-        .hero-rich-cta-btn,
-        .auth-submit,
-        .ai-studio-generate,
-        .ai-studio-generate-button
-    ) {
-    background: var(--accent);
-    border-color: var(--accent);
-    color: #fffdf8;
-    box-shadow: var(--shadow-sm);
-    text-shadow: none;
-    border-radius: var(--radius-sm);
-}
-
-html[data-storefront-preset='modern-oriental']
-    :is(
-        .primary-btn,
-        .primary-button,
-        .hero-rich-cta-btn,
-        .auth-submit,
-        .ai-studio-generate,
-        .ai-studio-generate-button
-    ):hover:not(:disabled) {
-    background: var(--accent-hover);
-    box-shadow: var(--shadow-sm);
-}
-
 html[data-storefront-preset='modern-oriental'] .hero {
     border: 1px solid var(--line);
     border-radius: var(--radius-md);
     box-shadow: var(--shadow-md);
-}
-
-/* Managed imagery stays intact; only its overlay and UI treatment follow the preset. */
-html[data-storefront-preset='modern-oriental'] .hero-rich-image-link {
-    --hero-overlay-color: #203346 !important;
-    --hero-overlay-strong: rgb(32 51 70 / 90%) !important;
-    --hero-overlay-medium: rgb(32 51 70 / 76%) !important;
-    --hero-overlay-soft: rgb(32 51 70 / 40%) !important;
-    --hero-overlay-fade: rgb(32 51 70 / 6%) !important;
-    --hero-title-color: #fffdf8 !important;
-    --hero-body-color: #ede5d6 !important;
-    --hero-accent-color: #a63d32 !important;
-    --hero-accent-secondary-color: #8b3027 !important;
-    --hero-button-text-color: #fffdf8 !important;
-    --hero-title-shadow: none !important;
-    --hero-body-shadow: none !important;
-    --hero-accent-shadow: transparent !important;
-    --hero-accent-text-shadow: transparent !important;
-}
-
-html[data-storefront-preset='modern-oriental']
-    :is(.hero-rich-title, .hero-rich-desc, .hero-rich-pill, .hero-stat-badge, .hero-stat-badge .stat-num) {
-    text-shadow: none;
-    box-shadow: none;
-}
-
-html[data-storefront-preset='modern-oriental'] :is(.hero-rich-pill, .hero-stat-badge) {
-    background: rgb(32 51 70 / 55%);
-    border-color: rgb(200 181 144 / 55%);
-    color: #f4e6c9;
 }
 
 html[data-storefront-preset='modern-oriental'] .auth-page {
@@ -183,24 +122,6 @@ html[data-storefront-preset='modern-oriental'] .auth-page {
     --auth-ink: var(--text);
     --auth-muted: var(--muted);
     --auth-line: var(--line);
-}
-
-html[data-storefront-preset='modern-oriental'] .auth-hero {
-    --auth-hero-accent-color: #ddc89c !important;
-    --auth-hero-overlay-color: #203346 !important;
-    background: #203346;
-}
-
-html[data-storefront-preset='modern-oriental'] .auth-hero::after {
-    background: linear-gradient(180deg, rgb(32 51 70 / 32%), rgb(32 51 70 / 90%));
-}
-
-html[data-storefront-preset='modern-oriental']
-    :is(.auth-hero-benefit-icon, .auth-hero-tags > span, .auth-hero-brand-mark) {
-    background: rgb(32 51 70 / 55%);
-    border-color: rgb(200 181 144 / 45%);
-    color: #ddc89c;
-    box-shadow: none;
 }
 
 html[data-storefront-preset='modern-oriental']
@@ -241,63 +162,32 @@ html[data-storefront-preset='modern-oriental'] :is(.sheet > header, .ai-confirma
 html[data-storefront-preset='modern-oriental'] .primary-action,
 html[data-storefront-preset='modern-oriental'] .auth-page .primary-action,
 html[data-storefront-preset='modern-oriental'] .ai-studio-prompt-tools button {
-    background: var(--accent);
-    color: var(--paper);
-    border-color: var(--accent);
+    background: var(--auth-accent, var(--accent));
+    color: var(--auth-button-foreground, var(--paper));
+    border-color: var(--auth-accent, var(--accent));
     border-radius: var(--radius-sm);
     box-shadow: var(--shadow-sm);
 }
 
 html[data-storefront-preset='modern-oriental'] .auth-page .primary-action:hover:not(:disabled) {
-    background: var(--accent-hover);
+    background: var(--auth-accent, var(--accent-hover));
     box-shadow: var(--shadow-sm);
 }
 
 html[data-storefront-preset='modern-oriental'] .quick-grid .colorful-icon-badge {
-    background: var(--soft) !important;
-    color: var(--accent) !important;
+    background: var(--soft);
+    color: var(--accent);
     border: 1px solid var(--line);
     border-radius: var(--radius-sm);
     box-shadow: none;
 }
 
 html[data-storefront-preset='modern-oriental'] .quick-grid .colorful-icon-badge svg {
-    filter: none !important;
-}
-
-html[data-storefront-preset='modern-oriental'] .home-trust-bar .trust-icon,
-html[data-storefront-preset='modern-oriental'] .hero-stat-badge .stat-num {
-    color: #ddc89c;
+    filter: none;
 }
 
 html[data-storefront-preset='modern-oriental'] .home-trust-bar .trust-icon {
     color: var(--oriental-gold);
-}
-
-/* Navigation colors are managed inline; the opt-in preset owns their active treatment. */
-html[data-storefront-preset='modern-oriental'] .storefront-bottom-nav a > span:last-child,
-html[data-storefront-preset='modern-oriental'] .storefront-bottom-nav a svg {
-    color: var(--muted) !important;
-}
-
-html[data-storefront-preset='modern-oriental']
-    .storefront-bottom-nav
-    a[aria-current='page']
-    > span:last-child,
-html[data-storefront-preset='modern-oriental'] .storefront-bottom-nav a[aria-current='page'] svg {
-    color: var(--accent) !important;
-    filter: none;
-}
-
-html[data-storefront-preset='modern-oriental'] .quick-grid {
-    background: var(--paper);
-    border-color: var(--line);
-}
-
-html[data-storefront-preset='modern-oriental'] .ai-studio-fixed-generate,
-html[data-storefront-preset='modern-oriental'] .ai-studio-setting-trigger {
-    background: var(--paper);
-    border-color: var(--line);
 }
 
 html[data-storefront-preset='modern-oriental'] .auth-page .login-content,
@@ -305,17 +195,6 @@ html[data-storefront-preset='modern-oriental'] .auth-page .auth-card {
     background: var(--paper);
     border-color: var(--line);
     box-shadow: var(--shadow-md);
-}
-
-html[data-storefront-preset='modern-oriental'] .auth-brand-mark {
-    background: var(--accent);
-    border-color: var(--oriental-gold);
-    box-shadow: none;
-}
-
-html[data-storefront-preset='modern-oriental'] .auth-page .auth-hero-tags > span {
-    background: rgb(32 51 70 / 55%);
-    border-color: rgb(200 181 144 / 45%);
 }
 
 html[data-storefront-preset='modern-oriental'] :is(.ai-studio-reference-add, .ai-studio-settlement-summary) {
@@ -384,4 +263,9 @@ html[data-storefront-preset='modern-oriental'] .ai-studio-optimizer-model {
 
 html[data-storefront-preset='modern-oriental'] .ai-studio-optimizer-model strong {
     color: var(--text);
+}
+
+html[data-storefront-preset='modern-oriental']
+    :is(.section-header h2, .subpage-header h1, .store-auth-copy h2) {
+    font-family: var(--font-display);
 }
