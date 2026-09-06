@@ -71,6 +71,7 @@ const PROGRAM = gql`
 const UPDATE_PROGRAM = gql`
     mutation UpdateReferralProgramE2E($input: UpdateReferralProgramInput!) {
         updateReferralProgram(input: $input) {
+            updatedAt
             enabled
             rewardRate
             releaseDelayDays
@@ -662,7 +663,6 @@ describe('referral rebate closed loop', () => {
         'rejects one of two concurrent edits that start from the same referral-program version',
         async () => {
             const current = await adminClient.query(PROGRAM);
-            await new Promise(resolve => setTimeout(resolve, 10));
 
             const results = await Promise.allSettled(
                 [11, 12].map(rewardRate =>
@@ -691,6 +691,13 @@ describe('referral rebate closed loop', () => {
             expect(fulfilled).toHaveLength(1);
             expect(rejected).toHaveLength(1);
             expect(String(rejected[0].reason)).toContain('CONCURRENT_MODIFICATION');
+            const persisted = (await adminClient.query(PROGRAM)).referralProgram;
+            expect(new Date(persisted.updatedAt).getTime()).toBeGreaterThan(
+                new Date(current.referralProgram.updatedAt).getTime(),
+            );
+            expect(fulfilled[0].value).toMatchObject({
+                updateReferralProgram: { updatedAt: persisted.updatedAt, rewardRate: persisted.rewardRate },
+            });
         },
     );
     it('preserves poster copy, keeps defaults enabled and persists an explicit all-hidden configuration', async () => {
