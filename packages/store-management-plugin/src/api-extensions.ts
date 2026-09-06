@@ -1164,6 +1164,7 @@ export const adminApiExtensions = gql`
         referralWithdrawals(skip: Int, take: Int): ReferralWithdrawalList!
         referralCustomerWallets(customerId: ID!): [ReferralWallet!]!
         referralTodayMetrics: ReferralTodayMetrics!
+        storefrontTraffic(days: Int = 7): StorefrontTrafficReport!
         referralBalanceAudit: ReferralBalanceAuditResult!
     }
 
@@ -1348,5 +1349,6 @@ export const shopApiExtensions = gql`
         ): RegisterCustomerAccountResult!
         useMyReferralBalance(amount: Money!): ReferralBalancePaymentResult!
         recordStorefrontVisit(visitorId: String): StorefrontVisitResult!
+        recordStorefrontPageView(input: StorefrontPageViewInput!): StorefrontVisitResult!
     }
 `;

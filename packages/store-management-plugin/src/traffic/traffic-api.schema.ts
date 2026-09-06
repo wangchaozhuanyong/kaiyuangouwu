@@ -15,10 +15,6 @@ export const trafficAdminSchema = gql`
         lastRecordedAt: DateTime
         days: [StorefrontTrafficDay!]!
     }
-
-    extend type Query {
-        storefrontTraffic(days: Int = 7): StorefrontTrafficReport!
-    }
 `;
 
 export const trafficShopSchema = gql`
@@ -26,9 +22,5 @@ export const trafficShopSchema = gql`
         eventId: String!
         visitorId: String
         pageView: Boolean!
-    }
-
-    extend type Mutation {
-        recordStorefrontPageView(input: StorefrontPageViewInput!): StorefrontVisitResult!
     }
 `;
