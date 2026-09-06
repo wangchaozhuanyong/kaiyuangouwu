@@ -2,6 +2,7 @@ import { parse } from 'graphql';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { createServer } from 'node:http';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
@@ -44,7 +45,7 @@ function storeFixture(id = '1') {
     return {
         channelId: id,
         channelCode: `store-${id}`,
-        profile: { id },
+        profile: { id, primaryDomain: `store-${id}.example.test` },
         settings: { heroAutoplayIntervalSeconds: 6, configuredBlockTypes: ['HERO'] },
         sharing: {
             defaultPosterTemplate: 'white',
@@ -211,6 +212,8 @@ void test('all Channel reads use scoped tokens and both client locale inputs wit
             assert.ok(store);
             if (query.includes('ConfigurationGuardPublished')) {
                 assert.equal(options.headers.authorization, undefined);
+                // Production require-domain routing resolves the Host and replaces any submitted Channel token.
+                assert.equal(options.headers.host, store.profile.primaryDomain);
                 const locale = new URL(url).searchParams.get('languageCode');
                 assert.equal(options.headers['language-code'], locale);
                 data = { activeChannel: { id: store.channelId }, storefrontContent: store.published[locale] };
@@ -237,12 +240,112 @@ void test('all Channel reads use scoped tokens and both client locale inputs wit
         calls
             .slice(1)
             .filter(call => call.url.includes('admin-api'))
-            .every(call => call.options.headers.authorization === 'Bearer PRIVATE_ADMIN_SESSION'),
+            .every(
+                call =>
+                    call.options.headers.authorization === 'Bearer PRIVATE_ADMIN_SESSION' &&
+                    call.options.headers.host === undefined,
+            ),
     );
     const serialized = JSON.stringify({ result, summary: configurationSummary(result) });
     for (const secret of ['PRIVATE_CHANNEL', 'PRIVATE_ADMIN_SESSION', 'FIXTURE_PASSWORD', 'FIXTURE_USER'])
         assert.equal(serialized.includes(secret), false);
     assert.equal(calls.filter(call => call.query.startsWith('mutation')).length, 1);
+});
+
+void test('real loopback transport reads each store through its verified domain without forwarding the admin session', async t => {
+    const fixtures = [storeFixture(), storeFixture('2')];
+    const seen = [];
+    const server = createServer(async (request, response) => {
+        try {
+            let body = '';
+            for await (const chunk of request) body += chunk;
+            const { query } = JSON.parse(body);
+            const url = new URL(request.url, 'http://127.0.0.1');
+            let data;
+            if (url.pathname === '/shop-api') {
+                const store = fixtures.find(item => item.profile.primaryDomain === request.headers.host);
+                if (!store || request.headers.authorization) {
+                    response.writeHead(404).end();
+                    return;
+                }
+                seen.push({ domain: request.headers.host, locale: url.searchParams.get('languageCode') });
+                data = {
+                    activeChannel: { id: store.channelId },
+                    storefrontContent: store.published[url.searchParams.get('languageCode')],
+                };
+            } else if (query.includes('ConfigurationGuardLogin')) {
+                response.setHeader('vendure-auth-token', 'PRIVATE_FIXTURE_ADMIN');
+                data = {
+                    login: {
+                        id: 'admin',
+                        channels: fixtures.map(store => ({
+                            id: store.channelId,
+                            code: store.channelCode,
+                            token: store.channelId,
+                        })),
+                    },
+                };
+            } else if (query.includes('ConfigurationGuardProfiles')) {
+                data = {
+                    storeProfiles: fixtures.map(store => ({
+                        ...store.profile,
+                        channel: { id: store.channelId },
+                    })),
+                };
+            } else {
+                const store = fixtures.find(item => item.channelId === request.headers['vendure-token']);
+                data = {
+                    activeChannel: { id: store.channelId },
+                    storefrontContentBlocks: store.blocks,
+                    storefrontContentSettings: store.settings,
+                    referralProgram: store.sharing,
+                };
+            }
+            response.setHeader('content-type', 'application/json');
+            response.end(JSON.stringify({ data }));
+        } catch {
+            response.writeHead(500).end();
+        }
+    });
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    t.after(() => {
+        server.closeAllConnections();
+        server.close();
+    });
+    const result = await captureStorefrontConfiguration({
+        username: 'fixture',
+        password: 'fixture',
+        apiOrigin: `http://127.0.0.1:${server.address().port}`,
+    });
+    assert.equal(result.stores.length, 2);
+    assert.deepEqual(
+        seen,
+        fixtures.flatMap(store =>
+            ['zh_Hans', 'en'].map(locale => ({ domain: store.profile.primaryDomain, locale })),
+        ),
+    );
+});
+
+void test('missing verified domain fails before any public read instead of falling back to a submitted token', async () => {
+    const queries = [];
+    await assert.rejects(
+        captureStorefrontConfiguration({
+            username: 'fixture',
+            password: 'fixture',
+            request: async (_url, options) => {
+                const { query } = JSON.parse(options.body);
+                queries.push(query);
+                const data = query.includes('ConfigurationGuardLogin')
+                    ? { login: { id: 'admin', channels: [{ id: '1', token: 'fixture' }] } }
+                    : { storeProfiles: [{ id: '1', channel: { id: '1' }, primaryDomain: null }] };
+                return new Response(JSON.stringify({ data }), {
+                    headers: { 'vendure-auth-token': 'fixture' },
+                });
+            },
+        }),
+        /verified primary domain/u,
+    );
+    assert.equal(queries.length, 2);
 });
 
 void test('guard rejects remote targets, authentication errors and API errors before returning a snapshot', async () => {

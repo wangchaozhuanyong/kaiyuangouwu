@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFile, writeFile } from 'node:fs/promises';
+import { request as httpRequest } from 'node:http';
 import { pathToFileURL } from 'node:url';
 
 const ASSET = 'id mimeType source preview';
@@ -12,9 +13,37 @@ const BLOCK = `id code internalName type layoutVariant enabled position startsAt
 const POSTER = `id name enabled position posterBackgroundAsset { ${ASSET} } shareBackgroundAsset { ${ASSET} }`;
 const PUBLIC_BLOCK = `id code type enabled position imageUrl title subtitle body ctaLabel
     items { id enabled position imageUrl label description }`;
-const PROFILE = `id channel { id code customFields { storefrontNameZh storefrontNameEn } }
+const PROFILE = `id primaryDomain channel { id code customFields { storefrontNameZh storefrontNameEn } }
     descriptionZh descriptionEn taglineZh taglineEn brandBackgroundColor brandPrimaryColor brandAccentColor
     brandHighlightColor logoAsset { id } logoOnLightAsset { id } logoOnDarkAsset { id }`;
+
+// Keep the connection on loopback while preserving the verified storefront Host.
+// Native fetch can replace Host with the URL authority, which fails require-domain routing.
+async function loopbackConfigurationRequest(url, { method, headers, signal, body }) {
+    return new Promise((resolve, reject) => {
+        const fail = error => reject(signal.aborted ? signal.reason : error);
+        const request = httpRequest(url, { method, headers, signal, agent: false }, async response => {
+            try {
+                const chunks = [];
+                for await (const chunk of response) chunks.push(chunk);
+                resolve(
+                    new Response(Buffer.concat(chunks), {
+                        status: response.statusCode,
+                        headers: Object.entries(response.headers).flatMap(([key, value]) =>
+                            value === undefined
+                                ? []
+                                : [[key, Array.isArray(value) ? value.join(',') : value]],
+                        ),
+                    }),
+                );
+            } catch (error) {
+                fail(error);
+            }
+        });
+        request.on('error', fail);
+        request.end(body);
+    });
+}
 
 function canonical(value) {
     if (Array.isArray(value)) return value.map(canonical);
@@ -195,17 +224,20 @@ export function configurationSummary(snapshot) {
 export async function captureStorefrontConfiguration({
     username,
     password,
-    request = fetch,
+    request = loopbackConfigurationRequest,
     apiOrigin = 'http://127.0.0.1:3002',
 } = {}) {
     assert.ok(username && password, 'Storefront verification credentials are unavailable');
     const origin = new URL(apiOrigin);
     assert.ok(
-        ['127.0.0.1', 'localhost', '[::1]'].includes(origin.hostname),
+        origin.protocol === 'http:' && ['127.0.0.1', 'localhost', '[::1]'].includes(origin.hostname),
         'Configuration guard requires a loopback API',
     );
     let auth = '';
-    async function query(document, { variables = {}, channel = '', locale = 'zh_Hans', shop = false } = {}) {
+    async function query(
+        document,
+        { variables = {}, channel = '', locale = 'zh_Hans', shop = false, host = '' } = {},
+    ) {
         const operation = document.match(/(?:query|mutation)\s+(ConfigurationGuard\w+)/u)?.[1];
         assert.ok(operation, 'Configuration query must have a fixed operation name');
         let failure = 'REQUEST_FAILED';
@@ -219,6 +251,7 @@ export async function captureStorefrontConfiguration({
                         'content-type': 'application/json',
                         'language-code': locale,
                         ...(channel ? { 'vendure-token': channel } : {}),
+                        ...(shop && host ? { host } : {}),
                         ...(!shop && auth ? { authorization: `Bearer ${auth}` } : {}),
                     },
                     body: JSON.stringify({ query: document, variables }),
@@ -255,6 +288,12 @@ export async function captureStorefrontConfiguration({
     );
     const stores = [];
     for (const channel of [...login.channels].sort((a, b) => String(a.id).localeCompare(String(b.id)))) {
+        const profile = storeProfiles.find(candidate => candidate.channel.id === channel.id) ?? null;
+        const host = profile?.primaryDomain;
+        assert.ok(
+            host && new URL(`https://${host}`).hostname === host,
+            'Configuration guard requires a verified primary domain for each Channel',
+        );
         const result = await query(
             `query ConfigurationGuardContent {
                 activeChannel { id }
@@ -273,7 +312,7 @@ export async function captureStorefrontConfiguration({
         for (const locale of ['zh_Hans', 'en']) {
             const data = await query(
                 `query ConfigurationGuardPublished { activeChannel { id } storefrontContent { ${PUBLIC_BLOCK} } }`,
-                { channel: channel.token, locale, shop: true },
+                { channel: channel.token, locale, shop: true, host },
             );
             assert.equal(data.activeChannel.id, channel.id, 'Shop API Channel mismatch');
             published[locale] = data.storefrontContent;
@@ -281,7 +320,7 @@ export async function captureStorefrontConfiguration({
         stores.push({
             channelId: channel.id,
             channelCode: channel.code,
-            profile: storeProfiles.find(profile => profile.channel.id === channel.id) ?? null,
+            profile,
             blocks: result.storefrontContentBlocks,
             settings: result.storefrontContentSettings,
             sharing: result.referralProgram,
