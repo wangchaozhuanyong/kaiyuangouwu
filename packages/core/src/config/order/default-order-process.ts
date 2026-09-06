@@ -4,9 +4,7 @@ import { unique } from '@vendure/common/lib/unique';
 
 import { RequestContext } from '../../api/common/request-context';
 import { TransactionalConnection } from '../../connection/transactional-connection';
-import { OrderLine } from '../../entity/order-line/order-line.entity';
-import { OrderModification } from '../../entity/order-modification/order-modification.entity';
-import { Order } from '../../entity/order/order.entity';
+import { Order, OrderLine, OrderModification } from '../../entity';
 import { Payment } from '../../entity/payment/payment.entity';
 import { ProductVariant } from '../../entity/product-variant/product-variant.entity';
 import { OrderPlacedEvent } from '../../event-bus/events/order-placed-event';
