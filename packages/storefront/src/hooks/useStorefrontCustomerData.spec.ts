@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ShopApi } from '../api';
-import type { ActiveCustomer } from '../types';
 
+import { type ShopApi } from '../api';
 import { enabledMarkets } from '../i18n';
 import { storefrontQueryKeys } from '../query-client';
+import { type ActiveCustomer } from '../types';
 
 import { useStorefrontCustomerData } from './useStorefrontCustomerData';
 

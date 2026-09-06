@@ -2,7 +2,6 @@ import { ID } from '@vendure/common/lib/shared-types';
 import { RequestContext, TransactionalConnection, UserInputError } from '@vendure/core';
 import { ReferralWalletUsage } from '@vendure/store-management-plugin';
 import { In, IsNull, MoreThanOrEqual, Not } from 'typeorm';
-import type { UsageTimelineItem } from './image-generation-helpers';
 
 import { ImageGenerationCostEvent } from './entities/image-generation-cost-event.entity';
 import { ImageGenerationJob } from './entities/image-generation-job.entity';
@@ -19,6 +18,7 @@ import {
     quotaTypeZh,
     sortUsageTimeline,
     usageOutcomeZh,
+    type UsageTimelineItem,
 } from './image-generation-helpers';
 import { ImageAiUsageRecordListInput } from './types';
 export class ImageGenerationUsageQuery {

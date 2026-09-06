@@ -1,9 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
-import type { StorefrontQueryContext } from './storefront-query-context';
 
 import { uiCopy } from '../i18n';
 import { offlineLoadError, resolveQueryLoadState } from '../loading-state';
 import { storefrontQueryKeys } from '../query-client';
+
+import { type StorefrontQueryContext } from './storefront-query-context';
 export function useStorefrontCustomerData({
     api,
     market,

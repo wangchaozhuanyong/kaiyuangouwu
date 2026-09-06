@@ -1,9 +1,8 @@
 import { useNavigate, useRouter, useRouterState } from '@tanstack/react-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { CollectionSummary } from '../types';
 
 import { routeFromRouterLocation, routePath, routeSearch, RouteState, SortMode } from '../storefront-router';
-import { FulfillmentType } from '../types';
+import { FulfillmentType, type CollectionSummary } from '../types';
 export function useStorefrontNavigation({ collections }: { collections: CollectionSummary[] }) {
     const router = useRouter();
 

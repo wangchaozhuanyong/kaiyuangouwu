@@ -1,5 +1,6 @@
 import { createContext, useContext } from 'react';
-import type { useStorefrontAppState } from './hooks/useStorefrontAppState';
+
+import { type useStorefrontAppState } from './hooks/useStorefrontAppState';
 
 export type StorefrontContextValue = ReturnType<typeof useStorefrontAppState>['storefrontContextValue'];
 

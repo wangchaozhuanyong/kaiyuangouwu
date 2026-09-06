@@ -1,6 +1,4 @@
 import { useQuery } from '@tanstack/react-query';
-import type { StorefrontContentBlock, StorefrontContentBlockType } from '../types';
-import type { StorefrontQueryContext } from './storefront-query-context';
 
 import { buildBestSellerProducts, buildRecommendationProducts } from '../home-merchandising';
 import {
@@ -11,7 +9,14 @@ import {
 } from '../query-client';
 import { useProductsByIdsQuery } from '../route-queries';
 import { contentNumberSetting, contentStringArraySetting } from '../storefront-utils';
-import { ActiveCustomer, Product } from '../types';
+import {
+    ActiveCustomer,
+    Product,
+    type StorefrontContentBlock,
+    type StorefrontContentBlockType,
+} from '../types';
+
+import { type StorefrontQueryContext } from './storefront-query-context';
 export function useStorefrontMerchandising({
     api,
     market,

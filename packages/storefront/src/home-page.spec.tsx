@@ -1,8 +1,13 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
-import type { HomePageProps } from './pages/home-page';
 
-import { buildHomeNoticeItems, CurrencySelectionSheet, HomePage, NoticeDetailSheet } from './pages/home-page';
+import {
+    buildHomeNoticeItems,
+    CurrencySelectionSheet,
+    HomePage,
+    NoticeDetailSheet,
+    type HomePageProps,
+} from './pages/home-page';
 import { HomePageContext } from './storefront-page-contexts';
 import { FlashSalePage } from './storefront-ui/content-ui';
 import { readStorefrontStylesheet } from './test-stylesheet';

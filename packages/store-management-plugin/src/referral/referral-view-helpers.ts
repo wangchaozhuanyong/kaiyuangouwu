@@ -1,5 +1,6 @@
-import type { Customer } from '@vendure/core';
-import type { ReferralWithdrawal } from '../entities/referral-withdrawal.entity';
+import { type Customer } from '@vendure/core';
+
+import { type ReferralWithdrawal } from '../entities/referral-withdrawal.entity';
 const MAX_PAGE_SIZE = 200;
 
 export function businessDateKey(value: Date): string {

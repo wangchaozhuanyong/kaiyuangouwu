@@ -1,10 +1,14 @@
 import { ExternalLink, Puzzle, Sparkles } from 'lucide-react';
-import type { RouteState } from '../storefront-router';
-import type { StorefrontContentBlock, StorefrontContentTargetType, StorefrontLanguage } from '../types';
 
 import { ClientPluginSlot, resolveClientPlugins } from '../client-plugins/client-plugin-registry';
 import { resolveBottomNavigationItems } from '../components/common/bottom-navigation';
 import { BusinessServicesPageContext } from '../storefront-page-contexts';
+import { type RouteState } from '../storefront-router';
+import {
+    type StorefrontContentBlock,
+    type StorefrontContentTargetType,
+    type StorefrontLanguage,
+} from '../types';
 
 const CLIENT_PLUGIN_BLOCK_CODE = 'storefront-client-plugins';
 const BUSINESS_SERVICES_COPY_VERSION = 1;

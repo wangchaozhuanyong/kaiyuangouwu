@@ -1,18 +1,19 @@
 import { createContext, useContext } from 'react';
-import type { AccountPageProps } from './pages/account-page';
-import type { AnnouncementsPageProps } from './pages/announcements-page';
-import type { BrowsingHistoryPageProps } from './pages/browsing-history-page';
-import type { BusinessServicesPageProps } from './pages/business-services-page';
-import type { CartPageProps } from './pages/cart-page';
-import type { CategoryPageProps } from './pages/category-page';
-import type { CouponCenterPageProps } from './pages/coupon-center-page';
-import type { FavoriteProductsPageProps } from './pages/favorite-products-page';
-import type { HomePageProps } from './pages/home-page';
-import type { NotificationsPageProps } from './pages/notifications-page';
-import type { ProductDetailPageProps } from './pages/product-detail-page';
-import type { ReferralPageProps } from './pages/referral-page';
-import type { SearchPageProps } from './pages/search-page';
-import type { SupportPageProps } from './pages/support-page';
+
+import { type AccountPageProps } from './pages/account-page';
+import { type AnnouncementsPageProps } from './pages/announcements-page';
+import { type BrowsingHistoryPageProps } from './pages/browsing-history-page';
+import { type BusinessServicesPageProps } from './pages/business-services-page';
+import { type CartPageProps } from './pages/cart-page';
+import { type CategoryPageProps } from './pages/category-page';
+import { type CouponCenterPageProps } from './pages/coupon-center-page';
+import { type FavoriteProductsPageProps } from './pages/favorite-products-page';
+import { type HomePageProps } from './pages/home-page';
+import { type NotificationsPageProps } from './pages/notifications-page';
+import { type ProductDetailPageProps } from './pages/product-detail-page';
+import { type ReferralPageProps } from './pages/referral-page';
+import { type SearchPageProps } from './pages/search-page';
+import { type SupportPageProps } from './pages/support-page';
 
 /** Page inputs have their own typed providers; they never replace application runtime state. */
 function createPageContext<T>(name: string) {

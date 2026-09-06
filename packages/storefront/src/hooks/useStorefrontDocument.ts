@@ -1,11 +1,11 @@
 import { useEffect } from 'react';
-import type { RouteName, RouteState } from '../storefront-router';
-import type { Product, StorefrontConfig } from '../types';
 
 import { productDescriptionText } from '../rich-text';
 import { STOREFRONT_SOCIAL_IMAGE } from '../storefront-images';
+import { type RouteName, type RouteState } from '../storefront-router';
 import { productImage, setMetaContent, trimText } from '../storefront-utils';
 import { cacheLogoUrl } from '../StorefrontErrorBoundary';
+import { type Product, type StorefrontConfig } from '../types';
 
 export function useStorefrontBrandColors(config: StorefrontConfig | undefined) {
     useEffect(() => {

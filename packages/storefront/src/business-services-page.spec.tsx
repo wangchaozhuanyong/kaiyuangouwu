@@ -1,9 +1,9 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
-import type { StorefrontContentBlock, StorefrontContentItem } from './types';
 
 import { BusinessServicesPage } from './pages/business-services-page';
 import { BusinessServicesPageContext } from './storefront-page-contexts';
+import { type StorefrontContentBlock, type StorefrontContentItem } from './types';
 
 function businessPluginBlock(): StorefrontContentBlock {
     const item: StorefrontContentItem = {

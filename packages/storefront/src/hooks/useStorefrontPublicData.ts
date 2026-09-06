@@ -1,5 +1,4 @@
 import { useQuery } from '@tanstack/react-query';
-import type { StorefrontQueryContext } from './storefront-query-context';
 
 import { normalizeHeroAutoplayIntervalSeconds } from '../hero-carousel';
 import { uiCopy } from '../i18n';
@@ -12,6 +11,8 @@ import {
 } from '../query-client';
 import { useProductsByIdsQuery } from '../route-queries';
 import { contentStringArraySetting } from '../storefront-utils';
+
+import { type StorefrontQueryContext } from './storefront-query-context';
 export function useStorefrontPublicData({
     api,
     market,

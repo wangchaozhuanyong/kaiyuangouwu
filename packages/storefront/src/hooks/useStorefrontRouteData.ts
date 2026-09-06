@@ -1,8 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
-import type { QueryLoadState } from '../loading-state';
-import type { StorefrontQueryContext } from './storefront-query-context';
 
-import { offlineLoadError } from '../loading-state';
+import { offlineLoadError, type QueryLoadState } from '../loading-state';
 import { orderStatusRefreshInterval } from '../order-refresh';
 import {
     PUBLIC_QUERY_GC_TIME,
@@ -12,6 +10,8 @@ import {
 } from '../query-client';
 import { RouteState } from '../storefront-router';
 import { ActiveCustomer } from '../types';
+
+import { type StorefrontQueryContext } from './storefront-query-context';
 export function useStorefrontRouteData({
     api,
     market,
