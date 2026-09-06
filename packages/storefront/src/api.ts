@@ -1,5 +1,6 @@
 import type { ShopApiContext } from './api/client-context';
 import type { CartController } from './cart/cart-controller';
+import type { StorefrontPageViewInput } from './storefront-traffic';
 import type {
     ActiveCustomer,
     AfterSalesRequest,
@@ -337,6 +338,10 @@ export class ShopApi {
 
     async recordStorefrontVisit(): Promise<boolean> {
         return this.referralsApi.recordStorefrontVisit();
+    }
+
+    async recordStorefrontPageView(input: StorefrontPageViewInput): Promise<boolean> {
+        return this.referralsApi.recordStorefrontPageView(input);
     }
 
     async refreshCustomerVerification(emailAddress: string): Promise<void> {

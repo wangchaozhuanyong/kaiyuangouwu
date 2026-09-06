@@ -653,7 +653,7 @@ export interface ReferralReportsResult {
 
 export interface ReferralTodayMetricsRecord {
     businessDate: string;
-    visitorCount: number;
+    visitorCount: number | null;
     newCustomerCount: number;
     consumerCount: number;
     firstTimeConsumerCount: number;

@@ -1,3 +1,4 @@
+import type { StorefrontPageViewInput } from '../storefront-traffic';
 import type {
     MyReferralOverview,
     ReferralBalancePaymentResult,
@@ -5,6 +6,8 @@ import type {
     RegisterCustomerInput,
 } from '../types';
 import type { ErrorResult } from './helpers';
+
+import { storefrontVisitorId } from '../referral-attribution';
 
 import { BaseDomainApi } from './base-domain-api';
 import { orderFields, referralWalletFields } from './fragments';
@@ -267,11 +270,22 @@ export class ReferralsApi extends BaseDomainApi {
     async recordStorefrontVisit(): Promise<boolean> {
         const result = await this.request<{ recordStorefrontVisit: { recorded: boolean } }>(
             `
-                mutation RecordStorefrontVisit {
-                    recordStorefrontVisit { recorded }
+                mutation RecordStorefrontVisit($visitorId: String) {
+                    recordStorefrontVisit(visitorId: $visitorId) { recorded }
                 }
             `,
+            { visitorId: storefrontVisitorId() },
         );
         return result.recordStorefrontVisit.recorded;
+    }
+
+    async recordStorefrontPageView(input: StorefrontPageViewInput): Promise<boolean> {
+        const result = await this.request<{ recordStorefrontPageView: { recorded: boolean } }>(
+            `mutation RecordStorefrontPageView($input: StorefrontPageViewInput!) {
+                recordStorefrontPageView(input: $input) { recorded }
+            }`,
+            { input },
+        );
+        return result.recordStorefrontPageView.recorded;
     }
 }

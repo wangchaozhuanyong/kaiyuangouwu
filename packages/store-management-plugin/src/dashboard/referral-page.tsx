@@ -390,7 +390,7 @@ function TodayMetrics({ query }: { query: ReturnType<typeof useQuery<ReferralTod
     if (query.isError || !query.data) return <QueryError onRetry={() => void query.refetch()} />;
     const value = query.data.referralTodayMetrics;
     const cards = [
-        ['今日访客', value.visitorCount],
+        ['独立访客（估算）', value.visitorCount ?? '—'],
         ['新增注册', value.newCustomerCount],
         ['消费客户', value.consumerCount],
         ['首次消费', value.firstTimeConsumerCount],

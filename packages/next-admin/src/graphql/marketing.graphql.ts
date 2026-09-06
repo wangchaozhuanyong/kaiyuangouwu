@@ -874,7 +874,7 @@ export interface ReferralProgramResult {
     referralProgram: ReferralProgramRecord;
     referralTodayMetrics: {
         businessDate: string;
-        visitorCount: number;
+        visitorCount: number | null;
         newCustomerCount: number;
         consumerCount: number;
         firstTimeConsumerCount: number;

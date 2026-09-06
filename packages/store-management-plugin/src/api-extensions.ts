@@ -2,6 +2,7 @@ import { gql } from 'graphql-tag';
 
 import { storeProfileInputSchema } from './store-profile-input.schema';
 import { storefrontBrandingSchema } from './storefront-branding.schema';
+import { trafficAdminSchema, trafficShopSchema } from './traffic/traffic-api.schema';
 
 const referralPosterFields = `
         design: JSON
@@ -408,6 +409,7 @@ const commonTypes = gql`
 `;
 
 export const adminApiExtensions = gql`
+    ${trafficAdminSchema}
     ${commonTypes}
     ${storeProfileInputSchema}
 
@@ -1048,7 +1050,7 @@ export const adminApiExtensions = gql`
 
     type ReferralTodayMetrics {
         businessDate: String!
-        visitorCount: Int!
+        visitorCount: Int
         newCustomerCount: Int!
         consumerCount: Int!
         firstTimeConsumerCount: Int!
@@ -1162,6 +1164,7 @@ export const adminApiExtensions = gql`
         referralWithdrawals(skip: Int, take: Int): ReferralWithdrawalList!
         referralCustomerWallets(customerId: ID!): [ReferralWallet!]!
         referralTodayMetrics: ReferralTodayMetrics!
+        storefrontTraffic(days: Int = 7): StorefrontTrafficReport!
         referralBalanceAudit: ReferralBalanceAuditResult!
     }
 
@@ -1230,6 +1233,7 @@ export const adminApiExtensions = gql`
 `;
 
 export const shopApiExtensions = gql`
+    ${trafficShopSchema}
     ${commonTypes}
     ${storefrontBrandingSchema}
 
@@ -1361,5 +1365,6 @@ export const shopApiExtensions = gql`
         ): RegisterCustomerAccountResult!
         useMyReferralBalance(amount: Money!): ReferralBalancePaymentResult!
         recordStorefrontVisit(visitorId: String): StorefrontVisitResult!
+        recordStorefrontPageView(input: StorefrontPageViewInput!): StorefrontVisitResult!
     }
 `;

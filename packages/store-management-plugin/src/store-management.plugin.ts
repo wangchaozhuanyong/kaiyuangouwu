@@ -42,6 +42,7 @@ import { StoreUsdtManualRefund } from './entities/store-usdt-manual-refund.entit
 import { StoreUsdtWalletAudit } from './entities/store-usdt-wallet-audit.entity';
 import { StoreUsdtWallet } from './entities/store-usdt-wallet.entity';
 import { StorefrontDailyVisitor } from './entities/storefront-daily-visitor.entity';
+import { StorefrontPageView } from './entities/storefront-page-view.entity';
 import { StorefrontPromotionPage } from './entities/storefront-promotion-page.entity';
 import { StorefrontUsdtCheckoutQuote } from './entities/storefront-usdt-checkout-quote.entity';
 import { StorefrontUsdtPaymentIntent } from './entities/storefront-usdt-payment-intent.entity';
@@ -114,6 +115,11 @@ import {
     SystemAnnouncementShopResolver,
 } from './system-announcement.resolver';
 import { SystemAnnouncementService } from './system-announcement.service';
+import {
+    StorefrontTrafficAdminResolver,
+    StorefrontTrafficShopResolver,
+} from './traffic/storefront-traffic.resolver';
+import { StorefrontTrafficService } from './traffic/storefront-traffic.service';
 import { StorefrontPromotionPluginOptions } from './types';
 // eslint-disable-next-line import/order -- organize-imports sorts this sibling file before the usdt directory.
 import { UsdtOtcRateService } from './usdt-otc-rate.service';
@@ -155,6 +161,7 @@ import {
         ReferralWalletUsage,
         ReferralWithdrawal,
         StorefrontDailyVisitor,
+        StorefrontPageView,
         StorefrontUsdtCheckoutQuote,
         StorefrontUsdtPaymentIntent,
         StoreUsdtManualRefund,
@@ -187,6 +194,7 @@ import {
         StorePromotionCampaignService,
         StoreCouponLifecycleService,
         ReferralService,
+        StorefrontTrafficService,
         ReferralWalletSpendService,
         SystemAnnouncementService,
         StorefrontRealtimeService,
@@ -269,6 +277,7 @@ import {
             StoreCouponOrderResolver,
             SystemAnnouncementAdminResolver,
             ReferralAdminResolver,
+            StorefrontTrafficAdminResolver,
         ],
     },
     shopApiExtensions: {
@@ -280,6 +289,7 @@ import {
             StorePromotionCampaignShopResolver,
             SystemAnnouncementShopResolver,
             ReferralShopResolver,
+            StorefrontTrafficShopResolver,
         ],
     },
     dashboard: '../src/dashboard/index.tsx',

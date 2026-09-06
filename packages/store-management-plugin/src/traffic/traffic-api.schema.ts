@@ -1,0 +1,26 @@
+import { gql } from 'graphql-tag';
+
+export const trafficAdminSchema = gql`
+    type StorefrontTrafficDay {
+        businessDate: String!
+        visitorCount: Int
+        pageViewCount: Int
+        ipCount: Int
+    }
+
+    type StorefrontTrafficReport {
+        businessDate: String!
+        timezone: String!
+        firstRecordedAt: DateTime
+        lastRecordedAt: DateTime
+        days: [StorefrontTrafficDay!]!
+    }
+`;
+
+export const trafficShopSchema = gql`
+    input StorefrontPageViewInput {
+        eventId: String!
+        visitorId: String
+        pageView: Boolean!
+    }
+`;
