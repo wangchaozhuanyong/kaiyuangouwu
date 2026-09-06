@@ -1,6 +1,7 @@
 import { gql } from '@apollo/client';
 import { useQuery } from '@apollo/client/react';
-import { useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import {
     AuthVisual,
     authVisualStyle,
@@ -8,6 +9,13 @@ import {
     readableColor,
     type AuthVisualData,
 } from '../../../../storefront-content-plugin/src/shared/auth-visual';
+import { HeroScene, type HeroSceneData } from '../../../../storefront-content-plugin/src/shared/hero-scene';
+import heroSceneCss from '../../../../storefront-content-plugin/src/shared/hero-scene.css?inline';
+import { heroThemeStyle } from '../../../../storefront-content-plugin/src/shared/hero-theme';
+import {
+    normalizeStorefrontAssetUrl,
+    responsiveImageSources,
+} from '../../../../storefront-content-plugin/src/shared/responsive-image';
 import { getActiveChannelToken } from '../../apollo';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { type StorefrontContentBlock, type StorefrontLanguageCode } from '../../graphql/storefront.graphql';
@@ -21,6 +29,7 @@ export function BlockPreview({
     block: StorefrontContentBlock;
     language: StorefrontLanguageCode;
 }) {
+    if (block.type === 'HERO') return <HeroBlockPreview block={block} language={language} />;
     if (block.type === 'AUTH_LOGIN' || block.type === 'AUTH_REGISTER')
         return <AuthBlockPreview block={block} language={language} />;
     const translation = blockTranslation(block, language);
@@ -196,6 +205,167 @@ const PREVIEW_BRANDING = gql`
         }
     }
 `;
+
+function HeroBlockPreview({
+    block,
+    language,
+}: {
+    block: StorefrontContentBlock;
+    language: StorefrontLanguageCode;
+}) {
+    const [viewport, setViewport] = useState<'mobile' | 'desktop'>('mobile');
+    const previewFrame = useRef<HTMLDivElement>(null);
+    const [previewWidth, setPreviewWidth] = useState(390);
+    useEffect(() => {
+        const frame = previewFrame.current;
+        if (!frame) return;
+        const observer = new ResizeObserver(entries => setPreviewWidth(entries[0].contentRect.width));
+        observer.observe(frame);
+        return () => observer.disconnect();
+    }, []);
+    const frameWidth = viewport === 'desktop' ? 1024 : 390;
+    const frameHeight = viewport === 'desktop' ? 400 : 235;
+    const frameScale = Math.min(1, previewWidth / frameWidth);
+    const imageUrl = block.imageAsset?.preview ?? block.imageUrl ?? '';
+    const content: HeroSceneData = {
+        ...blockTranslation(block, language),
+        backgroundColor: block.backgroundColor,
+        textColor: block.textColor,
+        settings: block.settings,
+        targetType: block.targetType,
+        items: block.items.map(item => ({ ...itemTranslation(item, language), enabled: item.enabled })),
+    };
+    const brandingQuery = useQuery<{
+        activeChannel: { id: string; token: string };
+        storefrontVisualPreset: { presetId: string };
+        storefrontPreviewBranding: {
+            channelId: string;
+            backgroundColor?: string;
+            primaryColor?: string;
+            highlightColor?: string;
+        };
+    }>(PREVIEW_BRANDING, { fetchPolicy: 'no-cache' });
+    const branding =
+        brandingQuery.data?.storefrontPreviewBranding.channelId === brandingQuery.data?.activeChannel.id &&
+        (!getActiveChannelToken() || getActiveChannelToken() === brandingQuery.data?.activeChannel.token)
+            ? brandingQuery.data?.storefrontPreviewBranding
+            : undefined;
+    const oriental = branding && brandingQuery.data?.storefrontVisualPreset.presetId === 'modern-oriental';
+    const background = configuredColor(branding?.backgroundColor);
+    const imageSources = responsiveImageSources(imageUrl, 'hero');
+    const style = {
+        '--store-background': background,
+        '--store-foreground': background ? readableColor(background) : undefined,
+        '--store-primary': configuredColor(branding?.primaryColor),
+        '--store-highlight': configuredColor(branding?.highlightColor),
+    } as CSSProperties;
+    const document =
+        '<!doctype html>' +
+        renderToStaticMarkup(
+            <html
+                lang={language === 'zh_Hans' ? 'zh' : 'en'}
+                data-storefront-preset={oriental ? 'modern-oriental' : 'classic'}
+            >
+                <head>
+                    <meta charSet="utf-8" />
+                    <style>{`*{box-sizing:border-box;border:0 solid}body{margin:0;padding:12px;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display','PingFang SC','Hiragino Sans GB','Microsoft YaHei','Segoe UI',Roboto,sans-serif;font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased;font-feature-settings:'cv02','cv03','cv04','cv11';--font-numeric:-apple-system,BlinkMacSystemFont,'SF Pro Display','PingFang SC','Segoe UI',Roboto,sans-serif}button{font:inherit;padding:0}h1,p{margin:0}img{display:block;max-width:100%;height:auto} ${heroSceneCss}`}</style>
+                </head>
+                <body style={style}>
+                    <section
+                        className="hero"
+                        style={{
+                            ...heroThemeStyle(content),
+                            margin: 0,
+                            width: viewport === 'desktop' ? 850 : '100%',
+                            minHeight: viewport === 'desktop' ? 360 : 195,
+                        }}
+                    >
+                        <HeroScene
+                            content={content}
+                            imageLabel={content.title}
+                            image={
+                                imageUrl ? (
+                                    <img
+                                        src={
+                                            imageSources?.fallbackSrc ?? normalizeStorefrontAssetUrl(imageUrl)
+                                        }
+                                        srcSet={imageSources?.webpSrcSet}
+                                        sizes={imageSources?.sizes}
+                                        className="hero-rich-backdrop"
+                                        alt={content.title}
+                                    />
+                                ) : (
+                                    <span role="status">
+                                        {language === 'zh_Hans' ? '尚未选择图片' : 'No image selected'}
+                                    </span>
+                                )
+                            }
+                        />
+                    </section>
+                </body>
+            </html>,
+        );
+    return (
+        <section
+            className="overflow-hidden rounded-xl border border-slate-200 bg-white"
+            aria-label="轮播效果预览"
+        >
+            <div className="flex items-center justify-between border-b border-slate-100 p-3">
+                <h3 className="flex items-center gap-2 text-xs font-bold">
+                    轮播效果预览
+                    <FeatureHelpButton topic="storefront.hero-preview" title="轮播效果预览" />
+                </h3>
+                <div className="flex gap-2">
+                    {(['mobile', 'desktop'] as const).map(value => (
+                        <button
+                            key={value}
+                            type="button"
+                            aria-pressed={viewport === value}
+                            onClick={() => setViewport(value)}
+                            className="rounded border px-2 py-1 text-xs"
+                        >
+                            {value === 'mobile' ? '手机' : '电脑'}
+                        </button>
+                    ))}
+                </div>
+            </div>
+            <p className="p-3 text-xs text-slate-500">
+                预览当前未保存的图片、文案、遮罩和配色；按钮仅展示，不会跳转。
+            </p>
+            {brandingQuery.error && (
+                <p role="alert" className="p-3 text-xs">
+                    品牌配色加载失败，请刷新预览。
+                </p>
+            )}
+            <div
+                ref={previewFrame}
+                style={{
+                    position: 'relative',
+                    minWidth: 0,
+                    overflow: 'hidden',
+                    height: frameHeight * frameScale,
+                }}
+            >
+                <iframe
+                    title="首页轮播效果"
+                    sandbox=""
+                    srcDoc={document}
+                    width={viewport === 'desktop' ? 1024 : 390}
+                    height={viewport === 'desktop' ? 400 : 235}
+                    style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        display: 'block',
+                        border: 0,
+                        transform: `scale(${frameScale})`,
+                        transformOrigin: 'top left',
+                    }}
+                />
+            </div>
+        </section>
+    );
+}
 
 function AuthBlockPreview({
     block,

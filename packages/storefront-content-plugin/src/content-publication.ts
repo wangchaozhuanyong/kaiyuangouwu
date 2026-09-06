@@ -33,7 +33,7 @@ export type ContentPublicationStatus =
     | 'SHARING';
 
 export const contentPublicationLabels: Record<ContentPublicationStatus, string> = {
-    PUBLISHED: '展示中',
+    PUBLISHED: '已发布',
     DISABLED: '已停用',
     SCHEDULED: '未到展示时间',
     EXPIRED: '已过期',

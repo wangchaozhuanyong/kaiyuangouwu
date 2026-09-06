@@ -2,11 +2,6 @@
 html[data-storefront-preset='modern-oriental'] {
     --skin-background: #f6f2ea;
     --skin-foreground: #203346;
-    --skin-hero-background: #203346;
-    --skin-hero-foreground: #fffdf8;
-    --skin-hero-body: #ede5d6;
-    --skin-hero-accent: #a63d32;
-    --skin-hero-secondary: #8b3027;
     --bg: #f6f2ea;
     --paper: #fffdf8;
     --surface: #fffdf8;
@@ -110,11 +105,6 @@ html[data-storefront-preset='modern-oriental'] :is(button, a, input, select, tex
     outline-offset: 3px;
 }
 
-html[data-storefront-preset='modern-oriental'] .hero {
-    border: 1px solid var(--line);
-    border-radius: var(--radius-md);
-    box-shadow: var(--shadow-md);
-}
 
 html[data-storefront-preset='modern-oriental'] .auth-page {
     --auth-accent: var(--accent);

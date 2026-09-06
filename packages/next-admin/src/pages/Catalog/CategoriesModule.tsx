@@ -55,6 +55,7 @@ import type {
 } from '../../graphql/generic-promotions.graphql';
 import { useUrlTab } from '../../hooks/use-url-tab';
 import { toUserFacingError } from '../../utils/user-facing-error';
+import { CategoryImageField, type CategoryImageAsset } from './CategoryImageField';
 
 type ActiveTab = 'CATEGORIES' | 'OPTION_TEMPLATES' | 'FACETS';
 const CATEGORY_TABS = { categories: 'CATEGORIES', options: 'OPTION_TEMPLATES', facets: 'FACETS' } as const;
@@ -77,6 +78,7 @@ interface CollectionItem {
     parentId?: string | null;
     position: number;
     productVariantCount: number;
+    featuredAsset: CategoryImageAsset | null;
     inheritFilters: boolean;
     filters: Array<{ code: string; args: Array<{ name: string; value: string }> }>;
     customFields?: Record<string, unknown> | null;
@@ -171,6 +173,7 @@ export function CategoriesModule() {
     const [formCode, setFormCode] = useState('');
     const [formValues, setFormValues] = useState('');
     const [formParentId, setFormParentId] = useState('');
+    const [formFeaturedAsset, setFormFeaturedAsset] = useState<CategoryImageAsset | null>(null);
     const [formIsPrivate, setFormIsPrivate] = useState(false);
     const [formInheritFilters, setFormInheritFilters] = useState(true);
     const [formFilters, setFormFilters] = useState<OperationValue[]>([]);
@@ -342,6 +345,7 @@ export function CategoriesModule() {
                   : '',
         );
         setFormParentId(item && 'parentId' in item ? (item.parentId ?? '') : '');
+        setFormFeaturedAsset(item && 'slug' in item ? (item.featuredAsset ?? null) : null);
         setFormIsPrivate(item && 'isPrivate' in item ? item.isPrivate : false);
         setFormInheritFilters(item && 'filters' in item ? item.inheritFilters : true);
         setFormFilters(
@@ -493,6 +497,7 @@ export function CategoriesModule() {
                         variables: {
                             input: {
                                 id: editingItem.id,
+                                featuredAssetId: formFeaturedAsset?.id ?? null,
                                 isPrivate: formIsPrivate,
                                 parentId: formParentId || null,
                                 inheritFilters: formInheritFilters,
@@ -524,6 +529,7 @@ export function CategoriesModule() {
                     await createCollection({
                         variables: {
                             input: {
+                                featuredAssetId: formFeaturedAsset?.id ?? null,
                                 isPrivate: formIsPrivate,
                                 parentId: formParentId || undefined,
                                 inheritFilters: formInheritFilters,
@@ -1024,6 +1030,11 @@ export function CategoriesModule() {
                         </div>
                         {activeTab === 'CATEGORIES' ? (
                             <>
+                                <CategoryImageField
+                                    value={formFeaturedAsset}
+                                    onChange={setFormFeaturedAsset}
+                                    disabled={saving}
+                                />
                                 <div>
                                     <label className="mb-1 block text-xs font-bold text-slate-700">
                                         上级分类

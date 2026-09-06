@@ -100,6 +100,19 @@ const client = new ApolloClient({
                                     revision: 'default',
                                 },
                             };
+                        } else if (name === 'StorefrontPreviewBranding') {
+                            data = {
+                                activeChannel: channel,
+                                storefrontVisualPreset: { presetId: 'classic' },
+                                storefrontPreviewBranding: {
+                                    channelId: channel.id,
+                                    name: '预览测试店铺',
+                                    backgroundColor: null,
+                                    primaryColor: null,
+                                    accentColor: null,
+                                    highlightColor: null,
+                                },
+                            };
                         } else if (name === 'NextAdminStorefrontEditorOptions') {
                             data = { products: { items: [], totalItems: 0 } };
                         } else if (name === 'GetAssets') {
