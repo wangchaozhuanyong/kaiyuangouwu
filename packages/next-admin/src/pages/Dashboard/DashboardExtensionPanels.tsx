@@ -100,9 +100,9 @@ export function StaleTranslationExtensionAlert() {
             <div className="flex items-start gap-3">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
                 <div>
-                    <strong className="text-xs">{count} 项英文内容待复核</strong>
+                    <strong className="text-xs">{count} 项英文待同步或复核</strong>
                     <p className="mt-1 text-[11px] leading-5 text-amber-800">
-                        中文已自动翻译；之前人工锁定的英文不会被覆盖，需要人工确认。
+                        中文已保存，英文正在后台同步；人工锁定的英文需要管理员复核。
                     </p>
                 </div>
             </div>

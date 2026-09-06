@@ -311,7 +311,10 @@ export function itemTranslation(item: StorefrontContentItem, languageCode: Store
     );
 }
 
-export function storefrontBlockInput(block: StorefrontContentBlock) {
+export function storefrontBlockInput(
+    block: StorefrontContentBlock,
+    original?: StorefrontContentBlock | null,
+) {
     return {
         code: block.code.trim(),
         internalName: block.internalName.trim(),
@@ -329,14 +332,25 @@ export function storefrontBlockInput(block: StorefrontContentBlock) {
         targetValue: block.targetType === 'NONE' ? null : block.targetValue?.trim() || null,
         settings: block.settings,
         translations: block.translations
-            .map(({ languageCode, title, subtitle, body, ctaLabel }) => ({
+            .map(translation => ({
+                ...translation,
+                updatedFields:
+                    translation.languageCode === 'en' && original
+                        ? (['title', 'subtitle', 'body', 'ctaLabel'] as const).filter(
+                              field => translation[field] !== blockTranslation(original, 'en')[field],
+                          )
+                        : undefined,
+            }))
+            .filter(translation => translation.updatedFields == null || translation.updatedFields.length > 0)
+            .map(({ languageCode, title, subtitle, body, ctaLabel, updatedFields }) => ({
+                updatedFields,
                 languageCode,
                 title: title.trim(),
                 subtitle: subtitle.trim(),
                 body: body.trim(),
                 ctaLabel: ctaLabel.trim(),
             }))
-            .filter(translation => Boolean(translation.title)),
+            .filter(translation => translation.languageCode === 'en' || Boolean(translation.title)),
         items: block.items.map((item, position) => {
             const channel =
                 typeof item.settings?.supportChannel === 'string' ? item.settings.supportChannel : '';
@@ -356,12 +370,32 @@ export function storefrontBlockInput(block: StorefrontContentBlock) {
                     targetType === 'NONE' ? null : (generatedTarget ?? (item.targetValue?.trim() || null)),
                 settings: item.settings,
                 translations: item.translations
-                    .map(({ languageCode, label, description }) => ({
+                    .map(translation => {
+                        const previous = original?.items.find(candidate =>
+                            item.id ? candidate.id === item.id : candidate.position === item.position,
+                        );
+                        const english = previous?.translations.find(value => value.languageCode === 'en');
+                        return {
+                            ...translation,
+                            updatedFields:
+                                translation.languageCode === 'en' && english
+                                    ? (['label', 'description'] as const).filter(
+                                          field => translation[field] !== english[field],
+                                      )
+                                    : undefined,
+                        };
+                    })
+                    .filter(
+                        translation =>
+                            translation.updatedFields == null || translation.updatedFields.length > 0,
+                    )
+                    .map(({ languageCode, label, description, updatedFields }) => ({
+                        updatedFields,
                         languageCode,
                         label: label.trim(),
                         description: description.trim(),
                     }))
-                    .filter(translation => Boolean(translation.label)),
+                    .filter(translation => translation.languageCode === 'en' || Boolean(translation.label)),
             };
         }),
     };

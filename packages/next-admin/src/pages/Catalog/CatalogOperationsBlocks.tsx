@@ -890,7 +890,6 @@ export function ProductVariantCustomFieldsBlock({ context }: { context: NextAdmi
                             translations: selected.translations.map(translation => ({
                                 id: translation.id,
                                 languageCode: translation.languageCode,
-                                name: translation.name,
                                 customFields: localizedCustomFieldInputFromValues(
                                     visibleDefinitions,
                                     values,

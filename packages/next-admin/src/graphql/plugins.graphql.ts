@@ -235,6 +235,10 @@ export const CONTENT_TRANSLATION_AUDIT_QUERY = gql`
                 origin
                 locked
                 error
+                attempts
+                revision
+                nextAttemptAt
+                lastErrorCode
                 updatedAt
             }
         }
@@ -246,6 +250,7 @@ export const BACKFILL_CONTENT_TRANSLATIONS_MUTATION = gql`
         backfillCustomerContentTranslations(entityType: $entityType, limit: $limit, offset: $offset) {
             total
             scanned
+            queued
             processed
             skipped
             failed
@@ -383,6 +388,10 @@ export interface ImageGenerationAdminResult {
 }
 
 export interface ContentTranslationStateRecord {
+    attempts: number;
+    revision: number;
+    nextAttemptAt: string | null;
+    lastErrorCode: string | null;
     id: string;
     channelId: string | null;
     entityType: string;
@@ -413,3 +422,11 @@ export interface ContentTranslationAuditResult {
         states: ContentTranslationStateRecord[];
     };
 }
+
+export const RETRY_CONTENT_TRANSLATIONS_MUTATION = gql`
+    mutation NextAdminRetryContentTranslations($ids: [ID!]!) {
+        retryCustomerContentTranslations(ids: $ids) {
+            queued
+        }
+    }
+`;

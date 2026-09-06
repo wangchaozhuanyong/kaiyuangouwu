@@ -1,103 +1,50 @@
-# Content Translation Plugin
+# 中文保存与异步英文同步
 
-本插件统一管理客户可见内容的简体中文到英文翻译。简体中文是源内容，英文由服务端自动生成；运营人员仍可填写英文进行人工覆盖。
+业务服务在原有事务中调用 `prepareLocalizedFields` / `prepareLocalizedColumns` 和 `recordPreparedFields`，仅校验中文、保留有效英文、登记字段状态。禁止在业务保存事务中调用 `translate`。唯一外部提供方调用位于 `TranslationExecutionService`；后台 worker 与管理端测试翻译共用数据库限流锁。
 
-## 运行规则
+## 执行与恢复
 
-- 管理后台只要求简体中文，英文留空时在保存事务中自动生成。
-- 简体中文输入区是唯一权威源内容，不能删除；英文默认由系统自动维护，运营人员不需要重复填写。
-- 需要精确措辞时，在内容编辑页开启“人工锁定”后才能编辑并固定英文；之后仅修改中文时，保存会保留该英文并将状态标记为 `STALE`。取消锁定并保存后，系统会立即重新自动翻译。
-- 翻译审计页只记录状态，不直接改动业务内容；系统公告记录会提供“编辑并锁定”入口，跳转到对应公告的编辑面板。
-- 当前店铺存在 `STALE` 内容时，管理后台通知铃铛会显示英文待复核数量，但不会要求日常编辑重复填写英文。
-- 翻译服务未配置或必填英文生成失败时，保存会明确失败，不会把只有中文的新增内容发布给英文客户端。
-- 客户端语言切换仍通过 Vendure 的 `languageCode` 请求上下文完成，不依赖浏览器网页翻译。
-- 英文客户端不使用中文内容兜底。历史数据缺少英文时，对应自定义文本为空或整块不发布，直到完成回填。
+- Vendure Scheduler 每分钟扫描最多 100 个到期字段；按格式合批，单批最多 50 个字段及 5,000 个 Unicode 码点，批内相同文本只提交一次。单个长字段隔离处理，Google 提供方再校验 128 段及请求字节限制。
+- 字段状态使用 revision、sourceHash、translatedHash、leaseToken 和 leaseUntil 进行写回校验。原生实体按实际 Channel 关系检查；装修子项通过父区块核验；共享原生英文尊重其他关联店铺的人工审核。
+- 提供方全局并发 1，租约 30 秒；Google 每次 HTTP 请求超时 10 秒。字段租约 60 秒，每轮工作预算 40 秒。配额与临时错误从 60 秒指数退避至 15 分钟，并遵守更长的 Retry-After。配置和永久内容错误暂停自动尝试，管理员修复后重试。
+- 自动状态依次为 PENDING → TRANSLATING → NOTIFY_PENDING → AUTO_TRANSLATED。重试原子认领记录，过期响应不得覆盖新版本。删除或越店铺任务取消；人工锁定保持 MANUAL_LOCKED / STALE。
+- 译文和 notificationVersion 同事务落库，然后等待默认搜索索引任务入队。通知失败只重试通知，已经写入的译文不会再次请求提供方。API 每 3 秒读取通知版本以刷新已连接前台的公共缓存；各 API 进程自行消费，断线客户端重连时重新读取数据。通知可能重复，消费者须保持幂等。
+- 历史扫描使用持久化游标分批登记，不在 API 启动中翻译，不重置已有失败退避或人工决定。审计接口区分排队数与完成数。后台人工重试不绕过提供方限流时间。
 
-## 人工双语复核例外
+## 内容与表单
 
-以下内容仍保留中英文同时填写或复核，因为自动翻译不能替代责任确认或版式验收：
+中文按原业务发布规则立即展示；有效旧英文保留，新内容所需英文未齐时等待补齐。表单传递实际修改过的英文；装修区块使用 updatedFields 兼容标记，空值表达清除人工覆盖。保存成功后刷新错误单独提示，保存错误保留草稿。
 
-- 法律条款与免责声明；
-- 对外投放的分享海报、二维码海报和短版营销文案；
-- 服务商模型名称、品牌固定写法和模型说明。
+字段登记与存储映射集中在 `customer-facing-content-registry.ts`、`translation-content-adapter.ts`。新内容类型必须同时登记字段、归属关系和事务入队入口。
 
-这些例外在 `customerFacingContentRegistry` 中标记为 `BILINGUAL_HUMAN_REVIEW_REQUIRED`。其他未标记类型均执行“中文源内容 + 自动英文 + 可选人工覆盖”。SKU、URL、模型 ID、接口代码等技术值不属于翻译字段，只保留一个输入。
+## 迁移与上线
 
-## 浏览器自带翻译
+先执行 dev-server 中 `AddTranslationOutbox1788739200000`，再启动新版 API 和 worker。迁移只新增翻译状态字段、提供方状态表及索引；down 保留新增状态和内容。代码回退不会删除数据，但旧代码可能恢复同步翻译行为，需结合旧版本评估。没有运行 worker 时中文照常保存，英文队列等待 worker 恢复。
 
-商城不设置 `notranslate`、`translate="no"` 或 Google `notranslate` 元信息。页面根节点显式允许翻译，且 `<html lang>` 会随站内中英文切换更新。商品、分类和装修内容虽然来自 Vendure/Shop API，但最终渲染为普通 DOM 文本，因此浏览器翻译可以处理；图片内文字、Canvas 内容以及第三方 iframe 不在浏览器网页翻译保证范围内。
+本实现未提交、未创建 PR、未部署。上线仍需独立授权、备份、正式迁移及真实业务验收。
 
-## 配置
+## 本地验证
 
-开发服务器使用 Google Cloud Translation Basic v2：
+在仓库根运行相关包的 `check-types`、`test`、`build`，以及 `bun run lint:check`、`bun run check:migration-registry`、`bun run check:storefront-publishing`。
 
-```dotenv
-VENDURE_GOOGLE_TRANSLATION_API_KEY=replace-with-a-restricted-server-key
+真实 Admin/Shop API 集成测试：在 `packages/storefront-content-plugin` 运行：
+
+```sh
+bunx vitest run --config ../../e2e-common/vitest.config.mts e2e/translation-outbox.e2e-spec.ts
 ```
 
-生产环境检查会把缺失或占位密钥标记为阻断项。API Key 应只允许调用 Cloud Translation API，并在 Google Cloud 中限制到生产服务端可用的网络身份。
+`TRANSLATION_BROWSER_ACCEPTANCE=1` 保持隔离 API（3298）运行，并输出临时控制文件。使用项目真实 Next Admin 连接本地 API；控制值 paused / rate-limit / recover / conflict / stop 仅用于测试提供方故障注入，不访问 Google 或生产数据库。
 
-## 管理接口
+PostgreSQL 额外验收固定连接到 loopback `127.0.0.1:15492`、数据库 `translation_outbox_e2e`。使用一次性容器和临时存储；这些测试会重建专用测试 schema，禁止绑定到业务数据库。构建本插件后，在本包运行：
 
-接口仅允许 `SuperAdmin` 调用。
-
-查询最近的翻译状态：
-
-```graphql
-query TranslationAudit($channelId: ID) {
-    contentTranslationAudit(channelId: $channelId) {
-        configured
-        provider
-        total
-        counts {
-            status
-            count
-        }
-        states {
-            entityType
-            entityId
-            fieldPath
-            status
-            origin
-            locked
-            updatedAt
-        }
-    }
-}
+```sh
+TRANSLATION_TEST_POSTGRES=1 bunx vitest run src/content-translation-retry.service.spec.ts src/provider-process.spec.ts
 ```
 
-管理后台省略 `channelId` 时，接口按当前请求 Channel 查询，并同时包含全局内容记录；显式传入
-Channel ID 时同样包含该 Channel 与全局记录，传入 `null` 仅查询全局记录。
+并在 `packages/dev-server` 运行：
 
-分批回填 Vendure 原生内容：
-
-```graphql
-mutation BackfillTranslations($entityType: String, $limit: Int, $offset: Int) {
-    backfillCustomerContentTranslations(entityType: $entityType, limit: $limit, offset: $offset) {
-        total
-        scanned
-        processed
-        skipped
-        failed
-        nextOffset
-        hasMore
-        skippedRecords
-        errors
-    }
-}
+```sh
+TRANSLATION_TEST_POSTGRES=1 bunx vitest run --config vitest.config.mts migrations/translation-outbox.spec.ts
 ```
 
-`entityType` 可省略，也可使用 `Product`、`ProductVariant`、`ProductOptionGroup`、`ProductOption`、`Collection`、`Facet`、`FacetValue`、`Promotion`、`ShippingMethod`、`PaymentMethod`、`Country` 或 `Province`。单次上限为 500；每次将返回的 `nextOffset` 作为下一次的 `offset`，直到 `hasMore` 为 `false`。`skippedRecords` 会明确列出缺少简体中文源记录的实体类型和 ID，不能再把“扫描数大于处理数”当成成功或失败不明的结果。
-
-历史上在英语语言槽中填写、但实际仍包含中文字符的原生内容，会由数据库迁移先复制为 `zh_Hans` 源内容。配置翻译服务后，服务端启动会自动扫描并替换这些伪英文历史值，即使它们与当前中文源文案不完全相同；不包含中文的人工英文仍会保留并锁定。已经是最新状态的自动翻译不会在每次启动时重复调用翻译 API。
-
-自定义店铺资料、公告和装修内容在保存时自动翻译；旧数据缺译会被店铺上线检查或发布过滤器拦截，运营人员重新保存该记录即可补齐。
-核心品类双卡片的角标与卡片按钮属于可选本地化设置，管理后台按当前语言分别维护；英文缺失或仍包含中文时，英文客户端只使用安全英文兜底，不会回退显示中文设置。
-
-## 发布顺序
-
-1. 配置受限的翻译 API Key。
-2. 执行数据库迁移。
-3. 查看启动日志中的自动回填结果；如果有失败记录，再通过管理接口分批重试，直到 `failed` 为 0。
-4. 重新保存被上线检查或发布过滤器标记为缺译的自定义内容。
-5. 查看翻译状态审计，再开放英文客户端流量。
+未设置该测试开关时，一致性测试使用 SQL.js，两个独立进程测试单独跳过。进程测试包含并发争抢、SIGKILL 中断及持久化租约到期后的恢复；提供方为本地确定性测试实现。

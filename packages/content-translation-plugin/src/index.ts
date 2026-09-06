@@ -23,3 +23,10 @@ export type {
     RecordTranslationStateInput,
     TranslationStateIdentity,
 } from './types.js';
+
+export { ContentTranslationBackfillService } from './content-translation-backfill.service.js';
+export { ContentTranslationRetryService } from './content-translation-retry.service.js';
+export { TranslationExecutionService } from './translation-execution.service.js';
+export { TranslationProviderError } from './translation-provider-error.js';
+
+export { TranslationProviderState } from './entities/translation-provider-state.entity.js';

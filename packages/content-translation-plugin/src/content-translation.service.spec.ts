@@ -24,7 +24,7 @@ describe('English publication policy', () => {
 });
 
 describe('ContentTranslationService localized fields', () => {
-    it('generates missing English while preserving an explicitly edited target', async () => {
+    it('queues missing English while preserving an explicitly edited target', async () => {
         const provider = {
             name: 'test',
             isConfigured: () => true,
@@ -50,12 +50,12 @@ describe('ContentTranslationService localized fields', () => {
                 { path: 'body', sourceText: '正文', targetText: 'Reviewed body' },
             ]),
         ).resolves.toEqual([
-            expect.objectContaining({ path: 'title', translatedText: 'EN:标题', origin: 'AUTO' }),
+            expect.objectContaining({ path: 'title', translatedText: '', status: 'PENDING', origin: 'AUTO' }),
             expect.objectContaining({ path: 'body', translatedText: 'Reviewed body', origin: 'MANUAL' }),
         ]);
     });
 
-    it('regenerates an unchanged submitted English value when the Chinese source changed', async () => {
+    it('queues an unchanged submitted English value when the Chinese source changed', async () => {
         const service = new ContentTranslationService({} as any, {
             provider: {
                 name: 'test',
@@ -81,10 +81,15 @@ describe('ContentTranslationService localized fields', () => {
             },
         ]);
 
-        expect(field).toMatchObject({ translatedText: 'New title', origin: 'AUTO', locked: false });
+        expect(field).toMatchObject({
+            translatedText: 'Old title',
+            status: 'PENDING',
+            origin: 'AUTO',
+            locked: false,
+        });
     });
 
-    it('regenerates an English field whose existing value still contains Chinese', async () => {
+    it('queues an English field whose existing value still contains Chinese', async () => {
         const translate = vi.fn(() =>
             Promise.resolve({
                 provider: 'test',
@@ -108,9 +113,10 @@ describe('ContentTranslationService localized fields', () => {
             },
         ]);
 
-        expect(translate).toHaveBeenCalledOnce();
+        expect(translate).not.toHaveBeenCalled();
         expect(field).toMatchObject({
-            translatedText: 'Official channel service',
+            translatedText: '',
+            status: 'PENDING',
             origin: 'AUTO',
             locked: false,
         });
@@ -174,7 +180,7 @@ describe('ContentTranslationService localized fields', () => {
         });
     });
 
-    it('regenerates English when a manual lock is explicitly removed', async () => {
+    it('queues English when a manual lock is explicitly removed', async () => {
         const translate = vi.fn(() =>
             Promise.resolve({
                 provider: 'test',
@@ -200,10 +206,10 @@ describe('ContentTranslationService localized fields', () => {
             },
         ]);
 
-        expect(translate).toHaveBeenCalledOnce();
+        expect(translate).not.toHaveBeenCalled();
         expect(field).toMatchObject({
-            translatedText: 'Fresh automatic translation',
-            status: 'AUTO_TRANSLATED',
+            translatedText: 'Reviewed maintenance',
+            status: 'PENDING',
             origin: 'AUTO',
             locked: false,
         });
@@ -269,8 +275,13 @@ describe('ContentTranslationService localized fields', () => {
         await expect(service.countStale({ channelId: 'channel-1' } as any)).resolves.toBe(3);
         expect(repository.count).toHaveBeenCalledWith({
             where: [
-                { channelId: 'channel-1', status: 'STALE' },
-                { channelId: expect.anything(), status: 'STALE' },
+                {
+                    channelId: 'channel-1',
+                    status: expect.objectContaining({
+                        _value: expect.arrayContaining(['STALE', 'PENDING', 'NOTIFY_PENDING', 'FAILED']),
+                    }),
+                },
+                { channelId: expect.anything(), status: expect.anything() },
             ],
         });
     });

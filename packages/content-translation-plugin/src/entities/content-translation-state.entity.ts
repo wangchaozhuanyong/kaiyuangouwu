@@ -5,6 +5,7 @@ import { ContentTranslationOrigin, ContentTranslationStatus } from '../types.js'
 
 @Entity({ name: 'content_translation_state' })
 @Index('IDX_content_translation_state_key', ['stateKey'], { unique: true })
+@Index('IDX_content_translation_state_due', ['status', 'nextAttemptAt'])
 @Index('IDX_content_translation_state_audit', ['channelId', 'entityType', 'status'])
 export class ContentTranslationState extends VendureEntity {
     constructor(input?: DeepPartial<ContentTranslationState>) {
@@ -46,6 +47,24 @@ export class ContentTranslationState extends VendureEntity {
 
     @Column('boolean', { default: false })
     locked: boolean;
+
+    @Column('int', { default: 1 })
+    revision: number;
+
+    @Column('int', { default: 0 })
+    attempts: number;
+
+    @Column({ type: Date, nullable: true })
+    nextAttemptAt: Date | null;
+
+    @Column({ type: Date, nullable: true })
+    leaseUntil: Date | null;
+
+    @Column('varchar', { length: 36, nullable: true })
+    leaseToken: string | null;
+
+    @Column('varchar', { length: 32, nullable: true })
+    lastErrorCode: string | null;
 
     @Column('text', { nullable: true })
     error: string | null;

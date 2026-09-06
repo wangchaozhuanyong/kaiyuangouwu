@@ -49,6 +49,9 @@ export function BusinessServicesCopyModule() {
     const [storedDraft, setDraft] = useState<StorefrontContentBlock | null>(() =>
         sourceSignature ? copyDraft(source) : null,
     );
+    const [originalDraft, setOriginalDraft] = useState<StorefrontContentBlock | null>(() =>
+        sourceSignature ? copyDraft(source) : null,
+    );
     const [signature, setSignature] = useState(sourceSignature);
     const [previewLanguage, setPreviewLanguage] = useState<Language>('zh_Hans');
     const [notice, setNotice] = useState('');
@@ -63,6 +66,7 @@ export function BusinessServicesCopyModule() {
     useEffect(() => {
         if (!sourceSignature || sourceSignature === signature) return;
         setDraft(copyDraft(source));
+        setOriginalDraft(copyDraft(source));
         setSignature(sourceSignature);
     }, [signature, source, sourceSignature]);
     /* oxlint-enable react/set-state-in-effect */
@@ -71,7 +75,7 @@ export function BusinessServicesCopyModule() {
     const valid = Boolean(
         draft &&
         linkIsValid &&
-        (['zh_Hans', 'en'] as const).every(language => {
+        (['zh_Hans'] as const).every(language => {
             const translation = getTranslation(draft, language);
             return translation.title.trim() && translation.body.trim();
         }),
@@ -113,7 +117,7 @@ export function BusinessServicesCopyModule() {
         );
 
     const save = async () => {
-        if (!draft || !valid || !canEdit) return;
+        if (!draft || !valid || !canEdit || pending) return;
         setError('');
         try {
             if (draft.id) {
@@ -123,15 +127,21 @@ export function BusinessServicesCopyModule() {
                         input: {
                             id: draft.id,
                             expectedUpdatedAt: draft.updatedAt,
-                            ...storefrontBlockInput(draft),
+                            ...storefrontBlockInput(draft, originalDraft ?? undefined),
                         },
                     },
                 });
             } else {
-                await create({ variables: { input: storefrontBlockInput(draft) } });
+                await create({
+                    variables: { input: storefrontBlockInput(draft, originalDraft ?? undefined) },
+                });
             }
-            setNotice('商业服务页文案已保存并发布');
-            await query.refetch();
+            setNotice('中文已保存，英文待同步');
+            try {
+                await query.refetch();
+            } catch {
+                setError('保存已成功，但刷新失败，请稍后重新载入');
+            }
         } catch (cause) {
             setNotice('');
             setError(toUserFacingError(cause, '商业服务页文案保存失败'));

@@ -41,6 +41,10 @@ export const adminApiExtensions = gql`
         locked: Boolean!
         error: String
         updatedAt: DateTime!
+        revision: Int!
+        attempts: Int!
+        nextAttemptAt: DateTime
+        lastErrorCode: String
     }
 
     type ContentTranslationAudit {
@@ -55,6 +59,7 @@ export const adminApiExtensions = gql`
         total: Int!
         scanned: Int!
         processed: Int!
+        queued: Int!
         skipped: Int!
         failed: Int!
         nextOffset: Int!
@@ -68,7 +73,12 @@ export const adminApiExtensions = gql`
         contentTranslationStaleCount: Int!
     }
 
+    type ContentTranslationRetryResult {
+        queued: Int!
+    }
+
     extend type Mutation {
+        retryCustomerContentTranslations(ids: [ID!]!): ContentTranslationRetryResult!
         translateCustomerContent(segments: [ContentTranslationSegmentInput!]!): ContentTranslationResult!
         backfillCustomerContentTranslations(
             entityType: String

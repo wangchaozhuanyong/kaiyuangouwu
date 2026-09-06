@@ -1,5 +1,4 @@
 import { Injectable, OnApplicationBootstrap } from '@nestjs/common';
-import { normalizeString } from '@vendure/common/lib/normalize-string';
 import {
     Channel,
     Collection,
@@ -13,7 +12,6 @@ import {
     FacetValueEvent,
     ID,
     LanguageCode,
-    Logger,
     PaymentMethod,
     PaymentMethodEvent,
     ProcessContext,
@@ -39,8 +37,8 @@ import {
 } from '@vendure/core';
 import { ObjectLiteral, ObjectType, Repository } from 'typeorm';
 
-import { contentTranslationLoggerCtx } from './constants.js';
 import { ContentTranslationService, contentTranslationInternals } from './content-translation.service.js';
+import { customerFacingContentRegistry } from './customer-facing-content-registry.js';
 import { ContentTranslationFormat } from './types.js';
 
 type TranslationField = {
@@ -60,6 +58,7 @@ export interface NativeContentBackfillResult {
     total: number;
     scanned: number;
     processed: number;
+    queued: number;
     skipped: number;
     failed: number;
     nextOffset: number;
@@ -80,53 +79,35 @@ type NativeEvent = {
     input?: unknown;
 };
 
-const definitions = new Map<NamedEntityClass, NativeDefinition>([
-    [
-        Product,
+const nativeClasses = [
+    Product,
+    ProductVariant,
+    ProductOptionGroup,
+    ProductOption,
+    Collection,
+    Facet,
+    FacetValue,
+    Promotion,
+    ShippingMethod,
+    PaymentMethod,
+    Country,
+    Province,
+];
+const definitions = new Map<NamedEntityClass, NativeDefinition>(
+    nativeClasses.map(entity => [
+        entity,
         {
-            fields: [
-                { path: 'name', required: true },
-                { path: 'slug', required: true, deriveFrom: 'name' },
-                { path: 'description', required: true, format: 'HTML' },
-            ],
+            fields: customerFacingContentRegistry[
+                entity.name as keyof typeof customerFacingContentRegistry
+            ].fields.map(field => ({
+                path: field.path,
+                required: field.requiredForPublish,
+                format: field.format === 'HTML' ? 'HTML' : 'TEXT',
+                deriveFrom: field.format === 'SLUG' ? 'name' : undefined,
+            })),
         },
-    ],
-    [ProductVariant, { fields: [{ path: 'name', required: true }] }],
-    [ProductOptionGroup, { fields: [{ path: 'name', required: true }] }],
-    [ProductOption, { fields: [{ path: 'name', required: true }] }],
-    [
-        Collection,
-        {
-            fields: [
-                { path: 'name', required: true },
-                { path: 'slug', required: true, deriveFrom: 'name' },
-                { path: 'description', format: 'HTML' },
-            ],
-        },
-    ],
-    [Facet, { fields: [{ path: 'name', required: true }] }],
-    [FacetValue, { fields: [{ path: 'name', required: true }] }],
-    [
-        Promotion,
-        {
-            fields: [{ path: 'name', required: true }, { path: 'description' }],
-        },
-    ],
-    [
-        ShippingMethod,
-        {
-            fields: [{ path: 'name', required: true }, { path: 'description' }],
-        },
-    ],
-    [
-        PaymentMethod,
-        {
-            fields: [{ path: 'name', required: true }, { path: 'description' }],
-        },
-    ],
-    [Country, { fields: [{ path: 'name', required: true }] }],
-    [Province, { fields: [{ path: 'name', required: true }] }],
-]);
+    ]),
+);
 
 @Injectable()
 export class NativeContentTranslationService implements OnApplicationBootstrap {
@@ -157,57 +138,16 @@ export class NativeContentTranslationService implements OnApplicationBootstrap {
             id: 'customer-content-auto-translate',
             handler: (event: any) => this.handle(event as NativeEvent),
         });
-        if (this.processContext?.isServer && this.requestContextService && this.translations.isConfigured()) {
-            void this.repairHistoricalTranslations().catch(error => {
-                Logger.error(
-                    `Automatic customer-content translation repair failed: ${
-                        error instanceof Error ? error.message : String(error)
-                    }`,
-                    contentTranslationLoggerCtx,
-                    error instanceof Error ? error.stack : undefined,
-                );
-            });
-        }
     }
 
-    async repairHistoricalTranslations(): Promise<NativeContentBackfillResult> {
-        if (!this.requestContextService || !this.translations.isConfigured()) {
-            return emptyBackfillResult();
-        }
+    // Called by the worker scanner only; one bounded page, no network requests.
+    async repairHistoricalTranslations(offset = 0): Promise<NativeContentBackfillResult> {
+        if (!this.requestContextService) return emptyBackfillResult();
         const ctx = await this.requestContextService.create({
             apiType: 'admin',
             languageCode: LanguageCode.zh_Hans,
         });
-        const aggregate = emptyBackfillResult();
-        let offset = 0;
-        do {
-            const page = await this.backfill(ctx, null, 100, offset);
-            aggregate.total = page.total;
-            aggregate.scanned += page.scanned;
-            aggregate.processed += page.processed;
-            aggregate.skipped += page.skipped;
-            aggregate.failed += page.failed;
-            aggregate.skippedRecords.push(
-                ...page.skippedRecords.slice(0, Math.max(0, 50 - aggregate.skippedRecords.length)),
-            );
-            aggregate.errors.push(...page.errors.slice(0, Math.max(0, 50 - aggregate.errors.length)));
-            aggregate.nextOffset = page.nextOffset;
-            aggregate.hasMore = page.hasMore;
-            if (page.scanned === 0) break;
-            offset = page.nextOffset;
-        } while (aggregate.hasMore);
-        const summary =
-            `Automatic customer-content translation repair scanned ${aggregate.scanned} records, ` +
-            `processed ${aggregate.processed}, skipped ${aggregate.skipped}, failed ${aggregate.failed}`;
-        if (aggregate.failed || aggregate.skipped) {
-            Logger.warn(
-                `${summary}. ${[...aggregate.skippedRecords, ...aggregate.errors].slice(0, 5).join('; ')}`,
-                contentTranslationLoggerCtx,
-            );
-        } else {
-            Logger.info(summary, contentTranslationLoggerCtx);
-        }
-        return aggregate;
+        return this.backfill(ctx, null, 100, offset);
     }
 
     private async handle(event: NativeEvent): Promise<void> {
@@ -310,7 +250,7 @@ export class NativeContentTranslationService implements OnApplicationBootstrap {
         const totals = await Promise.all(
             repositories.map(item =>
                 item.repository.count({
-                    where: item.entityClass === Collection ? { isRoot: false } : undefined,
+                    where: this.backfillWhere(ctx, item.entityClass),
                 }),
             ),
         );
@@ -319,6 +259,7 @@ export class NativeContentTranslationService implements OnApplicationBootstrap {
             total,
             scanned: 0,
             processed: 0,
+            queued: 0,
             skipped: 0,
             failed: 0,
             nextOffset: Math.min(offset, total),
@@ -337,7 +278,7 @@ export class NativeContentTranslationService implements OnApplicationBootstrap {
                 continue;
             }
             const entities = (await repository.find({
-                where: entityClass === Collection ? { isRoot: false } : undefined,
+                where: this.backfillWhere(ctx, entityClass),
                 relations:
                     entityClass === Product || entityClass === ProductVariant
                         ? ['translations', 'channels']
@@ -363,9 +304,11 @@ export class NativeContentTranslationService implements OnApplicationBootstrap {
                     continue;
                 }
                 try {
-                    await this.translateEntity(ctx, entity, { translations: [source] });
-                    await this.refreshProductSearchIndex(ctx, entity);
-                    result.processed++;
+                    const queued = await this.connection.withTransaction(ctx, transactionCtx =>
+                        this.translateEntity(transactionCtx, entity, { translations: [source] }),
+                    );
+                    if (queued) result.queued++;
+                    else result.processed++;
                 } catch (error) {
                     result.failed++;
                     if (result.errors.length < 50) {
@@ -383,12 +326,12 @@ export class NativeContentTranslationService implements OnApplicationBootstrap {
         return result;
     }
 
-    async translateEntity(ctx: RequestContext, entity: NativeEntity, input: any): Promise<void> {
+    async translateEntity(ctx: RequestContext, entity: NativeEntity, input: any): Promise<boolean> {
         const definition = definitions.get(entity.constructor);
-        if (!definition) return;
+        if (!definition) return false;
         const entityType = entity.constructor.name;
         const repository = this.translationRepository(ctx, entity);
-        if (!repository) return;
+        if (!repository) return false;
         const [source, target] = await Promise.all([
             findTranslation(repository, entity.id, 'zh_Hans'),
             findTranslation(repository, entity.id, 'en'),
@@ -398,19 +341,32 @@ export class NativeContentTranslationService implements OnApplicationBootstrap {
         }
 
         const targetInput = getTranslationInput(input, 'en');
-        const existingStates = await this.translations.findStates(ctx, {
-            channelId: ctx.channelId,
-            entityType,
-            entityId: entity.id,
-        });
-        const statesByField = new Map(existingStates.map(state => [state.fieldPath, state]));
+        const existingStates = await this.translations.findStates(
+            ctx,
+            {
+                channelId: ctx.channelId,
+                entityType,
+                entityId: entity.id,
+            },
+            true,
+        );
+        const statesByField = new Map(
+            existingStates
+                .filter(state => state.channelId == null || state.channelId === String(ctx.channelId))
+                .map(state => [state.fieldPath, state]),
+        );
         const manualFields = new Set<string>();
         const staleFields = new Set<string>();
         const currentAutoFields = new Set<string>();
         for (const field of definition.fields) {
-            const state = statesByField.get(field.path);
             const currentTargetText = String(target?.[field.path] ?? '');
             const currentHash = contentTranslationInternals.hash(currentTargetText);
+            const shared = existingStates.filter(
+                candidate => candidate.fieldPath === field.path && candidate.translatedHash === currentHash,
+            );
+            const state =
+                shared.find(candidate => candidate.locked) ?? statesByField.get(field.path) ?? shared[0];
+
             const sourceHash = contentTranslationInternals.hash(String(source[field.path] ?? ''));
             const targetWasSubmitted = targetInput?.[field.path] != null;
             const targetWasCleared = targetWasSubmitted && !String(targetInput?.[field.path] ?? '').trim();
@@ -451,55 +407,25 @@ export class NativeContentTranslationService implements OnApplicationBootstrap {
                 );
             }
         }
-        const segments = definition.fields
-            .filter(
-                field =>
-                    !field.deriveFrom && !manualFields.has(field.path) && !currentAutoFields.has(field.path),
-            )
-            .filter(field => String(source[field.path] ?? '').trim().length > 0)
-            .map(field => ({
-                key: field.path,
-                text: String(source[field.path]),
-                format: field.format ?? 'TEXT',
-            }));
-        if (segments.length && !this.translations.isConfigured()) {
-            throw new UserInputError(
-                'English content could not be generated because the translation provider is not configured',
-            );
-        }
-
-        const generated = segments.length
-            ? await this.translations.translate({ segments })
-            : { provider: this.translations.providerName(), translations: [] };
-        const generatedByField = new Map(generated.translations.map(item => [item.key, item.text]));
-        const nextTarget =
-            target ??
-            repository.create({
-                languageCode: 'en',
-                base: entity,
-            });
+        const pendingFields = definition.fields.filter(
+            field =>
+                !manualFields.has(field.path) &&
+                !currentAutoFields.has(field.path) &&
+                (field.deriveFrom || String(source[field.path] ?? '').trim()),
+        );
+        const pending = new Set(pendingFields.map(field => field.path));
+        const nextTarget = target ?? repository.create({ languageCode: 'en', base: entity });
         for (const field of definition.fields) {
             if (manualFields.has(field.path) || currentAutoFields.has(field.path)) continue;
-            if (field.deriveFrom) {
-                const seed = String(
-                    generatedByField.get(field.deriveFrom) ??
-                        nextTarget[field.deriveFrom] ??
-                        source[field.deriveFrom] ??
-                        '',
-                );
-                nextTarget[field.path] =
-                    normalizeString(seed, '-') || `${entityType.toLowerCase()}-${entity.id}`;
-            } else {
-                nextTarget[field.path] = generatedByField.get(field.path) ?? '';
-            }
+            const previous = String(target?.[field.path] ?? '');
+            nextTarget[field.path] =
+                pending.has(field.path) && !contentTranslationInternals.containsHanContent(previous)
+                    ? previous
+                    : '';
+            if (field.deriveFrom && !nextTarget[field.path])
+                nextTarget[field.path] = `${entityType.toLowerCase()}-${entity.id}`;
         }
-        for (const field of definition.fields) {
-            if (field.required && !String(nextTarget[field.path] ?? '').trim()) {
-                throw new UserInputError(
-                    `Cannot save ${entityType}: automatic English translation for required field "${field.path}" is empty`,
-                );
-            }
-        }
+
         await repository.save(nextTarget, { reload: false });
 
         for (const field of definition.fields) {
@@ -512,11 +438,28 @@ export class NativeContentTranslationService implements OnApplicationBootstrap {
                 fieldPath: field.path,
                 sourceText: String(source[field.path] ?? ''),
                 translatedText: String(nextTarget[field.path] ?? ''),
-                status: isStale ? 'STALE' : isManual ? 'MANUAL_LOCKED' : 'AUTO_TRANSLATED',
+                status: isStale
+                    ? 'STALE'
+                    : isManual
+                      ? 'MANUAL_LOCKED'
+                      : pending.has(field.path)
+                        ? 'PENDING'
+                        : 'AUTO_TRANSLATED',
                 origin: isManual ? 'MANUAL' : 'AUTO',
                 locked: isManual,
             });
         }
+        return pending.size > 0;
+    }
+
+    private backfillWhere(ctx: RequestContext, entityClass: NamedEntityClass) {
+        const metadata = this.connection.rawConnection.getMetadata(entityClass);
+        return {
+            ...(entityClass === Collection ? { isRoot: false } : {}),
+            ...(metadata.relations.some(relation => relation.propertyName === 'channels')
+                ? { channels: { id: ctx.channelId } }
+                : {}),
+        };
     }
 
     private translationRepository(
@@ -531,7 +474,7 @@ export class NativeContentTranslationService implements OnApplicationBootstrap {
         return this.connection.getRepository(ctx, translationsRelation.inverseEntityMetadata.target);
     }
 
-    private async refreshProductSearchIndex(ctx: RequestContext, entity: NativeEntity): Promise<void> {
+    async refreshProductSearchIndex(ctx: RequestContext, entity: NativeEntity): Promise<void> {
         if (!(entity instanceof Product) && !(entity instanceof ProductVariant)) return;
         const requestContextService = this.requestContextService;
         const contexts =
@@ -596,6 +539,7 @@ function emptyBackfillResult(): NativeContentBackfillResult {
         total: 0,
         scanned: 0,
         processed: 0,
+        queued: 0,
         skipped: 0,
         failed: 0,
         nextOffset: 0,

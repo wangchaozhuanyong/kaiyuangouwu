@@ -1,5 +1,9 @@
 import { LanguageCode } from '@vendure/common/lib/generated-types';
 import {
+    customerFacingContentRegistry,
+    isUsableEnglishTranslation,
+} from '@vendure/content-translation-plugin';
+import {
     Asset,
     ConfigService,
     ID,
@@ -31,7 +35,7 @@ export class ReferralPosterView {
     ) {}
 
     async configView(ctx: RequestContext, config: ReferralProgramConfig, includeDisabled: boolean) {
-        const posterTemplateConfigs = await this.connection.getRepository(ctx, ReferralPosterTemplate).find({
+        const templates = await this.connection.getRepository(ctx, ReferralPosterTemplate).find({
             where: {
                 channelId: ctx.channelId,
                 ...(includeDisabled ? {} : { enabled: true }),
@@ -42,6 +46,18 @@ export class ReferralPosterView {
             },
             order: { position: 'ASC', id: 'ASC' },
         });
+        const posterTemplateConfigs =
+            includeDisabled || String(ctx.languageCode).startsWith('zh')
+                ? templates
+                : templates.filter(template =>
+                      customerFacingContentRegistry.ReferralPosterTemplate.fields.every(field => {
+                          const values = template as unknown as Record<string, string>;
+                          return (
+                              !values[`${field.path}Zh`]?.trim() ||
+                              isUsableEnglishTranslation(values[`${field.path}En`])
+                          );
+                      }),
+                  );
         const minimumOrderAmount =
             convertChannelAmount(ctx, config.minimumOrderAmount, config.currencyCode, ctx.currencyCode) ?? 0;
         const maxRewardPerOrder =

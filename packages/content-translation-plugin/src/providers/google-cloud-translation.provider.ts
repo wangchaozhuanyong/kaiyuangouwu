@@ -1,3 +1,4 @@
+import { TranslationProviderError } from '../translation-provider-error.js';
 import {
     ContentTranslationFormat,
     ContentTranslationProvider,
@@ -20,7 +21,7 @@ interface GoogleTranslationResponse {
     data?: {
         translations?: Array<{ translatedText?: string }>;
     };
-    error?: { message?: string };
+    error?: { message?: string; errors?: Array<{ reason?: string }> };
 }
 
 const protectedPattern = /https?:\/\/[^\s<]+|\{\{[^{}]+\}\}|\{[^{}]+\}|%[A-Z0-9_]+%/giu;
@@ -41,7 +42,7 @@ export class GoogleCloudTranslationProvider implements ContentTranslationProvide
 
     async translate(request: ContentTranslationRequest): Promise<ContentTranslationResult> {
         if (!this.isConfigured()) {
-            throw new Error('Google Cloud Translation API key is not configured');
+            throw new TranslationProviderError('CONFIGURATION');
         }
         const translations = new Map<string, string>();
         for (const format of ['TEXT', 'HTML'] as const) {
@@ -72,33 +73,64 @@ export class GoogleCloudTranslationProvider implements ContentTranslationProvide
         sourceLanguageCode: string,
         targetLanguageCode: string,
     ): Promise<Array<{ key: string; text: string }>> {
+        if (segments.length > 128) throw new TranslationProviderError('TEXT_TOO_LONG');
         const protectedSegments = segments.map(segment => protectText(segment.text, glossary));
-        const response = await fetch(`${this.endpoint}?key=${encodeURIComponent(this.apiKey)}`, {
-            method: 'POST',
-            headers: { 'content-type': 'application/json; charset=utf-8' },
-            body: JSON.stringify({
-                q: protectedSegments.map(segment => segment.text),
-                source: toGoogleLanguageCode(sourceLanguageCode),
-                target: toGoogleLanguageCode(targetLanguageCode),
-                format: format === 'HTML' ? 'html' : 'text',
-            }),
+        const payload = JSON.stringify({
+            q: protectedSegments.map(segment => segment.text),
+            source: toGoogleLanguageCode(sourceLanguageCode),
+            target: toGoogleLanguageCode(targetLanguageCode),
+            format: format === 'HTML' ? 'html' : 'text',
         });
-        const body = (await response.json()) as GoogleTranslationResponse;
+        if (Buffer.byteLength(payload, 'utf8') > 100_000) throw new TranslationProviderError('TEXT_TOO_LONG');
+        let response: Response;
+        let body: GoogleTranslationResponse;
+        try {
+            response = await fetch(`${this.endpoint}?key=${encodeURIComponent(this.apiKey)}`, {
+                method: 'POST',
+                signal: AbortSignal.timeout(10_000),
+                headers: { 'content-type': 'application/json; charset=utf-8' },
+                body: payload,
+            });
+        } catch {
+            throw new TranslationProviderError('UNAVAILABLE');
+        }
+        try {
+            body = (await response.json()) as GoogleTranslationResponse;
+        } catch {
+            throw new TranslationProviderError(response.ok ? 'INVALID_RESPONSE' : 'UNAVAILABLE');
+        }
+        if (!body || typeof body !== 'object') throw new TranslationProviderError('INVALID_RESPONSE');
         if (!response.ok) {
-            throw new Error(body.error?.message || `Google Cloud Translation failed (${response.status})`);
+            const reason = [
+                body.error?.message,
+                ...(body.error?.errors?.map(error => error.reason) ?? []),
+            ].join(' ');
+            if (response.status === 429 || /user.?rate.?limit|rateLimitExceeded/i.test(reason)) {
+                throw new TranslationProviderError(
+                    'RATE_LIMIT',
+                    retryAfterMilliseconds(response.headers?.get('retry-after')),
+                );
+            }
+            if (/daily.?limit|dailyLimitExceeded|quotaExceeded/i.test(reason)) {
+                throw new TranslationProviderError(
+                    'QUOTA',
+                    retryAfterMilliseconds(response.headers?.get('retry-after')),
+                );
+            }
+            throw new TranslationProviderError(response.status >= 500 ? 'UNAVAILABLE' : 'CONFIGURATION');
         }
         const results = body.data?.translations ?? [];
-        if (results.length !== segments.length) {
-            throw new Error('Google Cloud Translation returned an unexpected number of translations');
+        if (!Array.isArray(results) || results.length !== segments.length) {
+            throw new TranslationProviderError('INVALID_RESPONSE');
         }
         return results.map((result, index) => {
+            if (typeof result?.translatedText !== 'string')
+                throw new TranslationProviderError('INVALID_RESPONSE');
             const restored = protectedSegments[index].restore(
                 decodeHtmlEntities(result.translatedText ?? ''),
             );
             if (segments[index].text.trim() && !restored.trim()) {
-                throw new Error(
-                    `Google Cloud Translation returned an empty value for ${segments[index].key}`,
-                );
+                throw new TranslationProviderError('INVALID_RESPONSE');
             }
             return { key: segments[index].key, text: restored };
         });
@@ -133,7 +165,7 @@ function protectText(value: string, glossary: Record<string, string>): Protected
                 restored = restored.replace(tokenPattern, replacement.value);
             }
             if (/ZXQ\s*TERM/iu.test(restored)) {
-                throw new Error('A protected translation placeholder could not be restored');
+                throw new TranslationProviderError('INVALID_RESPONSE');
             }
             return restored;
         },
@@ -154,3 +186,10 @@ function decodeHtmlEntities(value: string): string {
 }
 
 export const googleTranslationInternals = { protectText, decodeHtmlEntities, toGoogleLanguageCode };
+
+function retryAfterMilliseconds(value: string | null | undefined): number | undefined {
+    if (!value) return undefined;
+    const seconds = Number(value);
+    const delay = Number.isFinite(seconds) ? seconds * 1000 : Date.parse(value) - Date.now();
+    return Number.isFinite(delay) ? Math.max(0, delay) : undefined;
+}

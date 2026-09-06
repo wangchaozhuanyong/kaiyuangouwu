@@ -50,19 +50,22 @@ export function createContentPublicationChecker(isUsableEnglishTranslation: (val
     return function contentPublicationStatus(
         block: PublicationBlock,
         now = Date.now(),
+        languageCode = 'en',
     ): ContentPublicationStatus {
         if (isSharingContent(block)) return 'SHARING';
         if (!block.enabled) return 'DISABLED';
         if (block.startsAt && new Date(block.startsAt).getTime() > now) return 'SCHEDULED';
         if (block.endsAt && new Date(block.endsAt).getTime() <= now) return 'EXPIRED';
+        const requireEnglish = !languageCode.toLowerCase().startsWith('zh');
         const source = block.translations?.find(t => t.languageCode === 'zh_Hans');
         const target = block.translations?.find(t => t.languageCode === 'en');
         if (
             !source?.title?.trim() ||
-            !isUsableEnglishTranslation(target?.title) ||
-            (['subtitle', 'body', 'ctaLabel'] as const).some(
-                field => !translationPair(source[field], target?.[field]),
-            ) ||
+            (requireEnglish && !isUsableEnglishTranslation(target?.title)) ||
+            (requireEnglish &&
+                (['subtitle', 'body', 'ctaLabel'] as const).some(
+                    field => !translationPair(source[field], target?.[field]),
+                )) ||
             (block.items ?? [])
                 .filter(item => item.enabled)
                 .some(item => {
@@ -70,8 +73,8 @@ export function createContentPublicationChecker(isUsableEnglishTranslation: (val
                     const en = item.translations?.find(t => t.languageCode === 'en');
                     return (
                         !zh?.label?.trim() ||
-                        !isUsableEnglishTranslation(en?.label) ||
-                        !translationPair(zh.description, en?.description)
+                        (requireEnglish && !isUsableEnglishTranslation(en?.label)) ||
+                        (requireEnglish && !translationPair(zh.description, en?.description))
                     );
                 })
         )

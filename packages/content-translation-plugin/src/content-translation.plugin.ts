@@ -2,25 +2,45 @@ import { PluginCommonModule, VendurePlugin } from '@vendure/core';
 
 import { adminApiExtensions } from './api-extensions.js';
 import { CONTENT_TRANSLATION_OPTIONS } from './constants.js';
+import { ContentTranslationBackfillService } from './content-translation-backfill.service.js';
+import { ContentTranslationRetryService } from './content-translation-retry.service.js';
 import { ContentTranslationAdminResolver } from './content-translation.resolver.js';
 import { ContentTranslationService } from './content-translation.service.js';
+import {
+    enqueueHistoricalContentTranslations,
+    retryPendingContentTranslations,
+} from './content-translation.tasks.js';
 import { ContentTranslationState } from './entities/content-translation-state.entity.js';
+import { TranslationProviderState } from './entities/translation-provider-state.entity.js';
 import { NativeContentTranslationService } from './native-content-translation.service.js';
 import { UnavailableTranslationProvider } from './providers/unavailable-translation.provider.js';
+import { TranslationContentAdapter } from './translation-content-adapter.js';
+import { TranslationExecutionService } from './translation-execution.service.js';
 import { ContentTranslationPluginOptions } from './types.js';
 
 @VendurePlugin({
     imports: [PluginCommonModule],
-    entities: [ContentTranslationState],
+    entities: [ContentTranslationState, TranslationProviderState],
     providers: [
         ContentTranslationService,
+        ContentTranslationBackfillService,
+        TranslationExecutionService,
+        TranslationContentAdapter,
         NativeContentTranslationService,
+        ContentTranslationRetryService,
         {
             provide: CONTENT_TRANSLATION_OPTIONS,
             useFactory: () => ContentTranslationPlugin.options,
         },
     ],
     exports: [ContentTranslationService],
+    configuration: config => {
+        config.schedulerOptions.tasks.push(
+            retryPendingContentTranslations,
+            enqueueHistoricalContentTranslations,
+        );
+        return config;
+    },
     adminApiExtensions: {
         schema: adminApiExtensions,
         resolvers: [ContentTranslationAdminResolver],
