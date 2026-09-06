@@ -50,3 +50,13 @@ TRANSLATION_TEST_POSTGRES=1 bunx vitest run --config vitest.config.mts migration
 未设置该测试开关时，一致性测试使用 SQL.js，两个独立进程测试单独跳过。进程测试包含并发争抢、SIGKILL 中断及持久化租约到期后的恢复；提供方为本地确定性测试实现。
 
 `Build & Test` 的 unit-tests 作业使用一次性 PostgreSQL 服务执行上述队列、跨进程恢复和迁移测试，并运行真实 Admin/Shop API 验收；提供方故障由测试夹具注入。
+
+## 商品导入回归
+
+保留商品导入专项回归，并按后台翻译流程验证：失败行重试和 362 行批量保存时请求数为 0；随后由 worker 注入 Google 403、退避及恢复。验证 SKU 不重复、价格库存、两级分类和英文补齐，不连接生产数据库。
+
+```sh
+bunx vitest run --config e2e-common/vitest.config.mts packages/content-translation-plugin/e2e/catalog-import-rate-limit.e2e-spec.ts --maxWorkers=1
+```
+
+该命令在仓库根运行，已加入 Build & Test 的 unit-tests 作业。

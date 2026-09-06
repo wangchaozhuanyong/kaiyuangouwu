@@ -155,6 +155,34 @@ const english = async () =>
     (await db.getRepository(ItemTranslation).findOneByOrFail({ id: target.id })).label;
 
 describe('durable translation outbox with an isolated SQL database', () => {
+    it('preserves old English when one result exceeds its column limit without blocking other fields', async () => {
+        await db.getRepository(ItemTranslation).update(source.id, { description: '说明' });
+        await service.recordState(ctx, {
+            channelId: '1',
+            entityType: 'StorefrontContentItem',
+            entityId: state.entityId,
+            fieldPath: 'description',
+            sourceText: '说明',
+            translatedText: '',
+            status: 'PENDING',
+        });
+        translate.mockImplementation((request: any) =>
+            Promise.resolve({
+                translations: request.segments.map((segment: any) => ({
+                    key: segment.key,
+                    text: segment.text === '商业服务' ? 'x'.repeat(256) : 'Description',
+                })),
+            }),
+        );
+        const result = await retry.retryPending();
+        expect(result.translated).toBe(1);
+        expect(await english()).toBe(target.label);
+        expect(await readState()).toMatchObject({ status: 'FAILED', lastErrorCode: 'TEXT_TOO_LONG' });
+        expect((await db.getRepository(ItemTranslation).findOneByOrFail({ id: target.id })).description).toBe(
+            'Description',
+        );
+    });
+
     it('applies pending English without changing Chinese and consumes the task once', async () => {
         expect(await retry.retryPending()).toEqual({ scanned: 1, translated: 1, deferred: 0 });
         expect(await english()).toBe('Business services');

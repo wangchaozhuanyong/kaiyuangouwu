@@ -220,6 +220,11 @@ jobs:
                   PACKAGE: storefront-content-plugin
                   VENDURE_DISABLE_TELEMETRY: 'true'
               run: bunx vitest run --config e2e-common/vitest.config.mts packages/storefront-content-plugin/e2e/translation-outbox.e2e-spec.ts
+            - name: Catalog import translation outbox acceptance
+              env:
+                  PACKAGE: content-translation-plugin
+                  VENDURE_DISABLE_TELEMETRY: 'true'
+              run: bunx vitest run --config e2e-common/vitest.config.mts packages/content-translation-plugin/e2e/catalog-import-rate-limit.e2e-spec.ts --maxWorkers=1
             - name: Operations dashboard regression tests
               run: bun run --cwd packages/operations-dashboard-plugin test
             - name: Install browser for storefront configuration acceptance
