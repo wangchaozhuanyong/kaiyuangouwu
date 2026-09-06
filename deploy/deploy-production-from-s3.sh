@@ -19,6 +19,7 @@ readonly reviewed_storefront_media_keys="${VENDURE_REVIEWED_STOREFRONT_MEDIA_KEY
 readonly reviewed_storefront_media_channel_codes="${VENDURE_REVIEWED_STOREFRONT_MEDIA_CHANNEL_CODES:-}"
 readonly reviewed_auth_visuals="${VENDURE_REVIEWED_AUTH_VISUALS:-false}"
 readonly reviewed_moyao_brand="${VENDURE_REVIEWED_MOYAO_BRAND:-false}"
+readonly reviewed_referral_posters="${VENDURE_REVIEWED_REFERRAL_POSTERS:-none}"
 readonly reviewed_homepage_carousel="${VENDURE_REVIEWED_HOMEPAGE_CAROUSEL:-false}"
 readonly homepage_carousel_media_keys="home-hero-token-topup-v1,home-hero-codex-tiers-v1,home-hero-account-services-v1"
 readonly reviewed_damatong_storefront="${VENDURE_REVIEWED_DAMATONG_STOREFRONT:-false}"
@@ -93,6 +94,11 @@ if [[ "${reviewed_damatong_storefront}" == "false" && \
     -n "${reviewed_damatong_channel_token}" ]]; then
     fail 'reviewed Damatong Channel token was supplied without its publisher'
 fi
+
+case "${reviewed_referral_posters}" in
+    none|primary|both-stores) ;;
+    *) fail 'invalid reviewed referral poster scope' ;;
+esac
 
 umask 027
 
@@ -176,6 +182,20 @@ if [[ "${homepage_carousel_change}" == "false" && "${reviewed_homepage_carousel}
     fail 'reviewed homepage carousel scope was supplied without a carousel change'
 fi
 
+referral_poster_change=false
+if ! git diff --quiet "${deployed_sha}" "${target_sha}" -- \
+    packages/dev-server/scripts/sync-referral-posters.mjs \
+    packages/dev-server/assets/referral-posters/ \
+    packages/store-management-plugin/src/referral/referral-poster-presets.ts; then
+    referral_poster_change=true
+fi
+if [[ "${referral_poster_change}" == "true" && "${reviewed_referral_posters}" == "none" ]]; then
+    fail 'managed referral posters changed; select the reviewed referral poster scope'
+fi
+if [[ "${referral_poster_change}" == "false" && "${reviewed_referral_posters}" != "none" ]]; then
+    fail 'reviewed referral poster scope was supplied without a poster change'
+fi
+
 mapfile -t managed_storefront_changes < <(
     git diff --name-only "${deployed_sha}" "${target_sha}" -- \
         packages/dev-server/scripts/sync-storefront-media.mjs \
@@ -213,6 +233,7 @@ if [[ "${VENDURE_DEPLOY_REEXECUTED:-0}" != "1" ]]; then
         VENDURE_REVIEWED_STOREFRONT_MEDIA_CHANNEL_CODES="${reviewed_storefront_media_channel_codes}" \
         VENDURE_REVIEWED_AUTH_VISUALS="${reviewed_auth_visuals}" \
         VENDURE_REVIEWED_MOYAO_BRAND="${reviewed_moyao_brand}" \
+        VENDURE_REVIEWED_REFERRAL_POSTERS="${reviewed_referral_posters}" \
         VENDURE_REVIEWED_HOMEPAGE_CAROUSEL="${reviewed_homepage_carousel}" \
         VENDURE_REVIEWED_DAMATONG_STOREFRONT="${reviewed_damatong_storefront}" \
         VENDURE_REVIEWED_DAMATONG_CHANNEL_TOKEN="${reviewed_damatong_channel_token}" \
@@ -318,7 +339,8 @@ retain_release_file "${archive_path}" "${releases_dir}/${archive_name}"
 retain_release_file "${checksum_path}" "${releases_dir}/${checksum_name}"
 
 if [[ -n "${reviewed_storefront_media_keys}" || "${reviewed_auth_visuals}" == "true" || \
-    "${reviewed_moyao_brand}" == "true" || "${reviewed_damatong_storefront}" == "true" ]]; then
+    "${reviewed_moyao_brand}" == "true" || "${reviewed_damatong_storefront}" == "true" || \
+    "${reviewed_referral_posters}" != "none" ]]; then
     set -a
     # shellcheck disable=SC1090
     source "${environment_file}"
@@ -384,6 +406,15 @@ if [[ "${reviewed_homepage_carousel}" == "true" ]]; then
     cd "${repository}"
     printf 'HOMEPAGE_CAROUSEL_PREFLIGHT_OK channel=%s\n' \
         "${reviewed_storefront_media_channel_codes}"
+fi
+if [[ "${reviewed_referral_posters}" != "none" ]]; then
+    printf 'REFERRAL_POSTERS_PREFLIGHT_BEGIN scope=%s\n' "${reviewed_referral_posters}"
+    cd "${candidate}"
+    REFERRAL_POSTER_SCOPE="${reviewed_referral_posters}" \
+        VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
+        node packages/dev-server/scripts/sync-referral-posters.mjs --dry-run
+    cd "${repository}"
+    printf 'REFERRAL_POSTERS_PREFLIGHT_OK scope=%s\n' "${reviewed_referral_posters}"
 fi
 node "${memory_guard}" --stage pre-migration --check
 printf 'DEPLOY_MIGRATION_BEGIN\n'
@@ -564,6 +595,18 @@ if [[ "${reviewed_homepage_carousel}" == "true" ]]; then
     printf 'HOMEPAGE_CAROUSEL_VERIFY_OK channel=%s\n' \
         "${reviewed_storefront_media_channel_codes}"
 fi
+if [[ "${reviewed_referral_posters}" != "none" ]]; then
+    printf 'REFERRAL_POSTERS_PUBLISH_BEGIN scope=%s\n' "${reviewed_referral_posters}"
+    cd "${candidate}"
+    export REFERRAL_POSTER_SCOPE="${reviewed_referral_posters}"
+    export VENDURE_API_ORIGIN=http://127.0.0.1:3002
+    export REFERRAL_POSTER_BACKUP_FILE="${releases_dir}/referral-posters-${deployment_id}.json"
+    node packages/dev-server/scripts/sync-referral-posters.mjs --dry-run
+    node packages/dev-server/scripts/sync-referral-posters.mjs --apply --allow-remote
+    node packages/dev-server/scripts/sync-referral-posters.mjs --verify
+    cd "${repository}"
+    printf 'REFERRAL_POSTERS_VERIFY_OK scope=%s\n' "${reviewed_referral_posters}"
+fi
 node "${memory_guard}" --stage post-switch --report
 pm2 save 9>&-
 
@@ -617,7 +660,7 @@ sudo -n install -o root -g root -m 0755 \
 cmp --silent "${repository}/deploy/deploy-production-from-s3.sh" \
     /usr/local/sbin/vendure-production-deploy-from-s3 ||
     fail 'installed production bootstrap differs from the reviewed source'
-printf 'PRODUCTION_BOOTSTRAP_VERIFIED sha=%s homepage_carousel_guard=enabled\n' "${target_sha}"
+printf 'PRODUCTION_BOOTSTRAP_VERIFIED sha=%s homepage_carousel_guard=enabled referral_poster_guard=enabled\n' "${target_sha}"
 sudo -n systemctl daemon-reload
 sudo -n systemctl enable --now vendure-production-release-retention.path
 sudo -n systemctl enable --now vendure-mysql-restore-drill.timer

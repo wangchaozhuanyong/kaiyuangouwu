@@ -60,6 +60,22 @@ export const HOMEPAGE_CAROUSEL_RUNTIME_FILES = Object.freeze(
         existsSync(path.join(repositoryRoot, file)),
     ),
 );
+export const REFERRAL_POSTER_RUNTIME_FILES = Object.freeze(
+    existsSync(path.join(repositoryRoot, 'packages/dev-server/scripts/sync-referral-posters.mjs'))
+        ? [
+              'packages/dev-server/scripts/sync-referral-posters.mjs',
+              ...[
+                  'manifest.json',
+                  '01-clear-blue.png',
+                  '02-warm-paper.png',
+                  '03-jade-form.png',
+                  '04-champagne-arc.png',
+                  '05-lilac-prism.png',
+                  '06-ai-core.png',
+              ].map(file => `packages/dev-server/assets/referral-posters/v2/${file}`),
+          ]
+        : [],
+);
 const DAMATONG_RUNTIME_FILES = Object.freeze(
     damatongAssets.map(entry => path.relative(repositoryRoot, entry.file).split(path.sep).join('/')),
 );
@@ -86,6 +102,7 @@ export const REQUIRED_RUNTIME_FILES = Object.freeze([
     ...STOREFRONT_MEDIA_RUNTIME_FILES,
     ...MOYAO_BRAND_RUNTIME_FILES,
     ...HOMEPAGE_CAROUSEL_RUNTIME_FILES,
+    ...REFERRAL_POSTER_RUNTIME_FILES,
     ...DAMATONG_RUNTIME_FILES,
 ]);
 
@@ -254,6 +271,12 @@ export async function copyStorefrontMediaReleaseInputs(stagingRoot) {
         const scriptDestination = path.join(stagingRoot, 'packages/dev-server/scripts', scriptName);
         await mkdir(path.dirname(scriptDestination), { recursive: true });
         await cp(scriptSource, scriptDestination);
+    }
+
+    for (const file of REFERRAL_POSTER_RUNTIME_FILES) {
+        const destination = path.join(stagingRoot, file);
+        await mkdir(path.dirname(destination), { recursive: true });
+        await cp(path.join(repositoryRoot, file), destination);
     }
 
     for (const entry of storefrontMediaManifest) {

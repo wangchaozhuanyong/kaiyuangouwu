@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
@@ -584,4 +585,62 @@ void test('experimental UI examples do not commit Google API keys', async () => 
     );
 
     assert.doesNotMatch(locationMap, /AIza[A-Za-z0-9_-]{30,}/u);
+});
+
+void test('referral poster release scope rejects unreviewed values before any production operation', async () => {
+    const script = await readFile(path.join(repositoryRoot, 'deploy/deploy-production-from-s3.sh'), 'utf8');
+    const preflight = script.slice(0, script.indexOf('umask 027'));
+    const sha = 'a'.repeat(40);
+    for (const scope of ['none', 'primary', 'both-stores', 'all', 'true', 'primary;exit 0']) {
+        const result = spawnSync(
+            'bash',
+            [
+                '-s',
+                '--',
+                sha,
+                `${sha}-1-1-linux-x64`,
+                `s3://yunqiao-vendure-prod-backup-079740175286-apne1/deployments/${sha}`,
+            ],
+            {
+                input: preflight,
+                encoding: 'utf8',
+                env: { PATH: process.env.PATH, VENDURE_REVIEWED_REFERRAL_POSTERS: scope },
+            },
+        );
+        assert.equal(
+            result.status,
+            ['none', 'primary', 'both-stores'].includes(scope) ? 0 : 1,
+            result.stderr,
+        );
+    }
+});
+
+void test('poster guard ships before data and verifies both APIs before promoting the client', async () => {
+    const script = await readFile(path.join(repositoryRoot, 'deploy/deploy-production-from-s3.sh'), 'utf8');
+    const artifact = await readFile(
+        path.join(repositoryRoot, '.github/workflows/build_production_runtime.yml'),
+        'utf8',
+    );
+    const workflow = await readFile(
+        path.join(repositoryRoot, '.github/workflows/deploy_production_runtime.yml'),
+        'utf8',
+    );
+    for (const file of [
+        'sync-referral-posters.mjs',
+        'assets/referral-posters/',
+        'referral-poster-presets.ts',
+    ]) {
+        assert.ok(script.indexOf(file) < script.indexOf('git merge --ff-only'));
+    }
+    assert.ok(script.indexOf('REFERRAL_POSTERS_PREFLIGHT_OK') < script.indexOf('DEPLOY_MIGRATION_BEGIN'));
+    const publish = script.slice(script.indexOf("printf 'REFERRAL_POSTERS_PUBLISH_BEGIN"));
+    assert.ok(publish.indexOf('--dry-run') < publish.indexOf('--apply --allow-remote'));
+    assert.ok(publish.indexOf('--apply --allow-remote') < publish.indexOf('--verify'));
+    assert.ok(publish.indexOf('--verify') < publish.indexOf('"${current_pointer}"'));
+    assert.match(script, /referral_poster_guard=enabled/u);
+    assert.match(artifact, /referral_posters:[\s\S]*default: none/u);
+    assert.match(artifact, /referralPosters: \$referralPosters/u);
+    assert.match(workflow, /\.referralPosters \| type == "string"/u);
+    assert.match(workflow, /VENDURE_REVIEWED_REFERRAL_POSTERS='\$\{REFERRAL_POSTERS\}'/u);
+    assert.match(script, /REFERRAL_POSTER_BACKUP_FILE=/u);
 });

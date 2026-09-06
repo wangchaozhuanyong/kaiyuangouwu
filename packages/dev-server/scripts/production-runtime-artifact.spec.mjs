@@ -11,6 +11,7 @@ import {
     ensureRuntimeRootPermissions,
     HOMEPAGE_CAROUSEL_RUNTIME_FILES,
     pruneDeniedRuntimePackages,
+    REFERRAL_POSTER_RUNTIME_FILES,
     repositoryRoot,
     REQUIRED_RUNTIME_FILES,
     RUNTIME_PACKAGE_ASSETS,
@@ -91,6 +92,13 @@ void test('runtime artifact includes release publishers and every media manifest
             assert.equal(
                 await readFile(path.join(fixtureRoot, file), 'utf8'),
                 await readFile(path.join(repositoryRoot, file), 'utf8'),
+            );
+        }
+        for (const file of REFERRAL_POSTER_RUNTIME_FILES) {
+            assert.ok(REQUIRED_RUNTIME_FILES.includes(file));
+            assert.deepEqual(
+                await readFile(path.join(fixtureRoot, file)),
+                await readFile(path.join(repositoryRoot, file)),
             );
         }
         await access(path.join(fixtureRoot, 'packages/dev-server/scripts/damatong-storefront-config.mjs'));

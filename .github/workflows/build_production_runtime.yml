@@ -34,6 +34,15 @@ on:
                 required: false
                 default: false
                 type: boolean
+            referral_posters:
+                description: 'Reviewed poster scope: five neutral templates per store and AI custom for the primary store'
+                required: false
+                default: none
+                type: choice
+                options:
+                    - none
+                    - primary
+                    - both-stores
             homepage_carousel:
                 description: 'Publish the reviewed three-slide homepage carousel to the primary Channel'
                 required: false
@@ -64,6 +73,7 @@ env:
     MEDIA_KEYS: ${{ inputs.media_keys || '' }}
     AUTH_VISUALS: ${{ inputs.auth_visuals && 'true' || 'false' }}
     MOYAO_BRAND: ${{ inputs.moyao_brand && 'true' || 'false' }}
+    REFERRAL_POSTERS: ${{ inputs.referral_posters || 'none' }}
     HOMEPAGE_CAROUSEL: ${{ inputs.homepage_carousel && 'true' || 'false' }}
     DAMATONG_STOREFRONT: ${{ inputs.damatong_storefront && 'true' || 'false' }}
     DAMATONG_CHANNEL_TOKEN: ${{ inputs.damatong_channel_token || '' }}
@@ -91,6 +101,10 @@ jobs:
                     echo "channel_codes must be a comma-separated list of Channel codes" >&2
                     exit 1
                   fi
+                  case "$REFERRAL_POSTERS" in
+                    none|primary|both-stores) ;;
+                    *) echo 'Invalid reviewed referral poster scope' >&2; exit 1 ;;
+                  esac
                   if [[ "$AUTH_VISUALS" != "true" && "$AUTH_VISUALS" != "false" ]]; then
                     echo "auth_visuals must be true or false" >&2
                     exit 1
@@ -330,12 +344,13 @@ jobs:
                     --argjson damatongStorefront "$DAMATONG_STOREFRONT" \
                     --arg damatongChannelToken "$DAMATONG_CHANNEL_TOKEN" \
                     --argjson moyaoBrand "$MOYAO_BRAND" \
+                    --arg referralPosters "$REFERRAL_POSTERS" \
                     --argjson homepageCarousel "$HOMEPAGE_CAROUSEL" \
                     --arg mediaChannelCodes "$MEDIA_CHANNEL_CODES" \
                     --arg mediaKeys "$MEDIA_KEYS" \
                     --arg sourceRunId "$GITHUB_RUN_ID" \
                     --arg targetSha "$TARGET_SHA" \
-                    '{archiveName: $archiveName, archiveSha256: $archiveSha256, authVisuals: $authVisuals, damatongChannelToken: $damatongChannelToken, damatongStorefront: $damatongStorefront, format: 1, homepageCarousel: $homepageCarousel, mediaChannelCodes: $mediaChannelCodes, mediaKeys: $mediaKeys, moyaoBrand: $moyaoBrand, sourceRunId: $sourceRunId, targetSha: $targetSha}' \
+                    '{archiveName: $archiveName, archiveSha256: $archiveSha256, authVisuals: $authVisuals, damatongChannelToken: $damatongChannelToken, damatongStorefront: $damatongStorefront, format: 1, referralPosters: $referralPosters, homepageCarousel: $homepageCarousel, mediaChannelCodes: $mediaChannelCodes, mediaKeys: $mediaKeys, moyaoBrand: $moyaoBrand, sourceRunId: $sourceRunId, targetSha: $targetSha}' \
                     > "$ARCHIVE_DIR/release-plan.json"
                   (
                     cd "$ARCHIVE_DIR"
@@ -368,6 +383,7 @@ jobs:
                     else
                       echo '- Reviewed media keys: `none`'
                     fi
+                    echo "- Reviewed referral posters: \`$REFERRAL_POSTERS\`"
                     echo "- Reviewed auth visuals: \`$AUTH_VISUALS\`"
                     echo "- Reviewed MOYAO AI brand: \`$MOYAO_BRAND\`"
                     echo "- Reviewed Damatong storefront: \`$DAMATONG_STOREFRONT\`"
