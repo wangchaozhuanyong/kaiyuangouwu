@@ -1048,7 +1048,7 @@ export const adminApiExtensions = gql`
 
     type ReferralTodayMetrics {
         businessDate: String!
-        visitorCount: Int!
+        visitorCount: Int
         newCustomerCount: Int!
         consumerCount: Int!
         firstTimeConsumerCount: Int!
@@ -1057,6 +1057,21 @@ export const adminApiExtensions = gql`
         todayInvitedCount: Int!
         todayInvitedPurchaserCount: Int!
         salesByCurrency: [ReferralSalesMetric!]!
+    }
+
+    type StorefrontTrafficDay {
+        businessDate: String!
+        visitorCount: Int
+        pageViewCount: Int
+        ipCount: Int
+    }
+
+    type StorefrontTrafficReport {
+        businessDate: String!
+        timezone: String!
+        firstRecordedAt: DateTime
+        lastRecordedAt: DateTime
+        days: [StorefrontTrafficDay!]!
     }
 
     type ReferralBalanceAuditItem {
@@ -1162,6 +1177,7 @@ export const adminApiExtensions = gql`
         referralWithdrawals(skip: Int, take: Int): ReferralWithdrawalList!
         referralCustomerWallets(customerId: ID!): [ReferralWallet!]!
         referralTodayMetrics: ReferralTodayMetrics!
+        storefrontTraffic(days: Int = 7): StorefrontTrafficReport!
         referralBalanceAudit: ReferralBalanceAuditResult!
     }
 
@@ -1317,6 +1333,12 @@ export const shopApiExtensions = gql`
         recorded: Boolean!
     }
 
+    input StorefrontPageViewInput {
+        eventId: String!
+        visitorId: String
+        pageView: Boolean!
+    }
+
     extend type Query {
         storefrontBranding: StorefrontBranding!
         myCustomerAvatar: Asset
@@ -1345,5 +1367,6 @@ export const shopApiExtensions = gql`
         ): RegisterCustomerAccountResult!
         useMyReferralBalance(amount: Money!): ReferralBalancePaymentResult!
         recordStorefrontVisit(visitorId: String): StorefrontVisitResult!
+        recordStorefrontPageView(input: StorefrontPageViewInput!): StorefrontVisitResult!
     }
 `;

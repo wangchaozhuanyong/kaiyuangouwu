@@ -67,6 +67,19 @@ describe('ShopApi storefront config', () => {
 });
 
 describe('ShopApi storefront mutations', () => {
+    it('sends a stable page event and browser identity without accepting a client IP', async () => {
+        const fetchMock = mockGraphQlResponse({ recordStorefrontPageView: { recorded: true } });
+        const input = {
+            eventId: '00000000-0000-4000-8000-000000000001',
+            visitorId: 'test-browser-visitor-0001',
+            pageView: true,
+        };
+        await expect(new ShopApi(market).recordStorefrontPageView(input)).resolves.toBe(true);
+        const request = JSON.parse(jsonRequestBody(fetchMock.mock.calls[0][1]));
+        expect(request.query).toContain('recordStorefrontPageView(input: $input)');
+        expect(request.variables).toEqual({ input });
+    });
+
     it('surfaces the specific native authentication failure returned by the Shop API', async () => {
         const fetchMock = mockGraphQlResponse({
             login: {

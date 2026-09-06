@@ -48,7 +48,10 @@ export function TodayOverview({ data }: { data: ReferralProgramResult['referralT
                 </div>
             </div>
             <div className="grid overflow-hidden rounded-xl border border-slate-200 bg-white sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
-                <OverviewMetric label="访客" value={`${data.visitorCount}`} />
+                <OverviewMetric
+                    label="独立访客（估算）"
+                    value={data.visitorCount == null ? '—' : `${data.visitorCount}`}
+                />
                 <OverviewMetric label="新增客户" value={`${data.newCustomerCount}`} />
                 <OverviewMetric label="消费客户" value={`${data.consumerCount}`} />
                 <OverviewMetric label="首购客户" value={`${data.firstTimeConsumerCount}`} />

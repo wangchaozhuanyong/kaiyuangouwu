@@ -29,7 +29,7 @@ export const STALE_TRANSLATION_ALERT_QUERY = gql`
 export interface ReferralTodayWidgetData {
     referralTodayMetrics: {
         businessDate: string;
-        visitorCount: number;
+        visitorCount: number | null;
         newCustomerCount: number;
         consumerCount: number;
         firstTimeConsumerCount: number;

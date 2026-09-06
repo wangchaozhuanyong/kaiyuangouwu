@@ -16,6 +16,7 @@ import {
     ReferralTodayExtensionWidget,
     StaleTranslationExtensionAlert,
 } from '../pages/Dashboard/DashboardExtensionPanels';
+import { StorefrontTrafficPanel } from '../pages/Dashboard/StorefrontTrafficPanel';
 import { OrderOperationsBlock } from '../pages/Sales/OrderOperationsBlock';
 import { routeModuleLoaders } from '../route-modules';
 
@@ -383,9 +384,17 @@ defineNextAdminExtension({
     id: 'store-management-plugin',
     dashboardWidgets: [
         {
+            id: 'storefront-traffic-widget',
+            title: '网站访问统计',
+            description: '真实访问记录；独立访客为估算，独立 IP 不等于人数',
+            component: StorefrontTrafficPanel,
+            permissions: ['ReadReferral'],
+            order: 19,
+        },
+        {
             id: 'referral-today-widget',
             title: '今日客户与邀请数据',
-            description: '北京时间口径；访客按账号或匿名设备去重',
+            description: '北京时间口径；独立访客为估算，— 表示无新版采集记录',
             component: ReferralTodayExtensionWidget,
             permissions: ['ReadCustomer', 'ReadOrder'],
             order: 20,
