@@ -118,6 +118,7 @@ function renderCart(
     value: StorefrontCart | null,
     products: Product[] = [],
     coupons: StoreCustomerCoupon[] = [],
+    selectionPending = false,
 ) {
     return renderToStaticMarkup(
         createElement(
@@ -130,7 +131,8 @@ function renderCart(
                     market,
                     locale: market.locale,
                     language: 'zh' as const,
-                    loading: false,
+                    loading: selectionPending,
+                    selectionPending,
                     error: null,
                     addingVariantId: null,
                     favoriteProductIds: [],
@@ -144,6 +146,17 @@ function renderCart(
 }
 
 describe('CartPage guest cart', () => {
+    it('keeps selection responsive while totals are pending and blocks checkout until confirmed', () => {
+        const markup = renderCart({ ...cart, checkoutOrder }, [], [], true);
+        expect(markup).toContain('计算中…');
+        expect(markup).toContain('aria-busy="true"');
+        const checkbox = markup.match(/<input[^>]*type="checkbox"[^>]*>/)?.[0];
+        expect(checkbox).toBeDefined();
+        expect(checkbox).not.toContain('disabled');
+        expect(markup).toContain('disabled="">结算（1）');
+        expect(markup).not.toContain('aria-label="增加 32 英寸显示器 数量" disabled=""');
+    });
+
     it('keeps cart lines and editing controls visible for a guest customer', () => {
         const markup = renderCart(cart);
 

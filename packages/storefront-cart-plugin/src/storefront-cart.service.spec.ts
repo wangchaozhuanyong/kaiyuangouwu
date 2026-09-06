@@ -2,11 +2,155 @@ import 'reflect-metadata';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { StorefrontCartLine } from './entities/storefront-cart-line.entity';
 import { StorefrontCart } from './entities/storefront-cart.entity';
 import { isRegisteredProductionPaymentMethod, StorefrontCartService } from './storefront-cart.service';
 
 afterEach(() => {
     vi.restoreAllMocks();
+});
+
+describe('StorefrontCartService selection projection', () => {
+    function setup(selected = [true, true, false], quantities = [1, 1, 1]) {
+        let order: any = {
+            id: 'order-1',
+            code: 'TEST',
+            active: true,
+            state: 'AddingItems',
+            lines: [1, 2].map(id => ({ id: `order-line-${id}`, productVariantId: id, quantity: 1 })),
+        };
+        const cart = new StorefrontCart({
+            id: 'cart-1',
+            revision: 2,
+            projectedRevision: 1,
+            checkoutOrder: order,
+            lines: [1, 2, 3].map(
+                (id, index) =>
+                    new StorefrontCartLine({
+                        id: `cart-line-${id}`,
+                        productVariantId: id,
+                        productVariant: { enabled: true, product: { enabled: true } } as any,
+                        selected: selected[index],
+                        quantity: quantities[index],
+                        orderLineId: id < 3 ? `order-line-${id}` : null,
+                    }),
+            ),
+        });
+        const repository = { update: vi.fn().mockResolvedValue({ affected: 1 }) };
+        const orderService = {
+            applyPriceAdjustments: vi.fn((_ctx, current) => Promise.resolve(current)),
+            removeAllItemsFromOrder: vi.fn(() => Promise.resolve((order = { ...order, lines: [] }))),
+            removeItemsFromOrder: vi.fn((_ctx, _id, ids) =>
+                Promise.resolve(
+                    (order = { ...order, lines: order.lines.filter((line: any) => !ids.includes(line.id)) }),
+                ),
+            ),
+            addItemsToOrder: vi.fn((_ctx, _id, items) => {
+                order = {
+                    ...order,
+                    lines: [
+                        ...order.lines,
+                        ...items.map((item: any) => ({
+                            ...item,
+                            id: `new-line-${item.productVariantId}`,
+                        })),
+                    ],
+                };
+                return Promise.resolve({ order, errorResults: [] });
+            }),
+            adjustOrderLines: vi.fn((_ctx, _id, changes) => {
+                order = {
+                    ...order,
+                    lines: order.lines.map((line: any) => ({
+                        ...line,
+                        quantity:
+                            changes.find((change: any) => change.orderLineId === line.id)?.quantity ??
+                            line.quantity,
+                    })),
+                };
+                return Promise.resolve({ order, errorResults: [] });
+            }),
+        };
+        const service = new StorefrontCartService(
+            { getRepository: () => repository } as any,
+            {} as any,
+            {} as any,
+            orderService as any,
+            {} as any,
+            {} as any,
+            {} as any,
+        );
+        vi.spyOn(service as any, 'loadCart').mockImplementation(() =>
+            Promise.resolve({
+                ...cart,
+                checkoutOrder: order,
+            }),
+        );
+        const project = (force = false) =>
+            (service as any).projectCart(
+                { channelId: 'store-a' },
+                cart,
+                { ownerType: 'CUSTOMER', ownerId: 'customer-1' },
+                force,
+            );
+        return { project, orderService, repository };
+    }
+
+    it('deselects only the changed line without removing and re-adding retained items', async () => {
+        const { project, orderService } = setup([true, false, false]);
+        const result = await project();
+        expect(orderService.removeAllItemsFromOrder).not.toHaveBeenCalled();
+        expect(orderService.removeItemsFromOrder).toHaveBeenCalledWith(expect.anything(), 'order-1', [
+            'order-line-2',
+        ]);
+        expect(orderService.addItemsToOrder).not.toHaveBeenCalled();
+        expect(result.checkoutOrder.lines.map((line: any) => line.id)).toEqual(['order-line-1']);
+    });
+
+    it('adds only newly selected items and preserves existing order line ids', async () => {
+        const { project, orderService } = setup([true, true, true]);
+        const result = await project();
+        expect(orderService.removeAllItemsFromOrder).not.toHaveBeenCalled();
+        expect(orderService.addItemsToOrder).toHaveBeenCalledWith(expect.anything(), 'order-1', [
+            { productVariantId: 3, quantity: 1 },
+        ]);
+        expect(result.checkoutOrder.lines.map((line: any) => line.id)).toEqual([
+            'order-line-1',
+            'order-line-2',
+            'new-line-3',
+        ]);
+    });
+
+    it('adjusts only quantities that changed', async () => {
+        const { project, orderService } = setup([true, true, false], [3, 1, 1]);
+        await project();
+        expect(orderService.adjustOrderLines).toHaveBeenCalledWith(expect.anything(), 'order-1', [
+            { orderLineId: 'order-line-1', quantity: 3 },
+        ]);
+        expect(orderService.removeAllItemsFromOrder).not.toHaveBeenCalled();
+        expect(orderService.addItemsToOrder).not.toHaveBeenCalled();
+    });
+
+    it('still revalidates every selected item when checkout forces projection', async () => {
+        const { project, orderService } = setup();
+        await project(true);
+        expect(orderService.removeAllItemsFromOrder).not.toHaveBeenCalled();
+        expect(orderService.applyPriceAdjustments).toHaveBeenCalledOnce();
+        expect(orderService.adjustOrderLines).toHaveBeenCalledWith(expect.anything(), 'order-1', [
+            { orderLineId: 'order-line-1', quantity: 1 },
+            { orderLineId: 'order-line-2', quantity: 1 },
+        ]);
+    });
+
+    it('does not mark projection complete when an order mutation fails', async () => {
+        const { project, orderService, repository } = setup([true, true, true]);
+        orderService.addItemsToOrder.mockResolvedValueOnce({
+            order: null,
+            errorResults: [{ errorCode: 'INSUFFICIENT_STOCK_ERROR', message: 'Out of stock' }],
+        } as any);
+        expect(await project()).toMatchObject({ errorCode: 'CART_PROJECTION_ERROR' });
+        expect(repository.update).not.toHaveBeenCalled();
+    });
 });
 
 describe('production payment readiness', () => {
@@ -125,10 +269,14 @@ describe('StorefrontCartService login merge', () => {
             initialized: true,
         });
         const cartRepository = {
+            find: vi.fn().mockResolvedValue([customerCart]),
             findOne: vi.fn().mockResolvedValueOnce(null).mockResolvedValueOnce(customerCart),
             update: vi.fn().mockResolvedValue({ affected: 1 }),
         };
-        const connection = { getRepository: vi.fn().mockReturnValue(cartRepository) };
+        const connection = {
+            rawConnection: { options: { type: 'sqljs' } },
+            getRepository: vi.fn().mockReturnValue(cartRepository),
+        };
         const customerService = {
             findOneByUserId: vi.fn().mockResolvedValue({ id: 'customer-1' }),
         };

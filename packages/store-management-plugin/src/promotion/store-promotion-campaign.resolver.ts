@@ -1,5 +1,6 @@
 import { Args, Mutation, Parent, Query, ResolveField, Resolver } from '@nestjs/graphql';
 import { Allow, Ctx, ID, Order, Permission, RequestContext, Transaction } from '@vendure/core';
+import { CartCommandService } from '@vendure/storefront-cart-plugin';
 
 import { MerchantInitialPasswordService } from '../merchant-initial-password.service';
 import {
@@ -17,6 +18,7 @@ export class StorePromotionCampaignAdminResolver {
         private readonly campaignService: StorePromotionCampaignService,
         private readonly lifecycleService: StoreCouponLifecycleService,
         private readonly passwordService: MerchantInitialPasswordService,
+        private readonly cartCommands: CartCommandService,
     ) {}
 
     @Query()
@@ -102,7 +104,7 @@ export class StorePromotionCampaignAdminResolver {
             .then(() => this.campaignService.stopCouponIssuance(ctx, id));
     }
 
-    @Transaction()
+    @Transaction('manual')
     @Mutation()
     @Allow(Permission.DeletePromotion)
     archiveStoreCouponCampaign(
@@ -124,9 +126,10 @@ export class StorePromotionCampaignAdminResolver {
         @Args('password') password: string,
         @Args('reason') reason?: string,
     ) {
-        return this.passwordService
-            .assertCurrentPassword(ctx, password)
-            .then(() => this.lifecycleService.revokeCampaignOutstanding(ctx, id, reason));
+        return this.cartCommands.runTransaction(ctx, async () => {
+            await this.passwordService.assertCurrentPassword(ctx, password);
+            return this.lifecycleService.revokeCampaignOutstanding(ctx, id, reason);
+        });
     }
 
     @Transaction()
@@ -149,7 +152,7 @@ export class StorePromotionCampaignAdminResolver {
         return this.lifecycleService.grant(ctx, campaignId, customerId);
     }
 
-    @Transaction()
+    @Transaction('manual')
     @Mutation()
     @Allow(Permission.UpdatePromotion)
     revokeStoreCustomerCoupon(
@@ -157,7 +160,7 @@ export class StorePromotionCampaignAdminResolver {
         @Args('id') id: ID,
         @Args('reason') reason?: string,
     ) {
-        return this.lifecycleService.revoke(ctx, id, reason);
+        return this.cartCommands.runTransaction(ctx, () => this.lifecycleService.revoke(ctx, id, reason));
     }
 }
 
@@ -166,6 +169,7 @@ export class StorePromotionCampaignShopResolver {
     constructor(
         private readonly campaignService: StorePromotionCampaignService,
         private readonly lifecycleService: StoreCouponLifecycleService,
+        private readonly cartCommands: CartCommandService,
     ) {}
 
     @Query()
@@ -199,25 +203,25 @@ export class StorePromotionCampaignShopResolver {
         return this.lifecycleService.claim(ctx, campaignId);
     }
 
-    @Transaction()
+    @Transaction('manual')
     @Mutation()
     @Allow(Permission.Authenticated)
     applyStorefrontCoupon(@Ctx() ctx: RequestContext, @Args('id') id: ID) {
-        return this.lifecycleService.apply(ctx, id);
+        return this.cartCommands.legacy(ctx, () => this.lifecycleService.apply(ctx, id));
     }
 
-    @Transaction()
+    @Transaction('manual')
     @Mutation()
     @Allow(Permission.Authenticated)
     applyBestStorefrontCoupon(@Ctx() ctx: RequestContext) {
-        return this.lifecycleService.applyBest(ctx);
+        return this.cartCommands.legacy(ctx, () => this.lifecycleService.applyBest(ctx));
     }
 
-    @Transaction()
+    @Transaction('manual')
     @Mutation()
     @Allow(Permission.Authenticated)
     removeStorefrontCoupon(@Ctx() ctx: RequestContext, @Args('id') id: ID) {
-        return this.lifecycleService.remove(ctx, id);
+        return this.cartCommands.legacy(ctx, () => this.lifecycleService.remove(ctx, id));
     }
 }
 

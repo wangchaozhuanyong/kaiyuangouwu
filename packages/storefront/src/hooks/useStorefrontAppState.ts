@@ -3,6 +3,8 @@ import { useNavigate, useRouter, useRouterState } from '@tanstack/react-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { ShopApi, ShopApiError } from '../api';
+import { CartController } from '../cart/cart-controller';
+import { useCart } from '../cart/use-cart';
 import { categoryTargetSelection } from '../category-navigation';
 import { markCouponCampaignClaimed } from '../coupon-center-state';
 import { claimAndVerifyCoupon } from '../coupon-claim-verification';
@@ -170,7 +172,17 @@ export function useStorefrontAppState() {
     const isZh = language === 'zh';
     const storefrontName = storefrontNames[language];
     const vendureLanguageCode = languageCodeFor(language);
-    const api = useMemo(() => new ShopApi(market, vendureLanguageCode), [market, vendureLanguageCode]);
+    const cartController = useMemo(
+        () => new CartController(`${market.code}:${market.currencyCode}`),
+        [market.code, market.currencyCode],
+    );
+    const cartState = useCart(cartController);
+    const api = useMemo(() => {
+        const client = new ShopApi(market, vendureLanguageCode);
+        client.enableCartCommands(cartController);
+        return client;
+    }, [market, vendureLanguageCode, cartController]);
+    useEffect(() => () => cartController.reset(false), [cartController]);
 
     useEffect(() => {
         try {
@@ -298,7 +310,10 @@ export function useStorefrontAppState() {
         contentQuery.data?.settings?.heroAutoplayIntervalSeconds ?? 5,
     );
     const configuredBlockTypes = contentQuery.data?.settings?.configuredBlockTypes ?? [];
-    const cart = cartQuery.data ?? null;
+    const cart = cartState.cart;
+    useEffect(() => {
+        if (cartState.confirmed) queryClient.setQueryData(cartQueryKey, cartState.confirmed);
+    }, [cartState.confirmed, queryClient, market.code, market.currencyCode, vendureLanguageCode]);
 
     useEffect(() => {
         if (!storefrontContextResolved) return;
@@ -542,8 +557,11 @@ export function useStorefrontAppState() {
                 ? text.loadError
                 : null;
     const setCart = useCallback(
-        (nextCart: StorefrontCart) => queryClient.setQueryData(cartQueryKey, nextCart),
-        [market.code, market.currencyCode, queryClient, vendureLanguageCode],
+        (_nextCart: StorefrontCart) => {
+            const confirmed = cartController.getSnapshot().confirmed;
+            if (confirmed) queryClient.setQueryData(cartQueryKey, confirmed);
+        },
+        [cartController, market.code, market.currencyCode, queryClient, vendureLanguageCode],
     );
     const setCustomer = useCallback(
         (
@@ -793,8 +811,8 @@ export function useStorefrontAppState() {
     }, [cacheProducts, productsQuery.data]);
 
     useEffect(() => {
-        if (cartQuery.data !== undefined) setCheckoutOrder(cartQuery.data.checkoutOrder);
-    }, [cartQuery.data]);
+        if (cartState.confirmed) setCheckoutOrder(cartState.confirmed.checkoutOrder);
+    }, [cartState.confirmed]);
 
     const refetchStorefront = useCallback(async () => {
         await Promise.all([productsQuery.refetch(), collectionsQuery.refetch(), configQuery.refetch()]);
@@ -824,6 +842,7 @@ export function useStorefrontAppState() {
     }, [collections, route]);
 
     const refreshCart = useCallback(async () => {
+        await cartController.recoverPending();
         const latest = await api.cart();
         setCart(latest);
         setCheckoutOrder(latest.checkoutOrder);
@@ -836,7 +855,7 @@ export function useStorefrontAppState() {
             setCartLoading(true);
             setCartError(null);
             try {
-                const current = cart ?? (await api.cart());
+                const current = cartController.getSnapshot().cart ?? (await api.cart());
                 const updated = await mutation(current.revision);
                 setCart(updated);
                 setCheckoutOrder(updated.checkoutOrder);
@@ -888,33 +907,14 @@ export function useStorefrontAppState() {
             setCartLoading(true);
             setCartError(null);
             try {
-                const current = cart ?? (await api.cart());
-                let directCart = await api.addItem(variant.id, current.revision);
-                let directLine = directCart.lines.find(line => line.productVariant?.id === variant.id);
-                if (!directLine) {
+                const result = await cartController.execute({
+                    buyNow: { productVariantId: variant.id, quantity: 1 },
+                });
+                const session = result.session;
+                if (!session)
                     throw new Error(
-                        isZh ? '商品未能加入本次购买' : 'The product could not be prepared for purchase.',
+                        isZh ? '结算会话已变更，请重新确认' : 'Checkout changed. Please review again.',
                     );
-                }
-                const directLineId = directLine.id;
-
-                const otherSelectedLineIds = directCart.lines
-                    .filter(line => line.id !== directLineId && line.selected)
-                    .map(line => line.id);
-                if (otherSelectedLineIds.length) {
-                    directCart = await api.setLinesSelected(otherSelectedLineIds, false, directCart.revision);
-                    directLine = directCart.lines.find(line => line.id === directLineId);
-                    if (!directLine) {
-                        throw new Error(
-                            isZh ? '商品未能加入本次购买' : 'The product could not be prepared for purchase.',
-                        );
-                    }
-                }
-                if (directLine && !directLine.selected) {
-                    directCart = await api.setLinesSelected([directLine.id], true, directCart.revision);
-                }
-
-                const session = await api.beginCheckout(directCart.revision);
                 setCart(session.cart);
                 setCheckoutOrder(session.order);
                 notify(isZh ? '已准备本次购买' : 'Your purchase is ready to review');
@@ -965,10 +965,16 @@ export function useStorefrontAppState() {
             setCartLoading(true);
             setCartError(null);
             try {
-                let updated = cart ?? (await api.cart());
-                for (const line of order.lines) {
-                    updated = await api.addItem(line.productVariant.id, updated.revision, line.quantity);
-                }
+                const updated = (
+                    await cartController.execute({
+                        changes: {
+                            add: order.lines.map(line => ({
+                                productVariantId: line.productVariant.id,
+                                quantity: line.quantity,
+                            })),
+                        },
+                    })
+                ).cart;
                 setCart(updated);
                 setCheckoutOrder(updated.checkoutOrder);
                 notify(isZh ? '订单商品已加入购物车' : 'Order items added to cart');
@@ -1036,10 +1042,7 @@ export function useStorefrontAppState() {
             setCartError(null);
             try {
                 await api.applyCustomerCoupon(customerCouponId);
-                await Promise.all([
-                    refreshCart(),
-                    queryClient.invalidateQueries({ queryKey: customerCouponQueryKey }),
-                ]);
+                await Promise.all([queryClient.invalidateQueries({ queryKey: customerCouponQueryKey })]);
                 notify(isZh ? '优惠券已使用' : 'Coupon applied');
                 return null;
             } catch (requestError) {
@@ -1138,10 +1141,7 @@ export function useStorefrontAppState() {
             setCartError(null);
             try {
                 await api.removeCustomerCoupon(customerCouponId);
-                await Promise.all([
-                    refreshCart(),
-                    queryClient.invalidateQueries({ queryKey: customerCouponQueryKey }),
-                ]);
+                await Promise.all([queryClient.invalidateQueries({ queryKey: customerCouponQueryKey })]);
                 notify(isZh ? '已取消使用优惠券' : 'Coupon unapplied');
                 return null;
             } catch (requestError) {
@@ -1168,6 +1168,7 @@ export function useStorefrontAppState() {
             !customer ||
             !order?.lines.length ||
             cart?.state !== 'OPEN' ||
+            cartState.pending ||
             !(['cart', 'checkout', 'purchase'] as RouteName[]).includes(route.name) ||
             customerCouponsQuery.isPending ||
             !couponAutoSelectionScope ||
@@ -1196,10 +1197,7 @@ export function useStorefrontAppState() {
                             : `Best coupon applied: ${coupon.campaignName}`,
                     );
                 }
-                await Promise.all([
-                    refreshCart(),
-                    queryClient.invalidateQueries({ queryKey: customerCouponQueryKey }),
-                ]);
+                await Promise.all([queryClient.invalidateQueries({ queryKey: customerCouponQueryKey })]);
             })
             .catch(() => undefined);
         return () => {
@@ -1364,6 +1362,7 @@ export function useStorefrontAppState() {
     }, [api, cart, isZh, navigate, refreshCart, text.loadError]);
 
     const completeAuthentication = useCallback(async () => {
+        cartController.reset();
         clearPrivateQueryCache();
         const [nextCustomer, nextCart] = await Promise.all([api.activeCustomer(), api.cart()]);
         setCustomer(nextCustomer);
@@ -1657,8 +1656,24 @@ export function useStorefrontAppState() {
         displayCurrencyCode,
         addingVariantId,
         cart,
-        cartLoading,
-        cartError: cartError ?? cartQueryError,
+        cartLoading: cartLoading || cartState.pending,
+        cartPending: cartState.pending,
+        cartEditingBlocked: cartState.editingBlocked,
+        cartCommandUnknown: cartState.phase === 'unknown',
+        cancelPendingCartCommand: () => void cartController.recoverPending(true),
+        selectCartLines: (ids: string[], selected: boolean) => {
+            void api.setLinesSelected(ids, selected, cart?.revision ?? 0).catch(() => undefined);
+        },
+        toggleAllCartLines: () => {
+            const available = cart?.lines.filter(line => line.available && line.productVariant) ?? [];
+            void api
+                .setAllLinesSelected(
+                    available.some(line => !line.selected),
+                    cart?.revision ?? 0,
+                )
+                .catch(() => undefined);
+        },
+        cartError: cartState.error ?? cartError ?? cartQueryError,
         cartLoadState,
         cartQueryError,
         cartQuery,

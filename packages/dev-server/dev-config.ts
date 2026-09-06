@@ -979,6 +979,7 @@ export const devConfig: VendureConfig = {
                           Codex: 'Codex',
                       },
                   }),
+                  StorefrontCartPlugin,
                   CommerceFulfillmentPlugin,
                   CatalogManagementPlugin,
                   StoreManagementPlugin.init({
@@ -995,7 +996,6 @@ export const devConfig: VendureConfig = {
                       autoActivateSkillReleases: process.env.IMAGE_PROMPT_SKILL_AUTO_ACTIVATE === 'true',
                   }),
                   StorefrontCatalogPlugin,
-                  StorefrontCartPlugin,
                   StorefrontContentPlugin,
                   StorefrontReviewPlugin,
                   StoreDomainPlugin.init({

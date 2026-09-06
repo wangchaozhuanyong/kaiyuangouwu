@@ -1,0 +1,12 @@
+{
+    "extends": "../../e2e-common/tsconfig.e2e.json",
+    "compilerOptions": {
+        "lib": [
+            "ES2023",
+            "DOM"
+        ]
+    },
+    "include": [
+        "e2e/cart-checkout.e2e-spec.ts"
+    ]
+}

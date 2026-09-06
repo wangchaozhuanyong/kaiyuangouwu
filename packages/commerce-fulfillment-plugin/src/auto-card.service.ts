@@ -38,6 +38,7 @@ import { AutoCardDeliveryEvent } from './entities/auto-card-delivery-event.entit
 import { AutoCardDelivery } from './entities/auto-card-delivery.entity';
 import { AutoCardPoolItem } from './entities/auto-card-pool-item.entity';
 import { isAutoCardOrderLine } from './fulfillment-classification';
+import { orderLineProductName } from './order-line-snapshot';
 import {
     AutoCardDeliveryListOptions,
     AutoCardImportInput,
@@ -720,7 +721,7 @@ export class AutoCardService {
                 state: 'WAITING_STOCK',
                 recipientEmail,
                 languageCode: String(ctx.languageCode),
-                productName: line.productVariant.name,
+                productName: orderLineProductName(ctx, line),
                 sku: line.productVariant.sku,
                 quantity: line.quantity,
                 schemaSnapshot: config.fieldsJson,

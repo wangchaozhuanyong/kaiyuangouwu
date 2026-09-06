@@ -1,5 +1,6 @@
 import { ContentTranslationPlugin } from '@vendure/content-translation-plugin';
 import { configureDefaultOrderProcess, LanguageCode, PluginCommonModule, VendurePlugin } from '@vendure/core';
+import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 
 import { AfterSalesAdminResolver, AfterSalesShopResolver } from './after-sales.resolver';
 import { AfterSalesService } from './after-sales.service';
@@ -11,6 +12,7 @@ import { autoCardFulfillmentHandler } from './auto-card-fulfillment-handler';
 import { reconcileAutoCardDeliveriesTask } from './auto-card-tasks';
 import { autoCardAdminResolvers, autoCardShopResolvers } from './auto-card.resolver';
 import { AutoCardService } from './auto-card.service';
+import { CartDeliveryCommandAdapter } from './cart-delivery-command.adapter';
 import { CommerceI18nService } from './commerce-i18n.service';
 import { CommerceModeAdminResolver, CommerceModeShopResolver } from './commerce-mode.resolver';
 import { CommerceModeService } from './commerce-mode.service';
@@ -61,7 +63,7 @@ import { ProductPackagingService } from './product-packaging.service';
 import './types';
 
 @VendurePlugin({
-    imports: [PluginCommonModule, ContentTranslationPlugin],
+    imports: [PluginCommonModule, ContentTranslationPlugin, StorefrontCartPlugin],
     entities: [
         AfterSalesRequest,
         AfterSalesItem,
@@ -78,6 +80,7 @@ import './types';
     ],
     controllers: [DigitalDeliveryController],
     providers: [
+        CartDeliveryCommandAdapter,
         AfterSalesService,
         AutoCardCipherService,
         AutoCardService,

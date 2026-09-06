@@ -25,6 +25,7 @@ import { AfterSalesEvent } from './entities/after-sales-event.entity';
 import { AfterSalesItem } from './entities/after-sales-item.entity';
 import { AfterSalesRequest } from './entities/after-sales-request.entity';
 import { getOrderLineFulfillmentType } from './fulfillment-classification';
+import { orderLineProductName } from './order-line-snapshot';
 import {
     AfterSalesRequestListOptions,
     CreateAfterSalesRequestInput,
@@ -223,7 +224,7 @@ export class AfterSalesService {
                         quantity: item.quantity,
                         unitPriceWithTax: line.proratedUnitPriceWithTax,
                         lineAmountWithTax: line.proratedUnitPriceWithTax * item.quantity,
-                        productName: line.productVariant.name,
+                        productName: orderLineProductName(ctx, line),
                         sku: line.productVariant.sku,
                         fulfillmentType,
                     }),

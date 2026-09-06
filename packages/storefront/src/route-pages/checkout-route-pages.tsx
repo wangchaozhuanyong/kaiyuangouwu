@@ -12,6 +12,10 @@ function CheckoutRoutePage({ mode }: { mode?: 'purchase' }) {
             <AuthPageBoundary language={runtime.language} onBack={runtime.goBack}>
                 <LazyCheckoutPage
                     mode={mode}
+                    cartPending={runtime.cartPending}
+                    cartUnknown={runtime.cartEditingBlocked}
+                    cartError={runtime.cartError}
+                    onRetryCart={() => void runtime.refreshCart().catch(() => undefined)}
                     api={runtime.api}
                     cart={runtime.cart}
                     order={runtime.currentCheckoutOrder}

@@ -1,6 +1,7 @@
 import { expect as browserExpect, chromium } from '@playwright/test';
 import { ContentTranslationPlugin } from '@vendure/content-translation-plugin';
 import { mergeConfig, TransactionalConnection } from '@vendure/core';
+import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 import { createTestEnvironment, registerInitializer, SqljsInitializer } from '@vendure/testing';
 import gql from 'graphql-tag';
 import { randomUUID } from 'node:crypto';
@@ -19,6 +20,7 @@ const config = mergeConfig(testConfig(), {
     apiOptions: { trustProxy: 'loopback' },
     authOptions: { requireVerification: false },
     plugins: [
+        StorefrontCartPlugin,
         ContentTranslationPlugin.init({
             provider: {
                 name: 'traffic-test',

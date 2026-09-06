@@ -16,9 +16,11 @@ import {
     RequestContext,
     SessionService,
     TransactionalConnection,
+    UserInputError,
 } from '@vendure/core';
 import { In } from 'typeorm';
 
+import { CartChanges } from './cart-command.types';
 import { StorefrontCartCheckoutLine } from './entities/storefront-cart-checkout-line.entity';
 import { StorefrontCartCheckout } from './entities/storefront-cart-checkout.entity';
 import { StorefrontCartLine } from './entities/storefront-cart-line.entity';
@@ -94,6 +96,13 @@ export class StorefrontCartService {
         private readonly configService: ConfigService,
     ) {}
 
+    async hasCart(ctx: RequestContext): Promise<boolean> {
+        const owner = await this.getOwner(ctx);
+        return this.connection
+            .getRepository(ctx, StorefrontCart)
+            .existsBy({ channelId: ctx.channelId, ...owner });
+    }
+
     async getCart(ctx: RequestContext): Promise<StorefrontCart> {
         const owner = await this.getOwner(ctx);
         const cart = await this.findOrCreateCart(ctx, owner);
@@ -101,187 +110,214 @@ export class StorefrontCartService {
         return this.loadCart(ctx, cart.id, owner);
     }
 
-    async addItem(
-        ctx: RequestContext,
-        input: AddStorefrontCartItemInput,
-        expectedRevision: number,
-    ): Promise<StorefrontCartMutationResult> {
-        const cart = await this.getCart(ctx);
-        const mutableError = this.validateMutable(cart, expectedRevision);
-        if (mutableError) {
-            return mutableError;
-        }
+    async addItem(ctx: RequestContext, input: AddStorefrontCartItemInput, expectedRevision: number) {
+        return this.applyChanges(ctx, { add: [input] }, expectedRevision);
+    }
 
-        const variant = await this.productVariantService.findOne(ctx, input.productVariantId);
-        if (!variant || !variant.enabled || !variant.product.enabled) {
-            return new CartLineUnavailableError(input.productVariantId);
-        }
+    async setLineQuantity(ctx: RequestContext, lineId: ID, quantity: number, expectedRevision: number) {
+        return this.applyChanges(ctx, { lines: [{ lineId, quantity }] }, expectedRevision);
+    }
 
-        const existingLine = cart.lines.find(line => idsAreEqual(line.productVariantId, variant.id));
-        const newLineQuantity = (existingLine?.quantity ?? 0) + input.quantity;
-        const quantityError = this.validateQuantity(input.quantity, newLineQuantity);
-        if (quantityError) {
-            return quantityError;
-        }
-        const cartLimitError = this.validateCartLimit(
-            cart.lines.reduce((total, line) => total + line.quantity, 0) + input.quantity,
+    async removeLines(ctx: RequestContext, lineIds: ID[], expectedRevision: number) {
+        return this.applyChanges(ctx, { remove: lineIds }, expectedRevision);
+    }
+
+    async setLinesSelected(ctx: RequestContext, lineIds: ID[], selected: boolean, expectedRevision: number) {
+        return this.applyChanges(
+            ctx,
+            { lines: lineIds.map(lineId => ({ lineId, selected })) },
+            expectedRevision,
         );
-        if (cartLimitError) {
-            return cartLimitError;
-        }
+    }
 
-        const owner = await this.getOwner(ctx);
-        const revisionError = await this.claimRevision(ctx, cart, owner, expectedRevision);
-        if (revisionError) {
-            return revisionError;
-        }
+    async setAllLinesSelected(ctx: RequestContext, selected: boolean, expectedRevision: number) {
+        const cart = await this.getCart(ctx);
+        const lines = cart.lines.filter(
+            line => !selected || (line.productVariant?.enabled && line.productVariant.product?.enabled),
+        );
+        return this.applyChanges(
+            ctx,
+            { lines: lines.map(line => ({ lineId: line.id, selected })) },
+            expectedRevision,
+            cart,
+        );
+    }
 
-        const lineRepository = this.connection.getRepository(ctx, StorefrontCartLine);
-        if (existingLine) {
-            await lineRepository.update(existingLine.id, { quantity: newLineQuantity });
-        } else {
-            await lineRepository.save(
-                new StorefrontCartLine({
+    /** Validate the whole batch before writing; one revision and one delta projection per command. */
+    async applyChanges(
+        ctx: RequestContext,
+        changes: CartChanges,
+        expectedRevision: number,
+        snapshot?: StorefrontCart,
+    ): Promise<StorefrontCartMutationResult> {
+        const cart = snapshot ?? (await this.getCart(ctx));
+        const mutableError = this.validateMutable(cart, expectedRevision);
+        if (mutableError) return mutableError;
+        const original = new Map(cart.lines.map(line => [String(line.id), line]));
+        const removed = new Set((changes.remove ?? []).map(String));
+        const missing = [...removed, ...(changes.lines ?? []).map(line => String(line.lineId))].filter(
+            id => !original.has(id),
+        );
+        if (missing.length) return new CartLineNotFoundError([...new Set(missing)]);
+        const lines = cart.lines
+            .filter(line => !removed.has(String(line.id)))
+            .map(line => new StorefrontCartLine({ ...line }));
+        for (const change of changes.lines ?? []) {
+            if (removed.has(String(change.lineId))) continue;
+            const line = lines.find(item => idsAreEqual(item.id, change.lineId));
+            if (!line) return new CartLineNotFoundError([change.lineId]);
+            if (change.quantity != null) {
+                const error = this.validateQuantity(change.quantity, change.quantity);
+                if (error) return error;
+                line.quantity = change.quantity;
+            }
+            if (change.selected != null) line.selected = change.selected;
+            if (
+                (change.selected === true || change.quantity != null) &&
+                (!line.productVariant?.enabled || !line.productVariant.product?.enabled)
+            ) {
+                return new CartLineUnavailableError(line.productVariantId);
+            }
+        }
+        for (const addition of changes.add ?? []) {
+            let line = lines.find(item => idsAreEqual(item.productVariantId, addition.productVariantId));
+            const variant =
+                line?.productVariant ??
+                (await this.productVariantService.findOne(ctx, addition.productVariantId));
+            if (!variant?.enabled || !variant.product?.enabled)
+                return new CartLineUnavailableError(addition.productVariantId);
+            const quantity = (line?.quantity ?? 0) + addition.quantity;
+            const error = this.validateQuantity(addition.quantity, quantity);
+            if (error) return error;
+            if (line) {
+                line.quantity = quantity;
+            } else {
+                line = new StorefrontCartLine({
                     cartId: cart.id,
                     productVariantId: variant.id,
-                    quantity: input.quantity,
+                    quantity,
                     selected: true,
                     orderLineId: null,
-                }),
-            );
+                });
+                line.productVariant = variant;
+                lines.push(line);
+            }
         }
-        return this.projectCart(ctx, await this.loadCart(ctx, cart.id, owner), owner);
+        const limit = this.validateCartLimit(lines.reduce((total, line) => total + line.quantity, 0));
+        if (limit) return limit;
+        const changed = lines.filter(line => {
+            const previous = original.get(String(line.id));
+            return !previous || previous.quantity !== line.quantity || previous.selected !== line.selected;
+        });
+        const owner = await this.getOwner(ctx);
+        if (!changed.length && !removed.size) return this.projectCart(ctx, cart, owner);
+        const revisionError = await this.claimRevision(ctx, cart, owner, expectedRevision);
+        if (revisionError) return revisionError;
+        const repository = this.connection.getRepository(ctx, StorefrontCartLine);
+        if (removed.size) await repository.delete({ cartId: cart.id, id: In([...removed]) });
+        for (const line of changed) {
+            if (line.id != null) {
+                await repository.update(line.id, { quantity: line.quantity, selected: line.selected });
+            } else {
+                const saved = await repository.save(line);
+                Object.assign(line, saved);
+            }
+        }
+        cart.lines = lines;
+        cart.revision = expectedRevision + 1;
+        cart.projectedRevision = null;
+        return this.projectCart(ctx, cart, owner);
     }
 
-    async setLineQuantity(
-        ctx: RequestContext,
-        lineId: ID,
-        quantity: number,
-        expectedRevision: number,
-    ): Promise<StorefrontCartMutationResult> {
-        const cart = await this.getCart(ctx);
-        const mutableError = this.validateMutable(cart, expectedRevision);
-        if (mutableError) {
-            return mutableError;
-        }
-        const line = cart.lines.find(item => idsAreEqual(item.id, lineId));
-        if (!line) {
-            return new CartLineNotFoundError([lineId]);
-        }
-        const quantityError = this.validateQuantity(quantity, quantity);
-        if (quantityError) {
-            return quantityError;
-        }
-        const cartLimitError = this.validateCartLimit(
-            cart.lines.reduce((total, item) => total + item.quantity, 0) - line.quantity + quantity,
-        );
-        if (cartLimitError) {
-            return cartLimitError;
-        }
-        if (line.quantity === quantity) {
-            return this.projectCart(ctx, cart, await this.getOwner(ctx));
-        }
-
+    /** The caller must already hold a transaction. All cart/order writers lock cart before coupons. */
+    async lockCart(ctx: RequestContext): Promise<StorefrontCart> {
         const owner = await this.getOwner(ctx);
-        const revisionError = await this.claimRevision(ctx, cart, owner, expectedRevision);
-        if (revisionError) {
-            return revisionError;
-        }
-        await this.connection.getRepository(ctx, StorefrontCartLine).update(line.id, { quantity });
-        return this.projectCart(ctx, await this.loadCart(ctx, cart.id, owner), owner);
+        const cart = await this.findOrCreateCart(ctx, owner);
+        const repository = this.connection.getRepository(ctx, StorefrontCart);
+        // A no-op UPDATE is portable to SQLite and obtains an exclusive row lock in MySQL/Postgres.
+        await repository.update(
+            { id: cart.id, channelId: ctx.channelId, ...owner },
+            { lastActivityAt: new Date() },
+        );
+        await this.initializeCart(ctx, cart, owner);
+        return this.loadCart(ctx, cart.id, owner);
     }
 
-    async removeLines(
-        ctx: RequestContext,
-        lineIds: ID[],
-        expectedRevision: number,
-    ): Promise<StorefrontCartMutationResult> {
-        const cart = await this.getCart(ctx);
-        const mutableError = this.validateMutable(cart, expectedRevision);
-        if (mutableError) {
-            return mutableError;
-        }
-        const uniqueLineIds = this.uniqueIds(lineIds);
-        const missingLineIds = uniqueLineIds.filter(
-            lineId => !cart.lines.some(line => idsAreEqual(line.id, lineId)),
-        );
-        if (missingLineIds.length > 0) {
-            return new CartLineNotFoundError(missingLineIds);
-        }
-        if (uniqueLineIds.length === 0) {
-            return this.projectCart(ctx, cart, await this.getOwner(ctx));
-        }
-
-        const owner = await this.getOwner(ctx);
-        const revisionError = await this.claimRevision(ctx, cart, owner, expectedRevision);
-        if (revisionError) {
-            return revisionError;
-        }
-        await this.connection.getRepository(ctx, StorefrontCartLine).delete({ id: In(uniqueLineIds) });
-        return this.projectCart(ctx, await this.loadCart(ctx, cart.id, owner), owner);
-    }
-
-    async setLinesSelected(
-        ctx: RequestContext,
-        lineIds: ID[],
-        selected: boolean,
-        expectedRevision: number,
-    ): Promise<StorefrontCartMutationResult> {
-        const cart = await this.getCart(ctx);
-        const mutableError = this.validateMutable(cart, expectedRevision);
-        if (mutableError) {
-            return mutableError;
-        }
-        const uniqueLineIds = this.uniqueIds(lineIds);
-        const matchingLines = uniqueLineIds.map(lineId =>
-            cart.lines.find(line => idsAreEqual(line.id, lineId)),
-        );
-        const missingLineIds = uniqueLineIds.filter((_, index) => !matchingLines[index]);
-        if (missingLineIds.length > 0) {
-            return new CartLineNotFoundError(missingLineIds);
-        }
-        const changedLineIds = matchingLines
-            .filter((line): line is StorefrontCartLine => !!line && line.selected !== selected)
-            .map(line => line.id);
-        if (changedLineIds.length === 0) {
-            return this.projectCart(ctx, cart, await this.getOwner(ctx));
-        }
-
-        const owner = await this.getOwner(ctx);
-        const revisionError = await this.claimRevision(ctx, cart, owner, expectedRevision);
-        if (revisionError) {
-            return revisionError;
-        }
+    /** Used by order lifecycle and coupon maintenance jobs, which have no customer session. */
+    async lockForOrder(ctx: RequestContext, orderId: ID): Promise<void> {
         await this.connection
-            .getRepository(ctx, StorefrontCartLine)
-            .update({ id: In(changedLineIds) }, { selected });
-        return this.projectCart(ctx, await this.loadCart(ctx, cart.id, owner), owner);
+            .getRepository(ctx, StorefrontCart)
+            .update({ channelId: ctx.channelId, checkoutOrderId: orderId }, { lastActivityAt: new Date() });
     }
 
-    async setAllLinesSelected(
-        ctx: RequestContext,
-        selected: boolean,
-        expectedRevision: number,
-    ): Promise<StorefrontCartMutationResult> {
-        const cart = await this.getCart(ctx);
-        const mutableError = this.validateMutable(cart, expectedRevision);
-        if (mutableError) {
-            return mutableError;
-        }
-        const changedLineIds = cart.lines.filter(line => line.selected !== selected).map(line => line.id);
-        if (changedLineIds.length === 0) {
-            return this.projectCart(ctx, cart, await this.getOwner(ctx));
-        }
+    async isOrderPaymentLocked(ctx: RequestContext, orderId: ID): Promise<boolean> {
+        const repository = this.connection.getRepository(ctx, StorefrontCart);
+        const query = repository
+            .createQueryBuilder('cart')
+            .where({ channelId: ctx.channelId, checkoutOrderId: orderId });
+        if (
+            repository.manager.queryRunner?.isTransactionActive &&
+            !['sqlite', 'better-sqlite3', 'sqljs'].includes(this.connection.rawConnection.options.type)
+        )
+            query.setLock('pessimistic_read');
+        return (await query.getOne())?.state === 'PAYMENT_PENDING';
+    }
 
-        const owner = await this.getOwner(ctx);
-        const revisionError = await this.claimRevision(ctx, cart, owner, expectedRevision);
-        if (revisionError) {
-            return revisionError;
+    withTransaction<T>(ctx: RequestContext, work: (ctx: RequestContext) => Promise<T>): Promise<T> {
+        const type = this.connection.rawConnection.options.type;
+        return this.connection.withTransaction(
+            ctx,
+            work,
+            ['sqlite', 'better-sqlite3', 'sqljs'].includes(type) ? undefined : 'READ COMMITTED',
+        );
+    }
+
+    async withOrderChange<T>(
+        ctx: RequestContext,
+        orderId: ID,
+        work: (ctx: RequestContext) => Promise<T>,
+    ): Promise<T> {
+        const run = async (txCtx: RequestContext) => {
+            await this.lockForOrder(txCtx, orderId);
+            if (await this.isOrderPaymentLocked(txCtx, orderId)) {
+                throw new UserInputError('Checkout is locked. Reopen the order before changing its price.');
+            }
+            const result = await work(txCtx);
+            await this.connection
+                .getRepository(txCtx, StorefrontCart)
+                .createQueryBuilder()
+                .update(StorefrontCart)
+                .set({ revision: () => 'revision + 1', projectedRevision: null })
+                .where({ channelId: txCtx.channelId, checkoutOrderId: orderId })
+                .execute();
+            return result;
+        };
+        return this.connection.getRepository(ctx, StorefrontCart).manager.queryRunner?.isTransactionActive
+            ? run(ctx)
+            : this.withTransaction(ctx, run);
+    }
+
+    async acceptOrderChange(ctx: RequestContext, cart: StorefrontCart): Promise<StorefrontCart> {
+        const repository = this.connection.getRepository(ctx, StorefrontCart);
+        const current = await repository.findOneOrFail({ where: { id: cart.id } });
+        const revision = current.revision + 1;
+        await repository.update(cart.id, {
+            revision,
+            projectedRevision:
+                current.projectedRevision === current.revision ? revision : current.projectedRevision,
+        });
+        return this.loadCart(ctx, cart.id, await this.getOwner(ctx));
+    }
+
+    async checkoutContext(
+        ctx: RequestContext,
+        cart: StorefrontCart,
+    ): Promise<StorefrontCheckoutSession | null> {
+        if (cart.state === 'PAYMENT_PENDING') {
+            const session = await this.getPreparedCheckoutSession(ctx, cart);
+            return isGraphQlErrorResult(session) ? null : session;
         }
-        await this.connection
-            .getRepository(ctx, StorefrontCartLine)
-            .update({ id: In(changedLineIds) }, { selected });
-        return this.projectCart(ctx, await this.loadCart(ctx, cart.id, owner), owner);
+        return cart.checkoutOrder ? new StorefrontCheckoutSession(cart, cart.checkoutOrder, null) : null;
     }
 
     async syncActiveOrderSession(ctx: RequestContext, cart: StorefrontCart): Promise<void> {
@@ -327,8 +363,8 @@ export class StorefrontCartService {
         }
 
         const owner = await this.getOwner(ctx);
-        // Preserve customer, address and shipping changes made after beginCheckout unless the cart changed.
-        const projected = await this.projectCart(ctx, cart, owner);
+        // Recheck current stock and prices while preserving the order details entered after beginCheckout.
+        const projected = await this.projectCart(ctx, cart, owner, true);
         if (isGraphQlErrorResult(projected)) {
             return projected;
         }
@@ -452,22 +488,26 @@ export class StorefrontCartService {
             return;
         }
         const cartRepository = this.connection.getRepository(ctx, StorefrontCart);
-        const guestCart = await cartRepository.findOne({
-            where: {
-                channelId: ctx.channelId,
-                ownerType: 'SESSION',
-                ownerId: ctx.session.id,
-            },
-            relations: ['lines'],
-        });
-        const customerCart = await cartRepository.findOne({
-            where: {
-                channelId: ctx.channelId,
-                ownerType: 'CUSTOMER',
-                ownerId: customer.id,
-            },
-            relations: ['lines'],
-        });
+        const owners = [
+            { channelId: ctx.channelId, ownerType: 'SESSION' as const, ownerId: ctx.session.id },
+            { channelId: ctx.channelId, ownerType: 'CUSTOMER' as const, ownerId: customer.id },
+        ];
+        const type = this.connection.rawConnection.options.type;
+        const sqlite = ['sqlite', 'better-sqlite3', 'sqljs'].includes(type);
+        // Login may inherit an older REPEATABLE READ transaction. Read the locked rows
+        // themselves, including their lines, so a concurrent edit is not merged from a stale snapshot.
+        const merging = sqlite
+            ? await cartRepository.find({ where: owners, relations: ['lines'], order: { id: 'ASC' } })
+            : await cartRepository
+                  .createQueryBuilder('cart')
+                  .leftJoinAndSelect('cart.lines', 'line')
+                  .where(owners)
+                  .orderBy('cart.id', 'ASC')
+                  .setLock('pessimistic_write', undefined, type === 'postgres' ? ['cart'] : undefined)
+                  .getMany();
+        for (const cart of merging) await cartRepository.update(cart.id, { lastActivityAt: new Date() });
+        const guestCart = merging.find(cart => cart.ownerType === 'SESSION');
+        const customerCart = merging.find(cart => cart.ownerType === 'CUSTOMER');
         if (!guestCart && !customerCart) {
             return;
         }
@@ -512,7 +552,14 @@ export class StorefrontCartService {
             await this.connection
                 .getRepository(ctx, StorefrontCartCheckout)
                 .update({ cartId: guestCart.id }, { cartId: customerCart.id });
-            await cartRepository.delete(guestCart.id);
+            await lineRepository.delete({ cartId: guestCart.id });
+            await cartRepository.update(guestCart.id, {
+                revision: guestCart.revision + 1,
+                projectedRevision: null,
+                checkoutOrderId: null,
+                initialized: true,
+                lastActivityAt: new Date(),
+            });
             await cartRepository.update(customerCart.id, {
                 revision: Math.max(customerCart.revision, guestCart.revision) + 1,
                 checkoutOrderId: activeOrder?.id ?? null,
@@ -661,11 +708,13 @@ export class StorefrontCartService {
         if (!cart) {
             throw new ForbiddenError();
         }
-        const variants = await Promise.all(
-            cart.lines.map(line => this.productVariantService.findOne(ctx, line.productVariantId)),
+        const variants = await this.productVariantService.findByIdsWithProduct(
+            ctx,
+            cart.lines.map(line => line.productVariantId),
         );
-        for (const [index, line] of cart.lines.entries()) {
-            const variant = variants[index];
+        const variantsById = new Map(variants.map(variant => [String(variant.id), variant]));
+        for (const line of cart.lines) {
+            const variant = variantsById.get(String(line.productVariantId));
             if (variant) {
                 line.productVariant = variant;
             }
@@ -685,11 +734,14 @@ export class StorefrontCartService {
         if (!force && cart.projectedRevision === cart.revision) {
             return cart;
         }
-        const selectedLines = cart.lines.filter(line => line.selected);
-        const unavailableLine = selectedLines.find(
+        const requestedLines = cart.lines.filter(line => line.selected);
+        const selectedLines = requestedLines.filter(
+            line => line.productVariant?.enabled && line.productVariant.product?.enabled,
+        );
+        const unavailableLine = requestedLines.find(
             line => !line.productVariant?.enabled || !line.productVariant.product?.enabled,
         );
-        if (unavailableLine) {
+        if (force && unavailableLine) {
             return new CartLineUnavailableError(unavailableLine.productVariantId);
         }
 
@@ -714,18 +766,64 @@ export class StorefrontCartService {
         }
 
         if (order) {
-            if (order.lines.length > 0) {
-                const removeResult = await this.orderService.removeAllItemsFromOrder(ctx, order.id);
+            // Checkout validates every retained line without destroying order line identity,
+            // coupon allocations, delivery contacts or shipping selections.
+            const retainedVariantIds = new Set<string>();
+            const removedLineIds = order.lines
+                .filter(line => {
+                    const variantId = String(line.productVariantId);
+                    if (
+                        retainedVariantIds.has(variantId) ||
+                        !selectedLines.some(cartLine =>
+                            idsAreEqual(cartLine.productVariantId, line.productVariantId),
+                        )
+                    )
+                        return true;
+                    retainedVariantIds.add(variantId);
+                    return false;
+                })
+                .map(line => line.id);
+            if (removedLineIds.length > 0) {
+                const removeResult = await this.orderService.removeItemsFromOrder(
+                    ctx,
+                    order.id,
+                    removedLineIds,
+                );
                 if (isGraphQlErrorResult(removeResult)) {
                     return new CartProjectionError(removeResult.errorCode, removeResult.message);
                 }
                 order = removeResult;
             }
-            if (selectedLines.length > 0) {
+
+            const quantityChanges = order.lines.flatMap(line => {
+                const cartLine = selectedLines.find(selected =>
+                    idsAreEqual(selected.productVariantId, line.productVariantId),
+                );
+                return cartLine && (force || cartLine.quantity !== line.quantity)
+                    ? [{ orderLineId: line.id, quantity: cartLine.quantity }]
+                    : [];
+            });
+            if (quantityChanges.length > 0) {
+                const adjustResult = await this.orderService.adjustOrderLines(ctx, order.id, quantityChanges);
+                if (adjustResult.errorResults.length > 0) {
+                    const error = adjustResult.errorResults[0];
+                    return new CartProjectionError(error.errorCode, error.message);
+                }
+                order = adjustResult.order;
+            }
+
+            const existingOrderLines = order.lines;
+            const addedLines = selectedLines.filter(
+                cartLine =>
+                    !existingOrderLines.some(line =>
+                        idsAreEqual(line.productVariantId, cartLine.productVariantId),
+                    ),
+            );
+            if (addedLines.length > 0) {
                 const addResult = await this.orderService.addItemsToOrder(
                     ctx,
                     order.id,
-                    selectedLines.map(line => ({
+                    addedLines.map(line => ({
                         productVariantId: line.productVariantId,
                         quantity: line.quantity,
                     })),
@@ -736,10 +834,20 @@ export class StorefrontCartService {
                 }
                 order = addResult.order;
             }
+            if (force) order = await this.orderService.applyPriceAdjustments(ctx, order, order.lines);
         }
 
         const lineRepository = this.connection.getRepository(ctx, StorefrontCartLine);
-        await lineRepository.update({ cartId: cart.id }, { orderLineId: null });
+        const unselectedLineIds = cart.lines
+            .filter(
+                line =>
+                    !selectedLines.some(selected => idsAreEqual(selected.id, line.id)) &&
+                    line.orderLineId != null,
+            )
+            .map(line => line.id);
+        if (unselectedLineIds.length > 0) {
+            await lineRepository.update({ id: In(unselectedLineIds) }, { orderLineId: null });
+        }
         if (order) {
             for (const cartLine of selectedLines) {
                 const orderLine = order.lines.find(line =>
@@ -751,7 +859,9 @@ export class StorefrontCartService {
                         `No projected order line exists for variant ${cartLine.productVariantId}.`,
                     );
                 }
-                await lineRepository.update(cartLine.id, { orderLineId: orderLine.id });
+                if (cartLine.orderLineId == null || !idsAreEqual(cartLine.orderLineId, orderLine.id)) {
+                    await lineRepository.update(cartLine.id, { orderLineId: orderLine.id });
+                }
             }
         }
         await this.connection.getRepository(ctx, StorefrontCart).update(
@@ -767,7 +877,11 @@ export class StorefrontCartService {
                 lastActivityAt: new Date(),
             },
         );
-        return this.loadCart(ctx, cart.id, owner);
+        cart.checkoutOrder = order;
+        cart.checkoutOrderId = order?.id ?? null;
+        cart.projectedRevision = cart.revision;
+        cart.updatedAt = new Date();
+        return cart;
     }
 
     private async saveCheckoutSnapshot(

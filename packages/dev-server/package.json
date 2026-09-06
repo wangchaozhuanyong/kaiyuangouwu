@@ -50,7 +50,9 @@
         "start:worker": "node ../cli/dist/cli.js start worker",
         "load-test:1k": "node -r ts-node/register load-testing/run-load-test.ts 1000",
         "load-test:10k": "node -r ts-node/register load-testing/run-load-test.ts 10000",
-        "load-test:100k": "node -r ts-node/register load-testing/run-load-test.ts 100000"
+        "load-test:100k": "node -r ts-node/register load-testing/run-load-test.ts 100000",
+        "test:cart-e2e": "cross-env PACKAGE=dev-server vitest --config ../../e2e-common/vitest.config.mts --run e2e/cart-checkout.e2e-spec.ts",
+        "check:cart-e2e-types": "tsc --project tsconfig.cart-e2e.json --noEmit"
     },
     "dependencies": {
         "@nestjs/axios": "^4.0.0",

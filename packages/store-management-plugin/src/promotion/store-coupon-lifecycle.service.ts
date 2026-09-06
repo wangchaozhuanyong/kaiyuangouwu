@@ -19,6 +19,7 @@ import {
     TransactionalConnection,
     UserInputError,
 } from '@vendure/core';
+import { StorefrontCartService } from '@vendure/storefront-cart-plugin';
 import { In, IsNull, LessThanOrEqual, Like, LockNotSupportedOnGivenDriverError, Not } from 'typeorm';
 
 import { CouponLedgerEntry } from '../entities/coupon-ledger-entry.entity';
@@ -58,6 +59,7 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
         private readonly eventBus: EventBus,
         private readonly requestContextService: RequestContextService,
         private readonly orderCalculator: OrderCalculator,
+        private readonly carts?: StorefrontCartService,
     ) {}
 
     async onApplicationBootstrap(): Promise<void> {
@@ -110,6 +112,11 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
                 usableCustomerCouponStatuses.includes(coupon.status) &&
                 (!coupon.promotion || coupon.promotion.deletedAt || !coupon.promotion.enabled)
             ) {
+                if (
+                    coupon.lockedOrderId &&
+                    (await this.carts?.isOrderPaymentLocked(ctx, coupon.lockedOrderId))
+                )
+                    continue;
                 await this.revokeCoupon(ctx, coupon, '优惠券活动已删除或停用，系统自动作废');
             }
         }
@@ -380,6 +387,13 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
     }
 
     private async revokeCoupon(ctx: RequestContext, coupon: CustomerCoupon, note: string) {
+        const work = (txCtx: RequestContext) => this.revokeCouponWithinCart(txCtx, coupon, note);
+        return coupon.lockedOrderId && this.carts
+            ? this.carts.withOrderChange(ctx, coupon.lockedOrderId, work)
+            : work(ctx);
+    }
+
+    private async revokeCouponWithinCart(ctx: RequestContext, coupon: CustomerCoupon, note: string) {
         if (coupon.status === 'LOCKED' && coupon.lockedOrderId != null) {
             const order = await this.orderService.findOne(ctx, coupon.lockedOrderId, [
                 'lines',
@@ -464,12 +478,29 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
                 apiType: 'admin',
                 channelOrToken: coupon.channel,
             });
-            await this.connection.withTransaction(ctx, async txCtx => {
+            await (
+                this.carts?.withTransaction.bind(this.carts) ??
+                this.connection.withTransaction.bind(this.connection)
+            )(ctx, async txCtx => {
+                if (coupon.lockedOrderId) await this.carts?.lockForOrder(txCtx, coupon.lockedOrderId);
+                await this.connection
+                    .getRepository(txCtx, CustomerCoupon)
+                    .createQueryBuilder()
+                    .update(CustomerCoupon)
+                    .set({ updatedAt: () => 'updatedAt' })
+                    .where({ id: coupon.id })
+                    .execute();
                 const fresh = await this.connection.getRepository(txCtx, CustomerCoupon).findOne({
                     where: { id: coupon.id },
                     relations: { promotion: true, campaignConfig: true },
                 });
-                if (!fresh) return;
+                if (!fresh || String(fresh.lockedOrderId ?? '') !== String(coupon.lockedOrderId ?? ''))
+                    return;
+                if (
+                    fresh.lockedOrderId &&
+                    (await this.carts?.isOrderPaymentLocked(txCtx, fresh.lockedOrderId))
+                )
+                    return;
                 if (fresh.status === 'LOCKED' && fresh.lockExpiresAt && fresh.lockExpiresAt <= now) {
                     const order = fresh.lockedOrderId
                         ? await this.orderService.findOne(txCtx, fresh.lockedOrderId, [
@@ -549,7 +580,12 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
 
         const rule = couponRuleSnapshot(promotion);
         if (!rule) throw new UserInputError('优惠券规则无法识别');
-        const validFrom = promotion.startsAt && promotion.startsAt > now ? promotion.startsAt : now;
+        // Date columns use whole seconds on MySQL. An immediately usable coupon must not
+        // round into the next second when it is saved and then immediately applied.
+        const validFrom =
+            promotion.startsAt && promotion.startsAt > now
+                ? promotion.startsAt
+                : new Date(Math.floor(now.getTime() / 1000) * 1000);
         const relativeEnd = config.validityDays
             ? new Date(now.getTime() + config.validityDays * 24 * 60 * 60_000)
             : null;
@@ -773,6 +809,19 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
         order: Order | null,
         note: string,
     ) {
+        const work = (txCtx: RequestContext) =>
+            this.releaseLockedCouponWithinCart(txCtx, coupon, order, note);
+        return coupon.lockedOrderId && this.carts
+            ? this.carts.withOrderChange(ctx, coupon.lockedOrderId, work)
+            : work(ctx);
+    }
+
+    private async releaseLockedCouponWithinCart(
+        ctx: RequestContext,
+        coupon: CustomerCoupon,
+        order: Order | null,
+        note: string,
+    ) {
         const orderId = coupon.lockedOrderId;
         if (orderId == null) return;
         const nextStatus = coupon.returnedAt ? 'RETURNED' : 'AVAILABLE';
@@ -954,6 +1003,12 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
         entity: typeof CustomerCoupon | typeof StoreCouponCampaignConfig,
         id: ID,
     ) {
+        if (entity === CustomerCoupon && this.carts) {
+            const coupon = await this.connection
+                .getRepository(ctx, CustomerCoupon)
+                .findOne({ where: { id, channelId: ctx.channelId } });
+            if (coupon?.lockedOrderId) await this.carts.lockForOrder(ctx, coupon.lockedOrderId);
+        }
         try {
             await this.connection
                 .getRepository(ctx, entity)

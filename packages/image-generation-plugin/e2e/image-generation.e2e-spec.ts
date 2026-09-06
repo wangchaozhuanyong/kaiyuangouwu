@@ -5,6 +5,7 @@ import {
 } from '@vendure/content-translation-plugin';
 import { Customer, mergeConfig, TransactionalConnection } from '@vendure/core';
 import { ReferralWallet, ReferralWalletUsage, StoreManagementPlugin } from '@vendure/store-management-plugin';
+import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 import { createTestEnvironment } from '@vendure/testing';
 import gql from 'graphql-tag';
 import { mkdtempSync, writeFileSync } from 'node:fs';
@@ -21,6 +22,7 @@ import { ImageGenerationDispatch } from '../src/entities/image-generation-dispat
 import { ImageGenerationJob } from '../src/entities/image-generation-job.entity';
 import { ImageGenerationOutput } from '../src/entities/image-generation-output.entity';
 import { ImagePrivateAsset } from '../src/entities/image-private-asset.entity';
+import { ImageGenerationQueueService } from '../src/image-generation-queue.service';
 import { ImageGenerationPlugin } from '../src/image-generation.plugin';
 import { ImagePrivateStorageService } from '../src/storage/image-private-storage.service';
 
@@ -47,6 +49,7 @@ const translationProvider: ContentTranslationProvider = {
 const config = mergeConfig(testConfig(), {
     authOptions: { requireVerification: false },
     plugins: [
+        StorefrontCartPlugin,
         ContentTranslationPlugin.init({ provider: translationProvider }),
         StoreManagementPlugin.init({
             enabled: false,
@@ -611,6 +614,52 @@ describe('AI image generation full flow', () => {
             ]),
         });
 
+        // Prompt optimization now has its own model pool; image-provider textModelId is legacy metadata.
+        const promptInput = {
+            code: 'prompt-e2e-primary',
+            name: 'Prompt E2E fixture',
+            enabled: true,
+            baseUrl: 'https://1.1.1.1/v1',
+            apiKey: 'prompt-e2e-fixture-key',
+            modelId: 'prompt-e2e-model',
+            apiFormat: 'OPENAI',
+            priority: 10,
+            weight: 1,
+        };
+        const savePromptModel = gql`
+            mutation SavePromptE2E($input: SaveImagePromptModelInput!) {
+                saveImagePromptModel(input: $input) {
+                    id
+                    enabled
+                    healthStatus
+                }
+            }
+        `;
+        const promptModel = (await adminClient.query(savePromptModel, { input: promptInput }))
+            .saveImagePromptModel;
+        expect(promptModel).toMatchObject({ enabled: false, healthStatus: 'UNTESTED' });
+        expect(
+            (
+                await adminClient.query(
+                    gql`
+                        mutation TestPromptE2E($id: ID!) {
+                            testImagePromptModel(id: $id) {
+                                ok
+                            }
+                        }
+                    `,
+                    { id: promptModel.id },
+                )
+            ).testImagePromptModel.ok,
+        ).toBe(true);
+        expect(
+            (
+                await adminClient.query(savePromptModel, {
+                    input: { ...promptInput, id: promptModel.id, apiKey: null },
+                })
+            ).saveImagePromptModel,
+        ).toMatchObject({ enabled: true, healthStatus: 'HEALTHY' });
+
         const registration = await shopClient.query(REGISTER, {
             input: {
                 emailAddress: 'image-e2e@example.com',
@@ -752,7 +801,8 @@ describe('AI image generation full flow', () => {
         expect(failed.imageStudioBalance).toBe(375);
 
         const connection = server.app.get(TransactionalConnection);
-        const staleAt = new Date(Date.now() - 16 * 60_000);
+        // Match the persisted MySQL datetime precision while retaining the stale interval.
+        const staleAt = new Date(Math.floor(Date.now() / 1000) * 1000 - 16 * 60_000);
         const staleOutputId = Number(String(failedCreated.outputs[0].id).replace(/^T_/u, ''));
         const staleJobId = Number(String(failedCreated.id).replace(/^T_/u, ''));
         await connection.rawConnection.getRepository(ImageGenerationOutput).update(
@@ -1017,12 +1067,10 @@ describe('AI image generation full flow', () => {
         expect(
             (await shopClient.query(DELETE_JOB, { id: referenceCreated.id })).deleteMyImageGenerationJob,
         ).toBe(true);
-        const deletedRows = await connection.rawConnection.query(
-            'SELECT id, customerDeletedAt FROM image_generation_job ORDER BY id',
-        );
-        expect(deletedRows).toEqual(
-            expect.arrayContaining([expect.objectContaining({ customerDeletedAt: expect.any(String) })]),
-        );
+        const deletedJob = await connection.rawConnection
+            .getRepository(ImageGenerationJob)
+            .findOneByOrFail({ id: Number(String(referenceCreated.id).replace(/^T_/u, '')) });
+        expect(deletedJob.customerDeletedAt).toBeInstanceOf(Date);
         await expect(connection.rawConnection.getRepository(ImageGenerationCostEvent).count()).resolves.toBe(
             6,
         );
@@ -1034,6 +1082,8 @@ async function waitForJob(id: string, terminalStates: string[]) {
     let result = await shopClient.query(MY_JOB, { id });
     while (!terminalStates.includes(result.myImageGenerationJob.state) && Date.now() < deadline) {
         await new Promise(resolve => setTimeout(resolve, 100));
+        // The test server has no scheduler process; run the production reconciliation tick locally.
+        await server.app.get(ImageGenerationQueueService).reconcileUnknown();
         result = await shopClient.query(MY_JOB, { id });
     }
     expect(terminalStates).toContain(result.myImageGenerationJob.state);

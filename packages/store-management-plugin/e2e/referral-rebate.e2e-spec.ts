@@ -4,6 +4,7 @@ import {
     type ContentTranslationProvider,
 } from '@vendure/content-translation-plugin';
 import { mergeConfig, PaymentMethodHandler } from '@vendure/core';
+import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 import { createTestEnvironment } from '@vendure/testing';
 import gql from 'graphql-tag';
 import { randomUUID } from 'node:crypto';
@@ -45,6 +46,7 @@ const config = mergeConfig(testConfig(), {
     authOptions: { requireVerification: false },
     paymentOptions: { paymentMethodHandlers: [externalPaymentHandler] },
     plugins: [
+        StorefrontCartPlugin,
         ContentTranslationPlugin.init({
             provider: passthroughTranslationProvider,
         }),

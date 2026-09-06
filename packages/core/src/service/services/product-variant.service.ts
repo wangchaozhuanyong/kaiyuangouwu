@@ -31,6 +31,7 @@ import {
     Channel,
     Order,
     OrderLine,
+    Product,
     ProductOptionGroup,
     ProductVariantPrice,
     StockLevel,
@@ -41,7 +42,6 @@ import { FacetValue } from '../../entity/facet-value/facet-value.entity';
 import { ProductOption } from '../../entity/product-option/product-option.entity';
 import { ProductVariantTranslation } from '../../entity/product-variant/product-variant-translation.entity';
 import { ProductVariant } from '../../entity/product-variant/product-variant.entity';
-import { Product } from '../../entity/product/product.entity';
 import { EventBus } from '../../event-bus/event-bus';
 import { ProductVariantChannelEvent } from '../../event-bus/events/product-variant-channel-event';
 import { ProductVariantEvent } from '../../event-bus/events/product-variant-event';
@@ -145,6 +145,20 @@ export class ProductVariantService {
                     ]);
                 }
             });
+    }
+
+    /** Batch equivalent of findOne for a channel-scoped product snapshot. */
+    async findByIdsWithProduct(ctx: RequestContext, ids: ID[]): Promise<Array<Translated<ProductVariant>>> {
+        if (!ids.length) return [];
+        const variants = await this.connection.findByIdsInChannel(ctx, ProductVariant, ids, ctx.channelId, {
+            relations: ['product', 'featuredAsset', 'product.featuredAsset', 'taxCategory'],
+            where: { deletedAt: IsNull() },
+        });
+        return Promise.all(
+            variants.map(async variant =>
+                this.translator.translate(await this.applyChannelPriceAndTax(variant, ctx), ctx, ['product']),
+            ),
+        );
     }
 
     findByIds(ctx: RequestContext, ids: ID[]): Promise<Array<Translated<ProductVariant>>> {

@@ -100,6 +100,7 @@ import { AlignAdminTwoFactorTimestamps1788613200000 } from './1788613200000-alig
 import { AddOrderProfitExpenses1788652800000 } from './1788652800000-add-order-profit-expenses';
 import { AddCouponCampaignArchive1788652860000 } from './1788652860000-add-coupon-campaign-archive';
 import { AddStorefrontPageViews1788678000000 } from './1788678000000-add-storefront-page-views';
+import { AddCartCommandReceipts1788678060000 } from './1788678060000-add-cart-command-receipts';
 
 export const devServerMigrations = [
     CommerceFulfillment1786514145999,
@@ -204,4 +205,5 @@ export const devServerMigrations = [
     AddOrderProfitExpenses1788652800000,
     AddCouponCampaignArchive1788652860000,
     AddStorefrontPageViews1788678000000,
+    AddCartCommandReceipts1788678060000,
 ];

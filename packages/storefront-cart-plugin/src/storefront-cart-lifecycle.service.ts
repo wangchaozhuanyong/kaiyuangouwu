@@ -44,7 +44,7 @@ export class StorefrontCartLifecycleService implements OnApplicationBootstrap {
             return;
         }
         try {
-            await this.connection.withTransaction(event.ctx, txCtx =>
+            await this.storefrontCartService.withTransaction(event.ctx, txCtx =>
                 this.storefrontCartService.mergeAfterLogin(txCtx, event.user.id),
             );
         } catch (error) {
@@ -61,6 +61,7 @@ export class StorefrontCartLifecycleService implements OnApplicationBootstrap {
     }
 
     async completeCheckoutForOrder(ctx: RequestContext, orderId: string | number): Promise<void> {
+        await this.storefrontCartService.lockForOrder(ctx, orderId);
         const checkoutRepository = this.connection.getRepository(ctx, StorefrontCartCheckout);
         const checkout = await checkoutRepository.findOne({
             where: { orderId, state: 'PREPARED' },
@@ -118,7 +119,7 @@ export class StorefrontCartLifecycleService implements OnApplicationBootstrap {
                 apiType: 'admin',
                 channelOrToken: checkout.cart.channel,
             });
-            await this.connection.withTransaction(ctx, txCtx =>
+            await this.storefrontCartService.withTransaction(ctx, txCtx =>
                 this.completeCheckoutForOrder(txCtx, checkout.orderId),
             );
         }

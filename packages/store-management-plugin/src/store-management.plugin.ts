@@ -15,6 +15,7 @@ import {
     TransactionalConnection,
     VendurePlugin,
 } from '@vendure/core';
+import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 import { Like } from 'typeorm';
 
 import { adminApiExtensions, shopApiExtensions } from './api-extensions';
@@ -51,6 +52,7 @@ import { MerchantCatalogAccessService } from './merchant-catalog-access.service'
 import { MerchantInitialPasswordInterceptor } from './merchant-initial-password.interceptor';
 import { MerchantInitialPasswordResolver } from './merchant-initial-password.resolver';
 import { MerchantInitialPasswordService } from './merchant-initial-password.service';
+import { CartCouponCommandAdapter } from './promotion/cart-coupon-command.adapter';
 import {
     collectionPercentageDiscount,
     currencyMinimumOrderAmount,
@@ -138,7 +140,7 @@ import {
 } from './usdt/usdt-wallet-configuration.service';
 
 @VendurePlugin({
-    imports: [PluginCommonModule, ContentTranslationPlugin],
+    imports: [PluginCommonModule, ContentTranslationPlugin, StorefrontCartPlugin],
     entities: [
         StoreAdministratorAccess,
         StoreProfile,
@@ -168,6 +170,7 @@ import {
     ],
     controllers: [StorefrontPromotionController, StorefrontRealtimeController],
     providers: [
+        CartCouponCommandAdapter,
         MerchantCatalogAccessService,
         MerchantInitialPasswordService,
         StoreActivationReadinessService,

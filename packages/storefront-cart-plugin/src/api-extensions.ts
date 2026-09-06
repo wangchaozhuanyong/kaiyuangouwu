@@ -109,7 +109,7 @@ export const shopApiExtensions = gql`
     }
 
     union StorefrontCartResult =
-          StorefrontCart
+        | StorefrontCart
         | CartRevisionConflictError
         | CartLineNotFoundError
         | CartLineUnavailableError
@@ -120,7 +120,7 @@ export const shopApiExtensions = gql`
         | OrderLimitError
 
     union StorefrontCheckoutResult =
-          StorefrontCheckoutSession
+        | StorefrontCheckoutSession
         | CartRevisionConflictError
         | CartLineUnavailableError
         | CartCheckoutLockedError
@@ -128,11 +128,61 @@ export const shopApiExtensions = gql`
         | CartEmptySelectionError
         | OrderLimitError
 
+    input StorefrontCartLineChangeInput {
+        lineId: ID!
+        quantity: Int
+        selected: Boolean
+    }
+    input StorefrontCartChangesInput {
+        add: [AddStorefrontCartItemInput!]
+        lines: [StorefrontCartLineChangeInput!]
+        remove: [ID!]
+    }
+    input StorefrontCartOrderChangeInput {
+        note: String
+        currencyCode: CurrencyCode
+        shippingAddress: CreateAddressInput
+        shippingMethodId: ID
+        customer: CreateCustomerInput
+    }
+    input StorefrontCartCommandInput {
+        cartId: ID!
+        commandId: String!
+        expectedRevision: Int!
+        changes: StorefrontCartChangesInput
+        buyNow: AddStorefrontCartItemInput
+        order: StorefrontCartOrderChangeInput
+        beginCheckout: Boolean
+        preparePayment: Boolean
+        reopen: Boolean
+    }
+    enum StorefrontCartCommandStatus {
+        APPLIED
+        REJECTED
+        CANCELLED
+        NOT_FOUND
+    }
+    type StorefrontCartCommandResult {
+        commandId: String!
+        status: StorefrontCartCommandStatus!
+        appliedRevision: Int
+        errorCode: String
+        message: String
+        cart: StorefrontCart!
+        session: StorefrontCheckoutSession
+    }
+
     extend type Query {
         storefrontCart: StorefrontCart!
     }
 
     extend type Mutation {
+        applyStorefrontCartCommand(input: StorefrontCartCommandInput!): StorefrontCartCommandResult!
+        recoverStorefrontCartCommand(
+            cartId: ID!
+            commandId: String!
+            cancel: Boolean = false
+        ): StorefrontCartCommandResult!
         addStorefrontCartItem(
             input: AddStorefrontCartItemInput!
             expectedRevision: Int!
@@ -148,10 +198,7 @@ export const shopApiExtensions = gql`
             selected: Boolean!
             expectedRevision: Int!
         ): StorefrontCartResult!
-        setAllStorefrontCartLinesSelected(
-            selected: Boolean!
-            expectedRevision: Int!
-        ): StorefrontCartResult!
+        setAllStorefrontCartLinesSelected(selected: Boolean!, expectedRevision: Int!): StorefrontCartResult!
         beginStorefrontCheckout(expectedRevision: Int!): StorefrontCheckoutResult!
         prepareStorefrontCartPayment(expectedRevision: Int!): StorefrontCheckoutResult!
         reopenStorefrontCart(expectedRevision: Int!): StorefrontCartResult!

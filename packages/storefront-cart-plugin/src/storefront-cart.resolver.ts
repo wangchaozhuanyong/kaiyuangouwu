@@ -10,12 +10,14 @@ import {
     TransactionalConnection,
 } from '@vendure/core';
 
+import { CartCommandService } from './cart-command.service';
+import { CartCommandInput } from './cart-command.types';
 import { StorefrontCartLine } from './entities/storefront-cart-line.entity';
 import { StorefrontCart } from './entities/storefront-cart.entity';
 import {
     StorefrontCartService,
-    StorefrontCheckoutSession,
     StorefrontCheckoutResult,
+    StorefrontCheckoutSession,
 } from './storefront-cart.service';
 
 interface AddItemArgs {
@@ -32,7 +34,27 @@ export class StorefrontCartShopResolver {
     constructor(
         private readonly storefrontCartService: StorefrontCartService,
         private readonly connection: TransactionalConnection,
+        private readonly commands: CartCommandService,
     ) {}
+
+    @Transaction('manual')
+    @Mutation()
+    @Allow(Permission.Owner)
+    applyStorefrontCartCommand(@Ctx() ctx: RequestContext, @Args('input') input: CartCommandInput) {
+        return this.runCommand(ctx, () => this.commands.execute(ctx, input));
+    }
+
+    @Transaction('manual')
+    @Mutation()
+    @Allow(Permission.Owner)
+    recoverStorefrontCartCommand(
+        @Ctx() ctx: RequestContext,
+        @Args('commandId') commandId: string,
+        @Args('cartId') cartId: ID,
+        @Args('cancel') cancel: boolean,
+    ) {
+        return this.runCommand(ctx, () => this.commands.recover(ctx, commandId, cartId, cancel));
+    }
 
     @Transaction()
     @Query()
@@ -72,10 +94,7 @@ export class StorefrontCartShopResolver {
     @Transaction('manual')
     @Mutation()
     @Allow(Permission.Owner)
-    removeStorefrontCartLines(
-        @Ctx() ctx: RequestContext,
-        @Args() args: RevisionArgs & { lineIds: ID[] },
-    ) {
+    removeStorefrontCartLines(@Ctx() ctx: RequestContext, @Args() args: RevisionArgs & { lineIds: ID[] }) {
         return this.runMutation(ctx, () =>
             this.storefrontCartService.removeLines(ctx, args.lineIds, args.expectedRevision),
         );
@@ -106,11 +125,7 @@ export class StorefrontCartShopResolver {
         @Args() args: RevisionArgs & { selected: boolean },
     ) {
         return this.runMutation(ctx, () =>
-            this.storefrontCartService.setAllLinesSelected(
-                ctx,
-                args.selected,
-                args.expectedRevision,
-            ),
+            this.storefrontCartService.setAllLinesSelected(ctx, args.selected, args.expectedRevision),
         );
     }
 
@@ -136,25 +151,35 @@ export class StorefrontCartShopResolver {
     @Mutation()
     @Allow(Permission.Owner)
     reopenStorefrontCart(@Ctx() ctx: RequestContext, @Args() args: RevisionArgs) {
-        return this.runMutation(ctx, () =>
-            this.storefrontCartService.reopenCart(ctx, args.expectedRevision),
-        );
+        return this.runMutation(ctx, () => this.storefrontCartService.reopenCart(ctx, args.expectedRevision));
     }
 
-    private async runMutation<T extends Awaited<ReturnType<StorefrontCartService['addItem']>> | StorefrontCheckoutResult>(
-        ctx: RequestContext,
-        work: () => Promise<T>,
-    ): Promise<T> {
-        await this.connection.startTransaction(ctx);
+    private async runCommand<T>(ctx: RequestContext, work: () => Promise<T>): Promise<T> {
+        const type = this.connection.rawConnection.options.type;
+        await this.connection.startTransaction(
+            ctx,
+            ['sqlite', 'better-sqlite3', 'sqljs'].includes(type) ? undefined : 'READ COMMITTED',
+        );
+        const result = await work();
+        await this.connection.commitOpenTransaction(ctx);
+        return result;
+    }
+
+    private async runMutation<
+        T extends Awaited<ReturnType<StorefrontCartService['addItem']>> | StorefrontCheckoutResult,
+    >(ctx: RequestContext, work: () => Promise<T>): Promise<T> {
+        const type = this.connection.rawConnection.options.type;
+        await this.connection.startTransaction(
+            ctx,
+            ['sqlite', 'better-sqlite3', 'sqljs'].includes(type) ? undefined : 'READ COMMITTED',
+        );
+        await this.storefrontCartService.lockCart(ctx);
         const result = await work();
         if (isGraphQlErrorResult(result)) {
             await this.connection.rollBackTransaction(ctx);
             return result;
         }
-        const cart =
-            result instanceof StorefrontCart
-                ? result
-                : (result as StorefrontCheckoutSession).cart;
+        const cart = result instanceof StorefrontCart ? result : (result as StorefrontCheckoutSession).cart;
         await this.storefrontCartService.syncActiveOrderSession(ctx, cart);
         await this.connection.commitOpenTransaction(ctx);
         return result;
