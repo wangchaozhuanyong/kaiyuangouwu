@@ -14,7 +14,7 @@ export function useStorefrontBrandColors(config: StorefrontConfig | undefined) {
         const background = configuredColor(config?.brandBackgroundColor);
         const primary = configuredColor(config?.brandPrimaryColor);
         const colors = {
-            '--bg': config?.brandBackgroundColor,
+            // Page surfaces belong to the selected skin, independently of brand artwork colors.
             '--store-background': config?.brandBackgroundColor,
             '--store-primary': config?.brandPrimaryColor,
             '--store-highlight': config?.brandHighlightColor,
