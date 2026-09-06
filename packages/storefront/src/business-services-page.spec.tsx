@@ -1,9 +1,9 @@
-import type { StorefrontContentBlock, StorefrontContentItem } from './types';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { BusinessServicesPage } from './pages/business-services-page';
-import { StorefrontContext } from './StorefrontContext';
+import { BusinessServicesPageContext } from './storefront-page-contexts';
+import { type StorefrontContentBlock, type StorefrontContentItem } from './types';
 
 function businessPluginBlock(): StorefrontContentBlock {
     const item: StorefrontContentItem = {
@@ -82,7 +82,7 @@ function navigationBlock(servicesLabel: string): StorefrontContentBlock {
 
 function renderPage(contentBlocks: StorefrontContentBlock[], language: 'zh' | 'en' = 'zh') {
     return renderToStaticMarkup(
-        <StorefrontContext.Provider
+        <BusinessServicesPageContext.Provider
             value={{
                 contentBlocks,
                 language,
@@ -91,7 +91,7 @@ function renderPage(contentBlocks: StorefrontContentBlock[], language: 'zh' | 'e
             }}
         >
             <BusinessServicesPage />
-        </StorefrontContext.Provider>,
+        </BusinessServicesPageContext.Provider>,
     );
 }
 

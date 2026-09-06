@@ -24,12 +24,12 @@ import { referralShareUrl } from '../referral-attribution';
 import { availablePosterTemplates } from '../referral-poster-layout';
 import { ReferralPosterModal } from '../referral-poster-modal';
 import { PageSkeleton } from '../route-loading';
+import { ReferralPageContext } from '../storefront-page-contexts';
 import { EmptyState, Subpage } from '../storefront-ui/page-shell';
 import { formatMoney } from '../storefront-ui/product-display';
-import { useStorefront } from '../StorefrontContext';
 import { ActiveCustomer, MarketConfig, ReferralLedgerEntry, StorefrontLanguage } from '../types';
 
-interface ReferralPageProps {
+export interface ReferralPageProps {
     api: ShopApi;
     customer: ActiveCustomer | null;
     market: MarketConfig;
@@ -44,7 +44,7 @@ interface ReferralPageProps {
 
 export function ReferralPage() {
     const { api, customer, market, locale, language, storefrontName, logoUrl, onBack, onNotify, onLogin } =
-        useStorefront<ReferralPageProps>();
+        ReferralPageContext.useValue();
     const isZh = language === 'zh';
     const [copied, setCopied] = useState(false);
     const [showPoster, setShowPoster] = useState(false);

@@ -1,10 +1,10 @@
-import { ReactNode } from 'react';
+import type { ReactNode } from 'react';
 
 import { cartResolvedRoutes, customerResolvedRoutes, RouteName } from '../storefront-router';
 import { AsyncRouteStatePage } from '../storefront-ui/page-shell';
-import { StorefrontContext, useStorefront } from '../StorefrontContext';
+import { useStorefront, type StorefrontContextValue } from '../StorefrontContext';
 
-export type RouteRuntime = Record<string, any>;
+export type RouteRuntime = StorefrontContextValue;
 
 interface PreloadableComponent {
     preload?: () => Promise<void> | undefined;
@@ -17,11 +17,7 @@ export function registerRoutePreload(routeComponent: object, pageComponent: Prel
 }
 
 export function useRouteRuntime(): RouteRuntime {
-    return useStorefront<RouteRuntime>();
-}
-
-export function RoutePageContext({ value, children }: { value: RouteRuntime; children: ReactNode }) {
-    return <StorefrontContext.Provider value={value}>{children}</StorefrontContext.Provider>;
+    return useStorefront();
 }
 
 export function RouteGate({ name, children }: { name: RouteName; children: ReactNode }) {
@@ -43,7 +39,7 @@ export function RouteGate({ name, children }: { name: RouteName; children: React
             <AsyncRouteStatePage
                 routeName={name}
                 state={runtime.cartLoadState}
-                error={runtime.cartQueryError}
+                error={runtime.cartQueryError ?? ''}
                 language={runtime.language}
                 onBack={runtime.goBack}
                 onRetry={() => void runtime.cartQuery.refetch()}
@@ -55,7 +51,7 @@ export function RouteGate({ name, children }: { name: RouteName; children: React
             <AsyncRouteStatePage
                 routeName={name}
                 state={runtime.publicLoadState}
-                error={runtime.error}
+                error={runtime.error ?? ''}
                 language={runtime.language}
                 onBack={runtime.goBack}
                 onRetry={() => void runtime.refetchStorefront()}

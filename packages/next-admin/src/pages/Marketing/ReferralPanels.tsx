@@ -154,6 +154,8 @@ export function ProgramSettings({
 }
 
 export function PromotersPanel({
+    pageSize,
+    onPageSizeChange,
     data,
     loading,
     error,
@@ -162,6 +164,8 @@ export function PromotersPanel({
     changeSkip,
     onRetry,
 }: {
+    pageSize: number;
+    onPageSizeChange: (size: number) => void;
     data?: ReferralReportsResult;
     loading: boolean;
     error?: string;
@@ -235,6 +239,9 @@ export function PromotersPanel({
                     </tbody>
                 </table>
                 <ReportPagination
+                    loading={loading}
+                    pageSize={pageSize}
+                    onPageSizeChange={onPageSizeChange}
                     skip={skips.summaries}
                     total={data?.referralInviterSummaries.totalItems ?? 0}
                     onChange={value => changeSkip('summaries', value)}
@@ -301,6 +308,9 @@ export function PromotersPanel({
                     </tbody>
                 </table>
                 <ReportPagination
+                    loading={loading}
+                    pageSize={pageSize}
+                    onPageSizeChange={onPageSizeChange}
                     skip={skips.relationships}
                     total={data?.referralRelationships.totalItems ?? 0}
                     onChange={value => changeSkip('relationships', value)}
@@ -311,6 +321,8 @@ export function PromotersPanel({
 }
 
 export function RewardsPanel({
+    pageSize,
+    onPageSizeChange,
     data,
     loading,
     error,
@@ -319,6 +331,8 @@ export function RewardsPanel({
     changeSkip,
     onRetry,
 }: {
+    pageSize: number;
+    onPageSizeChange: (size: number) => void;
     data?: ReferralReportsResult;
     loading: boolean;
     error?: string;
@@ -416,6 +430,9 @@ export function RewardsPanel({
                 </tbody>
             </table>
             <ReportPagination
+                loading={loading}
+                pageSize={pageSize}
+                onPageSizeChange={onPageSizeChange}
                 skip={skip}
                 total={data?.referralRewards.totalItems ?? 0}
                 onChange={changeSkip}
@@ -425,6 +442,8 @@ export function RewardsPanel({
 }
 
 export function LedgerPanel({
+    pageSize,
+    onPageSizeChange,
     data,
     loading,
     error,
@@ -433,6 +452,8 @@ export function LedgerPanel({
     changeSkip,
     onRetry,
 }: {
+    pageSize: number;
+    onPageSizeChange: (size: number) => void;
     data?: ReferralReportsResult;
     loading: boolean;
     error?: string;
@@ -540,6 +561,9 @@ export function LedgerPanel({
                     </tbody>
                 </table>
                 <ReportPagination
+                    loading={loading}
+                    pageSize={pageSize}
+                    onPageSizeChange={onPageSizeChange}
                     skip={skip}
                     total={data?.referralLedger.totalItems ?? 0}
                     onChange={changeSkip}
@@ -550,6 +574,8 @@ export function LedgerPanel({
 }
 
 export function WithdrawalsPanel({
+    pageSize,
+    onPageSizeChange,
     data,
     loading,
     error,
@@ -559,6 +585,8 @@ export function WithdrawalsPanel({
     onAction,
     onRetry,
 }: {
+    pageSize: number;
+    onPageSizeChange: (size: number) => void;
     data?: ReferralReportsResult;
     loading: boolean;
     error?: string;
@@ -695,6 +723,9 @@ export function WithdrawalsPanel({
                 </tbody>
             </table>
             <ReportPagination
+                loading={loading}
+                pageSize={pageSize}
+                onPageSizeChange={onPageSizeChange}
                 skip={skip}
                 total={data?.referralWithdrawals.totalItems ?? 0}
                 onChange={changeSkip}

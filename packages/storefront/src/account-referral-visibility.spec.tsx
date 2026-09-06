@@ -6,7 +6,7 @@ import { ShopApi } from './api';
 import { languageCodeFor } from './i18n';
 import { AccountPage } from './pages/account-page';
 import { createStorefrontQueryClient, storefrontQueryKeys } from './query-client';
-import { StorefrontContext } from './StorefrontContext';
+import { AccountPageContext } from './storefront-page-contexts';
 import { ActiveCustomer, MarketConfig, MyReferralOverview, ReferralProgram } from './types';
 
 vi.mock('@tanstack/react-router', () => ({ useNavigate: () => vi.fn() }));
@@ -108,7 +108,7 @@ function renderAccount(referralEnabled: boolean): string {
 
     return renderToStaticMarkup(
         <QueryClientProvider client={client}>
-            <StorefrontContext.Provider
+            <AccountPageContext.Provider
                 value={{
                     api,
                     customer,
@@ -121,14 +121,12 @@ function renderAccount(referralEnabled: boolean): string {
                     favoriteProductCount: 0,
                     announcementCount: 0,
                     couponCount: 0,
-                    addingVariantId: null,
                     onContentTarget: vi.fn(),
-                    onAdd: vi.fn(),
                     onLogout: vi.fn(),
                 }}
             >
                 <AccountPage />
-            </StorefrontContext.Provider>
+            </AccountPageContext.Provider>
         </QueryClientProvider>,
     );
 }

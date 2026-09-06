@@ -2,14 +2,16 @@ import { lazyRouteComponent } from '@tanstack/react-router';
 import { ShoppingBag } from 'lucide-react';
 
 import { PageSkeleton } from '../route-loading';
+import {
+    CategoryPageContext,
+    HomePageContext,
+    ProductDetailPageContext,
+    SearchPageContext,
+} from '../storefront-page-contexts';
 import { EmptyState, Subpage } from '../storefront-ui/page-shell';
 import { CollectionSummary, FulfillmentType, Product, ProductVariant } from '../types';
 
-import {
-    RoutePageContext as PageContext,
-    registerRoutePreload,
-    useRouteRuntime as useRuntime,
-} from './shared';
+import { registerRoutePreload, useRouteRuntime as useRuntime } from './shared';
 
 const HomePage = lazyRouteComponent(() => import('../pages/home-page'), 'HomePage');
 const CategoryPage = lazyRouteComponent(() => import('../pages/category-page'), 'CategoryPage');
@@ -22,7 +24,7 @@ const SearchPage = lazyRouteComponent(() => import('../pages/search-page'), 'Sea
 export function HomeRoutePage() {
     const runtime = useRuntime();
     return (
-        <PageContext
+        <HomePageContext.Provider
             value={{
                 products: runtime.products,
                 collections: runtime.collections,
@@ -48,19 +50,17 @@ export function HomeRoutePage() {
                 storefrontTagline: runtime.storefrontTagline,
                 logoUrl: runtime.logoUrl,
                 logoOnLightUrl: runtime.logoOnLightUrl,
-                addingVariantId: runtime.addingVariantId,
                 couponLoading: runtime.cartLoading,
                 onCategorySelect: (collection: CollectionSummary) => {
                     const childId = collection.children?.[0]?.id ?? collection.id;
                     runtime.updateCategory({ collectionId: collection.id, childId });
                 },
-                onAdd: (variant: ProductVariant) => void runtime.addToCart(variant),
                 onToggleLanguage: runtime.toggleLanguage,
                 availableCurrencyCodes: runtime.availableCurrencyCodes,
                 currencySelectorEnabled: runtime.currencySelectorEnabled,
                 displayCurrencyCode: runtime.displayCurrencyCode,
                 currencyLoading: runtime.cartLoading,
-                onCurrencyChange: runtime.switchCurrency,
+                onCurrencyChange: code => void runtime.switchCurrency(code),
                 onNotifications: () => runtime.navigate({ name: 'notifications' }),
                 onToast: runtime.notify,
                 onClaimCoupon: runtime.claimCoupon,
@@ -71,14 +71,14 @@ export function HomeRoutePage() {
             }}
         >
             <HomePage />
-        </PageContext>
+        </HomePageContext.Provider>
     );
 }
 
 export function CategoryRoutePage() {
     const runtime = useRuntime();
     return (
-        <PageContext
+        <CategoryPageContext.Provider
             value={{
                 api: runtime.api,
                 products: runtime.products,
@@ -96,11 +96,10 @@ export function CategoryRoutePage() {
                 inStockOnly: runtime.inStockOnly,
                 minimumPrice: runtime.minimumPrice,
                 maximumPrice: runtime.maximumPrice,
-                addingVariantId: runtime.addingVariantId,
                 onCollectionChange: (collectionId: string, childId: string) =>
                     runtime.updateCategory({ collectionId, childId }),
                 onChildChange: (childId: string) => runtime.updateCategory({ childId }),
-                onSortChange: (sort: string) => runtime.updateCategory({ sort }),
+                onSortChange: sort => runtime.updateCategory({ sort }),
                 onFilterChange: (
                     fulfillment: 'all' | FulfillmentType,
                     inStockOnly: boolean,
@@ -113,13 +112,12 @@ export function CategoryRoutePage() {
                         minPrice: minPrice || undefined,
                         maxPrice: maxPrice || undefined,
                     }),
-                onAdd: (variant: ProductVariant) => void runtime.addToCart(variant),
                 onNotify: () => runtime.navigate({ name: 'notifications' }),
                 onRetry: () => void runtime.refetchStorefront(),
             }}
         >
             <CategoryPage />
-        </PageContext>
+        </CategoryPageContext.Provider>
     );
 }
 
@@ -165,7 +163,7 @@ export function ProductRoutePage() {
     }
     const product: Product = runtime.selectedProduct;
     return (
-        <PageContext
+        <ProductDetailPageContext.Provider
             value={{
                 api: runtime.api,
                 product,
@@ -190,14 +188,14 @@ export function ProductRoutePage() {
             }}
         >
             <ProductDetailPage />
-        </PageContext>
+        </ProductDetailPageContext.Provider>
     );
 }
 
 export function SearchRoutePage() {
     const runtime = useRuntime();
     return (
-        <PageContext
+        <SearchPageContext.Provider
             value={{
                 api: runtime.api,
                 products: runtime.products,
@@ -206,12 +204,10 @@ export function SearchRoutePage() {
                 language: runtime.language,
                 storefrontCode: runtime.storefrontCode,
                 initialQuery: runtime.route.term ?? '',
-                addingVariantId: runtime.addingVariantId,
-                onAdd: (variant: ProductVariant) => void runtime.addToCart(variant),
             }}
         >
             <SearchPage />
-        </PageContext>
+        </SearchPageContext.Provider>
     );
 }
 

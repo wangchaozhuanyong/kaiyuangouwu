@@ -15,16 +15,16 @@ import {
     publicQueryMeta,
     storefrontQueryKeys,
 } from '../query-client';
+import { SearchPageContext } from '../storefront-page-contexts';
 import { routeNavigateOptions } from '../storefront-router';
 import { readStoredStrings, scopedStorageKey, SEARCH_HISTORY_STORAGE_KEY } from '../storefront-storage';
 import { EmptyState, ListSkeleton } from '../storefront-ui/page-shell';
 import { ProductSection } from '../storefront-ui/product-section';
-import { useStorefront } from '../StorefrontContext';
 import { MarketConfig, Product, ProductSearchSort, StorefrontLanguage } from '../types';
 
 // TODO: Fix internal imports later
 
-interface SearchPageProps {
+export interface SearchPageProps {
     api: ShopApi;
     products: Product[];
     market: MarketConfig;
@@ -40,7 +40,7 @@ export function SearchPage() {
     const router = useRouter();
     const goBack = () => router.history.back();
     const { api, products, market, locale, language, storefrontCode, initialQuery } =
-        useStorefront<SearchPageProps>();
+        SearchPageContext.useValue();
     const queryClient = useQueryClient();
     const isZh = language === 'zh';
     const [query, setQuery] = useState(initialQuery);

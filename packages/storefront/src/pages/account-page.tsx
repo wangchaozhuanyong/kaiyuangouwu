@@ -31,13 +31,12 @@ import { compactUiCopy, languageCodeFor } from '../i18n';
 import { PUBLIC_QUERY_GC_TIME, ROUTE_QUERY_STALE_TIME, storefrontQueryKeys } from '../query-client';
 import { isReferralClientFeatureEnabled } from '../referral-client-feature';
 import { ACCOUNT_RECOMMENDATION_CREST_IMAGE } from '../storefront-images';
+import { AccountPageContext } from '../storefront-page-contexts';
 import { routeNavigateOptions } from '../storefront-router';
 import { orderStateLabel } from '../storefront-ui/order-ui';
 import { AccountShortcut, LegalFooter, SectionHeader, ServiceButton } from '../storefront-ui/page-shell';
 import { formatMoney, OrderImage, ProductVariantImage } from '../storefront-ui/product-display';
 import { ProductSection } from '../storefront-ui/product-section';
-import { StorefrontTrafficPreference } from '../storefront-ui/storefront-traffic-preference';
-import { useStorefront } from '../StorefrontContext';
 import {
     ActiveCustomer,
     MarketConfig,
@@ -48,7 +47,7 @@ import {
 
 // TODO: Fix internal imports later
 
-interface AccountPageProps {
+export interface AccountPageProps {
     api: ShopApi;
     customer: ActiveCustomer | null;
     products: Product[];
@@ -86,7 +85,7 @@ export function AccountPage() {
         couponCount,
         onContentTarget,
         onLogout,
-    } = useStorefront<AccountPageProps>();
+    } = AccountPageContext.useValue();
     const isZh = language === 'zh';
     const compactCopy = compactUiCopy[language];
     const orders = customer?.orders.items ?? [];
@@ -526,7 +525,6 @@ export function AccountPage() {
                 language={language}
                 onProduct={product => navigateTo({ name: 'product', id: product.id })}
             />
-            <StorefrontTrafficPreference language={language} />
             <LegalFooter
                 storefrontName={storefrontName}
                 language={language}

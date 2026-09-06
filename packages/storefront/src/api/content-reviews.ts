@@ -10,10 +10,11 @@ import type {
     StorefrontReviewList,
     SubmitStorefrontReviewInput,
 } from '../types';
+import type { StorefrontContentQueryResult } from './helpers';
 
 import { BaseDomainApi } from './base-domain-api';
+import { isSupportedContentSchemaFallback } from './content-compatibility';
 import { afterSalesFields, storefrontReviewFields } from './fragments';
-import { isStorefrontContentSchemaCompatibilityError, type StorefrontContentQueryResult } from './helpers';
 
 export class ContentReviewsApi extends BaseDomainApi {
     async storefrontConfig(signal?: AbortSignal): Promise<StorefrontConfig> {
@@ -177,7 +178,7 @@ export class ContentReviewsApi extends BaseDomainApi {
                 signal,
             );
         } catch (error) {
-            if (!isStorefrontContentSchemaCompatibilityError(error)) {
+            if (!isSupportedContentSchemaFallback(error, 'content')) {
                 throw error;
             }
             result = await this.request<StorefrontContentQueryResult>(
@@ -263,7 +264,7 @@ export class ContentReviewsApi extends BaseDomainApi {
             );
             return result.activeStorefrontCoupons;
         } catch (error) {
-            if (isStorefrontContentSchemaCompatibilityError(error)) return [];
+            if (isSupportedContentSchemaFallback(error, 'coupons')) return [];
             throw error;
         }
     }

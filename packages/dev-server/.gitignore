@@ -1,4 +1,18 @@
 assets
+# Keep only the versioned referral poster publishing inputs in source control.
+!/assets/
+/assets/*
+!/assets/referral-posters/
+/assets/referral-posters/*
+!/assets/referral-posters/v2/
+/assets/referral-posters/v2/*
+!/assets/referral-posters/v2/manifest.json
+!/assets/referral-posters/v2/01-clear-blue.png
+!/assets/referral-posters/v2/02-warm-paper.png
+!/assets/referral-posters/v2/03-jade-form.png
+!/assets/referral-posters/v2/04-champagne-arc.png
+!/assets/referral-posters/v2/05-lilac-prism.png
+!/assets/referral-posters/v2/06-ai-core.png
 vendure
 test-emails
 vendure.sqlite*

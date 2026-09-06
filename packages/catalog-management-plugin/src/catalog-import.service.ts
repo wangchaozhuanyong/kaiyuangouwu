@@ -1,22 +1,18 @@
 import { Injectable } from '@nestjs/common';
-import { CurrencyCode, GlobalFlag } from '@vendure/common/lib/generated-types';
-import { normalizeString } from '@vendure/common/lib/normalize-string';
+import { CurrencyCode } from '@vendure/common/lib/generated-types';
 import { ID } from '@vendure/common/lib/shared-types';
 import {
     FacetService,
-    FacetValue,
     FacetValueService,
-    Product,
     ProductService,
     ProductVariant,
     ProductVariantService,
     RequestContext,
     SearchService,
-    StockLevel,
     TransactionalConnection,
     UserInputError,
 } from '@vendure/core';
-import { In, IsNull } from 'typeorm';
+import { In } from 'typeorm';
 
 import {
     CatalogFileParserService,
@@ -24,37 +20,22 @@ import {
     catalogProductKey,
     catalogRowFingerprint,
     catalogSourceKey,
-    normalizeIdentity,
 } from './catalog-file-parser.service';
 import { CatalogImportCategoryService } from './catalog-import-category.service';
 import {
     clearsVariantIdentity,
-    dateString,
-    dateValue,
-    effectiveVariantEnabled,
-    facetNames,
-    nullableNumber,
-    numberValue,
-    recordValue,
     safeImportFilename,
     safeImportText,
     safeMessage,
     sanitizeCatalogRow,
     sanitizeFieldMapping,
-    shortCode,
     shouldClear,
-    stringArray,
-    stringOrNumberValue,
-    stringValue,
     validateImportSource,
 } from './catalog-import-helpers';
 import { CatalogImportOptionsService } from './catalog-import-options.service';
 import {
     type PlannedRow,
-    changed,
-    changedOptional,
     conflictPlan,
-    createChanges,
     effectiveStockLocation,
     emptyPlan,
     firstExactRowNumbers,
@@ -62,30 +43,22 @@ import {
     groupRows,
     importScopeError,
     isCatalogImportResolutionState,
-    microunits,
-    money,
-    productDescriptionForCreate,
     productFieldFingerprint,
     reusableCatalogImportStates,
     validationWarning,
-    variantCustomFieldUpdates,
-    variantCustomFields,
-    variantDisplayName,
     variantExecutionKey,
-    variantMatches,
-    warningPlan,
     withRiskConfirmation,
 } from './catalog-import-planning';
+import { CatalogImportPreview, type CatalogIndexProduct } from './catalog-import-preview';
+import { CatalogImportRollback } from './catalog-import-rollback';
+import { CatalogImportWriter } from './catalog-import-writer';
 import { CatalogOperationsService } from './catalog-operations.service';
-import { catalogCreateNewSourceRecordKey, resolveImportExecutionVariantId } from './catalog-row-identity';
-import { CatalogSupplierService, normalizeSupplierName } from './catalog-supplier.service';
+import { catalogCreateNewSourceRecordKey } from './catalog-row-identity';
+import { CatalogSupplierService } from './catalog-supplier.service';
 import { CatalogImportJob } from './entities/catalog-import-job.entity';
 import { CatalogImportRow } from './entities/catalog-import-row.entity';
 import { CatalogSourceBinding } from './entities/catalog-source-binding.entity';
 import { CatalogSupplier } from './entities/catalog-supplier.entity';
-import { InventoryLot } from './entities/inventory-lot.entity';
-import { InventoryPolicy } from './entities/inventory-policy.entity';
-import { VariantCostRecord } from './entities/variant-cost-record.entity';
 import {
     AppendCatalogImportRowsInput,
     BeginCatalogImportInput,
@@ -97,16 +70,14 @@ import {
     UploadedCatalogFile,
 } from './types';
 
-interface CatalogIndexProduct {
-    product: Product;
-    productKeyNames: Set<string>;
-    categories: Set<string>;
-}
-
 export { clearsVariantIdentity, shouldClear };
 
 @Injectable()
 export class CatalogImportService {
+    private readonly preview: CatalogImportPreview;
+    private readonly writer: CatalogImportWriter;
+    private readonly rollbackExecutor: CatalogImportRollback;
+
     private enqueue?: (jobId: ID) => Promise<void>;
 
     constructor(
@@ -121,7 +92,29 @@ export class CatalogImportService {
         private readonly facetValueService: FacetValueService,
         private readonly searchService: SearchService,
         private readonly suppliers: CatalogSupplierService,
-    ) {}
+    ) {
+        this.preview = new CatalogImportPreview(this.connection, this.suppliers);
+        this.writer = new CatalogImportWriter(
+            this.connection,
+            this.productService,
+            this.importOptions,
+            this.productVariantService,
+            this.operations,
+            this.suppliers,
+            this.categories,
+            this.facetService,
+            this.facetValueService,
+            this.preview,
+        );
+        this.rollbackExecutor = new CatalogImportRollback(
+            this.connection,
+            this.operations,
+            this.productVariantService,
+            this.suppliers,
+            this.productService,
+            this.categories,
+        );
+    }
 
     registerEnqueuer(enqueue: (jobId: ID) => Promise<void>): void {
         this.enqueue = enqueue;
@@ -788,56 +781,7 @@ export class CatalogImportService {
     }
 
     private async assertRollbackSafe(ctx: RequestContext, rows: CatalogImportRow[]): Promise<void> {
-        const latestProductRows = new Map<string, CatalogImportRow>();
-        const latestVariantRows = new Map<string, CatalogImportRow>();
-        for (const row of rows) {
-            if (row.targetProductId && !latestProductRows.has(String(row.targetProductId))) {
-                latestProductRows.set(String(row.targetProductId), row);
-            }
-            if (row.targetVariantId && !latestVariantRows.has(String(row.targetVariantId))) {
-                latestVariantRows.set(String(row.targetVariantId), row);
-            }
-        }
-
-        const productIds = [...latestProductRows.keys()] as ID[];
-        const variantIds = [...latestVariantRows.keys()] as ID[];
-        const products = productIds.length
-            ? await this.connection.getRepository(ctx, Product).find({
-                  where: { id: In(productIds), deletedAt: IsNull() },
-              })
-            : [];
-        const variants = variantIds.length
-            ? await this.connection.getRepository(ctx, ProductVariant).find({
-                  where: { id: In(variantIds), deletedAt: IsNull() },
-              })
-            : [];
-        const productById = new Map(products.map(product => [String(product.id), product]));
-        const variantById = new Map(variants.map(variant => [String(variant.id), variant]));
-        const conflicts: number[] = [];
-
-        for (const [productId, row] of latestProductRows) {
-            const product = productById.get(productId);
-            const after = recordValue(row.appliedSnapshot?.afterSnapshot);
-            if (!product || !after || dateString(product.updatedAt) !== stringValue(after.productUpdatedAt)) {
-                conflicts.push(row.rowNumber);
-            }
-        }
-        for (const [variantId, row] of latestVariantRows) {
-            const variant = variantById.get(variantId);
-            const after = recordValue(row.appliedSnapshot?.afterSnapshot);
-            if (!variant || !after || dateString(variant.updatedAt) !== stringValue(after.variantUpdatedAt)) {
-                conflicts.push(row.rowNumber);
-            }
-        }
-
-        const uniqueConflicts = [...new Set(conflicts)].sort((left, right) => left - right);
-        if (uniqueConflicts.length > 0) {
-            const preview = uniqueConflicts.slice(0, 10).join('、');
-            const suffix = uniqueConflicts.length > 10 ? `等 ${uniqueConflicts.length} 行` : '';
-            throw new UserInputError(
-                `导入完成后商品或 SKU 已被修改，或该历史任务缺少安全快照；为避免覆盖后续数据，已停止回滚（第 ${preview}${suffix} 行）`,
-            );
-        }
+        return this.rollbackExecutor.assertRollbackSafe(ctx, rows);
     }
 
     private async planRow(
@@ -848,166 +792,7 @@ export class CatalogImportService {
         binding?: CatalogSourceBinding,
         suppliersByName: Map<string, CatalogSupplier> = new Map(),
     ): Promise<PlannedRow> {
-        const warnings = [validationWarning(row)];
-        const categoryExists =
-            Boolean(row.category) &&
-            catalogIndex.some(item => item.categories.has(normalizeIdentity(row.category)));
-        if (row.category && !categoryExists) warnings.push('分类不存在，确认后将创建新分类');
-        const supplier = suppliersByName.get(normalizeSupplierName(row.supplier));
-        if (row.supplier && !supplier) warnings.push(`供货商“${row.supplier}”不存在，确认后将创建`);
-        if (supplier && !supplier.enabled) warnings.push(`供货商“${supplier.name}”已停用`);
-        const warning = warnings.filter((value): value is string => Boolean(value)).join('；') || null;
-        let targetProduct: Product | undefined;
-        let targetVariant: ProductVariant | undefined;
-        if (row.sku) {
-            const variants = catalogIndex
-                .flatMap(item => item.product.variants)
-                .filter(variant => variant.sku === row.sku);
-            if (variants.length > 1) return conflictPlan('SKU 匹配到多个商品，请先清理重复 SKU');
-            targetVariant = variants[0];
-            targetProduct = targetVariant
-                ? catalogIndex.find(item => String(item.product.id) === String(targetVariant?.productId))
-                      ?.product
-                : undefined;
-        } else if (row.barcode) {
-            const variants = catalogIndex
-                .flatMap(item => item.product.variants)
-                .filter(
-                    variant =>
-                        normalizeIdentity(
-                            stringValue(((variant.customFields ?? {}) as Record<string, unknown>).barcode),
-                        ) === normalizeIdentity(row.barcode),
-                );
-            if (variants.length > 1) return conflictPlan('条码匹配到多个商品，请先清理重复条码');
-            targetVariant = variants[0];
-            targetProduct = targetVariant
-                ? catalogIndex.find(item => String(item.product.id) === String(targetVariant?.productId))
-                      ?.product
-                : undefined;
-        } else if (binding) {
-            targetProduct = catalogIndex.find(
-                item => String(item.product.id) === String(binding.productId),
-            )?.product;
-            targetVariant = targetProduct?.variants.find(
-                variant => String(variant.id) === String(binding.variantId),
-            );
-            if (!targetProduct || !targetVariant) return conflictPlan('历史来源绑定指向的商品已经不存在');
-        } else {
-            const name = normalizeIdentity(row.name);
-            const category = normalizeIdentity(row.category);
-            const products = catalogIndex.filter(
-                item => item.productKeyNames.has(name) && item.categories.has(category),
-            );
-            if (products.length > 1) return conflictPlan('名称和分类匹配到多个商品');
-            targetProduct = products[0]?.product;
-            if (targetProduct) {
-                const variants = targetProduct.variants.filter(variant => variantMatches(variant, row));
-                if (variants.length > 1) return conflictPlan('规格和单位匹配到多个 SKU');
-                targetVariant = variants[0];
-                if (!targetVariant && clearsVariantIdentity(row, Boolean(input.clearBlankFields))) {
-                    if (targetProduct.variants.length > 1) {
-                        return conflictPlan('清空规格或单位时无法唯一确定 SKU，请人工选择');
-                    }
-                    targetVariant = targetProduct.variants[0];
-                }
-            }
-        }
-
-        if (!targetVariant) {
-            const missingCreateFields = [
-                !row.name ? '名称' : null,
-                !row.category ? '分类' : null,
-                row.purchaseCost == null ? '进货价' : null,
-                row.sellingPrice == null ? '销售价' : null,
-            ].filter((value): value is string => Boolean(value));
-            if (missingCreateFields.length > 0) {
-                return {
-                    ...emptyPlan('ERROR'),
-                    targetProductId: targetProduct?.id ?? null,
-                    expectedProductUpdatedAt: targetProduct?.updatedAt ?? null,
-                    message: `新建商品或 SKU 缺少必填字段：${missingCreateFields.join('、')}`,
-                };
-            }
-            const createPlan: PlannedRow = {
-                action: 'CREATE',
-                targetProductId: targetProduct?.id ?? null,
-                targetVariantId: null,
-                expectedProductUpdatedAt: targetProduct?.updatedAt ?? null,
-                expectedVariantUpdatedAt: null,
-                beforeSnapshot: targetProduct
-                    ? {
-                          productId: String(targetProduct.id),
-                          productCreated: false,
-                          variantCreated: true,
-                          productName:
-                              targetProduct.translations.find(
-                                  translation => translation.languageCode === ctx.languageCode,
-                              )?.name ??
-                              targetProduct.translations[0]?.name ??
-                              '',
-                          productSlug:
-                              targetProduct.translations.find(
-                                  translation => translation.languageCode === ctx.languageCode,
-                              )?.slug ??
-                              targetProduct.translations[0]?.slug ??
-                              '',
-                          productEnabled: targetProduct.enabled,
-                          productDescription:
-                              targetProduct.translations.find(
-                                  translation => translation.languageCode === ctx.languageCode,
-                              )?.description ?? '',
-                          productFacetValueIds:
-                              targetProduct.facetValues?.map(value => String(value.id)) ?? [],
-                          productCategories: [
-                              ...new Set(
-                                  targetProduct.variants.flatMap(variant =>
-                                      variant.collections.flatMap(collection =>
-                                          collection.translations.map(translation => translation.name),
-                                      ),
-                                  ),
-                              ),
-                          ],
-                          productImportCategory:
-                              facetNames(targetProduct.facetValues, 'catalog-import-category')[0] ?? null,
-                          productSourceCreatedAt: dateString(
-                              ((targetProduct.customFields ?? {}) as Record<string, unknown>).sourceCreatedAt,
-                          ),
-                      }
-                    : null,
-                plannedChanges: { safeAction: 'CREATE', ...createChanges(row, input.currencyCode) },
-                message: targetProduct ? '将在现有商品下创建新 SKU' : '将创建商品和 SKU',
-            };
-            return warning ? warningPlan(createPlan, warning) : createPlan;
-        }
-        const snapshot = await this.snapshotVariant(ctx, targetVariant, {
-            channelId: ctx.channelId,
-            stockLocationId: input.stockLocationId,
-            currencyCode: input.currencyCode,
-        } as CatalogImportJob);
-        const changes = this.diffRow(row, snapshot, input.currencyCode, Boolean(input.clearBlankFields));
-        if (Object.keys(changes).filter(key => key !== 'safeAction').length === 0) {
-            return {
-                action: 'SKIP_UNCHANGED',
-                targetProductId: targetProduct?.id ?? targetVariant.productId,
-                targetVariantId: targetVariant.id,
-                expectedProductUpdatedAt: targetProduct?.updatedAt ?? null,
-                expectedVariantUpdatedAt: targetVariant.updatedAt,
-                beforeSnapshot: snapshot,
-                plannedChanges: null,
-                message: '现有商品数值完全一致',
-            };
-        }
-        const plan: PlannedRow = {
-            action: 'UPDATE',
-            targetProductId: targetProduct?.id ?? targetVariant.productId,
-            targetVariantId: targetVariant.id,
-            expectedProductUpdatedAt: targetProduct?.updatedAt ?? null,
-            expectedVariantUpdatedAt: targetVariant.updatedAt,
-            beforeSnapshot: snapshot,
-            plannedChanges: { safeAction: 'UPDATE', ...changes },
-            message: '将只更新发生变化的字段',
-        };
-        return warning ? warningPlan(plan, warning) : plan;
+        return this.preview.planRow(ctx, row, input, catalogIndex, binding, suppliersByName);
     }
 
     private async snapshotVariant(
@@ -1015,82 +800,7 @@ export class CatalogImportService {
         variant: ProductVariant,
         job: Pick<CatalogImportJob, 'stockLocationId' | 'currencyCode'>,
     ): Promise<Record<string, unknown>> {
-        const [product, variantDetails, stock, cost, policy, supplierBinding] = await Promise.all([
-            this.connection.getRepository(ctx, Product).findOne({
-                where: { id: variant.productId },
-                relations: ['translations', 'facetValues', 'facetValues.facet'],
-            }),
-            this.connection.getRepository(ctx, ProductVariant).findOne({
-                where: { id: variant.id, deletedAt: IsNull() },
-                relations: ['translations', 'collections', 'collections.translations'],
-            }),
-            this.connection.getRepository(ctx, StockLevel).findOne({
-                where: { productVariantId: variant.id, stockLocationId: job.stockLocationId },
-            }),
-            this.connection.getRepository(ctx, VariantCostRecord).findOne({
-                where: { variantId: variant.id, channelId: ctx.channelId, currencyCode: job.currencyCode },
-                order: { effectiveAt: 'DESC', id: 'DESC' },
-            }),
-            this.connection.getRepository(ctx, InventoryPolicy).findOne({
-                where: { variantId: variant.id, stockLocationId: job.stockLocationId },
-            }),
-            this.suppliers.association(ctx, variant.id),
-        ]);
-        const customFields = (variant.customFields ?? {}) as Record<string, unknown>;
-        const productCustomFields = (product?.customFields ?? {}) as Record<string, unknown>;
-        const productTranslation =
-            product?.translations.find(item => item.languageCode === ctx.languageCode) ??
-            product?.translations[0];
-        const variantTranslation =
-            variantDetails?.translations.find(item => item.languageCode === ctx.languageCode) ??
-            variantDetails?.translations[0];
-        const productCategories = [
-            ...new Set(
-                (variantDetails?.collections ?? []).flatMap(collection =>
-                    collection.translations.map(translation => translation.name),
-                ),
-            ),
-        ].sort((left, right) => left.localeCompare(right, 'zh-Hans'));
-        const price = variant.productVariantPrices?.find(
-            item =>
-                String(item.channelId) === String(ctx.channelId) && item.currencyCode === job.currencyCode,
-        );
-        return {
-            productId: String(variant.productId),
-            variantId: String(variant.id),
-            productUpdatedAt: product?.updatedAt.toISOString() ?? null,
-            variantUpdatedAt: variant.updatedAt.toISOString(),
-            productName: productTranslation?.name ?? '',
-            productSlug: productTranslation?.slug ?? '',
-            productEnabled: product?.enabled ?? true,
-            productDescription: productTranslation?.description ?? '',
-            productCategories,
-            productImportCategory: facetNames(product?.facetValues, 'catalog-import-category')[0] ?? null,
-            productFacetValueIds: product?.facetValues?.map(value => String(value.id)) ?? [],
-            productBrand: facetNames(product?.facetValues, 'catalog-brand')[0] ?? null,
-            productTags: facetNames(product?.facetValues, 'catalog-tag'),
-            productSourceCreatedAt: dateString(productCustomFields.sourceCreatedAt),
-            sku: variant.sku,
-            variantName: variantTranslation?.name ?? '',
-            variantEnabled: variant.enabled,
-            barcode: stringValue(customFields.barcode),
-            specification: stringValue(customFields.specification),
-            saleUnit: stringValue(customFields.saleUnit),
-            purchaseUnit: stringValue(customFields.purchaseUnit),
-            packageQuantity: numberValue(customFields.packageQuantity) ?? 1,
-            shelfLifeDays: numberValue(customFields.shelfLifeDays),
-            supplierId: supplierBinding ? String(supplierBinding.supplierId) : null,
-            supplierName: supplierBinding?.supplier.name ?? null,
-            supplierEnabled: supplierBinding?.supplier.enabled ?? null,
-            sellingPrice: price?.price ?? null,
-            currencyCode: job.currencyCode,
-            purchaseCostMicrounits: cost ? Number(cost.costMicrounits) : null,
-            stockOnHand: stock?.stockOnHand ?? 0,
-            minimumStock: policy?.minimumStock ?? null,
-            maximumStock: policy?.maximumStock ?? null,
-            productCreated: false,
-            variantCreated: false,
-        };
+        return this.preview.snapshotVariant(ctx, variant, job);
     }
 
     private diffRow(
@@ -1099,112 +809,7 @@ export class CatalogImportService {
         currencyCode: CurrencyCode,
         clearBlankFields: boolean,
     ): Record<string, unknown> {
-        const changes: Record<string, unknown> = {};
-        changed(changes, 'productName', row.name, snapshot.productName);
-        changed(
-            changes,
-            'category',
-            row.category,
-            snapshot.productImportCategory ?? stringArray(snapshot.productCategories)[0] ?? null,
-        );
-        changed(changes, 'productEnabled', row.enabled, snapshot.productEnabled);
-        changed(changes, 'variantEnabled', effectiveVariantEnabled(row), snapshot.variantEnabled);
-        changedOptional(
-            changes,
-            'productDescription',
-            row.description,
-            snapshot.productDescription,
-            shouldClear(row, 'description', clearBlankFields),
-            '',
-        );
-        if (row.sku) changed(changes, 'sku', row.sku, snapshot.sku);
-        changedOptional(
-            changes,
-            'barcode',
-            row.barcode,
-            snapshot.barcode,
-            shouldClear(row, 'barcode', clearBlankFields),
-        );
-        changedOptional(
-            changes,
-            'specification',
-            row.specification,
-            snapshot.specification,
-            shouldClear(row, 'specification', clearBlankFields),
-        );
-        if (row.primaryUnit || shouldClear(row, 'primaryUnit', clearBlankFields)) {
-            changedOptional(changes, 'saleUnit', row.primaryUnit, snapshot.saleUnit, true);
-        }
-        if (row.purchaseUnit || shouldClear(row, 'purchaseUnit', clearBlankFields)) {
-            changedOptional(changes, 'purchaseUnit', row.purchaseUnit, snapshot.purchaseUnit, true);
-        }
-        changed(changes, 'packageQuantity', row.packageQuantity, snapshot.packageQuantity);
-        changedOptional(
-            changes,
-            'shelfLifeDays',
-            row.shelfLifeDays,
-            snapshot.shelfLifeDays,
-            shouldClear(row, 'shelfLifeDays', clearBlankFields),
-        );
-        if (row.sellingPrice != null) {
-            changed(changes, 'sellingPrice', money(row.sellingPrice), snapshot.sellingPrice);
-        }
-        if (row.purchaseCost != null) {
-            changed(
-                changes,
-                'purchaseCostMicrounits',
-                microunits(row.purchaseCost),
-                snapshot.purchaseCostMicrounits,
-            );
-        }
-        changed(changes, 'stockOnHand', row.stockOnHand, snapshot.stockOnHand);
-        changedOptional(
-            changes,
-            'minimumStock',
-            row.minimumStock,
-            snapshot.minimumStock,
-            shouldClear(row, 'minimumStock', clearBlankFields),
-        );
-        changedOptional(
-            changes,
-            'maximumStock',
-            row.maximumStock,
-            snapshot.maximumStock,
-            shouldClear(row, 'maximumStock', clearBlankFields),
-        );
-        changedOptional(
-            changes,
-            'brand',
-            row.brand || null,
-            snapshot.productBrand,
-            shouldClear(row, 'brand', clearBlankFields),
-        );
-        changedOptional(
-            changes,
-            'tags',
-            row.tags.length > 0 ? row.tags : null,
-            snapshot.productTags,
-            shouldClear(row, 'tags', clearBlankFields),
-            [],
-        );
-        changedOptional(
-            changes,
-            'sourceCreatedAt',
-            row.sourceCreatedAt,
-            snapshot.productSourceCreatedAt,
-            shouldClear(row, 'sourceCreatedAt', clearBlankFields),
-        );
-        changedOptional(
-            changes,
-            'supplier',
-            row.supplier || null,
-            snapshot.supplierName,
-            shouldClear(row, 'supplier', clearBlankFields),
-        );
-        if (row.manufacturedAt || row.lotCode) changes.inventoryLot = { from: null, to: true };
-        changes.currencyCode = currencyCode;
-        if (Object.keys(changes).length === 1) return {};
-        return changes;
+        return this.preview.diffRow(row, snapshot, currencyCode, clearBlankFields);
     }
 
     private async applyRow(
@@ -1216,501 +821,15 @@ export class CatalogImportService {
         stockLocations: Array<{ id: string; name: string }>,
         multiVariantProductKeys: Set<string>,
     ): Promise<void> {
-        const stockLocation = effectiveStockLocation(
-            row.normalizedData.stockLocationCode,
-            job.stockLocationId,
+        return this.writer.applyRow(
+            ctx,
+            job,
+            row,
+            productByKey,
+            variantByKey,
             stockLocations,
+            multiVariantProductKeys,
         );
-        if (!stockLocation) throw new UserInputError('导入行的仓库已不属于当前门店');
-        const stockLocationId = stockLocation.id as ID;
-        let productId = row.targetProductId ?? productByKey.get(row.productKey) ?? null;
-        let product: Product | undefined;
-        let variant: ProductVariant | undefined;
-        const productCreated = !productId;
-        const productAlreadyHandled =
-            productId != null && String(productByKey.get(row.productKey)) === String(productId);
-        if (productId) {
-            product =
-                (await this.connection.getRepository(ctx, Product).findOne({
-                    where: { id: productId, deletedAt: IsNull() },
-                    relations: ['translations', 'facetValues', 'facetValues.facet'],
-                })) ?? undefined;
-            if (!product) throw new UserInputError('预览中的商品已不存在');
-            if (
-                row.expectedProductUpdatedAt &&
-                !productAlreadyHandled &&
-                row.resolution !== 'UPDATE_EXISTING' &&
-                product.updatedAt.getTime() !== row.expectedProductUpdatedAt.getTime()
-            ) {
-                throw new UserInputError('商品在预览后被修改，请重新创建预览');
-            }
-        } else {
-            const newProductFacetValueIds = await this.resolveFacetValues(ctx, row.normalizedData);
-            const created = await this.productService.create(ctx, {
-                enabled: row.normalizedData.enabled ?? true,
-                facetValueIds: newProductFacetValueIds,
-                customFields: {
-                    sourceCreatedAt: row.normalizedData.sourceCreatedAt
-                        ? new Date(row.normalizedData.sourceCreatedAt)
-                        : null,
-                },
-                translations: [
-                    {
-                        languageCode: ctx.languageCode,
-                        name: row.normalizedData.name,
-                        slug: await this.uniqueSlug(ctx, row.normalizedData.name),
-                        description: productDescriptionForCreate(row.normalizedData),
-                    },
-                ],
-            });
-            productId = created.id;
-            product =
-                (await this.connection.getRepository(ctx, Product).findOne({
-                    where: { id: created.id },
-                    relations: ['translations', 'facetValues', 'facetValues.facet'],
-                })) ?? undefined;
-            productByKey.set(row.productKey, productId);
-        }
-        if (!product || !productId) throw new UserInputError('无法创建或加载商品');
-
-        const executionVariantKey = variantExecutionKey(row.normalizedData);
-        const executionVariantId = resolveImportExecutionVariantId(
-            row.resolution,
-            row.targetVariantId,
-            variantByKey.get(executionVariantKey),
-            row.plannedChanges?.forceCreateNew === true,
-        );
-        const variantAlreadyHandled =
-            executionVariantId != null &&
-            String(variantByKey.get(executionVariantKey)) === String(executionVariantId);
-        if (executionVariantId) {
-            variant =
-                (await this.connection.getRepository(ctx, ProductVariant).findOne({
-                    where: { id: executionVariantId, deletedAt: IsNull() },
-                    relations: ['productVariantPrices', 'translations'],
-                })) ?? undefined;
-            if (!variant || String(variant.productId) !== String(product.id)) {
-                throw new UserInputError('预览中的 SKU 已不存在');
-            }
-            if (
-                row.expectedVariantUpdatedAt &&
-                !variantAlreadyHandled &&
-                row.resolution !== 'UPDATE_EXISTING' &&
-                variant.updatedAt.getTime() !== row.expectedVariantUpdatedAt.getTime()
-            ) {
-                throw new UserInputError('SKU 在预览后被修改，请重新创建预览');
-            }
-        }
-        const variantCreated = !variant;
-
-        const existingBinding = await this.connection.getRepository(ctx, CatalogSourceBinding).findOne({
-            where: { channelId: ctx.channelId, sourceKey: row.sourceKey },
-        });
-        const before: Record<string, unknown> = {
-            ...(row.beforeSnapshot ?? {
-                productId: String(product.id),
-                productCreated,
-                variantCreated,
-                productName:
-                    product.translations.find(translation => translation.languageCode === ctx.languageCode)
-                        ?.name ??
-                    product.translations[0]?.name ??
-                    '',
-                productSlug:
-                    product.translations.find(translation => translation.languageCode === ctx.languageCode)
-                        ?.slug ??
-                    product.translations[0]?.slug ??
-                    '',
-                productEnabled: product.enabled,
-                productDescription:
-                    product.translations.find(translation => translation.languageCode === ctx.languageCode)
-                        ?.description ?? '',
-                productFacetValueIds: product.facetValues?.map(value => String(value.id)) ?? [],
-                productImportCategory: facetNames(product.facetValues, 'catalog-import-category')[0] ?? null,
-                variantName:
-                    variant?.translations.find(translation => translation.languageCode === ctx.languageCode)
-                        ?.name ??
-                    variant?.translations[0]?.name ??
-                    '',
-                productSourceCreatedAt: dateString(
-                    ((product.customFields ?? {}) as Record<string, unknown>).sourceCreatedAt,
-                ),
-            }),
-            sourceBinding: existingBinding
-                ? {
-                      productId: String(existingBinding.productId),
-                      variantId: String(existingBinding.variantId),
-                      lastFingerprint: existingBinding.lastFingerprint,
-                      lastFileHash: existingBinding.lastFileHash,
-                  }
-                : null,
-        };
-        const shouldApplyProductField = (field: string) =>
-            row.action === 'CREATE' || row.plannedChanges?.[field] != null;
-        const replaceBrand =
-            shouldApplyProductField('brand') &&
-            (Boolean(row.normalizedData.brand) ||
-                shouldClear(row.normalizedData, 'brand', job.clearBlankFields));
-        const replaceTags =
-            shouldApplyProductField('tags') &&
-            (row.normalizedData.tags.length > 0 ||
-                shouldClear(row.normalizedData, 'tags', job.clearBlankFields));
-        const replaceCategory = shouldApplyProductField('category') && Boolean(row.normalizedData.category);
-        const facetValueIds =
-            replaceBrand || replaceTags || replaceCategory
-                ? await this.resolveFacetValues(ctx, {
-                      ...row.normalizedData,
-                      brand: replaceBrand ? row.normalizedData.brand : '',
-                      tags: replaceTags ? row.normalizedData.tags : [],
-                      category: replaceCategory ? row.normalizedData.category : '',
-                  })
-                : [];
-        const retainedFacetValueIds = (product.facetValues ?? [])
-            .filter(value => {
-                const code = value.facet?.code;
-                return !(
-                    (replaceBrand && code === 'catalog-brand') ||
-                    (replaceTags && code === 'catalog-tag') ||
-                    (replaceCategory && code === 'catalog-import-category')
-                );
-            })
-            .map(value => value.id);
-        const nextFacetValueIds = [...new Set([...retainedFacetValueIds, ...facetValueIds])];
-        const replaceDescription =
-            shouldApplyProductField('productDescription') &&
-            (Boolean(row.normalizedData.description) ||
-                shouldClear(row.normalizedData, 'description', job.clearBlankFields));
-        const productTranslation =
-            product.translations.find(item => item.languageCode === ctx.languageCode) ??
-            product.translations[0];
-        const replaceName =
-            shouldApplyProductField('productName') &&
-            Boolean(row.normalizedData.name) &&
-            row.normalizedData.name !== productTranslation?.name;
-        const replaceSourceCreatedAt =
-            shouldApplyProductField('sourceCreatedAt') &&
-            (Boolean(row.normalizedData.sourceCreatedAt) ||
-                shouldClear(row.normalizedData, 'sourceCreatedAt', job.clearBlankFields));
-        const replaceProductEnabled =
-            shouldApplyProductField('productEnabled') && row.normalizedData.enabled != null;
-        if (
-            !productCreated &&
-            (replaceDescription ||
-                replaceName ||
-                replaceSourceCreatedAt ||
-                replaceProductEnabled ||
-                replaceBrand ||
-                replaceTags ||
-                replaceCategory)
-        ) {
-            await this.productService.update(ctx, {
-                id: product.id,
-                expectedUpdatedAt: product.updatedAt,
-                ...(replaceProductEnabled ? { enabled: row.normalizedData.enabled ?? undefined } : {}),
-                facetValueIds: nextFacetValueIds,
-                ...(replaceSourceCreatedAt
-                    ? {
-                          customFields: {
-                              ...((product.customFields ?? {}) as Record<string, unknown>),
-                              sourceCreatedAt: row.normalizedData.sourceCreatedAt
-                                  ? new Date(row.normalizedData.sourceCreatedAt)
-                                  : null,
-                          },
-                      }
-                    : {}),
-                ...(replaceDescription || replaceName
-                    ? {
-                          translations: [
-                              {
-                                  id: productTranslation?.id,
-                                  languageCode: productTranslation?.languageCode ?? ctx.languageCode,
-                                  name: replaceName
-                                      ? row.normalizedData.name
-                                      : (productTranslation?.name ?? row.normalizedData.name),
-                                  slug:
-                                      productTranslation?.slug ??
-                                      (await this.uniqueSlug(ctx, row.normalizedData.name)),
-                                  description: replaceDescription
-                                      ? row.normalizedData.description
-                                      : (productTranslation?.description ?? ''),
-                              },
-                          ],
-                      }
-                    : {}),
-            });
-        }
-
-        if (!variant) {
-            const sku = await this.uniqueSku(ctx, row.normalizedData.sku, row.sourceKey);
-            const optionIds = await this.importOptions.ensureImportVariantOptions(
-                ctx,
-                product,
-                row.sourceKey,
-                sku,
-                multiVariantProductKeys.has(row.productKey),
-            );
-            const created = await this.productVariantService.create(ctx, [
-                {
-                    productId: product.id,
-                    enabled: effectiveVariantEnabled(row.normalizedData) ?? true,
-                    sku,
-                    optionIds,
-                    price: money(row.normalizedData.sellingPrice),
-                    prices: [
-                        {
-                            currencyCode: job.currencyCode,
-                            price: money(row.normalizedData.sellingPrice),
-                        },
-                    ],
-                    translations: [
-                        {
-                            languageCode: ctx.languageCode,
-                            name: variantDisplayName(row.normalizedData),
-                        },
-                    ],
-                    trackInventory: GlobalFlag.TRUE,
-                    stockLevels:
-                        row.normalizedData.stockOnHand == null
-                            ? undefined
-                            : [
-                                  {
-                                      stockLocationId,
-                                      stockOnHand: Math.max(0, row.normalizedData.stockOnHand),
-                                  },
-                              ],
-                    customFields: variantCustomFields(row.normalizedData),
-                },
-            ]);
-            variant = created[0];
-            if (row.normalizedData.stockOnHand != null && row.normalizedData.stockOnHand < 0) {
-                await this.operations.updateVariant(
-                    ctx,
-                    {
-                        productVariantId: variant.id,
-                        stockLocationId,
-                        stockOnHand: row.normalizedData.stockOnHand,
-                        currencyCode: job.currencyCode,
-                    },
-                    row.resolution === 'APPLY',
-                );
-            }
-        } else {
-            const customFields = {
-                ...((variant.customFields ?? {}) as Record<string, unknown>),
-                ...variantCustomFieldUpdates(row.normalizedData, job.clearBlankFields),
-            };
-            const variantEnabled = effectiveVariantEnabled(row.normalizedData);
-            const variantTranslation =
-                variant.translations?.find(item => item.languageCode === ctx.languageCode) ??
-                variant.translations?.[0];
-            const clearSpecification = shouldClear(row.normalizedData, 'specification', job.clearBlankFields);
-            const clearUnit = shouldClear(row.normalizedData, 'primaryUnit', job.clearBlankFields);
-            const shouldUpdateVariantName = Boolean(
-                row.normalizedData.name ||
-                row.normalizedData.specification ||
-                row.normalizedData.primaryUnit ||
-                clearSpecification ||
-                clearUnit,
-            );
-            const currentCustomFields = (variant.customFields ?? {}) as Record<string, unknown>;
-            const nextVariantName = variantDisplayName({
-                ...row.normalizedData,
-                name:
-                    row.normalizedData.name ||
-                    productTranslation?.name ||
-                    variantTranslation?.name ||
-                    variant.sku,
-                specification:
-                    row.normalizedData.specification ||
-                    (clearSpecification ? '' : stringValue(currentCustomFields.specification)),
-                primaryUnit:
-                    row.normalizedData.primaryUnit ||
-                    (clearUnit ? '' : stringValue(currentCustomFields.saleUnit)),
-            });
-            await this.productVariantService.update(ctx, [
-                {
-                    id: variant.id,
-                    ...(variantEnabled != null ? { enabled: variantEnabled } : {}),
-                    ...(row.normalizedData.sku ? { sku: row.normalizedData.sku } : {}),
-                    ...(shouldUpdateVariantName && variantTranslation?.name !== nextVariantName
-                        ? {
-                              translations: [
-                                  {
-                                      id: variantTranslation?.id,
-                                      languageCode: variantTranslation?.languageCode ?? ctx.languageCode,
-                                      name: nextVariantName,
-                                  },
-                              ],
-                          }
-                        : {}),
-                    ...(row.normalizedData.sellingPrice != null
-                        ? {
-                              prices: [
-                                  {
-                                      currencyCode: job.currencyCode,
-                                      price: money(row.normalizedData.sellingPrice),
-                                  },
-                              ],
-                          }
-                        : {}),
-                    customFields,
-                },
-            ]);
-            if (row.normalizedData.stockOnHand != null) {
-                await this.operations.updateVariant(
-                    ctx,
-                    {
-                        productVariantId: variant.id,
-                        stockLocationId,
-                        stockOnHand: row.normalizedData.stockOnHand,
-                        currencyCode: job.currencyCode,
-                    },
-                    row.resolution === 'APPLY',
-                );
-            }
-        }
-
-        if (!variant) throw new UserInputError('无法创建或加载 SKU');
-        let supplierCreated = false;
-        let appliedSupplierId: ID | null = null;
-        const updateSupplier =
-            Boolean(row.normalizedData.supplier) ||
-            shouldClear(row.normalizedData, 'supplier', job.clearBlankFields);
-        if (updateSupplier) {
-            const existingSupplier = row.normalizedData.supplier
-                ? await this.suppliers.findByName(ctx, row.normalizedData.supplier)
-                : null;
-            const supplier = row.normalizedData.supplier
-                ? (existingSupplier ?? (await this.suppliers.ensureByName(ctx, row.normalizedData.supplier)))
-                : null;
-            supplierCreated = Boolean(supplier && !existingSupplier);
-            appliedSupplierId = supplier?.id ?? null;
-            await this.suppliers.setVariantSupplier(ctx, variant.id, appliedSupplierId);
-        }
-        if (row.normalizedData.purchaseCost != null) {
-            await this.operations.recordCost(
-                ctx,
-                variant.id,
-                job.currencyCode,
-                microunits(row.normalizedData.purchaseCost),
-                'IMPORT',
-                String(row.id),
-            );
-        }
-        const updateMinimumStock =
-            row.normalizedData.minimumStock != null ||
-            shouldClear(row.normalizedData, 'minimumStock', job.clearBlankFields);
-        const updateMaximumStock =
-            row.normalizedData.maximumStock != null ||
-            shouldClear(row.normalizedData, 'maximumStock', job.clearBlankFields);
-        if (updateMinimumStock || updateMaximumStock) {
-            await this.operations.savePolicy(
-                ctx,
-                variant.id,
-                stockLocationId,
-                updateMinimumStock ? row.normalizedData.minimumStock : nullableNumber(before.minimumStock),
-                updateMaximumStock ? row.normalizedData.maximumStock : nullableNumber(before.maximumStock),
-            );
-        }
-        let lotId: ID | null = null;
-        if (row.normalizedData.manufacturedAt || row.normalizedData.lotCode) {
-            const manufacturedAt = row.normalizedData.manufacturedAt
-                ? new Date(row.normalizedData.manufacturedAt)
-                : null;
-            const expiresAt =
-                manufacturedAt && row.normalizedData.shelfLifeDays != null
-                    ? new Date(manufacturedAt.getTime() + row.normalizedData.shelfLifeDays * 86_400_000)
-                    : null;
-            const lotCode = row.normalizedData.lotCode || `IMPORT-${String(job.id)}-${row.rowNumber}`;
-            const existingLot = await this.connection.getRepository(ctx, InventoryLot).findOne({
-                where: {
-                    variantId: variant.id,
-                    stockLocationId,
-                    lotCode,
-                },
-            });
-            before.inventoryLot = existingLot
-                ? {
-                      id: String(existingLot.id),
-                      lotCode: existingLot.lotCode,
-                      manufacturedAt: dateString(existingLot.manufacturedAt),
-                      expiresAt: dateString(existingLot.expiresAt),
-                      quantityOnHand: existingLot.quantityOnHand,
-                      purchaseCostMicrounits: existingLot.purchaseCostMicrounits,
-                      currencyCode: existingLot.currencyCode,
-                      state: existingLot.state,
-                  }
-                : null;
-            const lot = await this.operations.saveLot(
-                ctx,
-                {
-                    productVariantId: variant.id,
-                    stockLocationId,
-                    lotCode,
-                    manufacturedAt,
-                    expiresAt,
-                    quantityOnHand: Math.max(
-                        row.normalizedData.lotQuantity ?? row.normalizedData.stockOnHand ?? 0,
-                        0,
-                    ),
-                    purchaseCostMicrounits:
-                        row.normalizedData.purchaseCost == null
-                            ? null
-                            : microunits(row.normalizedData.purchaseCost),
-                    currencyCode: job.currencyCode,
-                },
-                row.normalizedData.lotQuantity != null && row.normalizedData.stockOnHand == null,
-            );
-            lotId = lot.id;
-        }
-        if (replaceCategory) {
-            await this.categories.moveImportedCategory(
-                ctx,
-                product.id,
-                stringValue(before.productImportCategory),
-                row.normalizedData.category,
-            );
-        }
-        await this.connection.getRepository(ctx, CatalogSourceBinding).upsert(
-            {
-                channelId: ctx.channelId,
-                sourceKey: row.sourceKey,
-                productId: product.id,
-                variantId: variant.id,
-                lastFingerprint: row.rowFingerprint,
-                lastFileHash: job.fileHash,
-            },
-            ['channelId', 'sourceKey'],
-        );
-        row.targetProductId = product.id;
-        row.targetVariantId = variant.id;
-        row.beforeSnapshot = before;
-        const refreshedVariant = await this.connection.getRepository(ctx, ProductVariant).findOne({
-            where: { id: variant.id, deletedAt: IsNull() },
-            relations: ['productVariantPrices'],
-        });
-        if (!refreshedVariant) throw new UserInputError('导入后无法读取 SKU 快照');
-        const afterSnapshot = await this.snapshotVariant(ctx, refreshedVariant, {
-            stockLocationId,
-            currencyCode: job.currencyCode,
-        });
-        row.appliedSnapshot = {
-            productId: String(product.id),
-            variantId: String(variant.id),
-            productCreated,
-            variantCreated,
-            stockLocationId: String(stockLocationId),
-            lotId: lotId ? String(lotId) : null,
-            supplierId: appliedSupplierId ? String(appliedSupplierId) : null,
-            supplierCreated,
-            importCategory: row.normalizedData.category || null,
-            afterSnapshot,
-        };
-        row.appliedAt = new Date();
-        row.message = row.action === 'CREATE' ? '新增成功' : '更新成功';
-        productByKey.set(row.productKey, product.id);
-        variantByKey.set(executionVariantKey, variant.id);
-        await this.connection.getRepository(ctx, CatalogImportRow).save(row);
     }
 
     private async rollbackRow(
@@ -1718,308 +837,11 @@ export class CatalogImportService {
         job: CatalogImportJob,
         row: CatalogImportRow,
     ): Promise<void> {
-        const before = row.beforeSnapshot ?? {};
-        const applied = row.appliedSnapshot ?? {};
-        const appliedStockLocationId = stringValue(applied.stockLocationId) || job.stockLocationId;
-        const variantId = row.targetVariantId;
-        const productId = row.targetProductId;
-        if (!variantId || !productId) return;
-        const variant = await this.connection.getRepository(ctx, ProductVariant).findOne({
-            where: { id: variantId, deletedAt: IsNull() },
-            relations: ['translations'],
-        });
-        const product = await this.connection.getRepository(ctx, Product).findOne({
-            where: { id: productId, deletedAt: IsNull() },
-            relations: ['translations', 'facetValues'],
-        });
-        if (variant) {
-            if (Boolean(applied.variantCreated) || Boolean(before.variantCreated)) {
-                await this.operations.updateVariant(
-                    ctx,
-                    {
-                        productVariantId: variant.id,
-                        stockLocationId: appliedStockLocationId,
-                        stockOnHand: Number(before.stockOnHand ?? 0),
-                        currencyCode: job.currencyCode,
-                    },
-                    true,
-                );
-                await this.productVariantService.update(ctx, [{ id: variant.id, enabled: false }]);
-            } else {
-                const variantTranslation =
-                    variant.translations?.find(item => item.languageCode === ctx.languageCode) ??
-                    variant.translations?.[0];
-                await this.productVariantService.update(ctx, [
-                    {
-                        id: variant.id,
-                        enabled: Boolean(before.variantEnabled),
-                        sku: stringValue(before.sku) || variant.sku,
-                        prices:
-                            before.sellingPrice == null
-                                ? undefined
-                                : [
-                                      {
-                                          currencyCode: job.currencyCode,
-                                          price: Number(before.sellingPrice),
-                                      },
-                                  ],
-                        customFields: {
-                            ...((variant.customFields ?? {}) as Record<string, unknown>),
-                            barcode: before.barcode ?? null,
-                            specification: before.specification ?? null,
-                            saleUnit: before.saleUnit ?? null,
-                            purchaseUnit: before.purchaseUnit ?? null,
-                            packageQuantity: before.packageQuantity ?? 1,
-                            shelfLifeDays: before.shelfLifeDays ?? null,
-                        },
-                        ...(variantTranslation && typeof before.variantName === 'string'
-                            ? {
-                                  translations: [
-                                      {
-                                          id: variantTranslation.id,
-                                          languageCode: variantTranslation.languageCode,
-                                          name: before.variantName,
-                                      },
-                                  ],
-                              }
-                            : {}),
-                    },
-                ]);
-                await this.operations.updateVariant(
-                    ctx,
-                    {
-                        productVariantId: variant.id,
-                        stockLocationId: appliedStockLocationId,
-                        stockOnHand: Number(before.stockOnHand ?? 0),
-                        minimumStock: nullableNumber(before.minimumStock),
-                        maximumStock: nullableNumber(before.maximumStock),
-                        currencyCode: job.currencyCode,
-                    },
-                    true,
-                );
-                await this.connection.getRepository(ctx, VariantCostRecord).delete({
-                    variantId: variant.id,
-                    channelId: ctx.channelId,
-                    currencyCode: job.currencyCode,
-                    source: 'IMPORT',
-                    sourceReference: String(row.id),
-                });
-                if (before.purchaseCostMicrounits != null) {
-                    await this.operations.recordCost(
-                        ctx,
-                        variant.id,
-                        job.currencyCode,
-                        Number(before.purchaseCostMicrounits),
-                        'ROLLBACK',
-                        String(job.id),
-                    );
-                }
-            }
-            const priorSupplierId = stringValue(before.supplierId);
-            await this.suppliers.setVariantSupplier(ctx, variant.id, priorSupplierId || null);
-        }
-        if (product) {
-            if (Boolean(before.productCreated)) {
-                await this.productService.update(ctx, {
-                    id: product.id,
-                    expectedUpdatedAt: product.updatedAt,
-                    enabled: false,
-                });
-            } else {
-                const translation =
-                    product.translations.find(item => item.languageCode === ctx.languageCode) ??
-                    product.translations[0];
-                await this.productService.update(ctx, {
-                    id: product.id,
-                    expectedUpdatedAt: product.updatedAt,
-                    enabled:
-                        typeof before.productEnabled === 'boolean' ? before.productEnabled : product.enabled,
-                    facetValueIds: stringArray(before.productFacetValueIds).map(value => value as ID),
-                    customFields: {
-                        ...((product.customFields ?? {}) as Record<string, unknown>),
-                        sourceCreatedAt: dateValue(before.productSourceCreatedAt),
-                    },
-                    ...(translation
-                        ? {
-                              translations: [
-                                  {
-                                      id: translation.id,
-                                      languageCode: translation.languageCode,
-                                      name:
-                                          typeof before.productName === 'string'
-                                              ? before.productName
-                                              : translation.name,
-                                      slug:
-                                          typeof before.productSlug === 'string' && before.productSlug
-                                              ? before.productSlug
-                                              : translation.slug,
-                                      description:
-                                          typeof before.productDescription === 'string'
-                                              ? before.productDescription
-                                              : translation.description,
-                                  },
-                              ],
-                          }
-                        : {}),
-                });
-            }
-            await this.categories.moveImportedCategory(
-                ctx,
-                product.id,
-                stringValue(applied.importCategory),
-                stringValue(before.productImportCategory),
-            );
-        }
-        if (applied.lotId) {
-            const previousLot = recordValue(before.inventoryLot);
-            if (previousLot) {
-                await this.connection.getRepository(ctx, InventoryLot).update(applied.lotId, {
-                    lotCode: stringValue(previousLot.lotCode),
-                    manufacturedAt: dateValue(previousLot.manufacturedAt),
-                    expiresAt: dateValue(previousLot.expiresAt),
-                    quantityOnHand: numberValue(previousLot.quantityOnHand) ?? 0,
-                    purchaseCostMicrounits:
-                        previousLot.purchaseCostMicrounits == null
-                            ? null
-                            : stringOrNumberValue(previousLot.purchaseCostMicrounits) || null,
-                    currencyCode: (stringValue(previousLot.currencyCode) || job.currencyCode) as CurrencyCode,
-                    state: stringValue(previousLot.state) || 'ACTIVE',
-                });
-            } else {
-                await this.connection.getRepository(ctx, InventoryLot).update(applied.lotId, {
-                    quantityOnHand: 0,
-                    state: 'VOID',
-                });
-            }
-        }
-        const appliedSupplierId = stringValue(applied.supplierId);
-        if (Boolean(applied.supplierCreated) && appliedSupplierId) {
-            await this.suppliers.disableIfUnused(ctx, appliedSupplierId);
-        }
-        const priorBinding = recordValue(before.sourceBinding);
-        if (priorBinding) {
-            await this.connection.getRepository(ctx, CatalogSourceBinding).upsert(
-                {
-                    channelId: ctx.channelId,
-                    sourceKey: row.sourceKey,
-                    productId: String(priorBinding.productId) as ID,
-                    variantId: String(priorBinding.variantId) as ID,
-                    lastFingerprint: String(priorBinding.lastFingerprint),
-                    lastFileHash: String(priorBinding.lastFileHash),
-                },
-                ['channelId', 'sourceKey'],
-            );
-        } else {
-            await this.connection.getRepository(ctx, CatalogSourceBinding).delete({
-                channelId: ctx.channelId,
-                sourceKey: row.sourceKey,
-                lastFileHash: job.fileHash,
-            });
-        }
-        row.message = '已安全回滚；导入创建且已有引用的商品仅被禁用';
-        await this.connection.getRepository(ctx, CatalogImportRow).save(row);
+        return this.rollbackExecutor.rollbackRow(ctx, job, row);
     }
 
     private async buildCatalogIndex(ctx: RequestContext): Promise<CatalogIndexProduct[]> {
-        const products = await this.connection
-            .getRepository(ctx, Product)
-            .createQueryBuilder('product')
-            .leftJoinAndSelect('product.translations', 'productTranslation')
-            .leftJoinAndSelect('product.facetValues', 'productFacetValue')
-            .leftJoinAndSelect('productFacetValue.facet', 'productFacet')
-            .leftJoinAndSelect('product.variants', 'variant', 'variant.deletedAt IS NULL')
-            .leftJoinAndSelect('variant.translations', 'variantTranslation')
-            .leftJoinAndSelect('variant.productVariantPrices', 'variantPrice')
-            .leftJoinAndSelect('variant.collections', 'collection')
-            .leftJoinAndSelect('collection.translations', 'collectionTranslation')
-            .innerJoin('product.channels', 'channel', 'channel.id = :channelId', { channelId: ctx.channelId })
-            .where('product.deletedAt IS NULL')
-            .getMany();
-        return products.map(product => ({
-            product,
-            productKeyNames: new Set(
-                product.translations.map(translation => normalizeIdentity(translation.name)),
-            ),
-            categories: new Set(
-                product.variants.flatMap(variant =>
-                    variant.collections.flatMap(collection =>
-                        collection.translations.map(translation => normalizeIdentity(translation.name)),
-                    ),
-                ),
-            ),
-        }));
-    }
-
-    private async resolveFacetValues(ctx: RequestContext, row: NormalizedCatalogRow): Promise<ID[]> {
-        const values: ID[] = [];
-        if (row.category) {
-            values.push(
-                await this.ensureFacetValue(
-                    ctx,
-                    'catalog-import-category',
-                    '导入分类标记',
-                    row.category,
-                    true,
-                ),
-            );
-        }
-        if (row.brand) values.push(await this.ensureFacetValue(ctx, 'catalog-brand', '品牌', row.brand));
-        for (const tag of row.tags) values.push(await this.ensureFacetValue(ctx, 'catalog-tag', '标签', tag));
-        return values;
-    }
-
-    private async ensureFacetValue(
-        ctx: RequestContext,
-        facetCode: string,
-        facetName: string,
-        value: string,
-        isPrivate = false,
-    ): Promise<ID> {
-        let facet = await this.facetService.findByCode(ctx, facetCode, ctx.languageCode);
-        if (!facet) {
-            facet = await this.facetService.create(ctx, {
-                code: facetCode,
-                isPrivate,
-                translations: [{ languageCode: ctx.languageCode, name: facetName }],
-            });
-        }
-        const existing = await this.connection.getRepository(ctx, FacetValue).find({
-            where: { facet: { id: facet.id } },
-            relations: ['translations'],
-        });
-        const match = existing.find(item =>
-            item.translations.some(
-                translation => normalizeIdentity(translation.name) === normalizeIdentity(value),
-            ),
-        );
-        if (match) return match.id;
-        const created = await this.facetValueService.create(ctx, facet, {
-            facetId: facet.id,
-            code: `${facetCode}-${shortCode(value)}`,
-            translations: [{ languageCode: ctx.languageCode, name: value }],
-        });
-        return created.id;
-    }
-
-    private async uniqueSlug(ctx: RequestContext, name: string): Promise<string> {
-        const base = normalizeString(name, '-').slice(0, 100) || `product-${shortCode(name)}`;
-        for (let index = 0; index < 100; index++) {
-            const slug = index === 0 ? base : `${base}-${index + 1}`;
-            if (!(await this.productService.findOneBySlug(ctx, slug))) return slug;
-        }
-        return `${base}-${Date.now()}`;
-    }
-
-    private async uniqueSku(ctx: RequestContext, preferred: string, sourceKey: string): Promise<string> {
-        const base = preferred.trim() || `IMP-${sourceKey.slice(0, 12).toUpperCase()}`;
-        for (let index = 0; index < 100; index++) {
-            const sku = index === 0 ? base : `${base}-${index + 1}`;
-            const exists = await this.connection.getRepository(ctx, ProductVariant).findOne({
-                where: { sku, deletedAt: IsNull() },
-            });
-            if (!exists) return sku;
-        }
-        throw new UserInputError('无法生成唯一 SKU，请在文件中填写商品编码');
+        return this.preview.buildCatalogIndex(ctx);
     }
 
     private async refreshCounts(ctx: RequestContext, jobId: ID): Promise<void> {

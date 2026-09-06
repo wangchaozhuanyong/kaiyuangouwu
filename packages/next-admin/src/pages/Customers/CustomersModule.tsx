@@ -1,3 +1,4 @@
+import { PageSizeSelect } from '../../components/PageSizeSelect';
 /* eslint-disable max-len -- Tailwind utility lists are intentionally kept as single JSX attributes. */
 import { useMutation, useQuery } from '@apollo/client/react';
 import {
@@ -76,8 +77,6 @@ import {
     getOrderStateClass,
     getOrderStateLabel,
 } from '../Sales/sales-utils';
-
-const PAGE_SIZE = 20;
 
 interface CustomerForm {
     title: string;
@@ -183,7 +182,8 @@ export function CustomersModule() {
     const canCreateCustomer = hasAnyPermission(['CreateCustomer']);
     const canDeleteCustomer = hasAnyPermission(['DeleteCustomer']);
     const canUpdateCustomer = hasAnyPermission(['UpdateCustomer']);
-    const { page, searchParams, searchTerm, setFilter, setPage, setSearchTerm } = useUrlListState();
+    const { page, pageSize, setPageSize, searchParams, searchTerm, setFilter, setPage, setSearchTerm } =
+        useUrlListState();
     const selectedGroupId = searchParams.get('group') ?? 'ALL';
     const setSelectedGroupId = (groupId: string) => setFilter('group', groupId, 'ALL');
     const deferredSearchTerm = useDeferredValue(searchTerm);
@@ -210,12 +210,12 @@ export function CustomersModule() {
 
     const options = useMemo(
         () => ({
-            skip: page * PAGE_SIZE,
-            take: PAGE_SIZE,
+            skip: page * pageSize,
+            take: pageSize,
             sort: { createdAt: 'DESC' },
             filter: customerFilter(deferredSearchTerm),
         }),
-        [deferredSearchTerm, page],
+        [deferredSearchTerm, page, pageSize],
     );
 
     const allCustomers = useQuery<CustomersResult>(CUSTOMERS_QUERY, {
@@ -275,7 +275,7 @@ export function CustomersModule() {
             : groupCustomers.data?.customerGroup?.customers;
     const groups = groupData?.customerGroups.items ?? [];
     const totalItems = list?.totalItems ?? 0;
-    const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
+    const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
 
     const refresh = async () => {
         setActionError('');
@@ -731,6 +731,12 @@ export function CustomersModule() {
                             </table>
                         </div>
                         <Pagination
+                            loading={activeQuery.loading}
+                            pageSize={pageSize}
+                            onPageSizeChange={size => {
+                                setPageSize(size);
+                                setSelectedCustomerIds([]);
+                            }}
                             page={page}
                             totalPages={totalPages}
                             totalItems={totalItems}
@@ -1895,25 +1901,32 @@ function GroupFilterButton({
     );
 }
 function Pagination({
+    loading = false,
+    pageSize,
+    onPageSizeChange,
     page,
     totalPages,
     totalItems,
     onPageChange,
 }: {
+    loading?: boolean;
+    pageSize: number;
+    onPageSizeChange: (size: number) => void;
     page: number;
     totalPages: number;
     totalItems: number;
     onPageChange: (page: number) => void;
 }) {
     return (
-        <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500">
+        <div className="flex flex-wrap gap-y-3 gap-x-4 items-center justify-between border-t border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500">
             <span>
                 共 {totalItems} 条，第 {page + 1}/{totalPages} 页
             </span>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+                <PageSizeSelect pageSize={pageSize} onPageSizeChange={onPageSizeChange} disabled={loading} />
                 <button
                     type="button"
-                    disabled={page === 0}
+                    disabled={loading || page === 0}
                     onClick={() => onPageChange(page - 1)}
                     className="rounded border border-slate-300 bg-white p-1.5 disabled:opacity-40"
                     aria-label="上一页"
@@ -1922,7 +1935,7 @@ function Pagination({
                 </button>
                 <button
                     type="button"
-                    disabled={page + 1 >= totalPages}
+                    disabled={loading || page + 1 >= totalPages}
                     onClick={() => onPageChange(page + 1)}
                     className="rounded border border-slate-300 bg-white p-1.5 disabled:opacity-40"
                     aria-label="下一页"

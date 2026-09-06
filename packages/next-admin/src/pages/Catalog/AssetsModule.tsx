@@ -21,6 +21,7 @@ import { useDeferredValue, useMemo, useRef, useState } from 'react';
 import { sensitiveActionContext, uploadAdminFiles } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
+import { PageSizeSelect } from '../../components/PageSizeSelect';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
 import { DynamicCustomFieldsForm } from '../../custom-fields/DynamicCustomFieldsForm';
 import type { CustomFieldValueMap } from '../../custom-fields/custom-field-types';
@@ -39,6 +40,7 @@ import {
     UPDATE_ASSET,
 } from '../../graphql/catalog-admin.graphql';
 import { GET_ASSETS } from '../../graphql/catalog.graphql';
+import { usePageSize } from '../../hooks/use-page-size';
 import { toUserFacingError } from '../../utils/user-facing-error';
 
 interface AssetItem {
@@ -83,7 +85,6 @@ interface CreateAssetsData {
 }
 
 const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024;
-const PAGE_SIZE = 40;
 const SUPPORTED_FILE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'video/mp4']);
 
 const formatFileSize = (size: number) => {
@@ -107,6 +108,7 @@ export function AssetsModule() {
     const [activeTypeFilter, setActiveTypeFilter] = useState<'ALL' | 'IMAGE' | 'VIDEO'>('ALL');
     const [searchTerm, setSearchTerm] = useState('');
     const [page, setPage] = useState(0);
+    const [pageSize, setPageSize] = usePageSize(setPage);
     const [notification, setNotification] = useState('');
     const [actionError, setActionError] = useState('');
     const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
@@ -126,8 +128,8 @@ export function AssetsModule() {
     const { data, loading, error, refetch } = useQuery<GetAssetsData>(assetsDocument, {
         variables: {
             options: {
-                skip: page * PAGE_SIZE,
-                take: PAGE_SIZE,
+                skip: page * pageSize,
+                take: pageSize,
                 sort: { updatedAt: 'DESC' },
                 filter: assetFilter,
             },
@@ -142,7 +144,7 @@ export function AssetsModule() {
     }>(DELETE_ASSETS);
     const assets = data?.assets.items ?? [];
     const totalItems = data?.assets.totalItems ?? 0;
-    const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
+    const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
 
     const showNotice = (message: string) => {
         setNotification(message);
@@ -591,7 +593,15 @@ export function AssetsModule() {
                         <span>
                             共 {totalItems} 个素材，第 {Math.min(page + 1, totalPages)} / {totalPages} 页
                         </span>
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <PageSizeSelect
+                                pageSize={pageSize}
+                                onPageSizeChange={size => {
+                                    setPageSize(size);
+                                    setSelectedAssetIds([]);
+                                }}
+                                disabled={loading}
+                            />
                             <button
                                 type="button"
                                 onClick={() => setPage(current => Math.max(0, current - 1))}

@@ -47,6 +47,7 @@ import { desktopIntroModuleOrder, homepageModuleEntries } from '../homepage-modu
 import { resolveManagedContentCopy } from '../managed-content-copy';
 import { PageSkeleton } from '../route-loading';
 import { couponCardsFromCampaigns, StorefrontCouponCard } from '../storefront-coupons';
+import { HomePageContext } from '../storefront-page-contexts';
 import { routeNavigateOptions, type RouteState } from '../storefront-router';
 import {
     BrandLogo,
@@ -76,7 +77,6 @@ import {
     trimText,
 } from '../storefront-ui/product-display';
 import { ProductSection } from '../storefront-ui/product-section';
-import { useStorefront } from '../StorefrontContext';
 import {
     CollectionSummary,
     MarketConfig,
@@ -426,7 +426,7 @@ function HomepageCouponHub({
     );
 }
 
-interface HomePageProps {
+export interface HomePageProps {
     products: Product[];
     collections: CollectionSummary[];
     contentBlocks: StorefrontContentBlock[];
@@ -508,7 +508,7 @@ export function HomePage() {
         onContentTarget,
         onContentRetry,
         onRetry,
-    } = useStorefront<HomePageProps>();
+    } = HomePageContext.useValue();
     const isZh = language === 'zh';
     const noticeBlock = contentBlocks.find(block => block.type === 'NOTICE');
     const managedHeroes = useMemo(

@@ -6,7 +6,7 @@ import {
     AnnouncementsPage,
     splitSystemAnnouncements,
 } from './pages/announcements-page';
-import { StorefrontContext } from './StorefrontContext';
+import { AnnouncementsPageContext } from './storefront-page-contexts';
 import { StorefrontSystemAnnouncement } from './types';
 
 const announcements: StorefrontSystemAnnouncement[] = [
@@ -38,12 +38,11 @@ const announcements: StorefrontSystemAnnouncement[] = [
 
 function renderPage(overrides: Record<string, unknown> = {}) {
     return renderToStaticMarkup(
-        <StorefrontContext.Provider
+        <AnnouncementsPageContext.Provider
             value={{
                 announcements,
                 loading: false,
                 error: '',
-                locale: 'zh-CN',
                 language: 'zh',
                 onBack: vi.fn(),
                 onRetry: vi.fn(),
@@ -51,7 +50,7 @@ function renderPage(overrides: Record<string, unknown> = {}) {
             }}
         >
             <AnnouncementsPage />
-        </StorefrontContext.Provider>,
+        </AnnouncementsPageContext.Provider>,
     );
 }
 

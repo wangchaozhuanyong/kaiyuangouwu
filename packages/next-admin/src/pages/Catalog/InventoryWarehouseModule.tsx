@@ -24,8 +24,9 @@ import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { sensitiveActionContext } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
-import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
+import { PageSizeSelect } from '../../components/PageSizeSelect';
 import {
     CREATE_STOCK_LOCATION,
     DELETE_STOCK_LOCATION,
@@ -40,6 +41,7 @@ import {
     SAVE_CATALOG_INVENTORY_LOT_MUTATION,
 } from '../../graphql/catalog-operations.graphql';
 import { UPDATE_PRODUCT_VARIANTS } from '../../graphql/catalog.graphql';
+import { usePageSize } from '../../hooks/use-page-size';
 import { useUrlTab } from '../../hooks/use-url-tab';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatMoney } from '../Sales/sales-utils';
@@ -154,7 +156,6 @@ interface InventoryLotDraft {
 const EMPTY_VARIANTS: ProductVariantItem[] = [];
 const EMPTY_LOCATIONS: StockLocationItem[] = [];
 const EMPTY_CATALOG_EXPORT_ROWS: CatalogExportRowRecord[] = [];
-const PAGE_SIZE = 50;
 const movementLabels: Record<StockMovementItem['type'], string> = {
     ADJUSTMENT: '库存盘点调整',
     ALLOCATION: '订单占用',
@@ -185,6 +186,7 @@ export function InventoryWarehouseModule() {
     const [searchTerm, setSearchTerm] = useState('');
     const deferredSearchTerm = useDeferredValue(searchTerm.trim());
     const [page, setPage] = useState(0);
+    const [pageSize, setPageSize] = usePageSize(setPage);
     const [notification, setNotification] = useState('');
     const [actionError, setActionError] = useState('');
     const [selectedStock, setSelectedStock] = useState<StockRow | null>(null);
@@ -207,8 +209,8 @@ export function InventoryWarehouseModule() {
     const { data, loading, error, refetch } = useQuery<InventoryData>(GET_INVENTORY_OVERVIEW, {
         variables: {
             variantOptions: {
-                skip: page * PAGE_SIZE,
-                take: PAGE_SIZE,
+                skip: page * pageSize,
+                take: pageSize,
                 sort: { updatedAt: 'DESC' },
                 filter: deferredSearchTerm
                     ? {
@@ -236,7 +238,7 @@ export function InventoryWarehouseModule() {
     const lotQuery = useQuery<{
         catalogExportRows: { items: CatalogExportRowRecord[]; totalItems: number };
     }>(CATALOG_EXPORT_ROWS_QUERY, {
-        variables: { skip: page * PAGE_SIZE, take: PAGE_SIZE },
+        variables: { skip: page * pageSize, take: pageSize },
         skip: activeTab !== 'LOTS',
         fetchPolicy: 'cache-and-network',
         notifyOnNetworkStatusChange: true,
@@ -288,7 +290,7 @@ export function InventoryWarehouseModule() {
     const locations = locationData?.stockLocations.items ?? EMPTY_LOCATIONS;
     const globalThreshold = data?.globalSettings.outOfStockThreshold ?? 0;
     const totalVariants = data?.productVariants.totalItems ?? 0;
-    const totalPages = Math.max(1, Math.ceil(totalVariants / PAGE_SIZE));
+    const totalPages = Math.max(1, Math.ceil(totalVariants / pageSize));
     const refetchAll = async () => {
         await Promise.all([
             refetch(),
@@ -357,7 +359,7 @@ export function InventoryWarehouseModule() {
         [lotVariants],
     );
     const lotTotalVariants = lotQuery.data?.catalogExportRows.totalItems ?? 0;
-    const lotTotalPages = Math.max(1, Math.ceil(lotTotalVariants / PAGE_SIZE));
+    const lotTotalPages = Math.max(1, Math.ceil(lotTotalVariants / pageSize));
 
     const filteredStockList = stockList.filter(stock => {
         if (activeTab === 'LOW_STOCK' && stock.status !== 'LOW_STOCK') return false;
@@ -1083,6 +1085,12 @@ export function InventoryWarehouseModule() {
                             </div>
                         )}
                         <InventoryPagination
+                            loading={pageLoading}
+                            pageSize={pageSize}
+                            onPageSizeChange={size => {
+                                setPageSize(size);
+                                setSelectedVariantIds([]);
+                            }}
                             page={page}
                             totalPages={totalPages}
                             totalItems={totalVariants}
@@ -1240,6 +1248,12 @@ export function InventoryWarehouseModule() {
                             </div>
                         )}
                         <InventoryPagination
+                            loading={pageLoading}
+                            pageSize={pageSize}
+                            onPageSizeChange={size => {
+                                setPageSize(size);
+                                setSelectedVariantIds([]);
+                            }}
                             page={page}
                             totalPages={totalPages}
                             totalItems={totalVariants}
@@ -1369,6 +1383,12 @@ export function InventoryWarehouseModule() {
                             </div>
                         )}
                         <InventoryPagination
+                            loading={pageLoading}
+                            pageSize={pageSize}
+                            onPageSizeChange={size => {
+                                setPageSize(size);
+                                setSelectedVariantIds([]);
+                            }}
                             page={page}
                             totalPages={lotTotalPages}
                             totalItems={lotTotalVariants}
@@ -1458,6 +1478,12 @@ export function InventoryWarehouseModule() {
                             </div>
                         )}
                         <InventoryPagination
+                            loading={pageLoading}
+                            pageSize={pageSize}
+                            onPageSizeChange={size => {
+                                setPageSize(size);
+                                setSelectedVariantIds([]);
+                            }}
                             page={page}
                             totalPages={totalPages}
                             totalItems={totalVariants}
@@ -1737,12 +1763,18 @@ export function InventoryWarehouseModule() {
 }
 
 function InventoryPagination({
+    loading = false,
+    pageSize,
+    onPageSizeChange,
     page,
     totalPages,
     totalItems,
     itemLabel = '个 SKU',
     onPageChange,
 }: {
+    loading?: boolean;
+    pageSize: number;
+    onPageSizeChange: (size: number) => void;
     page: number;
     totalPages: number;
     totalItems: number;
@@ -1750,14 +1782,15 @@ function InventoryPagination({
     onPageChange: (page: number) => void;
 }) {
     return (
-        <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500">
+        <div className="flex flex-wrap gap-y-3 gap-x-4 items-center justify-between border-t border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500">
             <span>
                 共 {totalItems} {itemLabel}，第 {page + 1}/{totalPages} 页
             </span>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+                <PageSizeSelect pageSize={pageSize} onPageSizeChange={onPageSizeChange} disabled={loading} />
                 <button
                     type="button"
-                    disabled={page === 0}
+                    disabled={loading || page === 0}
                     onClick={() => onPageChange(page - 1)}
                     className="rounded border border-slate-300 bg-white p-1.5 disabled:opacity-40"
                     aria-label="上一页"
@@ -1766,7 +1799,7 @@ function InventoryPagination({
                 </button>
                 <button
                     type="button"
-                    disabled={page + 1 >= totalPages}
+                    disabled={loading || page + 1 >= totalPages}
                     onClick={() => onPageChange(page + 1)}
                     className="rounded border border-slate-300 bg-white p-1.5 disabled:opacity-40"
                     aria-label="下一页"

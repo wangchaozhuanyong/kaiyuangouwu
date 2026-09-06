@@ -1,3 +1,4 @@
+import { PageSizeSelect } from '../../components/PageSizeSelect';
 /* eslint-disable max-len -- Tailwind utility lists are intentionally kept as single JSX attributes. */
 import { useMutation, useQuery } from '@apollo/client/react';
 import {
@@ -126,7 +127,6 @@ interface FulfillmentMutationData {
     };
 }
 
-const PAGE_SIZE = 20;
 const ORDER_TAB_RESET_PARAMETERS = ['page'];
 const EMPTY_ORDERS: SalesOrderItem[] = [];
 const FULFILLABLE_STATES = ['PaymentAuthorized', 'PaymentSettled', 'PartiallyShipped', 'PartiallyDelivered'];
@@ -161,7 +161,7 @@ export function SalesModule() {
         'tab',
         ORDER_TAB_RESET_PARAMETERS,
     );
-    const { page, searchTerm, setPage, setSearchTerm } = useUrlListState();
+    const { page, pageSize, setPageSize, searchTerm, setPage, setSearchTerm } = useUrlListState();
     const deferredSearchTerm = useDeferredValue(searchTerm);
     const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
     const [isBatchOpen, setIsBatchOpen] = useState(false);
@@ -187,13 +187,13 @@ export function SalesModule() {
         }
         return {
             options: {
-                skip: page * PAGE_SIZE,
-                take: PAGE_SIZE,
+                skip: page * pageSize,
+                take: pageSize,
                 sort: { orderPlacedAt: 'DESC' },
                 filter: { _and: filters },
             },
         };
-    }, [activeTab, deferredSearchTerm, page]);
+    }, [activeTab, deferredSearchTerm, page, pageSize]);
 
     const { data, loading, error, refetch } = useQuery<SalesOrdersData>(GET_SALES_ORDERS, {
         variables: queryVariables,
@@ -210,7 +210,7 @@ export function SalesModule() {
     }>(TRANSITION_SALES_FULFILLMENT);
     const orders = data?.orders.items ?? EMPTY_ORDERS;
     const totalItems = data?.orders.totalItems ?? 0;
-    const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
+    const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
     const physicalTodoCount = data?.physicalFulfillmentTodoCount ?? 0;
     const selectableOrders = orders.filter(
         order => FULFILLABLE_STATES.includes(order.state) && getRemainingPhysicalLines(order).length > 0,
@@ -813,18 +813,26 @@ export function SalesModule() {
                             )
                         )}
 
-                        <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50/60 px-4 py-3 text-xs text-slate-500">
+                        <div className="flex flex-wrap gap-y-3 gap-x-4 items-center justify-between border-t border-slate-200 bg-slate-50/60 px-4 py-3 text-xs text-slate-500">
                             <span>
                                 第 {page + 1} / {totalPages} 页，共 {totalItems} 笔
                             </span>
-                            <div className="flex gap-1.5">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                                <PageSizeSelect
+                                    pageSize={pageSize}
+                                    onPageSizeChange={size => {
+                                        setPageSize(size);
+                                        setSelectedOrderIds([]);
+                                    }}
+                                    disabled={loading}
+                                />
                                 <button
                                     type="button"
                                     onClick={() => {
                                         setPage(Math.max(0, page - 1));
                                         setSelectedOrderIds([]);
                                     }}
-                                    disabled={page === 0}
+                                    disabled={loading || page === 0}
                                     className="rounded-lg border border-slate-300 bg-white p-1.5 text-slate-600 disabled:opacity-40"
                                     aria-label="上一页"
                                 >
@@ -836,7 +844,7 @@ export function SalesModule() {
                                         setPage(Math.min(totalPages - 1, page + 1));
                                         setSelectedOrderIds([]);
                                     }}
-                                    disabled={page >= totalPages - 1}
+                                    disabled={loading || page >= totalPages - 1}
                                     className="rounded-lg border border-slate-300 bg-white p-1.5 text-slate-600 disabled:opacity-40"
                                     aria-label="下一页"
                                 >

@@ -1,6 +1,8 @@
 import { useMutation, useQuery } from '@apollo/client/react';
 import { Check, ChevronLeft, ChevronRight, RefreshCw, ShieldCheck, WalletCards, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { PageSizeSelect } from '../../components/PageSizeSelect';
+import { usePageSize } from '../../hooks/use-page-size';
 
 import { sensitiveActionContext } from '../../apollo';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
@@ -24,7 +26,6 @@ import {
     storeUsdtWalletStatusLabel,
 } from './store-usdt-utils';
 
-const PAGE_SIZE = 50;
 type ProtectedAction =
     | { kind: 'approve'; wallet: UsdtWalletRecord }
     | { kind: 'reject'; wallet: UsdtWalletRecord; reason: string }
@@ -42,7 +43,9 @@ export function UsdtPaymentManagementModule() {
     const [from, setFrom] = useState('');
     const [to, setTo] = useState('');
     const [paymentPage, setPaymentPage] = useState(0);
+    const [paymentPageSize, setPaymentPageSize] = usePageSize(setPaymentPage);
     const [refundPage, setRefundPage] = useState(0);
+    const [refundPageSize, setRefundPageSize] = usePageSize(setRefundPage);
     const [rejectionReasons, setRejectionReasons] = useState<Record<string, string>>({});
     const [refundPayment, setRefundPayment] = useState<PaymentDetailRecord | null>(null);
     const [action, setAction] = useState<ProtectedAction | null>(null);
@@ -59,8 +62,8 @@ export function UsdtPaymentManagementModule() {
         variables: {
             channelId: channelId === 'ALL' ? null : channelId,
             statsOptions: dateOptions,
-            paymentOptions: { ...dateOptions, skip: paymentPage * PAGE_SIZE, take: PAGE_SIZE },
-            refundOptions: { ...dateOptions, skip: refundPage * PAGE_SIZE, take: PAGE_SIZE },
+            paymentOptions: { ...dateOptions, skip: paymentPage * paymentPageSize, take: paymentPageSize },
+            refundOptions: { ...dateOptions, skip: refundPage * refundPageSize, take: refundPageSize },
         },
         fetchPolicy: 'cache-and-network',
     });
@@ -342,6 +345,9 @@ export function UsdtPaymentManagementModule() {
                             </div>
                             <Pager
                                 page={paymentPage}
+                                pageSize={paymentPageSize}
+                                onPageSizeChange={setPaymentPageSize}
+                                loading={query.loading}
                                 total={query.data?.storePaymentDetails.totalItems ?? 0}
                                 onChange={setPaymentPage}
                             />
@@ -383,6 +389,9 @@ export function UsdtPaymentManagementModule() {
                             </div>
                             <Pager
                                 page={refundPage}
+                                pageSize={refundPageSize}
+                                onPageSizeChange={setRefundPageSize}
+                                loading={query.loading}
                                 total={query.data?.storeUsdtManualRefunds.totalItems ?? 0}
                                 onChange={setRefundPage}
                             />
@@ -654,17 +663,32 @@ function required(value: string, label: string) {
     if (!clean) throw new Error(`${label}不能为空`);
     return clean;
 }
-function Pager({ page, total, onChange }: { page: number; total: number; onChange: (page: number) => void }) {
-    const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+function Pager({
+    page,
+    total,
+    onChange,
+    pageSize,
+    onPageSizeChange,
+    loading,
+}: {
+    page: number;
+    total: number;
+    onChange: (page: number) => void;
+    pageSize: number;
+    onPageSizeChange: (size: number) => void;
+    loading: boolean;
+}) {
+    const pages = Math.max(1, Math.ceil(total / pageSize));
     return (
-        <div className="mt-4 flex items-center justify-end gap-2 text-xs text-slate-500">
+        <div className="mt-4 flex flex-wrap items-center justify-end gap-3 text-xs text-slate-500">
+            <PageSizeSelect pageSize={pageSize} onPageSizeChange={onPageSizeChange} disabled={loading} />
             <span>
                 {total} 条 · {page + 1}/{pages}
             </span>
             <button
                 type="button"
                 onClick={() => onChange(page - 1)}
-                disabled={page === 0}
+                disabled={loading || page === 0}
                 className={pagerButton}
             >
                 <ChevronLeft className="h-4 w-4" />
@@ -672,7 +696,7 @@ function Pager({ page, total, onChange }: { page: number; total: number; onChang
             <button
                 type="button"
                 onClick={() => onChange(page + 1)}
-                disabled={page + 1 >= pages}
+                disabled={loading || page + 1 >= pages}
                 className={pagerButton}
             >
                 <ChevronRight className="h-4 w-4" />

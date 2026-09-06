@@ -9,12 +9,12 @@ import { productGalleryAssets } from '../product-media';
 import { ProductReviewsSection } from '../review-pages';
 import { productDescriptionText, sanitizeProductDescription } from '../rich-text';
 import { bestProductCouponPrice } from '../storefront-coupons';
+import { ProductDetailPageContext } from '../storefront-page-contexts';
 import { routeNavigateOptions, type RouteState } from '../storefront-router';
 import { SubHeader } from '../storefront-ui/page-shell';
 import { formatMoney, SafeImage } from '../storefront-ui/product-display';
 import { ProductGallery } from '../storefront-ui/product-gallery';
 import { ProductSection } from '../storefront-ui/product-section';
-import { useStorefront } from '../StorefrontContext';
 import {
     DigitalDeliveryMode,
     MarketConfig,
@@ -28,7 +28,7 @@ import {
 
 // TODO: Fix internal imports later
 
-interface ProductDetailPageProps {
+export interface ProductDetailPageProps {
     api: ShopApi;
     product: Product;
     products: Product[];
@@ -86,7 +86,7 @@ export function ProductDetailPage() {
         onBuyNow,
         onFavorite,
         onNotify,
-    } = useStorefront<ProductDetailPageProps>();
+    } = ProductDetailPageContext.useValue();
     const isZh = language === 'zh';
     const [variantId, setVariantId] = useState(product.variants[0]?.id ?? '');
     const [headerScrolled, setHeaderScrolled] = useState(false);

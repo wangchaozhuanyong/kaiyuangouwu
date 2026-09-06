@@ -1,18 +1,9 @@
 import { ArrowLeft, House, LayoutGrid, Navigation } from 'lucide-react';
 
-import { RouteState } from './storefront-router';
 import { useStorefront } from './StorefrontContext';
-import { StorefrontLanguage } from './types';
-
-interface NotFoundRouteRuntime {
-    language: StorefrontLanguage;
-    storefrontName: string;
-    goBack: () => void;
-    navigate: (route: RouteState, replace?: boolean) => void;
-}
 
 export function NotFoundRoutePage() {
-    const runtime = useStorefront<NotFoundRouteRuntime>();
+    const runtime = useStorefront();
     const isZh = runtime.language === 'zh';
 
     return (

@@ -4,7 +4,7 @@ import { hasDirectProductAssignment } from '../../utils/product-collection-assig
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { LookupPager } from './LookupPager';
 import { buildProductCollectionGroups, filterProductCollectionGroups } from './product-collection-hierarchy';
-import { LOOKUP_PAGE_SIZE, type CollectionItem } from './product-editor-types';
+import { type CollectionItem } from './product-editor-types';
 import { useProductEditor } from './ProductEditorContext';
 
 export function ProductFacetsCollectionsTab() {
@@ -18,6 +18,8 @@ export function ProductFacetsCollectionsTab() {
         facetSearch,
         setFacetSearch,
         facetPage,
+        facetPageSize,
+        setFacetPageSize,
         setFacetPage,
         collectionSearch,
         setCollectionSearch,
@@ -140,7 +142,9 @@ export function ProductFacetsCollectionsTab() {
                 )}
                 <LookupPager
                     page={facetPage}
-                    pageSize={LOOKUP_PAGE_SIZE}
+                    loading={facetsLoading}
+                    pageSize={facetPageSize}
+                    onPageSizeChange={setFacetPageSize}
                     totalItems={facetsData?.facets.totalItems ?? 0}
                     onPageChange={setFacetPage}
                 />

@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { CartPage } from './pages/cart-page';
-import { StorefrontContext } from './StorefrontContext';
+import { CartPageContext } from './storefront-page-contexts';
 import { readStorefrontStylesheet } from './test-stylesheet';
 import { MarketConfig, Order, Product, StoreCustomerCoupon, StorefrontCart } from './types';
 
@@ -65,7 +65,6 @@ const callbacks = {
     onFavorite: vi.fn(),
     onCheckout: vi.fn(),
     onReopen: vi.fn(),
-    onAdd: vi.fn(),
     onNotify: vi.fn(),
     onRetry: vi.fn(),
     onApplyCoupon: vi.fn().mockResolvedValue(null),
@@ -122,7 +121,7 @@ function renderCart(
 ) {
     return renderToStaticMarkup(
         createElement(
-            StorefrontContext.Provider,
+            CartPageContext.Provider,
             {
                 value: {
                     cart: value,
@@ -134,7 +133,6 @@ function renderCart(
                     loading: selectionPending,
                     selectionPending,
                     error: null,
-                    addingVariantId: null,
                     favoriteProductIds: [],
                     coupons,
                     ...callbacks,
