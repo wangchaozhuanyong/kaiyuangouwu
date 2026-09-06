@@ -14,8 +14,11 @@ import {
 import { ImgHTMLAttributes, ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 
 import { formatDisplayMoney } from '../money-display';
+import { productImage } from '../product-media';
 import { responsiveImageSources, StorefrontImageKind, storefrontPlaceholderUrl } from '../responsive-image';
 import { CollectionSummary, OrderSummary, Product, ProductVariant } from '../types';
+
+export { productImage } from '../product-media';
 
 export function OpenAiIcon({ className }: { className?: string }) {
     const pathD = [
@@ -448,10 +451,6 @@ export function OrderImage({ order }: { order: OrderSummary }) {
             <Package />
         </div>
     );
-}
-
-export function productImage(product?: Product | null): string | null {
-    return product?.featuredAsset?.preview ?? product?.assets?.[0]?.preview ?? null;
 }
 
 export function collectionImage(collection: CollectionSummary): string | null {

@@ -3,8 +3,22 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { ProductCard } from './components/common/product-card';
 import { buildProductRowSmartInfo, ProductRow } from './components/common/product-row';
+import { ProductDetailPage } from './pages/product-detail-page';
+import { SharePosterModal } from './share-poster-modal';
+import { productImage as displayProductImage } from './storefront-ui/product-display';
+import { ProductGallery } from './storefront-ui/product-gallery';
+import { productImage as metadataProductImage } from './storefront-utils';
+import { StorefrontContext } from './StorefrontContext';
 import { readStorefrontStylesheet } from './test-stylesheet';
 import { MarketConfig, Product } from './types';
+
+vi.mock('@tanstack/react-router', async importOriginal => ({
+    ...(await importOriginal<typeof import('@tanstack/react-router')>()),
+    useNavigate: () => vi.fn(),
+    useRouter: () => ({ history: { back: vi.fn() } }),
+}));
+
+vi.mock('./review-pages', () => ({ ProductReviewsSection: () => null }));
 
 const market: MarketConfig = {
     code: 'my-malaysia',
@@ -58,6 +72,70 @@ describe('product image navigation layers', () => {
         expect(markup).toContain('aspect-square');
         expect(markup).toContain('min-[900px]:aspect-[4/3]');
         expect(markup).toContain('[&amp;_img]:object-contain');
+    });
+
+    it('renders the same cover in cards, rows, detail, sharing and metadata when the gallery starts elsewhere', () => {
+        const cover = { id: 'cover', preview: '/assets/preview/current-cover.png' };
+        const detail = { id: 'detail', preview: '/assets/preview/previous-cover.png' };
+        const product = { ...digitalProduct, featuredAsset: cover, assets: [detail, cover] };
+        const commonProps = {
+            product,
+            market,
+            locale: market.locale,
+            language: 'zh' as const,
+            onOpen: vi.fn(),
+        };
+        const card = renderToStaticMarkup(<ProductCard {...commonProps} />);
+        const row = renderToStaticMarkup(<ProductRow {...commonProps} />);
+        const gallery = renderToStaticMarkup(<ProductGallery product={product} language="zh" />);
+        const page = renderToStaticMarkup(
+            <StorefrontContext.Provider
+                value={{
+                    ...commonProps,
+                    products: [],
+                    flashSaleItems: [],
+                    couponCampaigns: [],
+                    customerCoupons: [],
+                    storefrontName: 'Store',
+                    cartQuantity: 0,
+                    addingVariantId: null,
+                }}
+            >
+                <ProductDetailPage />
+            </StorefrontContext.Provider>,
+        );
+        const poster = renderToStaticMarkup(
+            <SharePosterModal
+                product={product}
+                storefrontName="Store"
+                logoUrl={null}
+                language="zh"
+                formattedPrice="¥99"
+                onClose={vi.fn()}
+                onNotify={vi.fn()}
+            />,
+        );
+
+        for (const markup of [card, row, gallery, page, poster]) {
+            expect(markup).toContain('/assets/preview/current-cover.png');
+            expect(markup).not.toContain('/assets/preview/previous-cover.png');
+        }
+        expect(gallery).toContain('查看第2张商品图');
+        expect(gallery).not.toContain('查看第3张商品图');
+        expect(displayProductImage(product)).toBe(cover.preview);
+        expect(metadataProductImage(product)).toBe(cover.preview);
+    });
+
+    it('renders a separately managed cover and a safe empty gallery', () => {
+        const coverOnly = { ...digitalProduct, featuredAsset: { id: 'cover', preview: '/cover.png' } };
+        const markup = renderToStaticMarkup(<ProductGallery product={coverOnly} language="zh" />);
+        expect(markup).toContain('/cover.png');
+        expect(markup).not.toContain('gallery-dots');
+
+        const empty = renderToStaticMarkup(<ProductGallery product={digitalProduct} language="zh" />);
+        expect(empty).toContain('image-placeholder');
+        expect(empty).not.toContain('gallery-count');
+        expect(empty).not.toContain('<img');
     });
 
     it('derives compact one-line product information from fulfillment and warranty data', () => {
