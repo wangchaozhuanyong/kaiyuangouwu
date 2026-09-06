@@ -64,12 +64,12 @@ function TestPaymentAvailabilityNotice({
         <aside className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-700">
             <p className="flex items-center gap-2 font-bold text-slate-900">
                 <Beaker className="h-4 w-4 shrink-0" aria-hidden="true" />
-                {available ? '受控测试支付' : '受控测试支付尚未开放'}
+                {available ? '测试支付' : '测试支付尚未开放'}
             </p>
             <p className="mt-1">
                 {available
-                    ? '仅指定的已登录测试客户可用。订单标记为“测试已付款”，不真实扣款、发货、扣库存或产生收入和返利。测试时请移除优惠券，不要使用余额抵扣。'
-                    : '当前服务器未开放受控测试支付，请联系平台管理员配置测试环境。填写“测试支付”作为名称不会开启功能。'}
+                    ? '启用后所有客户均可选择。按订单应付金额模拟付款成功，订单进入正常已付款、库存与交付流程；无需真实转账。'
+                    : '当前服务器未开放测试支付，请联系平台管理员开启测试支付开关。'}
             </p>
             {available && onConfigure && (
                 <button type="button" onClick={onConfigure} className={`${secondaryButton} mt-3`}>
@@ -403,7 +403,7 @@ function MethodEditorDialog({
     const [checkerArgs, setCheckerArgs] = useState(() => argsToForm(item?.checker));
     const [handlerArgs, setHandlerArgs] = useState(() =>
         initialTestPayment && !item
-            ? { channelId: data.activeChannel.id, customerIds: '' }
+            ? { channelId: data.activeChannel.id }
             : argsToForm(state.kind === 'payment' ? state.item?.handler : undefined),
     );
     const [calculatorArgs, setCalculatorArgs] = useState(() =>
@@ -470,7 +470,6 @@ function MethodEditorDialog({
                     return onError('USDT 支付方式由下方专用收款配置自动管理，不能在这里创建或修改');
                 }
                 if (!handlerCode) return onError('请选择支付处理器');
-                if (isControlledTest && !handlerArgs.customerIds?.trim()) return onError('请填写测试客户 ID');
                 const input = {
                     ...(item?.id ? { id: item.id } : {}),
                     code: isControlledTest ? `controlled-test-payment-${data.activeChannel.id}` : code.trim(),
@@ -478,7 +477,7 @@ function MethodEditorDialog({
                     checker,
                     handler: operationInput(
                         handlerCode,
-                        isControlledTest ? { ...handlerArgs, channelId: data.activeChannel.id } : handlerArgs,
+                        isControlledTest ? { channelId: data.activeChannel.id } : handlerArgs,
                         mainDefinitions,
                     ),
                     translations,
@@ -565,7 +564,7 @@ function MethodEditorDialog({
                     )}
                     {isControlledTest ? (
                         <p className="text-xs leading-5 text-slate-700">
-                            资格检查：仅本店指定、已注册并验证邮箱的测试客户可用，由服务器强制校验。
+                            启用后本店所有客户均可使用测试支付。
                         </p>
                     ) : (
                         <OperationEditor
@@ -594,7 +593,7 @@ function MethodEditorDialog({
                                     if (nextCode === testPaymentHandler) {
                                         setCode(`controlled-test-payment-${data.activeChannel.id}`);
                                         setEnabled(false);
-                                        setHandlerArgs({ channelId: data.activeChannel.id, customerIds: '' });
+                                        setHandlerArgs({ channelId: data.activeChannel.id });
                                     } else setHandlerArgs(defaultArgs(nextCode, mainDefinitions));
                                 }}
                                 onValuesChange={setHandlerArgs}

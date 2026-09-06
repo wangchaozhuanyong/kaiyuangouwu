@@ -2,9 +2,11 @@ import { CommerceFulfillmentPlugin } from '@vendure/commerce-fulfillment-plugin'
 import { ContentTranslationPlugin } from '@vendure/content-translation-plugin';
 import {
     ConfigService,
+    EventBus,
     LanguageCode,
     mergeConfig,
     Order,
+    OrderPlacedEvent,
     OrderService,
     PaymentMethodHandler,
     RequestContextService,
@@ -622,7 +624,7 @@ describe('complete cart domain on MySQL', () => {
 
 // Controlled checkout uses the real cart, payment, fulfillment and store plugins against a disposable DB.
 describe('controlled test payments', () => {
-    it('restricts accounts, completes a synthetic order, and leaves real goods and money untouched', async () => {
+    it('allows all checkout customers, settles the amount due and follows normal order and fulfillment steps', async () => {
         const client = new SimpleGraphQLClient(config, `http://127.0.0.1:${config.apiOptions.port}/shop-api`);
         const guest = new SimpleGraphQLClient(config, `http://127.0.0.1:${config.apiOptions.port}/shop-api`);
         const other = new SimpleGraphQLClient(config, `http://127.0.0.1:${config.apiOptions.port}/shop-api`);
@@ -668,15 +670,16 @@ describe('controlled test payments', () => {
             code,
             enabled: false,
             translations: [
-                { languageCode: 'zh_Hans', name: '测试支付', description: '仅用于测试，不真实扣款或交付' },
+                {
+                    languageCode: 'zh_Hans',
+                    name: '测试支付',
+                    description: '按应付金额模拟支付成功，无需真实转账',
+                },
             ],
             checker: { code: 'controlled-test-payment-checker', arguments: [] },
             handler: {
                 code: 'controlled-test-payment-handler',
-                arguments: [
-                    { name: 'channelId', value: JSON.stringify(channel.id) },
-                    { name: 'customerIds', value: JSON.stringify(customer.id) },
-                ],
+                arguments: [{ name: 'channelId', value: JSON.stringify(channel.id) }],
             },
         };
         const createMethod = gql`
@@ -745,6 +748,7 @@ describe('controlled test payments', () => {
                         active
                         state
                         orderPlacedAt
+                        totalWithTax
                         payments {
                             id
                             state
@@ -754,6 +758,9 @@ describe('controlled test payments', () => {
                         lines {
                             id
                             quantity
+                            productVariant {
+                                sku
+                            }
                         }
                     }
                     ... on ErrorResult {
@@ -818,23 +825,18 @@ describe('controlled test payments', () => {
                 ?.isEligible,
         ).toBe(true);
 
-        // Guest ownership alone must not authorize a test payment.
+        // Everyone who can complete the ordinary checkout can use the enabled method.
         await prepare(guest, 'guest-test@example.test');
         expect(
             (await guest.query(eligible)).eligiblePaymentMethods.find((m: any) => m.code === code)
                 ?.isEligible,
-        ).toBe(false);
-        const deniedGuest = (await guest.query(pay, { method: code })).addPaymentToOrder;
-        expect(deniedGuest.errorCode).toBe('INELIGIBLE_PAYMENT_METHOD_ERROR');
+        ).toBe(true);
         await other.asUserWithCredentials('outside-payment@example.test', 'local-controlled-test-only');
         await prepare(other, 'outside-payment@example.test');
         expect(
             (await other.query(eligible)).eligiblePaymentMethods.find((m: any) => m.code === code)
                 ?.isEligible,
-        ).toBe(false);
-        expect((await other.query(pay, { method: code })).addPaymentToOrder.errorCode).toBe(
-            'INELIGIBLE_PAYMENT_METHOD_ERROR',
-        );
+        ).toBe(true);
 
         const connection = server.app.get(TransactionalConnection);
         const snapshot = async () => {
@@ -855,6 +857,14 @@ describe('controlled test payments', () => {
             );
             return result;
         };
+        const placedOrderIds: string[] = [];
+        server.app.get(EventBus).registerBlockingEventHandler({
+            event: OrderPlacedEvent,
+            id: 'normal-test-payment-order-placed',
+            handler: event => {
+                placedOrderIds.push(String(event.order.id));
+            },
+        });
         const baseline = await snapshot();
         const token = (
             await client.query(gql`
@@ -866,13 +876,13 @@ describe('controlled test payments', () => {
             `)
         ).createStorefrontOrderConfirmationToken.token;
         const paid = (await client.query(pay, { method: code })).addPaymentToOrder;
-        expect(paid.state, paid.message).toBe('TestPaymentSettled');
+        expect(paid.state, paid.message).toBe('PaymentSettled');
         expect(paid.active).toBe(false);
-        expect(paid.orderPlacedAt).toBeNull();
+        expect(paid.orderPlacedAt).not.toBeNull();
         expect(paid.payments).toHaveLength(1);
-        expect(paid.payments[0].state).toBe('TestSettled');
+        expect(paid.payments[0].state).toBe('Settled');
         expect(paid.payments[0].metadata.public.testPayment).toBe(true);
-        expect(await snapshot()).toEqual(baseline);
+        expect(paid.payments[0].amount).toBe(paid.totalWithTax);
         const cartAfter = await readClient(client);
         expect(cartAfter.state).toBe('OPEN');
         expect(cartAfter.lines).toHaveLength(0);
@@ -887,9 +897,9 @@ describe('controlled test payments', () => {
             `,
             { token },
         );
-        expect(confirmation.storefrontOrderByConfirmationToken.state).toBe('TestPaymentSettled');
+        expect(confirmation.storefrontOrderByConfirmationToken.state).toBe('PaymentSettled');
         const repeated = await client.query(pay, { method: code });
-        expect(repeated.addPaymentToOrder.state).not.toBe('TestPaymentSettled');
+        expect(repeated.addPaymentToOrder.state).not.toBe('PaymentSettled');
         const runtimeConfig = server.app.get(ConfigService);
         const idStrategy = runtimeConfig.entityOptions.entityIdStrategy ?? runtimeConfig.entityIdStrategy;
         const decoded = idStrategy.decodeId(paid.id);
@@ -897,54 +907,23 @@ describe('controlled test payments', () => {
             .getRepository(Order)
             .findOneOrFail({ where: { id: decoded }, relations: ['payments'] });
         expect(saved.payments).toHaveLength(1);
-        await expect(
-            adminClient.query(
-                gql`
-                    mutation ($id: ID!) {
-                        transitionOrderToState(id: $id, state: "PaymentSettled") {
-                            ... on Order {
-                                state
-                            }
-                            ... on ErrorResult {
-                                message
-                            }
-                        }
-                    }
-                `,
-                { id: paid.id },
-            ),
-        ).resolves.toMatchObject({ transitionOrderToState: { message: expect.any(String) } });
-        const fulfillment = await adminClient.query(
-            gql`
-                mutation ($input: FulfillOrderInput!) {
-                    addFulfillmentToOrder(input: $input) {
-                        ... on Fulfillment {
-                            id
-                            state
-                        }
-                        ... on ErrorResult {
-                            message
-                        }
-                    }
-                }
-            `,
-            {
-                input: {
-                    lines: [{ orderLineId: paid.lines[0].id, quantity: 1 }],
-                    handler: {
-                        code: 'manual-fulfillment',
-                        arguments: [
-                            { name: 'method', value: 'test' },
-                            { name: 'trackingCode', value: '' },
-                        ],
-                    },
-                },
-            },
+        expect(placedOrderIds.filter(id => id === String(decoded))).toHaveLength(1);
+        const normalDelivery = await connection.rawConnection.query(
+            'SELECT COUNT(*) AS count FROM manual_digital_delivery WHERE orderId = ?',
+            [decoded],
         );
-        expect(fulfillment.addFulfillmentToOrder.message).toBeTruthy();
-        expect(await snapshot()).toEqual(baseline);
+        expect(Number(normalDelivery[0].count)).toBe(1);
+        for (const account of [guest, other]) {
+            const accountPaid = (await account.query(pay, { method: code })).addPaymentToOrder;
+            expect(accountPaid.state, accountPaid.message).toBe('PaymentSettled');
+            expect(accountPaid.payments[0]).toMatchObject({
+                state: 'Settled',
+                amount: accountPaid.totalWithTax,
+            });
+            expect(accountPaid.payments[0].metadata.public.testPayment).toBe(true);
+        }
 
-        // Concurrent submissions must produce exactly one simulated payment and no delivery.
+        // Concurrent submissions must place exactly one ordinary order, payment and delivery.
         const concurrentCart = await prepare(client, 'controlled-payment@example.test');
         const submissions = await Promise.allSettled([
             client.query(pay, { method: code }),
@@ -954,7 +933,7 @@ describe('controlled test payments', () => {
             submissions.some(
                 result =>
                     result.status === 'fulfilled' &&
-                    result.value.addPaymentToOrder.state === 'TestPaymentSettled',
+                    result.value.addPaymentToOrder.state === 'PaymentSettled',
             ),
         ).toBe(true);
         const concurrentOrder = await connection.rawConnection.getRepository(Order).findOneOrFail({
@@ -963,9 +942,61 @@ describe('controlled test payments', () => {
             },
             relations: ['payments'],
         });
-        expect(concurrentOrder.state).toBe('TestPaymentSettled');
+        expect(concurrentOrder.state).toBe('PaymentSettled');
         expect(concurrentOrder.payments).toHaveLength(1);
-        expect(await snapshot()).toEqual(baseline);
+        expect(placedOrderIds.filter(id => id === String(concurrentOrder.id))).toHaveLength(1);
+        const concurrentDelivery = await connection.rawConnection.query(
+            'SELECT COUNT(*) AS count FROM manual_digital_delivery WHERE orderId = ?',
+            [concurrentOrder.id],
+        );
+        expect(Number(concurrentDelivery[0].count)).toBe(1);
+
+        // The mixed physical/digital cart prepared above must use the same stock and shipment path.
+        const physicalStock = async () =>
+            (
+                await connection.rawConnection.query(
+                    'SELECT sl.stockOnHand, sl.stockAllocated FROM stock_level sl JOIN product_variant pv ON pv.id = sl.productVariantId WHERE pv.sku = ?',
+                    ['CART-PHYSICAL-QA'],
+                )
+            )[0];
+        const stockBefore = await physicalStock();
+        const mixedPaid = (await shopClient.query(pay, { method: code })).addPaymentToOrder;
+        expect(mixedPaid.state, mixedPaid.message).toBe('PaymentSettled');
+        const stockAfterPayment = await physicalStock();
+        expect(Number(stockAfterPayment.stockAllocated)).toBe(Number(stockBefore.stockAllocated) + 1);
+        const physicalLine = mixedPaid.lines.find(
+            (line: any) => line.productVariant.sku === 'CART-PHYSICAL-QA',
+        );
+        const fulfillment = (
+            await adminClient.query(
+                gql`
+                    mutation ($input: FulfillOrderInput!) {
+                        addFulfillmentToOrder(input: $input) {
+                            ... on Fulfillment {
+                                id
+                                state
+                            }
+                            ... on ErrorResult {
+                                message
+                            }
+                        }
+                    }
+                `,
+                {
+                    input: {
+                        lines: [{ orderLineId: physicalLine.id, quantity: 1 }],
+                        handler: {
+                            code: 'manual-fulfillment',
+                            arguments: [
+                                { name: 'method', value: 'test' },
+                                { name: 'trackingCode', value: '' },
+                            ],
+                        },
+                    },
+                },
+            )
+        ).addFulfillmentToOrder;
+        expect(fulfillment.id, fulfillment.message).toBeTruthy();
 
         // A subsequent order still uses the normal settlement and manual delivery path.
         await prepare(client, 'controlled-payment@example.test');
