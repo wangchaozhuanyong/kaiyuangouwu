@@ -26,7 +26,7 @@ import { StorefrontCartService } from './storefront-cart.service';
         StorefrontCartCheckout,
         StorefrontCartCheckoutLine,
     ],
-    exports: [CartCommandService, StorefrontCartService],
+    exports: [CartCommandService, StorefrontCartService, StorefrontCartLifecycleService],
     providers: [CartCommandService, StorefrontCartService, StorefrontCartLifecycleService],
     shopApiExtensions: {
         schema: shopApiExtensions,

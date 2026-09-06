@@ -38,7 +38,11 @@ import {
 type PaymentMethodItem = StoreManagementResult['paymentMethods']['items'][number];
 type ShippingMethodItem = StoreManagementResult['shippingMethods']['items'][number];
 type EditorState =
-    { kind: 'payment'; item?: PaymentMethodItem } | { kind: 'shipping'; item?: ShippingMethodItem };
+    | { kind: 'payment'; item?: PaymentMethodItem; testPayment?: boolean }
+    | { kind: 'shipping'; item?: ShippingMethodItem };
+
+const testPaymentHandler = 'controlled-test-payment-handler';
+const testPaymentChecker = 'controlled-test-payment-checker';
 
 const primaryButton =
     'inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-50';
@@ -46,6 +50,35 @@ const secondaryButton =
     'inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50';
 const inputClass =
     'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100';
+
+function TestPaymentAvailabilityNotice({
+    definitions,
+    onConfigure,
+}: {
+    definitions: ConfigurableOperationDefinitionRecord[];
+    onConfigure?: () => void;
+}) {
+    const available = definitions.some(definition => definition.code === testPaymentHandler);
+
+    return (
+        <aside className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-700">
+            <p className="flex items-center gap-2 font-bold text-slate-900">
+                <Beaker className="h-4 w-4 shrink-0" aria-hidden="true" />
+                {available ? '受控测试支付' : '受控测试支付尚未开放'}
+            </p>
+            <p className="mt-1">
+                {available
+                    ? '仅指定的已登录测试客户可用。订单标记为“测试已付款”，不真实扣款、发货、扣库存或产生收入和返利。测试时请移除优惠券，不要使用余额抵扣。'
+                    : '当前服务器未开放受控测试支付，请联系平台管理员配置测试环境。填写“测试支付”作为名称不会开启功能。'}
+            </p>
+            {available && onConfigure && (
+                <button type="button" onClick={onConfigure} className={`${secondaryButton} mt-3`}>
+                    配置测试支付
+                </button>
+            )}
+        </aside>
+    );
+}
 
 export function PaymentShippingManager({
     data,
@@ -118,6 +151,7 @@ export function PaymentShippingManager({
     };
 
     const deleting = deletePaymentState.loading || deleteShippingState.loading;
+    const testMethod = data.paymentMethods.items.find(item => item.handler.code === testPaymentHandler);
     return (
         <>
             <div className={`grid gap-4 ${commerceMode === 'DIGITAL_ONLY' ? '' : 'xl:grid-cols-2'}`}>
@@ -141,6 +175,17 @@ export function PaymentShippingManager({
                                 <Plus className="h-3.5 w-3.5" /> 新增
                             </button>
                         )}
+                    </div>
+                    <div className="px-5 pt-4 empty:hidden">
+                        <TestPaymentAvailabilityNotice
+                            definitions={data.paymentMethodHandlers}
+                            onConfigure={
+                                (testMethod ? canUpdatePayment : canCreatePayment)
+                                    ? () =>
+                                          setEditor({ kind: 'payment', item: testMethod, testPayment: true })
+                                    : undefined
+                            }
+                        />
                     </div>
                     <div className="divide-y divide-slate-100">
                         {data.paymentMethods.items.map(item => {
@@ -333,14 +378,21 @@ function MethodEditorDialog({
     state: EditorState;
 }) {
     const item = state.item;
+    const initialTestPayment = state.kind === 'payment' && state.testPayment;
     const languageCode = item?.translations[0]?.languageCode ?? data.activeChannel.defaultLanguageCode;
-    const [code, setCode] = useState(item?.code ?? '');
-    const [name, setName] = useState(item?.name ?? '');
+    const [code, setCode] = useState(
+        item?.code ?? (initialTestPayment ? `controlled-test-payment-${data.activeChannel.id}` : ''),
+    );
+    const [name, setName] = useState(item?.name ?? (initialTestPayment ? '测试支付' : ''));
     const [description, setDescription] = useState(item?.description ?? '');
-    const [enabled, setEnabled] = useState(state.kind === 'payment' ? (state.item?.enabled ?? true) : true);
+    const [enabled, setEnabled] = useState(
+        state.kind === 'payment' ? (state.item?.enabled ?? !initialTestPayment) : true,
+    );
     const [checkerCode, setCheckerCode] = useState(item?.checker?.code ?? '');
     const [handlerCode, setHandlerCode] = useState(
-        state.kind === 'payment' ? (state.item?.handler.code ?? '') : '',
+        state.kind === 'payment'
+            ? (state.item?.handler.code ?? (initialTestPayment ? testPaymentHandler : ''))
+            : '',
     );
     const [calculatorCode, setCalculatorCode] = useState(
         state.kind === 'shipping' ? (state.item?.calculator.code ?? '') : '',
@@ -350,7 +402,9 @@ function MethodEditorDialog({
     );
     const [checkerArgs, setCheckerArgs] = useState(() => argsToForm(item?.checker));
     const [handlerArgs, setHandlerArgs] = useState(() =>
-        argsToForm(state.kind === 'payment' ? state.item?.handler : undefined),
+        initialTestPayment && !item
+            ? { channelId: data.activeChannel.id, customerIds: '' }
+            : argsToForm(state.kind === 'payment' ? state.item?.handler : undefined),
     );
     const [calculatorArgs, setCalculatorArgs] = useState(() =>
         argsToForm(state.kind === 'shipping' ? state.item?.calculator : undefined),
@@ -374,6 +428,7 @@ function MethodEditorDialog({
         state.kind === 'payment'
             ? selectablePaymentHandlers(data.paymentMethodHandlers)
             : data.shippingCalculators;
+    const isControlledTest = state.kind === 'payment' && handlerCode === testPaymentHandler;
     const submit = async () => {
         if (!code.trim() || !name.trim()) return onError('请填写配置代码和显示名称');
         const customFieldErrors = validateCustomFieldValues(
@@ -385,7 +440,11 @@ function MethodEditorDialog({
             return onError(Object.values(customFieldErrors)[0] ?? '扩展字段校验失败');
         }
         try {
-            const checker = checkerCode ? operationInput(checkerCode, checkerArgs, checkerDefinitions) : null;
+            const checker = isControlledTest
+                ? operationInput(testPaymentChecker, {}, checkerDefinitions)
+                : checkerCode
+                  ? operationInput(checkerCode, checkerArgs, checkerDefinitions)
+                  : null;
             const customFields = customFieldInputFromValues(customFieldDefinitions, customFieldValues);
             const translations = (
                 item?.translations.length
@@ -411,12 +470,17 @@ function MethodEditorDialog({
                     return onError('USDT 支付方式由下方专用收款配置自动管理，不能在这里创建或修改');
                 }
                 if (!handlerCode) return onError('请选择支付处理器');
+                if (isControlledTest && !handlerArgs.customerIds?.trim()) return onError('请填写测试客户 ID');
                 const input = {
                     ...(item?.id ? { id: item.id } : {}),
-                    code: code.trim(),
+                    code: isControlledTest ? `controlled-test-payment-${data.activeChannel.id}` : code.trim(),
                     enabled,
                     checker,
-                    handler: operationInput(handlerCode, handlerArgs, mainDefinitions),
+                    handler: operationInput(
+                        handlerCode,
+                        isControlledTest ? { ...handlerArgs, channelId: data.activeChannel.id } : handlerArgs,
+                        mainDefinitions,
+                    ),
                     translations,
                     customFields,
                 };
@@ -468,6 +532,7 @@ function MethodEditorDialog({
                         <Field label="配置代码 *">
                             <input
                                 value={code}
+                                disabled={isControlledTest}
                                 onChange={event => setCode(event.target.value)}
                                 className={inputClass}
                             />
@@ -498,30 +563,43 @@ function MethodEditorDialog({
                             启用该支付方式
                         </label>
                     )}
-                    <OperationEditor
-                        label={state.kind === 'payment' ? '资格检查器（可选）' : '资格检查器 *'}
-                        allowEmpty={state.kind === 'payment'}
-                        code={checkerCode}
-                        values={checkerArgs}
-                        definitions={checkerDefinitions}
-                        onCodeChange={nextCode => {
-                            setCheckerCode(nextCode);
-                            setCheckerArgs(defaultArgs(nextCode, checkerDefinitions));
-                        }}
-                        onValuesChange={setCheckerArgs}
-                    />
-                    {state.kind === 'payment' ? (
+                    {isControlledTest ? (
+                        <p className="text-xs leading-5 text-slate-700">
+                            资格检查：仅本店指定、已注册并验证邮箱的测试客户可用，由服务器强制校验。
+                        </p>
+                    ) : (
                         <OperationEditor
-                            label="支付处理器 *"
-                            code={handlerCode}
-                            values={handlerArgs}
-                            definitions={mainDefinitions}
+                            label={state.kind === 'payment' ? '资格检查器（可选）' : '资格检查器 *'}
+                            allowEmpty={state.kind === 'payment'}
+                            code={checkerCode}
+                            values={checkerArgs}
+                            definitions={checkerDefinitions}
                             onCodeChange={nextCode => {
-                                setHandlerCode(nextCode);
-                                setHandlerArgs(defaultArgs(nextCode, mainDefinitions));
+                                setCheckerCode(nextCode);
+                                setCheckerArgs(defaultArgs(nextCode, checkerDefinitions));
                             }}
-                            onValuesChange={setHandlerArgs}
+                            onValuesChange={setCheckerArgs}
                         />
+                    )}
+                    {state.kind === 'payment' ? (
+                        <div className="space-y-3">
+                            <TestPaymentAvailabilityNotice definitions={data.paymentMethodHandlers} />
+                            <OperationEditor
+                                label="支付处理器 *"
+                                code={handlerCode}
+                                values={handlerArgs}
+                                definitions={mainDefinitions}
+                                onCodeChange={nextCode => {
+                                    setHandlerCode(nextCode);
+                                    if (nextCode === testPaymentHandler) {
+                                        setCode(`controlled-test-payment-${data.activeChannel.id}`);
+                                        setEnabled(false);
+                                        setHandlerArgs({ channelId: data.activeChannel.id, customerIds: '' });
+                                    } else setHandlerArgs(defaultArgs(nextCode, mainDefinitions));
+                                }}
+                                onValuesChange={setHandlerArgs}
+                            />
+                        </div>
                     ) : (
                         <>
                             <OperationEditor

@@ -29,6 +29,9 @@ const sharedEnvironment = {
     CLOUDFLARE_SAAS_AUTO_MANAGE_DNS: process.env.CLOUDFLARE_SAAS_AUTO_MANAGE_DNS ?? 'false',
     // The promotion page remains available at /promo, but the main storefront is always direct.
     STOREFRONT_PROMOTION_GATE_ENABLED: 'false',
+    // Explicit opt-in shared by API and Worker, including when PM2 retains an older daemon environment.
+    CONTROLLED_TEST_PAYMENTS_ENABLED:
+        process.env.CONTROLLED_TEST_PAYMENTS_ENABLED === 'true' ? 'true' : 'false',
     // Vendure's telemetry fallback writes .vendure/.installation-id below cwd,
     // which would mutate the verified immutable runtime directory.
     VENDURE_DISABLE_TELEMETRY: 'true',

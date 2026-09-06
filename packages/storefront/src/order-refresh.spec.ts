@@ -20,7 +20,7 @@ describe('order status refresh', () => {
         expect(orderStatusRefreshInterval(state)).toBe(ORDER_STATUS_REFRESH_INTERVAL);
     });
 
-    it.each(['Cancelled', 'Delivered'])('stops refreshing terminal state %s', state => {
+    it.each(['Cancelled', 'Delivered', 'TestPaymentSettled'])('stops refreshing terminal state %s', state => {
         expect(orderNeedsStatusRefresh(state)).toBe(false);
         expect(orderStatusRefreshInterval(state)).toBe(false);
     });

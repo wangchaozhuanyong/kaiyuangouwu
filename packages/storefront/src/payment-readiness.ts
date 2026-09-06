@@ -14,13 +14,18 @@ export function isTestPaymentMethod(method: PaymentMethod): boolean {
     return TEST_PAYMENT_PATTERN.test([method.code, method.name, method.description].join(' '));
 }
 
+export function isControlledTestPaymentMethod(method: PaymentMethod): boolean {
+    return method.code.startsWith('controlled-test-payment-');
+}
+
 export function paymentAvailability(
     methods: PaymentMethod[],
     options: { allowTestMethods: boolean },
 ): PaymentAvailability {
-    const visibleMethods = methods.filter(method =>
-        options.allowTestMethods ? isTestPaymentMethod(method) : !isTestPaymentMethod(method),
-    );
+    const visibleMethods = methods.filter(method => {
+        if (isControlledTestPaymentMethod(method)) return method.isEligible;
+        return !isTestPaymentMethod(method) || options.allowTestMethods;
+    });
     const eligibleMethods = visibleMethods.filter(method => method.isEligible);
 
     return {
