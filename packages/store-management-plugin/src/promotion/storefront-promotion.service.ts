@@ -207,7 +207,7 @@ export class StorefrontPromotionService {
             null;
         const shareImageUrl = referralShareAsset
             ? this.mediaUrl(ctx.req, referralShareAsset.source)
-            : heroImageUrl;
+            : logoUrl;
         const shareTitle = referralShare
             ? isEnglish
                 ? firstUsableEnglish(referralShare.template.headlineEn) || name
