@@ -34,14 +34,12 @@ import {
     useState,
 } from 'react';
 
-import {
-    normalizedHeroThemePreset,
-    normalizedHomepageVisualStyle,
-} from '../../../storefront-content-plugin/src/content-visuals';
+import { normalizedHomepageVisualStyle } from '../../../storefront-content-plugin/src/content-visuals';
+import { HeroScene } from '../../../storefront-content-plugin/src/shared/hero-scene';
 import { ProductCard } from '../components/common/product-card';
 import { claimableCouponCampaigns } from '../coupon-center-state';
 import { heroIndexAfterManualMove, isCompletedHeroSwipe } from '../hero-carousel';
-import { heroThemeStyle, heroUsesImageOverlay } from '../hero-theme';
+import { heroThemeStyle } from '../hero-theme';
 import { selectCategoryPromotionProducts, selectManagedProducts } from '../home-merchandising';
 import { desktopIntroModuleOrder, homepageModuleEntries } from '../homepage-module-order';
 import { resolveManagedContentCopy } from '../managed-content-copy';
@@ -560,7 +558,6 @@ export function HomePage({ embedded = false }: { embedded?: boolean } = {}) {
     const heroCount = managedHeroes.length;
     const desktopIntroOrder = heroCount > 0 ? desktopIntroModuleOrder(homepageModules) : null;
     const managedHero = managedHeroes[heroIndex];
-    const isVipTheme = normalizedHeroThemePreset(managedHero?.settings?.themePreset) === 'warm';
     const managedHeroProduct =
         managedHero?.targetType === 'PRODUCT'
             ? managedContentProductPool.find(product => product.id === managedHero.targetValue)
@@ -568,7 +565,6 @@ export function HomePage({ embedded = false }: { embedded?: boolean } = {}) {
     const hero = managedHeroProduct;
     const heroImage = managedHero?.imageUrl ?? '';
     const heroStyle = managedHero ? heroThemeStyle(managedHero) : undefined;
-    const showHeroImageOverlay = managedHero ? heroUsesImageOverlay(managedHero) : false;
     const noticeItems = buildHomeNoticeItems(systemAnnouncements, noticeBlock, language);
     const defaultNoticeItem: HomeNoticeItem = {
         id: 'default-notice',
@@ -947,98 +943,29 @@ export function HomePage({ embedded = false }: { embedded?: boolean } = {}) {
                                     onPointerCancel={event => finishHeroSwipe(event, true)}
                                     onDragStart={event => event.preventDefault()}
                                 >
-                                    {/* Render the image saved for this carousel slide. */}
-                                    <button
-                                        type="button"
-                                        className="hero-rich-image-link"
-                                        onClick={handleHeroImageOpen}
-                                        aria-label={`${isZh ? '查看推荐内容' : 'Open featured content'}：${
-                                            managedHero?.title || hero?.name || storefrontName
-                                        }`}
-                                    >
-                                        <SafeImage
-                                            src={heroImage}
-                                            alt={
-                                                managedHero?.title ||
-                                                (isZh
-                                                    ? `${storefrontName}精选`
-                                                    : `${storefrontName} Featured`)
+                                    {managedHero && (
+                                        <HeroScene
+                                            content={managedHero}
+                                            imageLabel={`${isZh ? '查看推荐内容' : 'Open featured content'}：${managedHero.title || hero?.name || storefrontName}`}
+                                            onImageOpen={handleHeroImageOpen}
+                                            onOpen={openActiveHero}
+                                            image={
+                                                <SafeImage
+                                                    src={heroImage}
+                                                    alt={
+                                                        managedHero.title ||
+                                                        (isZh
+                                                            ? `${storefrontName}精选`
+                                                            : `${storefrontName} Featured`)
+                                                    }
+                                                    className="hero-rich-backdrop"
+                                                    imageKind="hero"
+                                                    loading="eager"
+                                                    fetchPriority={heroIndex === 0 ? 'high' : 'auto'}
+                                                />
                                             }
-                                            className="hero-rich-backdrop"
-                                            imageKind="hero"
-                                            loading="eager"
-                                            fetchPriority={heroIndex === 0 ? 'high' : 'auto'}
                                         />
-                                    </button>
-                                    {showHeroImageOverlay ? (
-                                        <div className="hero-rich-overlay-shade" />
-                                    ) : null}
-
-                                    {/* Saved copy and display settings. */}
-                                    {(() => {
-                                        const title = resolveManagedContentCopy(managedHero, 'title', '');
-                                        const subtitle = resolveManagedContentCopy(
-                                            managedHero,
-                                            'subtitle',
-                                            '',
-                                        );
-                                        const body = resolveManagedContentCopy(managedHero, 'body', '');
-                                        const ctaLabel = resolveManagedContentCopy(
-                                            managedHero,
-                                            'ctaLabel',
-                                            '',
-                                        );
-                                        const stats = (managedHero?.items ?? []).map(item => ({
-                                            value: item.label,
-                                            label: item.description,
-                                        }));
-
-                                        return (
-                                            <div
-                                                className={`hero-rich-content ${isVipTheme ? 'is-vip' : ''}`}
-                                            >
-                                                {subtitle && (
-                                                    <div
-                                                        className={`hero-rich-pill ${isVipTheme ? 'is-vip-pill' : ''}`}
-                                                    >
-                                                        {isVipTheme ? (
-                                                            <ShieldCheck aria-hidden="true" />
-                                                        ) : (
-                                                            <Zap aria-hidden="true" />
-                                                        )}
-                                                        <span>{subtitle}</span>
-                                                    </div>
-                                                )}
-                                                <h1 className="hero-rich-title">{title}</h1>
-                                                {body && <p className="hero-rich-desc">{body}</p>}
-
-                                                {stats.length > 0 && (
-                                                    <div className="hero-rich-stats-row">
-                                                        {stats.map((stat, index) => (
-                                                            <div
-                                                                className={`hero-stat-badge${isVipTheme ? ' is-vip' : ''}`}
-                                                                key={`${stat.value}-${index}`}
-                                                            >
-                                                                <span className="stat-num">{stat.value}</span>
-                                                                <span className="stat-lbl">{stat.label}</span>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                )}
-
-                                                {ctaLabel && managedHero?.targetType !== 'NONE' && (
-                                                    <button
-                                                        type="button"
-                                                        className={`hero-rich-cta-btn ${isVipTheme ? 'is-vip-btn' : ''}`}
-                                                        onClick={openActiveHero}
-                                                    >
-                                                        {ctaLabel}
-                                                        <ChevronRight aria-hidden="true" />
-                                                    </button>
-                                                )}
-                                            </div>
-                                        );
-                                    })()}
+                                    )}
                                     {heroCount > 1 && (
                                         <div
                                             className="hero-pagination"

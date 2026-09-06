@@ -579,3 +579,22 @@ node deploy/verify-storefront-realtime.mjs \
 - 回滚目标是上一个已通过健康检查、仍保留在 `kaiyuangouwu-releases` 中的不可变运行产物。
 - 先对回滚产物重新执行 `verify-runtime.mjs --expected-sha <ROLLBACK_SHA>`，再将 PM2 和 `kaiyuangouwu-current` 指回该目录，最后重复上线验收。不单独拷贝旧 `dist` 或 `node_modules`。
 - 不回滚或删除数据库、上传资产、订单、客户、店铺配置和测试数据，除非另有经过确认的数据恢复方案。
+
+
+### 精确修正轮播遮罩
+
+`packages/dev-server/scripts/repair-hero-overlay.mjs` 仅修复已审核的美宜佳三张 HERO：
+`damatong-hero-marketplace`、`damatong-hero-malaysia-services`、`damatong-hero-ai-subscriptions`。
+只将 `settings.themePreset` 改成 `bright`，保留图片、双语文案、链接、子项、排期、排序及 6 秒等当前轮播间隔。
+不要使用整店 `sync-damatong-storefront --apply` 来完成这项修正。
+
+在授权的一次性维护中，使用已审查并合入 main 的不可变源码，复用服务器环境中的
+`SUPERADMIN_USERNAME` / `SUPERADMIN_PASSWORD`，不读取或输出凭据。明确设置
+`VENDURE_API_ORIGIN`、实际客户入口 `VENDURE_STOREFRONT_URL`，并在该维护进程中将
+`HOMEPAGE_CAROUSEL_CHANNEL_CODES` 设为 `my-malaysia`（不修改持久运行环境）。
+先运行 `node packages/dev-server/scripts/repair-hero-overlay.mjs --dry-run`，审查其三条字段差异；
+备份就绪后执行同一脚本 `--apply --allow-remote`，随后独立执行 `--verify`。
+默认及其他店铺不会被选入写入范围。脚本校验完整 Admin 内容快照与中英文 Shop 快照，
+语言请求同时使用查询参数和请求头。写后失败恢复原设置；并发编辑时停止自动回滚，保留现场人工处理。
+最后使用 Dashboard 和真实商城浏览器验收三张图片；脚本成功本身不代替视觉验收。
+此脚本不自动挂入常规部署，不允许用本地未提交文件替换生产文件或绕过部署门禁。

@@ -28,6 +28,11 @@ export const GET_CATALOG_TAXONOMY = gql`
         parentId
         position
         productVariantCount
+        featuredAsset {
+            id
+            name
+            preview
+        }
         inheritFilters
         filters {
             code
