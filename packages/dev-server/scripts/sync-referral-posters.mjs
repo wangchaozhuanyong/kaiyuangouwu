@@ -143,6 +143,26 @@ function expectedCopy(block) {
     );
 }
 
+export function comparablePoster(template, requestOrigin, peerOrigin = requestOrigin) {
+    const requestOrigins = new Set([new URL(requestOrigin).origin, new URL(peerOrigin).origin]);
+    const result = { ...template };
+    for (const field of ['posterBackgroundAsset', 'shareBackgroundAsset']) {
+        if (!template[field]) continue;
+        result[field] = { ...template[field] };
+        for (const key of ['source', 'preview']) {
+            if (typeof template[field][key] !== 'string') continue;
+            const url = new URL(template[field][key], requestOrigin);
+            assert.ok(['http:', 'https:'].includes(url.protocol) && !url.username && !url.password);
+            // AssetServer may use each request origin or one fixed public origin. Only
+            // normalize the two verified API origins; other/CDN hosts still match exactly.
+            result[field][key] = requestOrigins.has(url.origin)
+                ? `${url.pathname}${url.search}${url.hash}`
+                : url.href;
+        }
+    }
+    return result;
+}
+
 export async function syncReferralPosters({
     apiOrigin,
     username,
@@ -338,8 +358,12 @@ export async function syncReferralPosters({
                 admin.referralProgram.defaultPosterTemplate,
             );
             assert.deepEqual(
-                shop.referralProgram.posterTemplateConfigs,
-                admin.referralProgram.posterTemplateConfigs.filter(item => item.enabled),
+                shop.referralProgram.posterTemplateConfigs.map(item =>
+                    comparablePoster(item, channel.shopOrigin || origin, origin),
+                ),
+                admin.referralProgram.posterTemplateConfigs
+                    .filter(item => item.enabled)
+                    .map(item => comparablePoster(item, origin, channel.shopOrigin || origin)),
             );
             for (const preset of referralPosterPresets) {
                 const block = current.storefrontContentBlocks.find(
@@ -357,6 +381,8 @@ export async function syncReferralPosters({
                     const poster = program.systemPosterTemplateConfigs.find(item => item.id === preset.id);
                     assert.ok(poster, 'System template did not reach both APIs');
                     assert.equal(poster.posterBackgroundAsset?.id, assetId);
+                    assert.equal(poster.posterBackgroundAsset.width, 1080);
+                    assert.equal(poster.posterBackgroundAsset.height, 1920);
                     assert.deepEqual(
                         Object.fromEntries(copyFields.map(field => [field, poster[field]])),
                         expectedCopy(block),
@@ -367,8 +393,16 @@ export async function syncReferralPosters({
                     assert.equal(poster.enabled, program.posterTemplates.includes(preset.id));
                 }
                 assert.deepEqual(
-                    shop.referralProgram.systemPosterTemplateConfigs.find(item => item.id === preset.id),
-                    admin.referralProgram.systemPosterTemplateConfigs.find(item => item.id === preset.id),
+                    comparablePoster(
+                        shop.referralProgram.systemPosterTemplateConfigs.find(item => item.id === preset.id),
+                        channel.shopOrigin || origin,
+                        origin,
+                    ),
+                    comparablePoster(
+                        admin.referralProgram.systemPosterTemplateConfigs.find(item => item.id === preset.id),
+                        origin,
+                        channel.shopOrigin || origin,
+                    ),
                 );
             }
         }
