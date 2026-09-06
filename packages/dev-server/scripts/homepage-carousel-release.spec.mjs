@@ -69,6 +69,7 @@ void test('workflow rejects invalid carousel scope before checkout', () => {
                 PATH: process.env.PATH,
                 TARGET_SHA: sha,
                 HOMEPAGE_CAROUSEL: carousel,
+                REFERRAL_POSTERS: 'none',
                 MEDIA_CHANNEL_CODES: channel,
                 MEDIA_KEYS: media,
                 AUTH_VISUALS: 'false',
@@ -85,7 +86,7 @@ void test('workflow rejects invalid carousel scope before checkout', () => {
 void test('carousel change guard rejects missing approval and unexpected approval', () => {
     const source = deploy.slice(
         deploy.indexOf('homepage_carousel_change=false'),
-        deploy.indexOf('mapfile -t managed_storefront_changes'),
+        deploy.indexOf('referral_poster_change=false'),
     );
     for (const [changed, reviewed, succeeds] of [
         [false, 'false', true],
@@ -117,7 +118,7 @@ void test('carousel release chain verifies both endpoints before promoting the c
     assert.match(build, /homepageCarousel: \$homepageCarousel/u);
     assert.match(downstream, /\.homepageCarousel \| type == "boolean"/u);
     assert.match(downstream, /VENDURE_REVIEWED_HOMEPAGE_CAROUSEL/u);
-    assert.match(downstream, /HOMEPAGE_CAROUSEL_\|Runtime artifact verified/u);
+    assert.match(downstream, /HOMEPAGE_CAROUSEL_\|REFERRAL_POSTERS_\|Runtime artifact verified/u);
     assert.match(deploy, /packages\/dev-server\/scripts\/sync-homepage-carousel\.mjs/u);
     assert.match(deploy, /packages\/storefront\/src\/assets\/storefront\/carousel\//u);
     assert.match(deploy, /VENDURE_REVIEWED_HOMEPAGE_CAROUSEL="\$\{reviewed_homepage_carousel\}"/u);

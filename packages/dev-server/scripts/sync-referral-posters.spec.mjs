@@ -7,6 +7,7 @@ import test from 'node:test';
 import presetsModule from '../../store-management-plugin/dist/referral/referral-poster-presets.js';
 
 import {
+    comparablePoster,
     parsePosterArguments,
     prepareReferralPosters,
     syncReferralPosters,
@@ -304,9 +305,8 @@ test('a lost batch response after commit is recovered by invocation marker and r
         assert.deepEqual(f.state.a.custom, []);
     }));
 
-test('reviewed scope resolves real domain Channels without exposing their routing tokens', async () => {
-    const f = fixture();
-    const fetchImpl = async (url, init) => {
+function scopedFetch(f, wrongPublicPath = false) {
+    return async (url, init) => {
         const { query } = JSON.parse(init.body);
         if (query.includes('PosterPublishLogin'))
             return new Response(
@@ -335,8 +335,29 @@ test('reviewed scope resolves real domain Channels without exposing their routin
                     },
                 }),
             );
-        return f.options.fetchImpl(url, init);
+        const response = await f.options.fetchImpl(url, init);
+        if (!query.includes('PosterPublishVerify')) return response;
+        const body = await response.json();
+        const isPrimary = init.headers['vendure-token'] === 'fixture-a';
+        body.data.activeChannel.code = isPrimary ? '__default_channel__' : 'second-store';
+        for (const template of [
+            ...body.data.referralProgram.posterTemplateConfigs,
+            ...body.data.referralProgram.systemPosterTemplateConfigs,
+        ]) {
+            if (!template.posterBackgroundAsset) continue;
+            for (const field of ['source', 'preview']) {
+                const assetUrl = new URL(template.posterBackgroundAsset[field]);
+                const suffix = wrongPublicPath && url.includes('/shop-api') ? '-wrong' : '';
+                template.posterBackgroundAsset[field] = `${new URL(url).origin}${assetUrl.pathname}${suffix}`;
+            }
+        }
+        return new Response(JSON.stringify(body));
     };
+}
+
+test('reviewed scope resolves real domain Channels without exposing their routing tokens', async () => {
+    const f = fixture();
+    const fetchImpl = scopedFetch(f);
     const result = await syncReferralPosters({
         ...f.options,
         channelCodes: [],
@@ -348,6 +369,68 @@ test('reviewed scope resolves real domain Channels without exposing their routin
     assert.equal(result.results.filter(item => item.kind === 'custom-ai').length, 1);
     assert.equal(result.results.find(item => item.kind === 'custom-ai').channelCode, '__default_channel__');
     assert.doesNotMatch(JSON.stringify(result), /fixture-auth|fixture-a|fixture-b/);
+});
+
+test('internal and public API asset origins preserve full template parity for both stores and custom posters', () =>
+    withBackup(async backupFile => {
+        const f = fixture();
+        const options = {
+            ...f.options,
+            channelCodes: [],
+            aiChannelCode: undefined,
+            scope: 'both-stores',
+            fetchImpl: scopedFetch(f),
+        };
+        await syncReferralPosters({ ...options, backupFile, apply: true });
+        f.state.a.custom[0].enabled = true;
+        assert.equal((await syncReferralPosters({ ...options, verify: true })).verified, true);
+    }));
+
+test('a different public asset path still fails parity and restores imported content', () =>
+    withBackup(async backupFile => {
+        const f = fixture();
+        await assert.rejects(
+            syncReferralPosters({
+                ...f.options,
+                channelCodes: [],
+                aiChannelCode: undefined,
+                scope: 'both-stores',
+                fetchImpl: scopedFetch(f, true),
+                backupFile,
+                apply: true,
+            }),
+            /were restored/,
+        );
+        assert.equal(f.state.a.blocks.length, 0);
+        assert.equal(f.state.a.custom.length, 0);
+    }));
+
+test('origin normalization keeps unrelated hosts, dimensions, asset IDs and copy differences detectable', () => {
+    const adminOrigin = 'http://127.0.0.1:3002';
+    const shopOrigin = 'https://moyaoai.com';
+    const poster = host => ({
+        headlineZh: '广告内容',
+        posterBackgroundAsset: {
+            id: '131',
+            width: 1080,
+            height: 1920,
+            source: `${host}/assets/source/14/poster.png`,
+            preview: `${host}/assets/preview/c1/poster.png`,
+        },
+    });
+    const expected = comparablePoster(poster(adminOrigin), adminOrigin);
+    assert.deepEqual(comparablePoster(poster(shopOrigin), shopOrigin), expected);
+    assert.deepEqual(comparablePoster(poster(shopOrigin), adminOrigin, shopOrigin), expected);
+    assert.notDeepEqual(comparablePoster(poster('https://unrelated.example'), shopOrigin), expected);
+    for (const field of ['id', 'width', 'height']) {
+        const changed = poster(shopOrigin);
+        changed.posterBackgroundAsset[field] = 'different';
+        assert.notDeepEqual(comparablePoster(changed, shopOrigin), expected);
+    }
+    assert.notDeepEqual(
+        comparablePoster({ ...poster(shopOrigin), headlineZh: '旧广告' }, shopOrigin),
+        expected,
+    );
 });
 
 test('a later-store verification failure restores earlier store copy and background exactly', () =>
