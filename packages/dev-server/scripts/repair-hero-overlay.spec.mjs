@@ -10,6 +10,7 @@ function fixture({
     missing = false,
     ambiguous = false,
     lostResponse = false,
+    distinctAssetHosts = false,
 } = {}) {
     const blocks = [...heroOverlayRepairCodes, 'unrelated-floor'].map((code, index) => ({
         id: String(index),
@@ -83,6 +84,14 @@ function fixture({
                 ),
             ),
         }));
+        if (distinctAssetHosts) {
+            for (const block of shop)
+                block.imageAsset = {
+                    ...block.imageAsset,
+                    preview: `https://shop.example.test${block.imageAsset.preview}`,
+                    source: `https://shop.example.test${block.imageAsset.source}`,
+                };
+        }
         if (mismatch && writes.length === 1 && !injected) {
             injected = true;
             shop[0].settings = { broken: true };
@@ -182,4 +191,10 @@ test('verifies a committed transaction after a lost response without retrying th
     const f = fixture({ lostResponse: true });
     assert.equal((await f.run({ apply: true })).status, 'APPLIED_VERIFIED');
     assert.equal(f.writes.length, 1);
+});
+
+test('verifies the same asset binding across Admin and Shop URL origins', async () => {
+    const f = fixture({ distinctAssetHosts: true });
+    assert.equal((await f.run({ apply: true })).status, 'APPLIED_VERIFIED');
+    assert.deepEqual(f.blocks()[0].imageAsset, f.before[0].imageAsset);
 });

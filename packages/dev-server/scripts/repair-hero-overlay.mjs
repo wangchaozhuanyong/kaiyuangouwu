@@ -44,6 +44,16 @@ function stable(blocks) {
     return blocks.map(({ updatedAt, ...block }) => block);
 }
 
+function assetIdentity(asset) {
+    if (!asset) return null;
+    const assetPath = value => {
+        if (!value) return null;
+        const pathname = new URL(value, 'https://asset.invalid').pathname;
+        return /^\/(preview|source)\//.test(pathname) ? `/assets${pathname}` : pathname;
+    };
+    return { id: asset.id, preview: assetPath(asset.preview), source: assetPath(asset.source) };
+}
+
 function expected(blocks) {
     return stable(blocks).map(block =>
         heroOverlayRepairCodes.includes(block.code)
@@ -154,7 +164,11 @@ export async function repairHeroOverlay({
             for (const field of copy.split(' '))
                 assert.equal(shop[field], translation[0][field], `${code} ${locale} ${field} mismatch`);
             assert.deepEqual(shop.settings, admin.settings, `${code} settings mismatch before repair`);
-            assert.deepEqual(shop.imageAsset, admin.imageAsset, `${code} asset mismatch before repair`);
+            assert.deepEqual(
+                assetIdentity(shop.imageAsset),
+                assetIdentity(admin.imageAsset),
+                `${code} asset mismatch before repair`,
+            );
         }
     }
     const summary = plans.map(({ code, id, from, to, action }) => ({ code, id, from, to, action }));
