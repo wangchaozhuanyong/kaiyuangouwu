@@ -28,6 +28,76 @@ export class ReferralsApi extends BaseDomainApi {
                         posterTemplates
                         posterTemplateConfigs {
                             id
+                            updatedAt
+                            design
+                            name
+                            enabled
+                            position
+                            layoutVariant
+                            posterBackgroundAsset {
+                                id
+                                preview
+                                source
+                                width
+                                height
+                            }
+                            shareBackgroundAsset {
+                                id
+                                preview
+                                source
+                                width
+                                height
+                            }
+                            titleZh
+                            titleEn
+                            headlineZh
+                            headlineEn
+                            rewardTextZh
+                            rewardTextEn
+                            siteIntroZh
+                            siteIntroEn
+                            serviceTextZh
+                            serviceTextEn
+                            featureOneTitleZh
+                            featureOneTitleEn
+                            featureOneTextZh
+                            featureOneTextEn
+                            featureTwoTitleZh
+                            featureTwoTitleEn
+                            featureTwoTextZh
+                            featureTwoTextEn
+                            featureThreeTitleZh
+                            featureThreeTitleEn
+                            featureThreeTextZh
+                            featureThreeTextEn
+                            qrEyebrowZh
+                            qrEyebrowEn
+                            qrTitleZh
+                            qrTitleEn
+                            qrDescriptionZh
+                            qrDescriptionEn
+                            sceneOneZh
+                            sceneOneEn
+                            sceneTwoZh
+                            sceneTwoEn
+                            sceneThreeZh
+                            sceneThreeEn
+                            sceneFourZh
+                            sceneFourEn
+                            ctaTextZh
+                            ctaTextEn
+                            footerTitleZh
+                            footerTitleEn
+                            footerTextZh
+                            footerTextEn
+                            foregroundColor
+                            accentColor
+                            overlayOpacity
+                        }
+                        systemPosterTemplateConfigs {
+                            id
+                            updatedAt
+                            design
                             name
                             enabled
                             position

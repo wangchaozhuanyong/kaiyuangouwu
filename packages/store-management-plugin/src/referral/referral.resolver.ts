@@ -174,6 +174,18 @@ export class ReferralAdminResolver {
 
     @Transaction()
     @Mutation()
+    @Allow(referralPermission.Update)
+    setReferralPosterTemplateEnabled(
+        @Ctx() ctx: RequestContext,
+        @Args('id') id: ID,
+        @Args('enabled') enabled: boolean,
+        @Args('expectedUpdatedAt') expectedUpdatedAt: Date,
+    ) {
+        return this.referralService.setPosterTemplateEnabled(ctx, id, enabled, expectedUpdatedAt);
+    }
+
+    @Transaction()
+    @Mutation()
     @Allow(referralPermission.Delete)
     deleteReferralPosterTemplate(@Ctx() ctx: RequestContext, @Args('id') id: ID) {
         return this.referralService.deletePosterTemplate(ctx, id);

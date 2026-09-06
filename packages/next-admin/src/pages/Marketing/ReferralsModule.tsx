@@ -372,6 +372,7 @@ export function ReferralsModule() {
             {posterEditing && program.data && (
                 <PosterEditor
                     source={posterEditing}
+                    rewardRate={program.data.referralProgram.rewardRate}
                     onClose={() => setPosterEditing(null)}
                     onSaved={async message => {
                         setPosterEditing(null);

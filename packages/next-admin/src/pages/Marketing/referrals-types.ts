@@ -42,12 +42,47 @@ export interface PosterDraft {
     siteIntroEn: string;
     serviceTextZh: string;
     serviceTextEn: string;
+    featureOneTitleZh: string;
+    featureOneTitleEn: string;
+    featureOneTextZh: string;
+    featureOneTextEn: string;
+    featureTwoTitleZh: string;
+    featureTwoTitleEn: string;
+    featureTwoTextZh: string;
+    featureTwoTextEn: string;
+    featureThreeTitleZh: string;
+    featureThreeTitleEn: string;
+    featureThreeTextZh: string;
+    featureThreeTextEn: string;
+    qrEyebrowZh: string;
+    qrEyebrowEn: string;
+    qrTitleZh: string;
+    qrTitleEn: string;
+    qrDescriptionZh: string;
+    qrDescriptionEn: string;
+    sceneOneZh: string;
+    sceneOneEn: string;
+    sceneTwoZh: string;
+    sceneTwoEn: string;
+    sceneThreeZh: string;
+    sceneThreeEn: string;
+    sceneFourZh: string;
+    sceneFourEn: string;
+    ctaTextZh: string;
+    ctaTextEn: string;
+    footerTitleZh: string;
+    footerTitleEn: string;
+    footerTextZh: string;
+    footerTextEn: string;
     foregroundColor: string;
     accentColor: string;
     overlayOpacity: number;
 }
 
 export interface PosterAssetChoice {
+    source?: string;
+    width?: number;
+    height?: number;
     id: string;
     name: string;
     preview: string;

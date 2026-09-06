@@ -176,7 +176,7 @@ export function storefrontRealtimeQueryMatches(
         const ids = new Set(event.entityIds ?? []);
         return event.entityType !== 'Product' || ids.size === 0 || ids.has(String(key[4]));
     }
-    if (topics.has('referral') && section === 'referral-program') return true;
+    if ((topics.has('referral') || topics.has('content')) && section === 'referral-program') return true;
     if (section !== 'private') return false;
 
     const privateSection = key[4];

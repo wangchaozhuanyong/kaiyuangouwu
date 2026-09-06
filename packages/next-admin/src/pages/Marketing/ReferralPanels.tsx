@@ -8,7 +8,7 @@ import {
     ReferralProgramRecord,
     ReferralProgramResult,
     ReferralReportsResult,
-    UPDATE_REFERRAL_POSTER_MUTATION,
+    SET_REFERRAL_POSTER_ENABLED_MUTATION,
     UPDATE_REFERRAL_PROGRAM_MUTATION,
 } from '../../graphql/marketing.graphql';
 import { formatDateTime, formatMoney } from '../Sales/sales-utils';
@@ -68,44 +68,6 @@ export function TodayOverview({ data }: { data: ReferralProgramResult['referralT
         </section>
     );
 }
-
-export const SYSTEM_POSTER_TEMPLATES = [
-    {
-        id: 'BRAND_MINIMAL',
-        nameZh: '模钥简约',
-        nameEn: 'MOYAO AI minimal',
-        desc: '经典白蓝极简科技版式，通用度最高，适合各类数字化产品。',
-        gradient: 'linear-gradient(135deg, #635BFF, #22D3EE)',
-    },
-    {
-        id: 'BENEFIT_RED_GOLD',
-        nameZh: '冰川蓝光',
-        nameEn: 'Glacier blue',
-        desc: '冷光科技冰川蓝渐变，视觉聚焦，适合 SaaS 与 AI 服务。',
-        gradient: 'linear-gradient(135deg, #0284c7, #38bdf8)',
-    },
-    {
-        id: 'PRODUCT_STORY',
-        nameZh: '青空流线',
-        nameEn: 'Skyline flow',
-        desc: '青空流线清新风格，视觉轻盈舒适，适合生活化与创作工具。',
-        gradient: 'linear-gradient(135deg, #0369a1, #06b6d4)',
-    },
-    {
-        id: 'PREMIUM_DARK',
-        nameZh: '深海科技',
-        nameEn: 'Deep-sea tech',
-        desc: '深邃极客暗黑风，对比度鲜明，适合高阶开发者与 AI 工具。',
-        gradient: 'linear-gradient(135deg, #020b1d, #0f2b5c)',
-    },
-    {
-        id: 'CLOUD_BRIDGE_ORBIT',
-        nameZh: '模钥轨道',
-        nameEn: 'MOYAO AI orbit',
-        desc: '紫蓝科技轨道渐变，未来感与营销冲击力强。',
-        gradient: 'linear-gradient(135deg, #635BFF, #8B5CF6)',
-    },
-] as const;
 
 export function ProgramSettings({
     draft,
@@ -190,13 +152,17 @@ export function ProgramSettings({
                         onChange={event => setDraft({ ...draft, defaultPosterTemplate: event.target.value })}
                         className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-normal text-slate-900"
                     >
-                        {SYSTEM_POSTER_TEMPLATES.filter(t =>
-                            (draft.posterTemplates ?? []).includes(t.id),
-                        ).map(template => (
-                            <option key={template.id} value={template.id}>
-                                {template.nameZh}（系统预置）
-                            </option>
-                        ))}
+                        {draft.posterTemplates.length === 0 &&
+                            !program.posterTemplateConfigs.some(template => template.enabled) && (
+                                <option value="">全部隐藏，不提供海报</option>
+                            )}
+                        {program.systemPosterTemplateConfigs
+                            .filter(t => (draft.posterTemplates ?? []).includes(t.id))
+                            .map(template => (
+                                <option key={template.id} value={template.id}>
+                                    {template.name}（系统预置）
+                                </option>
+                            ))}
                         {program.posterTemplateConfigs
                             .filter(template => template.enabled)
                             .map(template => (
@@ -778,19 +744,20 @@ export function PostersPanel({
         deleteReferralPosterTemplate: { result: string; message?: string | null };
     }>(DELETE_REFERRAL_POSTER_MUTATION);
     const [updateProgram, updateProgramState] = useMutation(UPDATE_REFERRAL_PROGRAM_MUTATION);
-    const [updatePoster, updatePosterState] = useMutation(UPDATE_REFERRAL_POSTER_MUTATION);
+    const [updatePoster, updatePosterState] = useMutation(SET_REFERRAL_POSTER_ENABLED_MUTATION);
 
     const toggleSystemTemplate = async (templateId: string, enabled: boolean) => {
         const current = program.posterTemplates ?? [];
         const next = enabled
             ? [...new Set([...current, templateId])]
             : current.filter(id => id !== templateId);
-        let nextDefault = program.defaultPosterTemplate;
-        if (!enabled && program.defaultPosterTemplate === templateId) {
-            const customEnabled = program.posterTemplateConfigs.filter(t => t.enabled).map(t => t.id);
-            const allRemaining = [...next, ...customEnabled];
-            if (allRemaining.length > 0) nextDefault = allRemaining[0];
-        }
+        const allRemaining = [
+            ...next,
+            ...program.posterTemplateConfigs.filter(t => t.enabled).map(t => t.id),
+        ];
+        const nextDefault = allRemaining.includes(program.defaultPosterTemplate)
+            ? program.defaultPosterTemplate
+            : (allRemaining[0] ?? '');
         try {
             await updateProgram({
                 variables: {
@@ -809,7 +776,7 @@ export function PostersPanel({
                 },
             });
             await onChanged(
-                `系统预置模板「${posterLabel(templateId)}」已${enabled ? '开启客户端显示' : '隐藏'}`,
+                `系统预置模板「${posterLabel(templateId, program)}」已${enabled ? '开启客户端显示' : '隐藏'}`,
             );
         } catch (error) {
             onError(errorText(error));
@@ -834,68 +801,18 @@ export function PostersPanel({
                     },
                 },
             });
-            await onChanged(`默认海报已设置为「${posterLabel(templateId)}」`);
+            await onChanged(`默认海报已设置为「${posterLabel(templateId, program)}」`);
         } catch (error) {
             onError(errorText(error));
         }
     };
 
     const toggleCustomTemplate = async (template: ReferralPosterRecord, enabled: boolean) => {
-        let nextDefault = program.defaultPosterTemplate;
-        if (!enabled && program.defaultPosterTemplate === template.id) {
-            const currentSystem = program.posterTemplates ?? [];
-            const otherCustom = program.posterTemplateConfigs
-                .filter(t => t.id !== template.id && t.enabled)
-                .map(t => t.id);
-            const allRemaining = [...currentSystem, ...otherCustom];
-            if (allRemaining.length > 0) nextDefault = allRemaining[0];
-        }
         try {
             await updatePoster({
-                variables: {
-                    input: {
-                        id: template.id,
-                        name: template.name,
-                        enabled,
-                        position: template.position,
-                        layoutVariant: template.layoutVariant,
-                        posterBackgroundAssetId: template.posterBackgroundAsset?.id || null,
-                        shareBackgroundAssetId: template.shareBackgroundAsset?.id || null,
-                        titleZh: template.titleZh,
-                        titleEn: template.titleEn,
-                        headlineZh: template.headlineZh,
-                        headlineEn: template.headlineEn,
-                        rewardTextZh: template.rewardTextZh,
-                        rewardTextEn: template.rewardTextEn,
-                        siteIntroZh: template.siteIntroZh,
-                        siteIntroEn: template.siteIntroEn,
-                        serviceTextZh: template.serviceTextZh,
-                        serviceTextEn: template.serviceTextEn,
-                        foregroundColor: template.foregroundColor,
-                        accentColor: template.accentColor,
-                        overlayOpacity: template.overlayOpacity,
-                    },
-                },
+                variables: { id: template.id, enabled, expectedUpdatedAt: program.updatedAt },
             });
-            if (nextDefault !== program.defaultPosterTemplate) {
-                await updateProgram({
-                    variables: {
-                        input: {
-                            expectedUpdatedAt: program.updatedAt,
-                            enabled: program.enabled,
-                            rewardRate: program.rewardRate,
-                            releaseDelayDays: program.releaseDelayDays,
-                            minimumOrderAmount: program.minimumOrderAmount,
-                            maxRewardPerOrder: program.maxRewardPerOrder,
-                            allowBalanceSpend: program.allowBalanceSpend,
-                            attributionWindowDays: program.attributionWindowDays,
-                            defaultPosterTemplate: nextDefault,
-                            posterTemplates: program.posterTemplates,
-                        },
-                    },
-                });
-            }
-            await onChanged(`模板「${template.name}」已${enabled ? '启用客户端显示' : '停用隐藏'}`);
+            await onChanged(`模板「${template.name}」已${enabled ? '开启客户端显示' : '隐藏'}`);
         } catch (error) {
             onError(errorText(error));
         }
@@ -933,7 +850,7 @@ export function PostersPanel({
                     </p>
                 </div>
                 <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                    {SYSTEM_POSTER_TEMPLATES.map(sys => {
+                    {program.systemPosterTemplateConfigs.map(sys => {
                         const isEnabled = (program.posterTemplates ?? []).includes(sys.id);
                         const isDefault = program.defaultPosterTemplate === sys.id;
                         return (
@@ -944,7 +861,12 @@ export function PostersPanel({
                                 <div>
                                     <div
                                         className="aspect-[16/9] p-4 text-white flex flex-col justify-between"
-                                        style={{ background: sys.gradient }}
+                                        style={{
+                                            color: sys.foregroundColor,
+                                            background: sys.posterBackgroundAsset
+                                                ? `url(${sys.posterBackgroundAsset.preview}) center/cover`
+                                                : sys.design?.background || '#f5f9fe',
+                                        }}
                                     >
                                         <div className="flex items-center justify-between">
                                             <span className="text-[10px] font-bold uppercase tracking-wider opacity-90">
@@ -957,15 +879,13 @@ export function PostersPanel({
                                             )}
                                         </div>
                                         <div>
-                                            <div className="text-sm font-bold drop-shadow-sm">
-                                                {sys.nameZh}
-                                            </div>
-                                            <div className="text-[11px] opacity-80">{sys.nameEn}</div>
+                                            <div className="text-sm font-bold drop-shadow-sm">{sys.name}</div>
+                                            <div className="text-[11px] opacity-80">{sys.titleEn}</div>
                                         </div>
                                     </div>
                                     <div className="p-3 space-y-1.5">
                                         <div className="flex items-center justify-between">
-                                            <h3 className="text-xs font-bold text-slate-900">{sys.nameZh}</h3>
+                                            <h3 className="text-xs font-bold text-slate-900">{sys.name}</h3>
                                             <span
                                                 className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
                                                     isEnabled
@@ -977,7 +897,7 @@ export function PostersPanel({
                                             </span>
                                         </div>
                                         <p className="text-[11px] text-slate-500 leading-relaxed">
-                                            {sys.desc}
+                                            {sys.siteIntroZh}
                                         </p>
                                     </div>
                                 </div>
@@ -1004,6 +924,13 @@ export function PostersPanel({
                                     >
                                         {isDefault ? '当前为默认海报' : '设为默认海报'}
                                     </button>
+                                    <button
+                                        type="button"
+                                        className="w-full rounded-lg border border-slate-200 py-1.5 text-xs text-slate-700"
+                                        onClick={() => onEdit({ ...sys, id: '', enabled: false })}
+                                    >
+                                        基于此款创建本店模板
+                                    </button>
                                 </div>
                             </article>
                         );
@@ -1029,7 +956,13 @@ export function PostersPanel({
                     </div>
                     <button
                         type="button"
-                        onClick={() => onEdit('NEW')}
+                        onClick={() =>
+                            onEdit(
+                                program.systemPosterTemplateConfigs[0]
+                                    ? { ...program.systemPosterTemplateConfigs[0], id: '', enabled: false }
+                                    : 'NEW',
+                            )
+                        }
                         className="flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white"
                     >
                         <Plus className="h-3.5 w-3.5" />

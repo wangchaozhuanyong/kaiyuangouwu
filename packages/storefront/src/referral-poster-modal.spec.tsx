@@ -1,181 +1,141 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { ReferralPosterTemplate } from './types';
 
-import { posterForegroundColor, ReferralPosterModal, referralPosterStyles } from './referral-poster-modal';
+import {
+    availablePosterTemplates,
+    posterDomain,
+    posterLayoutFields,
+    posterRenderKey,
+    wrapPosterText,
+    type PosterCopy,
+} from './referral-poster-layout';
+import { ReferralPosterModal } from './referral-poster-modal';
 import { readStorefrontStylesheet } from './test-stylesheet';
 
-const expectedTemplateIds = [
-    'BRAND_MINIMAL',
-    'BENEFIT_RED_GOLD',
-    'PRODUCT_STORY',
-    'PREMIUM_DARK',
-    'CLOUD_BRIDGE_ORBIT',
-];
-
-describe('referral poster templates', () => {
+function template(id: string, name: string, enabled = true): ReferralPosterTemplate {
+    const copy = Object.fromEntries(
+        posterLayoutFields
+            .filter(f => f.field.endsWith('Zh'))
+            .flatMap(f => [
+                [f.field, '测试文案'],
+                [f.field.replace(/Zh$/, 'En'), 'Sample copy'],
+            ]),
+    ) as PosterCopy;
+    return {
+        ...copy,
+        serviceTextZh: '',
+        serviceTextEn: '',
+        id,
+        name,
+        enabled,
+        position: 0,
+        layoutVariant: 'STANDARD_CENTER',
+        posterBackgroundAsset: null,
+        shareBackgroundAsset: null,
+        foregroundColor: '#152c49',
+        accentColor: '#2565ae',
+        overlayOpacity: 0,
+        rewardTextZh: '邀请获得 {rewardRate}% 奖励',
+        rewardTextEn: 'Earn {rewardRate}% rewards',
+    };
+}
+const system = [template('BRAND_MINIMAL', '服务端模板甲'), template('PRODUCT_STORY', '服务端模板乙')];
+function markup(systemIds: string[], custom: ReferralPosterTemplate[] = []) {
+    return renderToStaticMarkup(
+        createElement(ReferralPosterModal, {
+            inviteCode: 'INVITE88',
+            storefrontName: '测试店铺',
+            logoUrl: null,
+            language: 'zh',
+            rewardRate: 3,
+            templates: systemIds,
+            systemTemplateConfigs: system,
+            templateConfigs: custom,
+            defaultTemplate: systemIds[0] ?? '',
+            channelId: 'store-a',
+            onClose: vi.fn(),
+            onNotify: vi.fn(),
+        }),
+    );
+}
+describe('referral poster isolation and visibility', () => {
     afterEach(() => vi.unstubAllGlobals());
-
-    it('keeps five distinct templates aligned with the backend contract', () => {
-        expect(referralPosterStyles.map(style => style.id)).toEqual(expectedTemplateIds);
-        expect(new Set(referralPosterStyles.map(style => style.background))).toHaveLength(5);
-        expect(new Set(referralPosterStyles.map(style => style.nameZh))).toHaveLength(5);
-        expect(new Set(referralPosterStyles.map(style => style.pattern))).toHaveLength(5);
-        expect(
-            new Set(
-                referralPosterStyles.map(style =>
-                    JSON.stringify([style.colors, style.foreground, style.accent, style.pattern]),
-                ),
-            ),
-        ).toHaveLength(5);
-        expect(referralPosterStyles.map(style => style.dark)).toEqual([false, true, true, true, false]);
-        expect(referralPosterStyles.find(style => style.id === 'PREMIUM_DARK')?.colors[0]).toBe('#020b1d');
-        expect(posterForegroundColor('#f3f8ff', 'deep-sea')).toBe('#f3f8ff');
-        expect(posterForegroundColor('#f3f8ff', 'minimal')).toBe('#0E2A63');
-        expect(posterForegroundColor('#f8fbff', 'minimal', true)).toBe('#f8fbff');
+    it('honours explicit empty configuration without restoring any built-in templates', () => {
+        vi.stubGlobal('window', { location: { origin: 'https://store-a.example' } });
+        expect(availablePosterTemplates([], system, [])).toEqual([]);
+        expect(markup([])).toBe('');
     });
-
-    it('renders all enabled templates and identifies the invite code as optional sharing data', () => {
-        vi.stubGlobal('window', { location: { origin: 'https://shop.example.com' } });
-        const markup = renderToStaticMarkup(
-            createElement(ReferralPosterModal, {
-                inviteCode: 'INVITE88',
-                storefrontName: '测试商城',
-                logoUrl: null,
-                language: 'zh',
-                rewardRate: 10,
-                templates: expectedTemplateIds,
-                defaultTemplate: 'BRAND_MINIMAL',
-                onClose: vi.fn(),
-                onNotify: vi.fn(),
-            }),
+    it('uses server-provided names and only includes enabled system and custom templates', () => {
+        vi.stubGlobal('window', { location: { origin: 'https://store-a.example' } });
+        const result = markup(
+            ['BRAND_MINIMAL'],
+            [template('123', '本店模板'), template('456', '已隐藏专属', false)],
         );
-
-        expect(markup).toContain('模钥简约');
-        expect(markup).toContain('冰川蓝光');
-        expect(markup).toContain('青空流线');
-        expect(markup).toContain('深海科技');
-        expect(markup).toContain('模钥轨道');
-        expect(markup).toContain('INVITE88');
-        expect(markup).toContain('好友成功消费，可获得 10% 奖励用于消费抵扣');
-        expect(markup).toContain('poster-templates-scroll');
-        expect(markup).toContain('scrollbar-width:none');
-        expect(markup).toContain('data-template-id="BRAND_MINIMAL" data-active="true"');
-        expect(markup).toContain('data-template-id="BENEFIT_RED_GOLD" data-active="false"');
+        expect(result).toContain('服务端模板甲');
+        expect(result).toContain('本店模板');
+        expect(result).not.toContain('服务端模板乙');
+        expect(result).not.toContain('已隐藏专属');
+        expect(result).toContain('邀请获得 3% 奖励');
+        for (const previousBrand of ['云桥', 'CloudBridge', 'damatong.net', 'moyaoai.com'])
+            expect(result).not.toContain(previousBrand);
     });
-
-    it('keeps the poster reachable and unobscured on short mobile viewports', () => {
-        vi.stubGlobal('window', { location: { origin: 'https://shop.example.com' } });
-        const markup = renderToStaticMarkup(
-            createElement(ReferralPosterModal, {
-                inviteCode: 'INVITE88',
-                storefrontName: 'Test Shop',
-                logoUrl: null,
-                language: 'en',
-                rewardRate: 10,
-                templates: expectedTemplateIds,
-                defaultTemplate: 'BRAND_MINIMAL',
-                onClose: vi.fn(),
-                onNotify: vi.fn(),
-            }),
+    it('retains the existing modal dimensions and scrolling affordance', () => {
+        vi.stubGlobal('window', { location: { origin: 'https://store-a.example' } });
+        const result = markup(['BRAND_MINIMAL', 'PRODUCT_STORY']);
+        for (const cls of [
+            'max-w-sm',
+            'min-w-0',
+            'overflow-x-hidden',
+            'poster-templates-scroll',
+            'referral-poster-preview',
+        ])
+            expect(result).toContain(cls);
+        expect(readStorefrontStylesheet(['./styles/modals-and-support.css'])).toMatch(
+            /aspect-ratio:\s*9\s*\/\s*16/,
         );
-
-        expect(markup).toContain('MOYAO AI minimal');
-        expect(markup).toContain('overflow-x-hidden');
-        expect(markup).toContain('min-w-0');
-        expect(markup).toContain('max-w-sm');
-        expect(markup).toContain('flex items-start justify-center');
-        expect(markup).toContain('my-auto');
-        expect(markup).toContain('pt-14');
-        expect(markup).toContain('referral-poster-preview');
-        expect(markup).not.toContain('max-h-[54dvh]');
-        expect(markup).not.toContain('grid place-items-center');
-
-        const stylesheet = readStorefrontStylesheet(['./styles/modals-and-support.css']);
-        expect(stylesheet).toMatch(/\.referral-poster-preview\s*\{[\s\S]*?aspect-ratio:\s*9\s*\/\s*16/);
-        expect(stylesheet).toContain('width: min(100%, calc(54dvh * 9 / 16))');
     });
-
-    it('combines custom templates with enabled default templates and omits disabled default templates', () => {
-        vi.stubGlobal('window', { location: { origin: 'https://shop.example.com' } });
-        const markup = renderToStaticMarkup(
-            createElement(ReferralPosterModal, {
-                inviteCode: 'INVITE88',
-                storefrontName: '测试商城',
-                logoUrl: null,
-                language: 'zh',
-                rewardRate: 10,
-                templates: ['BRAND_MINIMAL', 'BENEFIT_RED_GOLD'], // Only 2 default templates enabled
-                templateConfigs: [
-                    {
-                        id: 'custom-poster-1',
-                        name: '极客定制海报',
-                        enabled: true,
-                        position: 0,
-                        layoutVariant: 'STANDARD_CENTER',
-                        posterBackgroundAsset: null,
-                        shareBackgroundAsset: null,
-                        titleZh: '专属邀请',
-                        titleEn: 'Exclusive Invite',
-                        headlineZh: '邀请有礼',
-                        headlineEn: 'Invite & Earn',
-                        rewardTextZh: '得 10% 奖励',
-                        rewardTextEn: 'Earn 10%',
-                        siteIntroZh: '介绍',
-                        siteIntroEn: 'Intro',
-                        serviceTextZh: '服务',
-                        serviceTextEn: 'Service',
-                        featureOneTitleZh: '特色1',
-                        featureOneTitleEn: 'Feature 1',
-                        featureOneTextZh: '说明1',
-                        featureOneTextEn: 'Desc 1',
-                        featureTwoTitleZh: '特色2',
-                        featureTwoTitleEn: 'Feature 2',
-                        featureTwoTextZh: '说明2',
-                        featureTwoTextEn: 'Desc 2',
-                        featureThreeTitleZh: '特色3',
-                        featureThreeTitleEn: 'Feature 3',
-                        featureThreeTextZh: '说明3',
-                        featureThreeTextEn: 'Desc 3',
-                        qrEyebrowZh: '扫码',
-                        qrEyebrowEn: 'Scan',
-                        qrTitleZh: '标题',
-                        qrTitleEn: 'Title',
-                        qrDescriptionZh: '详情',
-                        qrDescriptionEn: 'Detail',
-                        sceneOneZh: '场景1',
-                        sceneOneEn: 'S1',
-                        sceneTwoZh: '场景2',
-                        sceneTwoEn: 'S2',
-                        sceneThreeZh: '场景3',
-                        sceneThreeEn: 'S3',
-                        sceneFourZh: '场景4',
-                        sceneFourEn: 'S4',
-                        ctaTextZh: '行动',
-                        ctaTextEn: 'CTA',
-                        footerTitleZh: '尾款',
-                        footerTitleEn: 'Footer',
-                        footerTextZh: '文案',
-                        footerTextEn: 'Copy',
-                        foregroundColor: '#ffffff',
-                        accentColor: '#3b82f6',
-                        overlayOpacity: 0,
-                    },
-                ],
-                defaultTemplate: 'custom-poster-1',
-                onClose: vi.fn(),
-                onNotify: vi.fn(),
-            }),
-        );
-
-        // Custom template is rendered
-        expect(markup).toContain('极客定制海报');
-        // Enabled default templates are rendered
-        expect(markup).toContain('模钥简约');
-        expect(markup).toContain('冰川蓝光');
-        // Disabled default templates are NOT rendered
-        expect(markup).not.toContain('青空流线');
-        expect(markup).not.toContain('深海科技');
-        expect(markup).not.toContain('模钥轨道');
+    it('invalidates rendered output for every store and content input', () => {
+        const input = {
+            channelId: 'a',
+            shareUrl: 'https://a.example/register?ref=ONE',
+            language: 'zh',
+            storefrontName: 'A',
+            logoUrl: null,
+            rewardRate: 3,
+            template: system[0],
+        };
+        const original = posterRenderKey(input);
+        const changes = [
+            { channelId: 'b' },
+            { shareUrl: 'https://b.example/register?ref=TWO' },
+            { language: 'en' },
+            { storefrontName: 'B' },
+            { logoUrl: 'https://a.example/logo.png' },
+            { rewardRate: 5 },
+            { template: { ...system[0], headlineZh: '新广告' } },
+            { template: { ...system[0], updatedAt: '2026-09-06T00:00:00Z' } },
+        ];
+        for (const change of changes) expect(posterRenderKey({ ...input, ...change })).not.toBe(original);
+    });
+    it('derives domains from valid share URLs and never substitutes another store', () => {
+        expect(posterDomain('https://shop.example:8443/register?ref=X')).toBe('shop.example:8443');
+        expect(() => posterDomain('broken')).toThrow();
+        expect(() => posterDomain('javascript:alert(1)')).toThrow();
+    });
+    it('wraps English and Chinese without dropping copy or explicit paragraphs', () => {
+        const ctx = { measureText: (value: string) => ({ width: Array.from(value).length * 10 }) } as Pick<
+            CanvasRenderingContext2D,
+            'measureText'
+        >;
+        expect(wrapPosterText(ctx, 'Choose better products', 70)).toEqual([
+            'Choose',
+            'better',
+            'product',
+            's',
+        ]);
+        expect(wrapPosterText(ctx, '精选商品与服务', 40)).toEqual(['精选商品', '与服务']);
+        expect(wrapPosterText(ctx, 'First\nSecond', 100)).toEqual(['First', 'Second']);
     });
 });

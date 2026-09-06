@@ -291,6 +291,7 @@ export const REFERRAL_PROGRAM_QUERY = gql`
             defaultPosterTemplate
             posterTemplates
             posterTemplateConfigs {
+                design
                 id
                 createdAt
                 updatedAt
@@ -320,6 +321,105 @@ export const REFERRAL_PROGRAM_QUERY = gql`
                 siteIntroEn
                 serviceTextZh
                 serviceTextEn
+                featureOneTitleZh
+                featureOneTitleEn
+                featureOneTextZh
+                featureOneTextEn
+                featureTwoTitleZh
+                featureTwoTitleEn
+                featureTwoTextZh
+                featureTwoTextEn
+                featureThreeTitleZh
+                featureThreeTitleEn
+                featureThreeTextZh
+                featureThreeTextEn
+                qrEyebrowZh
+                qrEyebrowEn
+                qrTitleZh
+                qrTitleEn
+                qrDescriptionZh
+                qrDescriptionEn
+                sceneOneZh
+                sceneOneEn
+                sceneTwoZh
+                sceneTwoEn
+                sceneThreeZh
+                sceneThreeEn
+                sceneFourZh
+                sceneFourEn
+                ctaTextZh
+                ctaTextEn
+                footerTitleZh
+                footerTitleEn
+                footerTextZh
+                footerTextEn
+                foregroundColor
+                accentColor
+                overlayOpacity
+            }
+            systemPosterTemplateConfigs {
+                design
+                id
+                createdAt
+                updatedAt
+                name
+                enabled
+                position
+                layoutVariant
+                posterBackgroundAsset {
+                    id
+                    name
+                    preview
+                    source
+                }
+                shareBackgroundAsset {
+                    id
+                    name
+                    preview
+                    source
+                }
+                titleZh
+                titleEn
+                headlineZh
+                headlineEn
+                rewardTextZh
+                rewardTextEn
+                siteIntroZh
+                siteIntroEn
+                serviceTextZh
+                serviceTextEn
+                featureOneTitleZh
+                featureOneTitleEn
+                featureOneTextZh
+                featureOneTextEn
+                featureTwoTitleZh
+                featureTwoTitleEn
+                featureTwoTextZh
+                featureTwoTextEn
+                featureThreeTitleZh
+                featureThreeTitleEn
+                featureThreeTextZh
+                featureThreeTextEn
+                qrEyebrowZh
+                qrEyebrowEn
+                qrTitleZh
+                qrTitleEn
+                qrDescriptionZh
+                qrDescriptionEn
+                sceneOneZh
+                sceneOneEn
+                sceneTwoZh
+                sceneTwoEn
+                sceneThreeZh
+                sceneThreeEn
+                sceneFourZh
+                sceneFourEn
+                ctaTextZh
+                ctaTextEn
+                footerTitleZh
+                footerTitleEn
+                footerTextZh
+                footerTextEn
                 foregroundColor
                 accentColor
                 overlayOpacity
@@ -565,6 +665,15 @@ export const UPDATE_REFERRAL_POSTER_MUTATION = gql`
     }
 `;
 
+export const SET_REFERRAL_POSTER_ENABLED_MUTATION = gql`
+    mutation SetReferralPosterEnabled($id: ID!, $enabled: Boolean!, $expectedUpdatedAt: DateTime!) {
+        setReferralPosterTemplateEnabled(id: $id, enabled: $enabled, expectedUpdatedAt: $expectedUpdatedAt) {
+            updatedAt
+            defaultPosterTemplate
+        }
+    }
+`;
+
 export const DELETE_REFERRAL_POSTER_MUTATION = gql`
     mutation AdminDeleteReferralPoster($id: ID!) {
         deleteReferralPosterTemplate(id: $id) {
@@ -687,6 +796,7 @@ export interface CouponDailyMetricRecord {
 }
 
 export interface ReferralPosterRecord {
+    design?: import('../../../storefront/src/referral-poster-layout').PosterDesign | null;
     id: string;
     createdAt: string;
     updatedAt: string;
@@ -706,6 +816,38 @@ export interface ReferralPosterRecord {
     siteIntroEn: string;
     serviceTextZh: string;
     serviceTextEn: string;
+    featureOneTitleZh: string;
+    featureOneTitleEn: string;
+    featureOneTextZh: string;
+    featureOneTextEn: string;
+    featureTwoTitleZh: string;
+    featureTwoTitleEn: string;
+    featureTwoTextZh: string;
+    featureTwoTextEn: string;
+    featureThreeTitleZh: string;
+    featureThreeTitleEn: string;
+    featureThreeTextZh: string;
+    featureThreeTextEn: string;
+    qrEyebrowZh: string;
+    qrEyebrowEn: string;
+    qrTitleZh: string;
+    qrTitleEn: string;
+    qrDescriptionZh: string;
+    qrDescriptionEn: string;
+    sceneOneZh: string;
+    sceneOneEn: string;
+    sceneTwoZh: string;
+    sceneTwoEn: string;
+    sceneThreeZh: string;
+    sceneThreeEn: string;
+    sceneFourZh: string;
+    sceneFourEn: string;
+    ctaTextZh: string;
+    ctaTextEn: string;
+    footerTitleZh: string;
+    footerTitleEn: string;
+    footerTextZh: string;
+    footerTextEn: string;
     foregroundColor: string;
     accentColor: string;
     overlayOpacity: number;
@@ -724,6 +866,7 @@ export interface ReferralProgramRecord {
     defaultPosterTemplate: string;
     posterTemplates: string[];
     posterTemplateConfigs: ReferralPosterRecord[];
+    systemPosterTemplateConfigs: ReferralPosterRecord[];
 }
 
 export interface ReferralProgramResult {
