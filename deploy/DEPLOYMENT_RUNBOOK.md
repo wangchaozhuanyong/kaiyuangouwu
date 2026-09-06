@@ -138,6 +138,12 @@ bun run --cwd packages/dev-server build:production-runtime -- --require-platform
 
 登录视觉或 MOYAO AI 品牌变更必须在同一制品调度分别勾选 `auth_visuals` 或 `moyao_brand`，并填写已审核 `channel_codes`。品牌发布只接受 `channel_codes=__default_channel__`。这些字段也写入并校验 `release-plan.json`；缺少审核、Channel 不正确，或在没有对应变更时携带发布范围，都必须在备份和运行时切换前失败关闭。
 
+装修发布保护分为两个版本：先单独部署工作流/服务器门禁（所有内容发布范围关闭），确认 `PRODUCTION_BOOTSTRAP_VERIFIED ... storefront_configuration_guard=enabled`，再发布受保护的客户端与发布器修复。`damatong_publish_review` 必须随 `damatong_storefront=true` 写入同一份校验发布计划：
+
+- `preserve-existing` 仅允许受管范围内的发布器代码变化，不允许内容清单或图片变化；不执行整店导入。候选 API 启动前保存所有店铺的后台配置快照，启动后校验品牌、内容、子项、图片绑定、轮播间隔与分享配置未变，并反查中英文 Shop API 的内容、顺序、图片。失败阻止客户端切换。
+- 真正写入内容时填写审核过的干运行 SHA-256，由部署脚本显式传递 `STOREFRONT_PUBLISH_REVIEW_SHA256`；部署环境中遗留的变量不能替代本次发布计划。配套发布器必须在任何写入前校验当前数据与计划摘要。
+- 生产 `Production Operations` 的 `inspect-storefront-config` 是固定只读操作，可逐店输出图片绑定与分享设置摘要；凭据和真实 Channel token 只在进程内部使用。配置快照以 0600 权限保留在 releases 目录，不进入代码或工作流制品。
+
 大马通整店受管内容使用独立的 `damatong_storefront` 与 `damatong_channel_token` 发布范围，不复用容易混淆 Channel code 与 token 的通用字段。生产只接受公开的受审选择器 `damatong_channel_token=my-malaysia`；该字段不是生产 Channel 凭据。发布脚本先从 `damatong.net` 的 Shop API 读取域名实际路由的 Channel code，再在已认证的 Admin Channel 列表中精确匹配，并只在进程内使用真实 token，日志不得输出该 token。首次启用必须先单独发布本工作流和服务器保护逻辑，且该门禁引导版本不得携带大马通内容或勾选发布范围；确认生产已安装新保护逻辑后，第二个正式版本才可携带发布器、图片与内容并勾选该范围。
 
 制品工作流成功后，`Deploy Production Runtime` 会自动接管手动制品任务和仅由上述 Skill 路径触发的 `main` push 发布。它使用 GitHub OIDC 临时凭证承担

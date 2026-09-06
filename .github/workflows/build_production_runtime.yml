@@ -58,6 +58,11 @@ on:
                 required: false
                 default: ''
                 type: string
+            damatong_publish_review:
+                description: 'preserve-existing for publisher-only fixes, or the exact reviewed dry-run SHA-256 for writes'
+                required: false
+                default: ''
+                type: string
 
 permissions:
     actions: read
@@ -77,6 +82,7 @@ env:
     HOMEPAGE_CAROUSEL: ${{ inputs.homepage_carousel && 'true' || 'false' }}
     DAMATONG_STOREFRONT: ${{ inputs.damatong_storefront && 'true' || 'false' }}
     DAMATONG_CHANNEL_TOKEN: ${{ inputs.damatong_channel_token || '' }}
+    DAMATONG_PUBLISH_REVIEW: ${{ inputs.damatong_publish_review || '' }}
     NODE_OPTIONS: --max-old-space-size=8192
 
 jobs:
@@ -149,6 +155,15 @@ jobs:
                   fi
                   if [[ "$DAMATONG_STOREFRONT" == "false" && -n "$DAMATONG_CHANNEL_TOKEN" ]]; then
                     echo "damatong_channel_token cannot be set without damatong_storefront" >&2
+                    exit 1
+                  fi
+                  if [[ "$DAMATONG_STOREFRONT" == "true" ]]; then
+                    [[ "$DAMATONG_PUBLISH_REVIEW" == "preserve-existing" || "$DAMATONG_PUBLISH_REVIEW" =~ ^[a-f0-9]{64}$ ]] || {
+                      echo 'Damatong release requires preserve-existing or the reviewed dry-run SHA-256' >&2
+                      exit 1
+                    }
+                  elif [[ -n "$DAMATONG_PUBLISH_REVIEW" ]]; then
+                    echo 'Damatong review requires its explicit release scope' >&2
                     exit 1
                   fi
 
@@ -343,6 +358,7 @@ jobs:
                     --argjson authVisuals "$AUTH_VISUALS" \
                     --argjson damatongStorefront "$DAMATONG_STOREFRONT" \
                     --arg damatongChannelToken "$DAMATONG_CHANNEL_TOKEN" \
+                    --arg damatongPublishReview "$DAMATONG_PUBLISH_REVIEW" \
                     --argjson moyaoBrand "$MOYAO_BRAND" \
                     --arg referralPosters "$REFERRAL_POSTERS" \
                     --argjson homepageCarousel "$HOMEPAGE_CAROUSEL" \
@@ -350,7 +366,7 @@ jobs:
                     --arg mediaKeys "$MEDIA_KEYS" \
                     --arg sourceRunId "$GITHUB_RUN_ID" \
                     --arg targetSha "$TARGET_SHA" \
-                    '{archiveName: $archiveName, archiveSha256: $archiveSha256, authVisuals: $authVisuals, damatongChannelToken: $damatongChannelToken, damatongStorefront: $damatongStorefront, format: 1, referralPosters: $referralPosters, homepageCarousel: $homepageCarousel, mediaChannelCodes: $mediaChannelCodes, mediaKeys: $mediaKeys, moyaoBrand: $moyaoBrand, sourceRunId: $sourceRunId, targetSha: $targetSha}' \
+                    '{archiveName: $archiveName, archiveSha256: $archiveSha256, authVisuals: $authVisuals, damatongChannelToken: $damatongChannelToken, damatongStorefront: $damatongStorefront, damatongPublishReview: $damatongPublishReview, format: 1, referralPosters: $referralPosters, homepageCarousel: $homepageCarousel, mediaChannelCodes: $mediaChannelCodes, mediaKeys: $mediaKeys, moyaoBrand: $moyaoBrand, sourceRunId: $sourceRunId, targetSha: $targetSha}' \
                     > "$ARCHIVE_DIR/release-plan.json"
                   (
                     cd "$ARCHIVE_DIR"

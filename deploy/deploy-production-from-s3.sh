@@ -24,6 +24,7 @@ readonly reviewed_homepage_carousel="${VENDURE_REVIEWED_HOMEPAGE_CAROUSEL:-false
 readonly homepage_carousel_media_keys="home-hero-token-topup-v1,home-hero-codex-tiers-v1,home-hero-account-services-v1"
 readonly reviewed_damatong_storefront="${VENDURE_REVIEWED_DAMATONG_STOREFRONT:-false}"
 readonly reviewed_damatong_channel_token="${VENDURE_REVIEWED_DAMATONG_CHANNEL_TOKEN:-}"
+readonly reviewed_damatong_publish_review="${VENDURE_REVIEWED_DAMATONG_PUBLISH_REVIEW:-}"
 
 fail() {
     printf 'Production deployment failed: %s\n' "$1" >&2
@@ -95,6 +96,20 @@ if [[ "${reviewed_damatong_storefront}" == "false" && \
     fail 'reviewed Damatong Channel token was supplied without its publisher'
 fi
 
+if [[ "${reviewed_damatong_storefront}" == "true" ]]; then
+    [[ "${reviewed_damatong_publish_review}" == "preserve-existing" || "${reviewed_damatong_publish_review}" =~ ^[a-f0-9]{64}$ ]] ||
+        fail 'Damatong release requires preserve-existing or the reviewed dry-run SHA-256'
+elif [[ -n "${reviewed_damatong_publish_review}" ]]; then
+    fail 'Damatong review requires its explicit release scope'
+fi
+
+if [[ "${reviewed_damatong_publish_review}" == "preserve-existing" ]]; then
+    [[ -z "${reviewed_storefront_media_keys}" && "${reviewed_auth_visuals}" == "false" && \
+        "${reviewed_moyao_brand}" == "false" && "${reviewed_homepage_carousel}" == "false" && \
+        "${reviewed_referral_posters}" == "none" ]] ||
+        fail 'Preserve-only release cannot run another content publisher'
+fi
+
 case "${reviewed_referral_posters}" in
     none|primary|both-stores) ;;
     *) fail 'invalid reviewed referral poster scope' ;;
@@ -149,11 +164,12 @@ if git diff --name-only "${deployed_sha}" "${target_sha}" -- \
 fi
 
 damatong_change=false
-if git diff --name-only "${deployed_sha}" "${target_sha}" -- \
+mapfile -t damatong_changes < <(git diff --name-only "${deployed_sha}" "${target_sha}" -- \
     packages/dev-server/scripts/damatong-storefront-config.mjs \
     packages/dev-server/scripts/sync-damatong-storefront.mjs \
     packages/storefront/src/assets/brand/damatong-market/ \
-    packages/storefront/src/assets/storefront/damatong/ | grep -q .; then
+    packages/storefront/src/assets/storefront/damatong/)
+if [[ "${#damatong_changes[@]}" -gt 0 ]]; then
     damatong_change=true
 fi
 if [[ "${damatong_change}" == "true" && "${reviewed_damatong_storefront}" != "true" ]]; then
@@ -237,11 +253,16 @@ if [[ "${VENDURE_DEPLOY_REEXECUTED:-0}" != "1" ]]; then
         VENDURE_REVIEWED_HOMEPAGE_CAROUSEL="${reviewed_homepage_carousel}" \
         VENDURE_REVIEWED_DAMATONG_STOREFRONT="${reviewed_damatong_storefront}" \
         VENDURE_REVIEWED_DAMATONG_CHANNEL_TOKEN="${reviewed_damatong_channel_token}" \
+        VENDURE_REVIEWED_DAMATONG_PUBLISH_REVIEW="${reviewed_damatong_publish_review}" \
         "${repository}/deploy/deploy-production-from-s3.sh" \
         "${target_sha}" "${artifact_name}" "${artifact_s3_prefix}"
     exit $?
 fi
 
+node "${repository}/deploy/storefront-configuration-guard.mjs" review \
+    "${reviewed_damatong_storefront}" "${reviewed_damatong_publish_review}" "${damatong_changes[@]}"
+
+readonly configuration_snapshot="${releases_dir}/storefront-configuration-${deployment_id}.json"
 readonly archive_name="${artifact_name}.tar.gz"
 readonly checksum_name="${archive_name}.sha256"
 readonly candidate="${releases_dir}/${artifact_name}"
@@ -346,9 +367,17 @@ if [[ -n "${reviewed_storefront_media_keys}" || "${reviewed_auth_visuals}" == "t
     source "${environment_file}"
     set +a
 fi
-if [[ "${reviewed_damatong_storefront}" == "true" ]]; then
+if [[ "${reviewed_damatong_publish_review}" == "preserve-existing" ]]; then
+    node "${repository}/deploy/storefront-configuration-guard.mjs" capture "${configuration_snapshot}"
+elif [[ "${reviewed_damatong_storefront}" == "true" ]]; then
     printf 'DAMATONG_PREFLIGHT_BEGIN token=%s\n' "${reviewed_damatong_channel_token}"
     cd "${candidate}"
+    node --input-type=module -e '
+        const publisher = await import("./packages/dev-server/scripts/sync-damatong-storefront.mjs");
+        if (typeof publisher.assertReviewedStorefrontPublish !== "function") {
+            throw new Error("Candidate publisher cannot enforce a reviewed configuration hash");
+        }
+    '
     VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
         VENDURE_STOREFRONT_URL=https://damatong.net \
         node packages/dev-server/scripts/sync-damatong-storefront.mjs --dry-run \
@@ -522,11 +551,14 @@ if [[ "${reviewed_moyao_brand}" == "true" ]]; then
     printf 'MOYAO_BRAND_VERIFY_OK channel=%s\n' \
         "${reviewed_storefront_media_channel_codes}"
 fi
-if [[ "${reviewed_damatong_storefront}" == "true" ]]; then
+if [[ "${reviewed_damatong_publish_review}" == "preserve-existing" ]]; then
+    node "${repository}/deploy/storefront-configuration-guard.mjs" verify "${configuration_snapshot}"
+elif [[ "${reviewed_damatong_storefront}" == "true" ]]; then
     printf 'DAMATONG_PUBLISH_BEGIN token=%s\n' "${reviewed_damatong_channel_token}"
     cd "${candidate}"
     VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
         VENDURE_STOREFRONT_URL=https://damatong.net \
+        STOREFRONT_PUBLISH_REVIEW_SHA256="${reviewed_damatong_publish_review}" \
         node packages/dev-server/scripts/sync-damatong-storefront.mjs --apply --allow-remote \
             --channel-token "${reviewed_damatong_channel_token}" \
             --source-channel-code __default_channel__
@@ -660,7 +692,7 @@ sudo -n install -o root -g root -m 0755 \
 cmp --silent "${repository}/deploy/deploy-production-from-s3.sh" \
     /usr/local/sbin/vendure-production-deploy-from-s3 ||
     fail 'installed production bootstrap differs from the reviewed source'
-printf 'PRODUCTION_BOOTSTRAP_VERIFIED sha=%s homepage_carousel_guard=enabled referral_poster_guard=enabled\n' "${target_sha}"
+printf 'PRODUCTION_BOOTSTRAP_VERIFIED sha=%s homepage_carousel_guard=enabled referral_poster_guard=enabled storefront_configuration_guard=enabled\n' "${target_sha}"
 sudo -n systemctl daemon-reload
 sudo -n systemctl enable --now vendure-production-release-retention.path
 sudo -n systemctl enable --now vendure-mysql-restore-drill.timer
