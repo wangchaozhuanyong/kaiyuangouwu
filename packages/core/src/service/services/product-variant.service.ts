@@ -46,6 +46,7 @@ import { EventBus } from '../../event-bus/event-bus';
 import { ProductVariantChannelEvent } from '../../event-bus/events/product-variant-channel-event';
 import { ProductVariantEvent } from '../../event-bus/events/product-variant-event';
 import { ProductVariantPriceEvent } from '../../event-bus/events/product-variant-price-event';
+import { catalogReadChannelId } from '../helpers/catalog-read-scope';
 import { CustomFieldRelationService } from '../helpers/custom-field-relation/custom-field-relation.service';
 import { ListQueryBuilder } from '../helpers/list-query-builder/list-query-builder';
 import { ProductPriceApplicator } from '../helpers/product-price-applicator/product-price-applicator';
@@ -110,7 +111,7 @@ export class ProductVariantService {
         return this.listQueryBuilder
             .build(ProductVariant, options, {
                 relations,
-                channelId: ctx.channelId,
+                channelId: catalogReadChannelId(ctx),
                 where: { deletedAt: IsNull() },
                 ctx,
                 customPropertyMap,
@@ -131,12 +132,17 @@ export class ProductVariantService {
         relations?: RelationPaths<ProductVariant>,
     ): Promise<Translated<ProductVariant> | undefined> {
         return this.connection
-            .findOneInChannel(ctx, ProductVariant, productVariantId, ctx.channelId, {
+            .getRepository(ctx, ProductVariant)
+            .findOne({
                 relations: [
                     ...(relations || ['product', 'featuredAsset', 'product.featuredAsset']),
                     'taxCategory',
                 ],
-                where: { deletedAt: IsNull() },
+                where: {
+                    id: productVariantId,
+                    deletedAt: IsNull(),
+                    ...(catalogReadChannelId(ctx) == null ? {} : { channels: { id: ctx.channelId } }),
+                },
             })
             .then(async result => {
                 if (result) {
@@ -163,7 +169,13 @@ export class ProductVariantService {
 
     findByIds(ctx: RequestContext, ids: ID[]): Promise<Array<Translated<ProductVariant>>> {
         return this.connection
-            .findByIdsInChannel(ctx, ProductVariant, ids, ctx.channelId, {
+            .getRepository(ctx, ProductVariant)
+            .find({
+                where: {
+                    id: In(ids),
+                    deletedAt: IsNull(),
+                    ...(catalogReadChannelId(ctx) == null ? {} : { channels: { id: ctx.channelId } }),
+                },
                 relations: [
                     'options',
                     'facetValues',
@@ -198,12 +210,14 @@ export class ProductVariantService {
                 where: { deletedAt: IsNull() },
                 ctx,
             })
-            .innerJoinAndSelect('productvariant.channels', 'channel', 'channel.id = :channelId', {
-                channelId: ctx.channelId,
-            })
+            .innerJoinAndSelect('productvariant.channels', 'channel')
             .innerJoinAndSelect('productvariant.product', 'product', 'product.id = :productId', {
                 productId,
             });
+
+        if (catalogReadChannelId(ctx) != null) {
+            qb.andWhere('channel.id = :channelId', { channelId: ctx.channelId });
+        }
 
         if (ctx.apiType === 'shop') {
             qb.andWhere('productvariant.enabled = :enabled', { enabled: true });
@@ -231,7 +245,7 @@ export class ProductVariantService {
         const qb = this.listQueryBuilder
             .build(ProductVariant, options, {
                 relations: unique([...relations, 'taxCategory']),
-                channelId: ctx.channelId,
+                channelId: catalogReadChannelId(ctx),
                 ctx,
             })
             .leftJoin('productvariant.collections', 'collection')
@@ -260,7 +274,7 @@ export class ProductVariantService {
     async getProductVariantChannels(ctx: RequestContext, productVariantId: ID): Promise<Channel[]> {
         const variant = await this.connection.getEntityOrThrow(ctx, ProductVariant, productVariantId, {
             relations: ['channels'],
-            channelId: ctx.channelId,
+            channelId: catalogReadChannelId(ctx),
         });
         return variant.channels;
     }
@@ -292,7 +306,12 @@ export class ProductVariantService {
      */
     getOptionsForVariant(ctx: RequestContext, variantId: ID): Promise<Array<Translated<ProductOption>>> {
         return this.connection
-            .findOneInChannel(ctx, ProductVariant, variantId, ctx.channelId, {
+            .getRepository(ctx, ProductVariant)
+            .findOne({
+                where: {
+                    id: variantId,
+                    ...(catalogReadChannelId(ctx) == null ? {} : { channels: { id: ctx.channelId } }),
+                },
                 relations: ['options'],
             })
             .then(variant => (!variant ? [] : variant.options.map(o => this.translator.translate(o, ctx))));
@@ -300,7 +319,12 @@ export class ProductVariantService {
 
     getFacetValuesForVariant(ctx: RequestContext, variantId: ID): Promise<Array<Translated<FacetValue>>> {
         return this.connection
-            .findOneInChannel(ctx, ProductVariant, variantId, ctx.channelId, {
+            .getRepository(ctx, ProductVariant)
+            .findOne({
+                where: {
+                    id: variantId,
+                    ...(catalogReadChannelId(ctx) == null ? {} : { channels: { id: ctx.channelId } }),
+                },
                 relations: ['facetValues', 'facetValues.facet', 'facetValues.channels'],
             })
             .then(variant =>
@@ -453,7 +477,7 @@ export class ProductVariantService {
                 variant.product = { id: input.productId } as any;
                 variant.taxCategory = { id: input.taxCategoryId } as any;
                 await this.assetService.updateFeaturedAsset(ctx, variant, input);
-                await this.channelService.assignToCurrentChannel(variant, ctx);
+                await this.channelService.assignToCurrentChannel(variant, ctx, false);
             },
             typeOrmSubscriberData: {
                 channelId: ctx.channelId,
@@ -505,7 +529,7 @@ export class ProductVariantService {
         if (product) {
             const additionalChannelIds = product.channels
                 .map(c => c.id)
-                .filter(id => !idsAreEqual(id, ctx.channelId) && !idsAreEqual(id, defaultChannel.id));
+                .filter(id => !idsAreEqual(id, ctx.channelId));
 
             if (additionalChannelIds.length) {
                 // Load the variant's options with their groups so we can assign them
@@ -883,6 +907,11 @@ export class ProductVariantService {
         ctx: RequestContext,
         input: AssignProductVariantsToChannelInput,
     ): Promise<Array<Translated<ProductVariant>>> {
+        if (!this.connection.getRepository(ctx, ProductVariant).manager.queryRunner?.isTransactionActive) {
+            return this.connection.withTransaction(ctx, txCtx =>
+                this.assignProductVariantsToChannel(txCtx, input),
+            );
+        }
         const hasPermission = await this.roleService.userHasPermissionOnChannel(
             ctx,
             input.channelId,
@@ -983,6 +1012,11 @@ export class ProductVariantService {
         ctx: RequestContext,
         input: RemoveProductVariantsFromChannelInput,
     ): Promise<Array<Translated<ProductVariant>>> {
+        if (!this.connection.getRepository(ctx, ProductVariant).manager.queryRunner?.isTransactionActive) {
+            return this.connection.withTransaction(ctx, txCtx =>
+                this.removeProductVariantsFromChannel(txCtx, input),
+            );
+        }
         const hasPermission = await this.roleService.userHasPermissionOnChannel(
             ctx,
             input.channelId,
@@ -992,22 +1026,27 @@ export class ProductVariantService {
             throw new ForbiddenError();
         }
         const defaultChannel = await this.channelService.getDefaultChannel(ctx);
-        if (idsAreEqual(input.channelId, defaultChannel.id)) {
-            throw new UserInputError('error.items-cannot-be-removed-from-default-channel');
-        }
-        const variants = await this.connection
-            .getRepository(ctx, ProductVariant)
-            .find({ where: { id: In(input.productVariantIds) } });
+        const variants = await this.connection.getRepository(ctx, ProductVariant).find({
+            where: {
+                id: In(input.productVariantIds),
+                deletedAt: IsNull(),
+                channels: { id: input.channelId },
+            },
+        });
         for (const variant of variants) {
             await this.channelService.removeFromChannels(ctx, ProductVariant, variant.id, [input.channelId]);
-            await this.connection.getRepository(ctx, ProductVariantPrice).delete({
-                channelId: input.channelId,
-                variant: { id: variant.id },
-            });
+            // Retain the default catalog's reference price, without granting sales access.
+            if (!idsAreEqual(input.channelId, defaultChannel.id)) {
+                await this.connection.getRepository(ctx, ProductVariantPrice).delete({
+                    channelId: input.channelId,
+                    variant: { id: variant.id },
+                });
+            }
             // If none of the ProductVariants is assigned to the Channel, remove the Channel from Product
             const productVariants = await this.connection.getRepository(ctx, ProductVariant).find({
                 where: {
                     productId: variant.productId,
+                    deletedAt: IsNull(),
                 },
                 relations: ['channels'],
             });

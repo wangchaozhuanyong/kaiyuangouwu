@@ -4,9 +4,9 @@ import { unique } from '@vendure/common/lib/unique';
 
 import { RequestContext } from '../../api/common/request-context';
 import { TransactionalConnection } from '../../connection/transactional-connection';
-import { Order } from '../../entity/order/order.entity';
 import { OrderLine } from '../../entity/order-line/order-line.entity';
 import { OrderModification } from '../../entity/order-modification/order-modification.entity';
+import { Order } from '../../entity/order/order.entity';
 import { Payment } from '../../entity/payment/payment.entity';
 import { ProductVariant } from '../../entity/product-variant/product-variant.entity';
 import { OrderPlacedEvent } from '../../event-bus/events/order-placed-event';
@@ -306,6 +306,9 @@ export function configureDefaultOrderProcess(options: DefaultOrderProcessOptions
                     .getRepository(ctx, ProductVariant)
                     .createQueryBuilder('variant')
                     .leftJoin('variant.product', 'product')
+                    .innerJoin('variant.channels', 'channel', 'channel.id = :channelId', {
+                        channelId: ctx.channelId,
+                    })
                     .where('variant.deletedAt IS NULL')
                     .andWhere('product.deletedAt IS NULL')
                     .andWhere('variant.id IN (:...variantIds)', { variantIds });

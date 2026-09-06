@@ -23,17 +23,20 @@ import { ListQueryOptions } from '../../common/types/common-types';
 import { Translated } from '../../common/types/locale-types';
 import { assertFound, idsAreEqual } from '../../common/utils';
 import { TransactionalConnection } from '../../connection/transactional-connection';
-import { Channel } from '../../entity/channel/channel.entity';
-import { FacetValue } from '../../entity/facet-value/facet-value.entity';
-import { ProductOptionGroup } from '../../entity/product-option-group/product-option-group.entity';
-import { ProductOption } from '../../entity/product-option/product-option.entity';
-import { ProductVariant } from '../../entity/product-variant/product-variant.entity';
-import { ProductTranslation } from '../../entity/product/product-translation.entity';
-import { Product } from '../../entity/product/product.entity';
+import {
+    Channel,
+    FacetValue,
+    Product,
+    ProductOption,
+    ProductOptionGroup,
+    ProductTranslation,
+    ProductVariant,
+} from '../../entity';
 import { EventBus } from '../../event-bus/event-bus';
 import { ProductChannelEvent } from '../../event-bus/events/product-channel-event';
 import { ProductEvent } from '../../event-bus/events/product-event';
 import { ProductOptionGroupChangeEvent } from '../../event-bus/events/product-option-group-change-event';
+import { catalogReadChannelId } from '../helpers/catalog-read-scope';
 import { CustomFieldRelationService } from '../helpers/custom-field-relation/custom-field-relation.service';
 import { ListQueryBuilder } from '../helpers/list-query-builder/list-query-builder';
 import { SlugValidator } from '../helpers/slug-validator/slug-validator';
@@ -115,7 +118,7 @@ export class ProductService {
         return this.listQueryBuilder
             .build(Product, options, {
                 relations: effectiveRelations,
-                channelId: ctx.channelId,
+                channelId: catalogReadChannelId(ctx),
                 where: { deletedAt: IsNull() },
                 ctx,
                 customPropertyMap,
@@ -143,10 +146,12 @@ export class ProductService {
             // when serving via the Shop API.
             effectiveRelations.push('facetValues.facet');
         }
-        const product = await this.connection.findOneInChannel(ctx, Product, productId, ctx.channelId, {
+        const product = await this.connection.getRepository(ctx, Product).findOne({
             relations: unique(effectiveRelations),
             where: {
+                id: productId,
                 deletedAt: IsNull(),
+                ...(catalogReadChannelId(ctx) == null ? {} : { channels: { id: ctx.channelId } }),
             },
         });
         if (!product) {
@@ -166,11 +171,14 @@ export class ProductService {
             .setFindOptions({ relations: (relations && false) || this.relations });
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         FindOptionsUtils.joinEagerRelations(qb, qb.alias, qb.expressionMap.mainAlias!.metadata);
+        if (catalogReadChannelId(ctx) != null) {
+            qb.innerJoin('product.channels', 'channel', 'channel.id = :channelId', {
+                channelId: ctx.channelId,
+            });
+        }
         return qb
-            .leftJoin('product.channels', 'channel')
             .andWhere('product.deletedAt IS NULL')
             .andWhere('product.id IN (:...ids)', { ids: productIds })
-            .andWhere('channel.id = :channelId', { channelId: ctx.channelId })
             .getMany()
             .then(products => {
                 return products.map(product =>
@@ -186,7 +194,7 @@ export class ProductService {
     async getProductChannels(ctx: RequestContext, productId: ID): Promise<Channel[]> {
         const product = await this.connection.getEntityOrThrow(ctx, Product, productId, {
             relations: ['channels'],
-            channelId: ctx.channelId,
+            channelId: catalogReadChannelId(ctx),
         });
         return product.channels;
     }
@@ -253,7 +261,7 @@ export class ProductService {
             entityType: Product,
             translationType: ProductTranslation,
             beforeSave: async p => {
-                await this.channelService.assignToCurrentChannel(p, ctx);
+                await this.channelService.assignToCurrentChannel(p, ctx, false);
                 if (input.facetValueIds) {
                     p.facetValues = await this.facetValueService.findByIds(ctx, input.facetValueIds);
                 }
@@ -364,6 +372,9 @@ export class ProductService {
         ctx: RequestContext,
         input: AssignProductsToChannelInput,
     ): Promise<Array<Translated<Product>>> {
+        if (!this.connection.getRepository(ctx, Product).manager.queryRunner?.isTransactionActive) {
+            return this.connection.withTransaction(ctx, txCtx => this.assignProductsToChannel(txCtx, input));
+        }
         const productsWithVariants = await this.connection.getRepository(ctx, Product).find({
             where: { id: In(input.productIds) },
             relations: ['variants', 'assets', 'optionGroups', 'optionGroups.options'],
@@ -414,8 +425,13 @@ export class ProductService {
         ctx: RequestContext,
         input: RemoveProductsFromChannelInput,
     ): Promise<Array<Translated<Product>>> {
+        if (!this.connection.getRepository(ctx, Product).manager.queryRunner?.isTransactionActive) {
+            return this.connection.withTransaction(ctx, txCtx =>
+                this.removeProductsFromChannel(txCtx, input),
+            );
+        }
         const productsWithVariants = await this.connection.getRepository(ctx, Product).find({
-            where: { id: In(input.productIds) },
+            where: { id: In(input.productIds), deletedAt: IsNull(), channels: { id: input.channelId } },
             relations: ['variants', 'optionGroups', 'optionGroups.options'],
             relationLoadStrategy: 'query',
             loadEagerRelations: false,

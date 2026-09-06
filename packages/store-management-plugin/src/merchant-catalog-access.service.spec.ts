@@ -49,7 +49,7 @@ function createService(options?: {
             if (entity === Fulfillment) return fulfillmentRepository;
             throw new Error(`Unexpected repository: ${String(entity)}`);
         }),
-        findByIdsInChannel: vi.fn(async (_ctx, entity, ids: string[]) =>
+        findByIdsInChannel: vi.fn((_ctx, entity, ids: string[]) =>
             ids
                 .filter(id => visibleEntityIds.includes(id))
                 .map(id => ({
@@ -242,7 +242,7 @@ describe('MerchantCatalogAccessService', () => {
         ).rejects.toBeInstanceOf(ForbiddenError);
     });
 
-    it('allows the implicit default Channel on a merchant-owned catalog entity', async () => {
+    it('treats a default-store assignment as sharing when checking merchant edit access', async () => {
         const accessRepository = { findOne: vi.fn().mockResolvedValue({ userId: 'user-a' }) };
         const userRepository = {
             findOne: vi.fn().mockResolvedValue({ roles: [{ channels: [{ id: 'store-a' }] }] }),
@@ -268,7 +268,7 @@ describe('MerchantCatalogAccessService', () => {
             service.assertRootFieldAccess(merchantContext, 'Mutation', 'updateProduct', {
                 input: { id: 'product-a', translations: [] },
             }),
-        ).resolves.toBeUndefined();
+        ).rejects.toBeInstanceOf(ForbiddenError);
     });
 
     it('rejects foreign stock locations and shared catalog entities', async () => {

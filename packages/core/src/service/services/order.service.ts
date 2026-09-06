@@ -682,6 +682,7 @@ export class OrderService {
                 continue;
             }
             const variant = await this.connection.getEntityOrThrow(ctx, ProductVariant, productVariantId, {
+                channelId: ctx.channelId,
                 relations: ['product'],
                 where: {
                     enabled: true,
