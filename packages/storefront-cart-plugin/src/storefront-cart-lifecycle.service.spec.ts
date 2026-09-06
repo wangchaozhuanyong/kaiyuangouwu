@@ -20,6 +20,7 @@ describe('StorefrontCartLifecycleService login handling', () => {
             withTransaction: vi.fn((_ctx, work) => work(transactionContext)),
         };
         const storefrontCartService = {
+            withTransaction: connection.withTransaction,
             mergeAfterLogin: vi.fn().mockResolvedValue(undefined),
         };
         const service = new StorefrontCartLifecycleService(

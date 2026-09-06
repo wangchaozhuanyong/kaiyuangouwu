@@ -249,6 +249,7 @@
         "@vendure/email-plugin": "3.7.2",
         "@vendure/operations-dashboard-plugin": "0.1.0",
         "@vendure/store-management-plugin": "0.1.0",
+        "@vendure/storefront-cart-plugin": "0.1.0",
         "graphql-tag": "^2.12.6",
       },
       "devDependencies": {
@@ -613,6 +614,7 @@
       "devDependencies": {
         "@types/express": "^5.0.0",
         "@types/react": "^19.2.14",
+        "@vendure/storefront-cart-plugin": "0.1.0",
         "typescript": "5.8.2",
         "vitest": "^3.2.4",
       },
@@ -728,6 +730,7 @@
         "@vendure/core": "3.7.2",
         "@vendure/operations-dashboard-plugin": "0.1.0",
         "@vendure/store-domain-plugin": "0.1.0",
+        "@vendure/storefront-cart-plugin": "0.1.0",
         "@vendure/storefront-content-plugin": "0.1.0",
         "cheerio": "1.0.0",
         "graphql-tag": "^2.12.6",
@@ -788,6 +791,7 @@
         "typeorm": "^0.3.21",
       },
       "devDependencies": {
+        "@vendure/testing": "3.7.2",
         "typescript": "5.8.2",
         "vitest": "^3.2.4",
       },

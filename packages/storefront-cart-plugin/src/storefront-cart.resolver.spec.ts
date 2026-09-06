@@ -5,10 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { StorefrontCartLine } from './entities/storefront-cart-line.entity';
 import { StorefrontCart } from './entities/storefront-cart.entity';
 import { CartRevisionConflictError } from './storefront-cart.errors';
-import {
-    StorefrontCartEntityResolver,
-    StorefrontCartShopResolver,
-} from './storefront-cart.resolver';
+import { StorefrontCartEntityResolver, StorefrontCartShopResolver } from './storefront-cart.resolver';
 
 function createCart(lines: Array<Pick<StorefrontCartLine, 'quantity' | 'selected'>>): StorefrontCart {
     return new StorefrontCart({ lines: lines.map(line => new StorefrontCartLine(line)) });
@@ -62,22 +59,24 @@ describe('StorefrontCart mutation transactions', () => {
     it('commits a successful projection and assigns the active order', async () => {
         const cart = createCart([]);
         const service = {
+            lockCart: vi.fn().mockResolvedValue(undefined),
             addItem: vi.fn().mockResolvedValue(cart),
             syncActiveOrderSession: vi.fn().mockResolvedValue(undefined),
         };
         const connection = {
+            rawConnection: { options: { type: 'mysql' } },
             startTransaction: vi.fn().mockResolvedValue(undefined),
             commitOpenTransaction: vi.fn().mockResolvedValue(undefined),
             rollBackTransaction: vi.fn().mockResolvedValue(undefined),
         };
-        const resolver = new StorefrontCartShopResolver(service as any, connection as any);
+        const resolver = new StorefrontCartShopResolver(service as any, connection as any, {} as any);
 
         await resolver.addStorefrontCartItem(ctx, {
             input: { productVariantId: '1', quantity: 1 },
             expectedRevision: 0,
         });
 
-        expect(connection.startTransaction).toHaveBeenCalledWith(ctx);
+        expect(connection.startTransaction).toHaveBeenCalledWith(ctx, 'READ COMMITTED');
         expect(service.syncActiveOrderSession).toHaveBeenCalledWith(ctx, cart);
         expect(connection.commitOpenTransaction).toHaveBeenCalledWith(ctx);
         expect(connection.rollBackTransaction).not.toHaveBeenCalled();
@@ -86,15 +85,17 @@ describe('StorefrontCart mutation transactions', () => {
     it('rolls back a structured error without assigning an active order', async () => {
         const conflict = new CartRevisionConflictError(0, 1);
         const service = {
+            lockCart: vi.fn().mockResolvedValue(undefined),
             addItem: vi.fn().mockResolvedValue(conflict),
             syncActiveOrderSession: vi.fn().mockResolvedValue(undefined),
         };
         const connection = {
+            rawConnection: { options: { type: 'mysql' } },
             startTransaction: vi.fn().mockResolvedValue(undefined),
             commitOpenTransaction: vi.fn().mockResolvedValue(undefined),
             rollBackTransaction: vi.fn().mockResolvedValue(undefined),
         };
-        const resolver = new StorefrontCartShopResolver(service as any, connection as any);
+        const resolver = new StorefrontCartShopResolver(service as any, connection as any, {} as any);
 
         const result = await resolver.addStorefrontCartItem(ctx, {
             input: { productVariantId: '1', quantity: 1 },

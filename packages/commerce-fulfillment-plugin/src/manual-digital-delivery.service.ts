@@ -24,6 +24,7 @@ import { ManualDigitalDelivery } from './entities/manual-digital-delivery.entity
 import { isManualServiceOrderLine } from './fulfillment-classification';
 import { ManualDigitalDeliveryReadyEvent } from './manual-digital-delivery.event';
 import { manualServiceFulfillmentHandler } from './manual-service-fulfillment-handler';
+import { orderLineProductName } from './order-line-snapshot';
 
 const MAX_ATTEMPTS = 5;
 const MAX_PAGE_SIZE = 100;
@@ -90,7 +91,7 @@ export class ManualDigitalDeliveryService {
                 state: 'WAITING_PROCESSING',
                 recipientEmail,
                 languageCode: String(ctx.languageCode),
-                productName: line.productVariant.name,
+                productName: orderLineProductName(ctx, line),
                 sku: line.productVariant.sku,
                 quantity: line.quantity,
                 expectedAt,

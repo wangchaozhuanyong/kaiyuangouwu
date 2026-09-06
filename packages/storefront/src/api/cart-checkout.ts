@@ -1,3 +1,5 @@
+import type { CartController } from '../cart/cart-controller';
+import type { CartCommand, CartCommandResult } from '../cart/cart-intents';
 import type {
     CustomerAddressInput,
     CustomerDeliveryEmail,
@@ -23,7 +25,50 @@ import {
 } from './fragments';
 
 export class CartCheckoutApi extends BaseDomainApi {
+    controller?: CartController;
+
+    connect(controller: CartController): void {
+        this.controller = controller;
+        controller.repository.setTransport({
+            read: signal => this.readCart(signal),
+            apply: command => this.applyCommand(command),
+            recover: (id, cancel) => this.recoverCommand(id, cancel),
+        });
+    }
+
+    private async applyCommand(input: CartCommand): Promise<CartCommandResult> {
+        const result = await this.request<{ applyStorefrontCartCommand: CartCommandResult }>(
+            `
+            mutation ApplyStorefrontCartCommand($input: StorefrontCartCommandInput!) {
+                applyStorefrontCartCommand(input: $input) { ${commandResultFields} }
+            }`,
+            { input },
+            undefined,
+            20_000,
+            true,
+        );
+        return hydrateCommandResult(result.applyStorefrontCartCommand);
+    }
+
+    private async recoverCommand(commandId: string, cancel: boolean): Promise<CartCommandResult> {
+        const result = await this.request<{ recoverStorefrontCartCommand: CartCommandResult }>(
+            `
+            mutation RecoverStorefrontCartCommand($cartId: ID!, $commandId: String!, $cancel: Boolean!) {
+                recoverStorefrontCartCommand(cartId: $cartId, commandId: $commandId, cancel: $cancel) { ${commandResultFields} }
+            }`,
+            { cartId: this.controller?.repository.snapshot?.id, commandId, cancel },
+            undefined,
+            20_000,
+            true,
+        );
+        return hydrateCommandResult(result.recoverStorefrontCartCommand);
+    }
+
     async cart(signal?: AbortSignal): Promise<StorefrontCart> {
+        return this.controller ? this.controller.read() : this.readCart(signal);
+    }
+
+    private async readCart(signal?: AbortSignal): Promise<StorefrontCart> {
         const result = await this.request<{ storefrontCart: StorefrontCart }>(
             `
             query StorefrontCart {
@@ -37,6 +82,12 @@ export class CartCheckoutApi extends BaseDomainApi {
     }
 
     async addItem(productVariantId: string, expectedRevision: number, quantity = 1): Promise<StorefrontCart> {
+        if (this.controller) {
+            const acknowledged = await this.controller.execute({
+                changes: { add: [{ productVariantId, quantity }] },
+            });
+            return acknowledged.cart;
+        }
         const result = await this.request<{ addStorefrontCartItem: StorefrontCart & ErrorResult }>(
             `
                 mutation AddStorefrontCartItem(
@@ -62,6 +113,12 @@ export class CartCheckoutApi extends BaseDomainApi {
         quantity: number,
         expectedRevision: number,
     ): Promise<StorefrontCart> {
+        if (this.controller) {
+            const acknowledged = await this.controller.execute({
+                changes: { lines: [{ lineId, quantity }] },
+            });
+            return acknowledged.cart;
+        }
         const result = await this.request<{
             setStorefrontCartLineQuantity: StorefrontCart & ErrorResult;
         }>(
@@ -86,6 +143,10 @@ export class CartCheckoutApi extends BaseDomainApi {
     }
 
     async removeLines(lineIds: string[], expectedRevision: number): Promise<StorefrontCart> {
+        if (this.controller) {
+            const acknowledged = await this.controller.execute({ changes: { remove: lineIds } });
+            return acknowledged.cart;
+        }
         const result = await this.request<{ removeStorefrontCartLines: StorefrontCart & ErrorResult }>(
             `
                 mutation RemoveStorefrontCartLines($lineIds: [ID!]!, $expectedRevision: Int!) {
@@ -107,6 +168,12 @@ export class CartCheckoutApi extends BaseDomainApi {
         selected: boolean,
         expectedRevision: number,
     ): Promise<StorefrontCart> {
+        if (this.controller) {
+            const acknowledged = await this.controller.execute({
+                changes: { lines: lineIds.map(lineId => ({ lineId, selected })) },
+            });
+            return acknowledged.cart;
+        }
         const result = await this.request<{
             setStorefrontCartLinesSelected: StorefrontCart & ErrorResult;
         }>(
@@ -131,6 +198,15 @@ export class CartCheckoutApi extends BaseDomainApi {
     }
 
     async setAllLinesSelected(selected: boolean, expectedRevision: number): Promise<StorefrontCart> {
+        if (this.controller) {
+            const cart = this.controller.getSnapshot().cart ?? (await this.controller.read());
+            const lines = cart.lines.filter(line => !selected || (line.available && line.productVariant));
+            return (
+                await this.controller.execute({
+                    changes: { lines: lines.map(line => ({ lineId: line.id, selected })) },
+                })
+            ).cart;
+        }
         const result = await this.request<{
             setAllStorefrontCartLinesSelected: StorefrontCart & ErrorResult;
         }>(
@@ -153,6 +229,11 @@ export class CartCheckoutApi extends BaseDomainApi {
     }
 
     async beginCheckout(expectedRevision: number): Promise<StorefrontCheckoutSession> {
+        if (this.controller) {
+            const acknowledged = await this.controller.execute({ beginCheckout: true });
+            if (!acknowledged.session) throw new Error('Checkout session is no longer available.');
+            return acknowledged.session;
+        }
         const result = await this.request<{
             beginStorefrontCheckout: StorefrontCheckoutSession & ErrorResult;
         }>(
@@ -169,6 +250,11 @@ export class CartCheckoutApi extends BaseDomainApi {
     }
 
     async preparePayment(expectedRevision: number): Promise<StorefrontCheckoutSession> {
+        if (this.controller) {
+            const acknowledged = await this.controller.execute({ preparePayment: true });
+            if (!acknowledged.session) throw new Error('Checkout session is no longer available.');
+            return acknowledged.session;
+        }
         const result = await this.request<{
             prepareStorefrontCartPayment: StorefrontCheckoutSession & ErrorResult;
         }>(
@@ -185,6 +271,10 @@ export class CartCheckoutApi extends BaseDomainApi {
     }
 
     async reopenCart(expectedRevision: number): Promise<StorefrontCart> {
+        if (this.controller) {
+            const acknowledged = await this.controller.execute({ reopen: true });
+            return acknowledged.cart;
+        }
         const result = await this.request<{ reopenStorefrontCart: StorefrontCart & ErrorResult }>(
             `
                 mutation ReopenStorefrontCart($expectedRevision: Int!) {
@@ -255,6 +345,12 @@ export class CartCheckoutApi extends BaseDomainApi {
     }
 
     async applyCustomerCoupon(id: string): Promise<StoreCustomerCoupon> {
+        if (this.controller) {
+            await this.controller.execute({ coupon: { action: 'APPLY', couponId: id } });
+            const coupon = (await this.myCoupons()).find(item => item.id === id);
+            if (!coupon) throw new Error('Coupon details are unavailable.');
+            return coupon;
+        }
         const result = await this.request<{ applyStorefrontCoupon: StoreCustomerCoupon }>(
             `
                 mutation ApplyOwnedStorefrontCoupon($id: ID!) {
@@ -267,6 +363,14 @@ export class CartCheckoutApi extends BaseDomainApi {
     }
 
     async applyBestCustomerCoupon(): Promise<StoreCustomerCoupon | null> {
+        if (this.controller) {
+            const acknowledged = await this.controller.execute({ coupon: { action: 'BEST' } });
+            return (
+                (await this.myCoupons()).find(
+                    coupon => coupon.lockedOrderId === acknowledged.cart.checkoutOrder?.id,
+                ) ?? null
+            );
+        }
         const result = await this.request<{ applyBestStorefrontCoupon: StoreCustomerCoupon | null }>(
             `
                 mutation ApplyBestOwnedStorefrontCoupon {
@@ -278,6 +382,12 @@ export class CartCheckoutApi extends BaseDomainApi {
     }
 
     async removeCustomerCoupon(id: string): Promise<StoreCustomerCoupon> {
+        if (this.controller) {
+            await this.controller.execute({ coupon: { action: 'REMOVE', couponId: id } });
+            const coupon = (await this.myCoupons()).find(item => item.id === id);
+            if (!coupon) throw new Error('Coupon details are unavailable.');
+            return coupon;
+        }
         const result = await this.request<{ removeStorefrontCoupon: StoreCustomerCoupon }>(
             `
                 mutation RemoveOwnedStorefrontCoupon($id: ID!) {
@@ -290,6 +400,12 @@ export class CartCheckoutApi extends BaseDomainApi {
     }
 
     async applyCouponCode(couponCode: string): Promise<Order> {
+        if (this.controller) {
+            const acknowledged = await this.controller.execute({
+                coupon: { action: 'APPLY_CODE', code: couponCode },
+            });
+            return requiredOrder(acknowledged);
+        }
         const result = await this.request<{ applyCouponCode: Order & ErrorResult }>(
             `
                 mutation ApplyStorefrontCoupon($couponCode: String!) {
@@ -306,6 +422,12 @@ export class CartCheckoutApi extends BaseDomainApi {
     }
 
     async removeCouponCode(couponCode: string): Promise<Order> {
+        if (this.controller) {
+            const acknowledged = await this.controller.execute({
+                coupon: { action: 'REMOVE_CODE', code: couponCode },
+            });
+            return requiredOrder(acknowledged);
+        }
         const result = await this.request<{ removeCouponCode: Order | null }>(
             `
                 mutation RemoveStorefrontCoupon($couponCode: String!) {
@@ -321,6 +443,10 @@ export class CartCheckoutApi extends BaseDomainApi {
     }
 
     async setOrderNote(customerNote: string): Promise<Order> {
+        if (this.controller) {
+            const acknowledged = await this.controller.execute({ order: { note: customerNote } });
+            return requiredOrder(acknowledged);
+        }
         const result = await this.request<{ setOrderCustomFields: Order & ErrorResult }>(
             `
                 mutation SetStorefrontOrderNote($input: UpdateOrderInput!) {
@@ -348,6 +474,13 @@ export class CartCheckoutApi extends BaseDomainApi {
                   isDefault?: boolean;
               },
     ): Promise<Order> {
+        if (this.controller) {
+            const deliveryEmail =
+                typeof inputOrEmail === 'string'
+                    ? { emailAddress: inputOrEmail, confirmEmailAddress: inputOrEmail }
+                    : inputOrEmail;
+            return requiredOrder(await this.controller.execute({ deliveryEmail }));
+        }
         const input =
             typeof inputOrEmail === 'string'
                 ? { emailAddress: inputOrEmail, confirmEmailAddress: inputOrEmail }
@@ -423,6 +556,10 @@ export class CartCheckoutApi extends BaseDomainApi {
     }
 
     async setCustomer(input: Record<string, string>): Promise<void> {
+        if (this.controller) {
+            await this.controller.execute({ order: { customer: input } });
+            return;
+        }
         const result = await this.request<{ setCustomerForOrder: ErrorResult }>(
             `
                 mutation SetCustomer($input: CreateCustomerInput!) {
@@ -438,6 +575,10 @@ export class CartCheckoutApi extends BaseDomainApi {
     }
 
     async setShippingAddress(input: CustomerAddressInput): Promise<Order> {
+        if (this.controller) {
+            const acknowledged = await this.controller.execute({ order: { shippingAddress: input } });
+            return requiredOrder(acknowledged);
+        }
         const result = await this.request<{ setOrderShippingAddress: Order & ErrorResult }>(
             `
                 mutation SetShippingAddress($input: CreateAddressInput!) {
@@ -462,6 +603,10 @@ export class CartCheckoutApi extends BaseDomainApi {
     }
 
     async setShippingMethod(id: string): Promise<Order> {
+        if (this.controller) {
+            const acknowledged = await this.controller.execute({ order: { shippingMethodId: id } });
+            return requiredOrder(acknowledged);
+        }
         const result = await this.request<{ setOrderShippingMethod: Order & ErrorResult }>(
             `
                 mutation SetShippingMethod($id: [ID!]!) {
@@ -477,6 +622,10 @@ export class CartCheckoutApi extends BaseDomainApi {
     }
 
     async setCurrencyForOrder(currencyCode: string): Promise<Order> {
+        if (this.controller) {
+            const acknowledged = await this.controller.execute({ order: { currencyCode } });
+            return requiredOrder(acknowledged);
+        }
         const result = await this.request<{ setCurrencyCodeForOrder: Order & ErrorResult }>(
             `
                 mutation SetStorefrontOrderCurrency($currencyCode: CurrencyCode!) {
@@ -561,4 +710,22 @@ export class CartCheckoutApi extends BaseDomainApi {
         );
         return this.assertOrder(result.addPaymentToOrder);
     }
+}
+
+const commandResultFields = `commandId status appliedRevision errorCode message
+    cart { ${cartFields} }
+    session { checkout { id cartRevision state completedAt } }`;
+function requiredOrder(result: CartCommandResult): Order {
+    if (!result.cart.checkoutOrder) throw new Error('No active checkout order.');
+    return result.cart.checkoutOrder;
+}
+
+function hydrateCommandResult(result: CartCommandResult): CartCommandResult {
+    return {
+        ...result,
+        session:
+            result.session && result.cart.checkoutOrder
+                ? { ...result.session, cart: result.cart, order: result.cart.checkoutOrder }
+                : null,
+    };
 }

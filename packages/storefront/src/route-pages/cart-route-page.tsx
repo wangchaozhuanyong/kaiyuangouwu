@@ -25,22 +25,18 @@ export function CartRoutePage() {
                     locale: runtime.locale,
                     language: runtime.language,
                     loading: runtime.cartLoading,
+                    selectionPending: runtime.cartPending,
+                    editingBlocked: runtime.cartEditingBlocked,
+                    commandUnknown: runtime.cartCommandUnknown,
+                    onCancelPending: runtime.cancelPendingCartCommand,
                     error: runtime.cartError,
                     addingVariantId: runtime.addingVariantId,
                     favoriteProductIds: runtime.favoriteProductIds,
                     coupons: runtime.myCoupons,
-                    onToggleAll: () =>
-                        void runtime.mutateCart((revision: number) =>
-                            runtime.api.setAllLinesSelected(runtime.cart?.selectionState !== 'ALL', revision),
-                        ),
+                    onToggleAll: runtime.toggleAllCartLines,
                     onSelect: (lineId: string, selected: boolean) =>
-                        void runtime.mutateCart((revision: number) =>
-                            runtime.api.setLinesSelected([lineId], selected, revision),
-                        ),
-                    onSelectGroup: (lineIds: string[], selected: boolean) =>
-                        void runtime.mutateCart((revision: number) =>
-                            runtime.api.setLinesSelected(lineIds, selected, revision),
-                        ),
+                        runtime.selectCartLines([lineId], selected),
+                    onSelectGroup: runtime.selectCartLines,
                     onQuantity: (lineId: string, quantity: number) =>
                         void runtime.mutateCart((revision: number) =>
                             runtime.api.setLineQuantity(lineId, quantity, revision),

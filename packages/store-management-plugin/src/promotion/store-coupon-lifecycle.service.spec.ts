@@ -152,6 +152,13 @@ describe('StoreCouponLifecycleService', () => {
         );
     });
 
+    it('keeps an immediately issued coupon usable at whole-second database precision', async () => {
+        const harness = createIssueHarness({});
+        const coupon = await harness.service.claim(ctx, 'promotion-1');
+        expect(coupon.validFrom.getMilliseconds()).toBe(0);
+        expect(coupon.validFrom.getTime()).toBeLessThanOrEqual(Date.now());
+    });
+
     it('issues a server-owned coupon before its future usage window and snapshots its validity', async () => {
         const now = Date.now();
         const startsAt = new Date(now + 24 * 60 * 60_000);

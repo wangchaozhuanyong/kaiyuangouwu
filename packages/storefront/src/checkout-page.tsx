@@ -57,7 +57,7 @@ export function CheckoutPage({
     mode = 'checkout',
     api,
     cart,
-    order,
+    order: confirmedOrder,
     customer,
     market,
     availableCountries,
@@ -70,8 +70,16 @@ export function CheckoutPage({
     coupons,
     onApplyCoupon,
     onRemoveCoupon,
+    cartPending = false,
+    cartUnknown = false,
+    cartError,
+    onRetryCart,
 }: {
     mode?: CheckoutMode;
+    cartPending?: boolean;
+    cartUnknown?: boolean;
+    cartError?: string | null;
+    onRetryCart?: () => void;
     api: ShopApi;
     cart: StorefrontCart | null;
     order: Order | null;
@@ -88,6 +96,19 @@ export function CheckoutPage({
     onApplyCoupon: (customerCouponId: string) => Promise<string | null>;
     onRemoveCoupon: (customerCouponId: string) => Promise<string | null>;
 }) {
+    const order =
+        confirmedOrder && cartPending && cart
+            ? {
+                  ...confirmedOrder,
+                  totalQuantity: cart.selectedQuantity,
+                  lines: confirmedOrder.lines.map(line => ({
+                      ...line,
+                      quantity:
+                          cart.lines.find(cartLine => cartLine.productVariant?.id === line.productVariant.id)
+                              ?.quantity ?? line.quantity,
+                  })),
+              }
+            : confirmedOrder;
     const navigate = useNavigate();
     const navigateTo = (route: CheckoutRoute, replace = false) =>
         void navigate({ ...routeNavigateOptions(route), replace } as never);
@@ -106,7 +127,6 @@ export function CheckoutPage({
     const [noteDraft, setNoteDraft] = useState('');
     const [noteSaving, setNoteSaving] = useState(false);
     const [noteError, setNoteError] = useState<string | null>(null);
-    const [quantityUpdatingVariantId, setQuantityUpdatingVariantId] = useState<string | null>(null);
     const formRef = useRef<HTMLFormElement>(null);
     const [selectedAddressId, setSelectedAddressId] = useState<string>(
         customer?.addresses?.find(address => address.defaultShippingAddress)?.id ??
@@ -186,7 +206,6 @@ export function CheckoutPage({
             setFormError(isZh ? '未找到本次购买商品' : 'The purchase item could not be found.');
             return;
         }
-        setQuantityUpdatingVariantId(productVariantId);
         setFormError(null);
         try {
             onCartChange(await api.setLineQuantity(cartLine.id, quantity, cart.revision));
@@ -198,8 +217,6 @@ export function CheckoutPage({
                       ? '购买数量更新失败'
                       : 'Could not update the purchase quantity',
             );
-        } finally {
-            setQuantityUpdatingVariantId(null);
         }
     };
 
@@ -439,7 +456,8 @@ export function CheckoutPage({
                     locale={locale}
                     language={language}
                     directPurchase={directPurchase}
-                    quantityUpdatingVariantId={quantityUpdatingVariantId}
+                    pending={cartPending}
+                    disabled={submitting || cartUnknown}
                     onQuantity={(id, q) => void updateDirectQuantity(id, q)}
                 />
             )}
@@ -467,7 +485,8 @@ export function CheckoutPage({
                     locale={locale}
                     language={language}
                     directPurchase={directPurchase}
-                    quantityUpdatingVariantId={quantityUpdatingVariantId}
+                    pending={cartPending}
+                    disabled={submitting || cartUnknown}
                     onQuantity={(id, q) => void updateDirectQuantity(id, q)}
                 />
             )}
@@ -480,6 +499,14 @@ export function CheckoutPage({
                 `page subpage checkout-page${directPurchase ? ' purchase-page' : ''}`,
             )}
         >
+            {cartError && (
+                <div role="alert">
+                    <p>{cartError}</p>
+                    <button type="button" onClick={onRetryCart}>
+                        {isZh ? '重新核对购物车' : 'Reconcile cart'}
+                    </button>
+                </div>
+            )}
             <SubHeader
                 title={
                     directPurchase
@@ -865,6 +892,7 @@ export function CheckoutPage({
                 </section>
                 <section className={checkoutPageClassName('checkout-section checkout-summary-section')}>
                     <PriceSummary
+                        pending={cartPending}
                         order={order}
                         locale={locale}
                         language={language}
@@ -901,8 +929,10 @@ export function CheckoutPage({
                     </span>
                 </section>
                 <div className={checkoutPageClassName('submit-order-bar')}>
-                    <button type="submit" disabled={submitting}>
+                    <button type="submit" disabled={submitting || cartPending}>
                         {(() => {
+                            if (cartPending)
+                                return isZh ? '正在确认商品与金额…' : 'Confirming items and total…';
                             if (submitting) return isZh ? '处理中…' : 'Processing…';
                             if (requiresShipping && !shippingMethods.length) {
                                 return isZh ? '下一步，选择配送' : 'Continue to delivery';
@@ -1002,7 +1032,8 @@ function CheckoutItemsGroup({
     locale,
     language,
     directPurchase = false,
-    quantityUpdatingVariantId,
+    pending = false,
+    disabled = false,
     onQuantity,
 }: {
     title: string;
@@ -1011,7 +1042,8 @@ function CheckoutItemsGroup({
     locale: string;
     language: StorefrontLanguage;
     directPurchase?: boolean;
-    quantityUpdatingVariantId?: string | null;
+    pending?: boolean;
+    disabled?: boolean;
     onQuantity?: (productVariantId: string, quantity: number) => void;
 }) {
     const isZh = language === 'zh';
@@ -1031,7 +1063,15 @@ function CheckoutItemsGroup({
                         </div>
                         <span className={checkoutPageClassName('checkout-line-meta')}>
                             <b>
-                                {formatMoney(line.linePriceWithTax, line.productVariant.currencyCode, locale)}
+                                {pending
+                                    ? isZh
+                                        ? '计算中…'
+                                        : 'Calculating…'
+                                    : formatMoney(
+                                          line.linePriceWithTax,
+                                          line.productVariant.currencyCode,
+                                          locale,
+                                      )}
                             </b>
                             {directPurchase ? (
                                 <span
@@ -1040,10 +1080,7 @@ function CheckoutItemsGroup({
                                 >
                                     <button
                                         type="button"
-                                        disabled={
-                                            line.quantity <= 1 ||
-                                            quantityUpdatingVariantId === line.productVariant.id
-                                        }
+                                        disabled={line.quantity <= 1 || disabled}
                                         onClick={() =>
                                             onQuantity?.(line.productVariant.id, line.quantity - 1)
                                         }
@@ -1055,7 +1092,7 @@ function CheckoutItemsGroup({
                                     <button
                                         type="button"
                                         disabled={
-                                            quantityUpdatingVariantId === line.productVariant.id ||
+                                            disabled ||
                                             !variantCanIncreaseQuantity(line.productVariant, line.quantity)
                                         }
                                         onClick={() =>
@@ -1129,14 +1166,22 @@ function PriceSummary({
     locale,
     language,
     requiresShipping = true,
+    pending = false,
 }: {
     order: Order;
     locale: string;
     language: StorefrontLanguage;
     requiresShipping?: boolean;
+    pending?: boolean;
 }) {
     const isZh = language === 'zh';
     const discount = Math.abs(order.discounts.reduce((sum, item) => sum + item.amountWithTax, 0));
+    if (pending)
+        return (
+            <p role="status">
+                {isZh ? '正在确认商品、优惠与运费…' : 'Confirming items, discounts and shipping…'}
+            </p>
+        );
     return (
         <dl className={checkoutPageClassName('price-summary')}>
             <div>

@@ -27,6 +27,7 @@ export function CartGroup({
     locale,
     language,
     loading,
+    selectionDisabled = loading,
     favoriteProductIds,
     pinnedLineIds,
     openActionLineId,
@@ -46,6 +47,7 @@ export function CartGroup({
     locale: string;
     language: StorefrontLanguage;
     loading: boolean;
+    selectionDisabled?: boolean;
     favoriteProductIds: string[];
     pinnedLineIds: string[];
     openActionLineId: string | null;
@@ -72,7 +74,7 @@ export function CartGroup({
                             !allSelected,
                         )
                     }
-                    disabled={loading}
+                    disabled={selectionDisabled}
                 >
                     <span>{allSelected ? <Check /> : partiallySelected ? <Minus /> : null}</span>
                     <strong>{title}</strong>
@@ -87,6 +89,7 @@ export function CartGroup({
                     locale={locale}
                     language={language}
                     loading={loading}
+                    selectionDisabled={selectionDisabled}
                     open={openActionLineId === line.id}
                     favorite={
                         !!line.productVariant?.product.id &&
@@ -116,6 +119,7 @@ export function SwipeableCartLine({
     locale,
     language,
     loading,
+    selectionDisabled = loading,
     open,
     favorite,
     pinned,
@@ -132,6 +136,7 @@ export function SwipeableCartLine({
     locale: string;
     language: StorefrontLanguage;
     loading: boolean;
+    selectionDisabled?: boolean;
     open: boolean;
     favorite: boolean;
     pinned: boolean;
@@ -345,7 +350,7 @@ export function SwipeableCartLine({
                         type="checkbox"
                         aria-label={isZh ? `选择 ${productName}` : `Select ${productName}`}
                         checked={line.selected}
-                        disabled={!line.available || loading}
+                        disabled={!line.available || selectionDisabled}
                         onChange={event => onSelect(line.id, event.target.checked)}
                     />
                     <span>

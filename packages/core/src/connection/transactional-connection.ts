@@ -213,10 +213,15 @@ export class TransactionalConnection {
      * @since 1.3.0
      */
     async withTransaction<T>(work: (ctx: RequestContext) => Promise<T>): Promise<T>;
-    async withTransaction<T>(ctx: RequestContext, work: (ctx: RequestContext) => Promise<T>): Promise<T>;
+    async withTransaction<T>(
+        ctx: RequestContext,
+        work: (ctx: RequestContext) => Promise<T>,
+        isolationLevel?: TransactionIsolationLevel,
+    ): Promise<T>;
     async withTransaction<T>(
         ctxOrWork: RequestContext | ((ctx: RequestContext) => Promise<T>),
         maybeWork?: (ctx: RequestContext) => Promise<T>,
+        isolationLevel?: TransactionIsolationLevel,
     ): Promise<T> {
         let ctx: RequestContext;
         let work: (ctx: RequestContext) => Promise<T>;
@@ -228,7 +233,13 @@ export class TransactionalConnection {
             ctx = RequestContext.empty();
             work = ctxOrWork;
         }
-        return this.transactionWrapper.executeInTransaction(ctx, work, 'auto', undefined, this.rawConnection);
+        return this.transactionWrapper.executeInTransaction(
+            ctx,
+            work,
+            'auto',
+            isolationLevel,
+            this.rawConnection,
+        );
     }
 
     /**
@@ -337,7 +348,7 @@ export class TransactionalConnection {
                 (entity as T & SoftDeletable).deletedAt !== null &&
                 options.includeSoftDeleted !== true)
         ) {
-            throw new EntityNotFoundError(entityType.name as any, id);
+            throw new EntityNotFoundError(entityType.name, id);
         }
         return entity;
     }
@@ -439,7 +450,7 @@ export class TransactionalConnection {
                     return (options: FindOneOptions<Entity> | FindManyOptions<Entity> = {}) => {
                         const alias = obj.metadata.name;
                         const qb = obj.createQueryBuilder(alias);
-                        qb.setFindOptions(options as FindManyOptions<Entity>);
+                        qb.setFindOptions(options);
                         strategy.applyAccessControl?.(qb as SelectQueryBuilder<any>, target as any, ctx);
                         switch (prop) {
                             case 'find':

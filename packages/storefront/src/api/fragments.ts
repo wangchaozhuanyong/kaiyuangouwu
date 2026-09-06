@@ -35,7 +35,7 @@ export const productPackagingFields = `
     }
 `;
 
-export const orderFields = `
+export const cartQuoteFields = `
     id
     code
     state
@@ -51,6 +51,45 @@ export const orderFields = `
     taxSummary { description taxRate taxBase taxTotal }
     couponCodes
     customFields { customerNote deliveryEmail }
+    lines {
+        id
+        quantity
+        linePriceWithTax
+        proratedUnitPriceWithTax
+        productVariant {
+            id
+            name
+            sku
+            priceWithTax
+            currencyCode
+            saleableStockLevel
+            autoCardAvailableStock
+            featuredAsset { id preview }
+            product { id name featuredAsset { id preview } }
+            customFields { fulfillmentType digitalDeliveryMode digitalStockPolicy }
+        }
+        customFields { fulfillmentTypeSnapshot digitalDeliveryModeSnapshot refundPolicySnapshot manualDeliverySlaMinutesSnapshot }
+    }
+    checkoutFulfillment {
+        fulfillmentType
+        containsPhysicalProducts
+        containsDigitalProducts
+        requiresShippingAddress
+        requiresShippingMethod
+    }
+    checkoutShipping {
+        methodCode
+        methodName
+        priceWithTax
+        estimateMinDays
+        estimateMaxDays
+        freeShippingThreshold
+        freeShippingApplied
+    }
+`;
+
+// Delivery and fulfilment records are fetched by order detail routes, not by high-frequency cart edits.
+export const orderFields = `${cartQuoteFields}
     fulfillments {
         id
         state
@@ -93,41 +132,6 @@ export const orderFields = `
         lastError
         sentAt
         orderLineId
-    }
-    lines {
-        id
-        quantity
-        linePriceWithTax
-        proratedUnitPriceWithTax
-        productVariant {
-            id
-            name
-            sku
-            priceWithTax
-            currencyCode
-            saleableStockLevel
-            autoCardAvailableStock
-            featuredAsset { id preview }
-            product { id name featuredAsset { id preview } }
-            customFields { fulfillmentType digitalDeliveryMode digitalStockPolicy }
-        }
-        customFields { fulfillmentTypeSnapshot digitalDeliveryModeSnapshot refundPolicySnapshot manualDeliverySlaMinutesSnapshot }
-    }
-    checkoutFulfillment {
-        fulfillmentType
-        containsPhysicalProducts
-        containsDigitalProducts
-        requiresShippingAddress
-        requiresShippingMethod
-    }
-    checkoutShipping {
-        methodCode
-        methodName
-        priceWithTax
-        estimateMinDays
-        estimateMaxDays
-        freeShippingThreshold
-        freeShippingApplied
     }
 `;
 
@@ -316,7 +320,7 @@ export const cartFields = `
             customFields { fulfillmentType digitalDeliveryMode }
         }
     }
-    checkoutOrder { ${orderFields} }
+    checkoutOrder { ${cartQuoteFields} }
 `;
 
 export const cartResultFields = `

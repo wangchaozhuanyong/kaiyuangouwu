@@ -29,6 +29,10 @@ interface CartPageProps {
     locale: string;
     language: StorefrontLanguage;
     loading: boolean;
+    selectionPending?: boolean;
+    editingBlocked?: boolean;
+    commandUnknown?: boolean;
+    onCancelPending?: () => void;
     error: string | null;
     favoriteProductIds: string[];
     coupons: StoreCustomerCoupon[];
@@ -58,6 +62,10 @@ export function CartPage() {
         locale,
         language,
         loading,
+        selectionPending = false,
+        editingBlocked = false,
+        commandUnknown = false,
+        onCancelPending,
         error,
         favoriteProductIds,
         coupons,
@@ -197,7 +205,7 @@ export function CartPage() {
                         className={`select-all ${(cart?.selectionState ?? 'NONE').toLowerCase()}`}
                         type="button"
                         onClick={onToggleAll}
-                        disabled={loading || locked}
+                        disabled={editingBlocked || (loading && !selectionPending) || locked}
                     >
                         <span>
                             {cart?.selectionState === 'ALL' ? (
@@ -223,6 +231,11 @@ export function CartPage() {
                 )}
             </header>
 
+            {commandUnknown && (
+                <button type="button" className="secondary-button" onClick={onCancelPending}>
+                    {isZh ? '取消待确认操作并核对购物车' : 'Cancel pending operation and reconcile cart'}
+                </button>
+            )}
             {error && <InlineError message={error} action={isZh ? '刷新' : 'Refresh'} onAction={onRetry} />}
             {locked && (
                 <div className="cart-pending-actions">
@@ -286,7 +299,8 @@ export function CartPage() {
                                 market={market}
                                 locale={locale}
                                 language={language}
-                                loading={loading || locked}
+                                loading={editingBlocked || (loading && !selectionPending) || locked}
+                                selectionDisabled={editingBlocked || (loading && !selectionPending) || locked}
                                 favoriteProductIds={favoriteProductIds}
                                 pinnedLineIds={pinnedLineIds}
                                 openActionLineId={openActionLineId}
@@ -312,7 +326,8 @@ export function CartPage() {
                                 market={market}
                                 locale={locale}
                                 language={language}
-                                loading={loading || locked}
+                                loading={editingBlocked || (loading && !selectionPending) || locked}
+                                selectionDisabled={editingBlocked || (loading && !selectionPending) || locked}
                                 favoriteProductIds={favoriteProductIds}
                                 pinnedLineIds={pinnedLineIds}
                                 openActionLineId={openActionLineId}
@@ -331,7 +346,7 @@ export function CartPage() {
                         className="coupon-row"
                         type="button"
                         onClick={() => setCouponOpen(true)}
-                        disabled={!order || locked}
+                        disabled={!order || loading || locked}
                     >
                         <span>
                             <TicketPercent />
@@ -420,34 +435,42 @@ export function CartPage() {
                     <div>
                         <span>
                             {isZh ? '合计' : 'Total'}{' '}
-                            <strong>
-                                {formatMoney(amount, order?.currencyCode ?? market.currencyCode, locale)}
+                            <strong aria-live="polite" aria-busy={selectionPending || commandUnknown}>
+                                {selectionPending || commandUnknown
+                                    ? isZh
+                                        ? '计算中…'
+                                        : 'Updating…'
+                                    : formatMoney(amount, order?.currencyCode ?? market.currencyCode, locale)}
                             </strong>
                         </span>
                         <small>
-                            {locked && order
-                                ? digitalOnly
-                                    ? isZh
-                                        ? '无需配送'
-                                        : 'No shipping required'
-                                    : order.shippingWithTax > 0
+                            {selectionPending || commandUnknown
+                                ? isZh
+                                    ? '正在更新所选商品和优惠'
+                                    : 'Updating selected items and offers'
+                                : locked && order
+                                  ? digitalOnly
                                       ? isZh
-                                          ? `已含配送费 ${formatMoney(order.shippingWithTax, order.currencyCode, locale)}`
-                                          : `Includes ${formatMoney(order.shippingWithTax, order.currencyCode, locale)} delivery`
-                                      : isZh
-                                        ? '配送费已确认'
-                                        : 'Delivery confirmed'
-                                : discount
-                                  ? isZh
-                                      ? `已优惠 ${formatMoney(discount, order?.currencyCode ?? market.currencyCode, locale)}`
-                                      : `${formatMoney(discount, order?.currencyCode ?? market.currencyCode, locale)} saved`
-                                  : digitalOnly
+                                          ? '无需配送'
+                                          : 'No shipping required'
+                                      : order.shippingWithTax > 0
+                                        ? isZh
+                                            ? `已含配送费 ${formatMoney(order.shippingWithTax, order.currencyCode, locale)}`
+                                            : `Includes ${formatMoney(order.shippingWithTax, order.currencyCode, locale)} delivery`
+                                        : isZh
+                                          ? '配送费已确认'
+                                          : 'Delivery confirmed'
+                                  : discount
                                     ? isZh
-                                        ? '无需配送'
-                                        : 'No shipping required'
-                                    : isZh
-                                      ? '不含待计算运费'
-                                      : 'Shipping not included'}
+                                        ? `已优惠 ${formatMoney(discount, order?.currencyCode ?? market.currencyCode, locale)}`
+                                        : `${formatMoney(discount, order?.currencyCode ?? market.currencyCode, locale)} saved`
+                                    : digitalOnly
+                                      ? isZh
+                                          ? '无需配送'
+                                          : 'No shipping required'
+                                      : isZh
+                                        ? '不含待计算运费'
+                                        : 'Shipping not included'}
                         </small>
                     </div>
                     <button

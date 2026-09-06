@@ -1,5 +1,6 @@
 import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
 import { Allow, Ctx, Permission, RequestContext, Transaction } from '@vendure/core';
+import { CartCommandService } from '@vendure/storefront-cart-plugin';
 
 import {
     CustomerDeliveryEmailService,
@@ -9,7 +10,10 @@ import {
 
 @Resolver()
 export class CustomerDeliveryEmailShopResolver {
-    constructor(private readonly service: CustomerDeliveryEmailService) {}
+    constructor(
+        private readonly service: CustomerDeliveryEmailService,
+        private readonly cartCommands: CartCommandService,
+    ) {}
 
     @Query()
     @Allow(Permission.Authenticated)
@@ -17,14 +21,14 @@ export class CustomerDeliveryEmailShopResolver {
         return this.service.listMine(ctx);
     }
 
-    @Transaction()
+    @Transaction('manual')
     @Mutation()
-    @Allow(Permission.Public)
+    @Allow(Permission.Owner)
     setActiveOrderDeliveryEmail(
         @Ctx() ctx: RequestContext,
         @Args('input') input: SetActiveOrderDeliveryEmailInput,
     ) {
-        return this.service.setActiveOrderEmail(ctx, input);
+        return this.cartCommands.legacy(ctx, () => this.service.setActiveOrderEmail(ctx, input));
     }
 
     @Transaction()

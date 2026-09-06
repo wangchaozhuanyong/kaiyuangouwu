@@ -539,6 +539,10 @@ export const shopApiExtensions = gql`
         saleableStockLevel: Int
     }
 
+    extend input StorefrontCartCommandInput {
+        deliveryEmail: SetActiveOrderDeliveryEmailInput
+    }
+
     extend type Mutation {
         createStorefrontOrderConfirmationToken: StorefrontOrderConfirmationToken!
         cancelMyAuthorizedOrder(orderId: ID!, reason: String!): Order!

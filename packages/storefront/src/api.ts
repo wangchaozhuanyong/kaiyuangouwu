@@ -1,4 +1,5 @@
 import type { ShopApiContext } from './api/client-context';
+import type { CartController } from './cart/cart-controller';
 import type {
     ActiveCustomer,
     AfterSalesRequest,
@@ -124,6 +125,10 @@ export class ShopApi {
         this.imageStudioApi = new ImageStudioApi(ctx);
         this.cartCheckoutApi = new CartCheckoutApi(ctx);
         this.realtimeApi = new RealtimeApi(ctx);
+    }
+
+    enableCartCommands(controller: CartController): void {
+        this.cartCheckoutApi.connect(controller);
     }
 
     async storefrontConfig(signal?: AbortSignal): Promise<StorefrontConfig> {
@@ -351,6 +356,7 @@ export class ShopApi {
     }
 
     async logout(): Promise<void> {
+        this.cartCheckoutApi.controller?.reset();
         return this.accountApi.logout();
     }
 

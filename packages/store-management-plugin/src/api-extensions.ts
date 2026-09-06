@@ -1331,6 +1331,22 @@ export const shopApiExtensions = gql`
         myReferralOverview: MyReferralOverview!
     }
 
+    enum StorefrontCartCouponAction {
+        APPLY
+        REMOVE
+        BEST
+        APPLY_CODE
+        REMOVE_CODE
+    }
+    input StorefrontCartCouponCommandInput {
+        action: StorefrontCartCouponAction!
+        couponId: ID
+        code: String
+    }
+    extend input StorefrontCartCommandInput {
+        coupon: StorefrontCartCouponCommandInput
+    }
+
     extend type Mutation {
         setCustomerAvatar(file: Upload!): Asset!
         createStorefrontUsdtCheckoutQuote: StorefrontUsdtCheckoutQuote!

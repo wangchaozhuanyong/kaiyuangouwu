@@ -95,3 +95,6 @@ export type {
 } from './types.js';
 export { StoreUsdtWalletService } from './usdt/store-usdt-wallet.service.js';
 export { UsdtManualRefundService } from './usdt/usdt-manual-refund.service.js';
+
+export { CustomerCoupon } from './entities/customer-coupon.entity.js';
+export { StoreCouponLifecycleService } from './promotion/store-coupon-lifecycle.service.js';

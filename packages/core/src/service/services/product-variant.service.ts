@@ -147,6 +147,20 @@ export class ProductVariantService {
             });
     }
 
+    /** Batch equivalent of findOne for a channel-scoped product snapshot. */
+    async findByIdsWithProduct(ctx: RequestContext, ids: ID[]): Promise<Array<Translated<ProductVariant>>> {
+        if (!ids.length) return [];
+        const variants = await this.connection.findByIdsInChannel(ctx, ProductVariant, ids, ctx.channelId, {
+            relations: ['product', 'featuredAsset', 'product.featuredAsset', 'taxCategory'],
+            where: { deletedAt: IsNull() },
+        });
+        return Promise.all(
+            variants.map(async variant =>
+                this.translator.translate(await this.applyChannelPriceAndTax(variant, ctx), ctx, ['product']),
+            ),
+        );
+    }
+
     findByIds(ctx: RequestContext, ids: ID[]): Promise<Array<Translated<ProductVariant>>> {
         return this.connection
             .findByIdsInChannel(ctx, ProductVariant, ids, ctx.channelId, {
