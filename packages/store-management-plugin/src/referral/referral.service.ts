@@ -202,6 +202,8 @@ export class ReferralService implements OnApplicationBootstrap {
             defaultPosterTemplate: effectivePosterDefault(defaultId, enabledIds),
             posterTemplates: systemIds,
         });
+        // Keep the optimistic version monotonic, including two edits within the same database second.
+        config.updatedAt = new Date(Math.max(Date.now(), config.updatedAt.getTime() + 1));
         await this.connection.getRepository(ctx, ReferralProgramConfig).save(config, { reload: false });
         await this.posterConfigurationChanged(ctx);
         return this.configView(ctx, config, true);
@@ -1408,6 +1410,8 @@ export class ReferralService implements OnApplicationBootstrap {
                     .andWhere('config.channelId = :channelId', { channelId: ctx.channelId })
                     .getOne();
                 if (!locked) throw new UserInputError('邀请返利配置不存在');
+                // A regular read can still return the transaction's older REPEATABLE READ snapshot.
+                return locked;
             } catch (error) {
                 if (!isLockNotSupportedError(error)) throw error;
             }
