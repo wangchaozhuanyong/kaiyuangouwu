@@ -376,7 +376,10 @@ export class MerchantCatalogAccessService {
             relations: ['channels'],
         });
         const defaultChannel = await this.channelService.getDefaultChannel(ctx);
-        const allowedChannelIds = [ctx.channelId, defaultChannel.id];
+        const allowedChannelIds =
+            (entity as Type<VendureEntity>) === Product || (entity as Type<VendureEntity>) === ProductVariant
+                ? [ctx.channelId]
+                : [ctx.channelId, defaultChannel.id];
         const containsForeignOrSharedEntity = entities.some(
             item =>
                 !item.channels.some(channel => idsAreEqual(channel.id, ctx.channelId)) ||

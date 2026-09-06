@@ -1,19 +1,24 @@
 import { expect as browserExpect, chromium } from '@playwright/test';
+import { GlobalFlag } from '@vendure/common/lib/generated-types';
 import {
     ChannelService,
     Collection,
     CollectionService,
+    DefaultJobQueuePlugin,
     DefaultSearchPlugin,
     LanguageCode,
     mergeConfig,
     PluginCommonModule,
     Product,
+    ProductService,
     ProductVariant,
+    ProductVariantService,
     RequestContext,
     RequestContextService,
     RoleService,
     StockLocationService,
     TransactionalConnection,
+    User,
     VendurePlugin,
 } from '@vendure/core';
 import { createTestEnvironment, registerInitializer, SqljsInitializer, testConfig } from '@vendure/testing';
@@ -29,6 +34,7 @@ import { CommerceModeService } from '../../commerce-fulfillment-plugin/src/comme
 import { PackagingUnpackEvent } from '../../commerce-fulfillment-plugin/src/entities/packaging-unpack-event.entity';
 import { ProductPackagingRule } from '../../commerce-fulfillment-plugin/src/entities/product-packaging-rule.entity';
 import { FulfillmentModelService } from '../../commerce-fulfillment-plugin/src/fulfillment-model.service';
+import { awaitRunningJobs } from '../../core/e2e/utils/await-running-jobs';
 import { CatalogImportService } from '../src/catalog-import.service';
 import { CatalogManagementPlugin } from '../src/catalog-management.plugin';
 import { CatalogOperationsService } from '../src/catalog-operations.service';
@@ -58,6 +64,7 @@ const config = mergeConfig(testConfig, {
     },
     plugins: [
         CatalogManagementPlugin,
+        DefaultJobQueuePlugin,
         ImportFulfillmentTestPlugin,
         DefaultSearchPlugin.init({ bufferUpdates: true }),
     ],
@@ -339,9 +346,11 @@ describe('catalog import persisted type, hierarchy and rollback', () => {
                 ).toContain('A 店商品');
                 client.setChannelToken(b.token);
                 expect((await client.query(query)).products.totalItems).toBe(0);
-                // Vendure retains the implicit default-channel aggregate, not a second Product record.
+                // The owner retains the aggregate catalog; a storefront only sees explicit sales assignments.
                 client.setChannelToken(ctx.channel.token);
-                expect((await client.query(query)).products.totalItems).toBe(before + 1);
+                expect((await client.query(query)).products.totalItems).toBe(
+                    client === adminClient ? before + 1 : before,
+                );
             }
         } finally {
             adminClient.setChannelToken(ctx.channel.token);
@@ -349,14 +358,209 @@ describe('catalog import persisted type, hierarchy and rollback', () => {
         }
     });
 
+    it('requires explicit default-store sharing and preserves the final store with or without SKUs', async () => {
+        const products = server.app.get(ProductService);
+        const variants = server.app.get(ProductVariantService);
+        const credentials = config.authOptions.superadminCredentials;
+        if (!credentials) throw new Error('Missing test administrator configuration');
+        const user = await connection.rawConnection
+            .getRepository(User)
+            .findOneOrFail({ where: { identifier: credentials.identifier } });
+        const aCtx = await server.app.get(RequestContextService).create({
+            apiType: 'admin',
+            user,
+            channelOrToken: 'import-store-a-test',
+            languageCode: ctx.languageCode,
+        });
+        const product = await connection.rawConnection.getRepository(Product).findOneOrFail({
+            where: { translations: { name: 'A 店商品' } },
+            relations: ['channels', 'variants', 'variants.channels'],
+        });
+        const variant = product.variants[0];
+        await variants.update(aCtx, [{ id: variant.id, trackInventory: GlobalFlag.FALSE }]);
+        expect(product.channels.map(channel => channel.id)).toEqual([aCtx.channelId]);
+        expect(variant.channels.map(channel => channel.id)).toEqual([aCtx.channelId]);
+        const reindex = async (context: RequestContext) => {
+            adminClient.setChannelToken(context.channel.token);
+            await adminClient.query(gql`
+                mutation {
+                    reindex {
+                        id
+                    }
+                }
+            `);
+            await awaitRunningJobs(adminClient, 10000);
+            adminClient.setChannelToken(ctx.channel.token);
+        };
+        const shop = async (listed: boolean) => {
+            shopClient.setChannelToken(ctx.channel.token);
+            const result = await shopClient.query(
+                gql`
+                    query ($id: ID!) {
+                        product(id: $id) {
+                            id
+                            variants {
+                                id
+                            }
+                        }
+                        search(input: { term: "A 店商品", groupByProduct: true }) {
+                            items {
+                                productId
+                            }
+                        }
+                    }
+                `,
+                { id: `T_${product.id}` },
+            );
+            expect(Boolean(result.product)).toBe(listed);
+            expect(
+                result.search.items.some(
+                    (item: { productId: string }) => item.productId === `T_${product.id}`,
+                ),
+            ).toBe(listed);
+            if (!listed) {
+                await expect(
+                    shopClient.query(
+                        gql`
+                            mutation ($id: ID!) {
+                                addItemToOrder(productVariantId: $id, quantity: 1) {
+                                    __typename
+                                }
+                            }
+                        `,
+                        { id: `T_${variant.id}` },
+                    ),
+                ).rejects.toThrow();
+            }
+        };
+        try {
+            await reindex(aCtx);
+            await reindex(ctx);
+            await shop(false);
+            await adminClient.asSuperAdmin();
+            const aggregate = await adminClient.query(
+                gql`
+                    query ($id: ID!) {
+                        product(id: $id) {
+                            id
+                            channels {
+                                id
+                            }
+                            variants {
+                                id
+                                channels {
+                                    id
+                                }
+                            }
+                        }
+                    }
+                `,
+                { id: `T_${product.id}` },
+            );
+            expect(aggregate.product.id).toBe(`T_${product.id}`);
+            expect(aggregate.product.channels.map((channel: { id: string }) => channel.id)).toEqual([
+                `T_${aCtx.channelId}`,
+            ]);
+            expect(aggregate.product.variants).toHaveLength(1);
+            await products.assignProductsToChannel(aCtx, {
+                productIds: [product.id],
+                channelId: ctx.channelId,
+            });
+            await reindex(ctx);
+            await shop(true);
+            const cart = await shopClient.query(
+                gql`
+                    mutation ($id: ID!) {
+                        addItemToOrder(productVariantId: $id, quantity: 1) {
+                            __typename
+                        }
+                    }
+                `,
+                { id: `T_${variant.id}` },
+            );
+            expect(cart.addItemToOrder.__typename).toBe('Order');
+            await products.removeProductsFromChannel(aCtx, {
+                productIds: [product.id],
+                channelId: ctx.channelId,
+            });
+            await reindex(ctx);
+            await shop(false);
+            const checkout = await shopClient.query(gql`
+                mutation {
+                    transitionOrderToState(state: "ArrangingPayment") {
+                        __typename
+                        ... on OrderStateTransitionError {
+                            transitionError
+                        }
+                    }
+                }
+            `);
+            expect(checkout.transitionOrderToState.__typename).toBe('OrderStateTransitionError');
+            expect(checkout.transitionOrderToState.transitionError).toContain('no longer available');
+            await expect(
+                products.removeProductsFromChannel(aCtx, {
+                    productIds: [product.id],
+                    channelId: aCtx.channelId,
+                }),
+            ).rejects.toThrow('至少保留一个销售店铺');
+            await expect(
+                variants.removeProductVariantsFromChannel(aCtx, {
+                    productVariantIds: [variant.id],
+                    channelId: aCtx.channelId,
+                }),
+            ).rejects.toThrow('至少保留一个销售店铺');
+            await expect(
+                server.app
+                    .get(ChannelService)
+                    .removeFromChannels(aCtx, ProductVariant, variant.id, [
+                        aCtx.channelId,
+                        String(aCtx.channelId),
+                    ]),
+            ).rejects.toThrow('至少保留一个销售店铺');
+            const bare = await products.create(aCtx, {
+                translations: [
+                    { languageCode: ctx.languageCode, name: 'No SKU', slug: 'no-sku', description: '' },
+                ],
+            });
+            await expect(
+                products.removeProductsFromChannel(aCtx, {
+                    productIds: [bare.id],
+                    channelId: aCtx.channelId,
+                }),
+            ).rejects.toThrow('至少保留一个销售店铺');
+            // A failure late in a batch must restore the previously removed shared product.
+            await products.assignProductsToChannel(aCtx, {
+                productIds: [product.id],
+                channelId: ctx.channelId,
+            });
+            await expect(
+                products.removeProductsFromChannel(aCtx, {
+                    productIds: [product.id, bare.id],
+                    channelId: aCtx.channelId,
+                }),
+            ).rejects.toThrow('至少保留一个销售店铺');
+            const restored = await connection.rawConnection
+                .getRepository(ProductVariant)
+                .findOneOrFail({ where: { id: variant.id }, relations: ['channels'] });
+            expect(restored.channels.map(channel => String(channel.id)).sort()).toEqual(
+                [String(aCtx.channelId), String(ctx.channelId)].sort(),
+            );
+            await products.removeProductsFromChannel(aCtx, {
+                productIds: [product.id],
+                channelId: ctx.channelId,
+            });
+            await products.softDelete(aCtx, bare.id);
+        } finally {
+            shopClient.setChannelToken(ctx.channel.token);
+            adminClient.setChannelToken(ctx.channel.token);
+        }
+    });
+
     it('downloads and previews the real template in desktop and mobile browsers', async () => {
         const root = join(process.cwd(), 'packages/next-admin');
         const entry = '.catalog-import-test.tsx';
         const html = '.catalog-import-test.html';
-        const screenshotDir = join(
-            process.cwd(),
-            '../../reports/catalog-import-types-hierarchy-performance-20260906',
-        );
+        const screenshotDir = join(process.cwd(), '../../reports/catalog-explicit-store-assignment-20260906');
         mkdirSync(screenshotDir, { recursive: true });
         writeFileSync(
             join(root, html),
@@ -465,7 +669,7 @@ describe('catalog import persisted type, hierarchy and rollback', () => {
                 .locator('label')
                 .filter({ has: page.getByRole('checkbox', { name: '选择商品：A 店商品', exact: true }) });
             await browserExpect(aRow.getByText('import-store-a', { exact: true })).toBeVisible();
-            await browserExpect(aRow.getByText('默认店铺（系统关联）', { exact: true })).toBeVisible();
+            await browserExpect(aRow.getByText('默认店铺', { exact: true })).toHaveCount(0);
             await dialog.getByLabel('目标店铺', { exact: true }).selectOption({ label: 'import-store-b' });
             await browserExpect(aRow.getByText('未在目标店铺', { exact: true })).toBeVisible();
             await dialog.getByLabel('价格系数', { exact: true }).fill('2');
@@ -539,10 +743,20 @@ describe('catalog import persisted type, hierarchy and rollback', () => {
                 ).products.totalItems,
             ).toBe(1);
             shopClient.setChannelToken(ctx.channel.token);
-            await dialog
-                .getByLabel('目标店铺', { exact: true })
-                .selectOption({ label: '默认店铺（系统自动关联）' });
+            await dialog.getByLabel('目标店铺', { exact: true }).selectOption({ label: '默认店铺' });
             await browserExpect(dialog.getByRole('button', { name: '确认移除', exact: true })).toBeDisabled();
+            await dialog.getByLabel('操作', { exact: true }).selectOption('assign');
+            await dialog.getByRole('checkbox', { name: '选择商品：A 店商品', exact: true }).check();
+            await dialog.getByRole('button', { name: '确认分配', exact: true }).click();
+            await browserExpect(aRow.getByText('默认店铺', { exact: true })).toBeVisible();
+            await dialog.getByLabel('操作', { exact: true }).selectOption('remove');
+            await dialog.getByRole('checkbox', { name: '选择商品：A 店商品', exact: true }).check();
+            await dialog.getByRole('button', { name: '确认移除', exact: true }).click();
+            await browserExpect(aRow.getByText('默认店铺', { exact: true })).toHaveCount(0);
+            await dialog.getByLabel('目标店铺', { exact: true }).selectOption({ label: 'import-store-a' });
+            await browserExpect(
+                dialog.getByRole('checkbox', { name: '选择商品：A 店商品', exact: true }),
+            ).toBeDisabled();
             expect(errors).toEqual([]);
         } finally {
             await browser.close();

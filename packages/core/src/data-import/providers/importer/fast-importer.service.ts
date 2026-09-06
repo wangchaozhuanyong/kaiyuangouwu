@@ -11,18 +11,20 @@ import { unique } from '@vendure/common/lib/unique';
 
 import { RequestContext } from '../../../api/common/request-context';
 import { TransactionalConnection } from '../../../connection/transactional-connection';
-import { Channel } from '../../../entity/channel/channel.entity';
-import { ProductOptionGroupTranslation } from '../../../entity/product-option-group/product-option-group-translation.entity';
-import { ProductOptionGroup } from '../../../entity/product-option-group/product-option-group.entity';
-import { ProductOptionTranslation } from '../../../entity/product-option/product-option-translation.entity';
-import { ProductOption } from '../../../entity/product-option/product-option.entity';
-import { ProductVariantAsset } from '../../../entity/product-variant/product-variant-asset.entity';
-import { ProductVariantPrice } from '../../../entity/product-variant/product-variant-price.entity';
-import { ProductVariantTranslation } from '../../../entity/product-variant/product-variant-translation.entity';
-import { ProductVariant } from '../../../entity/product-variant/product-variant.entity';
-import { ProductAsset } from '../../../entity/product/product-asset.entity';
-import { ProductTranslation } from '../../../entity/product/product-translation.entity';
-import { Product } from '../../../entity/product/product.entity';
+import {
+    Channel,
+    Product,
+    ProductAsset,
+    ProductOption,
+    ProductOptionGroup,
+    ProductOptionGroupTranslation,
+    ProductOptionTranslation,
+    ProductTranslation,
+    ProductVariant,
+    ProductVariantAsset,
+    ProductVariantPrice,
+    ProductVariantTranslation,
+} from '../../../entity';
 import { RequestContextService } from '../../../service/helpers/request-context/request-context.service';
 import { TranslatableSaver } from '../../../service/helpers/translatable-saver/translatable-saver';
 import { ChannelService } from '../../../service/services/channel.service';
@@ -82,8 +84,10 @@ export class FastImporterService {
             input,
             entityType: Product,
             translationType: ProductTranslation,
-            beforeSave: async p => {
-                p.channels = unique([this.defaultChannel, this.importCtx.channel], 'id');
+            beforeSave: p => {
+                p.channels = [
+                    this.importCtx.channelId == null ? this.defaultChannel : this.importCtx.channel,
+                ];
                 if (input.facetValueIds) {
                     p.facetValues = input.facetValueIds.map(id => ({ id }) as any);
                 }
@@ -115,7 +119,7 @@ export class FastImporterService {
             input,
             entityType: ProductOptionGroup,
             translationType: ProductOptionGroupTranslation,
-            beforeSave: async g => {
+            beforeSave: g => {
                 g.channels = unique([this.defaultChannel, this.importCtx.channel], 'id');
             },
         });
@@ -166,8 +170,10 @@ export class FastImporterService {
             input: inputWithoutPrice,
             entityType: ProductVariant,
             translationType: ProductVariantTranslation,
-            beforeSave: async variant => {
-                variant.channels = unique([this.defaultChannel, this.importCtx.channel], 'id');
+            beforeSave: variant => {
+                variant.channels = [
+                    this.importCtx.channelId == null ? this.defaultChannel : this.importCtx.channel,
+                ];
                 const { optionIds } = input;
                 if (optionIds && optionIds.length) {
                     variant.options = optionIds.map(id => ({ id }) as any);
