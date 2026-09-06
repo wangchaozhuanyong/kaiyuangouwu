@@ -7,6 +7,12 @@ import {
     CATALOG_REQUIRED_FIELDS,
     catalogFieldLabel,
 } from '../catalog-field-definitions';
+import {
+    catalogCategoryPath,
+    parseCatalogFulfillmentType,
+    validateCatalogCategories,
+} from '../catalog-import-classification';
+import { parseCatalogImportStore } from '../catalog-import-store';
 import { assignCatalogSourceRecordKeys } from '../catalog-row-identity';
 import { type NormalizedCatalogRow } from '../types';
 
@@ -14,7 +20,7 @@ export { CATALOG_EXCLUDED_HEADERS, CATALOG_FIELD_OPTIONS } from '../catalog-fiel
 
 type CellValue = string | number | boolean | Date | null | undefined;
 
-export const CATALOG_BROWSER_PARSER_VERSION = 'catalog-browser-v3';
+export const CATALOG_BROWSER_PARSER_VERSION = 'catalog-browser-v4';
 export const MAX_LOCAL_CATALOG_BYTES = 20 * 1024 * 1024;
 export const MAX_LOCAL_CATALOG_ROWS = 20_000;
 export const CATALOG_MAPPING_EXCLUDED = '__excluded__';
@@ -399,6 +405,9 @@ function normalizeRow(
     });
     const name = textValue(values.get('name'));
     const category = textValue(values.get('category'));
+    const secondaryCategory = textValue(values.get('secondaryCategory'));
+    const fulfillmentType = parseCatalogFulfillmentType(values.get('fulfillmentType'), rowNumber);
+    validateCatalogCategories(category, secondaryCategory, rowNumber);
     const sku = importSafeTextValue(values.get('sku'));
     const barcode = importSafeTextValue(values.get('barcode'));
     if (!name && !sku && !barcode) {
@@ -432,7 +441,9 @@ function normalizeRow(
         rowNumber,
         name,
         category,
-        channelCode: textValue(values.get('channelCode')),
+        secondaryCategory,
+        fulfillmentType,
+        channelCode: parseCatalogImportStore(importSafeTextValue(values.get('channelCode')), rowNumber),
         stockLocationCode: textValue(values.get('stockLocationCode')),
         currencyCode: textValue(values.get('currencyCode')).toUpperCase(),
         specification: textValue(values.get('specification')),
@@ -521,7 +532,7 @@ function localProductIdentity(row: NormalizedCatalogRow): string {
         ? `sku\u001f${normalizeIdentity(row.sku)}`
         : row.barcode
           ? `barcode\u001f${normalizeIdentity(row.barcode)}`
-          : [row.name, row.category, row.specification, row.primaryUnit]
+          : [row.name, catalogCategoryPath(row), row.specification, row.primaryUnit]
                 .map(normalizeIdentity)
                 .join('\u001f');
 }

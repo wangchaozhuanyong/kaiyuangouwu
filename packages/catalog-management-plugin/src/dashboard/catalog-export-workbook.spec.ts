@@ -14,7 +14,8 @@ describe('browser-local catalog export', () => {
         const productRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(workbook.Sheets['商品与SKU']);
         expect(productRows[0]).toMatchObject({
             名称: '匿名商品',
-            分类: '匿名分类',
+            一级分类: '匿名分类',
+            商品类型: '实物',
             SKU: "'=FORMULA",
             仓库: '主仓',
             库存量: 10,
@@ -36,7 +37,7 @@ describe('browser-local catalog export', () => {
         const csv = new TextDecoder().decode(output.buffer);
         expect([...bytes.slice(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
         expect(csv).toContain(
-            '名称,分类,SKU,仓库,库存量,进货价,销售价,毛利率,库存上限,库存下限,商品状态,商品描述,标签',
+            '名称,一级分类,SKU,仓库,库存量,进货价,销售价,毛利率,库存上限,库存下限,商品状态,商品描述,标签',
         );
         expect(csv).toContain('匿名商品');
         expect(csv).toContain('主仓,10,1.255,2.5');
@@ -150,8 +151,8 @@ describe('browser-local catalog export', () => {
         row.lots = [];
         const workbook = XLSX.read(buildCatalogExport([row], 'xlsx', 's1').buffer, { type: 'array' });
         workbook.Sheets['商品与SKU'] = XLSX.utils.aoa_to_sheet([
-            ['名称', '分类', 'SKU', '进货价', '销售价'],
-            [row.productName, '匿名分类', row.sku, 1.255, 2.5],
+            ['名称', '分类', 'SKU', '进货价', '销售价', '商品类型', '导入商店'],
+            [row.productName, '匿名分类', row.sku, 1.255, 2.5, '实物', row.channelCode],
         ]);
 
         const parsed = await parseCatalogArrayBuffer(XLSX.write(workbook, { type: 'array' }), '旧模板.xlsx');
@@ -184,8 +185,10 @@ describe('browser-local catalog export', () => {
 function exportRow(): CatalogExportRowRecord {
     return {
         productId: 'p1',
+        channelCode: 'test-store',
         variantId: 'v1',
         productName: '匿名商品',
+        fulfillmentType: 'physical',
         description: '仅用于测试',
         categories: ['匿名分类'],
         brand: '测试品牌',

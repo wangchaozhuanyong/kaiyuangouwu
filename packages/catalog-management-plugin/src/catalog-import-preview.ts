@@ -3,6 +3,7 @@ import { Product, ProductVariant, RequestContext, StockLevel, TransactionalConne
 import { IsNull } from 'typeorm';
 
 import { normalizeIdentity } from './catalog-file-parser.service';
+import { catalogCategoryPath, catalogImportTypeError } from './catalog-import-classification';
 import {
     clearsVariantIdentity,
     dateString,
@@ -53,10 +54,12 @@ export class CatalogImportPreview {
         binding?: CatalogSourceBinding,
         suppliersByName: Map<string, CatalogSupplier> = new Map(),
     ): Promise<PlannedRow> {
+        const typeError = catalogImportTypeError(ctx, row);
+        if (typeError) return { ...emptyPlan('ERROR'), message: typeError };
         const warnings = [validationWarning(row)];
         const categoryExists =
             Boolean(row.category) &&
-            catalogIndex.some(item => item.categories.has(normalizeIdentity(row.category)));
+            catalogIndex.some(item => item.categories.has(normalizeIdentity(catalogCategoryPath(row))));
         if (row.category && !categoryExists) warnings.push('分类不存在，确认后将创建新分类');
         const supplier = suppliersByName.get(normalizeSupplierName(row.supplier));
         if (row.supplier && !supplier) warnings.push(`供货商“${row.supplier}”不存在，确认后将创建`);
@@ -80,7 +83,9 @@ export class CatalogImportPreview {
                 .filter(
                     variant =>
                         normalizeIdentity(
-                            stringValue(((variant.customFields ?? {}) as Record<string, unknown>).barcode),
+                            stringValue(
+                                ((variant.customFields ?? {}) as unknown as Record<string, unknown>).barcode,
+                            ),
                         ) === normalizeIdentity(row.barcode),
                 );
             if (variants.length > 1) return conflictPlan('条码匹配到多个商品，请先清理重复条码');
@@ -99,9 +104,14 @@ export class CatalogImportPreview {
             if (!targetProduct || !targetVariant) return conflictPlan('历史来源绑定指向的商品已经不存在');
         } else {
             const name = normalizeIdentity(row.name);
-            const category = normalizeIdentity(row.category);
+            const category = normalizeIdentity(catalogCategoryPath(row));
             const products = catalogIndex.filter(
-                item => item.productKeyNames.has(name) && item.categories.has(category),
+                item =>
+                    item.productKeyNames.has(name) &&
+                    item.categories.has(category) &&
+                    (!row.fulfillmentType ||
+                        ((item.product.customFields as unknown as Record<string, unknown>)?.fulfillmentType ??
+                            'digital') === row.fulfillmentType),
             );
             if (products.length > 1) return conflictPlan('名称和分类匹配到多个商品');
             targetProduct = products[0]?.product;
@@ -157,6 +167,9 @@ export class CatalogImportPreview {
                               targetProduct.translations[0]?.slug ??
                               '',
                           productEnabled: targetProduct.enabled,
+                          productFulfillmentType:
+                              (targetProduct.customFields as unknown as Record<string, unknown>)
+                                  ?.fulfillmentType ?? 'digital',
                           productDescription:
                               targetProduct.translations.find(
                                   translation => translation.languageCode === ctx.languageCode,
@@ -175,7 +188,8 @@ export class CatalogImportPreview {
                           productImportCategory:
                               facetNames(targetProduct.facetValues, 'catalog-import-category')[0] ?? null,
                           productSourceCreatedAt: dateString(
-                              ((targetProduct.customFields ?? {}) as Record<string, unknown>).sourceCreatedAt,
+                              ((targetProduct.customFields ?? {}) as unknown as Record<string, unknown>)
+                                  .sourceCreatedAt,
                           ),
                       }
                     : null,
@@ -241,8 +255,8 @@ export class CatalogImportPreview {
             }),
             this.suppliers.association(ctx, variant.id),
         ]);
-        const customFields = (variant.customFields ?? {}) as Record<string, unknown>;
-        const productCustomFields = (product?.customFields ?? {}) as Record<string, unknown>;
+        const customFields = (variant.customFields ?? {}) as unknown as Record<string, unknown>;
+        const productCustomFields = (product?.customFields ?? {}) as unknown as Record<string, unknown>;
         const productTranslation =
             product?.translations.find(item => item.languageCode === ctx.languageCode) ??
             product?.translations[0];
@@ -268,6 +282,7 @@ export class CatalogImportPreview {
             productName: productTranslation?.name ?? '',
             productSlug: productTranslation?.slug ?? '',
             productEnabled: product?.enabled ?? true,
+            productFulfillmentType: productCustomFields.fulfillmentType ?? 'digital',
             productDescription: productTranslation?.description ?? '',
             productCategories,
             productImportCategory: facetNames(product?.facetValues, 'catalog-import-category')[0] ?? null,
@@ -309,9 +324,10 @@ export class CatalogImportPreview {
         changed(
             changes,
             'category',
-            row.category,
+            catalogCategoryPath(row),
             snapshot.productImportCategory ?? stringArray(snapshot.productCategories)[0] ?? null,
         );
+        changed(changes, 'fulfillmentType', row.fulfillmentType, snapshot.productFulfillmentType);
         changed(changes, 'productEnabled', row.enabled, snapshot.productEnabled);
         changed(changes, 'variantEnabled', effectiveVariantEnabled(row), snapshot.variantEnabled);
         changedOptional(

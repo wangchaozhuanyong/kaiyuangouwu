@@ -327,7 +327,7 @@ export class CatalogOperationsService {
             currencyCode: ctx.channel.defaultCurrencyCode,
             stockLocations,
             variants: variants.items.map(variant => {
-                const customFields = (variant.customFields ?? {}) as Record<string, unknown>;
+                const customFields = (variant.customFields ?? {}) as unknown as Record<string, unknown>;
                 const cost = latestCost.get(`${String(variant.id)}:${variant.currencyCode}`);
                 const costMicrounits = cost ? Number(cost.costMicrounits) : null;
                 const margin = calculateMargin(variant.price, costMicrounits);
@@ -446,8 +446,8 @@ export class CatalogOperationsService {
                 const translation =
                     product.translations.find(item => item.languageCode === ctx.languageCode) ??
                     product.translations[0];
-                const fields = (data.customFields ?? {}) as Record<string, unknown>;
-                const productFields = (product.customFields ?? {}) as Record<string, unknown>;
+                const fields = (data.customFields ?? {}) as unknown as Record<string, unknown>;
+                const productFields = (product.customFields ?? {}) as unknown as Record<string, unknown>;
                 const cost = latestCost.get(`${String(variant.id)}:${variant.currencyCode}`);
                 const costMicrounits = cost ? Number(cost.costMicrounits) : null;
                 return [
@@ -455,7 +455,12 @@ export class CatalogOperationsService {
                         productId: String(product.id),
                         variantId: String(variant.id),
                         productName: translation?.name ?? variant.name,
+                        channelCode: ctx.channel.code,
                         description: translation?.description ?? '',
+                        fulfillmentType:
+                            productFields.fulfillmentType === 'physical' ? 'physical' : 'digital',
+                        importCategory:
+                            facetValueNames(product, 'catalog-import-category', ctx.languageCode)[0] ?? null,
                         categories: uniqueNames([
                             ...facetValueNames(product, 'catalog-import-category', ctx.languageCode),
                             ...data.collections.map(
@@ -752,7 +757,7 @@ export class CatalogOperationsService {
         const variant = await this.connection.getEntityOrThrow(ctx, ProductVariant, input.productVariantId, {
             channelId: ctx.channelId,
         });
-        const currentFields = (variant.customFields ?? {}) as Record<string, unknown>;
+        const currentFields = (variant.customFields ?? {}) as unknown as Record<string, unknown>;
         const customFields = {
             ...currentFields,
             ...(input.barcode !== undefined ? { barcode: blankToNull(input.barcode) } : {}),

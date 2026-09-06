@@ -1,6 +1,7 @@
 import { LanguageCode, PluginCommonModule, VendurePlugin } from '@vendure/core';
 
 import { adminApiExtensions } from './api-extensions';
+import { CatalogChannelAssignmentsService } from './catalog-channel-assignments.service';
 import { CatalogFileParserService } from './catalog-file-parser.service';
 import { CatalogImportCategoryService } from './catalog-import-category.service';
 import { CatalogImportOptionsService } from './catalog-import-options.service';
@@ -44,6 +45,7 @@ import './types';
         CatalogVariantSupplier,
     ],
     providers: [
+        CatalogChannelAssignmentsService,
         CatalogFileParserService,
         CatalogOperationsService,
         CatalogProfitService,

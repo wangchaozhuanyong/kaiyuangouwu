@@ -9,7 +9,10 @@ import {
 
 describe('browser-local catalog parser', () => {
     it('parses UTF-8 Chinese CSV files without requiring a BOM', async () => {
-        const csv = ['名称,分类,SKU,进货价,销售价', '匿名商品,匿名分类,UTF8-CSV-001,1.25,2.50'].join('\n');
+        const csv = [
+            '名称,分类,SKU,进货价,销售价,商品类型,导入商店',
+            '匿名商品,匿名分类,UTF8-CSV-001,1.25,2.50,实物,test-store',
+        ].join('\n');
 
         const result = await parseCatalogArrayBuffer(
             new TextEncoder().encode(csv).buffer,
@@ -17,7 +20,7 @@ describe('browser-local catalog parser', () => {
             'text/csv',
         );
 
-        expect(result.headers).toEqual(['名称', '分类', 'SKU', '进货价', '销售价']);
+        expect(result.headers).toEqual(['名称', '分类', 'SKU', '进货价', '销售价', '商品类型', '导入商店']);
         expect(result.errors).toEqual([]);
         expect(result.rows).toHaveLength(1);
         expect(result.rows[0]).toMatchObject({
@@ -30,7 +33,10 @@ describe('browser-local catalog parser', () => {
     });
 
     it('accepts a stable SKU maintenance row with blank values for preserve-on-import', async () => {
-        const csv = ['名称,分类,SKU,包装换算,库存量,进货价,销售价', ',,SKU-KEEP-001,,,,'].join('\n');
+        const csv = [
+            '名称,分类,SKU,包装换算,库存量,进货价,销售价,商品类型,导入商店',
+            ',,SKU-KEEP-001,,,,,实物,test-store',
+        ].join('\n');
 
         const result = await parseCatalogArrayBuffer(
             new TextEncoder().encode(csv).buffer,
@@ -122,10 +128,10 @@ describe('browser-local catalog parser', () => {
 
     it('plans legacy same-name differing rows as independent SKUs and marks exact duplicates', async () => {
         const csv = [
-            '名称,分类,库存量,进货价,销售价',
-            '匿名商品,匿名分类,1,1.00,2.00',
-            '匿名商品,匿名分类,2,1.20,2.50',
-            '匿名商品,匿名分类,2,1.20,2.50',
+            '名称,分类,库存量,进货价,销售价,商品类型,导入商店',
+            '匿名商品,匿名分类,1,1.00,2.00,实物,test-store',
+            '匿名商品,匿名分类,2,1.20,2.50,实物,test-store',
+            '匿名商品,匿名分类,2,1.20,2.50,实物,test-store',
         ].join('\n');
 
         const result = await parseCatalogArrayBuffer(
@@ -262,8 +268,8 @@ describe('browser-local catalog parser', () => {
 
         const parsed = await parseCatalogArrayBuffer(toArrayBuffer(workbook), '36列匿名测试.xlsx');
 
-        expect(parsed.headers).toHaveLength(36);
-        expect(parsed.mappedHeaders).toBe(19);
+        expect(parsed.headers).toHaveLength(38);
+        expect(parsed.mappedHeaders).toBe(21);
         expect(parsed.excludedHeaders).toEqual(excluded);
         expect(parsed.unknownHeaders).toEqual([]);
         expect(parsed.rows[0].supplier).toBe('匿名供货商');
@@ -294,6 +300,16 @@ describe('browser-local catalog parser', () => {
 });
 
 function toArrayBuffer(workbook: XLSX.WorkBook): ArrayBuffer {
+    const name = workbook.SheetNames[0];
+    const rows = XLSX.utils.sheet_to_json<unknown[]>(workbook.Sheets[name], { header: 1, defval: null });
+    const width = rows[0].length;
+    workbook.Sheets[name] = XLSX.utils.aoa_to_sheet(
+        rows.map((row, index) => [
+            ...Array.from({ length: width }, (_, column) => row[column] ?? null),
+            index === 0 ? '商品类型' : '实物',
+            index === 0 ? '导入商店' : 'test-store',
+        ]),
+    );
     const output = XLSX.write(workbook, { type: 'array', bookType: 'xlsx', cellDates: true });
     return output instanceof ArrayBuffer ? output : new Uint8Array(output).buffer;
 }

@@ -5,24 +5,13 @@ import { useDeferredValue, useState } from 'react';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
-    ASSIGN_PRODUCTS_TO_CHANNEL,
-    GET_CATALOG_CHANNELS,
-    GET_PRODUCTS,
-    REMOVE_PRODUCTS_FROM_CHANNEL,
-} from '../../graphql/catalog.graphql';
+    GET_CATALOG_CHANNEL_ASSIGNMENTS,
+    type CatalogChannelAssignmentsData,
+    type ProductChannelAssignment,
+} from '../../graphql/catalog-channel-assignments.graphql';
+import { ASSIGN_PRODUCTS_TO_CHANNEL, REMOVE_PRODUCTS_FROM_CHANNEL } from '../../graphql/catalog.graphql';
 import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
-
-interface ProductResult {
-    products: {
-        items: Array<{ id: string; name: string; enabled: boolean; channels?: Array<{ id: string }> }>;
-        totalItems: number;
-    };
-}
-interface ChannelResult {
-    activeChannel: { id: string };
-    channels: { items: Array<{ id: string; code: string }>; totalItems: number };
-}
 
 export function CatalogBulkChannelAction() {
     const [open, setOpen] = useState(false);
@@ -34,7 +23,9 @@ export function CatalogBulkChannelAction() {
     const [priceFactor, setPriceFactor] = useState('1');
     const [notice, setNotice] = useState('');
     const [error, setError] = useState('');
-    const products = useQuery<ProductResult>(GET_PRODUCTS, {
+    const [pending, setPending] = useState(false);
+    const [assignmentFilter, setAssignmentFilter] = useState('all');
+    const products = useQuery<CatalogChannelAssignmentsData>(GET_CATALOG_CHANNEL_ASSIGNMENTS, {
         variables: {
             options: {
                 take: 100,
@@ -44,10 +35,7 @@ export function CatalogBulkChannelAction() {
         },
         skip: !open,
         fetchPolicy: 'network-only',
-    });
-    const channels = useQuery<ChannelResult>(GET_CATALOG_CHANNELS, {
-        variables: { options: { take: 100, sort: { code: 'ASC' } } },
-        skip: !open,
+        notifyOnNetworkStatusChange: true,
     });
     const [assign, assignState] = useMutation<{ assignProductsToChannel: Array<{ id: string }> }>(
         ASSIGN_PRODUCTS_TO_CHANNEL,
@@ -55,39 +43,92 @@ export function CatalogBulkChannelAction() {
     const [remove, removeState] = useMutation<{
         removeProductsFromChannel: Array<{ id: string }>;
     }>(REMOVE_PRODUCTS_FROM_CHANNEL);
-    const busy = assignState.loading || removeState.loading;
+    const busy = pending || assignState.loading || removeState.loading;
+    const page = products.data?.catalogProductChannelAssignments;
+    const target = page?.channels.find(channel => channel.id === channelId);
+    const ready = !products.loading && !products.error && deferredSearch === search.trim();
+    const belongsToTarget = (item: ProductChannelAssignment) =>
+        item.channels.some(channel => channel.id === channelId);
+    const eligible = (item: ProductChannelAssignment) =>
+        Boolean(target) &&
+        !(mode === 'remove' && target?.isDefault) &&
+        (mode === 'assign' ? !belongsToTarget(item) : belongsToTarget(item));
+    const items = (page?.items ?? []).filter(
+        item =>
+            assignmentFilter === 'all' ||
+            !target ||
+            (assignmentFilter === 'assigned' ? belongsToTarget(item) : !belongsToTarget(item)),
+    );
+    const selectable = items.filter(eligible);
+    const selected = selectable.filter(item => selectedIds.includes(item.id));
+    const resetSelection = () => {
+        setSelectedIds([]);
+        setError('');
+        setNotice('');
+    };
     const submit = async () => {
         setError('');
         setNotice('');
+        if (busy || !ready) return;
+        setPending(true);
         try {
-            if (!selectedIds.length) throw new Error('请至少选择一个商品');
-            if (!channelId) throw new Error('请选择目标店铺');
+            if (!selected.length) throw new Error('请至少选择一个可操作的商品');
+            if (!target) throw new Error('请选择目标店铺');
+            // Recheck membership immediately before applying a price factor or removing access.
+            const latest = (await products.refetch()).data?.catalogProductChannelAssignments;
+            if (!latest) throw new Error('无法核对最新店铺分配，请重试');
+            if (selected.some(item => !latest.items.some(current => current.id === item.id))) {
+                setSelectedIds([]);
+                throw new Error('商品列表已变化，请根据刷新后的结果重新选择');
+            }
+            const ids = latest.items
+                .filter(item => selectedIds.includes(item.id) && eligible(item))
+                .map(item => item.id);
+            const skipped = selected.length - ids.length;
+            if (!ids.length) {
+                setSelectedIds([]);
+                setNotice('分配状态已变化，本次无需操作，列表已刷新');
+                return;
+            }
             if (mode === 'assign') {
                 const factor = Number(priceFactor);
                 if (!Number.isFinite(factor) || factor <= 0) throw new Error('价格系数必须大于 0');
-                const result = await assign({
-                    variables: { input: { productIds: selectedIds, channelId, priceFactor: factor } },
+                await assign({
+                    variables: { input: { productIds: ids, channelId, priceFactor: factor } },
                 });
-                if ((result.data?.assignProductsToChannel.length ?? 0) !== selectedIds.length)
-                    throw new Error('后端未返回所有已分配商品');
             } else {
-                const result = await remove({ variables: { input: { productIds: selectedIds, channelId } } });
-                if ((result.data?.removeProductsFromChannel.length ?? 0) !== selectedIds.length)
-                    throw new Error('后端未返回所有已移除商品');
+                await remove({ variables: { input: { productIds: ids, channelId } } });
             }
-            setNotice(`已${mode === 'assign' ? '分配' : '移除'} ${selectedIds.length} 个商品`);
+            const verified = (await products.refetch()).data?.catalogProductChannelAssignments;
+            if (
+                !verified ||
+                !ids.every(id => {
+                    const item = verified.items.find(product => product.id === id);
+                    return mode === 'assign'
+                        ? Boolean(item && belongsToTarget(item))
+                        : !item || !belongsToTarget(item);
+                })
+            )
+                throw new Error('操作已返回，但最新分配状态未能确认，请刷新后核对');
+            setNotice(
+                `已${mode === 'assign' ? '分配到' : '从'}「${getChannelDisplayName(target.code)}」${mode === 'remove' ? '移除' : ''} ${ids.length} 个商品${skipped ? `，跳过 ${skipped} 个状态已变化的商品` : ''}`,
+            );
             setSelectedIds([]);
-            await products.refetch();
         } catch (cause) {
             setError(toUserFacingError(cause, '商品批量店铺操作失败'));
+            await products.refetch().catch(() => undefined);
+        } finally {
+            setPending(false);
         }
     };
-    const items = products.data?.products.items ?? [];
     return (
         <>
             <button
                 type="button"
-                onClick={() => setOpen(true)}
+                onClick={() => {
+                    resetSelection();
+                    setOpen(true);
+                }}
                 className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700"
             >
                 <Layers3 className="h-4 w-4" />
@@ -107,7 +148,7 @@ export function CatalogBulkChannelAction() {
                                     <FeatureHelpButton topic="catalog.products" title="商品批量店铺操作" />
                                 </h2>
                                 <p className="mt-1 text-xs text-slate-500">
-                                    将多个商品分配到目标 Channel 或从中移除；价格系数只在分配时应用。
+                                    同一商品可分配到多个店铺。先查看现有分配，再选择需要新增或移除的商品。
                                 </p>
                             </div>
                             <button
@@ -126,8 +167,13 @@ export function CatalogBulkChannelAction() {
                                 <label className={labelClass}>
                                     操作
                                     <select
+                                        aria-label="操作"
                                         value={mode}
-                                        onChange={event => setMode(event.target.value as 'assign' | 'remove')}
+                                        disabled={busy}
+                                        onChange={event => {
+                                            setMode(event.target.value as 'assign' | 'remove');
+                                            resetSelection();
+                                        }}
                                         className={inputClass}
                                     >
                                         <option value="assign">分配到店铺</option>
@@ -137,14 +183,20 @@ export function CatalogBulkChannelAction() {
                                 <label className={labelClass}>
                                     目标店铺
                                     <select
+                                        aria-label="目标店铺"
                                         value={channelId}
-                                        onChange={event => setChannelId(event.target.value)}
+                                        disabled={busy || !ready}
+                                        onChange={event => {
+                                            setChannelId(event.target.value);
+                                            resetSelection();
+                                        }}
                                         className={inputClass}
                                     >
                                         <option value="">请选择</option>
-                                        {channels.data?.channels.items.map(channel => (
+                                        {page?.channels.map(channel => (
                                             <option key={channel.id} value={channel.id}>
                                                 {getChannelDisplayName(channel.code)}
+                                                {channel.isDefault ? '（系统自动关联）' : ''}
                                             </option>
                                         ))}
                                     </select>
@@ -157,71 +209,147 @@ export function CatalogBulkChannelAction() {
                                             min="0.0001"
                                             step="0.01"
                                             value={priceFactor}
+                                            disabled={busy}
                                             onChange={event => setPriceFactor(event.target.value)}
                                             className={inputClass}
                                         />
                                     </label>
                                 )}
                             </div>
-                            <div className="relative">
-                                <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                                <input
-                                    value={search}
-                                    onChange={event => setSearch(event.target.value)}
-                                    placeholder="按名称搜索（最多返回 100 条）"
-                                    className="w-full rounded-lg border border-slate-300 py-2 pl-9 pr-3 text-xs"
+                            <p className="text-xs text-slate-500">
+                                已分配的商品会自动跳过，价格系数仅用于本次新增分配。仅显示你有权限查看的店铺。
+                            </p>
+                            {target?.isDefault && (
+                                <Notice
+                                    tone="info"
+                                    message="默认店铺目前由系统自动关联全部商品，不能在此移除。这里显示的是现有实际关联，并不代表手动分配记录。"
                                 />
+                            )}
+                            <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+                                <div className="relative">
+                                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                                    <input
+                                        value={search}
+                                        aria-label="搜索商品"
+                                        disabled={busy}
+                                        onChange={event => {
+                                            setSearch(event.target.value);
+                                            resetSelection();
+                                        }}
+                                        placeholder="按名称搜索（最多返回 100 条）"
+                                        className="w-full rounded-lg border border-slate-300 py-2 pl-9 pr-3 text-xs"
+                                    />
+                                </div>
+                                <select
+                                    aria-label="按目标店铺分配状态筛选"
+                                    value={assignmentFilter}
+                                    disabled={busy || !target || !ready}
+                                    onChange={event => {
+                                        setAssignmentFilter(event.target.value);
+                                        resetSelection();
+                                    }}
+                                    className={inputClass}
+                                >
+                                    <option value="all">全部分配状态</option>
+                                    <option value="assigned">已在目标店铺</option>
+                                    <option value="unassigned">未在目标店铺</option>
+                                </select>
                             </div>
-                            {products.loading && !products.data ? (
+                            {products.loading && !page ? (
                                 <p className="p-8 text-center text-xs text-slate-500">正在读取商品…</p>
                             ) : products.error ? (
-                                <Notice tone="error" message="商品读取失败" />
+                                <Notice tone="error" message="商品店铺分配读取失败，请关闭后重试" />
                             ) : (
                                 <div className="max-h-80 overflow-auto rounded-lg border border-slate-200">
                                     <label className="flex items-center gap-3 border-b bg-slate-50 p-3 text-xs font-bold">
                                         <input
                                             type="checkbox"
                                             checked={
-                                                Boolean(items.length) &&
-                                                items.every(item => selectedIds.includes(item.id))
+                                                Boolean(selectable.length) &&
+                                                selectable.every(item => selectedIds.includes(item.id))
                                             }
+                                            disabled={busy || !ready || !selectable.length}
                                             onChange={event =>
                                                 setSelectedIds(
-                                                    event.target.checked ? items.map(item => item.id) : [],
+                                                    event.target.checked
+                                                        ? selectable.map(item => item.id)
+                                                        : [],
                                                 )
                                             }
                                         />
-                                        选择当前结果 ({items.length})
+                                        选择当前可{mode === 'assign' ? '分配' : '移除'}商品 (
+                                        {selectable.length})
                                     </label>
+                                    {!items.length && (
+                                        <p className="p-8 text-center text-xs text-slate-500">
+                                            没有符合条件的商品
+                                        </p>
+                                    )}
                                     {items.map(item => (
                                         <label
                                             key={item.id}
-                                            className="flex items-center justify-between gap-3 border-b border-slate-100 p-3 text-xs last:border-0"
+                                            className="flex items-start gap-3 border-b border-slate-100 p-3 text-xs last:border-0"
                                         >
-                                            <span className="flex items-center gap-3">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={selectedIds.includes(item.id)}
-                                                    onChange={event =>
-                                                        setSelectedIds(current =>
-                                                            event.target.checked
-                                                                ? [...current, item.id]
-                                                                : current.filter(id => id !== item.id),
-                                                        )
-                                                    }
-                                                />
-                                                <strong>{item.name}</strong>
+                                            <input
+                                                type="checkbox"
+                                                className="mt-1 shrink-0"
+                                                aria-label={`选择商品：${item.name}`}
+                                                disabled={busy || !ready || !eligible(item)}
+                                                checked={selectedIds.includes(item.id)}
+                                                onChange={event =>
+                                                    setSelectedIds(current =>
+                                                        event.target.checked
+                                                            ? [...current, item.id]
+                                                            : current.filter(id => id !== item.id),
+                                                    )
+                                                }
+                                            />
+                                            <span className="min-w-0 flex-1 space-y-2">
+                                                <span className="flex flex-wrap items-start justify-between gap-2">
+                                                    <strong className="break-words">{item.name}</strong>
+                                                    <span
+                                                        className={`rounded px-2 py-0.5 ${target && belongsToTarget(item) ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}
+                                                    >
+                                                        {!target
+                                                            ? '未选择目标店铺'
+                                                            : belongsToTarget(item)
+                                                              ? '已在目标店铺'
+                                                              : '未在目标店铺'}
+                                                    </span>
+                                                </span>
+                                                <span className="flex flex-wrap items-center gap-1.5 text-slate-500">
+                                                    <span>当前所在店铺：</span>
+                                                    {item.channels.map(channel => (
+                                                        <span
+                                                            key={channel.id}
+                                                            className="rounded border border-slate-200 px-1.5 py-0.5"
+                                                        >
+                                                            {getChannelDisplayName(channel.code)}
+                                                            {channel.isDefault ? '（系统关联）' : ''}
+                                                        </span>
+                                                    ))}
+                                                    {!item.channels.length && (
+                                                        <span>暂无可查看的店铺关联</span>
+                                                    )}
+                                                </span>
                                             </span>
-                                            <small className="text-slate-500">
-                                                {item.enabled ? '上架' : '下架'}
-                                            </small>
                                         </label>
                                     ))}
                                 </div>
                             )}
+                            {page && (
+                                <p className="text-xs text-slate-500">
+                                    当前显示 {items.length} 个商品，可{mode === 'assign' ? '分配' : '移除'}{' '}
+                                    {selectable.length} 个
+                                    {page.totalItems > 100
+                                        ? `；匹配共 ${page.totalItems} 个，请按名称缩小范围`
+                                        : ''}
+                                    {!ready && !products.error ? ' · 正在刷新分配状态…' : ''}
+                                </p>
+                            )}
                         </div>
                         <div className="flex items-center justify-between border-t p-5">
-                            <span className="text-xs text-slate-500">已选 {selectedIds.length} 个商品</span>
+                            <span className="text-xs text-slate-500">已选 {selected.length} 个商品</span>
                             <div className="flex gap-2">
                                 <button
                                     type="button"
@@ -234,7 +362,7 @@ export function CatalogBulkChannelAction() {
                                 <button
                                     type="button"
                                     onClick={() => void submit()}
-                                    disabled={busy || !selectedIds.length || !channelId}
+                                    disabled={busy || !ready || !selected.length || !target}
                                     className={primaryButton}
                                 >
                                     {busy ? '后端处理中…' : mode === 'assign' ? '确认分配' : '确认移除'}
@@ -247,11 +375,11 @@ export function CatalogBulkChannelAction() {
         </>
     );
 }
-function Notice({ tone, message }: { tone: 'success' | 'error'; message: string }) {
+function Notice({ tone, message }: { tone: 'success' | 'error' | 'info'; message: string }) {
     return (
         <div
             role={tone === 'error' ? 'alert' : 'status'}
-            className={`rounded-lg border p-3 text-xs ${tone === 'error' ? 'border-rose-200 bg-rose-50 text-rose-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}
+            className={`rounded-lg border p-3 text-xs ${tone === 'error' ? 'border-rose-200 bg-rose-50 text-rose-800' : tone === 'info' ? 'border-blue-200 bg-blue-50 text-blue-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}
         >
             {message}
         </div>

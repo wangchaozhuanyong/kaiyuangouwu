@@ -1,6 +1,6 @@
 import { CurrencyCode } from '@vendure/common/lib/generated-types';
 import { ID } from '@vendure/common/lib/shared-types';
-import { ProductVariant, RequestContext } from '@vendure/core';
+import { ProductVariant, RequestContext, UserInputError } from '@vendure/core';
 
 import {
     catalogExactRowFingerprint,
@@ -8,6 +8,7 @@ import {
     catalogSourceKey,
     normalizeIdentity,
 } from './catalog-file-parser.service';
+import { catalogCategoryPath } from './catalog-import-classification';
 import {
     effectiveVariantEnabled,
     isBlankValue,
@@ -16,6 +17,7 @@ import {
     shouldClear,
     stringValue,
 } from './catalog-import-helpers';
+import { catalogImportStoreError } from './catalog-import-store';
 import {
     CatalogImportAction,
     CatalogImportContextInput,
@@ -114,14 +116,8 @@ export function importScopeError(
     input: CatalogImportContextInput,
     stockLocation: { id: ID; name: string },
 ): string | null {
-    if (
-        row.channelCode &&
-        ![String(ctx.channelId), normalizeIdentity(ctx.channel.code)].includes(
-            normalizeIdentity(row.channelCode),
-        )
-    ) {
-        return '文件门店与当前选择的门店不一致，默认不执行';
-    }
+    const storeError = catalogImportStoreError(row, ctx);
+    if (storeError) return storeError;
     if (
         row.stockLocationCode &&
         ![String(stockLocation.id), normalizeIdentity(stockLocation.name)].includes(
@@ -156,7 +152,9 @@ export function variantExecutionKey(row: NormalizedCatalogRow): string {
     if (row.sku) return `sku\u001f${normalizeIdentity(row.sku)}`;
     if (row.barcode) return `barcode\u001f${normalizeIdentity(row.barcode)}`;
     if (row.sourceRecordKey) return `record\u001f${row.sourceRecordKey}`;
-    return [row.name, row.category, row.specification, row.primaryUnit].map(normalizeIdentity).join('\u001f');
+    return [row.name, catalogCategoryPath(row), row.specification, row.primaryUnit]
+        .map(normalizeIdentity)
+        .join('\u001f');
 }
 
 export function groupRows(rows: NormalizedCatalogRow[]): Map<string, NormalizedCatalogRow[]> {
@@ -187,7 +185,8 @@ export function firstExactRowNumbers(rows: NormalizedCatalogRow[]): Map<string, 
 export function productFieldFingerprint(row: NormalizedCatalogRow): string {
     return JSON.stringify({
         name: row.name,
-        category: row.category,
+        category: catalogCategoryPath(row),
+        fulfillmentType: row.fulfillmentType,
         enabled: row.enabled,
         description: row.description,
         tags: row.tags,
@@ -203,7 +202,7 @@ export function isCatalogImportResolutionState(state: CatalogImportState): boole
 }
 
 export function variantMatches(variant: ProductVariant, row: NormalizedCatalogRow): boolean {
-    const fields = (variant.customFields ?? {}) as Record<string, unknown>;
+    const fields = (variant.customFields ?? {}) as unknown as Record<string, unknown>;
     const specification = normalizeIdentity(stringValue(fields.specification));
     const unit = normalizeIdentity(stringValue(fields.saleUnit));
     if (!row.specification && !row.primaryUnit) return specification === '' && unit === '';
@@ -218,7 +217,8 @@ export function createChanges(
 ): Record<string, unknown> {
     return {
         name: row.name,
-        category: row.category,
+        category: catalogCategoryPath(row),
+        fulfillmentType: row.fulfillmentType,
         specification: row.specification,
         saleUnit: row.primaryUnit,
         purchaseUnit: row.purchaseUnit || row.primaryUnit,
@@ -326,4 +326,13 @@ export function variantCustomFieldUpdates(
         shouldClear(row, 'shelfLifeDays', clearBlankFields),
     );
     return updates;
+}
+
+export function assertCatalogImportContext(ctx: RequestContext, input: CatalogImportContextInput): void {
+    if (String(input.channelId) !== String(ctx.channelId)) {
+        throw new UserInputError('目标门店必须与 Dashboard 当前选择的门店一致');
+    }
+    if (!ctx.channel.availableCurrencyCodes.includes(input.currencyCode)) {
+        throw new UserInputError('目标币种不属于当前门店');
+    }
 }

@@ -7,6 +7,7 @@ import {
     CATALOG_FIELD_OPTIONS,
     CATALOG_MAPPING_EXCLUDED,
     CATALOG_MAPPING_UNKNOWN,
+    catalogImportTemplateCsv,
     createCatalogImportBatches,
     rowsForCatalogTransport,
     type LocalCatalogFile,
@@ -643,7 +644,7 @@ export function CatalogImportDialog({ open, onClose }: { open: boolean; onClose:
                             }}
                             onParse={() => void handleLocalParse()}
                             onCreatePreview={() => void handleCreatePreview()}
-                            onDownloadTemplate={downloadTemplate}
+                            onDownloadTemplate={() => downloadTemplate(activeChannel?.code ?? '')}
                         />
                     ) : jobQuery.loading && !job ? (
                         <LoadingState label="正在读取导入任务" />
@@ -841,6 +842,10 @@ function UploadPanel({
                         </span>
                     </span>
                 </label>
+                <p className="text-xs text-slate-500 md:col-span-3">
+                    导入商店必填且必须与当前目标店铺一致；不同商店请分文件导入。商品类型必填：虚拟货品 /
+                    实物。一级分类填写主分类，二级分类可留空；留空表示没有二级分类，更新时也会移除旧二级分类。
+                </p>
                 {file && (
                     <div className="rounded-lg bg-slate-100 p-3 text-xs text-slate-700 md:col-span-3">
                         已选择：<strong>{file.name}</strong> · {formatBytes(file.size)}
@@ -1307,7 +1312,9 @@ function JobWorkspace({
                                     <th className="p-3">行号</th>
                                     <th className="p-3">结果</th>
                                     <th className="p-3">名称</th>
-                                    <th className="p-3">分类</th>
+                                    <th className="p-3">导入商店</th>
+                                    <th className="p-3">商品类型</th>
+                                    <th className="p-3">一级分类 / 二级分类</th>
                                     <th className="p-3">规格 / 单位</th>
                                     <th className="p-3">销售价 / 进货价 / 库存量</th>
                                     <th className="p-3">说明与处理</th>
@@ -1393,7 +1400,20 @@ function ImportRow({
                     {displayValue(data.sku, '无 SKU')}
                 </div>
             </td>
-            <td className="p-3">{displayValue(data.category)}</td>
+            <td className="whitespace-nowrap p-3">{displayValue(data.channelCode, '未填写')}</td>
+            <td className="whitespace-nowrap p-3">
+                {data.fulfillmentType === 'physical'
+                    ? '实物'
+                    : data.fulfillmentType === 'digital'
+                      ? '虚拟货品'
+                      : '未填写'}
+            </td>
+            <td className="p-3">
+                <div>{displayValue(data.category)}</div>
+                <div className="mt-1 text-[10px] text-slate-400">
+                    {displayValue(data.secondaryCategory, '无二级分类')}
+                </div>
+            </td>
             <td className="p-3">
                 {[displayValue(data.specification, ''), displayValue(data.primaryUnit, '')]
                     .filter(Boolean)
@@ -1768,64 +1788,9 @@ function stateLabel(state: CatalogImportJobRecord['state']) {
     )[state];
 }
 
-function downloadTemplate() {
-    const rows = [
-        [
-            '名称',
-            '分类',
-            '门店',
-            '仓库',
-            '币种',
-            'SKU',
-            '条码',
-            '规格',
-            '销售单位',
-            '采购单位',
-            '包装换算',
-            '库存量',
-            '进货价',
-            '销售价',
-            '库存上限',
-            '库存下限',
-            '品牌',
-            '生产日期',
-            '保质期',
-            '批次号',
-            '商品状态',
-            '商品描述',
-            '标签',
-            '创建日期',
-            '供货商',
-        ],
-        [
-            '示例商品',
-            '示例分类',
-            '',
-            '',
-            '',
-            'SKU-001',
-            '',
-            '500ml',
-            '瓶',
-            '箱',
-            '12',
-            '10',
-            '3.125',
-            '5.00',
-            '100',
-            '10',
-            '',
-            '',
-            '365',
-            '',
-            '启用',
-            '',
-            '',
-            '',
-            '示例供货商',
-        ],
-    ];
-    downloadCsv(rows.map(row => row.map(csvCell).join(',')).join('\r\n'), '商品导入标准模板.csv');
+function downloadTemplate(channelCode: string): void {
+    if (!channelCode) return;
+    downloadCsv(catalogImportTemplateCsv(channelCode), '商品导入标准模板.csv');
 }
 
 function downloadImportReport(job: CatalogImportJobRecord, rows: CatalogImportRowRecord[]) {
@@ -1845,13 +1810,32 @@ function downloadImportReport(job: CatalogImportJobRecord, rows: CatalogImportRo
         ['原始表头', '处理状态', '系统字段'],
         ...headerAudit,
         [],
-        ['行号', '结果', '处理选择', '名称', '分类', 'SKU', '说明', '应用时间'],
+        [
+            '行号',
+            '结果',
+            '处理选择',
+            '名称',
+            '导入商店',
+            '商品类型',
+            '一级分类',
+            '二级分类',
+            'SKU',
+            '说明',
+            '应用时间',
+        ],
         ...rows.map(row => [
             String(row.rowNumber),
             row.action,
             row.resolution ?? '',
             displayValue(row.normalizedData.name, ''),
+            displayValue(row.normalizedData.channelCode, ''),
+            row.normalizedData.fulfillmentType === 'physical'
+                ? '实物'
+                : row.normalizedData.fulfillmentType === 'digital'
+                  ? '虚拟货品'
+                  : '',
             displayValue(row.normalizedData.category, ''),
+            displayValue(row.normalizedData.secondaryCategory, ''),
             displayValue(row.normalizedData.sku, ''),
             row.message ?? '',
             row.appliedAt ?? '',

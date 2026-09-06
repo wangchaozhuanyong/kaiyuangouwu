@@ -1,9 +1,7 @@
 import { GlobalFlag } from '@vendure/common/lib/generated-types';
-import { normalizeString } from '@vendure/common/lib/normalize-string';
 import { ID } from '@vendure/common/lib/shared-types';
 import {
     FacetService,
-    FacetValue,
     FacetValueService,
     Product,
     ProductService,
@@ -15,16 +13,17 @@ import {
 } from '@vendure/core';
 import { IsNull } from 'typeorm';
 
-import { normalizeIdentity } from './catalog-file-parser.service';
 import { CatalogImportCategoryService } from './catalog-import-category.service';
+import { catalogCategoryPath, catalogImportTypeError } from './catalog-import-classification';
+import { resolveCatalogFacetValues } from './catalog-import-facets';
 import {
     dateString,
     effectiveVariantEnabled,
     facetNames,
     nullableNumber,
-    shortCode,
     shouldClear,
     stringValue,
+    uniqueCatalogProductSlug,
 } from './catalog-import-helpers';
 import { CatalogImportOptionsService } from './catalog-import-options.service';
 import {
@@ -38,6 +37,7 @@ import {
     variantExecutionKey,
 } from './catalog-import-planning';
 import { CatalogImportPreview } from './catalog-import-preview';
+import { catalogImportStoreError } from './catalog-import-store';
 import { CatalogOperationsService } from './catalog-operations.service';
 import { resolveImportExecutionVariantId } from './catalog-row-identity';
 import { CatalogSupplierService } from './catalog-supplier.service';
@@ -45,7 +45,6 @@ import { CatalogImportJob } from './entities/catalog-import-job.entity';
 import { CatalogImportRow } from './entities/catalog-import-row.entity';
 import { CatalogSourceBinding } from './entities/catalog-source-binding.entity';
 import { InventoryLot } from './entities/inventory-lot.entity';
-import { NormalizedCatalogRow } from './types';
 
 export class CatalogImportWriter {
     constructor(
@@ -70,6 +69,15 @@ export class CatalogImportWriter {
         stockLocations: Array<{ id: string; name: string }>,
         multiVariantProductKeys: Set<string>,
     ): Promise<void> {
+        const typeError =
+            catalogImportStoreError(row.normalizedData, ctx) ??
+            catalogImportTypeError(ctx, row.normalizedData);
+        if (typeError) throw new UserInputError(typeError);
+        const facetServices = {
+            connection: this.connection,
+            facetService: this.facetService,
+            facetValueService: this.facetValueService,
+        };
         const stockLocation = effectiveStockLocation(
             row.normalizedData.stockLocationCode,
             job.stockLocationId,
@@ -99,11 +107,16 @@ export class CatalogImportWriter {
                 throw new UserInputError('商品在预览后被修改，请重新创建预览');
             }
         } else {
-            const newProductFacetValueIds = await this.resolveFacetValues(ctx, row.normalizedData);
+            const newProductFacetValueIds = await resolveCatalogFacetValues(
+                facetServices,
+                ctx,
+                row.normalizedData,
+            );
             const created = await this.productService.create(ctx, {
                 enabled: row.normalizedData.enabled ?? true,
                 facetValueIds: newProductFacetValueIds,
                 customFields: {
+                    ...{ fulfillmentType: row.normalizedData.fulfillmentType },
                     sourceCreatedAt: row.normalizedData.sourceCreatedAt
                         ? new Date(row.normalizedData.sourceCreatedAt)
                         : null,
@@ -112,7 +125,11 @@ export class CatalogImportWriter {
                     {
                         languageCode: ctx.languageCode,
                         name: row.normalizedData.name,
-                        slug: await this.uniqueSlug(ctx, row.normalizedData.name),
+                        slug: await uniqueCatalogProductSlug(
+                            ctx,
+                            row.normalizedData.name,
+                            this.productService,
+                        ),
                         description: productDescriptionForCreate(row.normalizedData),
                     },
                 ],
@@ -123,9 +140,15 @@ export class CatalogImportWriter {
                     where: { id: created.id },
                     relations: ['translations', 'facetValues', 'facetValues.facet'],
                 })) ?? undefined;
-            productByKey.set(row.productKey, productId);
         }
         if (!product || !productId) throw new UserInputError('无法创建或加载商品');
+        if (
+            productCreated &&
+            (product.customFields as unknown as Record<string, unknown>)?.fulfillmentType !==
+                row.normalizedData.fulfillmentType
+        ) {
+            throw new UserInputError('商品实际类型与导入类型不一致，请检查关联门店的经营模式');
+        }
 
         const executionVariantKey = variantExecutionKey(row.normalizedData);
         const executionVariantId = resolveImportExecutionVariantId(
@@ -176,6 +199,9 @@ export class CatalogImportWriter {
                     product.translations[0]?.slug ??
                     '',
                 productEnabled: product.enabled,
+                productFulfillmentType:
+                    (product.customFields as unknown as Record<string, unknown>)?.fulfillmentType ??
+                    'digital',
                 productDescription:
                     product.translations.find(translation => translation.languageCode === ctx.languageCode)
                         ?.description ?? '',
@@ -187,7 +213,7 @@ export class CatalogImportWriter {
                     variant?.translations[0]?.name ??
                     '',
                 productSourceCreatedAt: dateString(
-                    ((product.customFields ?? {}) as Record<string, unknown>).sourceCreatedAt,
+                    ((product.customFields ?? {}) as unknown as Record<string, unknown>).sourceCreatedAt,
                 ),
             }),
             sourceBinding: existingBinding
@@ -210,9 +236,11 @@ export class CatalogImportWriter {
             (row.normalizedData.tags.length > 0 ||
                 shouldClear(row.normalizedData, 'tags', job.clearBlankFields));
         const replaceCategory = shouldApplyProductField('category') && Boolean(row.normalizedData.category);
+        const replaceFulfillmentType =
+            shouldApplyProductField('fulfillmentType') && Boolean(row.normalizedData.fulfillmentType);
         const facetValueIds =
-            replaceBrand || replaceTags || replaceCategory
-                ? await this.resolveFacetValues(ctx, {
+            !productCreated && (replaceBrand || replaceTags || replaceCategory)
+                ? await resolveCatalogFacetValues(facetServices, ctx, {
                       ...row.normalizedData,
                       brand: replaceBrand ? row.normalizedData.brand : '',
                       tags: replaceTags ? row.normalizedData.tags : [],
@@ -225,7 +253,8 @@ export class CatalogImportWriter {
                 return !(
                     (replaceBrand && code === 'catalog-brand') ||
                     (replaceTags && code === 'catalog-tag') ||
-                    (replaceCategory && code === 'catalog-import-category')
+                    (replaceCategory &&
+                        ['catalog-import-category', 'catalog-import-primary-category'].includes(code ?? ''))
                 );
             })
             .map(value => value.id);
@@ -252,6 +281,7 @@ export class CatalogImportWriter {
             (replaceDescription ||
                 replaceName ||
                 replaceSourceCreatedAt ||
+                replaceFulfillmentType ||
                 replaceProductEnabled ||
                 replaceBrand ||
                 replaceTags ||
@@ -262,13 +292,20 @@ export class CatalogImportWriter {
                 expectedUpdatedAt: product.updatedAt,
                 ...(replaceProductEnabled ? { enabled: row.normalizedData.enabled ?? undefined } : {}),
                 facetValueIds: nextFacetValueIds,
-                ...(replaceSourceCreatedAt
+                ...(replaceSourceCreatedAt || replaceFulfillmentType
                     ? {
                           customFields: {
-                              ...((product.customFields ?? {}) as Record<string, unknown>),
-                              sourceCreatedAt: row.normalizedData.sourceCreatedAt
-                                  ? new Date(row.normalizedData.sourceCreatedAt)
-                                  : null,
+                              ...((product.customFields ?? {}) as unknown as Record<string, unknown>),
+                              ...(replaceFulfillmentType
+                                  ? { fulfillmentType: row.normalizedData.fulfillmentType }
+                                  : {}),
+                              ...(replaceSourceCreatedAt
+                                  ? {
+                                        sourceCreatedAt: row.normalizedData.sourceCreatedAt
+                                            ? new Date(row.normalizedData.sourceCreatedAt)
+                                            : null,
+                                    }
+                                  : {}),
                           },
                       }
                     : {}),
@@ -283,7 +320,11 @@ export class CatalogImportWriter {
                                       : (productTranslation?.name ?? row.normalizedData.name),
                                   slug:
                                       productTranslation?.slug ??
-                                      (await this.uniqueSlug(ctx, row.normalizedData.name)),
+                                      (await uniqueCatalogProductSlug(
+                                          ctx,
+                                          row.normalizedData.name,
+                                          this.productService,
+                                      )),
                                   description: replaceDescription
                                       ? row.normalizedData.description
                                       : (productTranslation?.description ?? ''),
@@ -350,7 +391,7 @@ export class CatalogImportWriter {
             }
         } else {
             const customFields = {
-                ...((variant.customFields ?? {}) as Record<string, unknown>),
+                ...((variant.customFields ?? {}) as unknown as Record<string, unknown>),
                 ...variantCustomFieldUpdates(row.normalizedData, job.clearBlankFields),
             };
             const variantEnabled = effectiveVariantEnabled(row.normalizedData);
@@ -366,7 +407,7 @@ export class CatalogImportWriter {
                 clearSpecification ||
                 clearUnit,
             );
-            const currentCustomFields = (variant.customFields ?? {}) as Record<string, unknown>;
+            const currentCustomFields = (variant.customFields ?? {}) as unknown as Record<string, unknown>;
             const nextVariantName = variantDisplayName({
                 ...row.normalizedData,
                 name:
@@ -522,7 +563,7 @@ export class CatalogImportWriter {
                 ctx,
                 product.id,
                 stringValue(before.productImportCategory),
-                row.normalizedData.category,
+                catalogCategoryPath(row.normalizedData),
             );
         }
         await this.connection.getRepository(ctx, CatalogSourceBinding).upsert(
@@ -557,74 +598,12 @@ export class CatalogImportWriter {
             lotId: lotId ? String(lotId) : null,
             supplierId: appliedSupplierId ? String(appliedSupplierId) : null,
             supplierCreated,
-            importCategory: row.normalizedData.category || null,
+            importCategory: catalogCategoryPath(row.normalizedData) || null,
             afterSnapshot,
         };
         row.appliedAt = new Date();
         row.message = row.action === 'CREATE' ? '新增成功' : '更新成功';
-        productByKey.set(row.productKey, product.id);
-        variantByKey.set(executionVariantKey, variant.id);
         await this.connection.getRepository(ctx, CatalogImportRow).save(row);
-    }
-
-    async resolveFacetValues(ctx: RequestContext, row: NormalizedCatalogRow): Promise<ID[]> {
-        const values: ID[] = [];
-        if (row.category) {
-            values.push(
-                await this.ensureFacetValue(
-                    ctx,
-                    'catalog-import-category',
-                    '导入分类标记',
-                    row.category,
-                    true,
-                ),
-            );
-        }
-        if (row.brand) values.push(await this.ensureFacetValue(ctx, 'catalog-brand', '品牌', row.brand));
-        for (const tag of row.tags) values.push(await this.ensureFacetValue(ctx, 'catalog-tag', '标签', tag));
-        return values;
-    }
-
-    async ensureFacetValue(
-        ctx: RequestContext,
-        facetCode: string,
-        facetName: string,
-        value: string,
-        isPrivate = false,
-    ): Promise<ID> {
-        let facet = await this.facetService.findByCode(ctx, facetCode, ctx.languageCode);
-        if (!facet) {
-            facet = await this.facetService.create(ctx, {
-                code: facetCode,
-                isPrivate,
-                translations: [{ languageCode: ctx.languageCode, name: facetName }],
-            });
-        }
-        const existing = await this.connection.getRepository(ctx, FacetValue).find({
-            where: { facet: { id: facet.id } },
-            relations: ['translations'],
-        });
-        const match = existing.find(item =>
-            item.translations.some(
-                translation => normalizeIdentity(translation.name) === normalizeIdentity(value),
-            ),
-        );
-        if (match) return match.id;
-        const created = await this.facetValueService.create(ctx, facet, {
-            facetId: facet.id,
-            code: `${facetCode}-${shortCode(value)}`,
-            translations: [{ languageCode: ctx.languageCode, name: value }],
-        });
-        return created.id;
-    }
-
-    async uniqueSlug(ctx: RequestContext, name: string): Promise<string> {
-        const base = normalizeString(name, '-').slice(0, 100) || `product-${shortCode(name)}`;
-        for (let index = 0; index < 100; index++) {
-            const slug = index === 0 ? base : `${base}-${index + 1}`;
-            if (!(await this.productService.findOneBySlug(ctx, slug))) return slug;
-        }
-        return `${base}-${Date.now()}`;
     }
 
     async uniqueSku(ctx: RequestContext, preferred: string, sourceKey: string): Promise<string> {

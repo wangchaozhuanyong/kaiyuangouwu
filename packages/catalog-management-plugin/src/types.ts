@@ -208,6 +208,9 @@ export interface NormalizedCatalogRow {
     sourceRecordKey?: string;
     name: string;
     category: string;
+    /** Optional only for historical persisted rows; new imports require an explicit type. */
+    fulfillmentType?: 'digital' | 'physical';
+    secondaryCategory?: string;
     channelCode: string;
     stockLocationCode: string;
     currencyCode: string;

@@ -1,5 +1,7 @@
 import type { NormalizedCatalogRow } from './types';
 
+import { catalogCategoryPath } from './catalog-import-classification';
+
 export function assignCatalogSourceRecordKeys(rows: NormalizedCatalogRow[]): NormalizedCatalogRow[] {
     const occurrences = new Map<string, number>();
     return rows.map(row => {
@@ -16,6 +18,7 @@ export function catalogSourceRecordBase(
         NormalizedCatalogRow,
         | 'name'
         | 'category'
+        | 'secondaryCategory'
         | 'specification'
         | 'primaryUnit'
         | 'sku'
@@ -28,7 +31,7 @@ export function catalogSourceRecordBase(
         ? `sku\u001f${normalizeCatalogIdentity(row.sku)}`
         : row.barcode
           ? `barcode\u001f${normalizeCatalogIdentity(row.barcode)}`
-          : ['legacy', row.name, row.category, row.specification, row.primaryUnit]
+          : ['legacy', row.name, catalogCategoryPath(row), row.specification, row.primaryUnit]
                 .map(normalizeCatalogIdentity)
                 .join('\u001f');
     const inventoryScope = [row.stockLocationCode, row.lotCode]

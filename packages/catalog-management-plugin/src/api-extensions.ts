@@ -223,11 +223,14 @@ export const adminApiExtensions = gql`
     }
 
     type CatalogExportRow {
+        channelCode: String!
         productId: ID!
         variantId: ID!
         productName: String!
         description: String!
         categories: [String!]!
+        importCategory: String
+        fulfillmentType: String!
         brand: String
         tags: [String!]!
         productEnabled: Boolean!
@@ -410,6 +413,8 @@ export const adminApiExtensions = gql`
         sourceRecordKey: String
         name: String!
         category: String!
+        secondaryCategory: String
+        fulfillmentType: String!
         channelCode: String!
         stockLocationCode: String!
         currencyCode: String!
@@ -583,7 +588,27 @@ export const adminApiExtensions = gql`
         currencyCode: CurrencyCode!
     }
 
+    type CatalogAssignmentChannel {
+        id: ID!
+        code: String!
+        isDefault: Boolean!
+    }
+
+    type CatalogProductChannelAssignment {
+        id: ID!
+        name: String!
+        enabled: Boolean!
+        channels: [CatalogAssignmentChannel!]!
+    }
+
+    type CatalogProductChannelAssignmentList {
+        items: [CatalogProductChannelAssignment!]!
+        totalItems: Int!
+        channels: [CatalogAssignmentChannel!]!
+    }
+
     extend type Query {
+        catalogProductChannelAssignments(options: ProductListOptions): CatalogProductChannelAssignmentList!
         catalogImportJob(id: ID!): CatalogImportJob!
         catalogImportJobs(skip: Int, take: Int): CatalogImportJobList!
         catalogImportRows(jobId: ID!, action: CatalogImportAction): [CatalogImportRow!]!
