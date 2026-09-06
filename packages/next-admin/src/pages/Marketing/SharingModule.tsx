@@ -116,6 +116,7 @@ function SharingSettings({
             {editing && (
                 <PosterEditor
                     source={editing}
+                    programUpdatedAt={data.referralProgram.updatedAt}
                     rewardRate={data.referralProgram.rewardRate}
                     error={editorError}
                     onError={setEditorError}

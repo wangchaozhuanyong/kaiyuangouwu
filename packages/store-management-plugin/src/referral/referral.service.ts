@@ -226,7 +226,12 @@ export class ReferralService implements OnApplicationBootstrap {
         const repository = this.connection.getRepository(ctx, ReferralPosterTemplate);
         const template = await repository.findOne({ where: { id: input.id, channelId: ctx.channelId } });
         if (!template) throw new UserInputError('找不到该邀请海报模板');
-        Object.assign(template, await this.normalizePosterTemplateInput(ctx, input, template));
+        this.assertExpectedUpdatedAt(config.updatedAt, input.expectedUpdatedAt);
+        if ('enabled' in input) throw new UserInputError('请使用海报启停操作修改展示状态');
+        Object.assign(
+            template,
+            await this.normalizePosterTemplateInput(ctx, { ...input, enabled: template.enabled }, template),
+        );
         await repository.save(template, { reload: false });
         await this.reconcilePosterDefault(ctx, config);
         await this.posterConfigurationChanged(ctx);

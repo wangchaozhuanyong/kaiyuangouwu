@@ -203,7 +203,9 @@ export function StorefrontContentModule() {
                         onClick={() =>
                             void Promise.all([
                                 content.refetch(),
-                                tab === 'ANNOUNCEMENTS' ? announcements.refetch() : Promise.resolve(),
+                                tab === 'ANNOUNCEMENTS' && canManageAnnouncements
+                                    ? announcements.refetch()
+                                    : Promise.resolve(),
                                 tab === 'LANDING' ? promotion.refetch() : Promise.resolve(),
                             ])
                         }
@@ -275,7 +277,11 @@ export function StorefrontContentModule() {
                             onToggle={block => void toggleBlock(block)}
                         />
                     ))}
+                {tab === 'ANNOUNCEMENTS' && !canManageAnnouncements && (
+                    <p role="status">当前角色没有系统公告管理权限。</p>
+                )}
                 {tab === 'ANNOUNCEMENTS' &&
+                    canManageAnnouncements &&
                     (announcements.loading && !announcements.data ? (
                         <LoadingState label="正在读取系统公告…" />
                     ) : announcements.error ? (
@@ -322,7 +328,7 @@ export function StorefrontContentModule() {
                     onSave={saveBlock}
                 />
             )}
-            {activeAnnouncementEditor && (
+            {activeAnnouncementEditor && canManageAnnouncements && (
                 <AnnouncementEditor
                     key={activeAnnouncementEditor === 'NEW' ? 'new' : activeAnnouncementEditor.id}
                     value={activeAnnouncementEditor === 'NEW' ? null : activeAnnouncementEditor}
@@ -765,6 +771,8 @@ function PromotionPageEditor({
     onError: (error: unknown) => void;
     onRefresh: () => Promise<unknown>;
 }) {
+    const { hasAnyPermission } = useAdminPermissions();
+    const canUpdate = hasAnyPermission(['UpdateStorefrontContent']);
     const [contentType, setContentType] = useState(value.contentType);
     const [source, setSource] = useState(value.draftSource);
     const [previewHtml, setPreviewHtml] = useState('');
@@ -777,6 +785,7 @@ function PromotionPageEditor({
     const [reset, resetState] = useMutation(RESET_STOREFRONT_PROMOTION_PAGE_MUTATION);
     const dirty = contentType !== value.contentType || source !== value.draftSource;
     const saveDraft = async () => {
+        if (!canUpdate) return;
         if (!source.trim()) return onError(new Error('推广页内容不能为空'));
         try {
             await save({ variables: { input: { contentType, source } } });
@@ -787,6 +796,7 @@ function PromotionPageEditor({
         }
     };
     const showPreview = async () => {
+        if (!canUpdate) return;
         if (!source.trim()) return;
         try {
             const result = await preview({ variables: { input: { contentType, source } } });
@@ -796,6 +806,7 @@ function PromotionPageEditor({
         }
     };
     const publishPage = async () => {
+        if (!canUpdate) return;
         try {
             if (dirty) await save({ variables: { input: { contentType, source } } });
             await publish();
@@ -806,6 +817,7 @@ function PromotionPageEditor({
         }
     };
     const resetPage = async () => {
+        if (!canUpdate) return;
         try {
             await reset();
             setConfirmReset(false);
@@ -870,7 +882,7 @@ function PromotionPageEditor({
                         <button
                             type="button"
                             onClick={() => setConfirmReset(true)}
-                            disabled={pending}
+                            disabled={!canUpdate || pending}
                             className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50"
                         >
                             <RotateCcw className="h-3.5 w-3.5" />
@@ -880,7 +892,7 @@ function PromotionPageEditor({
                             <button
                                 type="button"
                                 onClick={() => void showPreview()}
-                                disabled={pending || !source.trim()}
+                                disabled={!canUpdate || pending || !source.trim()}
                                 className="flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700"
                             >
                                 <Code2 className="h-3.5 w-3.5" />
@@ -889,7 +901,7 @@ function PromotionPageEditor({
                             <button
                                 type="button"
                                 onClick={() => void saveDraft()}
-                                disabled={pending || !dirty || !source.trim()}
+                                disabled={!canUpdate || pending || !dirty || !source.trim()}
                                 className="flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 disabled:opacity-50"
                             >
                                 <Save className="h-3.5 w-3.5" />
@@ -898,7 +910,7 @@ function PromotionPageEditor({
                             <button
                                 type="button"
                                 onClick={() => void publishPage()}
-                                disabled={pending || !source.trim()}
+                                disabled={!canUpdate || pending || !source.trim()}
                                 className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
                             >
                                 <Send className="h-3.5 w-3.5" />

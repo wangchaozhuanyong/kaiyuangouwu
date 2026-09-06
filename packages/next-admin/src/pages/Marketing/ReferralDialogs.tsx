@@ -16,6 +16,7 @@ import {
     ReferralPosterRecord,
     UPDATE_REFERRAL_POSTER_MUTATION,
 } from '../../graphql/marketing.graphql';
+import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatMoney } from '../Sales/sales-utils';
 import { LoadingState, Modal } from '../Settings/settings-ui';
@@ -454,6 +455,7 @@ export function FinancialDialog({
 
 export function PosterEditor({
     source,
+    programUpdatedAt,
     rewardRate,
     onClose,
     onSaved,
@@ -461,12 +463,16 @@ export function PosterEditor({
     error,
 }: {
     source: ReferralPosterRecord | 'NEW';
+    programUpdatedAt: string;
     rewardRate: number;
     onClose: () => void;
     onSaved: (message: string) => Promise<void>;
     onError: (message: string) => void;
     error?: string;
 }) {
+    const { hasAnyPermission } = useAdminPermissions();
+    const canReadAssets = hasAnyPermission(['ReadAsset', 'ReadCatalog']);
+    const [expectedUpdatedAt] = useState(programUpdatedAt);
     const [draft, setDraft] = useState<PosterDraft>(() => posterDraft(source));
     const [assetSearch, setAssetSearch] = useState('');
     const [previewValidation, setPreviewValidation] = useState({ pending: true, error: '' });
@@ -484,6 +490,7 @@ export function PosterEditor({
     });
     const deferredAssetSearch = useDeferredValue(assetSearch.trim());
     const assetQuery = useQuery<PosterAssetLookupResult>(GET_ASSETS, {
+        skip: !canReadAssets,
         variables: {
             options: {
                 take: 30,
@@ -521,8 +528,10 @@ export function PosterEditor({
             shareBackgroundAssetId: draft.shareBackgroundAssetId || null,
         };
         try {
-            if (draft.id) await update({ variables: { input } });
-            else {
+            if (draft.id) {
+                const { enabled: _enabled, ...contentInput } = input;
+                await update({ variables: { input: { ...contentInput, expectedUpdatedAt } } });
+            } else {
                 const { id: _id, ...createInput } = input;
                 await create({ variables: { input: createInput } });
             }
@@ -693,12 +702,14 @@ export function PosterEditor({
                         step={1}
                         onChange={overlayOpacity => setDraft({ ...draft, overlayOpacity })}
                     />
-                    <ToggleField
-                        label="启用模板"
-                        detail="停用后客户端不会提供该模板。"
-                        checked={draft.enabled}
-                        onChange={enabled => setDraft({ ...draft, enabled })}
-                    />
+                    {!draft.id && (
+                        <ToggleField
+                            label="启用模板"
+                            detail="停用后客户端不会提供该模板。"
+                            checked={draft.enabled}
+                            onChange={enabled => setDraft({ ...draft, enabled })}
+                        />
+                    )}
                 </div>
                 <aside className="min-w-0 md:sticky md:top-0 md:self-start">
                     <ReferralPosterPreview

@@ -21,6 +21,7 @@ import {
     ReferralReportsResult,
     UPDATE_REFERRAL_PROGRAM_MUTATION,
 } from '../../graphql/marketing.graphql';
+import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { usePageSize } from '../../hooks/use-page-size';
 import { useUrlTab } from '../../hooks/use-url-tab';
 import { majorInputToMoney } from '../Sales/sales-utils';
@@ -52,6 +53,11 @@ export function ReferralsModule() {
 }
 
 function ReferralManagement() {
+    const { hasAnyPermission } = useAdminPermissions();
+    const canUpdate = hasAnyPermission(['UpdateReferral']);
+    const canWithdraw = hasAnyPermission(['ManageReferralWithdrawal']);
+    const canAdjust = hasAnyPermission(['AdjustReferralBalance']);
+    const canReadCustomers = hasAnyPermission(['ReadCustomer']);
     const [activeTab, setActiveTab] = useUrlTab<ReferralTab>(REFERRAL_TABS, 'settings');
     const [skips, setSkips] = useState<Record<ReportKey, number>>({
         summaries: 0,
@@ -105,7 +111,7 @@ function ReferralManagement() {
         setSkips(current => ({ ...current, [key]: Math.max(0, value) }));
 
     const saveProgram = async () => {
-        if (!draft) return;
+        if (!canUpdate || !draft) return;
         const validation = programDraftError(draft);
         if (validation) return setActionError(validation);
         const minimumOrderAmount = majorInputToMoney(draft.minimumOrderAmount, currencyCode);
@@ -151,9 +157,11 @@ function ReferralManagement() {
                             />
                             刷新
                         </button>
-                        {activeTab === 'WITHDRAWALS' && (
+                        {activeTab === 'WITHDRAWALS' && canWithdraw && (
                             <button
                                 type="button"
+                                disabled={!canReadCustomers}
+                                title={canReadCustomers ? undefined : '需要客户读取权限才能选择客户'}
                                 onClick={() => setFinancialDialog('WITHDRAW')}
                                 className="flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white"
                             >
@@ -161,9 +169,11 @@ function ReferralManagement() {
                                 代客发起提款
                             </button>
                         )}
-                        {activeTab === 'LEDGER' && (
+                        {activeTab === 'LEDGER' && canAdjust && (
                             <button
                                 type="button"
+                                disabled={!canReadCustomers}
+                                title={canReadCustomers ? undefined : '需要客户读取权限才能选择客户'}
                                 onClick={() => setFinancialDialog('ADJUST')}
                                 className="flex items-center gap-1 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white"
                             >
@@ -175,7 +185,7 @@ function ReferralManagement() {
                             <button
                                 type="button"
                                 onClick={() => void saveProgram()}
-                                disabled={!draft || !isDirty || updateState.loading}
+                                disabled={!canUpdate || !draft || !isDirty || updateState.loading}
                                 className="flex items-center gap-1 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-40"
                             >
                                 <Save className="h-3.5 w-3.5" />
@@ -279,11 +289,13 @@ function ReferralManagement() {
                                 </div>
                             )}
                             {activeTab === 'SETTINGS' && draft && (
-                                <ProgramSettings
-                                    draft={draft}
-                                    setDraft={setDraft}
-                                    currencyCode={currencyCode}
-                                />
+                                <fieldset disabled={!canUpdate}>
+                                    <ProgramSettings
+                                        draft={draft}
+                                        setDraft={setDraft}
+                                        currencyCode={currencyCode}
+                                    />
+                                </fieldset>
                             )}
                             {activeTab === 'PROMOTERS' && (
                                 <PromotersPanel
@@ -342,7 +354,7 @@ function ReferralManagement() {
                     )
                 )}
             </main>
-            {withdrawalAction && (
+            {withdrawalAction && canWithdraw && (
                 <WithdrawalActionDialog
                     action={withdrawalAction}
                     onClose={() => setWithdrawalAction(null)}
@@ -354,7 +366,7 @@ function ReferralManagement() {
                     onError={setActionError}
                 />
             )}
-            {financialDialog && (
+            {financialDialog && (financialDialog === 'WITHDRAW' ? canWithdraw : canAdjust) && (
                 <FinancialDialog
                     mode={financialDialog}
                     defaultCurrency={currencyCode}

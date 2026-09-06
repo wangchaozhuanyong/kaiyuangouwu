@@ -3,6 +3,7 @@ import { Search } from 'lucide-react';
 import { useDeferredValue, useState } from 'react';
 import { GET_COLLECTIONS, GET_PRODUCTS } from '../../graphql/catalog.graphql';
 import { type StorefrontTargetType } from '../../graphql/storefront.graphql';
+import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { navigationTargets } from './storefront-content-utils';
 import { inputClass } from './storefront-editor-model';
 
@@ -15,6 +16,9 @@ export function TargetValueInput({
     value: string;
     onChange: (value: string) => void;
 }) {
+    const { hasAnyPermission } = useAdminPermissions();
+    const canReadProducts = hasAnyPermission(['ReadCatalog', 'ReadProduct']);
+    const canReadCollections = hasAnyPermission(['ReadCatalog', 'ReadCollection']);
     const [lookupSearch, setLookupSearch] = useState('');
     const deferredLookupSearch = useDeferredValue(lookupSearch.trim());
     const productLookup = useQuery<{
@@ -27,7 +31,7 @@ export function TargetValueInput({
                 filter: deferredLookupSearch ? { name: { contains: deferredLookupSearch } } : {},
             },
         },
-        skip: type !== 'PRODUCT',
+        skip: type !== 'PRODUCT' || !canReadProducts,
         fetchPolicy: 'cache-first',
     });
     const collectionLookup = useQuery<{
@@ -41,9 +45,17 @@ export function TargetValueInput({
                 filter: deferredLookupSearch ? { name: { contains: deferredLookupSearch } } : {},
             },
         },
-        skip: type !== 'COLLECTION',
+        skip: type !== 'COLLECTION' || !canReadCollections,
         fetchPolicy: 'cache-first',
     });
+    if ((type === 'PRODUCT' && !canReadProducts) || (type === 'COLLECTION' && !canReadCollections)) {
+        return (
+            <div>
+                <input value={value} disabled className={inputClass} />
+                <p role="status">需要对应的商品或分类读取权限，已保留原目标。</p>
+            </div>
+        );
+    }
     if (type === 'NONE')
         return <input value="" disabled className={`${inputClass} bg-slate-100`} placeholder="无需填写" />;
     if (type === 'PAGE')

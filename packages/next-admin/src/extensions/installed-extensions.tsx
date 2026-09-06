@@ -453,7 +453,7 @@ defineNextAdminExtension({
             legacyPaths: ['/referral-rewards'],
             title: '分销与返利',
             component: ReferralsModule,
-            permissions: ['ReadPromotion', 'ReadCustomer', 'ReadOrder'],
+            permissions: ['ReadReferral'],
             preload: routeModuleLoaders.referrals,
         },
         {
