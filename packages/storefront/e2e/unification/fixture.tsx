@@ -1,12 +1,12 @@
 import { createMemoryHistory, createRootRoute, createRouter, RouterProvider } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import type { StorefrontContentBlock, StorefrontContentSettings } from '../../src/types';
 
 import { HomePage } from '../../src/pages/home-page';
 import { StorefrontContext } from '../../src/StorefrontContext';
 import '../../src/styles.css';
 import '../../src/styles/desktop-layout.css';
+import { StorefrontContentBlock, StorefrontContentSettings } from '../../src/types';
 
 // Only this test entry point uses the isolated SQL.js Shop API on loopback.
 const params = new URLSearchParams(location.search);

@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import type { StorefrontContentBlock, StorefrontContentBlockType } from './types';
 
 import {
     authVisualAccentColor,
@@ -7,6 +6,7 @@ import {
     findAuthVisualContent,
     resolveAuthVisualMessage,
 } from './auth-visual';
+import { StorefrontContentBlock, StorefrontContentBlockType } from './types';
 
 function block(type: StorefrontContentBlockType): StorefrontContentBlock {
     return {
