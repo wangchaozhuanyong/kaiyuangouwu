@@ -9,6 +9,7 @@ export { ContentTranslationState } from './entities/content-translation-state.en
 export { NativeContentTranslationService } from './native-content-translation.service.js';
 export { GoogleCloudTranslationProvider } from './providers/google-cloud-translation.provider.js';
 export { UnavailableTranslationProvider } from './providers/unavailable-translation.provider.js';
+export { TranslationProviderError } from './translation-provider-error.js';
 export type {
     ContentTranslationFormat,
     ContentTranslationOrigin,

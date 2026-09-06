@@ -1,3 +1,4 @@
+import { TranslationProviderError, type TranslationProviderFailure } from '../translation-provider-error.js';
 import {
     ContentTranslationFormat,
     ContentTranslationProvider,
@@ -20,7 +21,7 @@ interface GoogleTranslationResponse {
     data?: {
         translations?: Array<{ translatedText?: string }>;
     };
-    error?: { message?: string };
+    error?: { message?: string; errors?: Array<{ reason?: string }> };
 }
 
 const protectedPattern = /https?:\/\/[^\s<]+|\{\{[^{}]+\}\}|\{[^{}]+\}|%[A-Z0-9_]+%/giu;
@@ -29,6 +30,8 @@ export class GoogleCloudTranslationProvider implements ContentTranslationProvide
     readonly name = 'google-cloud-translation-basic';
     private readonly apiKey: string;
     private readonly endpoint: string;
+    private retryAfter = 0;
+    private lastFailure: TranslationProviderFailure = 'RATE_LIMIT';
 
     constructor(options: GoogleCloudTranslationProviderOptions) {
         this.apiKey = options.apiKey.trim();
@@ -41,8 +44,9 @@ export class GoogleCloudTranslationProvider implements ContentTranslationProvide
 
     async translate(request: ContentTranslationRequest): Promise<ContentTranslationResult> {
         if (!this.isConfigured()) {
-            throw new Error('Google Cloud Translation API key is not configured');
+            throw new TranslationProviderError('CONFIGURATION');
         }
+        if (Date.now() < this.retryAfter) throw new TranslationProviderError(this.lastFailure);
         const translations = new Map<string, string>();
         for (const format of ['TEXT', 'HTML'] as const) {
             const segments = request.segments.filter(segment => (segment.format ?? 'TEXT') === format);
@@ -73,35 +77,63 @@ export class GoogleCloudTranslationProvider implements ContentTranslationProvide
         targetLanguageCode: string,
     ): Promise<Array<{ key: string; text: string }>> {
         const protectedSegments = segments.map(segment => protectText(segment.text, glossary));
-        const response = await fetch(`${this.endpoint}?key=${encodeURIComponent(this.apiKey)}`, {
-            method: 'POST',
-            headers: { 'content-type': 'application/json; charset=utf-8' },
-            body: JSON.stringify({
-                q: protectedSegments.map(segment => segment.text),
-                source: toGoogleLanguageCode(sourceLanguageCode),
-                target: toGoogleLanguageCode(targetLanguageCode),
-                format: format === 'HTML' ? 'html' : 'text',
-            }),
-        });
-        const body = (await response.json()) as GoogleTranslationResponse;
+        let response: Response;
+        let body: GoogleTranslationResponse;
+        try {
+            response = await fetch(`${this.endpoint}?key=${encodeURIComponent(this.apiKey)}`, {
+                method: 'POST',
+                signal: AbortSignal.timeout(10_000),
+                headers: { 'content-type': 'application/json; charset=utf-8' },
+                body: JSON.stringify({
+                    q: protectedSegments.map(segment => segment.text),
+                    source: toGoogleLanguageCode(sourceLanguageCode),
+                    target: toGoogleLanguageCode(targetLanguageCode),
+                    format: format === 'HTML' ? 'html' : 'text',
+                }),
+            });
+        } catch {
+            throw this.pause('UNAVAILABLE');
+        }
+        try {
+            body = (await response.json()) as GoogleTranslationResponse;
+        } catch {
+            throw this.pause(response.ok ? 'INVALID_RESPONSE' : 'UNAVAILABLE');
+        }
+        if (!body || typeof body !== 'object') throw this.pause('INVALID_RESPONSE');
         if (!response.ok) {
-            throw new Error(body.error?.message || `Google Cloud Translation failed (${response.status})`);
+            const reason = [
+                body.error?.message,
+                ...(body.error?.errors?.map(error => error.reason) ?? []),
+            ].join(' ');
+            if (response.status === 429 || /user.?rate.?limit|rateLimitExceeded/i.test(reason)) {
+                throw this.pause('RATE_LIMIT');
+            }
+            if (/daily.?limit|dailyLimitExceeded|quotaExceeded/i.test(reason)) {
+                throw this.pause('QUOTA');
+            }
+            throw this.pause(response.status >= 500 ? 'UNAVAILABLE' : 'CONFIGURATION');
         }
         const results = body.data?.translations ?? [];
-        if (results.length !== segments.length) {
-            throw new Error('Google Cloud Translation returned an unexpected number of translations');
+        if (!Array.isArray(results) || results.length !== segments.length) {
+            throw new TranslationProviderError('INVALID_RESPONSE');
         }
         return results.map((result, index) => {
+            if (typeof result?.translatedText !== 'string')
+                throw new TranslationProviderError('INVALID_RESPONSE');
             const restored = protectedSegments[index].restore(
                 decodeHtmlEntities(result.translatedText ?? ''),
             );
             if (segments[index].text.trim() && !restored.trim()) {
-                throw new Error(
-                    `Google Cloud Translation returned an empty value for ${segments[index].key}`,
-                );
+                throw new TranslationProviderError('INVALID_RESPONSE');
             }
             return { key: segments[index].key, text: restored };
         });
+    }
+
+    private pause(code: TranslationProviderFailure): TranslationProviderError {
+        this.retryAfter = Date.now() + 60_000;
+        this.lastFailure = code;
+        return new TranslationProviderError(code);
     }
 }
 
@@ -133,7 +165,7 @@ function protectText(value: string, glossary: Record<string, string>): Protected
                 restored = restored.replace(tokenPattern, replacement.value);
             }
             if (/ZXQ\s*TERM/iu.test(restored)) {
-                throw new Error('A protected translation placeholder could not be restored');
+                throw new TranslationProviderError('INVALID_RESPONSE');
             }
             return restored;
         },

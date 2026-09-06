@@ -1,12 +1,14 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { containsHanContent } from '@vendure/common/lib/translation-validation';
+import { containsHanContent, isUsableEnglishTranslation } from '@vendure/common/lib/translation-validation';
 import { RequestContext, TransactionalConnection, UserInputError } from '@vendure/core';
 import { createHash } from 'node:crypto';
-import { IsNull } from 'typeorm';
+import { In, IsNull } from 'typeorm';
+
 export { containsHanContent, isUsableEnglishTranslation } from '@vendure/common/lib/translation-validation';
 
 import { CONTENT_TRANSLATION_OPTIONS } from './constants.js';
 import { ContentTranslationState } from './entities/content-translation-state.entity.js';
+import { TranslationProviderError } from './translation-provider-error.js';
 import {
     ContentTranslationPluginOptions,
     ContentTranslationRequest,
@@ -78,6 +80,7 @@ export class ContentTranslationService {
                     status: 'AUTO_TRANSLATED',
                     origin: 'AUTO',
                     locked: false,
+                    reusedTranslation: true,
                 });
                 continue;
             }
@@ -110,6 +113,7 @@ export class ContentTranslationService {
                     status: 'MANUAL_LOCKED',
                     origin: 'MANUAL',
                     locked: true,
+                    reusedTranslation: true,
                 });
                 continue;
             }
@@ -127,23 +131,62 @@ export class ContentTranslationService {
             segments.push({ key: field.path, text: sourceText, format: field.format ?? 'TEXT' });
         }
         if (segments.length) {
-            if (!this.isConfigured()) {
-                throw new UserInputError(
-                    'English content could not be generated because the translation provider is not configured',
-                );
-            }
-            const result = await this.translate({ segments });
-            for (const item of result.translations) {
-                const source = fields.find(field => field.path === item.key);
-                if (!source) continue;
-                prepared.set(item.key, {
-                    path: item.key,
-                    sourceText: source.sourceText.trim(),
-                    translatedText: item.text.trim(),
-                    status: 'AUTO_TRANSLATED',
-                    origin: 'AUTO',
-                    locked: false,
-                });
+            try {
+                if (!this.isConfigured()) throw new TranslationProviderError('CONFIGURATION');
+                const result = await this.translate({ segments });
+                if (
+                    segments.some(
+                        segment =>
+                            !isUsableEnglishTranslation(
+                                result.translations.find(item => item.key === segment.key)?.text,
+                            ),
+                    )
+                ) {
+                    throw new TranslationProviderError('INVALID_RESPONSE');
+                }
+                for (const item of result.translations) {
+                    const source = fields.find(field => field.path === item.key);
+                    if (!source) continue;
+                    if (source.maxTargetLength && item.text.trim().length > source.maxTargetLength) {
+                        prepared.set(item.key, {
+                            path: item.key,
+                            sourceText: source.sourceText.trim(),
+                            translatedText: isUsableEnglishTranslation(source.existingTargetText)
+                                ? source.existingTargetText.trim()
+                                : '',
+                            status: 'PENDING',
+                            origin: 'AUTO',
+                            locked: false,
+                            error: new TranslationProviderError('TEXT_TOO_LONG').message,
+                        });
+                        continue;
+                    }
+                    prepared.set(item.key, {
+                        path: item.key,
+                        sourceText: source.sourceText.trim(),
+                        translatedText: item.text.trim(),
+                        status: 'AUTO_TRANSLATED',
+                        origin: 'AUTO',
+                        locked: false,
+                    });
+                }
+            } catch (error) {
+                if (!(error instanceof TranslationProviderError)) throw error;
+                for (const segment of segments) {
+                    const source = fields.find(field => field.path === segment.key);
+                    if (!source) throw new Error('Missing source field');
+                    prepared.set(segment.key, {
+                        path: segment.key,
+                        sourceText: segment.text,
+                        translatedText: isUsableEnglishTranslation(source.existingTargetText)
+                            ? source.existingTargetText.trim()
+                            : '',
+                        status: 'PENDING',
+                        origin: 'AUTO',
+                        locked: false,
+                        error: error.message,
+                    });
+                }
             }
         }
         return fields.map(field => {
@@ -159,16 +202,80 @@ export class ContentTranslationService {
         fields: PreparedLocalizedContentField[],
     ): Promise<void> {
         for (const field of fields) {
+            // Reusing unchanged English must not turn a failed automatic translation into a manual lock.
+            const existing = field.reusedTranslation
+                ? await this.connection
+                      .getRepository(ctx, ContentTranslationState)
+                      .findOne({ where: { stateKey: this.stateKey({ ...identity, fieldPath: field.path }) } })
+                : undefined;
+            const reuseState =
+                existing &&
+                existing.sourceHash === hash(field.sourceText) &&
+                existing.translatedHash === hash(field.translatedText);
             await this.recordState(ctx, {
                 ...identity,
                 fieldPath: field.path,
                 sourceText: field.sourceText,
                 translatedText: field.translatedText,
-                status: field.status,
-                origin: field.origin,
-                locked: field.locked,
+                status: reuseState ? existing.status : field.status,
+                origin: reuseState ? existing.origin : field.origin,
+                locked: reuseState ? existing.locked : field.locked,
+                error: reuseState ? existing.error : field.error,
             });
         }
+    }
+
+    async prepareLocalizedColumns(
+        paths: readonly string[],
+        input: object,
+        existing?: object,
+        limits: Record<string, number> = {},
+        ctx?: RequestContext,
+    ) {
+        const submitted = input as Record<string, unknown>;
+        const previous = (existing ?? {}) as Record<string, unknown>;
+        const metadata = this.connection.rawConnection?.entityMetadatas?.find(
+            entity => entity.name === existing?.constructor.name,
+        );
+        const states =
+            ctx && metadata && (typeof previous.id === 'string' || typeof previous.id === 'number')
+                ? await this.findStates(ctx, {
+                      entityType: metadata.name,
+                      entityId: String(previous.id),
+                      channelId: ctx.channelId,
+                  })
+                : [];
+        const prepared = await this.prepareLocalizedFields(
+            paths.map(path => ({
+                path,
+                maxTargetLength:
+                    limits[path] ||
+                    Number(metadata?.findColumnWithPropertyName(`${path}En`)?.length) ||
+                    undefined,
+                sourceText: optionalLocalizedText(submitted[`${path}Zh`] ?? previous[`${path}Zh`]) ?? '',
+                targetText:
+                    submitted[`${path}En`] == null
+                        ? previous[`${path}En`] == null
+                            ? undefined
+                            : optionalLocalizedText(previous[`${path}En`])
+                        : optionalLocalizedText(submitted[`${path}En`]),
+                // Clearing an optional English override returns this field to automatic translation.
+                manualLock:
+                    submitted[`${path}En`] === ''
+                        ? false
+                        : states.find(state => state.fieldPath === path)?.locked
+                          ? true
+                          : undefined,
+                existingSourceText:
+                    previous[`${path}Zh`] == null ? undefined : optionalLocalizedText(previous[`${path}Zh`]),
+                existingTargetText:
+                    previous[`${path}En`] == null ? undefined : optionalLocalizedText(previous[`${path}En`]),
+            })),
+        );
+        return {
+            prepared,
+            values: Object.fromEntries(prepared.map(field => [`${field.path}En`, field.translatedText])),
+        };
     }
 
     async translate(
@@ -224,8 +331,11 @@ export class ContentTranslationService {
     async countStale(ctx: RequestContext): Promise<number> {
         return this.connection.getRepository(ctx, ContentTranslationState).count({
             where: [
-                { channelId: String(ctx.channelId), status: 'STALE' },
-                { channelId: IsNull(), status: 'STALE' },
+                {
+                    channelId: String(ctx.channelId),
+                    status: In(['STALE', 'PENDING', 'TRANSLATING', 'FAILED']),
+                },
+                { channelId: IsNull(), status: In(['STALE', 'PENDING', 'TRANSLATING', 'FAILED']) },
             ],
         });
     }
@@ -280,3 +390,9 @@ function hash(value: string): string {
 }
 
 export const contentTranslationInternals = { hash, containsHanContent };
+
+function optionalLocalizedText(value: unknown): string | undefined {
+    if (value == null) return undefined;
+    if (typeof value !== 'string') throw new UserInputError('本地化文案必须是文本');
+    return value;
+}
