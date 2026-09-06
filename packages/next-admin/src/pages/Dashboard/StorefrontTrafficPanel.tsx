@@ -56,8 +56,7 @@ export function StorefrontTrafficPanel() {
                 <StorefrontTrafficReport report={query.data.storefrontTraffic} />
             )}
             <p className="border-t border-slate-100 pt-3 text-[11px] text-slate-500">
-                要排除自己检查店铺的访问，请打开对应店铺网站，在“我的 → 访问统计”中设置。
-                设置仅对该浏览器和店铺域名生效，后台页面本身不采集访问。
+                后台页面本身不采集访问。
             </p>
         </div>
     );

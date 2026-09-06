@@ -1,3 +1,5 @@
+import { PageSizeSelect } from '../../../components/PageSizeSelect';
+import { usePageSize } from '../../../hooks/use-page-size';
 /* eslint-disable max-lines -- the import workbench keeps its state machine and review UI in one lazy chunk */
 import { useApolloClient, useQuery } from '@apollo/client/react';
 import {
@@ -78,7 +80,6 @@ interface ImportContextData {
     stockLocations: { items: Array<{ id: string; name: string }> };
 }
 
-const PAGE_SIZE = 100;
 const primaryButton =
     'inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-2 text-xs font-bold text-white transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-50';
 const secondaryButton =
@@ -106,6 +107,7 @@ export function CatalogImportDialog({ open, onClose }: { open: boolean; onClose:
     const [jobId, setJobId] = useState<string | null>(null);
     const [actionFilter, setActionFilter] = useState<ActionFilter>('ALL');
     const [rowPage, setRowPage] = useState(0);
+    const [pageSize, setPageSize] = usePageSize(setRowPage);
     const [targetVariantByRow, setTargetVariantByRow] = useState<Record<string, string>>({});
     const [busy, setBusy] = useState<BusyAction>(null);
     const [notice, setNotice] = useState('');
@@ -140,8 +142,8 @@ export function CatalogImportDialog({ open, onClose }: { open: boolean; onClose:
         variables: {
             jobId,
             action: actionFilter === 'ALL' ? null : actionFilter,
-            skip: rowPage * PAGE_SIZE,
-            take: PAGE_SIZE,
+            skip: rowPage * pageSize,
+            take: pageSize,
         },
         skip: !jobId,
         fetchPolicy: 'network-only',
@@ -162,7 +164,7 @@ export function CatalogImportDialog({ open, onClose }: { open: boolean; onClose:
     const job = jobQuery.data?.catalogImportJob;
     const rows = rowsQuery.data?.catalogImportRowPage.items ?? [];
     const totalRows = rowsQuery.data?.catalogImportRowPage.totalItems ?? 0;
-    const totalPages = Math.max(1, Math.ceil(totalRows / PAGE_SIZE));
+    const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
     const running = job?.state === 'QUEUED' || job?.state === 'RUNNING';
     const canExecute = canExecuteCatalogImport(job, canUpdate);
 
@@ -652,6 +654,8 @@ export function CatalogImportDialog({ open, onClose }: { open: boolean; onClose:
                         />
                     ) : (
                         <JobWorkspace
+                            pageSize={pageSize}
+                            onPageSizeChange={setPageSize}
                             job={job}
                             rows={rows}
                             totalRows={totalRows}
@@ -1088,6 +1092,8 @@ function FieldMappingEditor({
 }
 
 function JobWorkspace({
+    pageSize,
+    onPageSizeChange,
     job,
     rows,
     totalRows,
@@ -1114,6 +1120,8 @@ function JobWorkspace({
     onBatchApply,
     onBatchSkip,
 }: {
+    pageSize: number;
+    onPageSizeChange: (size: number) => void;
     job: CatalogImportJobRecord;
     rows: CatalogImportRowRecord[];
     totalRows: number;
@@ -1323,15 +1331,20 @@ function JobWorkspace({
                         </table>
                     </div>
                 )}
-                <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-4 py-3 text-[11px] text-slate-500">
+                <div className="flex flex-wrap gap-y-3 gap-x-4 items-center justify-between border-t border-slate-200 bg-slate-50 px-4 py-3 text-[11px] text-slate-500">
                     <span>
                         共 {totalRows} 行，第 {Math.min(rowPage + 1, totalPages)} / {totalPages} 页
                     </span>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <PageSizeSelect
+                            pageSize={pageSize}
+                            onPageSizeChange={onPageSizeChange}
+                            disabled={rowsLoading || busy !== null}
+                        />
                         <button
                             type="button"
                             className={secondaryButton}
-                            disabled={busy !== null || rowPage === 0}
+                            disabled={rowsLoading || busy !== null || rowPage === 0}
                             onClick={() => onPageChange(Math.max(0, rowPage - 1))}
                         >
                             <ChevronLeft className="h-3.5 w-3.5" /> 上一页
@@ -1339,7 +1352,7 @@ function JobWorkspace({
                         <button
                             type="button"
                             className={secondaryButton}
-                            disabled={busy !== null || rowPage + 1 >= totalPages}
+                            disabled={rowsLoading || busy !== null || rowPage + 1 >= totalPages}
                             onClick={() => onPageChange(rowPage + 1)}
                         >
                             下一页 <ChevronRight className="h-3.5 w-3.5" />

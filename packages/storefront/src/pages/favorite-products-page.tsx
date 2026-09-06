@@ -6,15 +6,15 @@ import { ShopApi } from '../api';
 import { offlineLoadError } from '../loading-state';
 import { PageSkeleton } from '../route-loading';
 import { useProductsByIdsQuery } from '../route-queries';
+import { FavoriteProductsPageContext } from '../storefront-page-contexts';
 import { routeNavigateOptions } from '../storefront-router';
 import { EmptyState, SubHeader } from '../storefront-ui/page-shell';
 import { ProductSection } from '../storefront-ui/product-section';
-import { useStorefront } from '../StorefrontContext';
 import { MarketConfig, StorefrontLanguage } from '../types';
 
 // TODO: Fix internal imports later
 
-interface FavoriteProductsPageProps {
+export interface FavoriteProductsPageProps {
     api: ShopApi;
     productIds: string[];
     market: MarketConfig;
@@ -30,7 +30,7 @@ export function FavoriteProductsPage() {
     const router = useRouter();
     const goBack = () => router.history.back();
     const { api, productIds, market, locale, language, onRemove, onClear } =
-        useStorefront<FavoriteProductsPageProps>();
+        FavoriteProductsPageContext.useValue();
     const isZh = language === 'zh';
     const favoritesQuery = useProductsByIdsQuery({ api, productIds, market, language });
     const favoriteProducts = productIds.length ? (favoritesQuery.data ?? []) : [];

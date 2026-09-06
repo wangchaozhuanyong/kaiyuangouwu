@@ -6,7 +6,7 @@ import { ShopApi } from './api';
 import { languageCodeFor } from './i18n';
 import { ReferralPage } from './pages/referral-page';
 import { createStorefrontQueryClient, storefrontQueryKeys } from './query-client';
-import { StorefrontContext } from './StorefrontContext';
+import { ReferralPageContext } from './storefront-page-contexts';
 import { ActiveCustomer, MarketConfig, MyReferralOverview, ReferralProgram } from './types';
 
 const market: MarketConfig = {
@@ -84,7 +84,7 @@ function renderReferralPage(customOverview?: Partial<MyReferralOverview>): strin
 
     return renderToStaticMarkup(
         <QueryClientProvider client={client}>
-            <StorefrontContext.Provider
+            <ReferralPageContext.Provider
                 value={{
                     api,
                     customer,
@@ -99,7 +99,7 @@ function renderReferralPage(customOverview?: Partial<MyReferralOverview>): strin
                 }}
             >
                 <ReferralPage />
-            </StorefrontContext.Provider>
+            </ReferralPageContext.Provider>
         </QueryClientProvider>,
     );
 }

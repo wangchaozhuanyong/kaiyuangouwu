@@ -21,6 +21,7 @@ import {
     ReferralReportsResult,
     UPDATE_REFERRAL_PROGRAM_MUTATION,
 } from '../../graphql/marketing.graphql';
+import { usePageSize } from '../../hooks/use-page-size';
 import { useUrlTab } from '../../hooks/use-url-tab';
 import { majorInputToMoney } from '../Sales/sales-utils';
 import { ErrorState, LoadingState, Message, TabButton } from '../Settings/settings-ui';
@@ -33,7 +34,7 @@ import {
     TodayOverview,
     WithdrawalsPanel,
 } from './ReferralPanels';
-import { PAGE_SIZE, ReferralHeading, errorText, programDraft, programDraftError } from './referral-ui';
+import { ReferralHeading, errorText, programDraft, programDraftError } from './referral-ui';
 import { ProgramDraft, ReferralTab, ReportKey, WithdrawalAction } from './referrals-types';
 
 const REFERRAL_TABS = {
@@ -59,6 +60,9 @@ function ReferralManagement() {
         ledger: 0,
         withdrawals: 0,
     });
+    const [pageSize, setPageSize] = usePageSize(() =>
+        setSkips({ summaries: 0, relationships: 0, rewards: 0, ledger: 0, withdrawals: 0 }),
+    );
     const [draftOverride, setDraftOverride] = useState<ProgramDraft | null>(null);
     const [search, setSearch] = useState('');
     const [notice, setNotice] = useState('');
@@ -72,7 +76,7 @@ function ReferralManagement() {
     });
     const reports = useQuery<ReferralReportsResult>(REFERRAL_REPORTS_QUERY, {
         variables: {
-            take: PAGE_SIZE,
+            take: pageSize,
             summarySkip: skips.summaries,
             relationshipSkip: skips.relationships,
             rewardSkip: skips.rewards,
@@ -283,6 +287,8 @@ function ReferralManagement() {
                             )}
                             {activeTab === 'PROMOTERS' && (
                                 <PromotersPanel
+                                    pageSize={pageSize}
+                                    onPageSizeChange={setPageSize}
                                     data={reports.data}
                                     loading={reports.loading}
                                     error={reports.error?.message}
@@ -294,6 +300,8 @@ function ReferralManagement() {
                             )}
                             {activeTab === 'REWARDS' && (
                                 <RewardsPanel
+                                    pageSize={pageSize}
+                                    onPageSizeChange={setPageSize}
                                     data={reports.data}
                                     loading={reports.loading}
                                     error={reports.error?.message}
@@ -305,6 +313,8 @@ function ReferralManagement() {
                             )}
                             {activeTab === 'LEDGER' && (
                                 <LedgerPanel
+                                    pageSize={pageSize}
+                                    onPageSizeChange={setPageSize}
                                     data={reports.data}
                                     loading={reports.loading}
                                     error={reports.error?.message}
@@ -316,6 +326,8 @@ function ReferralManagement() {
                             )}
                             {activeTab === 'WITHDRAWALS' && (
                                 <WithdrawalsPanel
+                                    pageSize={pageSize}
+                                    onPageSizeChange={setPageSize}
                                     data={reports.data}
                                     loading={reports.loading}
                                     error={reports.error?.message}

@@ -1,14 +1,10 @@
 import { lazyRouteComponent } from '@tanstack/react-router';
 
+import { BusinessServicesPageContext, SupportPageContext } from '../storefront-page-contexts';
 import { FlashSalePage, RecommendationPage } from '../storefront-ui/content-ui';
 import { Product } from '../types';
 
-import {
-    RoutePageContext as PageContext,
-    registerRoutePreload,
-    RouteGate,
-    useRouteRuntime as useRuntime,
-} from './shared';
+import { registerRoutePreload, RouteGate, useRouteRuntime as useRuntime } from './shared';
 
 const ReviewCenterPage = lazyRouteComponent(() => import('../review-pages'), 'ReviewCenterPage');
 const SupportPage = lazyRouteComponent(() => import('../pages/support-page'), 'SupportPage');
@@ -28,7 +24,7 @@ const TwoFactorPage = lazyRouteComponent(
 export function ServicesRoutePage() {
     const runtime = useRuntime();
     return (
-        <PageContext
+        <BusinessServicesPageContext.Provider
             value={{
                 contentBlocks: runtime.contentBlocks,
                 language: runtime.language,
@@ -37,7 +33,7 @@ export function ServicesRoutePage() {
             }}
         >
             <BusinessServicesPage />
-        </PageContext>
+        </BusinessServicesPageContext.Provider>
     );
 }
 
@@ -124,16 +120,14 @@ export function ReviewsRoutePage() {
 export function SupportRoutePage() {
     const runtime = useRuntime();
     return (
-        <PageContext
+        <SupportPageContext.Provider
             value={{
                 content: runtime.supportContent,
-                products: runtime.products,
                 language: runtime.language,
-                onContentTarget: runtime.openContentTarget,
             }}
         >
             <SupportPage />
-        </PageContext>
+        </SupportPageContext.Provider>
     );
 }
 

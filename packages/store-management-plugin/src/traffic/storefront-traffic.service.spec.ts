@@ -40,7 +40,7 @@ describe('storefront traffic persistence', () => {
     let service: StorefrontTrafficService;
     beforeEach(async () => {
         if (process.env.DB === 'mysql') {
-            database = `traffic_service_${randomUUID().replaceAll('-', '')}`;
+            database = `traffic_service_${randomUUID().replace(/-/g, '')}`;
             const localFixture = {
                 host: '127.0.0.1',
                 port: Number(process.env.E2E_MYSQL_PORT || 3306),

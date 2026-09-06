@@ -19,9 +19,9 @@ import {
     couponCardsFromCampaigns,
     couponScopeLabel,
 } from '../storefront-coupons';
+import { CouponCenterPageContext } from '../storefront-page-contexts';
 import { routeNavigateOptions, type RouteState } from '../storefront-router';
 import { EmptyState, InlineError, Subpage } from '../storefront-ui/page-shell';
-import { useStorefront } from '../StorefrontContext';
 import {
     StoreCouponUsageRecord,
     StoreCustomerCoupon,
@@ -29,7 +29,7 @@ import {
     StorefrontLanguage,
 } from '../types';
 
-interface CouponCenterPageProps {
+export interface CouponCenterPageProps {
     coupons: StorefrontCouponCampaign[];
     myCoupons: StoreCustomerCoupon[];
     usageRecords: StoreCouponUsageRecord[];
@@ -74,7 +74,7 @@ export function CouponCenterPage() {
         onRetryMyCoupons,
         onRetryUsageRecords,
         onClaim,
-    } = useStorefront<CouponCenterPageProps>();
+    } = CouponCenterPageContext.useValue();
     const isZh = language === 'zh';
     const [activeTab, setActiveTab] = useState<CouponCenterTab>('ACTIVITIES');
     const [claimingId, setClaimingId] = useState<string | null>(null);

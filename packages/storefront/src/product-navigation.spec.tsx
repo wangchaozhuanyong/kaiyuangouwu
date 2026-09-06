@@ -5,10 +5,10 @@ import { ProductCard } from './components/common/product-card';
 import { buildProductRowSmartInfo, ProductRow } from './components/common/product-row';
 import { ProductDetailPage } from './pages/product-detail-page';
 import { SharePosterModal } from './share-poster-modal';
+import { ProductDetailPageContext } from './storefront-page-contexts';
 import { productImage as displayProductImage } from './storefront-ui/product-display';
 import { ProductGallery } from './storefront-ui/product-gallery';
 import { productImage as metadataProductImage } from './storefront-utils';
-import { StorefrontContext } from './StorefrontContext';
 import { readStorefrontStylesheet } from './test-stylesheet';
 import { MarketConfig, Product } from './types';
 
@@ -89,7 +89,7 @@ describe('product image navigation layers', () => {
         const row = renderToStaticMarkup(<ProductRow {...commonProps} />);
         const gallery = renderToStaticMarkup(<ProductGallery product={product} language="zh" />);
         const page = renderToStaticMarkup(
-            <StorefrontContext.Provider
+            <ProductDetailPageContext.Provider
                 value={{
                     ...commonProps,
                     products: [],
@@ -98,11 +98,18 @@ describe('product image navigation layers', () => {
                     customerCoupons: [],
                     storefrontName: 'Store',
                     cartQuantity: 0,
+                    api: {} as import('./api').ShopApi,
+                    logoUrl: null,
+                    favorite: false,
+                    onAdd: () => undefined,
+                    onBuyNow: () => undefined,
+                    onFavorite: () => undefined,
+                    onNotify: () => undefined,
                     addingVariantId: null,
                 }}
             >
                 <ProductDetailPage />
-            </StorefrontContext.Provider>,
+            </ProductDetailPageContext.Provider>,
         );
         const poster = renderToStaticMarkup(
             <SharePosterModal

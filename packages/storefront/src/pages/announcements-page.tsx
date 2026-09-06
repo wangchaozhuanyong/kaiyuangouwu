@@ -4,11 +4,11 @@ import { useState } from 'react';
 
 import { formatBusinessDate } from '../business-time';
 import { PageSkeleton } from '../route-loading';
+import { AnnouncementsPageContext } from '../storefront-page-contexts';
 import { EmptyState, Sheet, Subpage } from '../storefront-ui/page-shell';
-import { useStorefront } from '../StorefrontContext';
 import { StorefrontLanguage, StorefrontSystemAnnouncement } from '../types';
 
-interface AnnouncementsPageProps {
+export interface AnnouncementsPageProps {
     announcements: StorefrontSystemAnnouncement[];
     loading: boolean;
     error: string;
@@ -100,8 +100,7 @@ export function AnnouncementDetailSheet({
 }
 
 export function AnnouncementsPage() {
-    const { announcements, loading, error, language, onBack, onRetry } =
-        useStorefront<AnnouncementsPageProps>();
+    const { announcements, loading, error, language, onBack, onRetry } = AnnouncementsPageContext.useValue();
     const isZh = language === 'zh';
     const [openAnnouncementId, setOpenAnnouncementId] = useState<string | null>(null);
     const { featured, more } = splitSystemAnnouncements(announcements);

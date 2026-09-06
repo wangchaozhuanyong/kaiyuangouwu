@@ -3,7 +3,6 @@ import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurfac
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { LookupPager } from './LookupPager';
 import { useProductEditor } from './ProductEditorContext';
-import { ASSET_PAGE_SIZE } from './product-editor-types';
 
 export function ProductAssetPickerModal() {
     const {
@@ -13,6 +12,8 @@ export function ProductAssetPickerModal() {
         assetSearch,
         setAssetSearch,
         assetPage,
+        assetPageSize,
+        setAssetPageSize,
         setAssetPage,
         assetsData,
         assetsLoading,
@@ -154,7 +155,9 @@ export function ProductAssetPickerModal() {
                 <div className="flex flex-col gap-3 border-t border-slate-100 pt-3 sm:flex-row sm:items-center sm:justify-between">
                     <LookupPager
                         page={assetPage}
-                        pageSize={ASSET_PAGE_SIZE}
+                        loading={assetsLoading}
+                        pageSize={assetPageSize}
+                        onPageSizeChange={setAssetPageSize}
                         totalItems={assetsData?.assets.totalItems ?? 0}
                         onPageChange={setAssetPage}
                     />

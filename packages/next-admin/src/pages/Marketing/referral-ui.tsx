@@ -1,13 +1,12 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import React from 'react';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
+import { PageSizeSelect } from '../../components/PageSizeSelect';
 import { ReferralPosterRecord, ReferralProgramRecord } from '../../graphql/marketing.graphql';
 import { getStatusLabel } from '../../utils/status-labels';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatMoney, majorInputToMoney } from '../Sales/sales-utils';
 import { PosterDraft, ProgramDraft, WithdrawalAction } from './referrals-types';
-
-export const PAGE_SIZE = 50;
 
 export function TableCard({
     title,
@@ -100,26 +99,33 @@ export function ActionButton({
     );
 }
 export function ReportPagination({
+    pageSize,
+    onPageSizeChange,
+    loading,
     skip,
     total,
     onChange,
 }: {
+    pageSize: number;
+    onPageSizeChange: (size: number) => void;
+    loading: boolean;
     skip: number;
     total: number;
     onChange: (value: number) => void;
 }) {
-    const page = Math.floor(skip / PAGE_SIZE);
-    const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    const page = Math.floor(skip / pageSize);
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
     return (
-        <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500">
+        <div className="flex flex-wrap gap-y-3 gap-x-4 items-center justify-between border-t border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500">
             <span>
                 共 {total} 条，第 {page + 1}/{totalPages} 页
             </span>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+                <PageSizeSelect pageSize={pageSize} onPageSizeChange={onPageSizeChange} disabled={loading} />
                 <button
                     type="button"
-                    disabled={skip === 0}
-                    onClick={() => onChange(skip - PAGE_SIZE)}
+                    disabled={loading || skip === 0}
+                    onClick={() => onChange(skip - pageSize)}
                     aria-label="上一页"
                     className="rounded border border-slate-300 bg-white p-1.5 disabled:opacity-40"
                 >
@@ -127,8 +133,8 @@ export function ReportPagination({
                 </button>
                 <button
                     type="button"
-                    disabled={skip + PAGE_SIZE >= total}
-                    onClick={() => onChange(skip + PAGE_SIZE)}
+                    disabled={loading || skip + pageSize >= total}
+                    onClick={() => onChange(skip + pageSize)}
                     aria-label="下一页"
                     className="rounded border border-slate-300 bg-white p-1.5 disabled:opacity-40"
                 >

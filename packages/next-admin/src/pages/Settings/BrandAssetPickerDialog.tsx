@@ -4,12 +4,12 @@ import { useState } from 'react';
 import { channelRequestContext } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { GET_ASSETS } from '../../graphql/catalog.graphql';
+import { usePageSize } from '../../hooks/use-page-size';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { LookupPager } from '../Catalog/LookupPager';
 import { inputClass, secondaryButton } from './settings-ui';
 import type { BrandChannel, StoreBrandAsset } from './store-brand-assets';
 
-const PAGE_SIZE = 30;
 interface PickerProps {
     title: string;
     selectedAsset: StoreBrandAsset | null;
@@ -84,13 +84,14 @@ function BrandAssetResults({
 }: Pick<PickerProps, 'channel' | 'selectedAsset' | 'onSelect'>) {
     const [search, setSearch] = useState('');
     const [page, setPage] = useState(0);
+    const [pageSize, setPageSize] = usePageSize(setPage);
     const { data, error, loading, refetch } = useQuery<{
         assets: { items: StoreBrandAsset[]; totalItems: number };
     }>(GET_ASSETS, {
         variables: {
             options: {
-                skip: page * PAGE_SIZE,
-                take: PAGE_SIZE,
+                skip: page * pageSize,
+                take: pageSize,
                 sort: { updatedAt: 'DESC' },
                 filter: {
                     type: { eq: 'IMAGE' },
@@ -174,7 +175,8 @@ function BrandAssetResults({
                 <div className="mt-3 border-t border-slate-100 pt-3">
                     <LookupPager
                         page={page}
-                        pageSize={PAGE_SIZE}
+                        pageSize={pageSize}
+                        onPageSizeChange={setPageSize}
                         totalItems={data?.assets.totalItems ?? 0}
                         onPageChange={setPage}
                     />

@@ -1,15 +1,13 @@
 import { Inject, Injectable, OnApplicationBootstrap } from '@nestjs/common';
 import { RegisterCustomerInput } from '@vendure/common/lib/generated-shop-types';
-import { CurrencyCode, LanguageCode } from '@vendure/common/lib/generated-types';
+import { CurrencyCode } from '@vendure/common/lib/generated-types';
 import {
-    Asset,
     ConfigService,
     Customer,
     CustomerService,
     EventBus,
     ID,
     isGraphQlErrorResult,
-    Order,
     OrderService,
     OrderStateTransitionEvent,
     Refund,
@@ -19,9 +17,8 @@ import {
     TransactionalConnection,
     UserInputError,
 } from '@vendure/core';
-import { StorefrontContentBlock } from '@vendure/storefront-content-plugin';
 import { createHash, createHmac, randomBytes } from 'node:crypto';
-import { In, LessThanOrEqual, LockNotSupportedOnGivenDriverError } from 'typeorm';
+import { LessThanOrEqual, LockNotSupportedOnGivenDriverError } from 'typeorm';
 
 import { STOREFRONT_PROMOTION_OPTIONS } from '../constants';
 import { ReferralAccount } from '../entities/referral-account.entity';
@@ -45,20 +42,15 @@ import {
     referralRewardStatusAfterClawback,
 } from './referral-calculation';
 import {
-    normalizeReferralPosterInput,
     requiredText,
     SaveReferralPosterTemplateInput,
     UpdateReferralPosterTemplateInput,
 } from './referral-input';
-import { REFERRAL_METRIC_SETTLED_ORDER_STATES, settledOrderNetTotal } from './referral-metrics';
 import { createReferralPaymentProof } from './referral-payment-proof';
-import {
-    effectivePosterDefault,
-    enabledPosterIds,
-    referralPosterContentCode,
-    referralPosterCopy,
-    referralPosterPresets,
-} from './referral-poster-presets';
+import { effectivePosterDefault, enabledPosterIds } from './referral-poster-presets';
+import { ReferralPosterView } from './referral-poster-view';
+import { ReferralReportQuery } from './referral-report-query';
+import { businessDateKey, customerName, maskedCustomerName, withdrawalView } from './referral-view-helpers';
 import {
     REFERRAL_BALANCE_PAYMENT_METHOD_CODE,
     referralPosterTemplates,
@@ -67,7 +59,6 @@ import {
 import { resolveStorefrontVisitorIdentity } from './storefront-visitor-identity';
 
 const INVITE_CODE_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
-const MAX_PAGE_SIZE = 200;
 
 export interface UpdateReferralProgramInput {
     expectedUpdatedAt: Date;
@@ -118,6 +109,9 @@ interface WalletDeltaInput {
 
 @Injectable()
 export class ReferralService implements OnApplicationBootstrap {
+    private readonly reports: ReferralReportQuery;
+    private readonly posters: ReferralPosterView;
+
     constructor(
         private readonly connection: TransactionalConnection,
         private readonly customerService: CustomerService,
@@ -127,7 +121,10 @@ export class ReferralService implements OnApplicationBootstrap {
         private readonly requestContextService: RequestContextService,
         @Inject(STOREFRONT_PROMOTION_OPTIONS)
         private readonly promotionOptions: Required<StorefrontPromotionPluginOptions>,
-    ) {}
+    ) {
+        this.posters = new ReferralPosterView(connection, configService);
+        this.reports = new ReferralReportQuery(connection);
+    }
 
     onApplicationBootstrap(): void {
         this.eventBus.registerBlockingEventHandler({
@@ -619,7 +616,7 @@ export class ReferralService implements OnApplicationBootstrap {
             actorType: 'ADMIN',
             note: '客服代客户创建人工提款申请',
         });
-        return this.withdrawalView(withdrawal, customer);
+        return withdrawalView(withdrawal, customer);
     }
 
     async processWithdrawal(ctx: RequestContext, input: ProcessReferralWithdrawalInput) {
@@ -675,7 +672,7 @@ export class ReferralService implements OnApplicationBootstrap {
         withdrawal.note = optionalText(input.note, 500) ?? withdrawal.note;
         withdrawal.processedByAdministratorId = ctx.activeUserId ?? null;
         await this.connection.getRepository(ctx, ReferralWithdrawal).save(withdrawal, { reload: false });
-        return this.withdrawalView(withdrawal, withdrawal.customer);
+        return withdrawalView(withdrawal, withdrawal.customer);
     }
 
     async adjustBalance(
@@ -702,265 +699,31 @@ export class ReferralService implements OnApplicationBootstrap {
     }
 
     async adminRelationships(ctx: RequestContext, skip = 0, take = 100) {
-        const [items, totalItems] = await this.connection
-            .getRepository(ctx, ReferralRelationship)
-            .findAndCount({
-                where: { channelId: ctx.channelId },
-                relations: { inviterCustomer: true, inviteeCustomer: true },
-                order: { boundAt: 'DESC' },
-                skip: Math.max(0, skip),
-                take: pageSize(take),
-            });
-        return {
-            totalItems,
-            items: items.map(item => ({
-                ...item,
-                inviterName: customerName(item.inviterCustomer),
-                inviterEmail: item.inviterCustomer.emailAddress,
-                inviteeName: customerName(item.inviteeCustomer),
-                inviteeEmail: item.inviteeCustomer.emailAddress,
-            })),
-        };
+        return this.reports.adminRelationships(ctx, skip, take);
     }
 
     async adminInviterSummaries(ctx: RequestContext, skip = 0, take = 50) {
-        const repository = this.connection.getRepository(ctx, ReferralRelationship);
-        const rows = await repository
-            .createQueryBuilder('relationship')
-            .innerJoin('relationship.inviterCustomer', 'customer')
-            .innerJoin(
-                ReferralAccount,
-                'account',
-                'account.customerId = relationship.inviterCustomerId AND account.channelId = relationship.channelId',
-            )
-            .select('relationship.inviterCustomerId', 'customerId')
-            .addSelect('customer.firstName', 'firstName')
-            .addSelect('customer.lastName', 'lastName')
-            .addSelect('customer.emailAddress', 'emailAddress')
-            .addSelect('account.inviteCode', 'inviteCode')
-            .addSelect('COUNT(relationship.id)', 'invitedCount')
-            .addSelect(
-                'SUM(CASE WHEN relationship.firstPaidOrderAt IS NULL THEN 0 ELSE 1 END)',
-                'purchasedInviteeCount',
-            )
-            .where('relationship.channelId = :channelId', { channelId: ctx.channelId })
-            .groupBy('relationship.inviterCustomerId')
-            .addGroupBy('customer.firstName')
-            .addGroupBy('customer.lastName')
-            .addGroupBy('customer.emailAddress')
-            .addGroupBy('account.inviteCode')
-            .orderBy('invitedCount', 'DESC')
-            .addOrderBy('relationship.inviterCustomerId', 'ASC')
-            .skip(Math.max(0, skip))
-            .take(pageSize(take))
-            .getRawMany<{
-                customerId: string | number;
-                firstName: string;
-                lastName: string;
-                emailAddress: string;
-                inviteCode: string;
-                invitedCount: string | number;
-                purchasedInviteeCount: string | number;
-            }>();
-        const total = await repository
-            .createQueryBuilder('relationship')
-            .select('COUNT(DISTINCT relationship.inviterCustomerId)', 'count')
-            .where('relationship.channelId = :channelId', { channelId: ctx.channelId })
-            .getRawOne<{ count: string | number }>();
-        return {
-            totalItems: Number(total?.count ?? 0),
-            items: rows.map(row => ({
-                customerId: row.customerId,
-                customerName: `${row.lastName ?? ''}${row.firstName ?? ''}`.trim() || row.emailAddress,
-                customerEmail: row.emailAddress,
-                inviteCode: row.inviteCode,
-                invitedCount: Number(row.invitedCount),
-                purchasedInviteeCount: Number(row.purchasedInviteeCount),
-            })),
-        };
+        return this.reports.adminInviterSummaries(ctx, skip, take);
     }
 
     async adminLedger(ctx: RequestContext, skip = 0, take = 100) {
-        const [items, totalItems] = await this.connection
-            .getRepository(ctx, ReferralLedgerEntry)
-            .findAndCount({
-                where: { channelId: ctx.channelId },
-                relations: { customer: true },
-                order: { createdAt: 'DESC' },
-                skip: Math.max(0, skip),
-                take: pageSize(take),
-            });
-        return {
-            totalItems,
-            items: items.map(item => ({
-                ...item,
-                customerName: customerName(item.customer),
-                customerEmail: item.customer.emailAddress,
-            })),
-        };
+        return this.reports.adminLedger(ctx, skip, take);
     }
 
     async adminRewards(ctx: RequestContext, skip = 0, take = 100) {
-        const [items, totalItems] = await this.connection.getRepository(ctx, ReferralReward).findAndCount({
-            where: { channelId: ctx.channelId },
-            relations: { inviterCustomer: true, inviteeCustomer: true, order: true },
-            order: { earnedAt: 'DESC' },
-            skip: Math.max(0, skip),
-            take: pageSize(take),
-        });
-        return {
-            totalItems,
-            items: items.map(item => ({
-                ...item,
-                orderCode: item.order.code,
-                inviterName: customerName(item.inviterCustomer),
-                inviterEmail: item.inviterCustomer.emailAddress,
-                inviteeName: customerName(item.inviteeCustomer),
-                inviteeEmail: item.inviteeCustomer.emailAddress,
-                rewardRate: item.rewardRateBps / 100,
-            })),
-        };
+        return this.reports.adminRewards(ctx, skip, take);
     }
 
     async adminWithdrawals(ctx: RequestContext, skip = 0, take = 100) {
-        const [items, totalItems] = await this.connection
-            .getRepository(ctx, ReferralWithdrawal)
-            .findAndCount({
-                where: { channelId: ctx.channelId },
-                relations: { customer: true },
-                order: { createdAt: 'DESC' },
-                skip: Math.max(0, skip),
-                take: pageSize(take),
-            });
-        return { totalItems, items: items.map(item => this.withdrawalView(item, item.customer)) };
+        return this.reports.adminWithdrawals(ctx, skip, take);
     }
 
     async adminCustomerWallets(ctx: RequestContext, customerId: ID) {
-        return this.connection.getRepository(ctx, ReferralWallet).find({
-            where: { channelId: ctx.channelId, customerId },
-            order: { currencyCode: 'ASC' },
-        });
+        return this.reports.adminCustomerWallets(ctx, customerId);
     }
 
     async todayMetrics(ctx: RequestContext) {
-        const { businessDate, start, end } = businessDayRange(new Date());
-        // Vendure's base createdAt/updatedAt columns are database-generated UTC values stored in
-        // timestamp-without-time-zone columns. Pass UTC wall-clock strings for those columns so a
-        // non-UTC Node.js process does not shift the business-day boundary during driver encoding.
-        const utcStart = utcDatabaseTimestamp(start);
-        const utcEnd = utcDatabaseTimestamp(end);
-        const orders = await this.connection
-            .getRepository(ctx, Order)
-            .createQueryBuilder('referralOrder')
-            .innerJoin('referralOrder.channels', 'orderChannel', 'orderChannel.id = :channelId', {
-                channelId: ctx.channelId,
-            })
-            .innerJoin(
-                'referralOrder.payments',
-                'settledTodayPayment',
-                'settledTodayPayment.state = :settledPaymentState AND settledTodayPayment.updatedAt >= :utcStart AND settledTodayPayment.updatedAt < :utcEnd',
-                { settledPaymentState: 'Settled', utcStart, utcEnd },
-            )
-            .leftJoinAndSelect('referralOrder.payments', 'metricPayment')
-            .leftJoinAndSelect('metricPayment.refunds', 'metricRefund')
-            .where('referralOrder.state IN (:...settledStates)', {
-                settledStates: REFERRAL_METRIC_SETTLED_ORDER_STATES,
-            })
-            .select([
-                'referralOrder.id',
-                'referralOrder.customerId',
-                'referralOrder.currencyCode',
-                'referralOrder.subTotalWithTax',
-                'referralOrder.shippingWithTax',
-                'referralOrder.orderPlacedAt',
-                'metricPayment.id',
-                'metricPayment.amount',
-                'metricPayment.state',
-                'metricPayment.updatedAt',
-                'metricRefund.id',
-                'metricRefund.total',
-                'metricRefund.state',
-            ])
-            .getMany();
-        const netOrders = orders
-            .map(order => ({ order, netTotal: settledOrderNetTotal(order) }))
-            .filter(item => item.netTotal > 0);
-        const netOrderIds = netOrders.map(({ order }) => order.id.toString());
-        const buyerIds = Array.from(
-            new Set(
-                netOrders.flatMap(({ order }) => (order.customerId ? [order.customerId.toString()] : [])),
-            ),
-        );
-        let returningCustomerIds = new Set<string>();
-        if (buyerIds.length) {
-            const previousBuyers = await this.connection
-                .getRepository(ctx, Order)
-                .createQueryBuilder('referralOrder')
-                .innerJoin('referralOrder.channels', 'orderChannel', 'orderChannel.id = :channelId', {
-                    channelId: ctx.channelId,
-                })
-                .where('referralOrder.customerId IN (:...buyerIds)', { buyerIds })
-                .andWhere('referralOrder.id NOT IN (:...currentOrderIds)', {
-                    currentOrderIds: netOrderIds,
-                })
-                .andWhere('referralOrder.orderPlacedAt < :start', { start })
-                .andWhere('referralOrder.state IN (:...settledStates)', {
-                    settledStates: REFERRAL_METRIC_SETTLED_ORDER_STATES,
-                })
-                .select('referralOrder.customerId', 'customerId')
-                .distinct(true)
-                .getRawMany<{ customerId: string | number }>();
-            returningCustomerIds = new Set(previousBuyers.map(item => item.customerId.toString()));
-        }
-        const [newCustomerCount, visitorCount, todayInvitedCount, todayInvitedPurchaserCount] =
-            await Promise.all([
-                this.connection
-                    .getRepository(ctx, Customer)
-                    .createQueryBuilder('customer')
-                    .innerJoin('customer.channels', 'customerChannel', 'customerChannel.id = :channelId', {
-                        channelId: ctx.channelId,
-                    })
-                    .innerJoin('customer.user', 'customerUser')
-                    .where('customerUser.createdAt >= :utcStart', { utcStart })
-                    .andWhere('customerUser.createdAt < :utcEnd', { utcEnd })
-                    .getCount(),
-                this.connection.getRepository(ctx, StorefrontDailyVisitor).count({
-                    where: { channelId: ctx.channelId, businessDate },
-                }),
-                this.connection
-                    .getRepository(ctx, ReferralRelationship)
-                    .createQueryBuilder('relationship')
-                    .where('relationship.channelId = :channelId', { channelId: ctx.channelId })
-                    .andWhere('relationship.boundAt >= :start', { start })
-                    .andWhere('relationship.boundAt < :end', { end })
-                    .getCount(),
-                this.connection
-                    .getRepository(ctx, ReferralRelationship)
-                    .createQueryBuilder('relationship')
-                    .where('relationship.channelId = :channelId', { channelId: ctx.channelId })
-                    .andWhere('relationship.firstPaidOrderAt >= :start', { start })
-                    .andWhere('relationship.firstPaidOrderAt < :end', { end })
-                    .getCount(),
-            ]);
-        const salesByCurrency = Array.from(
-            netOrders.reduce((totals, { order, netTotal }) => {
-                totals.set(order.currencyCode, (totals.get(order.currencyCode) ?? 0) + netTotal);
-                return totals;
-            }, new Map<CurrencyCode, number>()),
-            ([currencyCode, sales]) => ({ currencyCode, sales }),
-        );
-        return {
-            businessDate,
-            visitorCount,
-            newCustomerCount,
-            consumerCount: buyerIds.length,
-            firstTimeConsumerCount: buyerIds.filter(id => !returningCustomerIds.has(id)).length,
-            returningConsumerCount: buyerIds.filter(id => returningCustomerIds.has(id)).length,
-            orderCount: netOrders.length,
-            todayInvitedCount,
-            todayInvitedPurchaserCount,
-            salesByCurrency,
-        };
+        return this.reports.todayMetrics(ctx);
     }
 
     async reconcile(): Promise<{ releasedRewards: number }> {
@@ -1431,107 +1194,15 @@ export class ReferralService implements OnApplicationBootstrap {
     }
 
     private async configView(ctx: RequestContext, config: ReferralProgramConfig, includeDisabled: boolean) {
-        const posterTemplateConfigs = await this.connection.getRepository(ctx, ReferralPosterTemplate).find({
-            where: {
-                channelId: ctx.channelId,
-                ...(includeDisabled ? {} : { enabled: true }),
-            },
-            relations: {
-                posterBackgroundAsset: true,
-                shareBackgroundAsset: true,
-            },
-            order: { position: 'ASC', id: 'ASC' },
-        });
-        const minimumOrderAmount =
-            convertChannelAmount(ctx, config.minimumOrderAmount, config.currencyCode, ctx.currencyCode) ?? 0;
-        const maxRewardPerOrder =
-            config.maxRewardPerOrder == null
-                ? null
-                : convertChannelAmount(ctx, config.maxRewardPerOrder, config.currencyCode, ctx.currencyCode);
-        const posterTemplates =
-            config.posterTemplates == null
-                ? [...referralPosterTemplates]
-                : config.posterTemplates.filter(id => referralPosterTemplates.includes(id as never));
-        return {
-            channelId: config.channelId,
-            updatedAt: config.updatedAt,
-            enabled: config.enabled,
-            rewardRate: config.rewardRateBps / 100,
-            releaseDelayDays: config.releaseDelayDays,
-            currencyCode: ctx.currencyCode,
-            minimumOrderAmount,
-            maxRewardPerOrder,
-            allowBalanceSpend: config.allowBalanceSpend,
-            attributionWindowDays: config.attributionWindowDays,
-            defaultPosterTemplate: this.publicPosterId(
-                effectivePosterDefault(
-                    config.defaultPosterTemplate,
-                    enabledPosterIds(posterTemplates, posterTemplateConfigs),
-                ),
-            ),
-            posterTemplates,
-            systemPosterTemplateConfigs: await this.systemPosterTemplates(ctx, posterTemplates),
-            posterTemplateConfigs,
-        };
+        return this.posters.configView(ctx, config, includeDisabled);
     }
 
     private publicPosterId(id: string): string {
-        if (!id || referralPosterTemplates.includes(id as never)) return id;
-        const strategy =
-            this.configService.entityOptions.entityIdStrategy ?? this.configService.entityIdStrategy;
-        const entityId = strategy.primaryKeyType === 'increment' ? Number(id) : id;
-        return String(strategy.encodeId(entityId));
+        return this.posters.publicPosterId(id);
     }
 
     private async systemPosterTemplates(ctx: RequestContext, enabledIds: string[]) {
-        // The content plugin is optional in minimal test environments.
-        const blocks = this.connection.rawConnection.hasMetadata(StorefrontContentBlock)
-            ? await this.connection.getRepository(ctx, StorefrontContentBlock).find({
-                  where: {
-                      channelId: ctx.channelId,
-                      code: In(referralPosterPresets.map(preset => referralPosterContentCode(preset.id))),
-                  },
-                  relations: { imageAsset: true },
-              })
-            : [];
-        return referralPosterPresets.map((preset, position) => {
-            const block = blocks.find(item => item.code === referralPosterContentCode(preset.id));
-            const settings = block?.settings as Record<string, any> | undefined;
-            const configured =
-                settings?.purpose === 'referral-system-poster' && settings?.templateId === preset.id;
-            const copy = Object.fromEntries(
-                Object.entries(referralPosterCopy).map(([field, fallback]) => [
-                    field,
-                    configured && typeof settings?.copy?.[field] === 'string'
-                        ? settings.copy[field]
-                        : fallback,
-                ]),
-            );
-            return {
-                ...copy,
-                id: preset.id,
-                createdAt: block?.createdAt ?? new Date(0),
-                updatedAt: block?.updatedAt ?? new Date(0),
-                name:
-                    ctx.languageCode === LanguageCode.zh_Hans || ctx.languageCode === LanguageCode.zh_Hant
-                        ? preset.nameZh
-                        : preset.nameEn,
-                enabled: enabledIds.includes(preset.id),
-                position,
-                layoutVariant: 'STANDARD_CENTER',
-                posterBackgroundAsset: configured ? (block?.imageAsset ?? null) : null,
-                shareBackgroundAsset: null,
-                foregroundColor: configured
-                    ? block?.textColor || preset.foregroundColor
-                    : preset.foregroundColor,
-                accentColor:
-                    configured && typeof settings?.accentColor === 'string'
-                        ? settings.accentColor
-                        : preset.accentColor,
-                overlayOpacity: 0,
-                design: configured ? { ...preset.design, ...settings.design } : preset.design,
-            };
-        });
+        return this.posters.systemPosterTemplates(ctx, enabledIds);
     }
 
     private validateProgramInput(input: UpdateReferralProgramInput): void {
@@ -1568,33 +1239,7 @@ export class ReferralService implements OnApplicationBootstrap {
         input: SaveReferralPosterTemplateInput,
         existing?: ReferralPosterTemplate,
     ) {
-        input = {
-            ...existing,
-            ...Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined)),
-        } as SaveReferralPosterTemplateInput;
-        const normalized = normalizeReferralPosterInput(input);
-        const posterBackgroundAsset = await this.assetForChannel(ctx, input.posterBackgroundAssetId);
-        const shareBackgroundAsset = await this.assetForChannel(ctx, input.shareBackgroundAssetId);
-        return {
-            ...normalized,
-            posterBackgroundAssetId: posterBackgroundAsset?.id ?? null,
-            shareBackgroundAssetId: shareBackgroundAsset?.id ?? null,
-        };
-    }
-
-    private async assetForChannel(ctx: RequestContext, id?: ID | null): Promise<Asset | null> {
-        if (id == null || id === '') return null;
-        const asset = await this.connection
-            .getRepository(ctx, Asset)
-            .createQueryBuilder('asset')
-            .innerJoin('asset.channels', 'assetChannel', 'assetChannel.id = :channelId', {
-                channelId: ctx.channelId,
-            })
-            .where('asset.id = :id', { id })
-            .getOne();
-        if (!asset) throw new UserInputError('图片不存在或不属于当前店铺');
-        if (!asset.mimeType?.startsWith('image/')) throw new UserInputError('海报背景必须是图片');
-        return asset;
+        return this.posters.normalizePosterTemplateInput(ctx, input, existing);
     }
 
     private async posterTemplateById(ctx: RequestContext, id: ID): Promise<ReferralPosterTemplate> {
@@ -1745,14 +1390,6 @@ export class ReferralService implements OnApplicationBootstrap {
             if (!isLockNotSupportedError(error)) throw error;
         }
     }
-
-    private withdrawalView(withdrawal: ReferralWithdrawal, customer: Customer) {
-        return {
-            ...withdrawal,
-            customerName: customerName(customer),
-            customerEmail: customer.emailAddress,
-        };
-    }
 }
 
 function generateInviteCode(): string {
@@ -1768,44 +1405,6 @@ function legacyVisitorHash(value: string): string {
     return createHash('sha256').update(value).digest('hex');
 }
 
-function businessDateKey(value: Date): string {
-    const parts = Object.fromEntries(
-        new Intl.DateTimeFormat('en', {
-            timeZone: 'Asia/Shanghai',
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-        })
-            .formatToParts(value)
-            .filter(part => ['year', 'month', 'day'].includes(part.type))
-            .map(part => [part.type, part.value]),
-    );
-    return `${parts.year}-${parts.month}-${parts.day}`;
-}
-
-function businessDayRange(value: Date): { businessDate: string; start: Date; end: Date } {
-    const businessDate = businessDateKey(value);
-    const start = new Date(`${businessDate}T00:00:00+08:00`);
-    return { businessDate, start, end: new Date(start.getTime() + 86_400_000) };
-}
-
-function utcDatabaseTimestamp(value: Date): string {
-    return value.toISOString().replace('T', ' ').replace('Z', '');
-}
-
-function customerName(customer: Customer): string {
-    return `${customer.lastName ?? ''}${customer.firstName ?? ''}`.trim() || customer.emailAddress;
-}
-
-function maskedCustomerName(customer: Customer): string {
-    const name = customerName(customer);
-    if (name.includes('@')) {
-        const [local, domain] = name.split('@');
-        return `${local.slice(0, 2)}***@${domain}`;
-    }
-    return name.length <= 1 ? `${name}*` : `${name.slice(0, 1)}${'*'.repeat(Math.min(3, name.length - 1))}`;
-}
-
 function withdrawalCode(): string {
     const time = Date.now().toString(36).toUpperCase();
     return `RW-${time}-${randomBytes(3).toString('hex').toUpperCase()}`;
@@ -1814,10 +1413,6 @@ function withdrawalCode(): string {
 function optionalText(value: string | null | undefined, maxLength: number): string | null {
     const normalized = value?.trim() ?? '';
     return normalized ? normalized.slice(0, maxLength) : null;
-}
-
-function pageSize(value: number): number {
-    return Math.min(MAX_PAGE_SIZE, Math.max(1, Math.floor(value || 100)));
 }
 
 export function supportsReferralPessimisticLock(driverType: unknown): boolean {

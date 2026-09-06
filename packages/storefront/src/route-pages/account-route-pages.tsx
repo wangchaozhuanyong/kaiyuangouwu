@@ -1,13 +1,16 @@
 import { lazyRouteComponent } from '@tanstack/react-router';
 
-import { ProductVariant } from '../types';
-
 import {
-    RoutePageContext as PageContext,
-    registerRoutePreload,
-    RouteGate,
-    useRouteRuntime as useRuntime,
-} from './shared';
+    AccountPageContext,
+    AnnouncementsPageContext,
+    BrowsingHistoryPageContext,
+    CouponCenterPageContext,
+    FavoriteProductsPageContext,
+    NotificationsPageContext,
+    ReferralPageContext,
+} from '../storefront-page-contexts';
+
+import { registerRoutePreload, RouteGate, useRouteRuntime as useRuntime } from './shared';
 
 const AccountPage = lazyRouteComponent(() => import('../pages/account-page'), 'AccountPage');
 const AnnouncementsPage = lazyRouteComponent(
@@ -33,7 +36,7 @@ export function AccountRoutePage() {
     const runtime = useRuntime();
     return (
         <RouteGate name="account">
-            <PageContext
+            <AccountPageContext.Provider
                 value={{
                     api: runtime.api,
                     customer: runtime.customer,
@@ -48,9 +51,7 @@ export function AccountRoutePage() {
                     couponCount: runtime.myCoupons.filter((coupon: { status: string }) =>
                         ['AVAILABLE', 'RETURNED', 'LOCKED'].includes(coupon.status),
                     ).length,
-                    addingVariantId: runtime.addingVariantId,
                     onContentTarget: runtime.openContentTarget,
-                    onAdd: (variant: ProductVariant) => void runtime.addToCart(variant),
                     onLogout: () => {
                         void runtime.api.logout().then(() => {
                             runtime.clearPrivateQueryCache();
@@ -61,7 +62,7 @@ export function AccountRoutePage() {
                 }}
             >
                 <AccountPage />
-            </PageContext>
+            </AccountPageContext.Provider>
         </RouteGate>
     );
 }
@@ -69,7 +70,7 @@ export function AccountRoutePage() {
 export function AnnouncementsRoutePage() {
     const runtime = useRuntime();
     return (
-        <PageContext
+        <AnnouncementsPageContext.Provider
             value={{
                 announcements: runtime.systemAnnouncements,
                 loading: runtime.contentQuery.isLoading && runtime.contentQuery.data === undefined,
@@ -80,7 +81,7 @@ export function AnnouncementsRoutePage() {
             }}
         >
             <AnnouncementsPage />
-        </PageContext>
+        </AnnouncementsPageContext.Provider>
     );
 }
 
@@ -88,15 +89,13 @@ export function FavoritesRoutePage() {
     const runtime = useRuntime();
     const isZh = runtime.language === 'zh';
     return (
-        <PageContext
+        <FavoriteProductsPageContext.Provider
             value={{
                 api: runtime.api,
                 productIds: runtime.favoriteProductIds,
                 market: runtime.market,
                 locale: runtime.locale,
                 language: runtime.language,
-                addingVariantId: runtime.addingVariantId,
-                onAdd: (variant: ProductVariant) => void runtime.addToCart(variant),
                 onRemove: (productId: string) => {
                     runtime.toggleFavoriteProduct(productId);
                     runtime.notify(isZh ? '已取消收藏' : 'Removed from favorites');
@@ -111,7 +110,7 @@ export function FavoritesRoutePage() {
             }}
         >
             <FavoriteProductsPage />
-        </PageContext>
+        </FavoriteProductsPageContext.Provider>
     );
 }
 
@@ -119,15 +118,13 @@ export function HistoryRoutePage() {
     const runtime = useRuntime();
     const isZh = runtime.language === 'zh';
     return (
-        <PageContext
+        <BrowsingHistoryPageContext.Provider
             value={{
                 api: runtime.api,
                 productIds: runtime.recentProductIds,
                 market: runtime.market,
                 locale: runtime.locale,
                 language: runtime.language,
-                addingVariantId: runtime.addingVariantId,
-                onAdd: (variant: ProductVariant) => void runtime.addToCart(variant),
                 onClear: () => {
                     if (runtime.storefrontCode) {
                         localStorage.removeItem(`storefront-recent-product-ids:${runtime.storefrontCode}`);
@@ -138,7 +135,7 @@ export function HistoryRoutePage() {
             }}
         >
             <BrowsingHistoryPage />
-        </PageContext>
+        </BrowsingHistoryPageContext.Provider>
     );
 }
 
@@ -146,7 +143,7 @@ export function NotificationsRoutePage() {
     const runtime = useRuntime();
     return (
         <RouteGate name="notifications">
-            <PageContext
+            <NotificationsPageContext.Provider
                 value={{
                     api: runtime.api,
                     customer: runtime.customer,
@@ -156,7 +153,7 @@ export function NotificationsRoutePage() {
                 }}
             >
                 <NotificationsPage />
-            </PageContext>
+            </NotificationsPageContext.Provider>
         </RouteGate>
     );
 }
@@ -165,7 +162,7 @@ export function CouponsRoutePage() {
     const runtime = useRuntime();
     return (
         <RouteGate name="coupons">
-            <PageContext
+            <CouponCenterPageContext.Provider
                 value={{
                     coupons: runtime.activeCoupons,
                     myCoupons: runtime.myCoupons,
@@ -191,7 +188,7 @@ export function CouponsRoutePage() {
                 }}
             >
                 <CouponCenterPage />
-            </PageContext>
+            </CouponCenterPageContext.Provider>
         </RouteGate>
     );
 }
@@ -200,7 +197,7 @@ export function ReferralRoutePage() {
     const runtime = useRuntime();
     return (
         <RouteGate name="referral">
-            <PageContext
+            <ReferralPageContext.Provider
                 value={{
                     api: runtime.api,
                     customer: runtime.customer,
@@ -215,7 +212,7 @@ export function ReferralRoutePage() {
                 }}
             >
                 <ReferralPage />
-            </PageContext>
+            </ReferralPageContext.Provider>
         </RouteGate>
     );
 }

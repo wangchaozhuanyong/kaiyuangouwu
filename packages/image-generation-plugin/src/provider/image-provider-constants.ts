@@ -1,0 +1,15 @@
+export const REQUEST_TIMEOUT_MS = 120_000;
+
+export const MAX_PROVIDER_IMAGE_BYTES = 25 * 1024 * 1024;
+
+export const MAX_PROVIDER_BASE64_CHARACTERS = Math.ceil(MAX_PROVIDER_IMAGE_BYTES / 3) * 4;
+
+export const MAX_PROVIDER_JSON_BYTES = 40 * 1024 * 1024;
+
+export const MAX_PROMPT_RESPONSE_BYTES = 1024 * 1024;
+
+export const MAX_MODEL_RESPONSE_BYTES = 1024 * 1024;
+
+export const OPENAI_IMAGE_QUALITY = 'medium';
+
+export const IMAGE_GENERATION_TIMEOUT_MESSAGE = '中转站在 10 分钟内未返回完整生图结果';

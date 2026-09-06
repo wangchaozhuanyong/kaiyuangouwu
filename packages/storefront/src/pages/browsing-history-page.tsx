@@ -1,20 +1,20 @@
-import type { RouteState } from '../storefront-router';
 import { useNavigate, useRouter } from '@tanstack/react-router';
 import { Clock3, Trash2, WifiOff } from 'lucide-react';
+import type { RouteState } from '../storefront-router';
 
 import { ShopApi } from '../api';
 import { offlineLoadError } from '../loading-state';
 import { PageSkeleton } from '../route-loading';
 import { useProductsByIdsQuery } from '../route-queries';
+import { BrowsingHistoryPageContext } from '../storefront-page-contexts';
 import { routeNavigateOptions } from '../storefront-router';
 import { EmptyState, SubHeader } from '../storefront-ui/page-shell';
 import { ProductSection } from '../storefront-ui/product-section';
-import { useStorefront } from '../StorefrontContext';
 import { MarketConfig, StorefrontLanguage } from '../types';
 
 // TODO: Fix internal imports later
 
-interface BrowsingHistoryPageProps {
+export interface BrowsingHistoryPageProps {
     api: ShopApi;
     productIds: string[];
     market: MarketConfig;
@@ -28,7 +28,7 @@ export function BrowsingHistoryPage() {
     const navigateTo = (route: RouteState) => void navigate(routeNavigateOptions(route) as never);
     const router = useRouter();
     const goBack = () => router.history.back();
-    const { api, productIds, market, locale, language, onClear } = useStorefront<BrowsingHistoryPageProps>();
+    const { api, productIds, market, locale, language, onClear } = BrowsingHistoryPageContext.useValue();
     const isZh = language === 'zh';
     const historyQuery = useProductsByIdsQuery({ api, productIds, market, language });
     const historyProducts = productIds.length ? (historyQuery.data ?? []) : [];

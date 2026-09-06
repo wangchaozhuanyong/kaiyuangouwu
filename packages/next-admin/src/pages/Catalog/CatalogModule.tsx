@@ -1,3 +1,4 @@
+import { PageSizeSelect } from '../../components/PageSizeSelect';
 /* eslint-disable max-len -- Tailwind utility lists are intentionally kept as single JSX attributes. */
 import { useMutation, useQuery } from '@apollo/client/react';
 import {
@@ -164,7 +165,8 @@ const formatRange = (
 
 export function CatalogModule() {
     const navigate = useNavigate();
-    const { page, searchParams, searchTerm, setFilter, setPage, setSearchTerm } = useUrlListState();
+    const { page, pageSize, setPageSize, searchParams, searchTerm, setFilter, setPage, setSearchTerm } =
+        useUrlListState();
     const statusParameter = searchParams.get('status');
     const categoryId = searchParams.get('category') ?? '';
     const statusFilter: 'ALL' | 'ENABLED' | 'DISABLED' =
@@ -172,7 +174,6 @@ export function CatalogModule() {
     const setStatusFilter = (status: 'ALL' | 'ENABLED' | 'DISABLED') => {
         setFilter('status', status.toLowerCase(), 'all');
     };
-    const pageSize = 10;
 
     const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(
         null,
@@ -868,35 +869,38 @@ export function CatalogModule() {
                     </div>
 
                     {/* Pagination */}
-                    {totalItems > 0 && (
-                        <div className="px-5 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between text-xs text-slate-500">
-                            <div>
-                                共 <span className="font-bold text-slate-800 font-mono">{totalItems}</span>{' '}
-                                件商品，当前第{' '}
-                                <span className="font-bold text-slate-800 font-mono">{page + 1}</span> /{' '}
-                                <span className="font-bold text-slate-800 font-mono">{totalPages}</span> 页
-                            </div>
-
-                            <div className="flex items-center gap-2">
-                                <button
-                                    type="button"
-                                    disabled={page === 0}
-                                    onClick={() => setPage(Math.max(0, page - 1))}
-                                    className="px-2.5 py-1 bg-white border border-slate-200 rounded hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed font-medium flex items-center gap-1"
-                                >
-                                    <ChevronLeft className="w-3.5 h-3.5" /> 上一页
-                                </button>
-                                <button
-                                    type="button"
-                                    disabled={page + 1 >= totalPages}
-                                    onClick={() => setPage(page + 1)}
-                                    className="px-2.5 py-1 bg-white border border-slate-200 rounded hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed font-medium flex items-center gap-1"
-                                >
-                                    下一页 <ChevronRight className="w-3.5 h-3.5" />
-                                </button>
-                            </div>
+                    <div className="px-5 py-3 border-t border-slate-200 bg-slate-50 flex flex-wrap gap-y-3 gap-x-4 items-center justify-between text-xs text-slate-500">
+                        <div>
+                            共 <span className="font-bold text-slate-800 font-mono">{totalItems}</span>{' '}
+                            件商品，当前第{' '}
+                            <span className="font-bold text-slate-800 font-mono">{page + 1}</span> /{' '}
+                            <span className="font-bold text-slate-800 font-mono">{totalPages}</span> 页
                         </div>
-                    )}
+
+                        <div className="flex flex-wrap items-center gap-2">
+                            <PageSizeSelect
+                                pageSize={pageSize}
+                                onPageSizeChange={setPageSize}
+                                disabled={loading}
+                            />
+                            <button
+                                type="button"
+                                disabled={loading || page === 0}
+                                onClick={() => setPage(Math.max(0, page - 1))}
+                                className="px-2.5 py-1 bg-white border border-slate-200 rounded hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed font-medium flex items-center gap-1"
+                            >
+                                <ChevronLeft className="w-3.5 h-3.5" /> 上一页
+                            </button>
+                            <button
+                                type="button"
+                                disabled={loading || page + 1 >= totalPages}
+                                onClick={() => setPage(page + 1)}
+                                className="px-2.5 py-1 bg-white border border-slate-200 rounded hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed font-medium flex items-center gap-1"
+                            >
+                                下一页 <ChevronRight className="w-3.5 h-3.5" />
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
 

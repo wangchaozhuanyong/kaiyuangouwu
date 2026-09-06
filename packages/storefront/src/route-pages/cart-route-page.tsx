@@ -1,13 +1,8 @@
 import { lazyRouteComponent } from '@tanstack/react-router';
 
-import { ProductVariant } from '../types';
+import { CartPageContext } from '../storefront-page-contexts';
 
-import {
-    RoutePageContext as PageContext,
-    registerRoutePreload,
-    RouteGate,
-    useRouteRuntime as useRuntime,
-} from './shared';
+import { registerRoutePreload, RouteGate, useRouteRuntime as useRuntime } from './shared';
 
 const CartPage = lazyRouteComponent(() => import('../pages/cart-page'), 'CartPage');
 
@@ -15,7 +10,7 @@ export function CartRoutePage() {
     const runtime = useRuntime();
     return (
         <RouteGate name="cart">
-            <PageContext
+            <CartPageContext.Provider
                 value={{
                     isActive: true,
                     cart: runtime.cart,
@@ -30,7 +25,6 @@ export function CartRoutePage() {
                     commandUnknown: runtime.cartCommandUnknown,
                     onCancelPending: runtime.cancelPendingCartCommand,
                     error: runtime.cartError,
-                    addingVariantId: runtime.addingVariantId,
                     favoriteProductIds: runtime.favoriteProductIds,
                     coupons: runtime.myCoupons,
                     onToggleAll: runtime.toggleAllCartLines,
@@ -50,7 +44,6 @@ export function CartRoutePage() {
                     onReopen: () =>
                         runtime.cart?.checkoutOrder &&
                         void runtime.reopenPendingOrder(runtime.cart.checkoutOrder),
-                    onAdd: (variant: ProductVariant) => void runtime.addToCart(variant),
                     onNotify: runtime.notify,
                     onRetry: () => void runtime.refreshCart(),
                     onApplyCoupon: runtime.applyCoupon,
@@ -58,7 +51,7 @@ export function CartRoutePage() {
                 }}
             >
                 <CartPage />
-            </PageContext>
+            </CartPageContext.Provider>
         </RouteGate>
     );
 }

@@ -29,13 +29,6 @@ export interface StorefrontContentQueryResult {
     };
 }
 
-export function isStorefrontContentSchemaCompatibilityError(error: unknown): boolean {
-    return (
-        error instanceof Error &&
-        /cannot query field|unknown (?:field|argument)|is not defined by type/iu.test(error.message)
-    );
-}
-
 export interface GraphQlResponse<T> {
     data?: T;
     errors?: Array<{ message: string }>;
@@ -268,3 +261,35 @@ export async function cancelStorefrontRealtimeBody(
     }
 }
 
+export class ShopApiGraphQlError extends Error {
+    constructor(
+        readonly messages: string[],
+        readonly status: number,
+    ) {
+        super(messages[0] ?? `Shop API request failed (${status})`);
+        this.name = 'ShopApiGraphQlError';
+    }
+}
+
+export function parseShopApiResponse<T>(rawBody: string, status: number, ok: boolean): T {
+    let body: GraphQlResponse<T>;
+    try {
+        body = JSON.parse(rawBody) as GraphQlResponse<T>;
+    } catch {
+        throw new Error(
+            rawBody.trim()
+                ? `Shop API returned an invalid response (${status})`
+                : `Shop API did not respond (${status})`,
+        );
+    }
+    if (body.errors?.length) {
+        throw new ShopApiGraphQlError(
+            body.errors.map(error => error.message),
+            status,
+        );
+    }
+    if (!ok || !body.data) {
+        throw new Error(body.errors?.[0]?.message ?? `Shop API request failed (${status})`);
+    }
+    return body.data;
+}

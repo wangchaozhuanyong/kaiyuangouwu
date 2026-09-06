@@ -29,6 +29,7 @@ import { getServerHealthUrl, sensitiveActionContext } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
+import { PageSizeSelect } from '../../components/PageSizeSelect';
 import type { CustomFieldDefinition, CustomFieldValueMap } from '../../custom-fields/custom-field-types';
 import {
     addCustomFieldsToDocument,
@@ -55,6 +56,7 @@ import {
     type SystemJobRecord,
     type SystemOperationsResult,
 } from '../../graphql/management.graphql';
+import { usePageSize } from '../../hooks/use-page-size';
 import { useUrlTab } from '../../hooks/use-url-tab';
 import { getRoleCodeLabel, getRoleLabel, getStatusLabel } from '../../utils/status-labels';
 import { toUserFacingError } from '../../utils/user-facing-error';
@@ -71,7 +73,6 @@ const SYSTEM_OPS_TABS = {
     'api-keys': 'API_KEYS',
     telegram: 'TELEGRAM',
 } as const;
-const API_KEY_PAGE_SIZE = 50;
 
 export function SystemOpsModule() {
     const apiKeyCustomFields = useCustomFieldDefinitions('ApiKey');
@@ -83,12 +84,13 @@ export function SystemOpsModule() {
     const [notice, setNotice] = useState('');
     const [actionError, setActionError] = useState('');
     const [apiKeyPage, setApiKeyPage] = useState(0);
+    const [pageSize, setPageSize] = usePageSize(setApiKeyPage);
     const query = useQuery<SystemOperationsResult>(systemOperationsDocument, {
         variables: {
             jobOptions: { take: 100, sort: { createdAt: 'DESC' } },
             apiKeyOptions: {
-                skip: apiKeyPage * API_KEY_PAGE_SIZE,
-                take: API_KEY_PAGE_SIZE,
+                skip: apiKeyPage * pageSize,
+                take: pageSize,
                 sort: { createdAt: 'DESC' },
             },
         },
@@ -101,12 +103,12 @@ export function SystemOpsModule() {
         setActionError('');
         const refreshed = await query.refetch();
         const totalApiKeys = refreshed.data?.apiKeys.totalItems ?? 0;
-        if (apiKeyPage > 0 && apiKeyPage * API_KEY_PAGE_SIZE >= totalApiKeys) {
+        if (apiKeyPage > 0 && apiKeyPage * pageSize >= totalApiKeys) {
             setApiKeyPage(current => Math.max(0, current - 1));
         }
     };
     const data = query.data;
-    const apiKeyTotalPages = Math.max(1, Math.ceil((data?.apiKeys.totalItems ?? 0) / API_KEY_PAGE_SIZE));
+    const apiKeyTotalPages = Math.max(1, Math.ceil((data?.apiKeys.totalItems ?? 0) / pageSize));
 
     return (
         <div className="flex h-full flex-col bg-slate-50">
@@ -223,6 +225,8 @@ export function SystemOpsModule() {
                             )}
                             {tab === 'API_KEYS' && (
                                 <ApiKeysPanel
+                                    pageSize={pageSize}
+                                    onPageSizeChange={setPageSize}
                                     keys={data.apiKeys.items}
                                     total={data.apiKeys.totalItems}
                                     page={apiKeyPage}
@@ -941,6 +945,8 @@ function SettingsStorePanel({
 }
 
 function ApiKeysPanel({
+    pageSize,
+    onPageSizeChange,
     keys,
     total,
     page,
@@ -952,6 +958,8 @@ function ApiKeysPanel({
     onChanged,
     onError,
 }: {
+    pageSize: number;
+    onPageSizeChange: (size: number) => void;
     keys: ApiKeyRecord[];
     total: number;
     page: number;
@@ -1087,11 +1095,16 @@ function ApiKeysPanel({
                     <div className="p-12 text-center text-xs text-slate-400">当前页没有 API 密钥</div>
                 )}
             </div>
-            <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500">
+            <div className="flex flex-wrap gap-y-3 gap-x-4 items-center justify-between border-t border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500">
                 <span>
                     共 {total} 条，第 {page + 1}/{totalPages} 页
                 </span>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                    <PageSizeSelect
+                        pageSize={pageSize}
+                        onPageSizeChange={onPageSizeChange}
+                        disabled={loading}
+                    />
                     <button
                         type="button"
                         disabled={page === 0 || loading}

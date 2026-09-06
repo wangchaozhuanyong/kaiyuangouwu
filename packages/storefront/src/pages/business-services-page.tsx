@@ -1,15 +1,15 @@
+import { ExternalLink, Puzzle, Sparkles } from 'lucide-react';
 import type { RouteState } from '../storefront-router';
 import type { StorefrontContentBlock, StorefrontContentTargetType, StorefrontLanguage } from '../types';
-import { ExternalLink, Puzzle, Sparkles } from 'lucide-react';
 
 import { ClientPluginSlot, resolveClientPlugins } from '../client-plugins/client-plugin-registry';
 import { resolveBottomNavigationItems } from '../components/common/bottom-navigation';
-import { useStorefront } from '../StorefrontContext';
+import { BusinessServicesPageContext } from '../storefront-page-contexts';
 
 const CLIENT_PLUGIN_BLOCK_CODE = 'storefront-client-plugins';
 const BUSINESS_SERVICES_COPY_VERSION = 1;
 
-interface BusinessServicesPageProps {
+export interface BusinessServicesPageProps {
     contentBlocks: StorefrontContentBlock[];
     language: StorefrontLanguage;
     onNavigate: (route: RouteState) => void;
@@ -17,8 +17,7 @@ interface BusinessServicesPageProps {
 }
 
 export function BusinessServicesPage() {
-    const { contentBlocks, language, onNavigate, onContentTarget } =
-        useStorefront<BusinessServicesPageProps>();
+    const { contentBlocks, language, onNavigate, onContentTarget } = BusinessServicesPageContext.useValue();
     const isZh = language === 'zh';
     const clientPluginBlock = contentBlocks.find(
         block => block.type === 'CLIENT_PLUGINS' && block.code === CLIENT_PLUGIN_BLOCK_CODE,
