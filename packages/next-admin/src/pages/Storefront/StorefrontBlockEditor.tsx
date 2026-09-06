@@ -15,6 +15,7 @@ import {
     type StorefrontLanguageCode,
     type StorefrontTargetType,
 } from '../../graphql/storefront.graphql';
+import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { usePageSize } from '../../hooks/use-page-size';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { AssetPicker } from './storefront-asset-picker';
@@ -56,6 +57,8 @@ export function StorefrontBlockEditor({
     onClose: () => void;
     onSave: (value: StorefrontContentBlock) => Promise<void>;
 }) {
+    const { hasAnyPermission } = useAdminPermissions();
+    const canReadProducts = hasAnyPermission(['ReadCatalog', 'ReadProduct']);
     const [draft, setDraft] = useState(() => cloneContentBlock(value));
     const [language, setLanguage] = useState<StorefrontLanguageCode>('zh_Hans');
     const [showProducts, setShowProducts] = useState(false);
@@ -64,6 +67,7 @@ export function StorefrontBlockEditor({
     const [productPageSize, setProductPageSize] = usePageSize(setProductPage);
     const deferredProductSearch = useDeferredValue(productSearch.trim());
     const options = useQuery<EditorOptionsResult>(STOREFRONT_EDITOR_OPTIONS_QUERY, {
+        skip: !canReadProducts,
         variables: {
             productOptions: {
                 skip: productPage * productPageSize,
@@ -645,7 +649,10 @@ export function StorefrontBlockEditor({
                                             </div>
                                         )}
                                     </div>
-                                    {showProducts && productSettingKey && (
+                                    {showProducts && productSettingKey && !canReadProducts && (
+                                        <p role="status">需要商品读取权限才能选择商品，已保留原配置。</p>
+                                    )}
+                                    {showProducts && productSettingKey && canReadProducts && (
                                         <div className="mt-4 rounded-xl border border-slate-200 p-3">
                                             <div className="relative">
                                                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />

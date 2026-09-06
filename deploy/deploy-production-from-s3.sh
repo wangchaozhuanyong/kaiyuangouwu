@@ -292,6 +292,13 @@ rollback() {
     if [[ "${rollback_needed}" == "1" ]]; then
         rollback_needed=0
         printf 'ROLLBACK_BEGIN\n'
+        if ! node "${repository}/deploy/usdt-migration-guard.cjs" check-runtime "${previous_runtime}"; then
+            pm2 stop vendure-worker vendure-api 9>&- || true
+            pm2 save 9>&- || true
+            printf 'ROLLBACK_BLOCKED_USDT_SCHEMA compatible_forward_fix_required=yes\n' >&2
+            cleanup
+            exit "${status}"
+        fi
         VENDURE_DEPLOYMENT_ID="${deployment_id}-rollback" \
             "${repository}/deploy/switch-production-runtime.sh" "${previous_runtime}" 9>&- || true
         pm2 save 9>&- || true
@@ -446,6 +453,26 @@ if [[ "${reviewed_referral_posters}" != "none" ]]; then
     printf 'REFERRAL_POSTERS_PREFLIGHT_OK scope=%s\n' "${reviewed_referral_posters}"
 fi
 node "${memory_guard}" --stage pre-migration --check
+set -a
+# shellcheck disable=SC1090
+sudo -n "$(command -v node)" \
+    "${repository}/deploy/initialize-production-usdt-secrets.mjs" "${environment_file}"
+source "${environment_file}"
+set +a
+# The main domain is a direct storefront. Keep legacy encrypted env files from
+# re-enabling the retired promotion-cookie gate during readiness or migrations.
+export STOREFRONT_PROMOTION_GATE_ENABLED=false
+
+NODE_ENV=production READINESS_PROCESS_ROLE=migration RUN_MIGRATIONS=true RUN_JOB_QUEUE=0 \
+    node "${repository}/packages/dev-server/scripts/production-env-readiness.mjs"
+readonly usdt_guard="${repository}/deploy/usdt-migration-guard.cjs"
+readonly usdt_snapshot="${releases_dir}/usdt-migration-${deployment_id}.json"
+node "${usdt_guard}" plan "${candidate}"
+# Both writers must be stopped before either phase; a normal rolling restart is unsafe.
+rollback_needed=1
+pm2 stop vendure-worker vendure-api 9>&-
+pm2 save 9>&-
+node "${usdt_guard}" capture "${candidate}" "${usdt_snapshot}"
 printf 'DEPLOY_MIGRATION_BEGIN\n'
 sudo -n systemctl start vendure-mysql-backup.service
 readonly backup_service="vendure-mysql-backup.service"
@@ -474,23 +501,12 @@ sudo -n test -s "${backup_file}.sha256" || fail 'the verified database backup ch
 printf 'DEPLOY_BACKUP_OK file=%s offsite=yes invocation_id=%s\n' \
     "${backup_file}" "${backup_invocation_id}"
 
-set -a
-# shellcheck disable=SC1090
-sudo -n "$(command -v node)" \
-    "${repository}/deploy/initialize-production-usdt-secrets.mjs" "${environment_file}"
-source "${environment_file}"
-set +a
-# The main domain is a direct storefront. Keep legacy encrypted env files from
-# re-enabling the retired promotion-cookie gate during readiness or migrations.
-export STOREFRONT_PROMOTION_GATE_ENABLED=false
-
-NODE_ENV=production READINESS_PROCESS_ROLE=migration RUN_MIGRATIONS=true RUN_JOB_QUEUE=0 \
-    node "${repository}/packages/dev-server/scripts/production-env-readiness.mjs"
 (
     cd "${candidate}"
     NODE_ENV=production RUN_MIGRATIONS=true RUN_JOB_QUEUE=0 \
         node packages/dev-server/dist/run-migrations.js
 )
+node "${usdt_guard}" verify "${candidate}" "${usdt_snapshot}"
 NODE_ENV=production READINESS_PROCESS_ROLE=server RUN_MIGRATIONS=false RUN_JOB_QUEUE=0 \
     node "${repository}/packages/dev-server/scripts/production-env-readiness.mjs"
 NODE_ENV=production READINESS_PROCESS_ROLE=worker RUN_MIGRATIONS=false RUN_JOB_QUEUE=0 \

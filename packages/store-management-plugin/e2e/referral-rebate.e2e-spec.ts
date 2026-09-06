@@ -11,6 +11,7 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { initialData } from '../../../e2e-common/e2e-initial-data';
+import { createScopedAdminFixture } from '../../../e2e-common/scoped-admin-fixture';
 import { TEST_SETUP_TIMEOUT_MS, testConfig } from '../../../e2e-common/test-config';
 import { referralPosterCopy } from '../src/referral/referral-poster-presets';
 import { StoreManagementPlugin } from '../src/store-management.plugin';
@@ -469,6 +470,52 @@ describe('referral rebate closed loop', () => {
         await server.destroy();
     });
 
+    it.each([
+        { code: 'referral-read', permissions: ['ReadReferral'], read: true, write: false },
+        { code: 'referral-edit', permissions: ['ReadReferral', 'UpdateReferral'], read: true, write: true },
+        { code: 'referral-other', permissions: ['ReadCustomer'], read: false, write: false },
+        { code: 'referral-none', permissions: [], read: false, write: false },
+    ])('enforces the real Admin API role $code', async role => {
+        const credentials = await createScopedAdminFixture(adminClient, role.code, role.permissions);
+        const original = (await adminClient.query(PROGRAM)).referralProgram;
+        const settings = (
+            await adminClient.query(gql`
+                query {
+                    referralProgram {
+                        enabled
+                        rewardRate
+                        releaseDelayDays
+                        minimumOrderAmount
+                        maxRewardPerOrder
+                        allowBalanceSpend
+                        attributionWindowDays
+                        defaultPosterTemplate
+                        posterTemplates
+                    }
+                }
+            `)
+        ).referralProgram;
+        try {
+            await adminClient.asUserWithCredentials(credentials.emailAddress, credentials.password);
+            const request = adminClient.query(PROGRAM);
+            if (role.read) {
+                expect((await request).referralProgram).toEqual(original);
+            } else {
+                await expect(request).rejects.toThrow(/forbidden|authorized/i);
+            }
+            const mutation = adminClient.query(UPDATE_PROGRAM, {
+                input: { ...settings, expectedUpdatedAt: original.updatedAt },
+            });
+            if (role.write) {
+                expect((await mutation).updateReferralProgram.enabled).toBe(original.enabled);
+            } else {
+                await expect(mutation).rejects.toThrow(/forbidden|authorized/i);
+            }
+        } finally {
+            await adminClient.asSuperAdmin();
+        }
+    });
+
     it('binds an invitation, rewards paid product spend, claws back refunds, spends balance and handles an authorized withdrawal', async () => {
         const disabled = await shopClient.query(PROGRAM);
         expect(disabled.referralProgram.enabled).toBe(false);
@@ -813,11 +860,28 @@ describe('referral rebate closed loop', () => {
             footerTextEn: input.footerTextEn,
         });
         await expect(toggle(true, staleVersion)).rejects.toThrow('CONCURRENT_MODIFICATION');
+        const { enabled: _oldEnabled, ...staleContent } = input;
+        await expect(
+            adminClient.query(
+                gql`
+                    mutation StalePosterContent($input: UpdateReferralPosterTemplateInput!) {
+                        updateReferralPosterTemplate(input: $input) {
+                            id
+                        }
+                    }
+                `,
+                { input: { ...staleContent, id, name: 'Stale editor', expectedUpdatedAt: staleVersion } },
+            ),
+        ).rejects.toThrow('CONCURRENT_MODIFICATION');
+        expect((await read()).posterTemplateConfigs.find((template: any) => template.id === id).enabled).toBe(
+            false,
+        );
         await toggle(true);
         // Legacy clients omit advanced fields. Their basic edit must retain current detailed copy.
         const legacyInput = Object.fromEntries(
             Object.entries(input).filter(
                 ([key]) =>
+                    key !== 'enabled' &&
                     !key.startsWith('feature') &&
                     !key.startsWith('qr') &&
                     !key.startsWith('scene') &&
@@ -833,7 +897,14 @@ describe('referral rebate closed loop', () => {
                     }
                 }
             `,
-            { input: { ...legacyInput, id, name: 'Renamed only' } },
+            {
+                input: {
+                    ...legacyInput,
+                    id,
+                    name: 'Renamed only',
+                    expectedUpdatedAt: (await read()).updatedAt,
+                },
+            },
         );
         state = await read();
         expect(state.posterTemplateConfigs.find((t: any) => t.id === id)).toMatchObject({

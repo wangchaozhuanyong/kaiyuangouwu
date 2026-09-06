@@ -682,3 +682,15 @@ export interface ReferralCustomerWalletRecord {
     pendingBalance: number;
     reservedBalance: number;
 }
+
+export const setReferralPosterTemplateEnabledMutation = gql`
+    mutation SetReferralPosterTemplateEnabledAdmin(
+        $id: ID!
+        $enabled: Boolean!
+        $expectedUpdatedAt: DateTime!
+    ) {
+        setReferralPosterTemplateEnabled(id: $id, enabled: $enabled, expectedUpdatedAt: $expectedUpdatedAt) {
+            updatedAt
+        }
+    }
+`;

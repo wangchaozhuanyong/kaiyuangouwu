@@ -8,6 +8,7 @@ import { PageSizeSelect } from '../../components/PageSizeSelect';
 import { CREATE_ASSETS_MULTIPART } from '../../graphql/catalog-admin.graphql';
 import { GET_ASSETS } from '../../graphql/catalog.graphql';
 import { type StorefrontAssetRef } from '../../graphql/storefront.graphql';
+import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { usePageSize } from '../../hooks/use-page-size';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import {
@@ -31,6 +32,9 @@ export function AssetPicker({
     onChange: (asset: StorefrontAssetRef | null) => void;
     compact?: boolean;
 }) {
+    const { hasAnyPermission } = useAdminPermissions();
+    const canReadAssets = hasAnyPermission(['ReadCatalog', 'ReadAsset']);
+    const canCreateAssets = hasAnyPermission(['CreateCatalog', 'CreateAsset']);
     const [open, setOpen] = useState(false);
     const [search, setSearch] = useState('');
     const [page, setPage] = useState(0);
@@ -51,7 +55,7 @@ export function AssetPicker({
                 },
             },
         },
-        skip: !open,
+        skip: !open || !canReadAssets,
         fetchPolicy: 'cache-first',
     });
     const items = assets.data?.assets.items ?? [];
@@ -59,6 +63,7 @@ export function AssetPicker({
     const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
     const preview = value?.preview ?? fallbackUrl;
     const uploadImage = async (file: File) => {
+        if (!canCreateAssets) return;
         if (!supportedImageTypes.has(file.type)) {
             setUploadError('仅支持 JPG、PNG 或 WebP 图片');
             return;
@@ -96,7 +101,7 @@ export function AssetPicker({
             });
             setSearch('');
             setPage(0);
-            void assets.refetch().catch(() => undefined);
+            if (canReadAssets) void assets.refetch().catch(() => undefined);
         } catch (error) {
             setUploadError(toUserFacingError(error, '图片上传失败，请稍后重试'));
         } finally {
@@ -129,7 +134,7 @@ export function AssetPicker({
                             ref={uploadInputRef}
                             type="file"
                             accept="image/jpeg,image/png,image/webp"
-                            disabled={uploading}
+                            disabled={uploading || !canCreateAssets}
                             className="sr-only"
                             aria-label={`上传${label}`}
                             onChange={event => {
@@ -141,7 +146,7 @@ export function AssetPicker({
                         <button
                             type="button"
                             onClick={() => uploadInputRef.current?.click()}
-                            disabled={uploading}
+                            disabled={uploading || !canCreateAssets}
                             className="flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-blue-700 disabled:opacity-50"
                         >
                             <UploadCloud className={`h-3.5 w-3.5 ${uploading ? 'animate-pulse' : ''}`} />
@@ -150,6 +155,8 @@ export function AssetPicker({
                         <button
                             type="button"
                             onClick={() => setOpen(true)}
+                            disabled={!canReadAssets}
+                            title={canReadAssets ? undefined : '需要素材读取权限，已保留原图片'}
                             className="rounded-lg bg-blue-50 px-3 py-1.5 text-[11px] font-bold text-blue-700 hover:bg-blue-100"
                         >
                             从素材库选择
@@ -171,7 +178,7 @@ export function AssetPicker({
                     {uploadError}
                 </p>
             )}
-            {open && (
+            {open && canReadAssets && (
                 <div
                     className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/50 p-4"
                     onMouseDown={event => {

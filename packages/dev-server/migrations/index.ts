@@ -101,6 +101,8 @@ import { AddOrderProfitExpenses1788652800000 } from './1788652800000-add-order-p
 import { AddCouponCampaignArchive1788652860000 } from './1788652860000-add-coupon-campaign-archive';
 import { AddStorefrontPageViews1788678000000 } from './1788678000000-add-storefront-page-views';
 import { AddCartCommandReceipts1788678060000 } from './1788678060000-add-cart-command-receipts';
+import { AddUsdtActiveAmountKey1788703200000 } from './1788703200000-add-usdt-active-amount-key';
+import { ReleaseUsdtHistoricalAmountKeys1788706800000 } from './1788706800000-release-usdt-historical-amount-keys';
 
 export const devServerMigrations = [
     CommerceFulfillment1786514145999,
@@ -206,4 +208,6 @@ export const devServerMigrations = [
     AddCouponCampaignArchive1788652860000,
     AddStorefrontPageViews1788678000000,
     AddCartCommandReceipts1788678060000,
+    AddUsdtActiveAmountKey1788703200000,
+    ReleaseUsdtHistoricalAmountKeys1788706800000,
 ];

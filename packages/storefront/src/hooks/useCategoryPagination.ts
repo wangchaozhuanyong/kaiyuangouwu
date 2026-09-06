@@ -1,4 +1,4 @@
-import { InfiniteData, keepPreviousData, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
+import { InfiniteData, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { ShopApi } from '../api';
@@ -92,7 +92,10 @@ export function useCategoryPagination({
         refetchOnMount: false,
         refetchOnWindowFocus: current => current.state.status !== 'error',
         refetchOnReconnect: current => current.state.status !== 'error',
-        placeholderData: keepPreviousData,
+        placeholderData: (previousData, previousQuery) =>
+            previousQuery?.queryKey.slice(0, 3).every((part, index) => part === queryKey[index])
+                ? previousData
+                : undefined,
         retry: (count, error) =>
             !(error instanceof CatalogPaginationError) && storefrontQueryRetry(count, error),
         meta: publicQueryMeta(),

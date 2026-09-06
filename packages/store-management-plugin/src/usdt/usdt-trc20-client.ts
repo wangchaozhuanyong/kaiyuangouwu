@@ -62,16 +62,30 @@ export interface SolidifiedTronTransaction {
     blockNumber: number;
 }
 
+export interface Trc20TransferScan {
+    transfers: ConfirmedTrc20Transfer[];
+    complete: boolean;
+}
+
 @Injectable()
 export class UsdtTrc20Client {
     constructor(private readonly walletConfiguration: UsdtWalletConfigurationService) {}
 
     async incomingTransfers(receivingAddress: string, minTimestamp: Date): Promise<ConfirmedTrc20Transfer[]> {
+        return (await this.scanIncomingTransfers(receivingAddress, minTimestamp)).transfers;
+    }
+
+    async scanIncomingTransfers(
+        receivingAddress: string,
+        minTimestamp: Date,
+        maxTimestamp = new Date(),
+    ): Promise<Trc20TransferScan> {
         if (!isValidTronMainnetAddress(receivingAddress)) {
             throw new Error('Cannot scan an invalid TRON receiving address');
         }
         const records: ConfirmedTrc20Transfer[] = [];
         let fingerprint: string | undefined;
+        let complete = false;
 
         for (let page = 0; page < MAX_TRANSFER_PAGES; page += 1) {
             const url = new URL(
@@ -83,6 +97,7 @@ export class UsdtTrc20Client {
             url.searchParams.set('limit', '200');
             url.searchParams.set('order_by', 'block_timestamp,desc');
             url.searchParams.set('min_timestamp', String(minTimestamp.getTime()));
+            url.searchParams.set('max_timestamp', String(maxTimestamp.getTime()));
             url.searchParams.set('contract_address', USDT_TRC20_CONTRACT_ADDRESS);
             if (fingerprint) url.searchParams.set('fingerprint', fingerprint);
 
@@ -93,15 +108,21 @@ export class UsdtTrc20Client {
             if (!response.ok) throw new Error(`TronGrid transfer query failed (${response.status})`);
             const payload = (await response.json()) as TronGridTransferResponse;
             if (payload.success === false) throw new Error('TronGrid rejected the transfer query');
-            for (const record of payload.data ?? []) {
+            if (!Array.isArray(payload.data))
+                throw new Error('TronGrid returned an incomplete transfer page');
+            for (const record of payload.data) {
                 const transfer = parseConfirmedUsdtTransfer(record, receivingAddress);
                 if (transfer) records.push(transfer);
             }
             fingerprint = payload.meta?.fingerprint;
-            if (!fingerprint || !(payload.data ?? []).length) break;
+            if (!fingerprint) {
+                complete = true;
+                break;
+            }
+            if (!payload.data.length) break;
         }
 
-        return deduplicateTransfers(records);
+        return { transfers: deduplicateTransfers(records), complete };
     }
 
     async solidifiedTransaction(transactionId: string): Promise<SolidifiedTronTransaction | null> {

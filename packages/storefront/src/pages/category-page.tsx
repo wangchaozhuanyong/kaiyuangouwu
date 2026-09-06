@@ -185,6 +185,8 @@ export function CategoryPage() {
         : (error ?? '');
 
     useEffect(() => {
+        // Fallback products have no catalog provenance; placeholder pages belong to an older query.
+        if (!collections.length || !catalogQuery.isSuccess || catalogQuery.isPlaceholderData) return;
         for (const product of categoryProducts) {
             const queryKey = storefrontQueryKeys.product(
                 storefrontQueryKeys.market(market),
@@ -199,7 +201,16 @@ export function CategoryPage() {
                 meta: publicQueryMeta(),
             });
         }
-    }, [categoryProducts, market.code, market.currencyCode, queryClient, vendureLanguageCode]);
+    }, [
+        categoryProducts,
+        collections.length,
+        catalogQuery.isSuccess,
+        catalogQuery.isPlaceholderData,
+        market.code,
+        market.currencyCode,
+        queryClient,
+        vendureLanguageCode,
+    ]);
 
     const allCategoriesRef = useRef<HTMLDivElement | null>(null);
 

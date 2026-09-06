@@ -231,7 +231,7 @@ describe('public React Query session cache', () => {
         storage.setItem(
             PUBLIC_QUERY_CACHE_KEY,
             JSON.stringify({
-                version: 4,
+                version: 5,
                 savedAt: Date.now(),
                 state: dehydrate(source),
             }),
