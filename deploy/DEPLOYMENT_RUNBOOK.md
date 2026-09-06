@@ -144,6 +144,8 @@ GitHub 的 `main` 分支手动运行一次 `Production Runtime Artifact`，Skill
 
 新增或修改某类受管 publisher 的生产门禁时必须拆成两次发布：第一版只上线工作流、制品清单和服务器引导门禁，确认生产入口已运行新门禁；第二版才上线 publisher/受管数据改动，并携带新门禁要求的审核范围。当前服务器会在快进并重新执行目标脚本之前先按旧门禁检查差异，因此禁止用手工复制、跳过检查或伪造媒体 key 把两阶段合成一次发布。
 
+分享海报使用独立审核范围 `referral_posters=none|primary|both-stores`，默认为 `none`。`primary` 只解析 moyaoai.com 的实际 Channel；`both-stores` 另解析 damatong.net，两个域名必须对应不同 Channel。五款通用背景按各 Channel 发布，AI 自定义模板仅归主店；域名仅用于审核发布目标，海报文字和二维码仍由客户端当前店铺生成。第一阶段只部署工作流、制品和服务器门禁，保持 `none`，以 `PRODUCTION_BOOTSTRAP_VERIFIED ... referral_poster_guard=enabled` 为完成证据。第二阶段才加入发布器、模板配置和图片，选择已审核范围。发布器须通过环境变量读取 `REFERRAL_POSTER_SCOPE`、凭据及备份路径；当前 API 先只读预检，候选 API 健康后再次预演，再执行 `--apply --allow-remote`、独立 `--verify`，最终以 `REFERRAL_POSTERS_VERIFY_OK` 放行客户端切换。导入前在 releases 目录保存原绑定备份，失败恢复本批绑定；不得删除历史图片或其他店铺数据。
+
 首页三张轮播使用独立的 `homepage_carousel` 审核开关。第一阶段只发布该门禁，不勾选开关、不携带媒体或 Channel；必须在部署日志确认 `PRODUCTION_BOOTSTRAP_VERIFIED ... homepage_carousel_guard=enabled` 后才进入第二阶段。第二阶段新增 `sync-homepage-carousel.mjs` 与图片时，该脚本自动成为制品必需输入，勾选 `homepage_carousel=true`，并精确填写 `channel_codes=__default_channel__` 和 `media_keys=home-hero-token-topup-v1,home-hero-codex-tiers-v1,home-hero-account-services-v1`。缺少开关、Channel 或三张图片范围不一致均失败关闭。脚本先在备份前预演，候选 API 健康后执行 `--apply --allow-remote` 与独立 `--verify`；只有 `HOMEPAGE_CAROUSEL_VERIFY_OK` 后才切换客户端。图片、双语文案、链接和排序都绑定在 Vendure 首页内容区块，不能仅上传图片就宣布同步成功。
 
 单机发布会确保 `/var/lib/vendure-memory/production.swap` 提供 2 GiB 持久 Swap，并把 `vm.swappiness` 固定为

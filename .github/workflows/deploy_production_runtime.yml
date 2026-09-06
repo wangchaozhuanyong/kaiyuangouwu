@@ -93,6 +93,7 @@ jobs:
                     (.damatongStorefront | type == "boolean") and
                     (.moyaoBrand | type == "boolean") and
                     (.homepageCarousel | type == "boolean") and
+                    (.referralPosters | type == "string") and
                     (.mediaChannelCodes | type == "string") and
                     (.mediaKeys | type == "string")
                   ' "$RELEASE_PLAN_PATH" >/dev/null
@@ -102,6 +103,7 @@ jobs:
                   DAMATONG_CHANNEL_TOKEN="$(jq -r '.damatongChannelToken' "$RELEASE_PLAN_PATH")"
                   DAMATONG_STOREFRONT="$(jq -r '.damatongStorefront' "$RELEASE_PLAN_PATH")"
                   MOYAO_BRAND="$(jq -r '.moyaoBrand' "$RELEASE_PLAN_PATH")"
+                  REFERRAL_POSTERS="$(jq -r '.referralPosters' "$RELEASE_PLAN_PATH")"
                   HOMEPAGE_CAROUSEL="$(jq -r '.homepageCarousel' "$RELEASE_PLAN_PATH")"
                   if [[ -n "$MEDIA_KEYS" ]] && [[ ! "$MEDIA_KEYS" =~ ^[a-z0-9][a-z0-9-]*(,[a-z0-9][a-z0-9-]*)*$ ]]; then
                     echo 'release plan contains invalid reviewed media keys' >&2
@@ -111,6 +113,10 @@ jobs:
                     echo 'release plan contains invalid reviewed Channel codes' >&2
                     exit 1
                   fi
+                  case "$REFERRAL_POSTERS" in
+                    none|primary|both-stores) ;;
+                    *) echo 'Invalid reviewed referral poster scope' >&2; exit 1 ;;
+                  esac
                   if [[ "$AUTH_VISUALS" != "true" && "$AUTH_VISUALS" != "false" ]]; then
                     echo 'release plan contains an invalid auth visual flag' >&2
                     exit 1
@@ -169,6 +175,7 @@ jobs:
                   echo "DAMATONG_CHANNEL_TOKEN=$DAMATONG_CHANNEL_TOKEN" >> "$GITHUB_ENV"
                   echo "DAMATONG_STOREFRONT=$DAMATONG_STOREFRONT" >> "$GITHUB_ENV"
                   echo "MOYAO_BRAND=$MOYAO_BRAND" >> "$GITHUB_ENV"
+                  echo "REFERRAL_POSTERS=$REFERRAL_POSTERS" >> "$GITHUB_ENV"
                   echo "HOMEPAGE_CAROUSEL=$HOMEPAGE_CAROUSEL" >> "$GITHUB_ENV"
 
             - name: Configure short-lived AWS credentials
@@ -186,7 +193,7 @@ jobs:
 
             - name: Deploy through Systems Manager
               run: |
-                  REMOTE_COMMAND="sudo -H -u ubuntu env GITHUB_RUN_ID='${GITHUB_RUN_ID}' VENDURE_REVIEWED_STOREFRONT_MEDIA_KEYS='${MEDIA_KEYS}' VENDURE_REVIEWED_STOREFRONT_MEDIA_CHANNEL_CODES='${MEDIA_CHANNEL_CODES}' VENDURE_REVIEWED_AUTH_VISUALS='${AUTH_VISUALS}' VENDURE_REVIEWED_MOYAO_BRAND='${MOYAO_BRAND}' VENDURE_REVIEWED_DAMATONG_STOREFRONT='${DAMATONG_STOREFRONT}' VENDURE_REVIEWED_DAMATONG_CHANNEL_TOKEN='${DAMATONG_CHANNEL_TOKEN}' VENDURE_REVIEWED_HOMEPAGE_CAROUSEL='${HOMEPAGE_CAROUSEL}' /usr/local/sbin/vendure-production-deploy-from-s3 '${TARGET_SHA}' '${ARTIFACT_NAME}' '${ARTIFACT_S3_PREFIX}'"
+                  REMOTE_COMMAND="sudo -H -u ubuntu env GITHUB_RUN_ID='${GITHUB_RUN_ID}' VENDURE_REVIEWED_STOREFRONT_MEDIA_KEYS='${MEDIA_KEYS}' VENDURE_REVIEWED_STOREFRONT_MEDIA_CHANNEL_CODES='${MEDIA_CHANNEL_CODES}' VENDURE_REVIEWED_AUTH_VISUALS='${AUTH_VISUALS}' VENDURE_REVIEWED_MOYAO_BRAND='${MOYAO_BRAND}' VENDURE_REVIEWED_DAMATONG_STOREFRONT='${DAMATONG_STOREFRONT}' VENDURE_REVIEWED_DAMATONG_CHANNEL_TOKEN='${DAMATONG_CHANNEL_TOKEN}' VENDURE_REVIEWED_HOMEPAGE_CAROUSEL='${HOMEPAGE_CAROUSEL}' VENDURE_REVIEWED_REFERRAL_POSTERS='${REFERRAL_POSTERS}' /usr/local/sbin/vendure-production-deploy-from-s3 '${TARGET_SHA}' '${ARTIFACT_NAME}' '${ARTIFACT_S3_PREFIX}'"
                   jq -n --arg command "$REMOTE_COMMAND" \
                     '{commands: [$command], executionTimeout: ["3600"]}' > "$RUNNER_TEMP/ssm-parameters.json"
 
@@ -230,7 +237,7 @@ jobs:
                   jq '{Status, ResponseCode}' "$SSM_RESULT"
                   if [[ "$status" == Success ]]; then
                     jq -r '.StandardOutputContent // ""' "$SSM_RESULT" |
-                      grep -E '^(PRODUCTION_|DEPLOY_|STOREFRONT_MEDIA_|AUTH_VISUAL_|MOYAO_BRAND_|DAMATONG_|HOMEPAGE_CAROUSEL_|Runtime artifact verified)' |
+                      grep -E '^(PRODUCTION_|DEPLOY_|STOREFRONT_MEDIA_|AUTH_VISUAL_|MOYAO_BRAND_|DAMATONG_|HOMEPAGE_CAROUSEL_|REFERRAL_POSTERS_|Runtime artifact verified)' |
                       tail -n 120 || true
                   else
                     {
@@ -251,6 +258,7 @@ jobs:
                     else
                       echo '- Reviewed media keys: `none`'
                     fi
+                    echo "- Reviewed referral posters: \`$REFERRAL_POSTERS\`"
                     echo "- Reviewed auth visuals: \`$AUTH_VISUALS\`"
                     echo "- Reviewed MOYAO AI brand: \`$MOYAO_BRAND\`"
                     echo "- Reviewed Damatong storefront: \`$DAMATONG_STOREFRONT\`"
