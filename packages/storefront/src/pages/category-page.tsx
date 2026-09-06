@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { RouteState, SortMode } from '../storefront-router';
 
 import { ShopApi } from '../api';
+import allCategoriesGoldIcon from '../assets/icons/all-categories-gold.webp';
 import { minimumProductPrice, priceInputToMinorUnits, sortCategoryProducts } from '../catalog-page-utils';
 import { centeredHorizontalScrollLeft } from '../category-navigation';
 import { CategoryClientPluginSlot } from '../client-plugins/client-plugin-registry';
@@ -339,7 +340,13 @@ export function CategoryPage() {
                                 onClick={() => setAllCategoriesOpen(true)}
                             >
                                 <span className="primary-categories-all-icon" aria-hidden="true">
-                                    <LayoutGrid />
+                                    <img
+                                        src={allCategoriesGoldIcon}
+                                        alt=""
+                                        width={40}
+                                        height={40}
+                                        draggable={false}
+                                    />
                                 </span>
                                 <span className="primary-categories-all-label">
                                     {isZh ? '全部分类' : 'All'}
