@@ -55,13 +55,15 @@ export function createContentPublicationChecker(isUsableEnglishTranslation: (val
         if (!block.enabled) return 'DISABLED';
         if (block.startsAt && new Date(block.startsAt).getTime() > now) return 'SCHEDULED';
         if (block.endsAt && new Date(block.endsAt).getTime() <= now) return 'EXPIRED';
+        const isAuth = block.type === 'AUTH_LOGIN' || block.type === 'AUTH_REGISTER';
         const source = block.translations?.find(t => t.languageCode === 'zh_Hans');
         const target = block.translations?.find(t => t.languageCode === 'en');
         if (
-            !source?.title?.trim() ||
-            !isUsableEnglishTranslation(target?.title) ||
+            (isAuth
+                ? !source || !target || !translationPair(source.title, target.title)
+                : !source?.title?.trim() || !isUsableEnglishTranslation(target?.title)) ||
             (['subtitle', 'body', 'ctaLabel'] as const).some(
-                field => !translationPair(source[field], target?.[field]),
+                field => !translationPair(source?.[field], target?.[field]),
             ) ||
             (block.items ?? [])
                 .filter(item => item.enabled)
@@ -69,9 +71,10 @@ export function createContentPublicationChecker(isUsableEnglishTranslation: (val
                     const zh = item.translations?.find(t => t.languageCode === 'zh_Hans');
                     const en = item.translations?.find(t => t.languageCode === 'en');
                     return (
-                        !zh?.label?.trim() ||
-                        !isUsableEnglishTranslation(en?.label) ||
-                        !translationPair(zh.description, en?.description)
+                        (isAuth
+                            ? !zh || !en || !translationPair(zh.label, en.label)
+                            : !zh?.label?.trim() || !isUsableEnglishTranslation(en?.label)) ||
+                        !translationPair(zh?.description, en?.description)
                     );
                 })
         )

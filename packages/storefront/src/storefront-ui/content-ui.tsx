@@ -21,6 +21,7 @@ import { useEffect, useState } from 'react';
 
 import { selectManagedProducts } from '../home-merchandising';
 import { resolveManagedContentCopy } from '../managed-content-copy';
+import { managedContentStyle } from '../managed-content-style';
 import { responsiveImageSources } from '../responsive-image';
 import { StorefrontCouponCard } from '../storefront-coupons';
 import { routePath } from '../storefront-router';
@@ -591,8 +592,7 @@ export function ManagedContentSection({
         <section
             className={`content-section managed-content-section managed-content-${block.type.toLowerCase()}`}
             style={{
-                backgroundColor: block.backgroundColor ?? undefined,
-                color: block.textColor ?? undefined,
+                ...managedContentStyle(block),
             }}
         >
             <SectionHeader

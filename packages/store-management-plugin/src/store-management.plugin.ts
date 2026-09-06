@@ -109,7 +109,10 @@ import { StoreProvisioningResolver } from './store-provisioning.resolver';
 import { StoreProvisioningService } from './store-provisioning.service';
 import { StorefrontActivationInterceptor } from './storefront-activation.interceptor';
 import { StorefrontActivationService } from './storefront-activation.service';
-import { StorefrontBrandingShopResolver } from './storefront-branding.resolver';
+import {
+    StorefrontBrandingAdminResolver,
+    StorefrontBrandingShopResolver,
+} from './storefront-branding.resolver';
 import {
     SystemAnnouncementAdminResolver,
     SystemAnnouncementShopResolver,
@@ -267,6 +270,7 @@ import {
     adminApiExtensions: {
         schema: adminApiExtensions,
         resolvers: [
+            StorefrontBrandingAdminResolver,
             MerchantInitialPasswordResolver,
             StoreProvisioningResolver,
             StoreProfileAdminResolver,

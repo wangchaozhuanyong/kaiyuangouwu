@@ -57,7 +57,7 @@ export class StorefrontErrorBoundary extends Component<
                     <img className="fatal-error-mark" src={cachedLogoUrl} alt="" />
                 ) : (
                     <span className="fatal-error-mark" aria-hidden="true">
-                        桥
+                        ◇
                     </span>
                 )}
                 <h1>{isZh ? '页面暂时无法显示' : 'This page could not be displayed'}</h1>

@@ -45,6 +45,7 @@ import { heroThemeStyle, heroUsesImageOverlay } from '../hero-theme';
 import { selectCategoryPromotionProducts, selectManagedProducts } from '../home-merchandising';
 import { desktopIntroModuleOrder, homepageModuleEntries } from '../homepage-module-order';
 import { resolveManagedContentCopy } from '../managed-content-copy';
+import { managedContentStyle } from '../managed-content-style';
 import { PageSkeleton } from '../route-loading';
 import { couponCardsFromCampaigns, StorefrontCouponCard } from '../storefront-coupons';
 import { HomePageContext } from '../storefront-page-contexts';
@@ -468,7 +469,8 @@ export interface HomePageProps {
     onRetry: () => void;
 }
 
-export function HomePage() {
+export function HomePage({ embedded = false }: { embedded?: boolean } = {}) {
+    const PageTag = embedded ? 'section' : 'main';
     const navigate = useNavigate();
     const navigateTo = (route: RouteState) => void navigate(routeNavigateOptions(route) as never);
     const {
@@ -809,7 +811,7 @@ export function HomePage() {
     const colorfulQuickLinks = isColorfulHomepageStyle(quickBlock?.settings?.visualStyle);
 
     return (
-        <main className="page home-page">
+        <PageTag className={`page home-page${embedded ? ' is-embedded' : ''}`}>
             <header className="topbar home-topbar">
                 <button
                     className="brand"
@@ -1160,7 +1162,7 @@ export function HomePage() {
                             </div>
                         ))}
 
-                        {!products.length && (
+                        {!embedded && !products.length && (
                             <div
                                 className={homepageSectionShellClassName}
                                 style={{ order: homepageModules.length }}
@@ -1242,7 +1244,7 @@ export function HomePage() {
                         ) : null}
                     </div>
 
-                    {showFooter ? (
+                    {showFooter && !embedded ? (
                         <LegalFooter
                             storefrontName={storefrontName}
                             language={language}
@@ -1252,7 +1254,7 @@ export function HomePage() {
                     ) : null}
                 </>
             )}
-        </main>
+        </PageTag>
     );
 }
 
@@ -1617,8 +1619,7 @@ function ManagedContentSection({
         <section
             className={`content-section managed-content-section managed-content-${block.type.toLowerCase()}`}
             style={{
-                backgroundColor: block.backgroundColor ?? undefined,
-                color: block.textColor ?? undefined,
+                ...managedContentStyle(block),
             }}
         >
             <SectionHeader
@@ -1705,8 +1706,7 @@ function CategoryPromotionSection({
         <section
             className={sectionClassName}
             style={{
-                backgroundColor: block.backgroundColor ?? undefined,
-                color: block.textColor ?? undefined,
+                ...managedContentStyle(block),
             }}
         >
             <SectionHeader title={block.title} subtitle={block.subtitle} subtitlePlacement="end" />
@@ -1790,8 +1790,7 @@ function FeaturedCollectionSection({
                 <div
                     className="featured-collection-intro"
                     style={{
-                        backgroundColor: block.backgroundColor ?? undefined,
-                        color: block.textColor ?? undefined,
+                        ...managedContentStyle(block),
                     }}
                 >
                     <h2 id={`${block.id}-title`}>{block.title}</h2>
@@ -1887,8 +1886,7 @@ function ContentStorySection({
             <article
                 className="content-story-layout"
                 style={{
-                    backgroundColor: block.backgroundColor ?? undefined,
-                    color: block.textColor ?? undefined,
+                    ...managedContentStyle(block),
                 }}
             >
                 <button

@@ -168,7 +168,10 @@ export function storefrontRealtimeQueryMatches(
     const topics = new Set(event.topics);
 
     if (topics.has('config') && section === 'config') return true;
-    if (topics.has('content') && (section === 'content' || couponCampaignQueryMatches(key, scope))) {
+    if (
+        topics.has('content') &&
+        (section === 'content' || section === 'visual-preset' || couponCampaignQueryMatches(key, scope))
+    ) {
         return true;
     }
     if (topics.has('catalog') && catalogQueryMatches(key, event)) return true;

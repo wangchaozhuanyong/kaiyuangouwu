@@ -179,18 +179,27 @@ export function ClientPluginSlot({
     categoryContext,
     language,
     onNavigate,
+    toolsFirst = false,
 }: Readonly<{
     block: StorefrontContentBlock | undefined;
     placement: ClientPluginPlacement;
     categoryContext?: CategoryClientPluginContext;
+    toolsFirst?: boolean;
     language: StorefrontLanguage;
     onNavigate: (route: RouteState) => void;
 }>) {
     const plugins = resolveClientPlugins(block, placement, categoryContext);
     if (!plugins.length) return null;
+    // Desktop services group tools before assistance; preserve managed ordering within each group.
+    const orderedPlugins = toolsFirst
+        ? [
+              ...plugins.filter(plugin => plugin.code !== 'category-support-entry'),
+              ...plugins.filter(plugin => plugin.code === 'category-support-entry'),
+          ]
+        : plugins;
     return (
         <div className={`category-client-plugin-slot is-${placement.toLowerCase().replaceAll('_', '-')}`}>
-            {plugins.map(({ code, item, Component }) => (
+            {orderedPlugins.map(({ code, item, Component }) => (
                 <Component key={item.id || code} language={language} onNavigate={onNavigate} />
             ))}
         </div>

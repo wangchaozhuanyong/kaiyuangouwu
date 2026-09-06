@@ -6,15 +6,12 @@ import {
     Eye,
     EyeOff,
     Fingerprint,
-    Headphones,
     LockKeyhole,
     Mail,
-    ShieldCheck,
-    ShoppingBag,
-    Sparkles,
-    Zap,
 } from 'lucide-react';
-import { CSSProperties, FormEvent, ReactNode, useEffect, useId, useRef, useState } from 'react';
+import { FormEvent, ReactNode, useEffect, useId, useRef, useState } from 'react';
+
+import { AuthVisual, authVisualStyle } from '../../storefront-content-plugin/src/shared/auth-visual';
 
 import { ShopApi, ShopApiError } from './api';
 import {
@@ -22,7 +19,7 @@ import {
     ACCOUNT_PASSWORD_MIN_LENGTH,
     validateAccountPassword,
 } from './auth-validation';
-import { authVisualAccentColor, authVisualOverlayColor, resolveAuthVisualMessage } from './auth-visual';
+import { resolveAuthVisualMessage } from './auth-visual';
 import {
     attributionWithinWindow,
     captureReferralAttribution,
@@ -30,9 +27,7 @@ import {
     ReferralSource,
 } from './referral-attribution';
 import { isReferralClientFeatureEnabled } from './referral-client-feature';
-import { storefrontWebpUrl } from './responsive-image';
 import { routeNavigateOptions } from './storefront-router';
-import { SafeImage } from './storefront-ui/product-display';
 import { StorefrontContentBlock, StorefrontContentTargetType, StorefrontLanguage } from './types';
 
 type AuthRoute = { name: 'login' | 'register' | 'forgot-password' };
@@ -280,9 +275,7 @@ export function LoginPage({
             />
             <header className={`auth-form-heading auth-form-heading-${language}`}>
                 <h1>{isZh ? '欢迎回来' : 'Welcome back'}</h1>
-                <p>
-                    {isZh ? '登录后继续管理你的 AI 工具与订单' : 'Continue managing your AI tools and orders'}
-                </p>
+                <p>{isZh ? '登录后管理你的账户与订单' : 'Sign in to manage your account and orders'}</p>
             </header>
             <form aria-label={isZh ? '登录表单' : 'Sign-in form'} onSubmit={event => void submit(event)}>
                 <Field
@@ -1069,130 +1062,37 @@ function AuthLayout({
     onBack: () => void;
     children: ReactNode;
 }) {
-    const authVisualVariant = heroVariant === 'login' || heroVariant === 'register' ? heroVariant : null;
-    const heroMessage = authVisualVariant
-        ? resolveAuthVisualMessage(heroContent, authVisualVariant, language)
-        : null;
-    const heroStyle = authVisualVariant
-        ? ({
-              '--auth-hero-text-color': heroContent?.textColor ?? '#ffffff',
-              '--auth-hero-overlay-color': authVisualOverlayColor(heroContent),
-              '--auth-hero-accent-color': authVisualAccentColor(heroContent, authVisualVariant),
-          } as CSSProperties)
-        : undefined;
-    const managedHeroSrc = heroContent?.imageUrl?.trim();
-    const hasManagedHero = Boolean(authVisualVariant && heroContent);
-
+    const variant = heroVariant === 'register' ? 'register' : 'login';
+    const message = resolveAuthVisualMessage(heroContent, variant, language);
+    const content = heroContent ?? {
+        title: message.title,
+        subtitle: '',
+        ctaLabel: storefrontName,
+        items: [],
+    };
     return (
         <main
-            className={`page subpage auth-page auth-page-${heroVariant}${hasManagedHero ? ' auth-page-managed' : ''}`}
+            className={`page subpage auth-page auth-page-${heroVariant} auth-page-clear`}
             aria-label={title}
+            style={authVisualStyle(content)}
         >
-            <section
-                className={`auth-hero auth-hero-${heroVariant}${hasManagedHero ? ' auth-hero-managed' : ''}`}
-                style={heroStyle}
-            >
-                {managedHeroSrc && (
-                    <SafeImage
-                        src={managedHeroSrc}
-                        alt=""
-                        imageKind="hero"
-                        loading="eager"
-                        decoding="async"
-                        fetchPriority="high"
-                    />
-                )}
-                <div className="auth-hero-header">
-                    <button
-                        className="auth-back-button"
-                        type="button"
-                        onClick={onBack}
-                        aria-label={language === 'zh' ? '返回' : 'Back'}
-                    >
-                        <ArrowLeft aria-hidden="true" />
-                        <span>{language === 'zh' ? '返回' : 'Back'}</span>
-                    </button>
-                </div>
-                <div
-                    className={`auth-hero-message${heroMessage ? '' : ' auth-hero-message-brand-only'}${hasManagedHero ? ' auth-hero-message-managed' : ''}`}
-                >
-                    <div className="auth-hero-kicker">
-                        {!hasManagedHero && (
-                            <div className="auth-brand-lockup">
-                                <div className="auth-brand-main">
-                                    {logoUrl ? (
-                                        <img
-                                            className="auth-brand-mark"
-                                            src={storefrontWebpUrl(logoUrl, 'thumbnail')}
-                                            alt={storefrontName}
-                                        />
-                                    ) : (
-                                        <span className="auth-brand-mark" aria-hidden="true">
-                                            桥
-                                        </span>
-                                    )}
-                                    <strong>{storefrontName}</strong>
-                                </div>
-                                <small>{language === 'zh' ? '欢迎光临' : 'Welcome'}</small>
-                            </div>
-                        )}
-                        {heroMessage && <span className="auth-hero-eyebrow">{heroMessage.eyebrow}</span>}
+            <AuthVisual
+                content={content}
+                language={language}
+                header={
+                    <div className="auth-clear-header">
+                        <button
+                            className="auth-clear-back"
+                            type="button"
+                            onClick={onBack}
+                            aria-label={language === 'zh' ? '返回' : 'Back'}
+                        >
+                            <ArrowLeft aria-hidden="true" />
+                            <span>{language === 'zh' ? '返回' : 'Back'}</span>
+                        </button>
                     </div>
-                    {heroMessage && (
-                        <>
-                            <div className="auth-hero-copy">
-                                <h2>{heroMessage.title}</h2>
-                                <p>{heroMessage.description}</p>
-                            </div>
-                            {hasManagedHero ? (
-                                <div className="auth-hero-tags" aria-label={heroMessage.tags.join('、')}>
-                                    {heroMessage.tags.map((tag, index) => (
-                                        <span key={`${tag}-${index}`}>{tag}</span>
-                                    ))}
-                                </div>
-                            ) : (
-                                <div className="auth-hero-footer">
-                                    <div
-                                        className={`auth-hero-benefits auth-hero-benefits-${heroVariant}`}
-                                        aria-label={heroMessage.tags.join('、')}
-                                    >
-                                        {heroMessage.benefits.map((benefit, index) => {
-                                            const Icon =
-                                                heroVariant === 'register'
-                                                    ? ([ShieldCheck, Zap, Headphones][index] ?? ShieldCheck)
-                                                    : ([Sparkles, ShoppingBag, Headphones][index] ??
-                                                      Sparkles);
-                                            return (
-                                                <div className="auth-hero-benefit" key={benefit.title}>
-                                                    <span className="auth-hero-benefit-icon">
-                                                        <Icon aria-hidden="true" />
-                                                    </span>
-                                                    <span className="auth-hero-benefit-copy">
-                                                        <strong>{benefit.title}</strong>
-                                                        <small>{benefit.description}</small>
-                                                    </span>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                    {heroMessage.serviceTypes.length ? (
-                                        <div className="auth-hero-services">
-                                            <span className="auth-hero-services-label">
-                                                {language === 'zh' ? '支持服务类型' : 'Services available'}
-                                            </span>
-                                            <div className="auth-hero-service-list">
-                                                {heroMessage.serviceTypes.map(serviceType => (
-                                                    <span key={serviceType}>{serviceType}</span>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    ) : null}
-                                </div>
-                            )}
-                        </>
-                    )}
-                </div>
-            </section>
+                }
+            />
             <section className="login-content">
                 <div className="auth-form-column">
                     <div className="auth-card-content">{children}</div>

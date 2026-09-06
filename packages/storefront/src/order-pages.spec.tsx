@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ShopApi } from './api';
+import { DesktopLayoutContext } from './desktop-layout';
 import { LogisticsPage, OrderDetailPage, OrdersPage } from './order-pages';
 import { createStorefrontQueryClient, storefrontQueryKeys } from './query-client';
 import { orderPageStyles } from './tailwind/order-page-styles';
@@ -66,7 +67,7 @@ const customer: ActiveCustomer = {
     orders: { items: [order], totalItems: 1 },
 };
 
-function renderOrders(cachedOrders?: Order[], language: StorefrontLanguage = 'zh') {
+function renderOrders(cachedOrders?: Order[], language: StorefrontLanguage = 'zh', desktop = false) {
     const client = createStorefrontQueryClient();
     if (cachedOrders) {
         client.setQueryData(
@@ -97,7 +98,13 @@ function renderOrders(cachedOrders?: Order[], language: StorefrontLanguage = 'zh
         onBuyAgain: vi.fn(),
         onNotify: vi.fn(),
     });
-    return renderToStaticMarkup(createElement(QueryClientProvider, { client }, page));
+    return renderToStaticMarkup(
+        createElement(
+            QueryClientProvider,
+            { client },
+            createElement(DesktopLayoutContext.Provider, { value: desktop }, page),
+        ),
+    );
 }
 
 function renderLogistics(cachedOrders?: Order[]) {
@@ -130,6 +137,20 @@ function renderLogistics(cachedOrders?: Order[]) {
 }
 
 describe('OrdersPage route query', () => {
+    it('renders a desktop order with real order totals and all primary actions without the mobile search toggle', () => {
+        const pending = { ...order, state: 'ArrangingPayment', totalQuantity: 6, totalWithTax: 10800 };
+        const markup = renderOrders([pending], 'zh', true);
+        expect(markup).toContain('desktop-order-columns');
+        expect(markup).toContain('订单 T0001');
+        expect(markup).toContain('共 6 件');
+        expect(markup).toContain('108');
+        expect(markup).toContain('aria-label="订单号"');
+        expect(markup).toContain('立即付款');
+        expect(markup).toContain('没有更多订单');
+        expect(markup).not.toContain('DEMO-0001');
+        expect(markup).not.toContain('aria-label="搜索订单"');
+    });
+
     it('uses compact professional English labels for the five order filters', () => {
         const markup = renderOrders(undefined, 'en');
 

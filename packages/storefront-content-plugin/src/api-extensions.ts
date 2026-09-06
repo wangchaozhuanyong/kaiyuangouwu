@@ -1,6 +1,13 @@
 import { gql } from 'graphql-tag';
 
 const commonTypes = gql`
+    type StorefrontVisualPresetConfig {
+        channelId: ID!
+        presetId: String!
+        desktopLayout: String!
+        revision: String!
+    }
+
     enum StorefrontContentBlockType {
         HERO
         NOTICE
@@ -99,10 +106,18 @@ export const shopApiExtensions = gql`
     extend type Query {
         storefrontContent: [StorefrontContentBlock!]!
         storefrontContentSettings: StorefrontContentSettings!
+        storefrontVisualPreset: StorefrontVisualPresetConfig!
     }
 `;
 
 export const adminApiExtensions = gql`
+    input UpdateStorefrontVisualPresetInput {
+        channelId: ID!
+        presetId: String
+        desktopLayout: String
+        expectedRevision: String!
+    }
+
     ${commonTypes}
 
     type StorefrontContentBlockTranslation {
@@ -223,9 +238,11 @@ export const adminApiExtensions = gql`
         storefrontContentBlocks: [StorefrontContentBlock!]!
         storefrontContentBlock(id: ID!): StorefrontContentBlock
         storefrontContentSettings: StorefrontContentSettings!
+        storefrontVisualPreset: StorefrontVisualPresetConfig!
     }
 
     extend type Mutation {
+        updateStorefrontVisualPreset(input: UpdateStorefrontVisualPresetInput!): StorefrontVisualPresetConfig!
         createStorefrontContentBlock(input: CreateStorefrontContentBlockInput!): StorefrontContentBlock!
         updateStorefrontContentBlock(input: UpdateStorefrontContentBlockInput!): StorefrontContentBlock!
         applyStorefrontContentChanges(input: ApplyStorefrontContentChangesInput!): [StorefrontContentBlock!]!

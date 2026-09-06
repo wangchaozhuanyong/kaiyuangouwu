@@ -26,6 +26,7 @@ import { FormEvent, ReactNode, useEffect, useId, useRef, useState } from 'react'
 
 import { ShopApi } from './api';
 import { formatBusinessDate } from './business-time';
+import { useDesktopLayout } from './desktop-layout';
 import { compactUiCopy, languageCodeFor } from './i18n';
 import { offlineLoadError } from './loading-state';
 import { ORDER_STATUS_REFRESH_INTERVAL, orderNeedsStatusRefresh } from './order-refresh';
@@ -83,6 +84,7 @@ export function OrdersPage({
     const navigate = useNavigate();
     const navigateTo = (route: OrderRoute) => void navigate(routeNavigateOptions(route) as never);
     const isZh = language === 'zh';
+    const desktop = useDesktopLayout();
     const compactCopy = compactUiCopy[language];
     const [tab, setTab] = useState<OrderTab>(initialTab);
     const [searchOpen, setSearchOpen] = useState(false);
@@ -120,6 +122,17 @@ export function OrdersPage({
             (ordersQuery.data?.pages.flatMap(page => page.items) ?? []).map(order => [order.id, order]),
         ).values(),
     );
+    const countsQuery = useQuery({
+        queryKey: storefrontQueryKeys.customerOrderCounts(
+            storefrontQueryKeys.market(market),
+            languageCodeFor(language),
+            customer?.id ?? '',
+        ),
+        queryFn: ({ signal }) => api.customerOrderCounts(signal),
+        enabled: desktop && !!customer,
+        staleTime: ROUTE_QUERY_STALE_TIME,
+        gcTime: PUBLIC_QUERY_GC_TIME,
+    });
     const afterSalesQuery = useQuery({
         queryKey: storefrontQueryKeys.afterSalesRequests(
             storefrontQueryKeys.market(market),
@@ -127,7 +140,7 @@ export function OrdersPage({
             customer?.id ?? '',
         ),
         queryFn: ({ signal }) => api.afterSalesRequests(signal),
-        enabled: Boolean(customer) && tab === 'service',
+        enabled: Boolean(customer) && (desktop || tab === 'service'),
         staleTime: ROUTE_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
     });
@@ -179,38 +192,56 @@ export function OrdersPage({
         { id: 'service', label: compactCopy.orders.returns },
     ];
 
+    const tabCounts: Partial<Record<OrderTab, number>> = {
+        ...countsQuery.data,
+        all: customer?.orders.totalItems,
+        service: afterSalesQuery.data?.length,
+    };
+
     useEffect(() => setTab(initialTab), [initialTab]);
 
     return (
         <main className={orderPageClassName('page subpage orders-page')}>
-            <SubHeader
-                title={compactCopy.orders.title}
-                language={language}
-                onBack={onBack}
-                action={
-                    <button
-                        type="button"
-                        onClick={() => setSearchOpen(value => !value)}
-                        aria-label={isZh ? '搜索订单' : 'Search orders'}
-                        aria-expanded={searchOpen}
-                    >
-                        {searchOpen ? <X /> : <Search />}
-                    </button>
-                }
-            />
-            <nav className={orderPageClassName('order-tabs')}>
+            {desktop ? (
+                <div className="desktop-orders-heading">
+                    <h1>{compactCopy.orders.title}</h1>
+                </div>
+            ) : (
+                <SubHeader
+                    title={compactCopy.orders.title}
+                    language={language}
+                    onBack={onBack}
+                    action={
+                        <button
+                            type="button"
+                            onClick={() => setSearchOpen(value => !value)}
+                            aria-label={isZh ? '搜索订单' : 'Search orders'}
+                            aria-expanded={searchOpen}
+                        >
+                            {searchOpen ? <X /> : <Search />}
+                        </button>
+                    }
+                />
+            )}
+            <nav className={orderPageClassName('order-tabs')} aria-label={isZh ? '订单状态' : 'Order status'}>
                 {tabs.map(item => (
                     <button
                         type="button"
                         key={item.id}
                         className={orderPageClassName(tab === item.id ? 'is-active' : undefined)}
+                        aria-pressed={tab === item.id}
                         onClick={() => setTab(item.id)}
                     >
                         {item.label}
+                        {desktop && customer && (
+                            <span className="desktop-order-tab-count">
+                                {tabCounts[item.id] ?? (countsQuery.isError ? '—' : '…')}
+                            </span>
+                        )}
                     </button>
                 ))}
             </nav>
-            {searchOpen && (
+            {(desktop || searchOpen) && (
                 <form
                     className={orderPageClassName('order-search')}
                     onSubmit={event => {
@@ -282,9 +313,19 @@ export function OrdersPage({
                 />
             ) : orders.length ? (
                 <div className={orderPageClassName('order-list')}>
+                    {desktop && (
+                        <div className="desktop-order-columns" aria-hidden="true">
+                            <span>{isZh ? '商品信息' : 'Products'}</span>
+                            <span>{isZh ? '数量' : 'Quantity'}</span>
+                            <span>{isZh ? '订单金额' : 'Order total'}</span>
+                            <span>{isZh ? '订单状态' : 'Status'}</span>
+                            <span>{isZh ? '操作' : 'Actions'}</span>
+                        </div>
+                    )}
                     {orders.map(order => (
                         <OrderCard
                             key={order.id}
+                            desktop={desktop}
                             order={order}
                             locale={locale}
                             language={language}
@@ -315,6 +356,17 @@ export function OrdersPage({
                                   ? `加载更多（${orders.length}/${totalItems}）`
                                   : `Load more (${orders.length}/${totalItems})`}
                         </button>
+                    )}
+                    {desktop && orders.length >= totalItems && !listError && (
+                        <div className="desktop-orders-end">
+                            <p>{isZh ? '没有更多订单' : 'No more orders'}</p>
+                            <button
+                                type="button"
+                                onClick={() => void navigate(routeNavigateOptions({ name: 'home' }) as never)}
+                            >
+                                {isZh ? '继续选购' : 'Continue shopping'}
+                            </button>
+                        </div>
                     )}
                 </div>
             ) : (
@@ -1471,6 +1523,7 @@ function AfterSalesRequestSheet({
 }
 
 function OrderCard({
+    desktop = false,
     order,
     locale,
     language,
@@ -1478,6 +1531,7 @@ function OrderCard({
     onOpen,
     onBuyAgain,
 }: {
+    desktop?: boolean;
     order: OrderSummary;
     locale: string;
     language: StorefrontLanguage;
@@ -1514,9 +1568,14 @@ function OrderCard({
             <header className={orderPageClassName('order-card-header')}>
                 <button type="button" className={orderPageClassName('order-card-store-btn')} onClick={onOpen}>
                     <Store className={orderPageClassName('order-card-store-icon')} aria-hidden="true" />
-                    <strong>{storefrontName}</strong>
+                    <strong>{desktop ? `${isZh ? '订单' : 'Order'} ${order.code}` : storefrontName}</strong>
                     <ChevronRight aria-hidden="true" />
                 </button>
+                {desktop && formattedTime ? (
+                    <time className="desktop-order-date" dateTime={order.orderPlacedAt ?? undefined}>
+                        {formattedTime}
+                    </time>
+                ) : null}
                 <span className={orderPageClassName(`order-state-badge ${stateModifier}`)}>
                     {orderStateLabel(order.state, language)}
                 </span>
@@ -1556,6 +1615,13 @@ function OrderCard({
                     </div>
                 </div>
             </button>
+            {desktop && (
+                <div className="desktop-order-values">
+                    <span>{order.totalQuantity}</span>
+                    <strong>{formatMoney(order.totalWithTax, order.currencyCode, locale)}</strong>
+                    <span>{orderStateLabel(order.state, language)}</span>
+                </div>
+            )}
             <footer className={orderPageClassName('order-card-footer')}>
                 <div className={orderPageClassName('order-total-summary')}>
                     <span className={orderPageClassName('order-total-count')}>

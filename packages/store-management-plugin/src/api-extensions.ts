@@ -1,7 +1,7 @@
 import { gql } from 'graphql-tag';
 
 import { storeProfileInputSchema } from './store-profile-input.schema';
-import { storefrontBrandingSchema } from './storefront-branding.schema';
+import { storefrontBrandingSchema, storefrontPreviewBrandingSchema } from './storefront-branding.schema';
 import { trafficAdminSchema, trafficShopSchema } from './traffic/traffic-api.schema';
 
 const referralPosterFields = `
@@ -409,6 +409,7 @@ const commonTypes = gql`
 `;
 
 export const adminApiExtensions = gql`
+    ${storefrontPreviewBrandingSchema}
     ${trafficAdminSchema}
     ${commonTypes}
     ${storeProfileInputSchema}

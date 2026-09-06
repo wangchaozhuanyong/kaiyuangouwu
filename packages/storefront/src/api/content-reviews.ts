@@ -1,3 +1,4 @@
+import type { StorefrontVisualPresetConfig } from '../../../storefront-content-plugin/src/visual-presets';
 import type {
     AfterSalesRequest,
     CreateAfterSalesRequestInput,
@@ -17,6 +18,20 @@ import { isSupportedContentSchemaFallback } from './content-compatibility';
 import { afterSalesFields, storefrontReviewFields } from './fragments';
 
 export class ContentReviewsApi extends BaseDomainApi {
+    async storefrontVisualPreset(signal?: AbortSignal): Promise<StorefrontVisualPresetConfig> {
+        const result = await this.request<{
+            activeChannel: { id: string };
+            storefrontVisualPreset: StorefrontVisualPresetConfig;
+        }>(
+            `query StorefrontVisualPreset { activeChannel { id } storefrontVisualPreset { channelId presetId desktopLayout revision } }`,
+            undefined,
+            signal,
+        );
+        if (result.activeChannel.id !== result.storefrontVisualPreset.channelId)
+            throw new Error('Storefront channel mismatch');
+        return result.storefrontVisualPreset;
+    }
+
     async storefrontConfig(signal?: AbortSignal): Promise<StorefrontConfig> {
         const result = await this.request<{
             activeChannel: Omit<StorefrontConfig, 'availableCountries' | 'logoUrl' | 'description'>;

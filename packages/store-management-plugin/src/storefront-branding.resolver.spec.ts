@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { StorefrontBrandingShopResolver } from './storefront-branding.resolver';
+import {
+    StorefrontBrandingAdminResolver,
+    StorefrontBrandingShopResolver,
+} from './storefront-branding.resolver';
 
 function createResolver(profile: Record<string, unknown> | null) {
     const repository = { findOne: vi.fn().mockResolvedValue(profile) };
@@ -127,5 +130,48 @@ describe('StorefrontBrandingShopResolver', () => {
             supportEmail: 'support@moyaoai.com',
             privacyEmail: 'privacy@moyaoai.com',
         });
+    });
+});
+
+describe('StorefrontBrandingAdminResolver', () => {
+    it('reads the selected channel profile and clears branding for a new store', async () => {
+        const profiles: Record<string, Record<string, unknown>> = {
+            a: {
+                brandBackgroundColor: '#203346',
+                brandPrimaryColor: '#a63d32',
+                descriptionZh: '',
+                logoAsset: null,
+            },
+            b: {
+                brandBackgroundColor: '#f6f2ea',
+                brandPrimaryColor: '#2f6feb',
+                descriptionZh: '',
+                logoAsset: null,
+            },
+        };
+        const repository = {
+            findOne: vi.fn(({ where }) => Promise.resolve(profiles[where.channelId] ?? null)),
+        };
+        const connection = { getRepository: vi.fn().mockReturnValue(repository) };
+        const resolver = new StorefrontBrandingAdminResolver(
+            connection as any,
+            { assetOptions: { assetStorageStrategy: {} } } as any,
+        );
+        for (const channelId of ['a', 'b', 'new']) {
+            const result = await resolver.storefrontPreviewBranding({
+                channelId,
+                languageCode: 'zh_Hans',
+                channel: { code: channelId, customFields: {} },
+            } as any);
+            expect(result).toMatchObject({
+                channelId,
+                description: '',
+                logoUrl: null,
+                backgroundColor: profiles[channelId]?.brandBackgroundColor ?? null,
+            });
+            expect(repository.findOne).toHaveBeenLastCalledWith(
+                expect.objectContaining({ where: { channelId } }),
+            );
+        }
     });
 });

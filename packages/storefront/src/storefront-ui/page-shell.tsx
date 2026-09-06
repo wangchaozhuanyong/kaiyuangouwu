@@ -260,20 +260,23 @@ export function AccountShortcut({
     icon,
     label,
     count,
+    inlineCount = false,
     onClick,
 }: {
     icon: ReactNode;
     label: string;
-    count: number;
+    count: number | undefined;
+    inlineCount?: boolean;
     onClick: () => void;
 }) {
     return (
         <button type="button" onClick={onClick}>
             <span>
                 {icon}
-                {count > 0 && <b>{count}</b>}
+                {!inlineCount && count != null && count > 0 && <b>{count}</b>}
             </span>
             <small>{label}</small>
+            {inlineCount && <b className="desktop-shortcut-count">{count ?? '—'}</b>}
         </button>
     );
 }

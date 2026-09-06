@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
+import { DesktopLayoutContext } from './desktop-layout';
 import { BusinessServicesPage } from './pages/business-services-page';
 import { BusinessServicesPageContext } from './storefront-page-contexts';
 import { type StorefrontContentBlock, type StorefrontContentItem } from './types';
@@ -80,7 +81,7 @@ function navigationBlock(servicesLabel: string): StorefrontContentBlock {
     };
 }
 
-function renderPage(contentBlocks: StorefrontContentBlock[], language: 'zh' | 'en' = 'zh') {
+function renderPage(contentBlocks: StorefrontContentBlock[], language: 'zh' | 'en' = 'zh', desktop = false) {
     return renderToStaticMarkup(
         <BusinessServicesPageContext.Provider
             value={{
@@ -90,12 +91,34 @@ function renderPage(contentBlocks: StorefrontContentBlock[], language: 'zh' | 'e
                 onContentTarget: vi.fn(),
             }}
         >
-            <BusinessServicesPage />
+            <DesktopLayoutContext.Provider value={desktop}>
+                <BusinessServicesPage />
+            </DesktopLayoutContext.Provider>
         </BusinessServicesPageContext.Provider>,
     );
 }
 
 describe('business services page', () => {
+    it('puts enabled tools before assistance on desktop and retains managed copy in the disclosure', () => {
+        const block = businessPluginBlock();
+        block.settings = { businessServicesCopyVersion: 1 };
+        block.title = '后台服务说明';
+        block.body = '后台配置的说明';
+        block.items.push({
+            ...block.items[0],
+            id: 'tool',
+            position: 1,
+            settings: { ...block.items[0].settings, pluginCode: 'two-factor-code-tool' },
+        });
+        const desktop = renderPage([block], 'zh', true);
+        expect(desktop.indexOf('2FA 动态码')).toBeLessThan(desktop.indexOf('选购遇到问题？'));
+        expect(desktop).toContain('<details class="desktop-service-description">');
+        expect(desktop).toContain('后台服务说明');
+        expect(desktop).toContain('后台配置的说明');
+        const mobile = renderPage([block]);
+        expect(mobile.indexOf('选购遇到问题？')).toBeLessThan(mobile.indexOf('2FA 动态码'));
+        expect(mobile).not.toContain('<details');
+    });
     it('shows the centered default navigation name and an empty state before services are enabled', () => {
         const markup = renderPage([]);
 

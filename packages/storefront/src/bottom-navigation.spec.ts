@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { Node, Project, SyntaxKind } from 'ts-morph';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -100,12 +101,25 @@ describe('bottom navigation configuration', () => {
     });
 
     it('mounts navigation outside storefront-app to prevent mobile Safari clipping traps', () => {
-        const appSource = readFileSync(new URL('./App.tsx', import.meta.url), 'utf8');
-        // storefront-app closing tag must precede BottomNavigation
-        const storefrontAppClosingIndex = appSource.indexOf(
-            '</div>\n            {shouldShowBottomNavigation',
-        );
-        expect(storefrontAppClosingIndex).toBeGreaterThan(-1);
+        const appSource = readFileSync(new URL('./storefront-shell.tsx', import.meta.url), 'utf8');
+        const source = new Project({ useInMemoryFileSystem: true }).createSourceFile('App.tsx', appSource);
+        const navigation = source
+            .getDescendantsOfKind(SyntaxKind.JsxSelfClosingElement)
+            .find(node => node.getTagNameNode().getText() === 'BottomNavigation');
+        expect(navigation).toBeDefined();
+        // Inspect JSX ancestry so wrapper providers and formatting cannot weaken the Safari guard.
+        const insideApp = navigation
+            ?.getAncestors()
+            .some(
+                ancestor =>
+                    Node.isJsxElement(ancestor) &&
+                    ancestor
+                        .getOpeningElement()
+                        .getAttribute('className')
+                        ?.getText()
+                        .includes('storefront-app'),
+            );
+        expect(insideApp).toBe(false);
 
         const stylesheet = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
         expect(stylesheet).toContain('.storefront-bottom-nav');

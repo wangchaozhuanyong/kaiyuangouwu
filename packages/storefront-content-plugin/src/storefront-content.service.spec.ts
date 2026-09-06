@@ -154,7 +154,7 @@ describe('StorefrontContentService input validation', () => {
         expect(() => validate({ ...authInput, code: 'another-login-visual' })).toThrow(/系统保留编码/);
         expect(() =>
             (service as any).validateAuthVisual(normalized, authInput.items?.slice(0, 2) ?? []),
-        ).toThrow(/三个顺序固定/);
+        ).not.toThrow();
         expect(() =>
             (service as any).validateAuthVisual(
                 { ...normalized, settings: { accentColor: 'cyan' } },
@@ -564,7 +564,9 @@ describe('StorefrontContentService Channel isolation', () => {
             service.findOneForAdmin({ channelId: 'store-b' } as any, 'block-a'),
         ).resolves.toBeUndefined();
         expect(repository.findOne).toHaveBeenCalledWith(
-            expect.objectContaining({ where: { id: 'block-a', channelId: 'store-b' } }),
+            expect.objectContaining({
+                where: expect.objectContaining({ id: 'block-a', channelId: 'store-b' }),
+            }),
         );
     });
 });

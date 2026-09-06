@@ -13,6 +13,7 @@ function normalizedColor(value: unknown, fallback: string): string {
 }
 
 function colorWithAlpha(color: string, alpha: number): string {
+    if (!HEX_COLOR_PATTERN.test(color)) return `color-mix(in srgb, ${color} ${alpha * 100}%, transparent)`;
     const normalized = color.slice(1);
     const red = Number.parseInt(normalized.slice(0, 2), 16);
     const green = Number.parseInt(normalized.slice(2, 4), 16);
@@ -33,8 +34,14 @@ export function heroThemeStyle(block: StorefrontContentBlock): HeroThemeStyle {
     const vipTheme = normalizedHeroThemePreset(settings.themePreset) === 'warm';
     const defaultAccent = vipTheme ? '#fbbf24' : '#67e8f9';
     const defaultAccentSecondary = vipTheme ? '#b45309' : '#0e7490';
-    const overlayColor = normalizedColor(block.backgroundColor, '#090d16');
-    const accentColor = normalizedColor(settings.accentColor, defaultAccent);
+    const overlayColor = normalizedColor(
+        block.backgroundColor,
+        'var(--store-background, var(--skin-hero-background, #090d16))',
+    );
+    const accentColor = normalizedColor(
+        settings.accentColor,
+        `var(--store-primary, var(--skin-hero-accent, ${defaultAccent}))`,
+    );
     const lightOverlay = isLightColor(overlayColor);
     const highContrast = settings.contrastMode === 'high';
 
@@ -44,8 +51,14 @@ export function heroThemeStyle(block: StorefrontContentBlock): HeroThemeStyle {
         '--hero-overlay-medium': colorWithAlpha(overlayColor, highContrast ? 0.9 : 0.82),
         '--hero-overlay-soft': colorWithAlpha(overlayColor, highContrast ? 0.66 : 0.46),
         '--hero-overlay-fade': colorWithAlpha(overlayColor, highContrast ? 0.18 : 0.08),
-        '--hero-title-color': normalizedColor(block.textColor, '#ffffff'),
-        '--hero-body-color': normalizedColor(settings.secondaryTextColor, '#cbd5e1'),
+        '--hero-title-color': normalizedColor(
+            block.textColor,
+            'var(--store-foreground, var(--skin-hero-foreground, #ffffff))',
+        ),
+        '--hero-body-color': normalizedColor(
+            settings.secondaryTextColor,
+            'var(--store-foreground, var(--skin-hero-body, #cbd5e1))',
+        ),
         '--hero-accent-color': accentColor,
         '--hero-accent-soft': colorWithAlpha(accentColor, 0.18),
         '--hero-accent-border': colorWithAlpha(accentColor, 0.48),
@@ -55,7 +68,7 @@ export function heroThemeStyle(block: StorefrontContentBlock): HeroThemeStyle {
         '--hero-accent-text-shadow': colorWithAlpha(accentColor, 0.52),
         '--hero-accent-secondary-color': normalizedColor(
             settings.accentSecondaryColor,
-            defaultAccentSecondary,
+            `var(--store-highlight, var(--skin-hero-secondary, ${defaultAccentSecondary}))`,
         ),
         '--hero-button-text-color': normalizedColor(settings.buttonTextColor, '#ffffff'),
         '--hero-title-shadow': lightOverlay

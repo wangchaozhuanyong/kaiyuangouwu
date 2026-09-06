@@ -1,0 +1,271 @@
+/* Opt-in only. The classic preset deliberately has no overrides. */
+html[data-storefront-preset='modern-oriental'] {
+    --skin-background: #f6f2ea;
+    --skin-foreground: #203346;
+    --skin-hero-background: #203346;
+    --skin-hero-foreground: #fffdf8;
+    --skin-hero-body: #ede5d6;
+    --skin-hero-accent: #a63d32;
+    --skin-hero-secondary: #8b3027;
+    --bg: #f6f2ea;
+    --paper: #fffdf8;
+    --surface: #fffdf8;
+    --soft: #efe9df;
+    --product-media-bg: #f5f1e9;
+    --text: #203346;
+    --muted: #706e68;
+    --line: #ded5c6;
+    --accent: #a63d32;
+    --accent-hover: #8b3027;
+    --accent-ink: #94362b;
+    --accent-soft: #f4e5df;
+    --oriental-gold: #a58b58;
+    --studio-accent: var(--accent);
+    --studio-accent-hover: var(--accent-hover);
+    --studio-accent-ink: var(--accent-ink);
+    --studio-accent-soft: var(--accent-soft);
+    --studio-line: var(--line);
+    --font-display: 'Songti SC', 'STSong', 'Noto Serif CJK SC', 'SimSun', Georgia, serif;
+    --radius-sm: 6px;
+    --radius-md: 12px;
+    --shadow-sm: 0 2px 6px rgb(62 45 25 / 4%);
+    --shadow-md: 0 8px 24px rgb(62 45 25 / 7%);
+    /* Tailwind controls share the same semantic palette, including focus states. */
+    --color-blue-50: #faf0eb;
+    --color-blue-100: #f4e5df;
+    --color-blue-200: #e7c7bc;
+    --color-blue-300: #d8a391;
+    --color-blue-400: #c47761;
+    --color-blue-500: #b6503e;
+    --color-blue-600: #a63d32;
+    --color-blue-700: #8b3027;
+    --color-blue-800: #752b25;
+    --color-blue-900: #592520;
+    --color-slate-50: #faf7f0;
+    --color-slate-100: #efe9df;
+    --color-slate-200: #ded5c6;
+    --color-slate-300: #c6bcaa;
+    --color-slate-400: #8a857a;
+    --color-slate-500: #706e68;
+    --color-slate-600: #585951;
+    --color-slate-700: #384551;
+    --color-slate-800: #293c4d;
+    --color-slate-900: #203346;
+    color: var(--text);
+    background: var(--bg);
+    accent-color: var(--accent);
+}
+
+html[data-storefront-preset='modern-oriental']
+    :is(.storefront-app, .page, .auth-page, .category-client-plugin-image-studio) {
+    background: var(--bg);
+    color: var(--text);
+}
+
+html[data-storefront-preset='modern-oriental']
+    :is(
+        .topbar,
+        .subpage-header,
+        .storefront-bottom-nav,
+        .sheet,
+        .product-card,
+        .checkout-card,
+        .auth-card,
+        .ai-studio-history,
+        .ai-studio-model-grid,
+        .ai-confirmation-dialog
+    ) {
+    background: var(--paper);
+    border-color: var(--line);
+    box-shadow: var(--shadow-sm);
+    color: var(--text);
+}
+
+html[data-storefront-preset='modern-oriental']
+    :is(.product-card, .checkout-card, .auth-card, .ai-studio-history, .ai-studio-model-grid) {
+    border-radius: var(--radius-md);
+}
+
+html[data-storefront-preset='modern-oriental']
+    :is(
+        .section-header-icon-pill,
+        .quick-grid button,
+        .home-trust-bar,
+        .notice-strip,
+        .ai-studio-prompt-wrap
+    ) {
+    background: var(--paper);
+    border-color: var(--line);
+    color: var(--text);
+    box-shadow: var(--shadow-sm);
+}
+
+html[data-storefront-preset='modern-oriental'] .section-header-icon-pill {
+    color: var(--oriental-gold);
+    border: 1px solid var(--line);
+}
+
+html[data-storefront-preset='modern-oriental'] :is(button, a, input, select, textarea):focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+}
+
+html[data-storefront-preset='modern-oriental'] .hero {
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-md);
+}
+
+html[data-storefront-preset='modern-oriental'] .auth-page {
+    --auth-accent: var(--accent);
+    --auth-accent-hover: var(--accent-hover);
+    --auth-ink: var(--text);
+    --auth-muted: var(--muted);
+    --auth-line: var(--line);
+}
+
+html[data-storefront-preset='modern-oriental']
+    :is(.auth-page input, .auth-page select, .auth-page textarea, .ai-studio-prompt-wrap textarea) {
+    color: var(--text);
+    background: var(--paper);
+    border-color: var(--line);
+}
+
+html[data-storefront-preset='modern-oriental']
+    :is(.ai-studio-prompt-tools button, .ai-studio-terms-row button, .ai-studio-optimized) {
+    color: var(--accent);
+}
+
+html[data-storefront-preset='modern-oriental']
+    :is(
+        .ai-studio-model-grid button.is-selected,
+        .ai-studio-model-grid button.is-active,
+        .ai-studio-model-grid button[aria-pressed='true'],
+        .ai-studio-history-filters button.is-active
+    ) {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+    color: var(--accent-ink);
+    box-shadow: none;
+}
+
+html[data-storefront-preset='modern-oriental'] :is(.sheet > header, .ai-confirmation-dialog > footer) {
+    border-color: var(--line);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    html[data-storefront-preset='modern-oriental'] :is(button, a) {
+        transition: none;
+    }
+}
+
+html[data-storefront-preset='modern-oriental'] .primary-action,
+html[data-storefront-preset='modern-oriental'] .auth-page .primary-action,
+html[data-storefront-preset='modern-oriental'] .ai-studio-prompt-tools button {
+    background: var(--auth-accent, var(--accent));
+    color: var(--auth-button-foreground, var(--paper));
+    border-color: var(--auth-accent, var(--accent));
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-sm);
+}
+
+html[data-storefront-preset='modern-oriental'] .auth-page .primary-action:hover:not(:disabled) {
+    background: var(--auth-accent, var(--accent-hover));
+    box-shadow: var(--shadow-sm);
+}
+
+html[data-storefront-preset='modern-oriental'] .quick-grid .colorful-icon-badge {
+    background: var(--soft);
+    color: var(--accent);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    box-shadow: none;
+}
+
+html[data-storefront-preset='modern-oriental'] .quick-grid .colorful-icon-badge svg {
+    filter: none;
+}
+
+html[data-storefront-preset='modern-oriental'] .home-trust-bar .trust-icon {
+    color: var(--oriental-gold);
+}
+
+html[data-storefront-preset='modern-oriental'] .auth-page .login-content,
+html[data-storefront-preset='modern-oriental'] .auth-page .auth-card {
+    background: var(--paper);
+    border-color: var(--line);
+    box-shadow: var(--shadow-md);
+}
+
+html[data-storefront-preset='modern-oriental'] :is(.ai-studio-reference-add, .ai-studio-settlement-summary) {
+    background: var(--paper);
+    border-color: var(--line);
+}
+
+html[data-storefront-preset='modern-oriental']
+    :is(.ai-studio-reference-add-icon, .ai-studio-settlement-refund > svg) {
+    background: var(--accent-soft);
+    color: var(--accent);
+}
+
+html[data-storefront-preset='modern-oriental']
+    :is(.ai-studio-settlement-amount, .ai-studio-settlement-refund) {
+    border-color: var(--line);
+}
+
+html[data-storefront-preset='modern-oriental'] .checkout-page :is(input, select, textarea) {
+    background: var(--paper);
+    color: var(--text);
+}
+
+html[data-storefront-preset='modern-oriental'] .checkout-page :is(input, select, textarea):focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+html[data-storefront-preset='modern-oriental']
+    :is(.checkout-section, .checkout-summary, .checkout-assurance, .submit-order-bar) {
+    background: var(--paper);
+    border-color: var(--line);
+}
+
+html[data-storefront-preset='modern-oriental'] .smart-paste-toggle-btn {
+    background: var(--accent-soft);
+    color: var(--accent);
+    border-color: var(--line);
+}
+
+html[data-storefront-preset='modern-oriental'] .submit-order-bar > button {
+    box-shadow: var(--shadow-sm);
+    border-radius: var(--radius-sm);
+}
+
+html[data-storefront-preset='modern-oriental'] :is(.auth-route-tabs, .ai-studio-history-filters) {
+    background: var(--soft);
+    border-color: var(--line);
+}
+
+html[data-storefront-preset='modern-oriental'] .auth-route-tabs > button[aria-current='page'] {
+    background: var(--paper);
+    color: var(--accent-ink);
+    box-shadow: var(--shadow-sm);
+}
+
+html[data-storefront-preset='modern-oriental'] .ai-studio-setting-trigger > strong {
+    background: var(--soft);
+    border-color: var(--line);
+}
+
+html[data-storefront-preset='modern-oriental'] .ai-studio-optimizer-model {
+    color: var(--muted);
+    border-color: var(--line);
+}
+
+html[data-storefront-preset='modern-oriental'] .ai-studio-optimizer-model strong {
+    color: var(--text);
+}
+
+html[data-storefront-preset='modern-oriental']
+    :is(.section-header h2, .subpage-header h1, .store-auth-copy h2) {
+    font-family: var(--font-display);
+}

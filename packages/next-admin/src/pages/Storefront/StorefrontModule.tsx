@@ -36,6 +36,7 @@ import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { StorefrontBlockEditor } from './StorefrontBlockEditor';
+import { StorefrontVisualPresetPanel } from './StorefrontVisualPresetPanel';
 import {
     blockTranslation,
     errorText,
@@ -271,6 +272,9 @@ export function StorefrontModule() {
             </header>
 
             <main className="mx-auto grid w-full max-w-[1600px] flex-1 gap-5 overflow-y-auto p-5 sm:p-8 xl:grid-cols-[minmax(440px,620px)_minmax(0,1fr)]">
+                <div className="xl:col-span-2">
+                    <StorefrontVisualPresetPanel />
+                </div>
                 <div className="space-y-4">
                     {notice && !carouselOpen && (
                         <Message kind="success" onClose={() => setNotice('')}>

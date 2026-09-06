@@ -51,6 +51,7 @@ import {
     StorefrontLanguage,
     StorefrontLegalIdentity,
 } from '../types';
+import { useStorefrontVisualPreset } from '../use-storefront-visual-preset';
 
 import { useStorefrontCustomerData } from './useStorefrontCustomerData';
 import { useStorefrontBrandColors, useStorefrontMetadata } from './useStorefrontDocument';
@@ -125,6 +126,12 @@ export function useStorefrontAppState() {
         }
     }, []);
 
+    const visualConfig = useStorefrontVisualPreset(
+        api,
+        market,
+        vendureLanguageCode,
+        storefrontContextResolved,
+    );
     const queryContext = { api, market, language, vendureLanguageCode, storefrontContextResolved };
 
     const {
@@ -1094,6 +1101,7 @@ export function useStorefrontAppState() {
     );
 
     const storefrontContextValue = {
+        desktopLayout: visualConfig.desktopLayout,
         route,
         api,
         products,

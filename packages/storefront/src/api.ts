@@ -1,3 +1,4 @@
+import type { StorefrontVisualPresetConfig } from '../../storefront-content-plugin/src/visual-presets';
 import type { ShopApiContext } from './api/client-context';
 import type { CartController } from './cart/cart-controller';
 import type { StorefrontPageViewInput } from './storefront-traffic';
@@ -134,6 +135,10 @@ export class ShopApi {
 
     async storefrontConfig(signal?: AbortSignal): Promise<StorefrontConfig> {
         return this.contentReviewsApi.storefrontConfig(signal);
+    }
+
+    async storefrontVisualPreset(signal?: AbortSignal): Promise<StorefrontVisualPresetConfig> {
+        return this.contentReviewsApi.storefrontVisualPreset(signal);
     }
 
     async storefrontContent(signal?: AbortSignal): Promise<StorefrontContentResponse> {
