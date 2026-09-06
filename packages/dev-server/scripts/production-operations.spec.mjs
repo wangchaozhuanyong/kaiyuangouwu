@@ -188,6 +188,7 @@ void test('key backup plans and verification are read-only; key writes require a
         'plan-two-factor-backup',
         'verify-two-factor-backup',
         'verify-security-dependencies',
+        'inspect-storefront-config',
     ]) {
         assert.equal(
             operations.validateRequest({ OPS_SOURCE_SHA: sourceSha, OPS_OPERATION: operation }).operation,

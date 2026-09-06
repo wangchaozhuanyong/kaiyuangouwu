@@ -15,6 +15,7 @@ on:
                     - backup-two-factor-reviewed
                     - verify-two-factor-backup
                     - verify-security-dependencies
+                    - inspect-storefront-config
             expected_plan_sha256:
                 description: Exact plan SHA-256 from the corresponding read-only plan; required for reviewed writes
                 required: false
@@ -55,7 +56,7 @@ jobs:
                   }
                   [[ "$OPS_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
                   case "$OPS_OPERATION" in
-                    diagnose|plan-two-factor-backup|verify-two-factor-backup|verify-security-dependencies)
+                    diagnose|plan-two-factor-backup|verify-two-factor-backup|verify-security-dependencies|inspect-storefront-config)
                       [[ -z "$OPS_EXPECTED_PLAN_SHA256" ]] || {
                         echo 'Read-only operations must not include an expected plan' >&2
                         exit 1
@@ -103,6 +104,7 @@ jobs:
                   retention_script = base64.b64encode(Path('deploy/systemd/vendure-production-release-retention.cjs').read_bytes()).decode('ascii')
                   key_backup_script = base64.b64encode(Path('deploy/two-factor-key-backup.py').read_bytes()).decode('ascii')
                   security_script = base64.b64encode(Path('deploy/verify-runtime-security-dependencies.cjs').read_bytes()).decode('ascii')
+                  storefront_guard = base64.b64encode(Path('deploy/storefront-configuration-guard.mjs').read_bytes()).decode('ascii')
                   command = "/bin/bash <<'VENDURE_OPERATIONS_SCRIPT'\n" + '\n'.join([
                       'set -Eeuo pipefail',
                       'umask 077',
@@ -113,6 +115,7 @@ jobs:
                       f"printf '%s' '{retention_script}' | base64 -d > \"$operations_dir/systemd/vendure-production-release-retention.cjs\"",
                       f"printf '%s' '{key_backup_script}' | base64 -d > \"$operations_dir/two-factor-key-backup.py\"",
                       f"printf '%s' '{security_script}' | base64 -d > \"$operations_dir/verify-runtime-security-dependencies.cjs\"",
+                      f"printf '%s' '{storefront_guard}' | base64 -d > \"$operations_dir/storefront-configuration-guard.mjs\"",
                       f'env OPS_OPERATION={operation} OPS_EXPECTED_PLAN_SHA256={expected_plan} OPS_SOURCE_SHA={source_sha} /usr/bin/node "$operations_dir/production-operations.cjs"',
                   ]) + '\nVENDURE_OPERATIONS_SCRIPT'
                   Path(os.environ['RUNNER_TEMP'], 'operations-ssm-parameters.json').write_text(

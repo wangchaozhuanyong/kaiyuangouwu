@@ -91,6 +91,7 @@ jobs:
                     (.authVisuals | type == "boolean") and
                     (.damatongChannelToken | type == "string") and
                     (.damatongStorefront | type == "boolean") and
+                    (.damatongPublishReview | type == "string") and
                     (.moyaoBrand | type == "boolean") and
                     (.homepageCarousel | type == "boolean") and
                     (.referralPosters | type == "string") and
@@ -102,6 +103,7 @@ jobs:
                   AUTH_VISUALS="$(jq -r '.authVisuals' "$RELEASE_PLAN_PATH")"
                   DAMATONG_CHANNEL_TOKEN="$(jq -r '.damatongChannelToken' "$RELEASE_PLAN_PATH")"
                   DAMATONG_STOREFRONT="$(jq -r '.damatongStorefront' "$RELEASE_PLAN_PATH")"
+                  DAMATONG_PUBLISH_REVIEW="$(jq -r '.damatongPublishReview' "$RELEASE_PLAN_PATH")"
                   MOYAO_BRAND="$(jq -r '.moyaoBrand' "$RELEASE_PLAN_PATH")"
                   REFERRAL_POSTERS="$(jq -r '.referralPosters' "$RELEASE_PLAN_PATH")"
                   HOMEPAGE_CAROUSEL="$(jq -r '.homepageCarousel' "$RELEASE_PLAN_PATH")"
@@ -164,6 +166,16 @@ jobs:
                     exit 1
                   fi
 
+                  if [[ "$DAMATONG_STOREFRONT" == "true" ]]; then
+                    [[ "$DAMATONG_PUBLISH_REVIEW" == "preserve-existing" || "$DAMATONG_PUBLISH_REVIEW" =~ ^[a-f0-9]{64}$ ]] || {
+                      echo 'Damatong release requires preserve-existing or the reviewed dry-run SHA-256' >&2
+                      exit 1
+                    }
+                  elif [[ -n "$DAMATONG_PUBLISH_REVIEW" ]]; then
+                    echo 'Damatong review requires its explicit release scope' >&2
+                    exit 1
+                  fi
+
                   echo "ARCHIVE_PATH=$ARCHIVE_PATH" >> "$GITHUB_ENV"
                   echo "ARCHIVE_NAME=$ARCHIVE_NAME" >> "$GITHUB_ENV"
                   echo "ARTIFACT_NAME=$ARTIFACT_NAME" >> "$GITHUB_ENV"
@@ -174,6 +186,7 @@ jobs:
                   echo "AUTH_VISUALS=$AUTH_VISUALS" >> "$GITHUB_ENV"
                   echo "DAMATONG_CHANNEL_TOKEN=$DAMATONG_CHANNEL_TOKEN" >> "$GITHUB_ENV"
                   echo "DAMATONG_STOREFRONT=$DAMATONG_STOREFRONT" >> "$GITHUB_ENV"
+                  echo "DAMATONG_PUBLISH_REVIEW=$DAMATONG_PUBLISH_REVIEW" >> "$GITHUB_ENV"
                   echo "MOYAO_BRAND=$MOYAO_BRAND" >> "$GITHUB_ENV"
                   echo "REFERRAL_POSTERS=$REFERRAL_POSTERS" >> "$GITHUB_ENV"
                   echo "HOMEPAGE_CAROUSEL=$HOMEPAGE_CAROUSEL" >> "$GITHUB_ENV"
@@ -193,7 +206,7 @@ jobs:
 
             - name: Deploy through Systems Manager
               run: |
-                  REMOTE_COMMAND="sudo -H -u ubuntu env GITHUB_RUN_ID='${GITHUB_RUN_ID}' VENDURE_REVIEWED_STOREFRONT_MEDIA_KEYS='${MEDIA_KEYS}' VENDURE_REVIEWED_STOREFRONT_MEDIA_CHANNEL_CODES='${MEDIA_CHANNEL_CODES}' VENDURE_REVIEWED_AUTH_VISUALS='${AUTH_VISUALS}' VENDURE_REVIEWED_MOYAO_BRAND='${MOYAO_BRAND}' VENDURE_REVIEWED_DAMATONG_STOREFRONT='${DAMATONG_STOREFRONT}' VENDURE_REVIEWED_DAMATONG_CHANNEL_TOKEN='${DAMATONG_CHANNEL_TOKEN}' VENDURE_REVIEWED_HOMEPAGE_CAROUSEL='${HOMEPAGE_CAROUSEL}' VENDURE_REVIEWED_REFERRAL_POSTERS='${REFERRAL_POSTERS}' /usr/local/sbin/vendure-production-deploy-from-s3 '${TARGET_SHA}' '${ARTIFACT_NAME}' '${ARTIFACT_S3_PREFIX}'"
+                  REMOTE_COMMAND="sudo -H -u ubuntu env GITHUB_RUN_ID='${GITHUB_RUN_ID}' VENDURE_REVIEWED_STOREFRONT_MEDIA_KEYS='${MEDIA_KEYS}' VENDURE_REVIEWED_STOREFRONT_MEDIA_CHANNEL_CODES='${MEDIA_CHANNEL_CODES}' VENDURE_REVIEWED_AUTH_VISUALS='${AUTH_VISUALS}' VENDURE_REVIEWED_MOYAO_BRAND='${MOYAO_BRAND}' VENDURE_REVIEWED_DAMATONG_STOREFRONT='${DAMATONG_STOREFRONT}' VENDURE_REVIEWED_DAMATONG_CHANNEL_TOKEN='${DAMATONG_CHANNEL_TOKEN}' VENDURE_REVIEWED_DAMATONG_PUBLISH_REVIEW='${DAMATONG_PUBLISH_REVIEW}' VENDURE_REVIEWED_HOMEPAGE_CAROUSEL='${HOMEPAGE_CAROUSEL}' VENDURE_REVIEWED_REFERRAL_POSTERS='${REFERRAL_POSTERS}' /usr/local/sbin/vendure-production-deploy-from-s3 '${TARGET_SHA}' '${ARTIFACT_NAME}' '${ARTIFACT_S3_PREFIX}'"
                   jq -n --arg command "$REMOTE_COMMAND" \
                     '{commands: [$command], executionTimeout: ["3600"]}' > "$RUNNER_TEMP/ssm-parameters.json"
 
