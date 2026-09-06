@@ -38,6 +38,29 @@ afterEach(() => {
     sessionStorage.clear();
 });
 describe('runtime channel branding', () => {
+    it.each([
+        ['classic', '#f3f6fb'],
+        ['modern-oriental', '#f6f2ea'],
+    ])('preserves the %s page background when a store has dark branding', (preset, background) => {
+        document.head.innerHTML = `<style>:root { --bg: ${background}; }</style>`;
+        document.documentElement.dataset.storefrontPreset = preset;
+        const root = createRoot(host);
+        try {
+            act(() => root.render(<Fixture logo={null} background="#070B14" />));
+            expect(getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()).toBe(
+                background,
+            );
+            expect(document.documentElement.style.getPropertyValue('--store-background')).toBe('#070B14');
+            expect(document.documentElement.style.getPropertyValue('--auth-store-background')).toBe(
+                '#070B14',
+            );
+            expect(document.documentElement.style.getPropertyValue('--accent')).toBe('#234567');
+        } finally {
+            act(() => root.unmount());
+            delete document.documentElement.dataset.storefrontPreset;
+        }
+    });
+
     it('replaces every image and clears the prior store colors when switching to a blank store', () => {
         document.head.innerHTML = [
             '<meta property="og:image" content="/moyao.jpg">',
