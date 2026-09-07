@@ -6,6 +6,8 @@ import {
     NativeContentTranslationService,
     nativeContentTranslationInternals,
 } from './native-content-translation.service.js';
+import { TranslationProviderError } from './translation-provider-error.js';
+import { CachedTranslationPartialError } from './translation-result-cache.service.js';
 
 describe('native content translation event routing', () => {
     it('only routes mutations which contain Simplified Chinese source content', () => {
@@ -36,7 +38,7 @@ describe('native content translation event routing', () => {
         expect(nativeContentTranslationInternals.supportsEntityType(Province)).toBe(true);
     });
 
-    it('saves Chinese with pending English when the provider is unavailable', async () => {
+    it.each([false, true])('preserves cached name=%s on provider failure', async cachedName => {
         const source = {
             languageCode: 'zh_Hans',
             name: '测试商品',
@@ -76,7 +78,15 @@ describe('native content translation event routing', () => {
         const translations = {
             findStates: vi.fn().mockResolvedValue([]),
             isConfigured: vi.fn(() => false),
-            translate: vi.fn(),
+            translate: vi
+                .fn()
+                .mockRejectedValue(
+                    cachedName
+                        ? new CachedTranslationPartialError(new TranslationProviderError('CONFIGURATION'), [
+                              { key: 'name', text: 'Cached product name' },
+                          ])
+                        : new TranslationProviderError('CONFIGURATION'),
+                ),
             recordState: vi.fn(),
         };
         const service = new NativeContentTranslationService(
@@ -91,14 +101,26 @@ describe('native content translation event routing', () => {
             }),
         ).resolves.toBe(false);
 
-        expect(translations.translate).not.toHaveBeenCalled();
+        // The shared translation service checks the cache before rejecting an unavailable provider.
+        expect(translations.translate).toHaveBeenCalledOnce();
         expect(repository.save).toHaveBeenCalledWith(
-            expect.objectContaining({ languageCode: 'en', name: '', description: '' }),
+            expect.objectContaining({
+                languageCode: 'en',
+                name: cachedName ? 'Cached product name' : '',
+                description: '',
+            }),
             { reload: false },
         );
         expect(translations.recordState).toHaveBeenCalledWith(
             expect.anything(),
-            expect.objectContaining({ fieldPath: 'name', status: 'PENDING', locked: false }),
+            expect.objectContaining({
+                fieldPath: 'name',
+                status: cachedName ? 'AUTO_TRANSLATED' : 'PENDING',
+            }),
+        );
+        expect(translations.recordState).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({ fieldPath: 'description', status: 'PENDING', locked: false }),
         );
     });
 

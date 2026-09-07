@@ -93,7 +93,6 @@ export class ContentTranslationRetryService {
                     result.translated++;
                     continue;
                 }
-                if (!this.translations.isConfigured()) throw new TranslationProviderError('CONFIGURATION');
                 // Translate a snapshot outside any business row lock. New edits must win when applying it.
                 const response =
                     snapshot.derivedTarget != null

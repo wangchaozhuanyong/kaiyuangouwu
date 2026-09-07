@@ -42,6 +42,7 @@ import { ObjectLiteral, ObjectType, Repository } from 'typeorm';
 import { contentTranslationLoggerCtx } from './constants.js';
 import { ContentTranslationService, contentTranslationInternals } from './content-translation.service.js';
 import { TranslationProviderError } from './translation-provider-error.js';
+import { CachedTranslationPartialError } from './translation-result-cache.service.js';
 import { ContentTranslationFormat } from './types.js';
 
 type TranslationField = {
@@ -475,7 +476,6 @@ export class NativeContentTranslationService implements OnApplicationBootstrap {
         let generated: { translations: Array<{ key: string; text: string }> } = { translations: [] };
         try {
             if (segments.length) {
-                if (!this.translations.isConfigured()) throw new TranslationProviderError('CONFIGURATION');
                 generated = await this.translations.translate({ segments });
                 if (
                     segments.some(segment => {
@@ -487,6 +487,8 @@ export class NativeContentTranslationService implements OnApplicationBootstrap {
             }
         } catch (error) {
             if (!(error instanceof TranslationProviderError)) throw error;
+            if (error instanceof CachedTranslationPartialError)
+                generated = { translations: error.translations };
             failure = error;
         }
         const generatedByField = new Map(generated.translations.map(item => [item.key, item.text]));
@@ -498,7 +500,11 @@ export class NativeContentTranslationService implements OnApplicationBootstrap {
             });
         for (const field of definition.fields) {
             if (manualFields.has(field.path) || currentAutoFields.has(field.path)) continue;
-            if (failure && (field.deriveFrom || segments.some(segment => segment.key === field.path))) {
+            if (
+                failure &&
+                (field.deriveFrom || segments.some(segment => segment.key === field.path)) &&
+                !generatedByField.has(field.deriveFrom ?? field.path)
+            ) {
                 const previous = String(target?.[field.path] ?? '');
                 nextTarget[field.path] = contentTranslationInternals.containsHanContent(previous)
                     ? ''
@@ -537,6 +543,7 @@ export class NativeContentTranslationService implements OnApplicationBootstrap {
                 !field.deriveFrom &&
                 !isManual &&
                 !currentAutoFields.has(field.path) &&
+                !generatedByField.has(field.path) &&
                 segments.some(segment => segment.key === field.path);
             await this.translations.recordState(ctx, {
                 channelId: ctx.channelId,
