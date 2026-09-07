@@ -119,6 +119,9 @@ export class StoreProvisioningService {
         if (!template) {
             throw new UserInputError('基础店铺 Channel 不存在');
         }
+        if (!template.defaultShippingZone || !template.defaultTaxZone) {
+            throw new UserInputError('基础店铺必须先配置默认配送区域和默认计税区域');
+        }
         const [sharedStockLocations, sharedPaymentMethods, sharedShippingMethods] = await Promise.all([
             this.connection.getRepository(ctx, StockLocation).find({
                 where: { channels: { id: template.id } },
