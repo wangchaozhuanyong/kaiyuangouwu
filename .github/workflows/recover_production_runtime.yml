@@ -1,0 +1,81 @@
+name: Recover Current Production Runtime
+
+on:
+    workflow_dispatch:
+
+permissions:
+    contents: read
+    id-token: write
+
+concurrency:
+    group: production-deploy
+    cancel-in-progress: false
+
+jobs:
+    recover:
+        name: restart last verified runtime through AWS SSM
+        runs-on: ubuntu-24.04
+        timeout-minutes: 15
+        env:
+            AWS_REGION: ap-northeast-1
+            AWS_ACCOUNT_ID: '079740175286'
+            AWS_ROLE_ARN: arn:aws:iam::079740175286:role/yunqiao-vendure-github-deploy
+            INSTANCE_ID: i-041a146558e432cbf
+
+        steps:
+            - name: Validate recovery identity
+              env:
+                  TARGET_SHA: ${{ github.sha }}
+              run: |
+                  [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]
+
+            - name: Configure short-lived AWS credentials
+              uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+              with:
+                  role-to-assume: ${{ env.AWS_ROLE_ARN }}
+                  role-session-name: vendure-recovery-${{ github.run_id }}
+                  aws-region: ${{ env.AWS_REGION }}
+                  allowed-account-ids: ${{ env.AWS_ACCOUNT_ID }}
+
+            - name: Recover the last verified runtime
+              env:
+                  TARGET_SHA: ${{ github.sha }}
+              run: |
+                  REMOTE_COMMAND="sudo -H -u ubuntu env RECOVERY_TARGET_SHA='${TARGET_SHA}' GITHUB_RUN_ID='${GITHUB_RUN_ID}' /bin/bash -c 'set -Eeuo pipefail; cd /var/www/kaiyuangouwu; git fetch origin main --no-tags --prune; test -z \"\$(git status --porcelain --untracked-files=no)\"; git cat-file -e \"\$RECOVERY_TARGET_SHA^{commit}\"; git merge-base --is-ancestor HEAD \"\$RECOVERY_TARGET_SHA\"; git merge --ff-only \"\$RECOVERY_TARGET_SHA\"; test \"\$(git rev-parse HEAD^{commit})\" = \"\$RECOVERY_TARGET_SHA\"; exec ./deploy/recover-current-production-runtime.sh'"
+                  jq -n --arg command "$REMOTE_COMMAND" \
+                    '{commands: [$command], executionTimeout: ["900"]}' > "$RUNNER_TEMP/ssm-parameters.json"
+
+                  COMMAND_ID="$(aws ssm send-command \
+                    --region "$AWS_REGION" \
+                    --document-name AWS-RunShellScript \
+                    --instance-ids "$INSTANCE_ID" \
+                    --comment "Recover verified Vendure runtime" \
+                    --parameters "file://$RUNNER_TEMP/ssm-parameters.json" \
+                    --timeout-seconds 300 \
+                    --query 'Command.CommandId' \
+                    --output text)"
+                  test -n "$COMMAND_ID"
+
+                  status=Pending
+                  for attempt in $(seq 1 180); do
+                    status="$(aws ssm get-command-invocation \
+                      --region "$AWS_REGION" \
+                      --command-id "$COMMAND_ID" \
+                      --instance-id "$INSTANCE_ID" \
+                      --query Status \
+                      --output text 2>/dev/null || true)"
+                    case "$status" in
+                      Success|Failed|Cancelled|TimedOut|Cancelling)
+                        break
+                        ;;
+                    esac
+                    sleep 5
+                  done
+
+                  aws ssm get-command-invocation \
+                    --region "$AWS_REGION" \
+                    --command-id "$COMMAND_ID" \
+                    --instance-id "$INSTANCE_ID" \
+                    --query '{Status:Status,Output:StandardOutputContent,Error:StandardErrorContent}' \
+                    --output json
+                  test "$status" = Success

@@ -31,6 +31,7 @@ jobs:
               run: |
                   bun run check:migration-registry
                   bun run check:architecture-debt
+                  bun run check:storefront-publishing
                   bun run test:repository-checks
             - name: Build lint prerequisites
               run: bun run build:core-common
@@ -51,6 +52,7 @@ jobs:
         outputs:
             packages: ${{ steps.check.outputs.packages }}
             dashboard: ${{ steps.check.outputs.dashboard }}
+            dependencies: ${{ steps.check.outputs.dependencies }}
             e2e: ${{ steps.check.outputs.e2e }}
         steps:
             - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
@@ -62,6 +64,7 @@ jobs:
                   if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
                     echo "packages=true" >> "$GITHUB_OUTPUT"
                     echo "dashboard=true" >> "$GITHUB_OUTPUT"
+                    echo "dependencies=true" >> "$GITHUB_OUTPUT"
                     echo "e2e=true" >> "$GITHUB_OUTPUT"
                     exit 0
                   fi
@@ -88,15 +91,33 @@ jobs:
                     echo "dashboard=false" >> "$GITHUB_OUTPUT"
                   fi
 
+                  if echo "$changed" | grep -qE '(^|/)package\.json$|^(bun\.lock|bunfig\.toml|patches/|\.github/actions/setup/action\.yml|packages/dev-server/scripts/production-runtime-audit(\.spec)?\.mjs)$'; then
+                    echo "dependencies=true" >> "$GITHUB_OUTPUT"
+                  else
+                    echo "dependencies=false" >> "$GITHUB_OUTPUT"
+                  fi
+
                   # The four database suites exercise only the packages that declare an
                   # e2e script plus their shared core/testing inputs. Frontend, media and
-                  # other changes keep their build and unit gates without paying
+                  # deployment-only changes keep their build and unit gates without paying
                   # for four unrelated database environments.
                   if echo "$changed" | grep -qE '^(\.github/(actions/setup/action\.yml|workflows/(build_and_test|codegen)\.yml)|e2e-common/|patches/|package\.json$|bun\.lock$|bunfig\.toml$|tsconfig[^/]*\.json$|packages/(asset-server-plugin|cli|common|core|graphiql-plugin|job-queue-plugin|testing)/)'; then
                     echo "e2e=true" >> "$GITHUB_OUTPUT"
                   else
                     echo "e2e=false" >> "$GITHUB_OUTPUT"
                   fi
+    dependency-audit:
+        name: dependency audit
+        needs: detect-changes
+        if: needs.detect-changes.outputs.dependencies == 'true'
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+        steps:
+            - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+            - uses: ./.github/actions/setup
+            - name: Audit dependencies at the production threshold
+              run: node packages/dev-server/scripts/production-runtime-audit.mjs --audit-level high
     codegen:
         needs: detect-changes
         if: needs.detect-changes.outputs.packages == 'true'
@@ -473,6 +494,7 @@ jobs:
         needs:
             - quality-gates
             - detect-changes
+            - dependency-audit
             - codegen
             - build
             - unit-tests

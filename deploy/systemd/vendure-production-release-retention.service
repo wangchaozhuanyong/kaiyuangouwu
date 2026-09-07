@@ -1,0 +1,26 @@
+[Unit]
+Description=Retain the current Vendure production release and two rollback releases
+ConditionPathIsSymbolicLink=/var/www/kaiyuangouwu-current
+ConditionPathExists=/var/www/kaiyuangouwu-releases/current-sha
+
+[Service]
+Type=oneshot
+User=ubuntu
+Group=ubuntu
+Environment=HOME=/home/ubuntu
+Environment=PM2_HOME=/home/ubuntu/.pm2
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+Environment=VENDURE_ALLOW_PRODUCTION_RELEASE_PRUNE=1
+Environment=VENDURE_RELEASE_RETENTION_COUNT=3
+ExecStart=/usr/bin/flock --exclusive --wait 300 /run/lock/vendure-production-deploy.lock /usr/bin/node /usr/local/sbin/vendure-production-release-retention --apply
+TimeoutStartSec=10min
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_UNIX
+ReadWritePaths=/var/www/kaiyuangouwu-releases /run/lock /home/ubuntu/.pm2

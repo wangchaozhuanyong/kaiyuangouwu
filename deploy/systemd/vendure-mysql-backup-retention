@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+
+readonly vendure_backup_dir="${VENDURE_BACKUP_DIR:-/var/backups/vendure-mysql}"
+readonly vendure_retention_days="${VENDURE_BACKUP_RETENTION_DAYS:-14}"
+
+if [[ ! "${vendure_retention_days}" =~ ^[0-9]+$ ]] || ((vendure_retention_days < 7)); then
+    printf 'VENDURE_BACKUP_RETENTION_DAYS must be an integer of at least 7\n' >&2
+    exit 1
+fi
+
+find "${vendure_backup_dir}" -maxdepth 1 -type f \
+    \( -name 'vendure-*.sql.gz' -o -name 'vendure-*.sql.gz.sha256' -o -name '*.part.failed' \) \
+    -mtime "+${vendure_retention_days}" -print -delete

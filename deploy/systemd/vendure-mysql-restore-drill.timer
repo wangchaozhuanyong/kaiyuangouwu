@@ -1,0 +1,11 @@
+[Unit]
+Description=Run the Vendure MySQL restore drill every week
+
+[Timer]
+OnCalendar=Sun *-*-* 20:15:00 UTC
+RandomizedDelaySec=30m
+Persistent=true
+Unit=vendure-mysql-restore-drill.service
+
+[Install]
+WantedBy=timers.target
