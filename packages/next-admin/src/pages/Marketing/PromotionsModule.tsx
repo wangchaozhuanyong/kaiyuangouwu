@@ -29,6 +29,8 @@ import {
 } from '../../graphql/marketing.graphql';
 import { usePageSize } from '../../hooks/use-page-size';
 import { useUrlTab } from '../../hooks/use-url-tab';
+import { copyAdminText } from '../../utils/admin-clipboard';
+import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatMoney } from '../Sales/sales-utils';
 import { GenericPromotionsPanel } from './GenericPromotionsPanel';
 import { NameDialog, SensitiveDialog } from './promotion-actions';
@@ -374,7 +376,10 @@ export function PromotionsModule() {
                 ) : overview.loading && !overview.data ? (
                     <LoadingState label="正在读取营销活动…" />
                 ) : overview.error ? (
-                    <ErrorState message={overview.error.message} onRetry={() => void overview.refetch()} />
+                    <ErrorState
+                        message={toUserFacingError(overview.error, '营销活动读取失败')}
+                        onRetry={() => void overview.refetch()}
+                    />
                 ) : activeTab === 'COUPONS' ? (
                     <CouponList
                         coupons={visibleCoupons}
@@ -382,11 +387,8 @@ export function PromotionsModule() {
                         actionPending={actionPending}
                         onCreate={() => setCouponEditorOpen(true)}
                         onCopy={async code => {
-                            try {
-                                await navigator.clipboard.writeText(code);
+                            if (await copyAdminText(code, '优惠券兑换码')) {
                                 setNotice('优惠券内部兑换码已复制');
-                            } catch {
-                                setActionError('浏览器未允许访问剪贴板，请手动复制');
                             }
                         }}
                         onGrant={setGranting}
@@ -411,7 +413,7 @@ export function PromotionsModule() {
                         setFilter={setReportFilter}
                         metrics={report.data?.storeCouponDailyReport ?? []}
                         loading={report.loading}
-                        error={report.error?.message}
+                        error={report.error ? toUserFacingError(report.error, '促销日报读取失败') : undefined}
                     />
                 ) : (
                     <CouponLedger
@@ -433,7 +435,9 @@ export function PromotionsModule() {
                         }}
                         data={ledger.data?.storeCouponLedger}
                         loading={ledger.loading}
-                        error={ledger.error?.message}
+                        error={
+                            ledger.error ? toUserFacingError(ledger.error, '优惠券流水读取失败') : undefined
+                        }
                         onRetry={() => void ledger.refetch()}
                     />
                 )}

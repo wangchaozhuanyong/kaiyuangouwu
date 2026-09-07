@@ -41,6 +41,7 @@ import {
 } from '../../graphql/catalog-admin.graphql';
 import { GET_ASSETS } from '../../graphql/catalog.graphql';
 import { usePageSize } from '../../hooks/use-page-size';
+import { copyAdminText } from '../../utils/admin-clipboard';
 import { toUserFacingError } from '../../utils/user-facing-error';
 
 interface AssetItem {
@@ -855,8 +856,9 @@ export function AssetsModule() {
                                     <button
                                         type="button"
                                         onClick={async () => {
-                                            await navigator.clipboard.writeText(selectedAsset.source);
-                                            showNotice('素材地址已复制');
+                                            if (await copyAdminText(selectedAsset.source, '素材地址')) {
+                                                showNotice('素材地址已复制');
+                                            }
                                         }}
                                         className="rounded-lg border border-slate-200 bg-slate-100 px-3"
                                         aria-label="复制素材地址"

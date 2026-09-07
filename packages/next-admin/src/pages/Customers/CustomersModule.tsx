@@ -547,7 +547,7 @@ export function CustomersModule() {
                     <LoadingState label="正在读取客户数据…" />
                 ) : activeQuery.error ? (
                     <ErrorState
-                        message={activeQuery.error.message}
+                        message={toUserFacingError(activeQuery.error, '客户数据读取失败')}
                         onRetry={() => void activeQuery.refetch()}
                     />
                 ) : !list?.items.length ? (
@@ -1032,7 +1032,10 @@ function CustomerDrawer({
                     {loading && !customer ? (
                         <LoadingState label="正在读取客户详情…" />
                     ) : error ? (
-                        <ErrorState message={error.message} onRetry={() => void refetch()} />
+                        <ErrorState
+                            message={toUserFacingError(error, '客户详情读取失败')}
+                            onRetry={() => void refetch()}
+                        />
                     ) : !customer ? (
                         <EmptyState
                             icon={CircleUserRound}

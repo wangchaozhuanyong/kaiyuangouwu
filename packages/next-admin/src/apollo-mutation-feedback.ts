@@ -3,17 +3,20 @@ import { ApolloLink, Observable } from '@apollo/client';
 import { isSensitiveActionCancelledError } from './apollo-sensitive-action';
 import { createAdminFeedbackId, publishAdminFeedback } from './utils/admin-feedback';
 import {
-    extractMutationFailure,
+    extractMutationFailureDetails,
     getMutationFeedbackCopy,
     hasChineseSaveInput,
     isMutationDocument,
     type AdminMutationFeedbackContext,
     type AdminMutationFeedbackOptions,
 } from './utils/admin-mutation-feedback';
-import { toUserFacingError } from './utils/user-facing-error';
+import { normalizeOperationFailure } from './utils/operation-failure';
 
 interface GraphqlResultWithErrors {
-    errors?: ReadonlyArray<{ message?: string }>;
+    errors?: ReadonlyArray<{
+        message?: string;
+        extensions?: Readonly<Record<string, unknown>>;
+    }>;
 }
 
 /**
@@ -27,11 +30,11 @@ export const adminMutationFeedbackLink = new ApolloLink((operation, forward) => 
     if (feedbackContext === false) return forward(operation);
 
     const options: AdminMutationFeedbackOptions = feedbackContext ?? {};
-    const copy = getMutationFeedbackCopy(operation.operationName, options);
+    const copy = getMutationFeedbackCopy(operation.operationName, options, operation.variables);
     const feedbackId = createAdminFeedbackId(operation.operationName || 'admin-mutation');
 
     // 仅保留错误反馈时，不显示一个无法在成功后关闭的 loading 通知。
-    if (!options.skipPending && !options.skipSuccess) {
+    if (!options.skipPending && !options.skipSuccess && !options.skipError) {
         publishAdminFeedback({
             id: feedbackId,
             kind: 'loading',
@@ -45,6 +48,7 @@ export const adminMutationFeedbackLink = new ApolloLink((operation, forward) => 
         const finishWithError = (reason: unknown) => {
             if (completedFeedback) return;
             completedFeedback = true;
+            if (options.skipError) return;
             if (isSensitiveActionCancelledError(reason)) {
                 publishAdminFeedback({
                     id: feedbackId,
@@ -53,11 +57,23 @@ export const adminMutationFeedbackLink = new ApolloLink((operation, forward) => 
                 });
                 return;
             }
+            const failure = normalizeOperationFailure(reason, {
+                fallbackReason: copy.failure,
+                fallbackResolution: copy.resolution,
+                referenceId: feedbackId,
+            });
+            const details = [...(copy.details ?? []), ...(failure.details ?? [])];
             publishAdminFeedback({
                 id: feedbackId,
                 kind: 'error',
-                title: `${copy.action}失败`,
-                message: toUserFacingError(reason, copy.failure),
+                title: `${copy.action}${copy.target ?? ''}失败`,
+                message: failure.reason,
+                reason: failure.reason,
+                ...(details.length ? { details: [...new Set(details)] } : {}),
+                resolution: failure.resolution,
+                retryable: failure.retryable,
+                ...(failure.fieldErrors ? { fieldErrors: failure.fieldErrors } : {}),
+                ...(failure.traceId ? { traceId: failure.traceId } : {}),
             });
         };
 
@@ -65,10 +81,12 @@ export const adminMutationFeedbackLink = new ApolloLink((operation, forward) => 
             next: result => {
                 const graphqlErrors = (result as GraphqlResultWithErrors).errors;
                 if (graphqlErrors?.length) {
-                    finishWithError(graphqlErrors[0]?.message);
+                    finishWithError(graphqlErrors[0]);
                 } else {
                     const businessFailure =
-                        result.data == null ? '管理服务未返回操作结果' : extractMutationFailure(result.data);
+                        result.data == null
+                            ? { message: '管理服务未返回操作结果' }
+                            : extractMutationFailureDetails(result.data);
                     if (businessFailure) {
                         finishWithError(businessFailure);
                     } else if (!completedFeedback && !options.skipSuccess) {

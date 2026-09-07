@@ -37,11 +37,14 @@ export function AdminFeedbackCenter() {
             });
 
             if (feedback.kind !== 'loading') {
-                const duration = feedback.durationMs ?? (feedback.kind === 'error' ? 10_000 : 4_500);
+                const duration = feedback.durationMs ?? (feedback.kind === 'error' ? 16_000 : 4_500);
                 activeTimers.set(
                     feedback.id,
                     setTimeout(() => dismiss(feedback.id), duration),
                 );
+            }
+            if (feedback.kind === 'error' && feedback.fieldErrors) {
+                focusFirstFieldError(feedback.fieldErrors);
             }
         });
 
@@ -88,7 +91,7 @@ export function AdminFeedbackCenter() {
     return (
         <aside
             aria-label="操作通知"
-            className="pointer-events-none fixed right-4 top-20 z-[120] flex w-[min(24rem,calc(100vw-2rem))] flex-col gap-2 sm:right-6"
+            className="pointer-events-none fixed right-4 top-20 z-[120] flex w-[min(29rem,calc(100vw-2rem))] flex-col gap-2 sm:right-6"
         >
             {items.map(item => (
                 <article
@@ -101,7 +104,68 @@ export function AdminFeedbackCenter() {
                     <FeedbackIcon kind={item.kind} />
                     <div className="min-w-0 flex-1">
                         <p className="text-sm font-bold leading-5">{item.title}</p>
-                        {item.message && <p className="mt-1 text-xs leading-5 opacity-90">{item.message}</p>}
+                        {item.reason ? (
+                            <p className="mt-1 text-xs leading-5 opacity-90">
+                                <span className="font-semibold">原因：</span>
+                                {item.reason}
+                            </p>
+                        ) : (
+                            item.message && (
+                                <p className="mt-1 text-xs leading-5 opacity-90">{item.message}</p>
+                            )
+                        )}
+                        {item.details?.length ? (
+                            <div className="mt-2 text-xs leading-5 opacity-90">
+                                <p className="font-semibold">相关对象：</p>
+                                <ul className="list-disc space-y-0.5 pl-4">
+                                    {item.details.map(detail => (
+                                        <li key={detail}>{detail}</li>
+                                    ))}
+                                </ul>
+                            </div>
+                        ) : null}
+                        {item.fieldErrors && Object.keys(item.fieldErrors).length ? (
+                            <div className="mt-2 text-xs leading-5 opacity-90">
+                                <p className="font-semibold">需要修改：</p>
+                                <ul className="list-disc space-y-0.5 pl-4">
+                                    {Object.entries(item.fieldErrors).map(([field, message]) => (
+                                        <li key={field}>{message}</li>
+                                    ))}
+                                </ul>
+                            </div>
+                        ) : null}
+                        {item.resolution?.length ? (
+                            <div className="mt-2 text-xs leading-5 opacity-90">
+                                <p className="font-semibold">处理方法：</p>
+                                <ol className="list-decimal space-y-0.5 pl-4">
+                                    {item.resolution.map(step => (
+                                        <li key={step}>{step}</li>
+                                    ))}
+                                </ol>
+                            </div>
+                        ) : null}
+                        {item.traceId ? (
+                            <p className="mt-2 break-all font-mono text-[10px] leading-4 opacity-70">
+                                本次操作编号：{item.traceId}
+                            </p>
+                        ) : null}
+                        {item.actions?.length ? (
+                            <div className="mt-3 flex flex-wrap gap-2">
+                                {item.actions.map(action => (
+                                    <button
+                                        key={action.label}
+                                        type="button"
+                                        onClick={() => {
+                                            action.onSelect();
+                                            if (action.dismissOnSelect !== false) dismiss(item.id);
+                                        }}
+                                        className="rounded-md border border-current/25 bg-white/60 px-2.5 py-1 text-xs font-semibold hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current dark:bg-black/15 dark:hover:bg-black/25"
+                                    >
+                                        {action.label}
+                                    </button>
+                                ))}
+                            </div>
+                        ) : null}
                     </div>
                     {item.kind !== 'loading' && (
                         <button
@@ -157,4 +221,13 @@ function getControlLabel(control: HTMLInputElement | HTMLSelectElement | HTMLTex
     const placeholder = 'placeholder' in control ? control.placeholder : '';
     const candidate = control.getAttribute('aria-label') || explicitLabel || placeholder || control.name;
     return candidate && candidate.length <= 40 ? `“${candidate}”` : '当前字段';
+}
+
+function focusFirstFieldError(fieldErrors: Record<string, string>) {
+    const firstField = Object.keys(fieldErrors)[0];
+    if (!firstField) return;
+    const control = document.getElementsByName(firstField)[0];
+    if (!(control instanceof HTMLElement)) return;
+    control.setAttribute('aria-invalid', 'true');
+    queueMicrotask(() => control.focus());
 }

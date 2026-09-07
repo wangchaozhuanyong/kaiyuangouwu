@@ -59,4 +59,47 @@ describe('AdminFeedbackCenter', () => {
         firstInput.remove();
         secondInput.remove();
     });
+
+    it('renders the reason, blocking objects, recovery steps and operation reference', () => {
+        act(() => {
+            publishAdminFeedback({
+                id: 'delete-seller',
+                kind: 'error',
+                title: '删除商家主体失败',
+                reason: '该商家主体仍被店铺使用',
+                details: ['美宜佳店铺（Channel：my-malaysia）'],
+                resolution: ['先将 Channel 改绑到其他商家主体', '整店停用时执行安全清退'],
+                traceId: 'delete-seller-1234',
+            });
+        });
+
+        const alert = container.querySelector('[role="alert"]');
+        expect(alert?.textContent).toContain('原因：该商家主体仍被店铺使用');
+        expect(alert?.textContent).toContain('相关对象：美宜佳店铺（Channel：my-malaysia）');
+        expect(alert?.textContent).toContain('处理方法：先将 Channel 改绑到其他商家主体');
+        expect(alert?.textContent).toContain('本次操作编号：delete-seller-1234');
+    });
+
+    it('lists server field errors and focuses the first matching control', async () => {
+        const input = document.createElement('input');
+        input.name = 'storefrontNameZh';
+        document.body.append(input);
+
+        act(() => {
+            publishAdminFeedback({
+                id: 'save-store',
+                kind: 'error',
+                title: '保存店铺档案失败',
+                reason: '提交的数据未通过校验',
+                resolution: ['修改标记字段后重新提交'],
+                fieldErrors: { storefrontNameZh: '店铺中文名称不能为空' },
+            });
+        });
+        await act(async () => Promise.resolve());
+
+        expect(container.textContent).toContain('需要修改：店铺中文名称不能为空');
+        expect(document.activeElement).toBe(input);
+        expect(input.getAttribute('aria-invalid')).toBe('true');
+        input.remove();
+    });
 });

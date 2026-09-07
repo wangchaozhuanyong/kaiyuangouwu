@@ -377,6 +377,18 @@ export const BUSINESS_SETTINGS_QUERY = gql`
                 name
             }
         }
+        channels(options: { take: 1000 }) {
+            items {
+                id
+                code
+                defaultTaxZone {
+                    id
+                }
+                defaultShippingZone {
+                    id
+                }
+            }
+        }
         globalSettings {
             availableLanguages
             trackInventory
@@ -1205,6 +1217,14 @@ export interface BusinessSettingsResult {
         customFields?: Record<string, unknown> | null;
         defaultTaxZone: { id: string; name: string } | null;
         defaultShippingZone: { id: string; name: string } | null;
+    };
+    channels: {
+        items: Array<{
+            id: string;
+            code: string;
+            defaultTaxZone: { id: string } | null;
+            defaultShippingZone: { id: string } | null;
+        }>;
     };
     globalSettings: {
         availableLanguages: string[];

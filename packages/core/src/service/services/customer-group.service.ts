@@ -15,6 +15,7 @@ import { ID, PaginatedList } from '@vendure/common/lib/shared-types';
 import { RequestContext } from '../../api/common/request-context';
 import { RelationPaths } from '../../api/decorators/relations.decorator';
 import { UserInputError } from '../../common/error/errors';
+import { safeOperationErrorMessage } from '../../common/error/safe-operation-error';
 import { Instrument } from '../../common/instrument-decorator';
 import { assertFound, idsAreEqual } from '../../common/utils';
 import { TransactionalConnection } from '../../connection/transactional-connection';
@@ -136,10 +137,16 @@ export class CustomerGroupService {
             return {
                 result: DeletionResult.DELETED,
             };
-        } catch (e: any) {
+        } catch (error: unknown) {
             return {
                 result: DeletionResult.NOT_DELETED,
-                message: e.message,
+                message: safeOperationErrorMessage(
+                    ctx,
+                    error,
+                    'message.customer-group-delete-data-conflict',
+                    { name: group.name },
+                    `Could not delete CustomerGroup with id ${id}`,
+                ),
             };
         }
     }

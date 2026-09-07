@@ -37,6 +37,7 @@ import {
     PasswordResetTokenInvalidError,
     PasswordValidationError,
 } from '../../common/error/generated-graphql-shop-errors';
+import { safeOperationErrorMessage } from '../../common/error/safe-operation-error';
 import { Instrument } from '../../common/instrument-decorator';
 import { ListQueryOptions } from '../../common/types/common-types';
 import { assertFound, idsAreEqual, normalizeEmailAddress } from '../../common/utils';
@@ -252,6 +253,8 @@ export class CustomerService {
         }
         const customerUser = await this.userService.createCustomerUser(ctx, input.emailAddress, password);
         if (isGraphQlErrorResult(customerUser)) {
+            // GraphQL ErrorResult objects are deliberately propagated to the resolver union.
+            // eslint-disable-next-line @typescript-eslint/only-throw-error
             throw customerUser;
         }
         customer.user = customerUser;
@@ -263,6 +266,7 @@ export class CustomerService {
                 if (isGraphQlErrorResult(result)) {
                     // In theory this should never be reached, so we will just
                     // throw the result
+                    // eslint-disable-next-line @typescript-eslint/only-throw-error
                     throw result;
                 } else {
                     customer.user = result;
@@ -894,10 +898,16 @@ export class CustomerService {
             return {
                 result: DeletionResult.DELETED,
             };
-        } catch (e: any) {
+        } catch (error: unknown) {
             return {
                 result: DeletionResult.NOT_DELETED,
-                message: e.message,
+                message: safeOperationErrorMessage(
+                    ctx,
+                    error,
+                    'message.customer-note-delete-data-conflict',
+                    {},
+                    `Could not delete Customer note with id ${id}`,
+                ),
             };
         }
     }

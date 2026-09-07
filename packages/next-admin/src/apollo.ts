@@ -4,8 +4,7 @@ import { setContext } from '@apollo/client/link/context';
 import { adminMutationFeedbackLink } from './apollo-mutation-feedback';
 import { sensitiveActionPasswordLink } from './apollo-sensitive-action';
 import { CUSTOM_FIELD_POSSIBLE_TYPES } from './custom-fields/custom-fields.graphql';
-import { createAdminFeedbackId, publishAdminFeedback } from './utils/admin-feedback';
-import { toUserFacingError } from './utils/user-facing-error';
+import { runAdminActionWithFeedback } from './utils/admin-action-feedback';
 
 const AUTH_TOKEN_KEY = 'vendure-auth-token';
 const AUTH_PERSISTENCE_KEY = 'vendure-auth-persistence';
@@ -88,56 +87,48 @@ export const uploadAdminFiles = async <T>(
     files: File[],
     buildVariables: (filePlaceholders: null[]) => Record<string, unknown>,
 ): Promise<T> => {
-    const feedbackId = createAdminFeedbackId('admin-upload');
-    publishAdminFeedback({
-        id: feedbackId,
-        kind: 'loading',
-        title: '上传中…',
-        message: '正在等待管理服务返回结果，请勿重复提交',
-    });
-
-    try {
-        const channelContext = channelRequestContext(getActiveChannelToken() ?? '');
-        const formData = new FormData();
-        const variables = buildVariables(files.map(() => null));
-        const fileMap = Object.fromEntries(
-            files.map((_, index) => [String(index), [`variables.input.${index}.file`]]),
-        );
-
-        formData.append('operations', JSON.stringify({ query, variables }));
-        formData.append('map', JSON.stringify(fileMap));
-        files.forEach((file, index) => formData.append(String(index), file, file.name));
-
-        const token = getAuthToken();
-        const response = await vendureFetch(ADMIN_API_URL, {
-            method: 'POST',
-            headers: {
-                ...channelContext.headers,
-                ...(token ? { authorization: `Bearer ${token}` } : {}),
-            },
-            body: formData,
-        });
-        const result = (await response.json()) as GraphqlUploadResponse<T>;
-
-        if (!response.ok || result.errors?.length) {
-            throw new Error(
-                result.errors?.map(error => error.message).join('；') || `上传请求失败 (${response.status})`,
+    return runAdminActionWithFeedback(
+        {
+            action: '上传',
+            target: files.length > 1 ? `${files.length} 个文件` : `文件“${files[0]?.name ?? '未命名'}”`,
+            failure: '管理服务未接受文件上传请求',
+            resolution: ['检查文件格式、大小和当前账号权限后重试'],
+        },
+        async () => {
+            const channelContext = channelRequestContext(getActiveChannelToken() ?? '');
+            const formData = new FormData();
+            const variables = buildVariables(files.map(() => null));
+            const fileMap = Object.fromEntries(
+                files.map((_, index) => [String(index), [`variables.input.${index}.file`]]),
             );
-        }
-        if (!result.data) {
-            throw new Error('上传成功但后端未返回数据');
-        }
-        publishAdminFeedback({ id: feedbackId, kind: 'success', title: '上传成功' });
-        return result.data;
-    } catch (error) {
-        publishAdminFeedback({
-            id: feedbackId,
-            kind: 'error',
-            title: '上传失败',
-            message: toUserFacingError(error, '上传失败，请检查文件和账号权限后重试'),
-        });
-        throw error;
-    }
+
+            formData.append('operations', JSON.stringify({ query, variables }));
+            formData.append('map', JSON.stringify(fileMap));
+            files.forEach((file, index) => formData.append(String(index), file, file.name));
+
+            const token = getAuthToken();
+            const response = await vendureFetch(ADMIN_API_URL, {
+                method: 'POST',
+                headers: {
+                    ...channelContext.headers,
+                    ...(token ? { authorization: `Bearer ${token}` } : {}),
+                },
+                body: formData,
+            });
+            const result = (await response.json()) as GraphqlUploadResponse<T>;
+
+            if (!response.ok || result.errors?.length) {
+                throw new Error(
+                    result.errors?.map(error => error.message).join('；') ||
+                        `上传请求失败 (${response.status})`,
+                );
+            }
+            if (!result.data) {
+                throw new Error('上传成功但后端未返回数据');
+            }
+            return result.data;
+        },
+    );
 };
 
 // 指向 Vendure 真实的 Admin GraphQL API，并同时支持 Cookie 与 Bearer Token。
