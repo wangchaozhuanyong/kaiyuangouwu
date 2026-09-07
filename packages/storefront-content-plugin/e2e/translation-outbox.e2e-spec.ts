@@ -8,6 +8,7 @@ import {
     TranslationProviderState,
 } from '@vendure/content-translation-plugin';
 import {
+    ConfigService,
     DefaultSearchPlugin,
     LanguageCode,
     mergeConfig,
@@ -365,11 +366,14 @@ describe('real Admin API saves and Shop API publication with the translation out
                 },
             )
         ).createProduct;
+        const entityId = String(
+            server.app.get(ConfigService).entityOptions.entityIdStrategy.decodeId(created.id),
+        );
         const ctx = await server.app.get(RequestContextService).create({ apiType: 'admin' });
         await server.app.get(ContentTranslationService).recordState(ctx, {
             channelId: 'historical-channel',
             entityType: 'Product',
-            entityId: created.id,
+            entityId,
             fieldPath: 'name',
             sourceText: '旧商品名',
             translatedText: 'Old reviewed product',
@@ -397,9 +401,7 @@ describe('real Admin API saves and Shop API publication with the translation out
                 expect.objectContaining({ fieldPath: 'name', origin: 'MANUAL', locked: true }),
             ]),
         );
-        const nameStates = states.filter(
-            state => state.fieldPath === 'name' && state.entityId === created.id,
-        );
+        const nameStates = states.filter(state => state.fieldPath === 'name' && state.entityId === entityId);
         expect(nameStates).toHaveLength(2);
         expect(nameStates.every(state => state.status === 'MANUAL_LOCKED' && state.locked)).toBe(true);
         expect(new Set(nameStates.map(state => state.sourceHash)).size).toBe(1);
