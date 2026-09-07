@@ -30,3 +30,39 @@ export const collectionSummary = (collections: ReadonlyArray<{ name: string }> |
     if (!collections?.length) return { primary: '未分类', extraCount: 0 };
     return { primary: collections[0].name, extraCount: Math.max(0, collections.length - 1) };
 };
+
+interface CollectionHierarchyItem {
+    id: string;
+    name: string;
+    parent?: {
+        id: string;
+        name: string;
+    } | null;
+}
+
+const ROOT_COLLECTION_NAME = '__root_collection__';
+
+export const collectionHierarchySummary = (
+    collections: ReadonlyArray<CollectionHierarchyItem> | undefined,
+) => {
+    const topLevelCollections = new Map<string, CollectionHierarchyItem>();
+    const secondLevelCollections = new Map<string, CollectionHierarchyItem>();
+
+    for (const collection of collections ?? []) {
+        const isSecondLevel = Boolean(collection.parent && collection.parent.name !== ROOT_COLLECTION_NAME);
+        const topLevel = isSecondLevel ? collection.parent : collection;
+        const secondLevel = isSecondLevel ? collection : undefined;
+
+        if (topLevel) {
+            topLevelCollections.set(topLevel.id, topLevel);
+        }
+        if (secondLevel) {
+            secondLevelCollections.set(secondLevel.id, secondLevel);
+        }
+    }
+
+    return {
+        topLevel: collectionSummary([...topLevelCollections.values()]),
+        secondLevel: collectionSummary([...secondLevelCollections.values()]),
+    };
+};
