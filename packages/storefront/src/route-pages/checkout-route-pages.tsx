@@ -36,6 +36,7 @@ function CheckoutRoutePage({ mode }: { mode?: 'purchase' }) {
                     }}
                     onNotify={runtime.notify}
                     coupons={runtime.myCoupons}
+                    flashSales={runtime.activeFlashSales}
                     onApplyCoupon={runtime.applyCoupon}
                     onRemoveCoupon={runtime.removeCoupon}
                 />

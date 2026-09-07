@@ -318,7 +318,7 @@ export interface Order {
         state: string;
     }>;
     lines: OrderLine[];
-    discounts: Array<{ description: string; amountWithTax: number }>;
+    discounts: Array<{ adjustmentSource: string; description: string; amountWithTax: number }>;
     taxSummary: OrderTaxSummary[];
     couponCodes: string[];
     customFields: {

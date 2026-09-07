@@ -13,6 +13,7 @@ import {
     ProductVariant,
     StoreCustomerCoupon,
     StorefrontCart,
+    StorefrontFlashSale,
 } from './types';
 
 vi.mock('@tanstack/react-router', () => ({ useNavigate: () => vi.fn() }));
@@ -146,6 +147,7 @@ function renderCheckout(
     order: Order,
     customer: ActiveCustomer | null = null,
     coupons: StoreCustomerCoupon[] = [],
+    flashSales: StorefrontFlashSale[] = [],
 ): string {
     return renderToStaticMarkup(
         createElement(CheckoutPage, {
@@ -164,6 +166,7 @@ function renderCheckout(
             onCartChange: vi.fn(),
             onNotify: vi.fn(),
             coupons,
+            flashSales,
             onApplyCoupon: vi.fn().mockResolvedValue(null),
             onRemoveCoupon: vi.fn().mockResolvedValue(null),
         }),
@@ -276,5 +279,45 @@ describe('CheckoutPage digital delivery', () => {
 
         expect(selectedMarkup).toContain('title="新客优惠券">新客优惠券');
         expect(selectedMarkup).not.toContain('已使用优惠券');
+    });
+
+    it('does not show a payment-method option before the order is submitted', () => {
+        const markup = renderCheckout(orderFor('PHYSICAL'));
+
+        expect(markup).not.toContain('支付方式');
+        expect(markup).not.toContain('提交后选择');
+    });
+
+    it('shows flash-sale savings separately from other order discounts', () => {
+        const order = orderFor('DIGITAL');
+        order.discounts = [
+            {
+                adjustmentSource: 'Promotion:flash-sale-1',
+                description: '周末特价',
+                amountWithTax: -2_500,
+            },
+            {
+                adjustmentSource: 'Promotion:coupon-1',
+                description: '新客优惠',
+                amountWithTax: -500,
+            },
+        ];
+        order.subTotalWithTax -= 3_000;
+        order.totalWithTax -= 3_000;
+        const flashSales: StorefrontFlashSale[] = [
+            {
+                id: 'flash-sale-1',
+                startsAt: null,
+                endsAt: null,
+                items: [],
+            },
+        ];
+
+        const markup = renderCheckout(order, null, [], flashSales);
+
+        expect(markup).toContain('秒杀优惠');
+        expect(markup).toContain('其他优惠');
+        expect(markup).toMatch(/秒杀优惠<\/dt><dd>-[^<]*25<\/dd>/u);
+        expect(markup).toMatch(/其他优惠<\/dt><dd>-[^<]*5<\/dd>/u);
     });
 });
