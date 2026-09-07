@@ -237,7 +237,7 @@ bun run build
 bun run --cwd packages/dev-server build:production-runtime -- --require-platform linux/x64 --audit-level high
 ```
 
-正式版本优先对 `origin/main` 当前完整 SHA 手动运行 GitHub Actions 的 `Production Runtime Artifact` 工作流。它固定 Node `24.19.0`、Bun `1.3.14` 和 `linux/x64`，只有全量门禁与产物自验证通过才上传带 SHA-256 的归档；具体下载、传输和服务器复验命令见 `deploy/DEPLOYMENT_RUNBOOK.md`。
+正式版本优先对 `origin/main` 当前完整 SHA 手动运行 GitHub Actions 的 `Production Release` 工作流。它先完成生产现场只读预检，再以固定 Node `24.19.0`、Bun `1.3.14` 和 `linux/x64` 构建并部署；只有门禁与产物自验证通过才上传带 SHA-256 的归档。具体下载、传输和服务器复验命令见 `deploy/DEPLOYMENT_RUNBOOK.md`。
 
 产物内的稳定入口为：
 

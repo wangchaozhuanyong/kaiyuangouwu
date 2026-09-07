@@ -22,7 +22,7 @@
 | P1     | 服务端框架安全升级              | Nest、Apollo 5、Sharp 已升级；`image-size` 已移除      | 预发布迁移回放、Shop/Admin API 与真实文件上传 E2E 全部通过                 |
 | P1     | Dashboard/Admin UI 与构建链升级 | Angular、Apollo Client、Vite、esbuild、Nx/Lerna 已完成 | 预发布回归管理流程与 CSP                                                   |
 | P1     | 运行产物依赖瘦身                | 本地已完成；待 Linux 正式产物复验                      | 运行包不含六类构建工具，模块加载、静态 Dashboard、邮件和业务 E2E 通过      |
-| P1     | 运行产物的持续漏洞扫描          | 本地与手动 Linux CI 的 High+ 门禁已完成                 | CI 保存 `RUNTIME-AUDIT.json`，High 和 Critical 阻断发布                    |
+| P1     | 运行产物的持续漏洞扫描          | 本地与手动 Linux CI 的 High+ 门禁已完成                | CI 保存 `RUNTIME-AUDIT.json`，High 和 Critical 阻断发布                    |
 | P2     | Nginx HTTP/2 语法               | 已核对生产机为 Nginx 1.24.0，保留 `listen ... http2`   | 生产机 `nginx -t` 通过；升级至 1.25.1+ 后再评估切换为 `http2 on`           |
 
 ## P1 建议分批
@@ -33,7 +33,7 @@
 2. Apollo 5 使用官方 Express 5 集成，Shop/Admin API 的启动、认证与 GraphQL E2E 已通过；预发布仍需覆盖限流、查询复杂度、错误响应、认证 Cookie 与长时间 Worker 任务。
 3. Sharp 已完成升级和图片转换兼容修复；`image-size` 已移除，图片元数据读取由 Sharp 的受限入口统一处理。正式验收仍要覆盖 JPG/PNG/WebP/AVIF、异常文件、超限文件与并发上传。
 4. production runtime 构建会生成 `RUNTIME-PACKAGES.json` 和 `RUNTIME-AUDIT.json`，按真实版本与路径扫描，并将 High 设为默认硬阻断。后续每批仍需重复该检查，不能只看完整 monorepo 的数量。
-5. `Production Runtime Artifact` 手动工作流只接受 `origin/main` 当前完整 SHA，固定 Linux x64、Node 和 Bun 版本，并在上传保留符号链接的归档前重复全仓与运行产物门禁；工作流制品只保留 7 天，不能替代正式发布记录和服务器复验。
+5. `Production Release` 手动工作流只接受 `origin/main` 当前完整 SHA，先完成生产现场只读预检，再以固定 Linux x64、Node 和 Bun 版本生成并部署不可变制品；工作流制品只保留 7 天，不能替代正式发布记录和服务器复验。
 
 ### 第二批：Dashboard/Admin UI 与工具链
 

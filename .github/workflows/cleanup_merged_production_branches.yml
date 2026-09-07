@@ -8,7 +8,7 @@ on:
                 required: true
                 type: string
             deployment_run_id:
-                description: Successful Deploy Production Runtime workflow run ID
+                description: Successful Production Release workflow run ID
                 required: true
                 type: string
             acceptance_run_id:
@@ -63,8 +63,8 @@ jobs:
 
                   deployment_run="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${DEPLOYMENT_RUN_ID}")"
                   jq -e --arg sha "$PRODUCTION_SHA" '
-                      .path == ".github/workflows/deploy_production_runtime.yml" and
-                      .event == "workflow_run" and
+                      .path == ".github/workflows/production_release.yml" and
+                      (.event == "workflow_dispatch" or .event == "push") and
                       .head_branch == "main" and
                       .head_sha == $sha and
                       .status == "completed" and

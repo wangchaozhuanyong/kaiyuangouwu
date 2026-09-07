@@ -84,13 +84,24 @@ CI=true VITE_TEST_PORT=5176 bunx playwright test --config e2e/playwright.config.
 - This owner-maintained repository does not use the inherited Vendure CLA assistant, SonarQube scan, Vercel PR preview, or upstream PR-title gate.
 - Use a clear Conventional Commit-style PR title when practical, without making title formatting a merge blocker.
 
+### Production Release Coordination
+
+- Start production only through the `Production Release` workflow. It owns one repository-wide release slot from live preflight through immutable build and deploy; do not trigger the reusable build or deploy workflows directly.
+- Before merging another production-bound PR, check the active and pending `Production Release` runs. While a release is active, leave later PRs ready but unmerged so the candidate SHA, release scope and acceptance evidence do not change underneath it.
+- The workflow keeps the active release and only the newest pending candidate. Superseded pending candidates must not be deployed later merely because they were queued first.
+- Live preflight must pass before the expensive build starts. It verifies the running immutable revision, access to both production storefront domains, every reviewed Channel in the release scope, and that pending migrations are limited to the reviewed set.
+- Do not rerun a successful gate for the same exact SHA and inputs. Repeat a gate only after the SHA or release scope changes, or when the previous run failed or produced incomplete evidence.
+- Keep reports, branch cleanup and non-blocking repository housekeeping after deployment and acceptance. They are evidence/maintenance work, not part of the customer-visible release critical path.
+- Normal code-only releases should finish in 30-45 minutes; reviewed data or migration releases may take 45-90 minutes. At 90 minutes, stop starting more releases and report the exact blocking stage instead of accumulating retries.
+- Global Codex safety rules remain in force, but they do not require cleaning unrelated historical worktrees, re-reading unchanged evidence, or repeating already-passed checks for the same release candidate.
+
 ### Mandatory Production Branch & Release Evidence Policy
 
 - Production-bound changes must first be merged into `main` as an intentional, reviewed diff. Before merging, update the source branch against the latest `origin/main` and inspect both the complete diff and changed-file list. Never merge or commit an old workspace, release directory, WIP snapshot, or historical branch wholesale.
 - Production may deploy only an exact 40-character commit currently reachable from `origin/main`, or an immutable formal release tag that resolves to such a commit. Never deploy an uncommitted workspace, feature branch, stale worktree, movable tag, or manually selected `dist` directory.
 - Do not force-push `main` or move/reuse a formal release tag. If `origin/main` changes after validation, stop, update the release candidate, and repeat the checks and build.
 - Delete merged feature, hotfix and release branches only after the exact production SHA, deployment run and manual acceptance run are verified. Use `.github/workflows/cleanup_merged_production_branches.yml` in dry-run mode first, then rerun with `apply=true`; the workflow preserves open, unmerged, backup, archive and artifact branches. Production releases must use the immutable `main` SHA or a formal release tag rather than retaining task branches. Keep an active maintenance branch or rollback tag only when its owner and purpose are documented.
-- Every production deployment record must include the source branch, production ref (`main` or formal tag), full commit SHA, formal release tag when used, CI artifact name, artifact SHA-256 (or immutable container image digest), artifact workflow run, deployment workflow run, environment, UTC deployment time, operator, previous production SHA, and verification result. A mutable image version or tag alone is not sufficient evidence.
+- Every production deployment record must include the source branch, production ref (`main` or formal tag), full commit SHA, formal release tag when used, CI artifact name, artifact SHA-256 (or immutable container image digest), the single `Production Release` workflow run, environment, UTC deployment time, operator, previous production SHA, and verification result. Legacy artifact/deployment run fields both record that same run ID. A mutable image version or tag alone is not sufficient evidence.
 - Roll back only to a previously verified immutable artifact and record the rollback reason and SHA. Do not rewind `main`, rebuild from an old branch, or copy old build output over the active runtime.
 - Missing branch ancestry, immutable artifact identity, deployment evidence, or post-deploy verification is a release blocker. Do not bypass it with a manual copy or direct server build.
 

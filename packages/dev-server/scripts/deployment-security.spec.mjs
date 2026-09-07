@@ -260,6 +260,14 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
         path.join(repositoryRoot, '.github/workflows/build_production_runtime.yml'),
         'utf8',
     );
+    const releaseWorkflow = await readFile(
+        path.join(repositoryRoot, '.github/workflows/production_release.yml'),
+        'utf8',
+    );
+    const cleanupWorkflow = await readFile(
+        path.join(repositoryRoot, '.github/workflows/cleanup_merged_production_branches.yml'),
+        'utf8',
+    );
     const migrationReadinessCommand = [
         'NODE_ENV=production READINESS_PROCESS_ROLE=migration RUN_MIGRATIONS=true RUN_JOB_QUEUE=0 \\',
         '    node "${repository}/packages/dev-server/scripts/production-env-readiness.mjs"',
@@ -405,7 +413,7 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.match(script, /systemctl is-enabled vendure-mysql-restore-drill\.timer/u);
     assert.match(script, /systemctl is-active vendure-mysql-restore-drill\.timer/u);
 
-    assert.match(workflow, /workflow_run:/u);
+    assert.match(workflow, /workflow_call:/u);
     assert.match(workflow, /id-token: write/u);
     assert.match(workflow, /actions\/download-artifact@[0-9a-f]{40}/u);
     assert.match(workflow, /aws-actions\/configure-aws-credentials@[0-9a-f]{40}/u);
@@ -430,6 +438,20 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.doesNotMatch(workflow, /AWS_ACCESS_KEY_ID/u);
     assert.doesNotMatch(workflow, /AWS_SECRET_ACCESS_KEY/u);
 
+    assert.match(releaseWorkflow, /^name: Production Release$/mu);
+    assert.match(releaseWorkflow, /group: production-release/u);
+    assert.match(releaseWorkflow, /cancel-in-progress: false/u);
+    assert.match(releaseWorkflow, /operation: preflight-release/u);
+    assert.ok(
+        releaseWorkflow.indexOf('needs: preflight') < releaseWorkflow.indexOf('needs: build'),
+        'release must run preflight, build and deploy in order',
+    );
+    assert.match(releaseWorkflow, /uses: \.\/\.github\/workflows\/build_production_runtime\.yml/u);
+    assert.match(releaseWorkflow, /uses: \.\/\.github\/workflows\/deploy_production_runtime\.yml/u);
+    assert.match(cleanupWorkflow, /\.github\/workflows\/production_release\.yml/u);
+    assert.match(cleanupWorkflow, /\.event == "workflow_dispatch" or \.event == "push"/u);
+
+    assert.match(artifactWorkflow, /workflow_call:/u);
     assert.match(artifactWorkflow, /media_keys:/u);
     assert.match(artifactWorkflow, /channel_codes:/u);
     assert.match(artifactWorkflow, /MEDIA_CHANNEL_CODES" != "美宜佳"/u);
