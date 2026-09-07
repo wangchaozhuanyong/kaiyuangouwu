@@ -13,7 +13,12 @@ const darkTextClassPattern =
     /(?<![\w:-])(?:(?:focus|group-hover|hover):)?text-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(?:600|700|800|900|950)(?![\w/-])/g;
 
 // These translucent whites are deliberate overlays on permanently dark navigation or gradient surfaces.
-const intentionalDarkOverlayClasses = new Set(['bg-white/5', 'bg-white/10', 'hover:bg-white/5']);
+const intentionalDarkOverlayClasses = new Set([
+    'bg-white/5',
+    'bg-white/10',
+    'bg-white/15',
+    'hover:bg-white/5',
+]);
 
 function listSourceFiles(directory: string): string[] {
     return readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
