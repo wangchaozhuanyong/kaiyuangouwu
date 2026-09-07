@@ -7,6 +7,8 @@ import { In, IsNull } from 'typeorm';
 import { CONTENT_TRANSLATION_OPTIONS } from './constants.js';
 import { ContentTranslationState } from './entities/content-translation-state.entity.js';
 import { TranslationExecutionService } from './translation-execution.service.js';
+import { TranslationProviderError } from './translation-provider-error.js';
+import { TranslationResultCacheService } from './translation-result-cache.service.js';
 import {
     ContentTranslationPluginOptions,
     ContentTranslationRequest,
@@ -29,6 +31,7 @@ export class ContentTranslationService {
             connection,
             options,
         ),
+        private readonly resultCache?: TranslationResultCacheService,
     ) {}
 
     isConfigured(): boolean {
@@ -40,7 +43,6 @@ export class ContentTranslationService {
     }
 
     // Keep the asynchronous API for all callers; this phase intentionally performs no network I/O.
-    // eslint-disable-next-line @typescript-eslint/require-await
     async prepareLocalizedFields(
         fields: LocalizedContentFieldInput[],
     ): Promise<PreparedLocalizedContentField[]> {
@@ -137,10 +139,29 @@ export class ContentTranslationService {
             }
             segments.push({ key: field.path, text: sourceText, format: field.format ?? 'TEXT' });
         }
-        // Business saves never call the provider. The durable outbox is written by recordPreparedFields.
+        const cached = new Map(
+            (await this.cachedTranslations({ segments })).map(item => [item.key, item.text]),
+        );
+        // Business saves only read the cache. Misses are persisted to the durable outbox.
         for (const segment of segments) {
             const source = fields.find(field => field.path === segment.key);
             if (!source) throw new UserInputError('待译字段定义不存在');
+            const cachedText = cached.get(segment.key);
+            const tooLong =
+                cachedText != null &&
+                source.maxTargetLength != null &&
+                cachedText.length > source.maxTargetLength;
+            if (isUsableEnglishTranslation(cachedText) && !tooLong) {
+                prepared.set(segment.key, {
+                    path: segment.key,
+                    sourceText: segment.text,
+                    translatedText: cachedText,
+                    status: 'AUTO_TRANSLATED',
+                    origin: 'AUTO',
+                    locked: false,
+                });
+                continue;
+            }
             prepared.set(segment.key, {
                 path: segment.key,
                 sourceText: segment.text,
@@ -150,6 +171,7 @@ export class ContentTranslationService {
                 status: 'PENDING',
                 origin: 'AUTO',
                 locked: false,
+                error: tooLong ? new TranslationProviderError('TEXT_TOO_LONG').message : undefined,
             });
         }
         return fields.map(field => {
@@ -263,15 +285,42 @@ export class ContentTranslationService {
         };
     }
 
+    async cachedTranslations(
+        request: Pick<ContentTranslationRequest, 'segments'>,
+    ): Promise<Array<{ key: string; text: string }>> {
+        if (!this.resultCache || !request.segments.length) return [];
+        try {
+            return await this.resultCache.lookup(
+                {
+                    ...request,
+                    sourceLanguageCode: this.options.sourceLanguageCode,
+                    targetLanguageCode: this.options.targetLanguageCode,
+                    glossary: this.options.glossary,
+                },
+                this.providerName(),
+            );
+        } catch (error) {
+            if (!(error instanceof TranslationProviderError)) throw error;
+            return [];
+        }
+    }
+
     async translate(
         request: Omit<ContentTranslationRequest, 'sourceLanguageCode' | 'targetLanguageCode' | 'glossary'>,
     ): Promise<ContentTranslationResult> {
-        return this.execution.translate({
+        const translationRequest: ContentTranslationRequest = {
             sourceLanguageCode: this.options.sourceLanguageCode,
             targetLanguageCode: this.options.targetLanguageCode,
             glossary: this.options.glossary,
             ...request,
-        });
+        };
+        if (this.resultCache)
+            return this.resultCache.translate(translationRequest, {
+                name: this.providerName(),
+                isConfigured: () => this.isConfigured(),
+                translate: input => this.execution.translate(input),
+            });
+        return this.execution.translate(translationRequest);
     }
 
     async recordState(

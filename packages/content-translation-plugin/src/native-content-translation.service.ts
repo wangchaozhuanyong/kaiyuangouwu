@@ -1,4 +1,5 @@
 import { Injectable, OnApplicationBootstrap } from '@nestjs/common';
+import { normalizeString } from '@vendure/common/lib/normalize-string';
 import {
     Channel,
     Collection,
@@ -413,10 +414,38 @@ export class NativeContentTranslationService implements OnApplicationBootstrap {
                 !currentAutoFields.has(field.path) &&
                 (field.deriveFrom || String(source[field.path] ?? '').trim()),
         );
+        const cached = new Map(
+            (
+                await this.translations.cachedTranslations({
+                    segments: pendingFields
+                        .filter(field => !field.deriveFrom)
+                        .map(field => ({
+                            key: field.path,
+                            text: String(source[field.path] ?? '').trim(),
+                            format: field.format ?? 'TEXT',
+                        })),
+                })
+            ).map(item => [item.key, item.text]),
+        );
         const pending = new Set(pendingFields.map(field => field.path));
         const nextTarget = target ?? repository.create({ languageCode: 'en', base: entity });
         for (const field of definition.fields) {
             if (manualFields.has(field.path) || currentAutoFields.has(field.path)) continue;
+            const cachedText = cached.get(field.path);
+            const maxLength =
+                Number(repository.metadata?.findColumnWithPropertyName(field.path)?.length) || undefined;
+            if (cachedText != null && (!maxLength || cachedText.length <= maxLength)) {
+                nextTarget[field.path] = cachedText;
+                pending.delete(field.path);
+                continue;
+            }
+            if (field.deriveFrom && !pending.has(field.deriveFrom)) {
+                nextTarget[field.path] =
+                    normalizeString(nextTarget[field.deriveFrom] ?? '', '-') ||
+                    `${entityType.toLowerCase()}-${entity.id}`;
+                pending.delete(field.path);
+                continue;
+            }
             const previous = String(target?.[field.path] ?? '');
             nextTarget[field.path] =
                 pending.has(field.path) && !contentTranslationInternals.containsHanContent(previous)

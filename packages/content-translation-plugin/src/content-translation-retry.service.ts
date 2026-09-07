@@ -17,6 +17,7 @@ import {
 } from './translation-content-adapter.js';
 import { translationBackoff } from './translation-execution.service.js';
 import { TranslationProviderError } from './translation-provider-error.js';
+import { CachedTranslationPartialError } from './translation-result-cache.service.js';
 
 interface ClaimedField {
     state: ContentTranslationState;
@@ -135,34 +136,43 @@ export class ContentTranslationRetryService {
                 result.deferred++;
             }
         }
-        let providerStopped = false;
         for (const batch of batches) {
-            if (Date.now() >= deadline || providerStopped) {
+            if (Date.now() >= deadline) {
                 for (const item of batch)
                     await this.defer(item.state, new TranslationProviderError('BUSY', 60_000));
                 result.deferred += batch.length;
                 continue;
             }
             try {
-                // Repeated text in this batch shares a single provider segment, never a cross-shop text cache.
+                // Repeated text shares a segment; the shared cache is checked before the provider lease.
                 const unique = new Map<string, string>();
                 for (const item of batch)
                     if (!unique.has(item.snapshot.source))
                         unique.set(item.snapshot.source, String(item.state.id));
-                const response = await this.translations.translate({
-                    segments: [...unique].map(([text, key]) => ({
-                        key,
-                        text,
-                        format: batch[0].snapshot.format,
-                    })),
-                });
+                let partialFailure: CachedTranslationPartialError | undefined;
+                const response = await this.translations
+                    .translate({
+                        segments: [...unique].map(([text, key]) => ({
+                            key,
+                            text,
+                            format: batch[0].snapshot.format,
+                        })),
+                    })
+                    .catch((error: unknown) => {
+                        if (!(error instanceof CachedTranslationPartialError)) throw error;
+                        partialFailure = error;
+                        return {
+                            provider: this.translations.providerName(),
+                            translations: error.translations,
+                        };
+                    });
                 for (const item of batch) {
                     try {
                         const translated = response.translations.find(
                             value => value.key === unique.get(item.snapshot.source),
                         )?.text;
                         if (!isUsableEnglishTranslation(translated))
-                            throw new TranslationProviderError('INVALID_RESPONSE');
+                            throw partialFailure ?? new TranslationProviderError('INVALID_RESPONSE');
                         if (
                             item.snapshot.maxTargetLength &&
                             translated.trim().length > item.snapshot.maxTargetLength
@@ -178,9 +188,6 @@ export class ContentTranslationRetryService {
             } catch (error) {
                 for (const item of batch) await this.defer(item.state, error);
                 result.deferred += batch.length;
-                providerStopped =
-                    !(error instanceof TranslationProviderError) ||
-                    ['RATE_LIMIT', 'QUOTA', 'UNAVAILABLE', 'CONFIGURATION', 'BUSY'].includes(error.code);
             }
         }
         return result;

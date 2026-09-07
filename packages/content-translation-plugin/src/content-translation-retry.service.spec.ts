@@ -1,3 +1,4 @@
+import { SettingsStoreEntry } from '@vendure/core';
 import 'reflect-metadata';
 import {
     Column,
@@ -18,6 +19,7 @@ import { TranslationProviderState } from './entities/translation-provider-state.
 import { TranslationContentAdapter } from './translation-content-adapter.js';
 import { TranslationExecutionService } from './translation-execution.service.js';
 import { TranslationProviderError } from './translation-provider-error.js';
+import { TranslationResultCacheService } from './translation-result-cache.service.js';
 
 // These SQL fixtures mirror real ownership: an item has blockId, never a direct channelId.
 @Entity()
@@ -58,6 +60,7 @@ class FacetTranslation {
     @ManyToOne(() => Facet, facet => facet.translations) base: Facet;
 }
 PrimaryGeneratedColumn()(ContentTranslationState.prototype, 'id');
+PrimaryGeneratedColumn()(SettingsStoreEntry.prototype, 'id');
 let db: DataSource;
 let source: ItemTranslation;
 let target: ItemTranslation;
@@ -96,6 +99,7 @@ beforeEach(async () => {
             ItemTranslation,
             ContentTranslationState,
             TranslationProviderState,
+            SettingsStoreEntry,
         ],
     }).initialize();
     if (process.env.TRANSLATION_TEST_POSTGRES === '1') {
@@ -155,6 +159,56 @@ const english = async () =>
     (await db.getRepository(ItemTranslation).findOneByOrFail({ id: target.id })).label;
 
 describe('durable translation outbox with an isolated SQL database', () => {
+    it('applies cached fields while retaining provider Retry-After for uncached fields', async () => {
+        const cache = new TranslationResultCacheService(connection);
+        await cache.translate(
+            { ...options, segments: [{ key: 'warm', text: source.label }] },
+            options.provider,
+        );
+        service = new ContentTranslationService(connection, options, execution, cache);
+        retry = new ContentTranslationRetryService(connection, service, adapter);
+        await db.getRepository(ItemTranslation).update(source.id, { description: '说明' });
+        const missing = await service.recordState(ctx, {
+            channelId: '1',
+            entityType: 'StorefrontContentItem',
+            entityId: state.entityId,
+            fieldPath: 'description',
+            sourceText: '说明',
+            translatedText: '',
+            status: 'PENDING',
+        });
+        translate.mockRejectedValueOnce(new TranslationProviderError('RATE_LIMIT', 180_000));
+        expect(await retry.retryPending()).toEqual({ scanned: 2, translated: 1, deferred: 1 });
+        expect(await english()).toBe('Business services');
+        expect((await readState()).status).toBe('AUTO_TRANSLATED');
+        expect(
+            await db.getRepository(ContentTranslationState).findOneByOrFail({ id: missing.id }),
+        ).toMatchObject({
+            status: 'PENDING',
+            lastErrorCode: 'RATE_LIMIT',
+            nextAttemptAt: new Date(Date.now() + 180_000),
+        });
+        expect(translate).toHaveBeenCalledTimes(2);
+        expect(translate.mock.calls[1][0].segments.map((segment: any) => segment.text)).toEqual(['说明']);
+    });
+
+    it('consumes a cached result even while the shared provider lease is cooling down', async () => {
+        const cache = new TranslationResultCacheService(connection);
+        await cache.translate(
+            { ...options, segments: [{ key: 'warm', text: source.label }] },
+            options.provider,
+        );
+        translate.mockRejectedValueOnce(new TranslationProviderError('RATE_LIMIT', 180_000));
+        await expect(
+            execution.translate({ ...options, segments: [{ key: 'other', text: '新内容' }] }),
+        ).rejects.toMatchObject({ code: 'RATE_LIMIT' });
+        service = new ContentTranslationService(connection, options, execution, cache);
+        retry = new ContentTranslationRetryService(connection, service, adapter);
+        expect(await retry.retryPending()).toEqual({ scanned: 1, translated: 1, deferred: 0 });
+        expect(await english()).toBe('Business services');
+        expect(translate).toHaveBeenCalledTimes(2);
+    });
+
     it('preserves old English when one result exceeds its column limit without blocking other fields', async () => {
         await db.getRepository(ItemTranslation).update(source.id, { description: '说明' });
         await service.recordState(ctx, {

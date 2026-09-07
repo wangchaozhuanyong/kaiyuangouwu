@@ -36,65 +36,78 @@ describe('native content translation event routing', () => {
         expect(nativeContentTranslationInternals.supportsEntityType(Province)).toBe(true);
     });
 
-    it('queues English without calling an unconfigured provider', async () => {
-        const source = {
-            languageCode: 'zh_Hans',
-            name: '测试商品',
-            slug: 'ce-shi-shang-pin',
-            description: '<p>商品详情</p>',
-        };
-        const repository = {
-            createQueryBuilder: vi.fn(() => {
-                let languageCode = '';
-                const builder = {
-                    leftJoinAndSelect: vi.fn(() => builder),
-                    where: vi.fn(() => builder),
-                    andWhere: vi.fn((_query: string, parameters: { languageCode: string }) => {
-                        languageCode = parameters.languageCode;
-                        return builder;
-                    }),
-                    getOne: vi.fn(() => Promise.resolve(languageCode === 'zh_Hans' ? source : null)),
-                };
-                return builder;
-            }),
-            create: vi.fn((value: any) => value),
-            save: vi.fn((value: any) => Promise.resolve(value)),
-        };
-        const connection = {
-            rawConnection: {
-                getMetadata: vi.fn(() => ({
-                    relations: [
-                        {
-                            propertyName: 'translations',
-                            inverseEntityMetadata: { target: class ProductTranslation {} },
-                        },
-                    ],
-                })),
-            },
-            getRepository: vi.fn(() => repository),
-        };
-        const translations = {
-            findStates: vi.fn().mockResolvedValue([]),
-            isConfigured: vi.fn(() => false),
-            translate: vi.fn(),
-            recordState: vi.fn().mockResolvedValue(undefined),
-        };
-        const service = new NativeContentTranslationService(
-            {} as any,
-            connection as any,
-            translations as any,
-        );
+    it.each([false, true])(
+        'preserves cached English and queues misses without a provider (cached=%s)',
+        async cached => {
+            const source = {
+                languageCode: 'zh_Hans',
+                name: '测试商品',
+                slug: 'ce-shi-shang-pin',
+                description: '<p>商品详情</p>',
+            };
+            const repository = {
+                createQueryBuilder: vi.fn(() => {
+                    let languageCode = '';
+                    const builder = {
+                        leftJoinAndSelect: vi.fn(() => builder),
+                        where: vi.fn(() => builder),
+                        andWhere: vi.fn((_query: string, parameters: { languageCode: string }) => {
+                            languageCode = parameters.languageCode;
+                            return builder;
+                        }),
+                        getOne: vi.fn(() => Promise.resolve(languageCode === 'zh_Hans' ? source : null)),
+                    };
+                    return builder;
+                }),
+                create: vi.fn((value: any) => value),
+                save: vi.fn((value: any) => Promise.resolve(value)),
+            };
+            const connection = {
+                rawConnection: {
+                    getMetadata: vi.fn(() => ({
+                        relations: [
+                            {
+                                propertyName: 'translations',
+                                inverseEntityMetadata: { target: class ProductTranslation {} },
+                            },
+                        ],
+                    })),
+                },
+                getRepository: vi.fn(() => repository),
+            };
+            const translations = {
+                cachedTranslations: vi.fn().mockResolvedValue([]),
+                findStates: vi.fn().mockResolvedValue([]),
+                isConfigured: vi.fn(() => false),
+                translate: vi.fn(),
+                recordState: vi.fn().mockResolvedValue(undefined),
+            };
+            if (cached)
+                translations.cachedTranslations.mockResolvedValue([{ key: 'name', text: 'Cached product' }]);
+            const service = new NativeContentTranslationService(
+                {} as any,
+                connection as any,
+                translations as any,
+            );
 
-        await expect(
-            service.translateEntity({ channelId: 'channel-1' } as any, new Product({ id: 'product-1' }), {
-                translations: [source],
-            }),
-        ).resolves.toBe(true);
+            await expect(
+                service.translateEntity({ channelId: 'channel-1' } as any, new Product({ id: 'product-1' }), {
+                    translations: [source],
+                }),
+            ).resolves.toBe(true);
 
-        expect(translations.translate).not.toHaveBeenCalled();
-        expect(repository.create).toHaveBeenCalled();
-        expect(repository.save).toHaveBeenCalled();
-    });
+            expect(translations.translate).not.toHaveBeenCalled();
+            expect(repository.create).toHaveBeenCalled();
+            expect(repository.save).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    name: cached ? 'Cached product' : '',
+                    slug: cached ? 'cached-product' : 'product-product-1',
+                    description: '',
+                }),
+                { reload: false },
+            );
+        },
+    );
 
     it('regenerates a required English translation when a submitted target was cleared', async () => {
         const source = {
@@ -140,6 +153,7 @@ describe('native content translation event routing', () => {
             getRepository: vi.fn(() => repository),
         };
         const translations = {
+            cachedTranslations: vi.fn().mockResolvedValue([]),
             findStates: vi.fn().mockResolvedValue([]),
             isConfigured: vi.fn(() => true),
             providerName: vi.fn(() => 'test'),
@@ -219,6 +233,7 @@ describe('native content translation event routing', () => {
             getRepository: vi.fn(() => repository),
         };
         const translations = {
+            cachedTranslations: vi.fn().mockResolvedValue([]),
             findStates: vi.fn().mockResolvedValue([]),
             isConfigured: vi.fn(() => true),
             providerName: vi.fn(() => 'test'),
@@ -301,6 +316,7 @@ describe('native content translation event routing', () => {
             getRepository: vi.fn(() => repository),
         };
         const translations = {
+            cachedTranslations: vi.fn().mockResolvedValue([]),
             findStates: vi.fn().mockResolvedValue([]),
             isConfigured: vi.fn(() => true),
             providerName: vi.fn(() => 'test'),
@@ -381,6 +397,7 @@ describe('native content translation event routing', () => {
                 getRepository: vi.fn(() => repository),
             };
             const translations = {
+                cachedTranslations: vi.fn().mockResolvedValue([]),
                 findStates: vi.fn().mockResolvedValue([
                     {
                         channelId,
@@ -458,6 +475,7 @@ describe('native content translation event routing', () => {
                 getRepository: vi.fn(() => repository),
             };
             const translations = {
+                cachedTranslations: vi.fn().mockResolvedValue([]),
                 findStates: vi
                     .fn()
                     .mockResolvedValueOnce([
@@ -565,7 +583,10 @@ describe('native content translation event routing', () => {
             },
             getRepository: vi.fn(() => repository),
         };
-        const translations = { recordState: vi.fn().mockResolvedValue(undefined) };
+        const translations = {
+            cachedTranslations: vi.fn().mockResolvedValue([]),
+            recordState: vi.fn().mockResolvedValue(undefined),
+        };
         const service = new NativeContentTranslationService(
             {} as any,
             connection as any,
@@ -622,7 +643,10 @@ describe('native content translation event routing', () => {
             },
             getRepository: vi.fn(() => repository),
         };
-        const translations = { recordState: vi.fn().mockResolvedValue(undefined) };
+        const translations = {
+            cachedTranslations: vi.fn().mockResolvedValue([]),
+            recordState: vi.fn().mockResolvedValue(undefined),
+        };
         const service = new NativeContentTranslationService(
             {} as any,
             connection as any,

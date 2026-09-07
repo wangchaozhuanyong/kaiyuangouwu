@@ -145,8 +145,8 @@ describe('auth password visibility controls', () => {
         expect(markup).not.toContain('人工服务');
         expect(markup).toContain('class="auth-form-heading auth-form-heading-zh"');
         expect(markup).not.toContain('账户登录');
-        expect(markup).toContain('auth-clear-header');
-        expect(markup).toContain('返回');
+        expect(markup).toContain('auth-hero-header');
+        expect(markup).toContain('>返回</span>');
         expect(markup).toContain('class="auth-route-tabs"');
         expect(markup).toContain('aria-current="page"');
         expect(markup).toContain('aria-label="登录表单"');
@@ -164,7 +164,7 @@ describe('auth password visibility controls', () => {
         expect(markup).not.toContain('验证邮箱即可开始使用');
         expect(markup).not.toContain('订单与售后状态清晰可查');
         expect(markup).not.toContain('新账户');
-        expect(markup).toContain('auth-clear-header');
+        expect(markup).toContain('auth-hero-header');
         expect(markup).toContain('class="auth-route-tabs"');
         expect(markup).not.toContain('全球模型 · 一钥直达');
         expect(markup).toContain('aria-label="注册表单"');
@@ -218,10 +218,11 @@ describe('auth password visibility controls', () => {
         expect(markup).toContain('后台登录主标题');
         expect(markup).toContain('后台卖点3');
         expect(markup).toContain('--auth-visual-background:#010203');
+        expect(markup).toContain('--auth-visual-foreground:#fefefe');
         expect(markup).toContain('--auth-accent:#abcdef');
-        expect(markup).toContain('preset=storefront-original-preview');
-        expect(markup).toContain('height:auto;object-fit:contain;filter:none');
-        expect(markup).toContain('store-auth-copy');
+        expect(markup).toContain('auth-hero-managed');
+        expect(markup).toContain('auth-hero-message-managed');
+        expect(markup).toContain('class="auth-hero-tags"');
         expect(markup).not.toContain('auth-brand-lockup');
         expect(markup).not.toContain('auth-hero-benefit');
         expect(markup).not.toContain('支持服务类型');
@@ -240,11 +241,14 @@ describe('auth password visibility controls', () => {
 });
 
 describe('managed auth visual layout', () => {
-    it('keeps the dashboard preview composition visible on mobile and short screens', () => {
+    it('keeps the previous compact hero and form layout on mobile and short screens', () => {
         const styles = readStorefrontStylesheet();
 
-        expect(styles).toContain('.auth-page.auth-page-clear');
-        expect(styles).toContain('grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr)');
+        expect(styles).toContain('--auth-managed-hero-height: clamp(210px, 58.974vw, 230px)');
+        expect(styles).toContain('.auth-page .auth-hero-message-managed > .auth-hero-copy > p');
+        expect(styles).toContain('.auth-page .auth-hero-message-managed .auth-hero-tags');
+        expect(styles).toContain('.auth-page-managed .login-content');
+        expect(styles).toContain('.auth-page .auth-hero-header .auth-back-button');
         expect(styles).toContain('.auth-page .auth-password-toggle svg');
         expect(styles).toContain('.auth-route-tabs');
     });
