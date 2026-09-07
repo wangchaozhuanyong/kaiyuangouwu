@@ -62,9 +62,9 @@ export function ProductFacetsCollectionsTab() {
         !hasDirectProductAssignment(collection.filters, productId ?? '');
 
     return (
-        <div className="space-y-6">
+        <div className="grid items-start gap-4 2xl:grid-cols-2">
             {/* Facet 筛选标签属性 */}
-            <div className="bg-white rounded-xl shadow-2xs border border-slate-200 p-6 space-y-4">
+            <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-2xs">
                 <div className="border-b border-slate-100 pb-3">
                     <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                         Facet 属性标签关联
@@ -151,7 +151,7 @@ export function ProductFacetsCollectionsTab() {
             </div>
 
             {/* 所属商品分类 */}
-            <div className="bg-white rounded-xl shadow-2xs border border-slate-200 p-6 space-y-3">
+            <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-5 shadow-2xs">
                 <div className="border-b border-slate-100 pb-3">
                     <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                         所属商品分类 (Collections)
@@ -233,7 +233,7 @@ export function ProductFacetsCollectionsTab() {
                                             </div>
 
                                             {group.children.length > 0 ? (
-                                                <div className="grid grid-cols-1 gap-2 p-3 sm:grid-cols-2 xl:grid-cols-3">
+                                                <div className="grid grid-cols-1 gap-2 p-3 sm:grid-cols-2">
                                                     {group.children.map(child => (
                                                         <CollectionAssignmentOption
                                                             key={child.id}
