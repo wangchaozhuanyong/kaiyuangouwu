@@ -8,16 +8,24 @@ export class StorefrontRegionShopResolver {
     @Query()
     @Allow(Permission.Public)
     async availableStorefrontProvinces(@Ctx() ctx: RequestContext) {
-        const result = await this.provinceService.findAll(
-            ctx,
-            {
-                take: 500,
-                filter: { enabled: { eq: true } },
-            },
-            ['parent'],
-        );
+        const provinces: Awaited<ReturnType<ProvinceService['findAll']>>['items'] = [];
+        let skip = 0;
+        for (;;) {
+            const result = await this.provinceService.findAll(
+                ctx,
+                {
+                    skip,
+                    take: 100,
+                    filter: { enabled: { eq: true } },
+                },
+                ['parent'],
+            );
+            provinces.push(...result.items);
+            skip += result.items.length;
+            if (result.items.length === 0 || skip >= result.totalItems) break;
+        }
 
-        return result.items
+        return provinces
             .flatMap(province => {
                 const country = province.parent;
                 if (country?.type !== 'country' || !country.enabled) return [];

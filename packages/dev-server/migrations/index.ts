@@ -105,6 +105,7 @@ import { AddUsdtActiveAmountKey1788703200000 } from './1788703200000-add-usdt-ac
 import { ReleaseUsdtHistoricalAmountKeys1788706800000 } from './1788706800000-release-usdt-historical-amount-keys';
 import { AddTranslationOutbox1788739200000 } from './1788739200000-add-translation-outbox';
 import { SeedCheckoutProvinces1788742800000 } from './1788742800000-seed-checkout-provinces';
+import { AlignCheckoutProvinceCountries1788746400000 } from './1788746400000-align-checkout-province-countries';
 
 export const devServerMigrations = [
     CommerceFulfillment1786514145999,
@@ -214,4 +215,5 @@ export const devServerMigrations = [
     ReleaseUsdtHistoricalAmountKeys1788706800000,
     AddTranslationOutbox1788739200000,
     SeedCheckoutProvinces1788742800000,
+    AlignCheckoutProvinceCountries1788746400000,
 ];

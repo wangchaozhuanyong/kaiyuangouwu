@@ -38,7 +38,48 @@ describe('StorefrontRegionShopResolver', () => {
         ]);
         expect(provinceService.findAll).toHaveBeenCalledWith(
             {},
-            { take: 500, filter: { enabled: { eq: true } } },
+            { skip: 0, take: 100, filter: { enabled: { eq: true } } },
+            ['parent'],
+        );
+    });
+
+    it('paginates without exceeding the Vendure list limit', async () => {
+        const provinceService = {
+            findAll: vi
+                .fn()
+                .mockResolvedValueOnce({
+                    totalItems: 2,
+                    items: [
+                        {
+                            code: 'MY-01',
+                            name: 'Johor',
+                            enabled: true,
+                            parent: { code: '001', type: 'country', enabled: true },
+                        },
+                    ],
+                })
+                .mockResolvedValueOnce({
+                    totalItems: 2,
+                    items: [
+                        {
+                            code: 'MY-10',
+                            name: 'Selangor',
+                            enabled: true,
+                            parent: { code: '001', type: 'country', enabled: true },
+                        },
+                    ],
+                }),
+        };
+        const resolver = new StorefrontRegionShopResolver(provinceService as never);
+
+        await expect(resolver.availableStorefrontProvinces({} as never)).resolves.toEqual([
+            { code: 'MY-01', name: 'Johor', countryCode: '001' },
+            { code: 'MY-10', name: 'Selangor', countryCode: '001' },
+        ]);
+        expect(provinceService.findAll).toHaveBeenNthCalledWith(
+            2,
+            {},
+            { skip: 1, take: 100, filter: { enabled: { eq: true } } },
             ['parent'],
         );
     });

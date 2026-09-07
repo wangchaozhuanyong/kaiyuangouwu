@@ -33,10 +33,12 @@ test('USDT contracted schema never permits a legacy runtime, even before the fir
 test('production migration preflight permits only the reviewed migration set', () => {
     guard.assertPending([]);
     guard.assertPending(['SeedCheckoutProvinces1788742800000']);
+    guard.assertPending(['AlignCheckoutProvinceCountries1788746400000']);
     guard.assertPending([
         'AddUsdtActiveAmountKey1788703200000',
         'ReleaseUsdtHistoricalAmountKeys1788706800000',
         'SeedCheckoutProvinces1788742800000',
+        'AlignCheckoutProvinceCountries1788746400000',
     ]);
     assert.throws(
         () =>
