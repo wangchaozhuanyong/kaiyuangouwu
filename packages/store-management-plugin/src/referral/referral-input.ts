@@ -11,11 +11,11 @@ export interface SaveReferralPosterTemplateInput {
     posterBackgroundAssetId?: ID | null;
     shareBackgroundAssetId?: ID | null;
     titleZh: string;
-    titleEn: string;
+    titleEn?: string;
     headlineZh: string;
-    headlineEn: string;
+    headlineEn?: string;
     rewardTextZh: string;
-    rewardTextEn: string;
+    rewardTextEn?: string;
     siteIntroZh: string;
     siteIntroEn: string;
     serviceTextZh: string;
@@ -81,11 +81,11 @@ export function normalizeReferralPosterInput(input: SaveReferralPosterTemplateIn
         position: input.position,
         layoutVariant: input.layoutVariant,
         titleZh: requiredText(input.titleZh, '中文小标题', 80),
-        titleEn: requiredText(input.titleEn, '英文小标题', 80),
+        titleEn: clippedText(input.titleEn, 80),
         headlineZh: requiredText(input.headlineZh, '中文主标题', 180),
-        headlineEn: requiredText(input.headlineEn, '英文主标题', 180),
+        headlineEn: clippedText(input.headlineEn, 180),
         rewardTextZh: requiredText(input.rewardTextZh, '中文奖励文案', 220),
-        rewardTextEn: requiredText(input.rewardTextEn, '英文奖励文案', 220),
+        rewardTextEn: clippedText(input.rewardTextEn, 220),
         siteIntroZh: clippedText(input.siteIntroZh, 260),
         siteIntroEn: clippedText(input.siteIntroEn, 260),
         serviceTextZh: clippedText(input.serviceTextZh, 260),

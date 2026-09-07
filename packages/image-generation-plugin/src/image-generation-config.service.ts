@@ -1,5 +1,7 @@
 import { Inject, Injectable, OnApplicationBootstrap } from '@nestjs/common';
 import { ID } from '@vendure/common/lib/shared-types';
+import { isUsableEnglishTranslation } from '@vendure/common/lib/translation-validation';
+import { ContentTranslationService } from '@vendure/content-translation-plugin';
 import { RequestContext, TransactionalConnection, UserInputError } from '@vendure/core';
 import { createHash, randomUUID } from 'node:crypto';
 import { In, IsNull, MoreThanOrEqual } from 'typeorm';
@@ -47,6 +49,8 @@ const PROVIDER_SCOPES = ['OPENAI', 'GEMINI'] as const satisfies readonly ImagePr
 
 @Injectable()
 export class ImageGenerationConfigService implements OnApplicationBootstrap {
+    @Inject(ContentTranslationService)
+    private readonly translations!: ContentTranslationService;
     constructor(
         @Inject(IMAGE_GENERATION_OPTIONS) private readonly options: ImageGenerationPluginOptions,
         private readonly connection: TransactionalConnection,
@@ -241,6 +245,9 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
                 available:
                     model.enabled &&
                     modelReady(model) &&
+                    (String(ctx.languageCode) !== 'en' ||
+                        (isUsableEnglishTranslation(model.displayNameEn) &&
+                            isUsableEnglishTranslation(model.descriptionEn))) &&
                     (await this.providerRouter.hasAvailable(ctx, {
                         scope: providerScopeForModel(model.protocol, model.providerModelId),
                         purpose: 'IMAGE',
@@ -255,14 +262,17 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
         });
         const promptOptimizerModelIds = [...new Set(promptModels.map(m => m.modelId.trim()).filter(Boolean))];
         const optimizerAvailable = promptOptimizerModelIds.length > 0;
+        const englishTermsReady =
+            String(ctx.languageCode) !== 'en' || isUsableEnglishTranslation(config.termsEn);
         const promptPrice = quoteImageMoney(
             ctx,
             config.paidPromptOptimizationPrice,
             config.paidPromptOptimizationCurrencyCode,
         );
         return {
-            enabled: config.enabled && availableModels.length > 0,
-            promptOptimizationEnabled: config.promptOptimizationEnabled && optimizerAvailable,
+            enabled: config.enabled && availableModels.length > 0 && englishTermsReady,
+            promptOptimizationEnabled:
+                config.promptOptimizationEnabled && optimizerAvailable && englishTermsReady,
             promptOptimizerModelIds,
             promptRateLimitPerMinute: config.promptRateLimitPerMinute,
             promptDailyFreeLimit: config.promptDailyFreeLimit,
@@ -273,7 +283,7 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
             defaultModelCode: config.defaultModelCode,
             termsVersion: config.termsVersion,
             termsZh: config.termsZh,
-            termsEn: config.termsEn,
+            termsEn: englishTermsReady ? config.termsEn : '',
             outputRetentionDays: 90,
             referenceRetentionHours: 24,
             maxReferenceBytes: 10 * 1024 * 1024,
@@ -439,10 +449,22 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
             config.paidPromptOptimizationPrice = input.paidPromptOptimizationPrice;
             config.paidPromptOptimizationCurrencyCode = input.paidPromptOptimizationCurrencyCode;
             config.defaultModelCode = input.defaultModelCode;
+            const localized = await this.translations.prepareLocalizedColumns(
+                ['terms'],
+                input,
+                config,
+                { terms: 8_000 },
+                txCtx,
+            );
             config.termsVersion = requiredText(input.termsVersion, 32, '条款版本');
             config.termsZh = requiredText(input.termsZh, 8_000, '中文条款');
-            config.termsEn = requiredText(input.termsEn, 8_000, '英文条款');
+            config.termsEn = optionalText(localized.values.termsEn, 8_000, '英文条款');
             await this.connection.getRepository(txCtx, ImageGenerationConfig).save(config, { reload: false });
+            await this.translations.recordPreparedFields(
+                txCtx,
+                { channelId: txCtx.channelId, entityType: ImageGenerationConfig.name, entityId: config.id },
+                localized.prepared,
+            );
             await modelRepository
                 .createQueryBuilder()
                 .update(ImageModelConfig)
@@ -724,13 +746,20 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
         });
     }
 
-    private saveModelRecord(
+    private async saveModelRecord(
         txCtx: RequestContext,
         input: SaveImageModelInput,
         definition: (typeof launchModelDefinitions)[number],
         existingModel: ImageModelConfig | undefined,
     ): Promise<ImageModelConfig> {
         const repository = this.connection.getRepository(txCtx, ImageModelConfig);
+        const localized = await this.translations.prepareLocalizedColumns(
+            ['displayName', 'description'],
+            input,
+            existingModel,
+            { displayName: 120, description: 500 },
+            txCtx,
+        );
         const mappingChanged =
             !existingModel ||
             existingModel.providerModelId !== input.providerModelId.trim() ||
@@ -740,9 +769,9 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
             code: definition.code,
             enabled: input.enabled,
             displayNameZh: requiredText(input.displayNameZh, 120, '中文名称'),
-            displayNameEn: requiredText(input.displayNameEn, 120, '英文名称'),
+            displayNameEn: optionalText(localized.values.displayNameEn, 120, '英文名称'),
             descriptionZh: requiredText(input.descriptionZh, 500, '中文模型说明'),
-            descriptionEn: requiredText(input.descriptionEn, 500, '英文模型说明'),
+            descriptionEn: optionalText(localized.values.descriptionEn, 500, '英文模型说明'),
             officialModelId: definition.officialModelId,
             providerModelId: requiredText(input.providerModelId, 160, '中转站模型 ID'),
             protocol: input.protocol,
@@ -763,9 +792,15 @@ export class ImageGenerationConfigService implements OnApplicationBootstrap {
             lastTestedAt: mappingChanged ? null : (existingModel?.lastTestedAt ?? null),
             consecutiveFailures: mappingChanged ? 0 : (existingModel?.consecutiveFailures ?? 0),
         };
-        return repository.save(
+        const saved = await repository.save(
             existingModel ? Object.assign(existingModel, values) : new ImageModelConfig(values),
         );
+        await this.translations.recordPreparedFields(
+            txCtx,
+            { channelId: txCtx.channelId, entityType: ImageModelConfig.name, entityId: saved.id },
+            localized.prepared,
+        );
+        return saved;
     }
 
     skillReleases(ctx: RequestContext): Promise<ImagePromptSkillRelease[]> {

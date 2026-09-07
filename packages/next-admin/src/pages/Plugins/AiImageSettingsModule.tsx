@@ -257,6 +257,7 @@ function ConfigPanel({
     onSaved: (message: string) => Promise<void>;
     onError: (error: unknown) => void;
 }) {
+    const [originalValue] = useState(value);
     const [enabled, setEnabled] = useState(value.enabled);
     const [optimization, setOptimization] = useState(value.promptOptimizationEnabled);
     const [defaultModelCode, setDefaultModelCode] = useState(value.defaultModelCode);
@@ -272,8 +273,8 @@ function ConfigPanel({
               ? '默认模型必须处于启用状态'
               : !termsVersion.trim()
                 ? '请填写条款版本'
-                : !termsZh.trim() || !termsEn.trim()
-                  ? '中英文服务条款都不能为空'
+                : !termsZh.trim()
+                  ? '中文服务条款不能为空，英文会在后台补齐'
                   : null;
     const dirty =
         enabled !== value.enabled ||
@@ -283,11 +284,11 @@ function ConfigPanel({
         termsZh !== value.termsZh ||
         termsEn !== value.termsEn;
     const submit = async () => {
-        if (validation) return;
+        if (saveState.loading || validation) return;
         try {
             await saveConfig({
                 variables: {
-                    input: buildImageGenerationConfigInput(value, {
+                    input: buildImageGenerationConfigInput(originalValue, {
                         enabled,
                         promptOptimizationEnabled: optimization,
                         defaultModelCode,
@@ -297,7 +298,7 @@ function ConfigPanel({
                     }),
                 },
             });
-            await onSaved('AI 图片工坊运营配置已保存');
+            await onSaved('中文已保存，英文待同步');
         } catch (error) {
             onError(error);
         }
@@ -448,6 +449,7 @@ function ModelEditor({
     onSaved: (message: string) => Promise<void>;
     onError: (error: unknown) => void;
 }) {
+    const [originalValue] = useState(value);
     const [enabled, setEnabled] = useState(value.enabled);
     const [nameZh, setNameZh] = useState(value.displayNameZh);
     const [nameEn, setNameEn] = useState(value.displayNameEn);
@@ -466,14 +468,13 @@ function ModelEditor({
     );
     const currency = value.currencyCode || fallbackCurrency;
     const priceMoney = majorInputToMoney(unitPrice, currency);
-    const validation =
-        !nameZh.trim() || !nameEn.trim()
-            ? '中英文模型名称都不能为空'
-            : !providerModelId.trim()
-              ? '请填写服务商模型 ID'
-              : priceMoney == null || (enabled && priceMoney <= 0)
-                ? '启用模型时单张价格必须大于 0'
-                : null;
+    const validation = !nameZh.trim()
+        ? '中文模型名称不能为空，英文会在后台补齐'
+        : !providerModelId.trim()
+          ? '请填写服务商模型 ID'
+          : priceMoney == null || (enabled && priceMoney <= 0)
+            ? '启用模型时单张价格必须大于 0'
+            : null;
     const dirty =
         enabled !== value.enabled ||
         nameZh !== value.displayNameZh ||
@@ -485,11 +486,11 @@ function ModelEditor({
         priceMoney !== value.unitPrice ||
         Number(position) !== value.position;
     const submit = async () => {
-        if (validation || priceMoney == null) return;
+        if (saveState.loading || validation || priceMoney == null) return;
         try {
             await saveModel({
                 variables: {
-                    input: buildImageModelInput(value, {
+                    input: buildImageModelInput(originalValue, {
                         enabled,
                         displayNameZh: nameZh.trim(),
                         displayNameEn: nameEn.trim(),

@@ -42,6 +42,7 @@ import {
 import { useAccessibleDialog } from '../../hooks/use-accessible-dialog';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { useUrlTab } from '../../hooks/use-url-tab';
+import { omitUnchangedEnglish } from '../../utils/english-edit-intent';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import {
     blockTranslation,
@@ -130,7 +131,14 @@ export function StorefrontContentModule() {
 
     const saveBlock = async (block: StorefrontContentBlock) => {
         setActionError('');
-        if (content.loading || content.error || !(block.id ? canUpdate : canCreate)) return;
+        if (
+            createBlockState.loading ||
+            updateBlockState.loading ||
+            content.loading ||
+            content.error ||
+            !(block.id ? canUpdate : canCreate)
+        )
+            return;
         try {
             if (block.id) {
                 if (!block.updatedAt) throw new Error('缺少内容版本，请刷新后重试');
@@ -139,16 +147,20 @@ export function StorefrontContentModule() {
                         input: {
                             id: block.id,
                             expectedUpdatedAt: block.updatedAt,
-                            ...storefrontBlockInput(block),
+                            ...storefrontBlockInput(block, editingBlock),
                         },
                     },
                 });
             } else {
-                await createBlock({ variables: { input: storefrontBlockInput(block) } });
+                await createBlock({ variables: { input: storefrontBlockInput(block, editingBlock) } });
             }
             setEditingBlock(null);
-            showNotice('店铺内容已保存，客户端按发布状态展示');
-            await content.refetch();
+            showNotice('中文已保存，英文待同步；人工英文保持原设置');
+            try {
+                await content.refetch();
+            } catch (error) {
+                setActionError(`内容已保存，但重新读取失败，请刷新检查。${errorText(error)}`);
+            }
         } catch (error) {
             showError(error);
         }
@@ -400,7 +412,9 @@ function PageBlockList({
                                     className={`rounded px-2 py-1 text-[10px] font-bold ${block?.enabled ? 'bg-emerald-50 text-emerald-700' : block ? 'bg-slate-100 text-slate-500' : 'bg-amber-50 text-amber-700'}`}
                                 >
                                     {block
-                                        ? contentPublicationLabels[contentPublicationStatus(block)]
+                                        ? contentPublicationLabels[
+                                              contentPublicationStatus(block, undefined, 'zh_Hans')
+                                          ]
                                         : '待配置'}
                                 </span>
                             </div>
@@ -592,11 +606,15 @@ function AnnouncementEditor({
         startsAt: toLocalDateTime(value?.startsAt ?? null),
         endsAt: toLocalDateTime(value?.endsAt ?? null),
     }));
+    const [originalEnglish] = useState(() => ({
+        titleEn: value?.titleEn ?? '',
+        contentEn: value?.contentEn ?? '',
+    }));
     const [create, createState] = useMutation(CREATE_SYSTEM_ANNOUNCEMENT_MUTATION);
     const [update, updateState] = useMutation(UPDATE_SYSTEM_ANNOUNCEMENT_MUTATION);
     const validation = announcementDraftError(draft);
     const submit = async () => {
-        if (validation) return;
+        if (createState.loading || updateState.loading || validation) return;
         const input = {
             enabled: draft.enabled,
             priority: Number.parseInt(draft.priority, 10) || 0,
@@ -611,9 +629,16 @@ function AnnouncementEditor({
             endsAt: fromLocalDateTime(draft.endsAt),
         };
         try {
-            if (value) await update({ variables: { input: { id: value.id, ...input } } });
+            if (value)
+                await update({
+                    variables: { input: { id: value.id, ...omitUnchangedEnglish(input, originalEnglish) } },
+                });
             else await create({ variables: { input } });
-            await onSaved(value ? '系统公告已更新' : '系统公告已创建');
+            try {
+                await onSaved('中文公告已保存，英文待同步');
+            } catch {
+                onError(new Error('公告已保存，刷新失败，请稍后刷新页面'));
+            }
         } catch (error) {
             onError(error);
         }

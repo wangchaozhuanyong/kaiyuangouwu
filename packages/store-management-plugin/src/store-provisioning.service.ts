@@ -141,14 +141,15 @@ export class StoreProvisioningService {
         const [preparedStorefrontName] = await this.contentTranslations.prepareLocalizedFields([
             {
                 path: 'storefrontName',
+                maxTargetLength: 16,
                 sourceText: normalized.storefrontNameZh,
                 targetText: normalized.storefrontNameEn,
                 required: true,
             },
         ]);
         normalized.storefrontNameEn = preparedStorefrontName.translatedText;
-        if (!this.validStorefrontName(normalized.storefrontNameEn)) {
-            throw new UserInputError('自动生成的英文网站名称必须是 1 至 16 个显示单位，请手动调整');
+        if (normalized.storefrontNameEn && !this.validStorefrontName(normalized.storefrontNameEn)) {
+            throw new UserInputError('英文网站名称必须是 1 至 16 个显示单位');
         }
 
         const seller = await this.sellerService.create(ctx, { name: normalized.name });

@@ -103,6 +103,7 @@ import { AddStorefrontPageViews1788678000000 } from './1788678000000-add-storefr
 import { AddCartCommandReceipts1788678060000 } from './1788678060000-add-cart-command-receipts';
 import { AddUsdtActiveAmountKey1788703200000 } from './1788703200000-add-usdt-active-amount-key';
 import { ReleaseUsdtHistoricalAmountKeys1788706800000 } from './1788706800000-release-usdt-historical-amount-keys';
+import { AddTranslationOutbox1788739200000 } from './1788739200000-add-translation-outbox';
 
 export const devServerMigrations = [
     CommerceFulfillment1786514145999,
@@ -210,4 +211,5 @@ export const devServerMigrations = [
     AddCartCommandReceipts1788678060000,
     AddUsdtActiveAmountKey1788703200000,
     ReleaseUsdtHistoricalAmountKeys1788706800000,
+    AddTranslationOutbox1788739200000,
 ];

@@ -137,7 +137,7 @@ describe('reviewed storefront translations', () => {
         expect(translate).not.toHaveBeenCalled();
     });
 
-    it.each([undefined, false])('retains automatic translation when the lock is %s', async locked => {
+    it.each([undefined, false])('queues automatic translation when the lock is %s', async locked => {
         const repository = {
             find: vi.fn().mockResolvedValue([
                 { languageCode: LanguageCode.zh_Hans, label: '原中文' },
@@ -158,10 +158,9 @@ describe('reviewed storefront translations', () => {
                 { languageCode: LanguageCode.zh_Hans, label: '新中文' },
                 { languageCode: LanguageCode.en, label: 'Old English', labelLocked: locked },
             ]),
-        ).rejects.toThrow('User Rate Limit Exceeded');
-        expect(translate).toHaveBeenCalledOnce();
-        expect(repository.delete).not.toHaveBeenCalled();
-        expect(repository.save).not.toHaveBeenCalled();
+        ).resolves.toBeUndefined();
+        expect(translate).not.toHaveBeenCalled();
+        expect(repository.save).toHaveBeenCalled();
     });
 
     it('exposes optional per-field translation locks in the Admin schema', () => {

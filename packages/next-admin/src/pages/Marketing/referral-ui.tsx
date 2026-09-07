@@ -416,19 +416,11 @@ export function posterDraft(source: ReferralPosterRecord | 'NEW'): PosterDraft {
 }
 export function posterDraftError(draft: PosterDraft) {
     if (
-        ![
-            draft.name,
-            draft.titleZh,
-            draft.titleEn,
-            draft.headlineZh,
-            draft.headlineEn,
-            draft.rewardTextZh,
-            draft.rewardTextEn,
-            draft.siteIntroZh,
-            draft.siteIntroEn,
-        ].every(value => value.trim())
+        ![draft.name, draft.titleZh, draft.headlineZh, draft.rewardTextZh, draft.siteIntroZh].every(value =>
+            value.trim(),
+        )
     )
-        return '模板名称和中英文文案均不能为空';
+        return '模板名称和中文文案不能为空，英文会在后台补齐';
     if (!Number.isInteger(draft.position) || draft.position < 0 || draft.position > 100_000)
         return '排序必须是0到100000的整数';
     if (!Number.isInteger(draft.overlayOpacity) || draft.overlayOpacity < 0 || draft.overlayOpacity > 80)

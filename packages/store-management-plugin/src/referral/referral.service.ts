@@ -2,6 +2,10 @@ import { Inject, Injectable, OnApplicationBootstrap } from '@nestjs/common';
 import { RegisterCustomerInput } from '@vendure/common/lib/generated-shop-types';
 import { CurrencyCode } from '@vendure/common/lib/generated-types';
 import {
+    ContentTranslationService,
+    customerFacingContentRegistry,
+} from '@vendure/content-translation-plugin';
+import {
     ConfigService,
     Customer,
     CustomerService,
@@ -109,6 +113,7 @@ interface WalletDeltaInput {
 
 @Injectable()
 export class ReferralService implements OnApplicationBootstrap {
+    @Inject(ContentTranslationService) private readonly translations!: ContentTranslationService;
     private readonly reports: ReferralReportQuery;
     private readonly posters: ReferralPosterView;
 
@@ -210,11 +215,20 @@ export class ReferralService implements OnApplicationBootstrap {
         const config = await this.lockConfigOrThrow(ctx, (await this.getOrCreateConfig(ctx)).id);
         if (input.expectedUpdatedAt) this.assertExpectedUpdatedAt(config.updatedAt, input.expectedUpdatedAt);
         const repository = this.connection.getRepository(ctx, ReferralPosterTemplate);
+        const localized = await this.translations.prepareLocalizedColumns(
+            customerFacingContentRegistry.ReferralPosterTemplate.fields.map(field => field.path),
+            input,
+        );
         const saved = await repository.save(
             repository.create({
-                ...(await this.normalizePosterTemplateInput(ctx, input)),
+                ...(await this.normalizePosterTemplateInput(ctx, { ...input, ...localized.values })),
                 channelId: ctx.channelId,
             }),
+        );
+        await this.translations.recordPreparedFields(
+            ctx,
+            { channelId: ctx.channelId, entityType: ReferralPosterTemplate.name, entityId: saved.id },
+            localized.prepared,
         );
         await this.reconcilePosterDefault(ctx, config);
         await this.posterConfigurationChanged(ctx);
@@ -228,11 +242,27 @@ export class ReferralService implements OnApplicationBootstrap {
         if (!template) throw new UserInputError('找不到该邀请海报模板');
         this.assertExpectedUpdatedAt(config.updatedAt, input.expectedUpdatedAt);
         if ('enabled' in input) throw new UserInputError('请使用海报启停操作修改展示状态');
+        const localized = await this.translations.prepareLocalizedColumns(
+            customerFacingContentRegistry.ReferralPosterTemplate.fields.map(field => field.path),
+            input,
+            template,
+            {},
+            ctx,
+        );
         Object.assign(
             template,
-            await this.normalizePosterTemplateInput(ctx, { ...input, enabled: template.enabled }, template),
+            await this.normalizePosterTemplateInput(
+                ctx,
+                { ...input, ...localized.values, enabled: template.enabled },
+                template,
+            ),
         );
         await repository.save(template, { reload: false });
+        await this.translations.recordPreparedFields(
+            ctx,
+            { channelId: ctx.channelId, entityType: ReferralPosterTemplate.name, entityId: template.id },
+            localized.prepared,
+        );
         await this.reconcilePosterDefault(ctx, config);
         await this.posterConfigurationChanged(ctx);
         return this.posterTemplateById(ctx, template.id);

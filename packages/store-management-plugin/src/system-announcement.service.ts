@@ -51,14 +51,16 @@ export class SystemAnnouncementService {
             .take(20)
             .getMany();
         const isZh = String(ctx.languageCode).toLowerCase().startsWith('zh');
-        return announcements.filter(hasCompleteAnnouncementTranslation).map(announcement => ({
-            id: announcement.id,
-            title: localizedText(announcement.titleZh, announcement.titleEn, isZh),
-            content: localizedText(announcement.contentZh, announcement.contentEn, isZh),
-            linkUrl: announcement.linkUrl,
-            startsAt: announcement.startsAt,
-            endsAt: announcement.endsAt,
-        }));
+        return announcements
+            .filter(announcement => isZh || hasCompleteAnnouncementTranslation(announcement))
+            .map(announcement => ({
+                id: announcement.id,
+                title: localizedText(announcement.titleZh, announcement.titleEn, isZh),
+                content: localizedText(announcement.contentZh, announcement.contentEn, isZh),
+                linkUrl: announcement.linkUrl,
+                startsAt: announcement.startsAt,
+                endsAt: announcement.endsAt,
+            }));
     }
 
     async create(ctx: RequestContext, input: CreateSystemAnnouncementInput): Promise<SystemAnnouncement> {

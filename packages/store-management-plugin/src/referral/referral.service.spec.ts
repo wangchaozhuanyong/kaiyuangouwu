@@ -71,6 +71,10 @@ describe('referral poster stale editor regression', () => {
                         ? repository
                         : { save: (value: unknown) => Promise.resolve(value) },
             },
+            translations: {
+                prepareLocalizedColumns: () => Promise.resolve({ values: {}, prepared: [] }),
+                recordPreparedFields: () => Promise.resolve(undefined),
+            },
             getOrCreateConfig: () => Promise.resolve(config),
             lockConfigOrThrow: () => Promise.resolve(config),
             configView: () => Promise.resolve(config),

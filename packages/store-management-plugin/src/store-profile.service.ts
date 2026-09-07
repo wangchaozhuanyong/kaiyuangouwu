@@ -255,6 +255,7 @@ export class StoreProfileService {
         ) {
             fields.push({
                 path: 'storefrontName',
+                maxTargetLength: 16,
                 sourceText: this.normalizeStorefrontName(
                     input.storefrontNameZh,
                     customFields.storefrontNameZh,
@@ -609,11 +610,13 @@ export class StoreProfileService {
         value: string | null | undefined,
         current: string | null | undefined,
         label: string,
+        allowEmpty = false,
     ): string {
         if (value == null) {
             return current?.trim() ?? '';
         }
         const normalized = value.trim();
+        if (allowEmpty && !normalized) return '';
         const units = Array.from(normalized).reduce(
             (total, character) => total + (/\p{Script=Han}|[\uFF01-\uFF60]/u.test(character) ? 2 : 1),
             0,
@@ -643,6 +646,7 @@ export class StoreProfileService {
             storefrontNameEnInput,
             customFields.storefrontNameEn,
             '英文店铺名称',
+            true,
         );
         const updatedChannel = await this.channelService.update(ctx, {
             id: profile.channelId,

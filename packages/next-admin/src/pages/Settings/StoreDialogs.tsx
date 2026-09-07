@@ -23,6 +23,7 @@ import {
     type StoreProfileRecord,
 } from '../../graphql/management.graphql';
 import { getChannelDisplayName } from '../../utils/channel-display';
+import { omitUnchangedEnglish } from '../../utils/english-edit-intent';
 import { StoreBrandAssets } from './StoreBrandAssets';
 import {
     Field,
@@ -54,6 +55,11 @@ export function StoreEditor({
     onError: (message: string) => void;
 }) {
     const requestConfirmation = useConfirmDialog();
+    const [originalEnglish] = useState(() => ({
+        ...profile,
+        ...profile.channel.customFields,
+        taglineEn: profile.taglineEn ?? '',
+    }));
     const [nameZh, setNameZh] = useState(profile.channel.customFields.storefrontNameZh);
     const [nameEn, setNameEn] = useState(profile.channel.customFields.storefrontNameEn);
     const [descriptionZh, setDescriptionZh] = useState(profile.descriptionZh);
@@ -127,8 +133,17 @@ export function StoreEditor({
                 sortOrder,
                 ...(statusChanged ? { status, currentPassword } : {}),
             };
-            await saveStoreProfileWithBrandAssets(client, profile, brandAssets, input);
-            await onCompleted('店铺档案已保存');
+            await saveStoreProfileWithBrandAssets(
+                client,
+                profile,
+                brandAssets,
+                omitUnchangedEnglish(input, originalEnglish),
+            );
+            try {
+                await onCompleted('中文已保存，英文待同步');
+            } catch {
+                reportError('店铺档案已保存，刷新失败，请稍后刷新页面');
+            }
         } catch (error) {
             reportError(errorText(error));
         } finally {
