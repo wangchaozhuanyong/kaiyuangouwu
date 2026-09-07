@@ -14,7 +14,7 @@ const adminQuery = `query CollectionReviewAdmin($slug: String!) {
     activeChannel { id code } collection(slug: $slug) { ${collectionFields} } }`;
 const shopQuery = `query CollectionReviewShop($id: ID!) {
     activeChannel { id code } collection(id: $id) { id name slug description featuredAsset { id } } }`;
-const auditQuery = `query CollectionReviewAudit { contentTranslationAudit {
+const auditQuery = `query CollectionReviewAudit($channelId: ID!) { contentTranslationAudit(channelId: $channelId) {
     states { entityType entityId fieldPath status origin locked } } }`;
 const mutation = `mutation CollectionReviewApply($input: UpdateCollectionInput!) {
     updateCollection(input: $input) { ${collectionFields} } }`;
@@ -65,10 +65,7 @@ export async function reviewCollectionTranslations({
     );
     assert.ok(!(apply && verify), 'Choose apply or verify');
     assert.ok(channelCodes?.length === 1, 'Exactly one reviewed Channel code is required per invocation');
-    assert.ok(
-        ['https://damatong.net', 'https://moyaoai.com'].includes(new URL(shopOrigin).origin),
-        'Unreviewed storefront',
-    );
+    assert.ok(new URL(shopOrigin).origin === 'https://damatong.net', 'Unreviewed storefront');
     if (apply) {
         assert.ok(allowRemote, 'Writes require --apply --allow-remote');
         assert.ok(snapshotFile, 'Writes require an external --snapshot-file backup');
@@ -120,8 +117,21 @@ export async function reviewCollectionTranslations({
         assert.equal(zh.name, definition.sourceName, 'Chinese source changed since review');
         return data.collection;
     };
-    const audit = async () =>
-        (await request(apiOrigin, 'admin-api', auditQuery, {}, headers)).data.contentTranslationAudit.states;
+    const defaultChannels = login.data.login.channels.filter(c => c.code === '__default_channel__');
+    assert.equal(defaultChannels.length, 1, 'Default Channel audit access required');
+    assert.notEqual(defaultChannels[0].id, channel.id, 'Damatong requires a dedicated Channel');
+    const auditChannels = [channel.id, defaultChannels[0].id];
+    const audit = async () => {
+        const result = {};
+        for (const channelId of auditChannels) {
+            result[channelId] = (
+                await request(apiOrigin, 'admin-api', auditQuery, { channelId }, headers)
+            ).data.contentTranslationAudit.states;
+        }
+        return result;
+    };
+    const allReviewed = (auditRecords, id, field) =>
+        auditChannels.every(channelId => reviewed(auditRecords[channelId], id, field));
     const verifyShop = async collection => {
         for (const locale of locales) {
             const { data } = await request(
@@ -171,7 +181,8 @@ export async function reviewCollectionTranslations({
             from: translation(collection, 'en')[field],
             to: review.to,
             action:
-                translation(collection, 'en')[field] === review.to && reviewed(states, collection.id, field)
+                translation(collection, 'en')[field] === review.to &&
+                allReviewed(states, collection.id, field)
                     ? 'noop'
                     : 'review',
         })),
@@ -186,7 +197,11 @@ export async function reviewCollectionTranslations({
     // Exclusive create prevents accidentally replacing the only pre-write backup.
     writeFileSync(
         snapshotFile,
-        JSON.stringify({ capturedAt: new Date().toISOString(), channel, before, plans }, null, 2),
+        JSON.stringify(
+            { capturedAt: new Date().toISOString(), channel, before, plans, auditStates: states },
+            null,
+            2,
+        ),
         { flag: 'wx', mode: 0o600 },
     );
     const writes = [];
@@ -222,7 +237,7 @@ export async function reviewCollectionTranslations({
             );
             await verifyShop(current);
             for (const field of Object.keys(definitions[index].fields))
-                assert.ok(reviewed(afterStates, current.id, field), 'Manual lock verification failed');
+                assert.ok(allReviewed(afterStates, current.id, field), 'Manual lock verification failed');
         }
     } catch (error) {
         let restored = true;

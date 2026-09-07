@@ -73,13 +73,20 @@ function fixture(
         const { query, variables } = JSON.parse(init.body);
         const locale = new URL(url).searchParams.get('languageCode');
         assert.equal(init.headers['language-code'], locale);
-        requests.push({ url, query, locale });
+        requests.push({ url, query, locale, variables });
         const response = data =>
             new Response(JSON.stringify({ data }), { headers: { 'vendure-auth-token': 'fixture-session' } });
         if (query.includes('CollectionReviewRoute'))
             return response({ activeChannel: wrongChannel ? { id: '1', code: 'wrong' } : channel });
         if (query.includes('CollectionReviewLogin'))
-            return response({ login: { channels: [{ ...channel, token: 'fixture-channel' }] } });
+            return response({
+                login: {
+                    channels: [
+                        { ...channel, token: 'fixture-channel' },
+                        { id: '1', code: '__default_channel__', token: 'fixture-default-channel' },
+                    ],
+                },
+            });
         assert.equal(init.headers['vendure-token'], 'fixture-channel');
         if (query.includes('CollectionReviewAudit')) return response({ contentTranslationAudit: { states } });
         if (query.includes('CollectionReviewAdmin')) {
@@ -148,6 +155,12 @@ test('English-only review preserves Chinese, slugs, assets, filters; repeated ap
     const backup = JSON.parse(readFileSync(f.snapshotFile, 'utf8'));
     assert.deepEqual(backup.before, [f.before]);
     assert.equal(f.writes.length, 1);
+    assert.deepEqual(
+        new Set(
+            f.requests.filter(r => r.query.includes('CollectionReviewAudit')).map(r => r.variables.channelId),
+        ),
+        new Set(['1', '2']),
+    );
     const expected = structuredClone(f.before);
     expected.updatedAt = 'v2';
     expected.translations[1].name = 'Visa & study abroad';
