@@ -17,7 +17,7 @@ import { UnavailableTranslationProvider } from './providers/unavailable-translat
 import { TranslationContentAdapter } from './translation-content-adapter.js';
 import { TranslationExecutionService } from './translation-execution.service.js';
 import { TranslationResultCacheService } from './translation-result-cache.service.js';
-import { ContentTranslationPluginOptions } from './types.js';
+import { ContentTranslationPluginOptions, ResolvedContentTranslationOptions } from './types.js';
 
 @VendurePlugin({
     imports: [PluginCommonModule],
@@ -55,8 +55,9 @@ import { ContentTranslationPluginOptions } from './types.js';
     compatibility: '^3.7.0',
 })
 export class ContentTranslationPlugin {
-    static options: Required<ContentTranslationPluginOptions> = {
+    static options: ResolvedContentTranslationOptions = {
         provider: new UnavailableTranslationProvider(),
+        fallbackProviders: [],
         glossary: {},
         sourceLanguageCode: 'zh_Hans',
         targetLanguageCode: 'en',
@@ -65,6 +66,7 @@ export class ContentTranslationPlugin {
     static init(options: ContentTranslationPluginOptions = {}): typeof ContentTranslationPlugin {
         this.options = {
             provider: options.provider ?? new UnavailableTranslationProvider(),
+            fallbackProviders: options.fallbackProviders ?? [],
             glossary: options.glossary ?? {},
             sourceLanguageCode: options.sourceLanguageCode ?? 'zh_Hans',
             targetLanguageCode: options.targetLanguageCode ?? 'en',
