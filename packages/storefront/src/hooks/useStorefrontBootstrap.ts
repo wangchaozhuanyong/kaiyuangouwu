@@ -221,7 +221,7 @@ export function useStorefrontBootstrap() {
         setStorefrontTagline(config.tagline?.trim() ?? '');
     }, [configQuery.data, configQuery.dataUpdatedAt, language, market, queryClient, vendureLanguageCode]);
 
-    useStorefrontBrandColors(configQuery.data);
+    useStorefrontBrandColors(configQuery.data, visualConfig.presetId);
 
     useEffect(() => {
         if (productsQuery.data) cacheProducts(productsQuery.data);
@@ -245,7 +245,6 @@ export function useStorefrontBootstrap() {
 
     return {
         ...publicData,
-        visualConfig,
         market,
         language,
         setStorefrontContext,

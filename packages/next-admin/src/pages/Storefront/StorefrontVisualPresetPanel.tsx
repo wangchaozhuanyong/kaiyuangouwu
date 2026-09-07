@@ -1,17 +1,14 @@
 import { useMutation, useQuery } from '@apollo/client/react';
 import { Monitor, Smartphone, X } from 'lucide-react';
 import { useState } from 'react';
-import {
-    storefrontDesktopLayouts,
-    storefrontVisualPresets,
-    type StorefrontVisualPresetConfig,
-} from '../../../../storefront-content-plugin/src/visual-presets';
+import { storefrontVisualPresets } from '../../../../storefront-content-plugin/src/visual-presets';
 import { channelRequestContext, getActiveChannelToken } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
     STOREFRONT_VISUAL_PRESET_QUERY,
     UPDATE_STOREFRONT_VISUAL_PRESET_MUTATION,
+    type StorefrontSkinConfig,
     type StorefrontVisualPresetResult,
 } from '../../graphql/storefront-visual-preset.graphql';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
@@ -25,13 +22,13 @@ export function StorefrontVisualPresetPanel() {
         fetchPolicy: 'no-cache',
         notifyOnNetworkStatusChange: true,
     });
-    const [save, mutation] = useMutation<{ updateStorefrontVisualPreset: StorefrontVisualPresetConfig }>(
+    const [save, mutation] = useMutation<{ updateStorefrontVisualPreset: StorefrontSkinConfig }>(
         UPDATE_STOREFRONT_VISUAL_PRESET_MUTATION,
         { fetchPolicy: 'no-cache' },
     );
     const { hasAnyPermission } = useAdminPermissions();
     const [preview, setPreview] = useState<'mobile' | 'desktop' | null>(null);
-    const [draft, setDraft] = useState<StorefrontVisualPresetConfig | null>(null);
+    const [draft, setDraft] = useState<StorefrontSkinConfig | null>(null);
     const [notice, setNotice] = useState('');
     const [error, setError] = useState('');
     const [feedbackChannel, setFeedbackChannel] = useState<string | null>(null);
@@ -45,16 +42,11 @@ export function StorefrontVisualPresetPanel() {
         (!getActiveChannelToken() || channel.token === getActiveChannelToken()),
     );
     const selected = consistent && draft?.channelId === source?.channelId ? draft : source;
-    const dirty = Boolean(
-        consistent &&
-        selected &&
-        source &&
-        (selected.presetId !== source.presetId || selected.desktopLayout !== source.desktopLayout),
-    );
+    const dirty = Boolean(consistent && selected && source && selected.presetId !== source.presetId);
     const busy = query.loading || mutation.loading;
     const disabled =
         !consistent || busy || Boolean(query.error) || !hasAnyPermission(['UpdateStorefrontContent']);
-    useUnsavedChangesWarning(dirty || mutation.loading, '皮肤或布局选择尚未保存，离开后将放弃本次选择。');
+    useUnsavedChangesWarning(dirty || mutation.loading, '皮肤选择尚未保存，离开后将放弃本次选择。');
     const reload = async () => {
         const activeToken = getActiveChannelToken();
         setFeedbackChannel(channel?.id ?? null);
@@ -83,21 +75,13 @@ export function StorefrontVisualPresetPanel() {
                     input: {
                         channelId: channel.id,
                         expectedRevision: selected.revision,
-                        ...(selected.presetId !== source.presetId ? { presetId: selected.presetId } : {}),
-                        ...(selected.desktopLayout !== source.desktopLayout
-                            ? { desktopLayout: selected.desktopLayout }
-                            : {}),
+                        presetId: selected.presetId,
                     },
                 },
             });
             if (!stillCurrent()) return;
             const saved = result.data?.updateStorefrontVisualPreset;
-            if (
-                !saved ||
-                saved.channelId !== channel.id ||
-                saved.presetId !== selected.presetId ||
-                saved.desktopLayout !== selected.desktopLayout
-            )
+            if (!saved || saved.channelId !== channel.id || saved.presetId !== selected.presetId)
                 throw new Error('保存结果不一致，请重新读取配置');
             setDraft(saved);
             setNotice('已保存到当前店铺。');
@@ -116,11 +100,11 @@ export function StorefrontVisualPresetPanel() {
         }
     };
     return (
-        <section className="rounded-xl border border-slate-200 bg-white p-5" aria-label="皮肤与电脑端布局">
+        <section className="rounded-xl border border-slate-200 bg-white p-5" aria-label="店铺皮肤">
             <div className="flex items-center justify-between gap-3">
                 <h2 className="flex items-center gap-2 text-base font-bold text-slate-900">
-                    皮肤与电脑端布局
-                    <FeatureHelpButton topic="storefront.decoration" title="皮肤与电脑端布局" />
+                    店铺皮肤
+                    <FeatureHelpButton topic="storefront.decoration" title="店铺皮肤" />
                 </h2>
                 <button
                     type="button"
@@ -132,7 +116,7 @@ export function StorefrontVisualPresetPanel() {
                 </button>
             </div>
             <p className="mt-2 text-xs text-slate-500">
-                各店拥有相同选项，选择仅保存到当前店铺。区块颜色优先于品牌配色，未设置时继承皮肤。
+                选择仅保存到当前店铺。现代东方使用皮肤配色，现有皮肤保留品牌配色；单独设置的区块颜色优先。
             </p>
             {query.loading && (
                 <p role="status" className="mt-3 text-sm">
@@ -150,41 +134,32 @@ export function StorefrontVisualPresetPanel() {
                     {notice}
                 </p>
             )}
-            {(['presetId', 'desktopLayout'] as const).map(field => (
-                <fieldset key={field} disabled={disabled} className="mt-4">
-                    <legend className="text-sm font-bold">
-                        {field === 'presetId' ? '皮肤' : '电脑端布局'}
-                    </legend>
-                    <div className="mt-2 grid gap-3 sm:grid-cols-2">
-                        {(field === 'presetId' ? storefrontVisualPresets : storefrontDesktopLayouts).map(
-                            option => (
-                                <label
-                                    key={option.id}
-                                    className="flex gap-3 rounded-lg border border-slate-200 p-3"
-                                >
-                                    <input
-                                        type="radio"
-                                        name={field}
-                                        value={option.id}
-                                        checked={consistent && selected?.[field] === option.id}
-                                        onChange={() => {
-                                            if (selected) setDraft({ ...selected, [field]: option.id });
-                                            setNotice('');
-                                            setError('');
-                                        }}
-                                    />
-                                    <span>
-                                        <strong className="text-sm">{option.name}</strong>
-                                        <span className="mt-1 block text-xs text-slate-500">
-                                            {option.description}
-                                        </span>
-                                    </span>
-                                </label>
-                            ),
-                        )}
-                    </div>
-                </fieldset>
-            ))}
+            <fieldset disabled={disabled} className="mt-4">
+                <legend className="text-sm font-bold">皮肤</legend>
+                <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                    {storefrontVisualPresets.map(option => (
+                        <label key={option.id} className="flex gap-3 rounded-lg border border-slate-200 p-3">
+                            <input
+                                type="radio"
+                                name="presetId"
+                                value={option.id}
+                                checked={consistent && selected?.presetId === option.id}
+                                onChange={() => {
+                                    if (selected) setDraft({ ...selected, presetId: option.id });
+                                    setNotice('');
+                                    setError('');
+                                }}
+                            />
+                            <span>
+                                <strong className="text-sm">{option.name}</strong>
+                                <span className="mt-1 block text-xs text-slate-500">
+                                    {option.description}
+                                </span>
+                            </span>
+                        </label>
+                    ))}
+                </div>
+            </fieldset>
             <button
                 type="button"
                 disabled={disabled || !dirty}
@@ -210,7 +185,7 @@ export function StorefrontVisualPresetPanel() {
                 </button>
             </div>
             <p className="mt-3 text-xs text-slate-500">
-                切换皮肤与布局会保留图片、文案、区块颜色、楼层顺序和开关。
+                电脑端使用统一布局，首页按已保存的楼层顺序展示。切换皮肤会保留图片、文案、区块颜色和开关。
             </p>
             {preview && selected && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-3">

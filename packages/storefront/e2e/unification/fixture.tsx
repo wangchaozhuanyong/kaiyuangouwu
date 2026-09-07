@@ -5,15 +5,11 @@ import { createRoot } from 'react-dom/client';
 
 import { ShopApi } from '../../src/api';
 import { LoginPage, RegisterPage } from '../../src/auth-pages';
-import { DesktopHeader } from '../../src/components/common/desktop-header';
-import { DesktopLayoutContext, useDesktopCatalog } from '../../src/desktop-layout';
 import { useStorefrontBrandColors, useStorefrontMetadata } from '../../src/hooks/useStorefrontDocument';
-import { DesktopCatalogPage } from '../../src/pages/desktop-catalog-page';
 import { HomePage } from '../../src/pages/home-page';
 import { HomePageContext } from '../../src/storefront-page-contexts';
 import { StorefrontContext, type StorefrontContextValue } from '../../src/StorefrontContext';
 import '../../src/styles.css';
-import '../../src/styles/desktop-catalog.css';
 import '../../src/styles/desktop-layout.css';
 import '../../src/styles/visual-presets.css';
 import { StorefrontContentBlock, StorefrontContentSettings } from '../../src/types';
@@ -53,7 +49,6 @@ function Fixture() {
     );
     const api = useMemo(() => new ShopApi(market, language === 'zh' ? 'zh_Hans' : 'en'), [market, language]);
     const visual = useStorefrontVisualPreset(api, market, language);
-    const desktop = useDesktopCatalog(visual.desktopLayout);
     const [catalogRoute, setCatalogRoute] = useState({ name: 'home' } as StorefrontContextValue['route']);
     const [error, setError] = useState('');
     const [refresh, setRefresh] = useState(0);
@@ -95,6 +90,7 @@ function Fixture() {
                   brandPrimaryColor: data.storefrontBranding.primaryColor,
               } as Parameters<typeof useStorefrontBrandColors>[0])
             : undefined,
+        visual.presetId,
     );
     useStorefrontMetadata({
         isZh: language === 'zh',
@@ -158,80 +154,75 @@ function Fixture() {
     } as unknown as StorefrontContextValue;
     return (
         <StorefrontContext.Provider value={runtime}>
-            <DesktopLayoutContext.Provider value={desktop}>
-                <div className={`storefront-app${desktop ? ' has-desktop-catalog' : ''}`}>
-                    {params.get('stores') && (
-                        <select
-                            aria-label="测试切店"
-                            value={token}
-                            onChange={event => setToken(event.target.value)}
+            <div className="storefront-app">
+                {params.get('stores') && (
+                    <select
+                        aria-label="测试切店"
+                        value={token}
+                        onChange={event => setToken(event.target.value)}
+                    >
+                        {(params.get('stores') ?? '').split(',').map(value => (
+                            <option key={value}>{value}</option>
+                        ))}
+                    </select>
+                )}
+                <div>
+                    <div>
+                        <HomePageContext.Provider
+                            value={{
+                                products: [],
+                                collections: [],
+                                managedContentProducts: [],
+                                bestSellerProducts: [],
+                                recommendationProducts: [],
+                                contentBlocks: blocks,
+                                configuredBlockTypes:
+                                    data?.storefrontContentSettings.configuredBlockTypes ?? [],
+                                heroAutoplayIntervalSeconds:
+                                    data?.storefrontContentSettings.heroAutoplayIntervalSeconds ?? 5,
+                                coupons: [],
+                                flashSales: [],
+                                systemAnnouncements: [],
+                                couponCampaignsLoading: false,
+                                couponCampaignsError: '',
+                                couponLoading: false,
+                                loading: !data && !error,
+                                error,
+                                contentError: '',
+                                language,
+                                locale: language === 'zh' ? 'zh-CN' : 'en-US',
+                                market: {
+                                    code: 'test',
+                                    currencyCode: 'USD',
+                                    countryCode: 'US',
+                                    defaultLanguageCode: 'en',
+                                    locale: 'en-US',
+                                    label: 'Test',
+                                },
+                                storefrontName: params.get('name') ?? 'Test store',
+                                storefrontDescription: '',
+                                storefrontTagline: '',
+                                logoUrl: null,
+                                availableCurrencyCodes: ['USD'],
+                                currencySelectorEnabled: false,
+                                displayCurrencyCode: 'USD',
+                                currencyLoading: false,
+                                onToggleLanguage: () => setLanguage(value => (value === 'zh' ? 'en' : 'zh')),
+                                onCurrencyChange: () => undefined,
+                                onNotifications: () => undefined,
+                                onCategorySelect: () => undefined,
+                                onContentTarget: () => undefined,
+                                onClaimCoupon: () => Promise.resolve(null),
+                                onCouponCampaignsRetry: reload,
+                                onContentRetry: reload,
+                                onRetry: reload,
+                            }}
                         >
-                            {(params.get('stores') ?? '').split(',').map(value => (
-                                <option key={value}>{value}</option>
-                            ))}
-                        </select>
-                    )}
-                    {desktop && <DesktopHeader cartQuantity={0} />}
-                    <div className={desktop ? 'desktop-store-layout' : undefined}>
-                        <div className={desktop ? 'desktop-page-content' : undefined}>
-                            <HomePageContext.Provider
-                                value={{
-                                    products: [],
-                                    collections: [],
-                                    managedContentProducts: [],
-                                    bestSellerProducts: [],
-                                    recommendationProducts: [],
-                                    contentBlocks: blocks,
-                                    configuredBlockTypes:
-                                        data?.storefrontContentSettings.configuredBlockTypes ?? [],
-                                    heroAutoplayIntervalSeconds:
-                                        data?.storefrontContentSettings.heroAutoplayIntervalSeconds ?? 5,
-                                    coupons: [],
-                                    flashSales: [],
-                                    systemAnnouncements: [],
-                                    couponCampaignsLoading: false,
-                                    couponCampaignsError: '',
-                                    couponLoading: false,
-                                    loading: !data && !error,
-                                    error,
-                                    contentError: '',
-                                    language,
-                                    locale: language === 'zh' ? 'zh-CN' : 'en-US',
-                                    market: {
-                                        code: 'test',
-                                        currencyCode: 'USD',
-                                        countryCode: 'US',
-                                        defaultLanguageCode: 'en',
-                                        locale: 'en-US',
-                                        label: 'Test',
-                                    },
-                                    storefrontName: params.get('name') ?? 'Test store',
-                                    storefrontDescription: '',
-                                    storefrontTagline: '',
-                                    logoUrl: null,
-                                    availableCurrencyCodes: ['USD'],
-                                    currencySelectorEnabled: false,
-                                    displayCurrencyCode: 'USD',
-                                    currencyLoading: false,
-                                    onToggleLanguage: () =>
-                                        setLanguage(value => (value === 'zh' ? 'en' : 'zh')),
-                                    onCurrencyChange: () => undefined,
-                                    onNotifications: () => undefined,
-                                    onCategorySelect: () => undefined,
-                                    onContentTarget: () => undefined,
-                                    onClaimCoupon: () => Promise.resolve(null),
-                                    onCouponCampaignsRetry: reload,
-                                    onContentRetry: reload,
-                                    onRetry: reload,
-                                }}
-                            >
-                                <HomePage embedded={desktop} />
-                            </HomePageContext.Provider>
-                            {desktop && <DesktopCatalogPage />}
-                        </div>
+                            <HomePage />
+                        </HomePageContext.Provider>
                     </div>
                 </div>
-            </DesktopLayoutContext.Provider>
+            </div>
         </StorefrontContext.Provider>
     );
 }

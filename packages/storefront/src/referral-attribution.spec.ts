@@ -35,6 +35,47 @@ describe('referral attribution', () => {
         expect(attributionWithinWindow(attribution, 30, 1_001 + 30 * 86_400_000)).toBeNull();
     });
 
+    it.each(['LINK', 'POSTER'] as const)(
+        'keeps a stored %s invitation after years when days is zero',
+        source => {
+            const storage = memoryStorage();
+            const captured = captureReferralAttribution(
+                { search: `?ref=AB12CD&source=${source}` },
+                storage,
+                1_000,
+            );
+            const laterVisit = captureReferralAttribution(
+                { search: '' },
+                storage,
+                1_000 + 10 * 365 * 86_400_000,
+            );
+
+            expect(attributionWithinWindow(laterVisit, 0, 1_000 + 10 * 365 * 86_400_000)).toEqual(captured);
+            expect(attributionWithinWindow(laterVisit, 365, 1_000 + 10 * 365 * 86_400_000)).toBeNull();
+        },
+    );
+
+    it('refreshes attribution when the same invitation URL is opened again years later', () => {
+        const storage = memoryStorage();
+        const location = { search: '?ref=AB12CD&source=LINK' };
+        captureReferralAttribution(location, storage, 1_000);
+        const now = 1_000 + 10 * 365 * 86_400_000;
+        const captured = captureReferralAttribution(location, storage, now);
+
+        expect(attributionWithinWindow(captured, 30, now + 1_000)).toEqual({
+            code: 'AB12CD',
+            source: 'LINK',
+            capturedAt: now,
+        });
+    });
+
+    it('still rejects missing and future-dated attribution when days is zero', () => {
+        expect(attributionWithinWindow(null, 0, 1_000)).toBeNull();
+        expect(
+            attributionWithinWindow({ code: 'AB12CD', source: 'LINK', capturedAt: 1_001 }, 0, 1_000),
+        ).toBeNull();
+    });
+
     it('normalizes and caps user-entered codes', () => {
         expect(normalizeReferralCode(' abc def 123456789 ')).toBe('ABCDEF123456');
     });

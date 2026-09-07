@@ -139,13 +139,13 @@ export function ProgramSettings({
                     placeholder="留空表示不限"
                 />
                 <NumberField
-                    label="邀请归因有效期 (天)"
+                    label="邀请归因有效期 (天，0 表示永久)"
                     value={draft.attributionWindowDays}
-                    min={1}
+                    min={0}
                     max={365}
                     step={1}
                     onChange={attributionWindowDays => setDraft({ ...draft, attributionWindowDays })}
-                    detail="客户打开邀请链接后，在该期限内注册自动归因。"
+                    detail="邀请链接本身长期有效。这里设置打开链接后自动带入邀请码的保留期限：0 表示永久，1–365 表示天数。"
                 />
             </div>
             {validation && <p className="mt-4 text-xs text-rose-600">{validation}</p>}

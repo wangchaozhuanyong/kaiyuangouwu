@@ -1,10 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useLayoutEffect } from 'react';
 
-import {
-    normalizeStorefrontDesktopLayout,
-    normalizeStorefrontVisualPreset,
-} from '../../storefront-content-plugin/src/visual-presets';
+import { normalizeStorefrontVisualPreset } from '../../storefront-content-plugin/src/visual-presets';
 
 import { type ShopApi } from './api';
 import { storefrontQueryKeys } from './query-client';
@@ -38,8 +35,5 @@ export function useStorefrontVisualPreset(
     // Theme loading stays independent of route rendering, so slow requests never unmount a form.
     const presetId = normalizeStorefrontVisualPreset(enabled ? query.data?.presetId : undefined);
     useLayoutEffect(() => applyStorefrontVisualPreset(document.documentElement, presetId), [presetId]);
-    return {
-        presetId,
-        desktopLayout: normalizeStorefrontDesktopLayout(enabled ? query.data?.desktopLayout : undefined),
-    };
+    return { presetId };
 }

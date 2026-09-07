@@ -1,15 +1,15 @@
-import type { QueryKey } from '@tanstack/react-query';
-import { useQueryClient } from '@tanstack/react-query';
+import { QueryKey, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef } from 'react';
-import type { RouteName, RouteState } from '../storefront-router';
-import type { ActiveCustomer, StoreCustomerCoupon, StorefrontCart, StorefrontCouponCampaign } from '../types';
-import type { StorefrontQueryContext } from './storefront-query-context';
-import type { useStorefrontNavigation } from './useStorefrontNavigation';
 
 import { markCouponCampaignClaimed } from '../coupon-center-state';
 import { claimAndVerifyCoupon } from '../coupon-claim-verification';
 import { uiCopy } from '../i18n';
 import { storefrontQueryKeys } from '../query-client';
+import { RouteName, RouteState } from '../storefront-router';
+import { ActiveCustomer, StoreCustomerCoupon, StorefrontCart, StorefrontCouponCampaign } from '../types';
+
+import { StorefrontQueryContext } from './storefront-query-context';
+import { useStorefrontNavigation } from './useStorefrontNavigation';
 
 interface StorefrontCouponOptions extends StorefrontQueryContext {
     cart: StorefrontCart | null;

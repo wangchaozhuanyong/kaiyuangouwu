@@ -3,12 +3,12 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { StorefrontConfig } from '../types';
 
 import { enabledMarkets, marketForStorefrontConfig } from '../i18n';
 import { storefrontQueryKeys } from '../query-client';
 import { scopedStorageKey } from '../storefront-storage';
 import { FAVORITE_PRODUCT_STORAGE_KEY } from '../storefront-utils';
+import { StorefrontConfig } from '../types';
 
 import { useStorefrontBootstrap } from './useStorefrontBootstrap';
 

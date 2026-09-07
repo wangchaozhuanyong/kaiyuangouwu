@@ -33,11 +33,8 @@ export function normalizeStorefrontVisualPreset(value: unknown): StorefrontVisua
     return isStorefrontVisualPresetId(value) ? value : 'classic';
 }
 
+// Legacy API metadata remains readable; the storefront now uses one fixed responsive layout.
 export type StorefrontDesktopLayout = 'classic' | 'catalog';
-export const storefrontDesktopLayouts = [
-    { id: 'classic', name: '现有布局', description: '保留当前电脑端呈现。' },
-    { id: 'catalog', name: '目录布局', description: '统一商品目录与账户导航，首页楼层仍按保存顺序展示。' },
-] as const;
 export function isStorefrontDesktopLayout(value: unknown): value is StorefrontDesktopLayout {
     return value === 'classic' || value === 'catalog';
 }

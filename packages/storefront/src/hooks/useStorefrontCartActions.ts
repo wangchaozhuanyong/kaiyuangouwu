@@ -1,9 +1,10 @@
 import { useCallback } from 'react';
-import type { CartController } from '../cart/cart-controller';
-import type { Order, OrderSummary, ProductVariant, StorefrontCart } from '../types';
-import type { useStorefrontNavigation } from './useStorefrontNavigation';
 
 import { ShopApi, ShopApiError } from '../api';
+import { CartController } from '../cart/cart-controller';
+import { Order, OrderSummary, ProductVariant, StorefrontCart } from '../types';
+
+import { useStorefrontNavigation } from './useStorefrontNavigation';
 
 interface StorefrontCartActionOptions {
     api: ShopApi;

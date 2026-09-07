@@ -2,10 +2,10 @@
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Order, ProductVariant, StorefrontCart } from '../types';
 
 import { ShopApi, ShopApiError } from '../api';
 import { CartController } from '../cart/cart-controller';
+import { Order, ProductVariant, StorefrontCart } from '../types';
 
 import { useStorefrontCartActions } from './useStorefrontCartActions';
 

@@ -3,7 +3,6 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { ProductRow } from './components/common/product-row';
 import { desktopCatalogInput, desktopCatalogRoute } from './desktop-catalog-query';
-import { supportsDesktopCatalog } from './desktop-layout';
 import { MarketConfig, Product } from './types';
 
 vi.mock('@tanstack/react-router', async importOriginal => ({
@@ -95,15 +94,6 @@ describe('desktop catalog navigation', () => {
             minPriceWithTax: 125,
             maxPriceWithTax: 10099,
         });
-    });
-
-    it('enables the same saved catalog choice for any channel and defaults to classic', () => {
-        expect(supportsDesktopCatalog('catalog')).toBe(true);
-        expect(supportsDesktopCatalog('classic')).toBe(false);
-        expect(supportsDesktopCatalog('__default_channel__')).toBe(false);
-        expect(supportsDesktopCatalog('my-malaysia')).toBe(false);
-        expect(supportsDesktopCatalog('')).toBe(false);
-        expect(supportsDesktopCatalog('unknown-store')).toBe(false);
     });
 });
 

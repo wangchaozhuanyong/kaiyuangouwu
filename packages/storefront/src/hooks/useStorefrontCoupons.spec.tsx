@@ -3,16 +3,16 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ShopApi } from '../api';
-import type {
+
+import { ShopApi } from '../api';
+import { enabledMarkets } from '../i18n';
+import {
     ActiveCustomer,
     Order,
     StoreCustomerCoupon,
     StorefrontCart,
     StorefrontCouponCampaign,
 } from '../types';
-
-import { enabledMarkets } from '../i18n';
 
 import { useStorefrontCoupons } from './useStorefrontCoupons';
 

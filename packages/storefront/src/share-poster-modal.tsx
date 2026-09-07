@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import './styles/modals-and-support.css';
 
+import { productImage } from './product-media';
 import { storefrontWebpUrl } from './responsive-image';
 import { acquireBodyScrollLock } from './scroll-lock';
 import { Product, StorefrontLanguage } from './types';
@@ -43,7 +44,7 @@ export function SharePosterModal({
     const [qrCodeUrl, setQrCodeUrl] = useState('');
 
     const productUrl = typeof window !== 'undefined' ? window.location.href : '';
-    const mainImageSource = product.featuredAsset?.preview ?? product.assets[0]?.preview ?? '';
+    const mainImageSource = productImage(product);
     const mainImage = mainImageSource ? storefrontWebpUrl(mainImageSource, 'detail') : '';
     const storefrontLogo = logoUrl ? storefrontWebpUrl(logoUrl, 'thumbnail') : '';
 

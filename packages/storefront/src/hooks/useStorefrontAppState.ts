@@ -29,7 +29,6 @@ export function useStorefrontAppState() {
     const queryClient = useQueryClient();
 
     const {
-        visualConfig,
         market,
         language,
         setStorefrontContext,
@@ -540,7 +539,6 @@ export function useStorefrontAppState() {
     );
 
     const storefrontContextValue = {
-        desktopLayout: visualConfig.desktopLayout,
         route,
         api,
         products,

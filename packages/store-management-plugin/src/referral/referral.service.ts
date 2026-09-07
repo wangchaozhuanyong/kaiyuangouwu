@@ -1185,7 +1185,7 @@ export class ReferralService implements OnApplicationBootstrap {
                 currencyCode: ctx.channel.defaultCurrencyCode,
                 maxRewardPerOrder: null,
                 allowBalanceSpend: true,
-                attributionWindowDays: 30,
+                attributionWindowDays: 0,
                 defaultPosterTemplate: 'BRAND_MINIMAL',
             })
         );
@@ -1262,10 +1262,10 @@ export class ReferralService implements OnApplicationBootstrap {
         }
         if (
             !Number.isInteger(input.attributionWindowDays) ||
-            input.attributionWindowDays < 1 ||
+            input.attributionWindowDays < 0 ||
             input.attributionWindowDays > 365
         ) {
-            throw new UserInputError('邀请来源有效期必须在1至365天之间');
+            throw new UserInputError('邀请归因有效期必须是0至365的整数，0表示永久有效');
         }
     }
 

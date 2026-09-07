@@ -539,17 +539,20 @@ function ProgramSettings({
                 />
                 <Help>留空表示单笔订单不限制最大返利金额。</Help>
             </Field>
-            <Field label="邀请来源有效期（天）">
+            <Field label="邀请归因有效期（天，0 表示永久）">
                 <Input
                     type="number"
-                    min={1}
+                    min={0}
                     max={365}
                     step={1}
                     value={draft.attributionWindowDays}
                     disabled={disabled}
                     onChange={event => update('attributionWindowDays', Number(event.target.value))}
                 />
-                <Help>客户打开邀请链接后，在该期限内注册会自动带入邀请码，最长 365 天。</Help>
+                <Help>
+                    邀请链接本身长期有效。这里设置打开链接后自动带入邀请码的保留期限：0 表示永久，1–365
+                    表示天数。
+                </Help>
             </Field>
             <Field label="默认分享海报">
                 <Select
@@ -2535,7 +2538,7 @@ function validProgramDraft(draft: ProgramDraft): boolean {
         Number(draft.minimumOrderAmount) >= 0 &&
         (!draft.maxRewardPerOrder || Number(draft.maxRewardPerOrder) > 0) &&
         Number.isInteger(draft.attributionWindowDays) &&
-        draft.attributionWindowDays >= 1 &&
+        draft.attributionWindowDays >= 0 &&
         draft.attributionWindowDays <= 365
     );
 }
