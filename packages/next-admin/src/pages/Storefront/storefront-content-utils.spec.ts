@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
     cloneContentBlock,
     fromLocalDateTime,
+    newAccountHeroBlock,
     newContentBlock,
     normalizeSupportAccount,
     storefrontBlockInput,
@@ -142,6 +143,33 @@ describe('storefront support content editor', () => {
                     item.translations.every(translation => !translation.label),
             ),
         ).toBe(true);
+    });
+});
+
+describe('storefront account hero editor', () => {
+    it('creates one publishable reserved block and binds only the selected asset', () => {
+        const block = newAccountHeroBlock(7);
+        block.imageAsset = {
+            id: 'asset-account-hero',
+            name: 'account-hero.webp',
+            preview: '/assets/preview/account-hero.webp',
+            source: '/assets/source/account-hero.webp',
+        };
+
+        expect(block).toMatchObject({
+            code: 'account-hero-visual',
+            type: 'ACCOUNT_HERO',
+            layoutVariant: 'HERO_OVERLAY',
+            enabled: true,
+            position: 7,
+            targetType: 'NONE',
+            items: [],
+        });
+        expect(storefrontBlockValidation(block)).toBeNull();
+        expect(storefrontBlockInput(block)).toMatchObject({
+            imageAssetId: 'asset-account-hero',
+            imageUrl: null,
+        });
     });
 });
 

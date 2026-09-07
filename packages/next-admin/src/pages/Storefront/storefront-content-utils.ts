@@ -1,3 +1,4 @@
+import { STOREFRONT_ACCOUNT_HERO_CODE } from '../../../../storefront-content-plugin/src/account-hero-config';
 import { homepageModuleCatalog } from '../../../../storefront-content-plugin/src/homepage-manifest';
 import type {
     StorefrontBlockTranslation,
@@ -76,7 +77,7 @@ export const navigationTargets = [
 ] as const;
 
 export function defaultLayoutForType(type: StorefrontBlockType): StorefrontLayoutVariant {
-    if (['HERO', 'AUTH_LOGIN', 'AUTH_REGISTER'].includes(type)) return 'HERO_OVERLAY';
+    if (['HERO', 'AUTH_LOGIN', 'AUTH_REGISTER', 'ACCOUNT_HERO'].includes(type)) return 'HERO_OVERLAY';
     if (type === 'NOTICE') return 'TICKER';
     if (['QUICK_LINKS', 'TRUST_BAR', 'NAVIGATION'].includes(type)) return 'ICON_GRID';
     if (['CORE_CATEGORIES', 'CATEGORY_AD'].includes(type)) return 'CARD_GRID';
@@ -180,6 +181,17 @@ export function newContentBlock(
     return block;
 }
 
+export function newAccountHeroBlock(position: number): StorefrontContentBlock {
+    const block = newContentBlock('ACCOUNT_HERO', position, '个人中心头图');
+    block.code = STOREFRONT_ACCOUNT_HERO_CODE;
+    block.enabled = true;
+    block.translations = [
+        { ...emptyBlockTranslation('zh_Hans'), title: '个人中心头图' },
+        { ...emptyBlockTranslation('en'), title: 'Account hero' },
+    ];
+    return block;
+}
+
 function navigationItem(
     position: number,
     targetValue: string,
@@ -234,6 +246,7 @@ function englishDefaultTitle(type: StorefrontBlockType): string {
             SUPPORT: 'Support',
             AUTH_LOGIN: 'Login visual',
             AUTH_REGISTER: 'Register visual',
+            ACCOUNT_HERO: 'Account hero',
             NAVIGATION: 'Navigation',
             CLIENT_PLUGINS: 'Client plugins',
             CUSTOM: 'Custom content',

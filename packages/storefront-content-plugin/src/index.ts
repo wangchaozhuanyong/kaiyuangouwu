@@ -8,6 +8,7 @@ export type {
     StorefrontClientPluginPlacement,
 } from './client-plugin-manifest';
 export {
+    STOREFRONT_ACCOUNT_HERO_CODE,
     storefrontContentBlockTypes,
     storefrontContentPermission,
     storefrontContentTargetTypes,

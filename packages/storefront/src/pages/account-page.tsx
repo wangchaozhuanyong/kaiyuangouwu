@@ -55,6 +55,7 @@ export interface AccountPageProps {
     language: StorefrontLanguage;
     storefrontName: string;
     logoUrl: string | null;
+    accountHeroImageUrl: string | null;
     favoriteProductCount: number;
     announcementCount: number;
     couponCount: number;
@@ -78,6 +79,7 @@ export function AccountPage() {
         language,
         storefrontName,
         logoUrl,
+        accountHeroImageUrl,
         favoriteProductCount,
         announcementCount,
         couponCount,
@@ -158,7 +160,14 @@ export function AccountPage() {
     return (
         <main className="page account-page lg:grid lg:content-start lg:gap-4 lg:px-6 lg:pb-8 lg:pt-[88px]">
             <section
-                className="account-hero lg:col-span-full"
+                className={`account-hero lg:col-span-full ${accountHeroImageUrl ? 'has-custom-background' : ''}`}
+                style={
+                    accountHeroImageUrl
+                        ? ({
+                              '--account-hero-image': `url(${JSON.stringify(accountHeroImageUrl)})`,
+                          } as CSSProperties)
+                        : undefined
+                }
                 aria-labelledby={customer ? undefined : 'guest-account-title'}
             >
                 {customer ? (

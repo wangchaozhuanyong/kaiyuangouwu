@@ -1,5 +1,7 @@
 import { CrudPermissionDefinition } from '@vendure/core';
 
+export { STOREFRONT_ACCOUNT_HERO_CODE } from './account-hero-config';
+
 export {
     MAX_STOREFRONT_CLIENT_PLUGINS,
     STOREFRONT_CLIENT_PLUGINS_CODE,
@@ -58,6 +60,7 @@ export const storefrontContentBlockTypes = [
     'SUPPORT',
     'AUTH_LOGIN',
     'AUTH_REGISTER',
+    'ACCOUNT_HERO',
     'NAVIGATION',
     'CLIENT_PLUGINS',
     'CUSTOM',

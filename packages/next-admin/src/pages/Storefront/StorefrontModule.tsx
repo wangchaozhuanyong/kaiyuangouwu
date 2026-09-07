@@ -10,6 +10,7 @@ import {
     LayoutGrid,
     LoaderCircle,
     Monitor,
+    Palette,
     Pencil,
     Plus,
     RefreshCw,
@@ -32,9 +33,11 @@ import {
     type StorefrontContentResult,
     type StorefrontLanguageCode,
 } from '../../graphql/storefront.graphql';
+import { useAccessibleDialog } from '../../hooks/use-accessible-dialog';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
+import { AccountHeroImagePanel } from './AccountHeroImagePanel';
 import { StorefrontBlockEditor } from './StorefrontBlockEditor';
 import { StorefrontFloorList } from './StorefrontFloorList';
 import { StorefrontVisualPresetPanel } from './StorefrontVisualPresetPanel';
@@ -42,6 +45,7 @@ import {
     blockTranslation,
     errorText,
     homepageModuleDescriptors,
+    newAccountHeroBlock,
     newContentBlock,
     storefrontBlockInput,
 } from './storefront-content-utils';
@@ -66,6 +70,7 @@ export function StorefrontModule() {
     const [previewLanguage, setPreviewLanguage] = useState<StorefrontLanguageCode>('zh_Hans');
     const [viewport, setViewport] = useState<Viewport>('MOBILE');
     const [carouselOpen, setCarouselOpen] = useState(false);
+    const [settingsOpen, setSettingsOpen] = useState(false);
     const [actionPending, setActionPending] = useState(false);
     const [editing, setEditing] = useState<StorefrontContentBlock | null>(null);
     const [deleting, setDeleting] = useState<StorefrontContentBlock | null>(null);
@@ -86,6 +91,7 @@ export function StorefrontModule() {
     }>(DELETE_STOREFRONT_BLOCK_MUTATION, mutationOptions);
     const [updateSettings, settingsState] = useMutation(UPDATE_STOREFRONT_SETTINGS_MUTATION, mutationOptions);
     const allBlocks = query.data?.storefrontContentBlocks ?? [];
+    const accountHeroBlock = allBlocks.find(block => block.type === 'ACCOUNT_HERO') ?? null;
     const homepageRows = storefrontHomepageRows(allBlocks);
     const homepageBlocks = homepageRows.flatMap(row => row.blocks);
     const configuredTypes = new Set(homepageBlocks.map(block => block.type));
@@ -235,17 +241,56 @@ export function StorefrontModule() {
         }
     };
 
+    const saveAccountHero = async (asset: StorefrontContentBlock['imageAsset']) => {
+        if (savePending || query.loading) throw new Error('配置正在处理，请稍后重试');
+        if (query.error) throw query.error;
+        const block =
+            accountHeroBlock ??
+            newAccountHeroBlock(Math.max(-1, ...allBlocks.map(item => item.position)) + 1);
+        if (!(block.id ? canUpdate : canCreate)) throw new Error('当前账号没有保存商城装修的权限');
+        const draft = {
+            ...block,
+            imageAsset: asset,
+            imageAssetId: asset?.id ?? null,
+            imageUrl: null,
+        };
+        setActionPending(true);
+        try {
+            if (draft.id) {
+                if (!draft.updatedAt) throw new Error('缺少内容版本，请刷新后重试');
+                await updateBlock({
+                    variables: {
+                        input: {
+                            id: draft.id,
+                            expectedUpdatedAt: draft.updatedAt,
+                            ...storefrontBlockInput(draft, block),
+                        },
+                    },
+                });
+            } else {
+                await createBlock({ variables: { input: storefrontBlockInput(draft) } });
+            }
+            try {
+                await query.refetch();
+            } catch {
+                throw new Error('头图已保存，但重新读取失败，请刷新确认');
+            }
+        } finally {
+            setActionPending(false);
+        }
+    };
+
     return (
         <div className="flex h-full flex-col bg-slate-50">
             <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-4 sm:px-8">
                 <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
-                            商城首页装修
-                            <FeatureHelpButton topic="storefront.decoration" title="商城首页装修" />
+                            商城装修
+                            <FeatureHelpButton topic="storefront.decoration" title="商城装修" />
                         </h1>
                         <p className="mt-1 text-xs text-slate-500">
-                            管理当前店铺真实楼层、展示顺序、排期与中英文内容
+                            管理当前店铺的皮肤、个人中心图片、首页楼层与双语内容
                         </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -260,6 +305,14 @@ export function StorefrontModule() {
                         </button>
                         <button
                             type="button"
+                            onClick={() => setSettingsOpen(true)}
+                            className="flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 hover:border-blue-300 hover:bg-blue-100"
+                        >
+                            <Palette className="h-3.5 w-3.5" />
+                            装修设置
+                        </button>
+                        <button
+                            type="button"
                             onClick={() => setCarouselOpen(true)}
                             className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700"
                         >
@@ -270,8 +323,7 @@ export function StorefrontModule() {
                 </div>
             </header>
 
-            <main className="mx-auto grid w-full max-w-[1600px] flex-1 gap-5 overflow-y-auto p-5 sm:p-8 xl:grid-cols-[minmax(440px,620px)_minmax(0,1fr)]">
-                <StorefrontVisualPresetPanel />
+            <main className="mx-auto grid w-full max-w-[1600px] flex-1 items-start gap-5 overflow-y-auto p-5 sm:p-8 xl:grid-cols-[minmax(0,1fr)_minmax(480px,0.9fr)]">
                 <div className="space-y-4">
                     {notice && !carouselOpen && (
                         <Message kind="success" onClose={() => setNotice('')}>
@@ -485,6 +537,28 @@ export function StorefrontModule() {
                 </section>
             </main>
 
+            <StorefrontSettingsDrawer
+                open={settingsOpen}
+                channelName={query.data ? getChannelDisplayName(query.data.activeChannel.code) : '当前店铺'}
+                onClose={() => setSettingsOpen(false)}
+            >
+                <StorefrontVisualPresetPanel />
+                <AccountHeroImagePanel
+                    key={query.data?.activeChannel.id ?? 'loading'}
+                    block={accountHeroBlock}
+                    channelName={
+                        query.data ? getChannelDisplayName(query.data.activeChannel.code) : '当前店铺'
+                    }
+                    disabled={
+                        query.loading ||
+                        Boolean(query.error) ||
+                        actionPending ||
+                        !(accountHeroBlock ? canUpdate : canCreate)
+                    }
+                    onSave={saveAccountHero}
+                />
+            </StorefrontSettingsDrawer>
+
             {carouselOpen && (
                 <CarouselManager
                     blocks={heroes}
@@ -538,6 +612,60 @@ export function StorefrontModule() {
                     onConfirm={() => void confirmDelete()}
                 />
             )}
+        </div>
+    );
+}
+
+function StorefrontSettingsDrawer({
+    open,
+    channelName,
+    onClose,
+    children,
+}: {
+    open: boolean;
+    channelName: string;
+    onClose: () => void;
+    children: ReactNode;
+}) {
+    const { dialogRef } = useAccessibleDialog(onClose, open);
+    return (
+        <div
+            aria-hidden={!open}
+            className={open ? 'fixed inset-0 z-50 flex justify-end bg-slate-950/45' : 'hidden'}
+            onMouseDown={event => {
+                if (event.target === event.currentTarget) onClose();
+            }}
+        >
+            <aside
+                ref={dialogRef}
+                role="dialog"
+                aria-modal="true"
+                aria-label="商城装修设置"
+                tabIndex={-1}
+                className="flex h-full w-full max-w-[760px] flex-col border-l border-slate-200 bg-slate-100 shadow-2xl outline-none"
+                onMouseDown={event => event.stopPropagation()}
+            >
+                <header className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-200 bg-white px-5 py-4 sm:px-7">
+                    <div>
+                        <h2 className="flex items-center gap-2 text-base font-bold text-slate-900">
+                            装修设置
+                            <FeatureHelpButton topic="storefront.decoration" title="装修设置" />
+                        </h2>
+                        <p className="mt-1 text-xs text-slate-500">
+                            {channelName} · 管理店铺皮肤和个人中心头图
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        aria-label="关闭装修设置"
+                        onClick={onClose}
+                        className="shrink-0 rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                    >
+                        <X className="h-5 w-5" />
+                    </button>
+                </header>
+                <div className="flex-1 space-y-5 overflow-y-auto p-4 sm:p-7">{children}</div>
+            </aside>
         </div>
     );
 }

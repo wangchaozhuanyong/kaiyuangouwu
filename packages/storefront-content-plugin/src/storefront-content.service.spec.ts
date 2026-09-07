@@ -165,6 +165,34 @@ describe('StorefrontContentService input validation', () => {
         ).toThrow(/强调色/);
     });
 
+    it('reserves a singleton-shaped block for the account hero image', () => {
+        const service = new StorefrontContentService({} as never, {} as never, {} as never, {} as never);
+        const accountHeroInput = createInput({
+            code: 'account-hero-visual',
+            type: 'ACCOUNT_HERO',
+            layoutVariant: 'HERO_OVERLAY',
+            targetType: 'NONE',
+            targetValue: null,
+            translations: [
+                { languageCode: LanguageCode.zh_Hans, title: '个人中心头图' },
+                { languageCode: LanguageCode.en, title: 'Account hero' },
+            ],
+            items: [],
+        });
+        const normalized = validate(accountHeroInput);
+
+        expect(() => (service as any).validateAccountHero(normalized, [])).not.toThrow();
+        expect(() => validate({ ...accountHeroInput, code: 'custom-account-hero' })).toThrow(/系统保留编码/);
+        expect(() =>
+            (service as any).validateAccountHero(normalized, [
+                {
+                    position: 0,
+                    translations: [{ languageCode: LanguageCode.zh_Hans, label: '不应存在' }],
+                },
+            ]),
+        ).toThrow(/不支持配置子项/);
+    });
+
     it('reserves one system code for the storefront navigation block', () => {
         expect(() =>
             validate(

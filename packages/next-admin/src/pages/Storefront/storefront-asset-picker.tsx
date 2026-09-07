@@ -129,7 +129,7 @@ export function AssetPicker({
                     <div className="truncate text-xs font-bold text-slate-800">
                         {value?.name ?? (preview ? '外部图片' : '未选择素材')}
                     </div>
-                    <div className="mt-2 flex gap-2">
+                    <div className="mt-2 flex flex-wrap gap-2">
                         <input
                             ref={uploadInputRef}
                             type="file"

@@ -53,7 +53,7 @@ const overview: MyReferralOverview = {
     ledger: [],
 };
 
-function renderAccount(referralEnabled: boolean): string {
+function renderAccount(referralEnabled: boolean, accountHeroImageUrl: string | null = null): string {
     const client = createStorefrontQueryClient();
     const languageCode = languageCodeFor('zh');
     const program: ReferralProgram = {
@@ -118,6 +118,7 @@ function renderAccount(referralEnabled: boolean): string {
                     language: 'zh',
                     storefrontName: '测试商城',
                     logoUrl: null,
+                    accountHeroImageUrl,
                     favoriteProductCount: 0,
                     announcementCount: 0,
                     couponCount: 0,
@@ -145,5 +146,14 @@ describe('account referral visibility', () => {
 
         expect(markup).toContain('grid-cols-3');
         expect(markup).not.toContain('邀请返利');
+    });
+
+    it('renders the managed account hero image as the top background layer', () => {
+        const markup = renderAccount(true, 'https://assets.example.com/account-hero.webp');
+
+        expect(markup).toContain('has-custom-background');
+        expect(markup).toContain(
+            '--account-hero-image:url(&quot;https://assets.example.com/account-hero.webp&quot;)',
+        );
     });
 });
