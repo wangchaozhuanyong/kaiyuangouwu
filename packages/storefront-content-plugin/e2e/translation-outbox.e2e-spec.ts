@@ -2,11 +2,13 @@ import {
     ContentTranslationBackfillService,
     ContentTranslationPlugin,
     ContentTranslationRetryService,
+    ContentTranslationService,
     ContentTranslationState,
     TranslationProviderError,
     TranslationProviderState,
 } from '@vendure/content-translation-plugin';
 import {
+    ConfigService,
     DefaultSearchPlugin,
     LanguageCode,
     mergeConfig,
@@ -364,6 +366,22 @@ describe('real Admin API saves and Shop API publication with the translation out
                 },
             )
         ).createProduct;
+        const entityId = String(
+            server.app.get(ConfigService).entityOptions.entityIdStrategy.decodeId(created.id),
+        );
+        const ctx = await server.app.get(RequestContextService).create({ apiType: 'admin' });
+        await server.app.get(ContentTranslationService).recordState(ctx, {
+            channelId: 'historical-channel',
+            entityType: 'Product',
+            entityId,
+            fieldPath: 'name',
+            sourceText: '旧商品名',
+            translatedText: 'Old reviewed product',
+            status: 'STALE',
+            origin: 'MANUAL',
+            locked: true,
+        });
+
         await adminClient.query(
             gql`
                 mutation ($input: UpdateProductInput!) {
@@ -383,6 +401,11 @@ describe('real Admin API saves and Shop API publication with the translation out
                 expect.objectContaining({ fieldPath: 'name', origin: 'MANUAL', locked: true }),
             ]),
         );
+        const nameStates = states.filter(state => state.fieldPath === 'name' && state.entityId === entityId);
+        expect(nameStates).toHaveLength(2);
+        expect(nameStates.every(state => state.status === 'MANUAL_LOCKED' && state.locked)).toBe(true);
+        expect(new Set(nameStates.map(state => state.sourceHash)).size).toBe(1);
+        expect(new Set(nameStates.map(state => state.translatedHash)).size).toBe(1);
         expect(translate).not.toHaveBeenCalled();
     });
     it('retries an actual search queue enqueue without requesting another translation', async () => {

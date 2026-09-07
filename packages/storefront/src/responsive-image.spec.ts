@@ -76,9 +76,17 @@ describe('responsiveImageSources', () => {
         expect(sources?.webpSrcSet).toContain('preset=storefront-card-square-320');
     });
 
-    it('keeps SVG assets as vectors instead of rasterizing them', () => {
-        expect(responsiveImageSources('/assets/source/icon.svg', 'thumbnail')).toBeNull();
-        expect(storefrontWebpUrl('/assets/source/icon.svg', 'thumbnail')).toBe('/assets/source/icon.svg');
+    it('renders uploaded SVG assets through explicit WebP presets', () => {
+        const sources = responsiveImageSources('/assets/source/icon.svg', 'thumbnail');
+        expect(sources?.fallbackSrc).toBe(
+            '/assets/source/icon.svg?preset=storefront-thumbnail-320&format=webp&q=90',
+        );
+        expect(sources?.webpSrcSet).toContain('preset=storefront-thumbnail-160&format=webp');
+        expect(storefrontWebpUrl('/assets/source/icon.svg', 'thumbnail')).toBe(sources?.fallbackSrc);
+        expect(responsiveImageSources('/storefront/icon.svg', 'thumbnail')).toBeNull();
+        expect(storefrontWebpUrl('https://images.example.com/icon.svg', 'thumbnail')).toBe(
+            'https://images.example.com/icon.svg',
+        );
     });
 
     it('does not mistake Vite content-hashed files for Vendure transformable assets', () => {

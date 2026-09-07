@@ -542,75 +542,106 @@ describe('native content translation event routing', () => {
         },
     );
 
-    it('locks an English-only edit so later source saves do not overwrite it', async () => {
-        const source = {
-            languageCode: 'zh_Hans',
-            name: '测试商品',
-            slug: 'ce-shi-shang-pin',
-            description: '<p>商品详情</p>',
-        };
-        const target = {
-            languageCode: 'en',
-            name: 'Reviewed product name',
-            slug: 'reviewed-product-name',
-            description: '<p>Reviewed details</p>',
-        };
-        const repository = {
-            createQueryBuilder: vi.fn(() => {
-                let languageCode = '';
-                const builder = {
-                    leftJoinAndSelect: vi.fn(() => builder),
-                    where: vi.fn(() => builder),
-                    andWhere: vi.fn((_query: string, parameters: { languageCode: string }) => {
-                        languageCode = parameters.languageCode;
-                        return builder;
-                    }),
-                    getOne: vi.fn(() => Promise.resolve(languageCode === 'zh_Hans' ? source : target)),
-                };
-                return builder;
-            }),
-        };
-        const connection = {
-            rawConnection: {
-                getMetadata: vi.fn(() => ({
-                    relations: [
-                        {
-                            propertyName: 'translations',
-                            inverseEntityMetadata: { target: class ProductTranslation {} },
-                        },
-                    ],
-                })),
-            },
-            getRepository: vi.fn(() => repository),
-        };
-        const translations = {
-            cachedTranslations: vi.fn().mockResolvedValue([]),
-            recordState: vi.fn().mockResolvedValue(undefined),
-        };
-        const service = new NativeContentTranslationService(
-            {} as any,
-            connection as any,
-            translations as any,
-        );
+    it.each([false, true])(
+        'locks an English-only edit across existing shared states (shared=%s)',
+        async shared => {
+            const source = {
+                languageCode: 'zh_Hans',
+                name: '测试商品',
+                slug: 'ce-shi-shang-pin',
+                description: '<p>商品详情</p>',
+            };
+            const target = {
+                languageCode: 'en',
+                name: 'Reviewed product name',
+                slug: 'reviewed-product-name',
+                description: '<p>Reviewed details</p>',
+            };
+            const repository = {
+                createQueryBuilder: vi.fn(() => {
+                    let languageCode = '';
+                    const builder = {
+                        leftJoinAndSelect: vi.fn(() => builder),
+                        where: vi.fn(() => builder),
+                        andWhere: vi.fn((_query: string, parameters: { languageCode: string }) => {
+                            languageCode = parameters.languageCode;
+                            return builder;
+                        }),
+                        getOne: vi.fn(() => Promise.resolve(languageCode === 'zh_Hans' ? source : target)),
+                    };
+                    return builder;
+                }),
+            };
+            const connection = {
+                rawConnection: {
+                    getMetadata: vi.fn(() => ({
+                        relations: [
+                            {
+                                propertyName: 'translations',
+                                inverseEntityMetadata: { target: class ProductTranslation {} },
+                            },
+                        ],
+                    })),
+                },
+                getRepository: vi.fn(() => repository),
+            };
+            const translations = {
+                cachedTranslations: vi.fn().mockResolvedValue([]),
+                findStates: vi.fn().mockResolvedValue(
+                    shared
+                        ? [
+                              { channelId: 'channel-1', fieldPath: 'name' },
+                              { channelId: 'channel-2', fieldPath: 'name' },
+                              { channelId: null, fieldPath: 'name' },
+                              { channelId: 'channel-2', fieldPath: 'description' },
+                          ]
+                        : [],
+                ),
+                recordState: vi.fn().mockResolvedValue(undefined),
+            };
+            const service = new NativeContentTranslationService(
+                {} as any,
+                connection as any,
+                translations as any,
+            );
 
-        await service.lockManualTranslation(
-            { channelId: 'channel-1' } as any,
-            new Product({ id: 'product-1' }),
-            { translations: [target] },
-        );
+            await service.lockManualTranslation(
+                { channelId: 'channel-1' } as any,
+                new Product({ id: 'product-1' }),
+                { translations: [shared ? { languageCode: 'en', name: target.name } : target] },
+            );
 
-        expect(translations.recordState).toHaveBeenCalledTimes(3);
-        expect(translations.recordState).toHaveBeenCalledWith(
-            expect.anything(),
-            expect.objectContaining({
-                fieldPath: 'name',
-                translatedText: 'Reviewed product name',
-                status: 'MANUAL_LOCKED',
-                origin: 'MANUAL',
-                locked: true,
-            }),
-        );
-    });
+            expect(translations.recordState).toHaveBeenCalledTimes(3);
+            if (shared) {
+                const recorded = translations.recordState.mock.calls.map(call => call[1]);
+                expect(recorded.map(record => record.channelId)).toEqual(['channel-1', 'channel-2', null]);
+                expect(
+                    recorded.every(
+                        record =>
+                            record.fieldPath === 'name' &&
+                            record.sourceText === source.name &&
+                            record.translatedText === target.name &&
+                            record.status === 'MANUAL_LOCKED',
+                    ),
+                ).toBe(true);
+                expect(translations.findStates).toHaveBeenCalledWith(
+                    expect.anything(),
+                    { channelId: 'channel-1', entityType: 'Product', entityId: 'product-1' },
+                    true,
+                );
+            }
+            expect(translations.recordState).toHaveBeenCalledWith(
+                expect.anything(),
+                expect.objectContaining({
+                    fieldPath: 'name',
+                    translatedText: 'Reviewed product name',
+                    status: 'MANUAL_LOCKED',
+                    origin: 'MANUAL',
+                    locked: true,
+                }),
+            );
+        },
+    );
 
     it('regenerates rather than locking an English-only edit which still contains Chinese', async () => {
         const source = { languageCode: 'zh_Hans', name: '测试规格' };
