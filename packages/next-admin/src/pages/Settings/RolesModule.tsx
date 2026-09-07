@@ -216,7 +216,10 @@ export function RolesModule() {
                     </div>
                 </div>
                 {query.error && !query.data ? (
-                    <ErrorState message={query.error.message} onRetry={() => void query.refetch()} />
+                    <ErrorState
+                        message={toUserFacingError(query.error, '员工与权限数据读取失败')}
+                        onRetry={() => void query.refetch()}
+                    />
                 ) : isTeamInitializing ? (
                     <SettingsContentSkeleton label="正在读取员工与权限数据" sections={2} />
                 ) : tab === 'MEMBERS' ? (

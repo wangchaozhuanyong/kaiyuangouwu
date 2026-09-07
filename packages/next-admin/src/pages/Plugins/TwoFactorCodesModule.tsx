@@ -34,6 +34,7 @@ import {
     type DashboardTwoFactorAccount,
     type DashboardTwoFactorAccountsResult,
 } from '../../graphql/two-factor.graphql';
+import { copyAdminText, readAdminText } from '../../utils/admin-clipboard';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import {
     clearLegacyTwoFactorSessionStorage,
@@ -230,27 +231,22 @@ export function TwoFactorCodesModule() {
     };
 
     const handlePaste = async () => {
-        try {
-            const value = await navigator.clipboard.readText();
-            if (!value.trim()) throw new Error('剪贴板为空');
-            setQueryInput(value.trim());
-            setQuerySecret(null);
-            setQueryCode(null);
-            showSuccess('已从剪贴板粘贴 2FA 密钥');
-        } catch (error) {
-            showError(error, '无法读取剪贴板，请手动粘贴密钥');
+        const value = await readAdminText('2FA 密钥');
+        if (value === null) return;
+        if (!value.trim()) {
+            showError(new Error('剪贴板为空'), '剪贴板中没有可粘贴的 2FA 密钥');
+            return;
         }
+        setQueryInput(value.trim());
+        setQuerySecret(null);
+        setQueryCode(null);
+        showSuccess('已从剪贴板粘贴 2FA 密钥');
     };
 
     const copyCode = async (code: string): Promise<boolean> => {
-        try {
-            await navigator.clipboard.writeText(code);
-            showSuccess('验证码已复制');
-            return true;
-        } catch (error) {
-            showError(error, '验证码复制失败，请手动复制');
-            return false;
-        }
+        if (!(await copyAdminText(code, '2FA 验证码'))) return false;
+        showSuccess('验证码已复制');
+        return true;
     };
 
     const submitAccount = async (

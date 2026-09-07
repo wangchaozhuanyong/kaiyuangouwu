@@ -64,8 +64,10 @@ describe('adminMutationFeedbackLink', () => {
 
         expect(events.at(-1)).toMatchObject({
             kind: 'error',
-            title: '保存失败',
-            message: '无法连接管理服务，请检查网络后重试',
+            title: '保存店铺档案失败',
+            reason: '浏览器当前无法连接管理服务',
+            resolution: ['检查网络和管理服务状态后重试'],
+            retryable: true,
         });
     });
 
@@ -87,6 +89,10 @@ describe('adminMutationFeedbackLink', () => {
 
         expect(events.map(event => event.kind)).toEqual(['loading', 'error']);
         expect(events.at(-1)?.message).toBe('店铺名称不能为空');
+        expect(events.at(-1)).toMatchObject({
+            reason: '店铺名称不能为空',
+            resolution: ['按页面提示修正对应字段后重新提交'],
+        });
     });
 
     it('does not report success when the service returns no usable mutation result', async () => {
@@ -115,6 +121,77 @@ describe('adminMutationFeedbackLink', () => {
         await client.query({ query: SETTINGS_QUERY, fetchPolicy: 'no-cache' });
 
         expect(events).toEqual([]);
+    });
+
+    it('shows the target, blocking resources and recovery steps from GraphQL extensions', async () => {
+        const events = collectFeedback();
+        const client = createClient({
+            errors: [
+                {
+                    message: '商家主体仍被店铺使用',
+                    extensions: {
+                        code: 'RESOURCE_IN_USE',
+                        blockingResources: [{ name: '美宜佳店铺', code: 'my-malaysia' }],
+                        resolution: ['先将 Channel 改绑到其他商家主体'],
+                        retryable: false,
+                    },
+                },
+            ],
+        });
+
+        await expect(
+            client.mutate({
+                mutation: gql`
+                    mutation NextAdminDeleteSeller($id: ID!) {
+                        deleteSeller(id: $id) {
+                            result
+                        }
+                    }
+                `,
+                variables: { id: 'seller-1' },
+            }),
+        ).rejects.toThrow('商家主体仍被店铺使用');
+
+        expect(events.at(-1)).toMatchObject({
+            title: '删除商家主体（ID：seller-1）失败',
+            reason: '商家主体仍被店铺使用',
+            details: ['美宜佳店铺（my-malaysia）'],
+            resolution: ['先将 Channel 改绑到其他商家主体'],
+            retryable: false,
+        });
+    });
+
+    it('explains a deletion business refusal and names the channel that occupies the zone', async () => {
+        const events = collectFeedback();
+        const client = createClient({
+            data: {
+                deleteZone: {
+                    result: 'NOT_DELETED',
+                    message:
+                        'The selected Zone cannot be deleted as it used as a default in the following Channels: 美宜佳',
+                },
+            },
+        });
+
+        await client.mutate({
+            mutation: gql`
+                mutation NextAdminDeleteBusinessZone($id: ID!) {
+                    deleteZone(id: $id) {
+                        result
+                        message
+                    }
+                }
+            `,
+            variables: { id: 'zone-1' },
+        });
+
+        expect(events.at(-1)).toMatchObject({
+            kind: 'error',
+            title: '删除业务区域（ID：zone-1）失败',
+            reason: '该数据仍被其他业务记录使用，当前不能直接删除',
+            details: ['店铺 Channel：美宜佳'],
+            resolution: ['先解除关联或将占用记录改绑到其他对象，再重新删除'],
+        });
     });
 });
 

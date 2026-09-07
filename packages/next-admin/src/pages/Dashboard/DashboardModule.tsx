@@ -363,7 +363,7 @@ export function DashboardModule() {
                                         {metrics.error && !metrics.data ? (
                                             <ErrorPanel
                                                 message="经营指标加载失败"
-                                                detail={metrics.error.message}
+                                                detail={toUserFacingError(metrics.error, '经营指标读取失败')}
                                                 onRetry={() => void metrics.refetch()}
                                             />
                                         ) : (
@@ -510,7 +510,10 @@ export function DashboardModule() {
                                             <div className="p-5">
                                                 <ErrorPanel
                                                     message="最近订单加载失败"
-                                                    detail={recentOrders.error.message}
+                                                    detail={toUserFacingError(
+                                                        recentOrders.error,
+                                                        '最近订单读取失败',
+                                                    )}
                                                     onRetry={() => void recentOrders.refetch()}
                                                 />
                                             </div>

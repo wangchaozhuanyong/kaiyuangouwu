@@ -5,7 +5,20 @@ export interface AdminFeedback {
     kind: AdminFeedbackKind;
     title: string;
     message?: string;
+    reason?: string;
+    details?: string[];
+    resolution?: string[];
+    traceId?: string;
+    retryable?: boolean;
+    fieldErrors?: Record<string, string>;
+    actions?: AdminFeedbackAction[];
     durationMs?: number;
+}
+
+export interface AdminFeedbackAction {
+    label: string;
+    onSelect: () => void;
+    dismissOnSelect?: boolean;
 }
 
 export type AdminFeedbackInput = Omit<AdminFeedback, 'id'> & { id?: string };

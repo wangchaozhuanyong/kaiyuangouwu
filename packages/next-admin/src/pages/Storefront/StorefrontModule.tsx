@@ -319,7 +319,10 @@ export function StorefrontModule() {
                         {query.loading && !query.data ? (
                             <LoadingState />
                         ) : query.error ? (
-                            <ErrorState message={query.error.message} onRetry={() => void query.refetch()} />
+                            <ErrorState
+                                message={toUserFacingError(query.error, '店铺首页内容读取失败')}
+                                onRetry={() => void query.refetch()}
+                            />
                         ) : (
                             <div>
                                 <StorefrontFloorList
@@ -488,7 +491,7 @@ export function StorefrontModule() {
                     interval={query.data?.storefrontContentSettings.heroAutoplayIntervalSeconds}
                     pending={pending}
                     loading={query.loading && !query.data}
-                    error={query.error?.message}
+                    error={query.error ? toUserFacingError(query.error, '店铺首页内容刷新失败') : undefined}
                     notice={notice}
                     actionError={actionError}
                     covered={Boolean(editing || deleting)}

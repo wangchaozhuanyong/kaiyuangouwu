@@ -3,6 +3,7 @@ import {
     MARKETING_CAMPAIGN_SCOPE_QUERY,
     MarketingCampaignScopeResult,
 } from '../../graphql/marketing.graphql';
+import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatDateTime, formatMoney } from '../Sales/sales-utils';
 import { CampaignDetail, couponKindLabels, couponRule } from './promotion-model';
 import { Modal } from './promotion-ui';
@@ -147,7 +148,9 @@ export function CampaignDetailDialog({
                             coupon.collectionIds,
                             collectionNames,
                             scopeQuery.loading,
-                            scopeQuery.error?.message,
+                            scopeQuery.error
+                                ? toUserFacingError(scopeQuery.error, '促销适用分类读取失败')
+                                : undefined,
                         )}
                     />
                     <DetailValue
@@ -156,7 +159,9 @@ export function CampaignDetailDialog({
                             coupon.productVariantIds,
                             variantNames,
                             scopeQuery.loading,
-                            scopeQuery.error?.message,
+                            scopeQuery.error
+                                ? toUserFacingError(scopeQuery.error, '促销适用商品读取失败')
+                                : undefined,
                         )}
                     />
                 </DetailGrid>

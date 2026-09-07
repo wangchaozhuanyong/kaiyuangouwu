@@ -16,6 +16,7 @@ import { ID, PaginatedList } from '@vendure/common/lib/shared-types';
 import { RequestContext } from '../../api/common/request-context';
 import { RelationPaths } from '../../api/decorators/relations.decorator';
 import { ForbiddenError, UserInputError } from '../../common/error/errors';
+import { safeOperationErrorMessage } from '../../common/error/safe-operation-error';
 import { Instrument } from '../../common/instrument-decorator';
 import { ListQueryOptions } from '../../common/types/common-types';
 import { Translated } from '../../common/types/locale-types';
@@ -123,7 +124,7 @@ export class PaymentMethodService {
             input,
             entityType: PaymentMethod,
             translationType: PaymentMethodTranslation,
-            beforeSave: async pm => {
+            beforeSave: pm => {
                 if (input.checker) {
                     pm.checker = this.configArgService.parseInput(
                         'PaymentMethodEligibilityChecker',
@@ -178,10 +179,16 @@ export class PaymentMethodService {
                 return {
                     result: DeletionResult.DELETED,
                 };
-            } catch (e: any) {
+            } catch (error: unknown) {
                 return {
                     result: DeletionResult.NOT_DELETED,
-                    message: e.message || String(e),
+                    message: safeOperationErrorMessage(
+                        ctx,
+                        error,
+                        'message.payment-method-delete-data-conflict',
+                        { name: paymentMethod.name },
+                        `Could not delete PaymentMethod with id ${paymentMethodId}`,
+                    ),
                 };
             }
         } else {

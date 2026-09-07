@@ -1,6 +1,7 @@
 import { useLazyQuery, useMutation, useQuery } from '@apollo/client/react';
 import { Beaker, CreditCard, Pencil, Plus, Trash2, Truck, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { sensitiveActionContext } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
@@ -125,28 +126,44 @@ export function PaymentShippingManager({
 
     const removeMethod = async (state: EditorState) => {
         if (!state.item) return;
-        const confirmed = await requestConfirmation({
+        const confirmation = await requestConfirmation({
             title: state.kind === 'payment' ? '删除支付方式' : '删除配送方式',
             description: `确定删除“${state.item.name}”？如果已有 Channel 或订单引用，后端会拒绝不安全的删除。`,
-            confirmLabel: '确认删除',
+            confirmLabel: '验证并删除',
             tone: 'danger',
+            requireCurrentPassword: true,
         });
-        if (!confirmed) return;
+        if (!confirmation) return;
+        const kindLabel = state.kind === 'payment' ? '支付方式' : '配送方式';
+        const context = {
+            ...sensitiveActionContext(confirmation.currentPassword ?? ''),
+            adminFeedback: {
+                target: `${kindLabel}“${state.item.name}”`,
+                resolution: [
+                    `检查该${kindLabel}是否仍分配给店铺 Channel 或被订单引用`,
+                    `先解除关联，再重新删除${kindLabel}`,
+                ],
+            },
+        };
         try {
             let result: { result: string; message?: string | null } | undefined;
             if (state.kind === 'payment') {
                 const response = await deletePayment({
                     variables: { id: state.item.id, force: false },
+                    context,
                 });
                 result = response.data?.deletePaymentMethod;
             } else {
-                const response = await deleteShipping({ variables: { id: state.item.id } });
+                const response = await deleteShipping({
+                    variables: { id: state.item.id },
+                    context,
+                });
                 result = response.data?.deleteShippingMethod;
             }
-            if (result?.result !== 'DELETED') throw new Error(result?.message || '后端未删除该配置');
+            if (result?.result !== 'DELETED') return;
             await onChanged(state.kind === 'payment' ? '支付方式已删除' : '配送方式已删除');
-        } catch (error) {
-            onError(toUserFacingError(error, '配置删除失败'));
+        } catch {
+            // Apollo 全局反馈已显示失败原因，避免页面再出现第二条重复错误。
         }
     };
 

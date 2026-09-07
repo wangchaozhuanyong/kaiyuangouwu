@@ -1,6 +1,7 @@
 import { useMutation, useQuery } from '@apollo/client/react';
 import { Languages, MapPin, Pencil, ReceiptText, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { sensitiveActionContext } from '../../apollo';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
 import { DynamicCustomFieldsForm } from '../../custom-fields/DynamicCustomFieldsForm';
@@ -148,7 +149,11 @@ export function BusinessBasicsPanel({
     if (query.error || !query.data)
         return (
             <ErrorState
-                message={query.error?.message ?? '业务基础配置读取失败'}
+                message={
+                    query.error
+                        ? toUserFacingError(query.error, '业务基础配置读取失败')
+                        : '业务基础配置读取失败'
+                }
                 onRetry={() => void query.refetch()}
             />
         );
@@ -189,6 +194,8 @@ export function BusinessBasicsPanel({
                 <ZoneBusinessSettings
                     zones={query.data.zones.items}
                     countries={query.data.countries.items}
+                    channels={query.data.channels.items}
+                    taxRates={query.data.taxRates.items}
                     languageCode={query.data.activeChannel.defaultLanguageCode}
                     onChanged={refresh}
                     onError={onError}
@@ -600,37 +607,55 @@ function TaxBusinessSettings({
         }
     };
     const removeCategory = async (id: string, name: string) => {
-        const confirmed = await requestConfirmation({
+        const confirmation = await requestConfirmation({
             title: `删除税类“${name}”？`,
             description: '有关联税率或商品时，后端会拒绝不安全的删除。',
-            confirmLabel: '确认删除',
+            confirmLabel: '验证并删除',
             tone: 'danger',
+            requireCurrentPassword: true,
         });
-        if (!confirmed) return;
+        if (!confirmation) return;
         try {
-            const response = await deleteCategory({ variables: { id } });
-            if (response.data?.deleteTaxCategory.result !== 'DELETED')
-                throw new Error(response.data?.deleteTaxCategory.message || '税类未删除');
+            const response = await deleteCategory({
+                variables: { id },
+                context: {
+                    ...sensitiveActionContext(confirmation.currentPassword ?? ''),
+                    adminFeedback: {
+                        target: `税务分类“${name}”`,
+                        resolution: ['先删除或改绑引用该分类的税率，再重新删除税务分类'],
+                    },
+                },
+            });
+            if (response.data?.deleteTaxCategory.result !== 'DELETED') return;
             await onChanged('税类已删除');
-        } catch (error) {
-            onError(errorText(error));
+        } catch {
+            // Apollo 全局反馈已显示失败原因，避免页面再出现第二条重复错误。
         }
     };
     const removeRate = async (id: string, name: string) => {
-        const confirmed = await requestConfirmation({
+        const confirmation = await requestConfirmation({
             title: `删除税率“${name}”？`,
             description: '删除后新订单不再使用该税率，历史订单数据不会改写。',
-            confirmLabel: '确认删除',
+            confirmLabel: '验证并删除',
             tone: 'danger',
+            requireCurrentPassword: true,
         });
-        if (!confirmed) return;
+        if (!confirmation) return;
         try {
-            const response = await deleteRate({ variables: { id } });
-            if (response.data?.deleteTaxRate.result !== 'DELETED')
-                throw new Error(response.data?.deleteTaxRate.message || '税率未删除');
+            const response = await deleteRate({
+                variables: { id },
+                context: {
+                    ...sensitiveActionContext(confirmation.currentPassword ?? ''),
+                    adminFeedback: {
+                        target: `税率“${name}”`,
+                        resolution: ['刷新税务配置确认最新状态后，再重新删除税率'],
+                    },
+                },
+            });
+            if (response.data?.deleteTaxRate.result !== 'DELETED') return;
             await onChanged('税率已删除');
-        } catch (error) {
-            onError(errorText(error));
+        } catch {
+            // Apollo 全局反馈已显示失败原因，避免页面再出现第二条重复错误。
         }
     };
     const busy =
@@ -903,12 +928,16 @@ function TaxBusinessSettings({
 function ZoneBusinessSettings({
     zones,
     countries,
+    channels,
+    taxRates,
     languageCode,
     onChanged,
     onError,
 }: {
     zones: BusinessSettingsResult['zones']['items'];
     countries: BusinessSettingsResult['countries']['items'];
+    channels: BusinessSettingsResult['channels']['items'];
+    taxRates: BusinessSettingsResult['taxRates']['items'];
     languageCode: string;
     onChanged: (message: string) => Promise<void>;
     onError: (message: string) => void;
@@ -962,20 +991,49 @@ function ZoneBusinessSettings({
         }
     };
     const removeZone = async (id: string, zoneName: string) => {
-        const confirmed = await requestConfirmation({
+        const channelUsages = channels
+            .filter(channel => channel.defaultTaxZone?.id === id || channel.defaultShippingZone?.id === id)
+            .map(channel => {
+                const roles = [
+                    channel.defaultTaxZone?.id === id ? '默认税务区域' : '',
+                    channel.defaultShippingZone?.id === id ? '默认配送区域' : '',
+                ].filter(Boolean);
+                return `店铺 Channel“${channel.code}”（${roles.join('、')}）`;
+            });
+        const taxRateUsages = taxRates.filter(rate => rate.zone.id === id).map(rate => `税率“${rate.name}”`);
+        const usages = [...channelUsages, ...taxRateUsages];
+        if (usages.length) {
+            onError(
+                `无法删除业务区域“${zoneName}”，正在占用的对象：${usages.join('、')}。处理方法：先把这些店铺的默认区域和税率改绑到其他业务区域，再重新删除。`,
+            );
+            return;
+        }
+        const confirmation = await requestConfirmation({
             title: `删除区域“${zoneName}”？`,
             description: '被 Channel、配送方式或税率引用时，后端会拒绝删除。',
-            confirmLabel: '确认删除',
+            confirmLabel: '验证并删除',
             tone: 'danger',
+            requireCurrentPassword: true,
         });
-        if (!confirmed) return;
+        if (!confirmation) return;
         try {
-            const response = await deleteZone({ variables: { id } });
-            if (response.data?.deleteZone.result !== 'DELETED')
-                throw new Error(response.data?.deleteZone.message || '区域未删除');
+            const response = await deleteZone({
+                variables: { id },
+                context: {
+                    ...sensitiveActionContext(confirmation.currentPassword ?? ''),
+                    adminFeedback: {
+                        target: `业务区域“${zoneName}”`,
+                        resolution: [
+                            '检查将该区域设为默认区域的店铺 Channel，以及引用它的税率',
+                            '先改绑这些配置，再重新删除业务区域',
+                        ],
+                    },
+                },
+            });
+            if (response.data?.deleteZone.result !== 'DELETED') return;
             await onChanged('区域已删除');
-        } catch (error) {
-            onError(errorText(error));
+        } catch {
+            // Apollo 全局反馈已显示失败原因，避免页面再出现第二条重复错误。
         }
     };
     const submitCountry = async () => {
@@ -1010,20 +1068,32 @@ function ZoneBusinessSettings({
         }
     };
     const removeCountry = async (id: string, displayName: string) => {
-        const confirmed = await requestConfirmation({
+        const confirmation = await requestConfirmation({
             title: `删除国家/地区“${displayName}”？`,
             description: '被业务区域或历史地址引用时，后端会拒绝不安全的删除。',
-            confirmLabel: '确认删除',
+            confirmLabel: '验证并删除',
             tone: 'danger',
+            requireCurrentPassword: true,
         });
-        if (!confirmed) return;
+        if (!confirmation) return;
         try {
-            const response = await deleteCountry({ variables: { id } });
-            if (response.data?.deleteCountry.result !== 'DELETED')
-                throw new Error(response.data?.deleteCountry.message || '国家/地区未删除');
+            const response = await deleteCountry({
+                variables: { id },
+                context: {
+                    ...sensitiveActionContext(confirmation.currentPassword ?? ''),
+                    adminFeedback: {
+                        target: `国家或地区“${displayName}”`,
+                        resolution: [
+                            '检查引用该国家或地区的业务区域和客户地址',
+                            '先解除关联，再重新删除国家或地区',
+                        ],
+                    },
+                },
+            });
+            if (response.data?.deleteCountry.result !== 'DELETED') return;
             await onChanged('国家/地区已删除');
-        } catch (error) {
-            onError(errorText(error));
+        } catch {
+            // Apollo 全局反馈已显示失败原因，避免页面再出现第二条重复错误。
         }
     };
     const busy =

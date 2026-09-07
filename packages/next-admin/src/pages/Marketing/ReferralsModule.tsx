@@ -24,6 +24,7 @@ import {
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { usePageSize } from '../../hooks/use-page-size';
 import { useUrlTab } from '../../hooks/use-url-tab';
+import { toUserFacingError } from '../../utils/user-facing-error';
 import { majorInputToMoney } from '../Sales/sales-utils';
 import { ErrorState, LoadingState, Message, TabButton } from '../Settings/settings-ui';
 import { FinancialDialog, WithdrawalActionDialog } from './ReferralDialogs';
@@ -210,7 +211,10 @@ function ReferralManagement() {
                 {program.loading && !program.data ? (
                     <LoadingState />
                 ) : program.error ? (
-                    <ErrorState message={program.error.message} onRetry={() => void program.refetch()} />
+                    <ErrorState
+                        message={toUserFacingError(program.error, '分销设置读取失败')}
+                        onRetry={() => void program.refetch()}
+                    />
                 ) : (
                     program.data && (
                         <>
@@ -304,7 +308,11 @@ function ReferralManagement() {
                                     onPageSizeChange={setPageSize}
                                     data={reports.data}
                                     loading={reports.loading}
-                                    error={reports.error?.message}
+                                    error={
+                                        reports.error
+                                            ? toUserFacingError(reports.error, '推广员报表读取失败')
+                                            : undefined
+                                    }
                                     search={search}
                                     skips={skips}
                                     changeSkip={changeSkip}
@@ -317,7 +325,11 @@ function ReferralManagement() {
                                     onPageSizeChange={setPageSize}
                                     data={reports.data}
                                     loading={reports.loading}
-                                    error={reports.error?.message}
+                                    error={
+                                        reports.error
+                                            ? toUserFacingError(reports.error, '返利报表读取失败')
+                                            : undefined
+                                    }
                                     search={search}
                                     skip={skips.rewards}
                                     changeSkip={value => changeSkip('rewards', value)}
@@ -330,7 +342,11 @@ function ReferralManagement() {
                                     onPageSizeChange={setPageSize}
                                     data={reports.data}
                                     loading={reports.loading}
-                                    error={reports.error?.message}
+                                    error={
+                                        reports.error
+                                            ? toUserFacingError(reports.error, '返利流水读取失败')
+                                            : undefined
+                                    }
                                     search={search}
                                     skip={skips.ledger}
                                     changeSkip={value => changeSkip('ledger', value)}
@@ -343,7 +359,11 @@ function ReferralManagement() {
                                     onPageSizeChange={setPageSize}
                                     data={reports.data}
                                     loading={reports.loading}
-                                    error={reports.error?.message}
+                                    error={
+                                        reports.error
+                                            ? toUserFacingError(reports.error, '提款报表读取失败')
+                                            : undefined
+                                    }
                                     search={search}
                                     skip={skips.withdrawals}
                                     changeSkip={value => changeSkip('withdrawals', value)}

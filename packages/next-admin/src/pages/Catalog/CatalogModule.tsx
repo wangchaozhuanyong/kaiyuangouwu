@@ -48,6 +48,7 @@ import {
     isDefaultChannelCode,
 } from '../../utils/channel-display';
 import { collectionHierarchySummary } from '../../utils/commerce-mode';
+import { toUserFacingError } from '../../utils/user-facing-error';
 
 interface ProductVariantItem {
     id: string;
@@ -256,12 +257,7 @@ export function CatalogModule() {
                 setProductToDelete(null);
                 setDeletePassword('');
                 void refetch();
-            } else {
-                showNotice(res?.deleteProduct?.message || '商品删除失败，请稍后重试', 'error');
             }
-        },
-        onError: err => {
-            showNotice(err.message || '商品删除失败，请稍后重试', 'error');
         },
     });
 
@@ -292,7 +288,17 @@ export function CatalogModule() {
         }
         void deleteProductMutation({
             variables: { id: productToDelete.id },
-            context: sensitiveActionContext(deletePassword),
+            context: {
+                ...sensitiveActionContext(deletePassword),
+                adminFeedback: {
+                    target: `商品“${productToDelete.name}”`,
+                    resolution: [
+                        '检查商品是否仍有在售 SKU、订单或其他业务记录引用',
+                        '先停用或解除关联，再重新删除商品',
+                    ],
+                    skipSuccess: true,
+                },
+            },
         });
     };
 
@@ -304,10 +310,7 @@ export function CatalogModule() {
             setPage(0);
             showNotice('已切换到默认店铺');
         } catch (switchError) {
-            showNotice(
-                switchError instanceof Error ? switchError.message : '切换默认店铺失败，请稍后重试',
-                'error',
-            );
+            showNotice(toUserFacingError(switchError, '切换默认店铺失败'), 'error');
         } finally {
             setIsSwitchingStore(false);
         }

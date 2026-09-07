@@ -218,7 +218,9 @@ export function CouponEditor({
                     items={scopedItems}
                     totalItems={scopedTotal}
                     loading={catalog.loading}
-                    error={catalog.error?.message}
+                    error={
+                        catalog.error ? toUserFacingError(catalog.error, '促销适用商品读取失败') : undefined
+                    }
                     selectedIds={selectedIds}
                     search={selectorSearch}
                     setSearch={setSelectorSearch}
@@ -369,7 +371,7 @@ export function FlashEditor({
                 items={products}
                 totalItems={catalog.data?.products.totalItems ?? 0}
                 loading={catalog.loading}
-                error={catalog.error?.message}
+                error={catalog.error ? toUserFacingError(catalog.error, '秒杀商品读取失败') : undefined}
                 selectedIds={draft.productIds}
                 search={search}
                 setSearch={setSearch}

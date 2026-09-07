@@ -190,7 +190,10 @@ export function AiImageSettingsModule() {
                 {query.loading && !query.data ? (
                     <LoadingState />
                 ) : query.error ? (
-                    <ErrorState message={query.error.message} onRetry={() => void query.refetch()} />
+                    <ErrorState
+                        message={toUserFacingError(query.error, 'AI 图片配置读取失败')}
+                        onRetry={() => void query.refetch()}
+                    />
                 ) : config && tab === 'CONFIG' ? (
                     <ConfigPanel
                         key={config.id}

@@ -9,6 +9,7 @@ import { ID, PaginatedList } from '@vendure/common/lib/shared-types';
 
 import { RequestContext } from '../../api/common/request-context';
 import { EntityNotFoundError } from '../../common/error/errors';
+import { safeOperationErrorMessage } from '../../common/error/safe-operation-error';
 import { Instrument } from '../../common/instrument-decorator';
 import { ListQueryOptions } from '../../common/types/common-types';
 import { assertFound } from '../../common/utils';
@@ -107,10 +108,16 @@ export class TaxCategoryService {
             return {
                 result: DeletionResult.DELETED,
             };
-        } catch (e: any) {
+        } catch (error: unknown) {
             return {
                 result: DeletionResult.NOT_DELETED,
-                message: e.toString(),
+                message: safeOperationErrorMessage(
+                    ctx,
+                    error,
+                    'message.tax-category-delete-data-conflict',
+                    { name: taxCategory.name },
+                    `Could not delete TaxCategory with id ${id}`,
+                ),
             };
         }
     }

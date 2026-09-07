@@ -82,7 +82,10 @@ export function AiImageAccessModule() {
                     {query.loading && !query.data ? (
                         <LoadingState />
                     ) : query.error ? (
-                        <ErrorState message={query.error.message} onRetry={() => void query.refetch()} />
+                        <ErrorState
+                            message={toUserFacingError(query.error, 'AI 服务商配置读取失败')}
+                            onRetry={() => void query.refetch()}
+                        />
                     ) : (
                         <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
                             <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3.5 sm:px-5">
