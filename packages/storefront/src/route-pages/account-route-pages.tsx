@@ -46,6 +46,8 @@ export function AccountRoutePage() {
                     language: runtime.language,
                     storefrontName: runtime.storefrontName,
                     logoUrl: runtime.logoUrl,
+                    accountHeroImageUrl:
+                        runtime.contentBlocks.find(block => block.type === 'ACCOUNT_HERO')?.imageUrl ?? null,
                     favoriteProductCount: runtime.favoriteProductIds.length,
                     announcementCount: runtime.systemAnnouncements.length,
                     couponCount: runtime.myCoupons.filter((coupon: { status: string }) =>

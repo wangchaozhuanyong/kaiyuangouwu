@@ -37,7 +37,7 @@ const loggerCtx = 'AddressBasedTaxZoneStrategy';
  * @docsCategory tax
  */
 export class AddressBasedTaxZoneStrategy implements TaxZoneStrategy {
-    determineTaxZone(ctx: RequestContext, zones: Zone[], channel: Channel, order?: Order): Zone {
+    determineTaxZone(ctx: RequestContext, zones: Zone[], channel: Channel, order?: Order): Zone | undefined {
         const countryCode = order?.shippingAddress?.countryCode;
         if (order && countryCode) {
             const zone = zones.find(z => z.members?.find(member => member.code === countryCode));
@@ -51,6 +51,6 @@ export class AddressBasedTaxZoneStrategy implements TaxZoneStrategy {
                 );
             }
         }
-        return channel.defaultTaxZone;
+        return channel.defaultTaxZone ?? undefined;
     }
 }

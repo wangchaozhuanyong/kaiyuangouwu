@@ -8,12 +8,12 @@ import { VendureEntity } from '../base/base.entity';
 import { Collection } from '../collection/collection.entity';
 import { CustomChannelFields } from '../custom-entity-fields';
 import { EntityId } from '../entity-id.decorator';
-import { FacetValue } from '../facet-value/facet-value.entity';
 import { Facet } from '../facet/facet.entity';
-import { ProductOptionGroup } from '../product-option-group/product-option-group.entity';
-import { ProductOption } from '../product-option/product-option.entity';
-import { ProductVariant } from '../product-variant/product-variant.entity';
+import { FacetValue } from '../facet-value/facet-value.entity';
 import { Product } from '../product/product.entity';
+import { ProductOption } from '../product-option/product-option.entity';
+import { ProductOptionGroup } from '../product-option-group/product-option-group.entity';
+import { ProductVariant } from '../product-variant/product-variant.entity';
 import { Seller } from '../seller/seller.entity';
 import { Zone } from '../zone/zone.entity';
 
@@ -66,10 +66,10 @@ export class Channel extends VendureEntity {
 
     @Index()
     @ManyToOne(type => Seller, seller => seller.channels)
-    seller?: Seller;
+    seller?: Seller | null;
 
     @EntityId({ nullable: true })
-    sellerId?: ID;
+    sellerId?: ID | null;
 
     @Column('varchar') defaultLanguageCode: LanguageCode;
 
@@ -78,11 +78,11 @@ export class Channel extends VendureEntity {
 
     @Index()
     @ManyToOne(type => Zone, zone => zone.defaultTaxZoneChannels)
-    defaultTaxZone: Zone;
+    defaultTaxZone: Zone | null;
 
     @Index()
     @ManyToOne(type => Zone, zone => zone.defaultShippingZoneChannels)
-    defaultShippingZone: Zone;
+    defaultShippingZone: Zone | null;
 
     @Column('varchar')
     defaultCurrencyCode: CurrencyCode;

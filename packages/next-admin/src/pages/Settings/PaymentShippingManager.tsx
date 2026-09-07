@@ -1,7 +1,12 @@
 import { useLazyQuery, useMutation, useQuery } from '@apollo/client/react';
 import { Beaker, CreditCard, Pencil, Plus, Trash2, Truck, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { sensitiveActionContext } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
+import {
+    ConfigurableOperationField,
+    ConfigurableOperationTechnicalDetails,
+} from '../../components/ConfigurableOperationFields';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
 import { DynamicCustomFieldsForm } from '../../custom-fields/DynamicCustomFieldsForm';
@@ -26,6 +31,11 @@ import {
     type StoreManagementResult,
 } from '../../graphql/management.graphql';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
+import {
+    configurableArgumentLabel,
+    configurableOperationLabel,
+    serializeConfigurableListValue,
+} from '../../utils/configurable-operation-localization';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { UsdtPaymentSetupPanel } from './UsdtPaymentSetupPanel';
 import {
@@ -125,28 +135,44 @@ export function PaymentShippingManager({
 
     const removeMethod = async (state: EditorState) => {
         if (!state.item) return;
-        const confirmed = await requestConfirmation({
+        const confirmation = await requestConfirmation({
             title: state.kind === 'payment' ? '删除支付方式' : '删除配送方式',
             description: `确定删除“${state.item.name}”？如果已有 Channel 或订单引用，后端会拒绝不安全的删除。`,
-            confirmLabel: '确认删除',
+            confirmLabel: '验证并删除',
             tone: 'danger',
+            requireCurrentPassword: true,
         });
-        if (!confirmed) return;
+        if (!confirmation) return;
+        const kindLabel = state.kind === 'payment' ? '支付方式' : '配送方式';
+        const context = {
+            ...sensitiveActionContext(confirmation.currentPassword ?? ''),
+            adminFeedback: {
+                target: `${kindLabel}“${state.item.name}”`,
+                resolution: [
+                    `检查该${kindLabel}是否仍分配给店铺 Channel 或被订单引用`,
+                    `先解除关联，再重新删除${kindLabel}`,
+                ],
+            },
+        };
         try {
             let result: { result: string; message?: string | null } | undefined;
             if (state.kind === 'payment') {
                 const response = await deletePayment({
                     variables: { id: state.item.id, force: false },
+                    context,
                 });
                 result = response.data?.deletePaymentMethod;
             } else {
-                const response = await deleteShipping({ variables: { id: state.item.id } });
+                const response = await deleteShipping({
+                    variables: { id: state.item.id },
+                    context,
+                });
                 result = response.data?.deleteShippingMethod;
             }
-            if (result?.result !== 'DELETED') throw new Error(result?.message || '后端未删除该配置');
+            if (result?.result !== 'DELETED') return;
             await onChanged(state.kind === 'payment' ? '支付方式已删除' : '配送方式已删除');
-        } catch (error) {
-            onError(toUserFacingError(error, '配置删除失败'));
+        } catch {
+            // Apollo 全局反馈已显示失败原因，避免页面再出现第二条重复错误。
         }
     };
 
@@ -380,6 +406,12 @@ function MethodEditorDialog({
     const item = state.item;
     const initialTestPayment = state.kind === 'payment' && state.testPayment;
     const languageCode = item?.translations[0]?.languageCode ?? data.activeChannel.defaultLanguageCode;
+    const checkerDefinitions =
+        state.kind === 'payment' ? data.paymentMethodEligibilityCheckers : data.shippingEligibilityCheckers;
+    const mainDefinitions =
+        state.kind === 'payment'
+            ? selectablePaymentHandlers(data.paymentMethodHandlers)
+            : data.shippingCalculators;
     const [code, setCode] = useState(
         item?.code ?? (initialTestPayment ? `controlled-test-payment-${data.activeChannel.id}` : ''),
     );
@@ -400,14 +432,17 @@ function MethodEditorDialog({
     const [fulfillmentHandler, setFulfillmentHandler] = useState(
         state.kind === 'shipping' ? (state.item?.fulfillmentHandlerCode ?? '') : '',
     );
-    const [checkerArgs, setCheckerArgs] = useState(() => argsToForm(item?.checker));
+    const [checkerArgs, setCheckerArgs] = useState(() => argsToForm(item?.checker, checkerDefinitions));
     const [handlerArgs, setHandlerArgs] = useState(() =>
         initialTestPayment && !item
             ? { channelId: data.activeChannel.id }
-            : argsToForm(state.kind === 'payment' ? state.item?.handler : undefined),
+            : argsToForm(
+                  state.kind === 'payment' ? state.item?.handler : undefined,
+                  data.paymentMethodHandlers,
+              ),
     );
     const [calculatorArgs, setCalculatorArgs] = useState(() =>
-        argsToForm(state.kind === 'shipping' ? state.item?.calculator : undefined),
+        argsToForm(state.kind === 'shipping' ? state.item?.calculator : undefined, data.shippingCalculators),
     );
     const [customFieldValues, setCustomFieldValues] = useState<CustomFieldValueMap>(() =>
         customFieldValuesFromEntity(customFieldDefinitions, item?.customFields, item?.translations),
@@ -422,13 +457,10 @@ function MethodEditorDialog({
         createShippingState.loading ||
         updateShippingState.loading;
 
-    const checkerDefinitions =
-        state.kind === 'payment' ? data.paymentMethodEligibilityCheckers : data.shippingEligibilityCheckers;
-    const mainDefinitions =
-        state.kind === 'payment'
-            ? selectablePaymentHandlers(data.paymentMethodHandlers)
-            : data.shippingCalculators;
     const isControlledTest = state.kind === 'payment' && handlerCode === testPaymentHandler;
+    const fulfillmentDefinition = data.fulfillmentHandlers.find(
+        definition => definition.code === fulfillmentHandler,
+    );
     const submit = async () => {
         if (!code.trim() || !name.trim()) return onError('请填写配置代码和显示名称');
         const customFieldErrors = validateCustomFieldValues(
@@ -621,11 +653,14 @@ function MethodEditorDialog({
                                     <option value="">请选择</option>
                                     {data.fulfillmentHandlers.map(definition => (
                                         <option key={definition.code} value={definition.code}>
-                                            {definition.code}
+                                            {configurableOperationLabel(definition, '履约处理方式')}
                                         </option>
                                     ))}
                                 </select>
                             </Field>
+                            {fulfillmentDefinition && (
+                                <ConfigurableOperationTechnicalDetails definition={fulfillmentDefinition} />
+                            )}
                             <ShippingMethodTester
                                 checkerCode={checkerCode}
                                 checkerArgs={checkerArgs}
@@ -842,41 +877,29 @@ function OperationEditor({
                     <option value="">{allowEmpty ? '不使用检查器' : '请选择'}</option>
                     {definitions.map(item => (
                         <option key={item.code} value={item.code}>
-                            {item.code}
+                            {configurableOperationLabel(item, `${label}选项`)}
                         </option>
                     ))}
                 </select>
             </Field>
-            {definition?.description && (
-                <p className="mt-2 text-[10px] leading-4 text-slate-400">{definition.description}</p>
+            {definition && (
+                <div className="mt-2">
+                    <p className="text-[10px] leading-4 text-slate-500">
+                        {configurableOperationLabel(definition, `${label}选项`)}
+                    </p>
+                    <ConfigurableOperationTechnicalDetails definition={definition} />
+                </div>
             )}
             {definition && definition.args.length > 0 && (
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
                     {definition.args.map(arg => (
-                        <Field key={arg.name} label={`${arg.label || arg.name}${arg.required ? ' *' : ''}`}>
-                            {arg.type.toLowerCase().includes('boolean') ? (
-                                <select
-                                    value={values[arg.name] ?? 'false'}
-                                    onChange={event =>
-                                        onValuesChange({ ...values, [arg.name]: event.target.value })
-                                    }
-                                    className={inputClass}
-                                >
-                                    <option value="true">是</option>
-                                    <option value="false">否</option>
-                                </select>
-                            ) : (
-                                <input
-                                    type={arg.type.toLowerCase().includes('password') ? 'password' : 'text'}
-                                    value={values[arg.name] ?? ''}
-                                    onChange={event =>
-                                        onValuesChange({ ...values, [arg.name]: event.target.value })
-                                    }
-                                    placeholder={arg.description ?? undefined}
-                                    className={inputClass}
-                                />
-                            )}
-                        </Field>
+                        <ConfigurableOperationField
+                            key={arg.name}
+                            definition={arg}
+                            operationCode={definition.code}
+                            value={values[arg.name] ?? ''}
+                            onChange={value => onValuesChange({ ...values, [arg.name]: value })}
+                        />
                     ))}
                 </div>
             )}
@@ -893,14 +916,32 @@ function Field({ children, label }: { children: React.ReactNode; label: string }
     );
 }
 
-function argsToForm(operation?: ConfigurableOperationRecord | null) {
-    return Object.fromEntries((operation?.args ?? []).map(arg => [arg.name, displayValue(arg.value)]));
+function argsToForm(
+    operation: ConfigurableOperationRecord | null | undefined,
+    definitions: ConfigurableOperationDefinitionRecord[],
+) {
+    const definition = definitions.find(candidate => candidate.code === operation?.code);
+    return Object.fromEntries(
+        (operation?.args ?? []).map(arg => [
+            arg.name,
+            definition?.args.find(candidate => candidate.name === arg.name)?.list
+                ? arg.value
+                : displayValue(arg.value),
+        ]),
+    );
 }
 
 function defaultArgs(code: string, definitions: ConfigurableOperationDefinitionRecord[]) {
     const definition = definitions.find(candidate => candidate.code === code);
     return Object.fromEntries(
-        (definition?.args ?? []).map(arg => [arg.name, displayValue(arg.defaultValue)]),
+        (definition?.args ?? []).map(arg => [
+            arg.name,
+            arg.list
+                ? typeof arg.defaultValue === 'string'
+                    ? arg.defaultValue
+                    : JSON.stringify(arg.defaultValue ?? [])
+                : displayValue(arg.defaultValue),
+        ]),
     );
 }
 
@@ -924,7 +965,15 @@ function operationInput(
     if (!definition) throw new Error(`后端未注册处理器 ${code}`);
     const argumentsInput = definition.args.map(arg => {
         const raw = values[arg.name] ?? '';
-        if (arg.required && !raw.trim()) throw new Error(`${arg.label || arg.name} 为必填参数`);
+        const label = configurableArgumentLabel(arg, definition.code);
+        if (arg.required && !raw.trim()) throw new Error(`${label}为必填参数`);
+        if (arg.list) {
+            try {
+                return { name: arg.name, value: serializeConfigurableListValue(raw, arg.type) };
+            } catch (cause) {
+                throw new Error(`${label}：${cause instanceof Error ? cause.message : '列表内容无效'}`);
+            }
+        }
         return { name: arg.name, value: serializeValue(raw, arg.type) };
     });
     return { code, arguments: argumentsInput };

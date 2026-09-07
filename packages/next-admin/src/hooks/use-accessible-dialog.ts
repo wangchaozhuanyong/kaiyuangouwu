@@ -1,5 +1,7 @@
 import { useEffect, useId, useRef } from 'react';
 
+import { isInputMethodKey } from '../utils/input-method';
+
 const activeDialogStack: symbol[] = [];
 
 const FOCUSABLE_SELECTOR = [
@@ -33,6 +35,7 @@ export function useAccessibleDialog(onClose: () => void, active = true) {
         if (!dialog?.contains(document.activeElement)) dialog?.focus();
 
         const handleKeyDown = (event: KeyboardEvent) => {
+            if (isInputMethodKey(event)) return;
             if (activeDialogStack[activeDialogStack.length - 1] !== dialogKey) return;
             if (event.key === 'Escape') {
                 event.preventDefault();

@@ -19,6 +19,10 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import { sensitiveActionContext } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
+import {
+    ConfigurableOperationField,
+    ConfigurableOperationTechnicalDetails,
+} from '../../components/ConfigurableOperationFields';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
 import { DynamicCustomFieldsForm } from '../../custom-fields/DynamicCustomFieldsForm';
@@ -56,6 +60,11 @@ import type {
     OperationValue,
 } from '../../graphql/generic-promotions.graphql';
 import { useUrlTab } from '../../hooks/use-url-tab';
+import {
+    configurableArgumentLabel,
+    configurableOperationLabel,
+    serializeConfigurableListValue,
+} from '../../utils/configurable-operation-localization';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { CategoryImageField, type CategoryImageAsset } from './CategoryImageField';
 import { OptionGroupProductsDialog } from './OptionGroupProductsDialog';
@@ -1340,7 +1349,7 @@ function CollectionFiltersEditor({
                         <FeatureHelpButton topic="catalog.collection-rules" title="集合筛选规则" />
                     </h4>
                     <p className="mt-1 text-[10px] leading-4 text-slate-500">
-                        规则来自当前 Vendure 服务端注册的 CollectionFilter，可在保存前预览命中的 SKU。
+                        使用当前店铺支持的商品筛选规则，可在保存前预览命中的 SKU。
                     </p>
                 </div>
                 <label className="flex shrink-0 items-center gap-2 text-xs font-bold text-slate-700">
@@ -1361,7 +1370,7 @@ function CollectionFiltersEditor({
                     <option value="">请选择筛选器</option>
                     {definitions.map(definition => (
                         <option key={definition.code} value={definition.code}>
-                            {definition.description || definition.code}
+                            {configurableOperationLabel(definition, '商品筛选规则')}
                         </option>
                     ))}
                 </select>
@@ -1386,9 +1395,13 @@ function CollectionFiltersEditor({
                             <div className="flex items-start justify-between gap-3">
                                 <div>
                                     <strong className="text-xs text-slate-800">
-                                        {definition?.description || operation.code}
+                                        {definition
+                                            ? configurableOperationLabel(definition, '商品筛选规则')
+                                            : '商品筛选规则'}
                                     </strong>
-                                    <code className="ml-2 text-[10px] text-slate-400">{operation.code}</code>
+                                    {definition && (
+                                        <ConfigurableOperationTechnicalDetails definition={definition} />
+                                    )}
                                 </div>
                                 <button
                                     type="button"
@@ -1403,9 +1416,10 @@ function CollectionFiltersEditor({
                             </div>
                             <div className="mt-3 grid gap-3 sm:grid-cols-2">
                                 {(definition?.args ?? []).map(arg => (
-                                    <CollectionFilterArgument
+                                    <ConfigurableOperationField
                                         key={arg.name}
                                         definition={arg}
+                                        operationCode={operation.code}
                                         value={
                                             operation.arguments.find(item => item.name === arg.name)?.value ??
                                             ''
@@ -1470,47 +1484,6 @@ function CollectionFiltersEditor({
     );
 }
 
-function CollectionFilterArgument({
-    definition,
-    value,
-    onChange,
-}: {
-    definition: OperationArgDefinition;
-    value: string;
-    onChange: (value: string) => void;
-}) {
-    const label = definition.label || definition.name;
-    return (
-        <label className="text-xs font-bold text-slate-600">
-            {label}
-            {definition.required ? ' *' : ''}
-            {definition.type.toLowerCase() === 'boolean' && !definition.list ? (
-                <select
-                    value={value}
-                    onChange={event => onChange(event.target.value)}
-                    className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-normal"
-                >
-                    <option value="true">true</option>
-                    <option value="false">false</option>
-                </select>
-            ) : (
-                <input
-                    value={value}
-                    onChange={event => onChange(event.target.value)}
-                    placeholder={definition.list ? '["value-1"]' : definition.type}
-                    className={`mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-normal ${definition.list ? 'font-mono' : ''}`}
-                />
-            )}
-            {definition.description && (
-                <small className="mt-1 block font-normal leading-4 text-slate-400">
-                    {definition.description}
-                    {definition.list ? ' · JSON 数组' : ''}
-                </small>
-            )}
-        </label>
-    );
-}
-
 function collectionFilterInput(values: OperationValue[], definitions: OperationDefinition[]) {
     return values.map(operation => {
         const definition = definitions.find(item => item.code === operation.code);
@@ -1519,21 +1492,29 @@ function collectionFilterInput(values: OperationValue[], definitions: OperationD
             code: operation.code,
             arguments: definition.args.map(arg => {
                 const value = operation.arguments.find(item => item.name === arg.name)?.value.trim() ?? '';
+                const label = configurableArgumentLabel(arg, definition.code);
                 if (arg.required && !value)
                     throw new Error(
-                        `${definition.description || operation.code} 的 ${arg.label || arg.name} 不能为空`,
+                        `${configurableOperationLabel(definition, '商品筛选规则')}的“${label}”不能为空`,
                     );
-                if (arg.list && value) {
-                    const parsed = JSON.parse(value) as unknown;
-                    if (!Array.isArray(parsed)) throw new Error(`${arg.label || arg.name} 必须是 JSON 数组`);
+                let serializedValue = value;
+                if (arg.list) {
+                    try {
+                        serializedValue = serializeConfigurableListValue(value, arg.type);
+                    } catch (cause) {
+                        throw new Error(
+                            `${label}：${cause instanceof Error ? cause.message : '列表内容无效'}`,
+                        );
+                    }
                 }
                 if (
+                    !arg.list &&
                     ['int', 'float', 'money'].includes(arg.type.toLowerCase()) &&
                     value &&
                     !Number.isFinite(Number(value))
                 )
-                    throw new Error(`${arg.label || arg.name} 必须是数字`);
-                return { name: arg.name, value };
+                    throw new Error(`${label}必须是数字`);
+                return { name: arg.name, value: serializedValue };
             }),
         };
     });

@@ -296,6 +296,7 @@ export type StorefrontBlockType =
     | 'SUPPORT'
     | 'AUTH_LOGIN'
     | 'AUTH_REGISTER'
+    | 'ACCOUNT_HERO'
     | 'NAVIGATION'
     | 'CLIENT_PLUGINS'
     | 'CUSTOM';

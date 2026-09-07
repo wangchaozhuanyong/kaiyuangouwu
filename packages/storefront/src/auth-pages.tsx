@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { CSSProperties, FormEvent, ReactNode, useEffect, useId, useRef, useState } from 'react';
 
-import { authVisualStyle } from '../../storefront-content-plugin/src/shared/auth-visual';
+import { authOriginalImageUrl, authVisualStyle } from '../../storefront-content-plugin/src/shared/auth-visual';
 
 import { ShopApi, ShopApiError } from './api';
 import {
@@ -1095,9 +1095,9 @@ function AuthLayout({
             >
                 {managedHeroSrc && (
                     <SafeImage
-                        src={managedHeroSrc}
+                        src={authOriginalImageUrl(managedHeroSrc)}
+                        fallbackSrc={managedHeroSrc}
                         alt=""
-                        imageKind="hero"
                         loading="eager"
                         decoding="async"
                         fetchPriority="high"

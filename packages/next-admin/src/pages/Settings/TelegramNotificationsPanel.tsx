@@ -151,7 +151,12 @@ export function TelegramNotificationsPanel() {
 
     if (query.loading && !query.data) return <LoadingState />;
     if (query.error && !query.data) {
-        return <ErrorState message={query.error.message} onRetry={() => void query.refetch()} />;
+        return (
+            <ErrorState
+                message={toUserFacingError(query.error, 'Telegram 通知配置读取失败')}
+                onRetry={() => void query.refetch()}
+            />
+        );
     }
     if (!config || !draft || !query.data) {
         return <ErrorState message="Telegram 配置数据不完整" onRetry={() => void query.refetch()} />;

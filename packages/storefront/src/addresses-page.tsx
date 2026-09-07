@@ -6,6 +6,7 @@ import { FormEvent, ReactNode, useEffect, useId, useRef, useState } from 'react'
 import { provinceCodeForValue, provinceDisplayName, provincesForCountry } from './address-region-options';
 import { ShopApi } from './api';
 import { languageCodeFor } from './i18n';
+import { isInputMethodKey } from './input-method';
 import {
     PUBLIC_QUERY_GC_TIME,
     PUBLIC_QUERY_STALE_TIME,
@@ -733,6 +734,7 @@ function Sheet({
         const items = () => Array.from(dialog.querySelectorAll<HTMLElement>(selector));
         const frame = requestAnimationFrame(() => (items()[0] ?? dialog).focus());
         const keydown = (event: KeyboardEvent) => {
+            if (isInputMethodKey(event)) return;
             if (event.key === 'Escape') {
                 event.preventDefault();
                 closeRef.current();

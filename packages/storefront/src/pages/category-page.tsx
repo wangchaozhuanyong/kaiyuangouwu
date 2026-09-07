@@ -6,7 +6,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { RouteState, SortMode } from '../storefront-router';
 
 import { ShopApi } from '../api';
-import allCategoriesGoldIcon from '../assets/icons/all-categories-gold.webp';
 import { minimumProductPrice, priceInputToMinorUnits, sortCategoryProducts } from '../catalog-page-utils';
 import { centeredHorizontalScrollLeft } from '../category-navigation';
 import { CategoryClientPluginSlot } from '../client-plugins/client-plugin-registry';
@@ -339,13 +338,35 @@ export function CategoryPage() {
                                 onClick={() => setAllCategoriesOpen(true)}
                             >
                                 <span className="primary-categories-all-icon" aria-hidden="true">
-                                    <img
-                                        src={allCategoriesGoldIcon}
-                                        alt=""
-                                        width={40}
-                                        height={40}
-                                        draggable={false}
-                                    />
+                                    <svg viewBox="0 0 40 40" fill="none">
+                                        <rect
+                                            x="9"
+                                            y="9"
+                                            width="6"
+                                            height="6"
+                                            rx="1.75"
+                                            fill="currentColor"
+                                        />
+                                        <path d="M19 12H31" />
+                                        <rect
+                                            x="9"
+                                            y="17"
+                                            width="6"
+                                            height="6"
+                                            rx="1.75"
+                                            fill="currentColor"
+                                        />
+                                        <path d="M19 20H31" />
+                                        <rect
+                                            x="9"
+                                            y="25"
+                                            width="6"
+                                            height="6"
+                                            rx="1.75"
+                                            fill="currentColor"
+                                        />
+                                        <path d="M19 28H27" />
+                                    </svg>
                                 </span>
                                 <span className="primary-categories-all-label">
                                     {isZh ? '全部分类' : 'All'}

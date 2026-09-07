@@ -252,7 +252,10 @@ export function ClientPluginsModule() {
                 {content.loading && !content.data ? (
                     <LoadingState />
                 ) : content.error ? (
-                    <ErrorState message={content.error.message} onRetry={() => void content.refetch()} />
+                    <ErrorState
+                        message={toUserFacingError(content.error, '客户端插件配置读取失败')}
+                        onRetry={() => void content.refetch()}
+                    />
                 ) : (
                     draft && (
                         <>

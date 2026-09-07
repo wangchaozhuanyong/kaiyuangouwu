@@ -37,6 +37,7 @@ import {
     PasswordResetTokenInvalidError,
     PasswordValidationError,
 } from '../../common/error/generated-graphql-shop-errors';
+import { safeOperationErrorMessage } from '../../common/error/safe-operation-error';
 import { Instrument } from '../../common/instrument-decorator';
 import { ListQueryOptions } from '../../common/types/common-types';
 import { assertFound, idsAreEqual, normalizeEmailAddress } from '../../common/utils';
@@ -47,6 +48,7 @@ import { Address } from '../../entity/address/address.entity';
 import { NativeAuthenticationMethod } from '../../entity/authentication-method/native-authentication-method.entity';
 import { Channel } from '../../entity/channel/channel.entity';
 import { CustomerGroup } from '../../entity/customer-group/customer-group.entity';
+// eslint-disable-next-line import/order -- Prettier sorts the hyphenated customer-group path first.
 import { Customer } from '../../entity/customer/customer.entity';
 import { HistoryEntry } from '../../entity/history-entry/history-entry.entity';
 import { Order } from '../../entity/order/order.entity';
@@ -252,6 +254,8 @@ export class CustomerService {
         }
         const customerUser = await this.userService.createCustomerUser(ctx, input.emailAddress, password);
         if (isGraphQlErrorResult(customerUser)) {
+            // GraphQL ErrorResult objects are deliberately propagated to the resolver union.
+            // eslint-disable-next-line @typescript-eslint/only-throw-error
             throw customerUser;
         }
         customer.user = customerUser;
@@ -263,6 +267,7 @@ export class CustomerService {
                 if (isGraphQlErrorResult(result)) {
                     // In theory this should never be reached, so we will just
                     // throw the result
+                    // eslint-disable-next-line @typescript-eslint/only-throw-error
                     throw result;
                 } else {
                     customer.user = result;
@@ -894,10 +899,16 @@ export class CustomerService {
             return {
                 result: DeletionResult.DELETED,
             };
-        } catch (e: any) {
+        } catch (error: unknown) {
             return {
                 result: DeletionResult.NOT_DELETED,
-                message: e.message,
+                message: safeOperationErrorMessage(
+                    ctx,
+                    error,
+                    'message.customer-note-delete-data-conflict',
+                    {},
+                    `Could not delete Customer note with id ${id}`,
+                ),
             };
         }
     }

@@ -79,6 +79,7 @@ import {
 } from '../utils/admin-permissions';
 import { getChannelDisplayLabel } from '../utils/channel-display';
 import { commerceModeAllowsPath } from '../utils/commerce-mode';
+import { isInputMethodKey } from '../utils/input-method';
 import { toUserFacingError } from '../utils/user-facing-error';
 
 import {
@@ -407,6 +408,7 @@ export function AppShell() {
     /* oxlint-disable react/set-state-in-effect */
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
+            if (isInputMethodKey(e)) return;
             if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
                 e.preventDefault();
                 setIsCmdKOpen(prev => !prev);
@@ -693,6 +695,7 @@ export function AppShell() {
 
     // ⌘K 键盘上下键与回车处理
     const handleCmdKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (isInputMethodKey(e.nativeEvent)) return;
         if (filteredCmdItems.length === 0) return;
         if (e.key === 'ArrowDown') {
             e.preventDefault();

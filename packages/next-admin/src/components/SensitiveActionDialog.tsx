@@ -1,6 +1,7 @@
 import { ShieldAlert, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
+import { isInputMethodKey } from '../utils/input-method';
 import { AccessibleDialogSurface } from './AccessibleDialogSurface';
 
 export function SensitiveActionDialog({
@@ -63,6 +64,7 @@ export function SensitiveActionDialog({
                         value={password}
                         onChange={event => setPassword(event.target.value)}
                         onKeyDown={event => {
+                            if (isInputMethodKey(event.nativeEvent)) return;
                             if (event.key === 'Enter' && password && !loading) void onConfirm(password);
                         }}
                         className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm"

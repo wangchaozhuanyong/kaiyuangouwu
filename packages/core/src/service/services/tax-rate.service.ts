@@ -11,6 +11,7 @@ import { ID, PaginatedList } from '@vendure/common/lib/shared-types';
 import { RequestContext } from '../../api/common/request-context';
 import { RelationPaths } from '../../api/decorators/relations.decorator';
 import { EntityNotFoundError } from '../../common/error/errors';
+import { safeOperationErrorMessage } from '../../common/error/safe-operation-error';
 import { Instrument } from '../../common/instrument-decorator';
 import { createSelfRefreshingCache, SelfRefreshingCache } from '../../common/self-refreshing-cache';
 import { ListQueryOptions } from '../../common/types/common-types';
@@ -176,10 +177,16 @@ export class TaxRateService {
             return {
                 result: DeletionResult.DELETED,
             };
-        } catch (e: any) {
+        } catch (error: unknown) {
             return {
                 result: DeletionResult.NOT_DELETED,
-                message: e.toString(),
+                message: safeOperationErrorMessage(
+                    ctx,
+                    error,
+                    'message.tax-rate-delete-data-conflict',
+                    { name: taxRate.name },
+                    `Could not delete TaxRate with id ${id}`,
+                ),
             };
         }
     }

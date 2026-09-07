@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import type { ReferralPosterRecord } from '../../graphql/marketing.graphql';
 import { SHARING_SETTINGS_QUERY, type SharingSettingsResult } from '../../graphql/sharing.graphql';
+import { toUserFacingError } from '../../utils/user-facing-error';
 import { ErrorState, LoadingState, Message } from '../Settings/settings-ui';
 import { PosterEditor } from './ReferralDialogs';
 import { PostersPanel } from './ReferralPanels';
@@ -17,7 +18,12 @@ export function SharingModule() {
 
     if (query.loading && !query.data) return <LoadingState />;
     if (query.error && !query.data)
-        return <ErrorState message={query.error.message} onRetry={() => void query.refetch()} />;
+        return (
+            <ErrorState
+                message={toUserFacingError(query.error, '分享设置读取失败')}
+                onRetry={() => void query.refetch()}
+            />
+        );
     const data = query.data;
     if (!data || data.activeChannel.id !== data.referralProgram.channelId) {
         return <ErrorState message="未能读取当前店铺的分享设置" onRetry={() => void query.refetch()} />;
@@ -27,7 +33,7 @@ export function SharingModule() {
             key={data.activeChannel.id}
             data={data}
             loading={query.loading}
-            readError={query.error?.message}
+            readError={query.error ? toUserFacingError(query.error, '分享设置刷新失败') : undefined}
             refresh={async () => {
                 await query.refetch();
             }}

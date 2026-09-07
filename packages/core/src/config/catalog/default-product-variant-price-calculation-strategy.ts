@@ -24,17 +24,18 @@ export class DefaultProductVariantPriceCalculationStrategy implements ProductVar
 
     async calculate(args: ProductVariantPriceCalculationArgs): Promise<PriceCalculationResult> {
         const { inputPrice, activeTaxZone, ctx, taxCategory } = args;
+        const defaultTaxZone = ctx.channel.defaultTaxZone;
         let price = inputPrice;
         let priceIncludesTax = false;
 
-        if (ctx.channel.pricesIncludeTax) {
-            const isDefaultZone = idsAreEqual(activeTaxZone.id, ctx.channel.defaultTaxZone.id);
+        if (ctx.channel.pricesIncludeTax && defaultTaxZone) {
+            const isDefaultZone = idsAreEqual(activeTaxZone.id, defaultTaxZone.id);
             if (isDefaultZone) {
                 priceIncludesTax = true;
             } else {
                 const taxRateForDefaultZone = await this.taxRateService.getApplicableTaxRate(
                     ctx,
-                    ctx.channel.defaultTaxZone,
+                    defaultTaxZone,
                     taxCategory,
                 );
                 price = roundMoney(taxRateForDefaultZone.netPriceOf(inputPrice));

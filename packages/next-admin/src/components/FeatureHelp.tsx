@@ -15,6 +15,7 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 
+import { copyAdminText } from '../utils/admin-clipboard';
 import { featureHelpContent, featureHelpCopyText, type FeatureHelpTopic } from './feature-help-content';
 import { calculateFeatureHelpPosition, type FeatureHelpPosition } from './feature-help-position';
 
@@ -239,13 +240,9 @@ function FeatureHelpPopover({ state }: { state: FeatureHelpState }) {
     }, [context, state.trigger]);
 
     const copy = async () => {
-        try {
-            await navigator.clipboard.writeText(featureHelpCopyText(state.title, content));
-            setCopyState('copied');
-            window.setTimeout(() => setCopyState('idle'), 1600);
-        } catch {
-            setCopyState('failed');
-        }
+        const copied = await copyAdminText(featureHelpCopyText(state.title, content), '功能说明');
+        setCopyState(copied ? 'copied' : 'failed');
+        if (copied) window.setTimeout(() => setCopyState('idle'), 1600);
     };
 
     const style: CSSProperties = { left: position.left, top: position.top };

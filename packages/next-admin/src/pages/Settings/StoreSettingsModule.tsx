@@ -83,6 +83,7 @@ export function StoreSettingsModule() {
         Boolean(storeSettingsError),
         initialSupplementSettled,
     );
+    const queryError = query.error ? toUserFacingError(query.error, '店铺综合设置读取失败') : '';
     useEffect(() => {
         const data = storeSettingsData;
         if (!data || storeSettingsLoading || storeSettingsError || loadingAllStoreSettingsRef.current) return;
@@ -274,7 +275,7 @@ export function StoreSettingsModule() {
                     )}
                 </div>
                 {query.error && !query.data ? (
-                    <ErrorState message={query.error.message} onRetry={() => void query.refetch()} />
+                    <ErrorState message={queryError} onRetry={() => void query.refetch()} />
                 ) : !initializedStoreSettings ? (
                     <SettingsContentSkeleton label="正在读取店铺综合设置" sections={2} />
                 ) : (
@@ -300,6 +301,7 @@ export function StoreSettingsModule() {
                         {tab === 'SELLERS' && (
                             <SellersPanel
                                 sellers={query.data?.sellers.items ?? []}
+                                profiles={profiles}
                                 customFieldDefinitions={sellerCustomFields}
                                 onChanged={completed}
                                 onError={setActionError}

@@ -2389,7 +2389,8 @@
 }
 
 .primary-category-strip {
-    height: 80px;
+    height: 81px;
+    padding: 0 0 12px;
     display: flex;
     align-items: stretch;
     position: relative;
@@ -2399,7 +2400,7 @@
     flex: 1;
     min-width: 0;
     height: 100%;
-    padding: 6px 4px 6px 10px;
+    padding: 0 4px 0 10px;
     overflow-x: auto;
     display: flex;
     align-items: center;
@@ -2533,7 +2534,7 @@
     width: 72px;
     min-width: 72px;
     height: 100%;
-    padding: 6px 4px 6px 0;
+    padding: 0 4px 0 0;
     position: relative;
     z-index: 1;
     border: 0;
@@ -2566,27 +2567,34 @@
     width: 40px;
     height: 40px;
     border-radius: 8px;
-    border: 0;
-    background: #ffffff;
+    border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--line));
+    background: color-mix(in srgb, var(--accent) 7%, var(--paper));
+    color: var(--accent);
     display: flex;
     align-items: center;
     justify-content: center;
     transition:
         transform 160ms ease,
-        filter 160ms ease;
+        border-color 160ms ease,
+        background-color 160ms ease;
 }
 
 .primary-categories-all:hover .primary-categories-all-icon {
     transform: translateY(-2px);
-    filter: brightness(1.06);
+    border-color: color-mix(in srgb, var(--accent) 48%, var(--line));
+    background: color-mix(in srgb, var(--accent) 12%, var(--paper));
 }
 
-.primary-categories-all-icon img {
+.primary-categories-all-icon svg {
     display: block;
     width: 100%;
     height: 100%;
-    object-fit: contain;
-    border-radius: inherit;
+}
+
+.primary-categories-all-icon path {
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
 }
 
 .primary-categories-all-label {

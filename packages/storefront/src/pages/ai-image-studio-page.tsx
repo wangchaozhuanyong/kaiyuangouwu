@@ -24,6 +24,7 @@ import '../styles/image-studio.css';
 import '../styles/modals-and-support.css';
 
 import { ShopApi, ShopApiTimeoutError } from '../api';
+import { isInputMethodKey } from '../input-method';
 import { formatDisplayMoney } from '../money-display';
 import { PageSkeleton } from '../route-loading';
 import { EmptyState, Sheet, Subpage } from '../storefront-ui/page-shell';
@@ -1784,6 +1785,7 @@ function GenerationImagePreview({
         document.body.style.overflow = 'hidden';
         const focusFrame = window.requestAnimationFrame(() => dialogRef.current?.focus());
         const handleKeyDown = (event: KeyboardEvent) => {
+            if (isInputMethodKey(event)) return;
             if (event.key === 'Escape') {
                 event.preventDefault();
                 event.stopImmediatePropagation();
@@ -1890,6 +1892,7 @@ function ConfirmationDialog({
         document.body.style.overflow = 'hidden';
         const focusFrame = window.requestAnimationFrame(() => cancelButtonRef.current?.focus());
         const handleKeyDown = (event: KeyboardEvent) => {
+            if (isInputMethodKey(event)) return;
             if (event.key !== 'Escape' || busy) return;
             event.preventDefault();
             onCancelRef.current();

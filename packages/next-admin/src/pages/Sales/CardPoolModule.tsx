@@ -35,6 +35,7 @@ import {
 } from '../../graphql/fulfillment.graphql';
 import { usePageSize } from '../../hooks/use-page-size';
 import { useUrlTab } from '../../hooks/use-url-tab';
+import { copyAdminText } from '../../utils/admin-clipboard';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatDateTime, getOrderStateLabel } from './sales-utils';
 
@@ -186,7 +187,7 @@ export function CardPoolModule() {
                     <LoadingState text="正在读取卡密 SKU…" />
                 ) : variantsQuery.error ? (
                     <ErrorState
-                        message={variantsQuery.error.message}
+                        message={toUserFacingError(variantsQuery.error, '卡密商品读取失败')}
                         onRetry={() => void variantsQuery.refetch()}
                     />
                 ) : !variants.length ? (
@@ -310,7 +311,7 @@ export function CardPoolModule() {
                             <LoadingState text="正在读取真实卡密库存…" />
                         ) : workspaceQuery.error ? (
                             <ErrorState
-                                message={workspaceQuery.error.message}
+                                message={toUserFacingError(workspaceQuery.error, '卡密库存读取失败')}
                                 onRetry={() => void workspaceQuery.refetch()}
                             />
                         ) : tab === 'POOL' ? (
@@ -725,8 +726,7 @@ function RevealDialog({
                             aria-label={`复制${field.label}`}
                             title={`复制${field.label}`}
                             onClick={async () => {
-                                await navigator.clipboard.writeText(field.value);
-                                setCopied(field.key);
+                                if (await copyAdminText(field.value, field.label)) setCopied(field.key);
                             }}
                             className={iconButton}
                         >

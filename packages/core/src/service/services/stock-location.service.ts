@@ -15,6 +15,7 @@ import { RequestContext } from '../../api/common/request-context';
 import { RelationPaths } from '../../api/decorators/relations.decorator';
 import { RequestContextCacheService } from '../../cache/request-context-cache.service';
 import { EntityNotFoundError, ForbiddenError, UserInputError } from '../../common/error/errors';
+import { safeOperationErrorMessage } from '../../common/error/safe-operation-error';
 import { Instrument } from '../../common/instrument-decorator';
 import { ListQueryOptions } from '../../common/types/common-types';
 import { assertFound, idsAreEqual } from '../../common/utils';
@@ -173,10 +174,16 @@ export class StockLocationService {
             await this.eventBus.publish(
                 new StockLocationEvent(ctx, deletedStockLocation, 'deleted', input.id),
             );
-        } catch (e: any) {
+        } catch (error: unknown) {
             return {
                 result: DeletionResult.NOT_DELETED,
-                message: e.message,
+                message: safeOperationErrorMessage(
+                    ctx,
+                    error,
+                    'message.stock-location-delete-data-conflict',
+                    { name: stockLocation.name },
+                    `Could not delete StockLocation with id ${input.id}`,
+                ),
             };
         }
         return {

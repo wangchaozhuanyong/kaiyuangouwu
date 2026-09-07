@@ -1471,6 +1471,7 @@ describe('ShopApi storefront mutations', () => {
 
         const request = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as { query: string };
         expect(request.query).toContain('taxSummary { description taxRate taxBase taxTotal }');
+        expect(request.query).toContain('discounts { adjustmentSource description amountWithTax }');
         expect(request.query).not.toContain('handlerCode');
         expect(request.query).toContain('checkoutShipping {');
         expect(request.query).toContain('estimateMinDays');

@@ -29,6 +29,7 @@ import {
 
 import { ErrorResultUnion, isGraphQlErrorResult } from '../../../common/error/error-result';
 import { UserInputError } from '../../../common/error/errors';
+import { safeOperationErrorMessage } from '../../../common/error/safe-operation-error';
 import { TransactionalConnection } from '../../../connection/index';
 import { Customer } from '../../../entity/customer/customer.entity';
 import { Order } from '../../../entity/order/order.entity';
@@ -65,7 +66,7 @@ export class DraftOrderResolver {
         if (!order || order.state !== 'Draft') {
             return {
                 result: DeletionResult.NOT_DELETED,
-                message: `No draft Order with the ID ${args.orderId} was found`,
+                message: ctx.translate('message.draft-order-not-found', { orderId: args.orderId }),
             };
         }
         try {
@@ -73,10 +74,16 @@ export class DraftOrderResolver {
             return {
                 result: DeletionResult.DELETED,
             };
-        } catch (e: any) {
+        } catch (error: unknown) {
             return {
                 result: DeletionResult.NOT_DELETED,
-                message: e.message,
+                message: safeOperationErrorMessage(
+                    ctx,
+                    error,
+                    'message.draft-order-delete-data-conflict',
+                    { orderId: args.orderId.toString() },
+                    `Could not delete draft Order with id ${args.orderId}`,
+                ),
             };
         }
     }

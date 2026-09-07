@@ -17,6 +17,7 @@ import {
 import { CSSProperties, ReactNode, Suspense, useEffect, useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
 
+import { isInputMethodKey } from '../input-method';
 import { QueryLoadState } from '../loading-state';
 import { PageSkeleton } from '../route-loading';
 import { acquireBodyScrollLock } from '../scroll-lock';
@@ -481,6 +482,7 @@ export function Sheet({
             (initialFocus === 'dialog' ? dialog : (getFocusableElements()[0] ?? dialog)).focus();
         });
         const handleKeyDown = (event: KeyboardEvent) => {
+            if (isInputMethodKey(event)) return;
             if (event.key === 'Escape') {
                 event.preventDefault();
                 onCloseRef.current();

@@ -28,6 +28,7 @@ import { ShopApi } from './api';
 import { formatBusinessDate } from './business-time';
 import { useDesktopLayout } from './desktop-layout';
 import { compactUiCopy, languageCodeFor } from './i18n';
+import { isInputMethodKey } from './input-method';
 import { offlineLoadError } from './loading-state';
 import { ORDER_STATUS_REFRESH_INTERVAL, orderNeedsStatusRefresh } from './order-refresh';
 import { PUBLIC_QUERY_GC_TIME, ROUTE_QUERY_STALE_TIME, storefrontQueryKeys } from './query-client';
@@ -1291,6 +1292,7 @@ function AfterSalesRequestSheet({
         const focusable = () => Array.from(dialog.querySelectorAll<HTMLElement>(selector));
         const frame = requestAnimationFrame(() => (focusable()[0] ?? dialog).focus());
         const keydown = (event: KeyboardEvent) => {
+            if (isInputMethodKey(event)) return;
             if (event.key === 'Escape' && !submittingRef.current) {
                 event.preventDefault();
                 closeRef.current();
@@ -1918,6 +1920,7 @@ function CancelOrderSheet({
         const focusable = () => Array.from(dialog.querySelectorAll<HTMLElement>(selector));
         const frame = requestAnimationFrame(() => (focusable()[0] ?? dialog).focus());
         const keydown = (event: KeyboardEvent) => {
+            if (isInputMethodKey(event)) return;
             if (event.key === 'Escape' && !submittingRef.current) {
                 event.preventDefault();
                 closeRef.current();

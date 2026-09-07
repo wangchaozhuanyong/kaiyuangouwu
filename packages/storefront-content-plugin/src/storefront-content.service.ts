@@ -21,6 +21,7 @@ import {
     MAX_STOREFRONT_CLIENT_PLUGINS,
     MAX_STOREFRONT_NAVIGATION_ITEMS,
     MIN_HERO_AUTOPLAY_INTERVAL_SECONDS,
+    STOREFRONT_ACCOUNT_HERO_CODE,
     STOREFRONT_CLIENT_PLUGINS_CODE,
     STOREFRONT_NAVIGATION_CODE,
     storefrontClientPluginCodes,
@@ -164,6 +165,7 @@ export class StorefrontContentService {
             this.validateClientPluginItems(input.items ?? []);
         }
         this.validateAuthVisual(normalized, input.items ?? []);
+        this.validateAccountHero(normalized, input.items ?? []);
         await this.assertUniqueCode(ctx, normalized.code);
         const image = await this.resolveImage(ctx, normalized.imageAssetId, normalized.imageUrl, '区块图片');
         this.assertEnabledHeroHasImage(normalized.type, normalized.enabled, image);
@@ -262,6 +264,18 @@ export class StorefrontContentService {
                         label: translation.label,
                         description: translation.description,
                     })),
+                })),
+        );
+        this.validateAccountHero(
+            next,
+            input.items ??
+                block.items.map(item => ({
+                    id: item.id,
+                    enabled: item.enabled,
+                    position: item.position,
+                    targetType: item.targetType,
+                    targetValue: item.targetValue,
+                    translations: [],
                 })),
         );
         await this.assertUniqueCode(ctx, next.code, block.id);
@@ -818,6 +832,12 @@ export class StorefrontContentService {
         ) {
             throw new UserInputError('客户端插件配置必须使用系统保留编码');
         }
+        if (
+            (input.type === 'ACCOUNT_HERO' && code !== STOREFRONT_ACCOUNT_HERO_CODE) ||
+            (input.type !== 'ACCOUNT_HERO' && code === STOREFRONT_ACCOUNT_HERO_CODE)
+        ) {
+            throw new UserInputError('个人中心头图必须使用系统保留编码');
+        }
         const authVisualType = input.type as keyof typeof authVisualCodeByType;
         const requiredAuthVisualCode = authVisualCodeByType[authVisualType];
         const reservedAuthVisualCodes = Object.values(authVisualCodeByType);
@@ -922,6 +942,22 @@ export class StorefrontContentService {
             (typeof accentColor !== 'string' || (accentColor !== '' && !/^#[0-9a-f]{6}$/i.test(accentColor)))
         ) {
             throw new UserInputError('登录注册页标签强调色必须使用六位十六进制颜色');
+        }
+    }
+
+    private validateAccountHero(
+        input: ReturnType<StorefrontContentService['validateBlockInput']>,
+        items: StorefrontContentItemInput[],
+    ): void {
+        if (input.type !== 'ACCOUNT_HERO') return;
+        if (input.layoutVariant !== 'HERO_OVERLAY' || input.targetType !== 'NONE') {
+            throw new UserInputError('个人中心头图必须使用主视觉叠加布局且不能配置跳转');
+        }
+        if (input.startsAt || input.endsAt) {
+            throw new UserInputError('个人中心头图不能设置定时上下线');
+        }
+        if (items.length) {
+            throw new UserInputError('个人中心头图不支持配置子项');
         }
     }
 

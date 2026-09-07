@@ -270,7 +270,10 @@ export function StorefrontContentModule() {
                     (content.loading && !content.data ? (
                         <LoadingState label="正在读取店铺内容…" />
                     ) : content.error ? (
-                        <ErrorState message={content.error.message} onRetry={() => void content.refetch()} />
+                        <ErrorState
+                            message={toUserFacingError(content.error, '店铺内容读取失败')}
+                            onRetry={() => void content.refetch()}
+                        />
                     ) : (
                         <PageBlockList
                             blocks={pageBlocks}
@@ -298,7 +301,7 @@ export function StorefrontContentModule() {
                         <LoadingState label="正在读取系统公告…" />
                     ) : announcements.error ? (
                         <ErrorState
-                            message={announcements.error.message}
+                            message={toUserFacingError(announcements.error, '系统公告读取失败')}
                             onRetry={() => void announcements.refetch()}
                         />
                     ) : (
@@ -314,7 +317,7 @@ export function StorefrontContentModule() {
                         <LoadingState label="正在读取推广页…" />
                     ) : promotion.error ? (
                         <ErrorState
-                            message={promotion.error.message}
+                            message={toUserFacingError(promotion.error, '店铺促销页读取失败')}
                             onRetry={() => void promotion.refetch()}
                         />
                     ) : (

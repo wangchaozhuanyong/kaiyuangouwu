@@ -8,10 +8,12 @@ import {
 import { ID, PaginatedList } from '@vendure/common/lib/shared-types';
 
 import { RequestContext } from '../../api/common/request-context';
+import { safeOperationErrorMessage } from '../../common/error/safe-operation-error';
 import { Instrument } from '../../common/instrument-decorator';
 import { ListQueryOptions } from '../../common/types/common-types';
 import { assertFound } from '../../common/utils';
 import { TransactionalConnection } from '../../connection/transactional-connection';
+import { Channel } from '../../entity/channel/channel.entity';
 import { Seller } from '../../entity/seller/seller.entity';
 import { EventBus, SellerEvent } from '../../event-bus/index';
 import { CustomFieldRelationService } from '../helpers/custom-field-relation/custom-field-relation.service';
@@ -82,12 +84,41 @@ export class SellerService {
 
     async delete(ctx: RequestContext, id: ID): Promise<DeletionResponse> {
         const seller = await this.connection.getEntityOrThrow(ctx, Seller, id);
-        await this.connection.getRepository(ctx, Seller).remove(seller);
-        const deletedSeller = new Seller(seller);
-        await this.eventBus.publish(new SellerEvent(ctx, deletedSeller, 'deleted', id));
-        return {
-            result: DeletionResult.DELETED,
-        };
+        const channelsUsingSeller = await this.connection
+            .getRepository(ctx, Channel)
+            .createQueryBuilder('channel')
+            .where('channel.seller = :id', { id })
+            .getMany();
+
+        if (channelsUsingSeller.length > 0) {
+            return {
+                result: DeletionResult.NOT_DELETED,
+                message: ctx.translate('message.seller-used-in-channels', {
+                    sellerName: seller.name,
+                    channelCodes: channelsUsingSeller.map(channel => channel.code).join(', '),
+                }),
+            };
+        }
+
+        try {
+            const deletedSeller = new Seller(seller);
+            await this.connection.getRepository(ctx, Seller).remove(seller);
+            await this.eventBus.publish(new SellerEvent(ctx, deletedSeller, 'deleted', id));
+            return {
+                result: DeletionResult.DELETED,
+            };
+        } catch (error: unknown) {
+            return {
+                result: DeletionResult.NOT_DELETED,
+                message: safeOperationErrorMessage(
+                    ctx,
+                    error,
+                    'message.seller-delete-data-conflict',
+                    { sellerName: seller.name },
+                    `Could not delete Seller with id ${id}`,
+                ),
+            };
+        }
     }
 
     private async ensureDefaultSellerExists() {

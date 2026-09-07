@@ -22,6 +22,7 @@ import { smartParseAddressText } from './address-parser';
 import { provinceCodeForValue, provinceDisplayName, provincesForCountry } from './address-region-options';
 import { ShopApi } from './api';
 import { compactUiCopy } from './i18n';
+import { isInputMethodKey } from './input-method';
 import { formatDisplayMoney } from './money-display';
 import { variantCanIncreaseQuantity } from './product-availability';
 import { acquireBodyScrollLock } from './scroll-lock';
@@ -44,6 +45,7 @@ import {
     StorefrontCart,
     StorefrontCheckoutSession,
     StorefrontConfig,
+    StorefrontFlashSale,
     StorefrontLanguage,
     StorefrontProvince,
 } from './types';
@@ -71,6 +73,7 @@ export function CheckoutPage({
     onCartChange,
     onNotify,
     coupons,
+    flashSales = [],
     onApplyCoupon,
     onRemoveCoupon,
     cartPending = false,
@@ -97,6 +100,7 @@ export function CheckoutPage({
     onCartChange: (cart: StorefrontCart) => void;
     onNotify: (message: string) => void;
     coupons: StoreCustomerCoupon[];
+    flashSales?: StorefrontFlashSale[];
     onApplyCoupon: (customerCouponId: string) => Promise<string | null>;
     onRemoveCoupon: (customerCouponId: string) => Promise<string | null>;
 }) {
@@ -867,22 +871,6 @@ export function CheckoutPage({
                     )}
                     <button
                         type="button"
-                        onClick={() =>
-                            onNotify(
-                                isZh
-                                    ? '订单提交后继续选择支付方式'
-                                    : 'Choose a payment method after placing the order',
-                            )
-                        }
-                    >
-                        <span>{isZh ? '支付方式' : 'Payment method'}</span>
-                        <small>
-                            {isZh ? '提交后选择' : 'Choose after submission'}
-                            <ChevronRight />
-                        </small>
-                    </button>
-                    <button
-                        type="button"
                         onClick={() => {
                             setNoteDraft(order.customFields.customerNote ?? '');
                             setNoteError(null);
@@ -913,6 +901,7 @@ export function CheckoutPage({
                         order={order}
                         locale={locale}
                         language={language}
+                        flashSales={flashSales}
                         requiresShipping={requiresShipping}
                     />
                 </section>
@@ -1182,17 +1171,26 @@ function PriceSummary({
     order,
     locale,
     language,
+    flashSales,
     requiresShipping = true,
     pending = false,
 }: {
     order: Order;
     locale: string;
     language: StorefrontLanguage;
+    flashSales: StorefrontFlashSale[];
     requiresShipping?: boolean;
     pending?: boolean;
 }) {
     const isZh = language === 'zh';
     const discount = Math.abs(order.discounts.reduce((sum, item) => sum + item.amountWithTax, 0));
+    const flashSalePromotionIds = new Set(flashSales.map(sale => String(sale.id)));
+    const flashSaleDiscount = Math.abs(
+        order.discounts
+            .filter(item => flashSalePromotionIds.has(promotionIdFromAdjustmentSource(item.adjustmentSource)))
+            .reduce((sum, item) => sum + item.amountWithTax, 0),
+    );
+    const otherDiscount = Math.max(0, discount - flashSaleDiscount);
     if (pending)
         return (
             <p role="status">
@@ -1211,10 +1209,24 @@ function PriceSummary({
                 </dt>
                 <dd>{formatMoney(order.shippingWithTax, order.currencyCode, locale)}</dd>
             </div>
-            {discount > 0 && (
+            {flashSaleDiscount > 0 && (
                 <div className={checkoutPageClassName('discount')}>
-                    <dt>{isZh ? '优惠' : 'Discount'}</dt>
-                    <dd>-{formatMoney(discount, order.currencyCode, locale)}</dd>
+                    <dt>{isZh ? '秒杀优惠' : 'Flash sale discount'}</dt>
+                    <dd>-{formatMoney(flashSaleDiscount, order.currencyCode, locale)}</dd>
+                </div>
+            )}
+            {otherDiscount > 0 && (
+                <div className={checkoutPageClassName('discount')}>
+                    <dt>
+                        {isZh
+                            ? flashSaleDiscount > 0
+                                ? '其他优惠'
+                                : '优惠'
+                            : flashSaleDiscount > 0
+                              ? 'Other discounts'
+                              : 'Discount'}
+                    </dt>
+                    <dd>-{formatMoney(otherDiscount, order.currencyCode, locale)}</dd>
                 </div>
             )}
             <TaxSummaryRows order={order} locale={locale} language={language} useDisplayCurrency />
@@ -1224,6 +1236,14 @@ function PriceSummary({
             </div>
         </dl>
     );
+}
+
+function promotionIdFromAdjustmentSource(adjustmentSource: string): string {
+    const separatorIndex = adjustmentSource.indexOf(':');
+    if (separatorIndex < 0 || adjustmentSource.slice(0, separatorIndex).toLowerCase() !== 'promotion') {
+        return '';
+    }
+    return adjustmentSource.slice(separatorIndex + 1);
 }
 
 function normalizeDeliveryEmail(value: string): string | null {
@@ -1427,6 +1447,7 @@ function Sheet({
             );
         const frame = requestAnimationFrame(() => (focusable()[0] ?? dialog).focus());
         const keydown = (event: KeyboardEvent) => {
+            if (isInputMethodKey(event)) return;
             if (event.key === 'Escape') {
                 event.preventDefault();
                 onCloseRef.current();

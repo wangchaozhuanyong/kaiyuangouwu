@@ -3,6 +3,7 @@ import { AlertCircle, Image as ImageIcon, X } from 'lucide-react';
 import { useState } from 'react';
 import { channelRequestContext } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
+import { ImageAssetUploadButton } from '../../components/ImageAssetUploadButton';
 import { GET_ASSETS } from '../../graphql/catalog.graphql';
 import { usePageSize } from '../../hooks/use-page-size';
 import { toUserFacingError } from '../../utils/user-facing-error';
@@ -106,16 +107,27 @@ function BrandAssetResults({
     const assets = data?.assets.items ?? [];
     return (
         <>
-            <input
-                aria-label="搜索品牌图片素材"
-                placeholder="按素材名称搜索"
-                className={`${inputClass} my-3`}
-                value={search}
-                onChange={event => {
-                    setSearch(event.target.value);
-                    setPage(0);
-                }}
-            />
+            <div className="my-3 flex flex-col gap-2 sm:flex-row sm:items-start">
+                <input
+                    aria-label="搜索品牌图片素材"
+                    placeholder="按素材名称搜索"
+                    className={`${inputClass} min-w-0 flex-1`}
+                    value={search}
+                    onChange={event => {
+                        setSearch(event.target.value);
+                        setPage(0);
+                    }}
+                />
+                <ImageAssetUploadButton
+                    ariaLabel={`上传品牌图片到${channel.code}素材库`}
+                    channelToken={channel.token}
+                    onUploaded={uploaded => {
+                        const [asset] = uploaded;
+                        if (!asset) return;
+                        onSelect({ ...asset, sourceChannelToken: channel.token });
+                    }}
+                />
+            </div>
             <div className="min-h-0 flex-1 overflow-y-auto" aria-busy={loading}>
                 {loading ? (
                     <p role="status" className="py-16 text-center text-xs text-slate-500">
@@ -142,7 +154,7 @@ function BrandAssetResults({
                         <p>
                             {search.trim()
                                 ? '没有匹配的图片，请调整搜索词。'
-                                : '本素材库暂无图片，请先到素材中心上传。'}
+                                : '本素材库暂无图片，可使用上方按钮直接上传。'}
                         </p>
                     </div>
                 ) : (

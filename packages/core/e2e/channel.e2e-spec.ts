@@ -27,6 +27,8 @@ import {
     createAdministratorDocument,
     createChannelDocument,
     createRoleDocument,
+    createZoneDocument,
+    deleteZoneDocument,
     getChannelsDocument,
     getCustomerListDocument,
     getProductListDocument,
@@ -36,6 +38,24 @@ import {
 } from './graphql/shared-definitions';
 import { getActiveOrderDocument } from './graphql/shop-definitions';
 import { assertThrowsWithMessage } from './utils/assert-throws-with-message';
+
+const createSellerDocument = graphql(`
+    mutation CreateChannelTestSeller($input: CreateSellerInput!) {
+        createSeller(input: $input) {
+            id
+            name
+        }
+    }
+`);
+
+const deleteSellerDocument = graphql(`
+    mutation DeleteChannelTestSeller($id: ID!) {
+        deleteSeller(id: $id) {
+            result
+            message
+        }
+    }
+`);
 
 describe('Channels', () => {
     const { server, adminClient, shopClient } = createTestEnvironment(testConfig());
@@ -119,6 +139,79 @@ describe('Channels', () => {
             },
             pricesIncludeTax: true,
         });
+    });
+
+    it('clears nullable Channel Zone relations and then allows the Zone to be deleted', async () => {
+        const { createZone } = await adminClient.query(createZoneDocument, {
+            input: { name: 'Temporary Channel default Zone' },
+        });
+        const { updateChannel: assignedChannel } = await adminClient.query(updateChannelDocument, {
+            input: {
+                id: 'T_2',
+                defaultShippingZoneId: createZone.id,
+                defaultTaxZoneId: createZone.id,
+            },
+        });
+        channelGuard.assertSuccess(assignedChannel);
+        const rejectedDeletion = await adminClient.query(
+            deleteZoneDocument,
+            { id: createZone.id },
+            { displayLanguageCode: LanguageCode.zh_Hans },
+        );
+        expect(rejectedDeletion.deleteZone).toEqual({
+            result: DeletionResult.NOT_DELETED,
+            message: '无法删除所选区域，因为以下店铺将其用作默认区域：second-channel',
+        });
+
+        const { updateChannel } = await adminClient.query(updateChannelDocument, {
+            input: {
+                id: 'T_2',
+                defaultShippingZoneId: null,
+                defaultTaxZoneId: null,
+            },
+        });
+        channelGuard.assertSuccess(updateChannel);
+        expect(updateChannel.defaultShippingZone).toBeNull();
+        expect(updateChannel.defaultTaxZone).toBeNull();
+        const acceptedDeletion = await adminClient.query(deleteZoneDocument, { id: createZone.id });
+        expect(acceptedDeletion.deleteZone.result).toBe(DeletionResult.DELETED);
+
+        const { updateChannel: restoredChannel } = await adminClient.query(updateChannelDocument, {
+            input: {
+                id: 'T_2',
+                defaultShippingZoneId: 'T_1',
+                defaultTaxZoneId: 'T_1',
+            },
+        });
+        channelGuard.assertSuccess(restoredChannel);
+    });
+
+    it('returns a useful reason when deleting an assigned Seller and allows deletion after unassigning it', async () => {
+        const { createSeller } = await adminClient.query(createSellerDocument, {
+            input: { name: 'Channel assignment test seller' },
+        });
+        const { updateChannel } = await adminClient.query(updateChannelDocument, {
+            input: { id: 'T_2', sellerId: createSeller.id },
+        });
+        channelGuard.assertSuccess(updateChannel);
+
+        const rejectedDeletion = await adminClient.query(
+            deleteSellerDocument,
+            { id: createSeller.id },
+            { displayLanguageCode: LanguageCode.zh_Hans },
+        );
+        expect(rejectedDeletion.deleteSeller).toEqual({
+            result: DeletionResult.NOT_DELETED,
+            message:
+                '无法删除商家主体“Channel assignment test seller”，因为以下店铺 Channel 仍在使用它：second-channel。请先将这些 Channel 改绑到其他商家主体；整间店铺不再使用时，请执行安全清退',
+        });
+
+        const { updateChannel: unassignedChannel } = await adminClient.query(updateChannelDocument, {
+            input: { id: 'T_2', sellerId: null },
+        });
+        channelGuard.assertSuccess(unassignedChannel);
+        const acceptedDeletion = await adminClient.query(deleteSellerDocument, { id: createSeller.id });
+        expect(acceptedDeletion.deleteSeller.result).toBe(DeletionResult.DELETED);
     });
 
     // it('update currencyCode', async () => {

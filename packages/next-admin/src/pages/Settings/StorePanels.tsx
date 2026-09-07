@@ -1,7 +1,7 @@
 import { useMutation, useQuery } from '@apollo/client/react';
 import { ExternalLink, Globe2, Pencil, Plus, Store, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { client } from '../../apollo';
+import { client, sensitiveActionContext } from '../../apollo';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { useCustomFieldDefinitions } from '../../custom-fields/custom-fields-context';
@@ -27,6 +27,7 @@ import {
     type StoreProfileRecord,
 } from '../../graphql/management.graphql';
 import { getChannelDisplayName } from '../../utils/channel-display';
+import { isInputMethodKey } from '../../utils/input-method';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatDateTime } from '../Sales/sales-utils';
 import {
@@ -460,6 +461,7 @@ export function DomainsPanel({
                             value={domain}
                             onChange={event => setDomain(event.target.value)}
                             onKeyDown={event => {
+                                if (isInputMethodKey(event.nativeEvent)) return;
                                 if (event.key === 'Enter') void add();
                             }}
                             placeholder="shop.example.com"
@@ -480,7 +482,10 @@ export function DomainsPanel({
             {query.loading && !query.data ? (
                 <LoadingState />
             ) : query.error ? (
-                <ErrorState message={query.error.message} onRetry={() => void query.refetch()} />
+                <ErrorState
+                    message={toUserFacingError(query.error, '店铺域名数据读取失败')}
+                    onRetry={() => void query.refetch()}
+                />
             ) : (
                 <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
                     <div className="divide-y divide-slate-100">
@@ -615,11 +620,13 @@ export function DomainsPanel({
 
 export function SellersPanel({
     sellers,
+    profiles,
     customFieldDefinitions,
     onChanged,
     onError,
 }: {
     sellers: StoreManagementResult['sellers']['items'];
+    profiles: StoreProfileRecord[];
     customFieldDefinitions: ReturnType<typeof useCustomFieldDefinitions>;
     onChanged: (message: string) => Promise<void>;
     onError: (message: string) => void;
@@ -630,27 +637,49 @@ export function SellersPanel({
         deleteSeller: { result: string; message?: string | null };
     }>(DELETE_SELLER_MUTATION);
     const deleteSeller = async (seller: StoreManagementResult['sellers']['items'][number]) => {
-        const confirmed = await requestConfirmation({
+        const usages = sellerUsageLabels(profiles, seller.id);
+        if (usages.length > 0) {
+            onError(
+                `无法删除商家主体“${seller.name}”，正在占用的店铺：${usages.join('、')}。处理方法：保留店铺时，请先将对应 Channel 改绑到其他商家主体；整间店铺不再使用时，请到“店铺实例”使用“安全清退”。`,
+            );
+            return;
+        }
+        const confirmation = await requestConfirmation({
             title: '删除商家主体',
-            description: `确定删除“${seller.name}”？如果仍被 Channel 使用，后端会拒绝删除。`,
-            confirmLabel: '确认删除',
+            description: `“${seller.name}”当前未被已加载的店铺占用。删除后不可恢复，请输入当前管理员密码。`,
+            confirmLabel: '验证并删除',
             tone: 'danger',
+            requireCurrentPassword: true,
         });
-        if (!confirmed) return;
+        if (!confirmation) return;
+        const failureHelp = `无法删除商家主体“${seller.name}”。请先确认没有店铺 Channel 使用该主体；保留店铺时先改绑到其他商家主体，整间店铺不再使用时请到“店铺实例”使用“安全清退”。`;
+        const resolution = [
+            '保留店铺时，先将对应 Channel 改绑到其他商家主体',
+            '整间店铺不再使用时，到“店铺实例”执行“安全清退”',
+        ];
         try {
-            const response = await remove({ variables: { id: seller.id } });
-            if (response.data?.deleteSeller.result !== 'DELETED')
-                throw new Error(response.data?.deleteSeller.message || '商家主体未删除');
+            const response = await remove({
+                variables: { id: seller.id },
+                context: {
+                    ...sensitiveActionContext(confirmation.currentPassword ?? ''),
+                    adminFeedback: {
+                        target: `商家主体“${seller.name}”`,
+                        failure: failureHelp,
+                        resolution,
+                    },
+                },
+            });
+            if (response.data?.deleteSeller.result !== 'DELETED') return;
             await onChanged('商家主体已删除');
-        } catch (error) {
-            onError(errorText(error));
+        } catch {
+            // Apollo 全局反馈已显示失败原因，避免页面再出现第二条重复错误。
         }
     };
     return (
         <>
             <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
                 <div className="overflow-x-auto">
-                    <table className="w-full min-w-[760px] border-collapse text-left text-xs">
+                    <table className="w-full min-w-[940px] border-collapse text-left text-xs">
                         <thead>
                             <tr className={theadClass}>
                                 <th
@@ -661,6 +690,9 @@ export function SellersPanel({
                                 </th>
                                 <th scope="col" className="w-56 whitespace-nowrap px-3 py-3">
                                     ID
+                                </th>
+                                <th scope="col" className="w-80 whitespace-nowrap px-3 py-3">
+                                    占用店铺 / Channel
                                 </th>
                                 <th scope="col" className="w-40 whitespace-nowrap px-3 py-3">
                                     创建时间
@@ -677,50 +709,65 @@ export function SellersPanel({
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                            {sellers.map(seller => (
-                                <tr key={seller.id} className="group h-[52px] hover:bg-slate-50/80">
-                                    <td className="sticky left-0 z-10 h-[52px] max-w-52 bg-white px-3 py-0 font-bold text-slate-900 group-hover:bg-slate-50">
-                                        <span className="block truncate" title={seller.name}>
-                                            {seller.name}
-                                        </span>
-                                    </td>
-                                    <td className="h-[52px] max-w-56 px-3 py-0 font-mono text-[10px] text-slate-400">
-                                        <span className="block truncate" title={seller.id}>
-                                            {seller.id}
-                                        </span>
-                                    </td>
-                                    <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500">
-                                        {formatDateTime(seller.createdAt)}
-                                    </td>
-                                    <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500">
-                                        {formatDateTime(seller.updatedAt)}
-                                    </td>
-                                    <td className="sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 bg-white px-3 py-0 group-hover:bg-slate-50">
-                                        <div className="flex justify-end gap-1">
-                                            <button
-                                                type="button"
-                                                onClick={() => setEditing(seller)}
-                                                className="rounded-md p-1.5 text-blue-600 hover:bg-blue-50"
-                                                aria-label={`编辑${seller.name}`}
-                                            >
-                                                <Pencil className="h-3.5 w-3.5" />
-                                            </button>
-                                            <button
-                                                type="button"
-                                                disabled={state.loading}
-                                                onClick={() => void deleteSeller(seller)}
-                                                className="rounded-md p-1.5 text-rose-600 hover:bg-rose-50"
-                                                aria-label={`删除${seller.name}`}
-                                            >
-                                                <Trash2 className="h-3.5 w-3.5" />
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
+                            {sellers.map(seller => {
+                                const usages = sellerUsageLabels(profiles, seller.id);
+                                return (
+                                    <tr key={seller.id} className="group h-[52px] hover:bg-slate-50/80">
+                                        <td className="sticky left-0 z-10 h-[52px] max-w-52 bg-white px-3 py-0 font-bold text-slate-900 group-hover:bg-slate-50">
+                                            <span className="block truncate" title={seller.name}>
+                                                {seller.name}
+                                            </span>
+                                        </td>
+                                        <td className="h-[52px] max-w-56 px-3 py-0 font-mono text-[10px] text-slate-400">
+                                            <span className="block truncate" title={seller.id}>
+                                                {seller.id}
+                                            </span>
+                                        </td>
+                                        <td className="h-[52px] max-w-80 px-3 py-0 text-[10px] text-slate-500">
+                                            {usages.length > 0 ? (
+                                                <span
+                                                    className="block truncate text-amber-700"
+                                                    title={usages.join('、')}
+                                                >
+                                                    被 {usages.join('、')} 使用
+                                                </span>
+                                            ) : (
+                                                <span className="text-emerald-700">未被店铺占用</span>
+                                            )}
+                                        </td>
+                                        <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500">
+                                            {formatDateTime(seller.createdAt)}
+                                        </td>
+                                        <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-500">
+                                            {formatDateTime(seller.updatedAt)}
+                                        </td>
+                                        <td className="sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 bg-white px-3 py-0 group-hover:bg-slate-50">
+                                            <div className="flex justify-end gap-1">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setEditing(seller)}
+                                                    className="rounded-md p-1.5 text-blue-600 hover:bg-blue-50"
+                                                    aria-label={`编辑${seller.name}`}
+                                                >
+                                                    <Pencil className="h-3.5 w-3.5" />
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    disabled={state.loading}
+                                                    onClick={() => void deleteSeller(seller)}
+                                                    className="rounded-md p-1.5 text-rose-600 hover:bg-rose-50"
+                                                    aria-label={`删除${seller.name}`}
+                                                >
+                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
                             {!sellers.length && (
                                 <tr>
-                                    <td colSpan={5} className="p-12 text-center text-slate-400">
+                                    <td colSpan={6} className="p-12 text-center text-slate-400">
                                         暂无商家主体
                                     </td>
                                 </tr>
@@ -743,4 +790,10 @@ export function SellersPanel({
             )}
         </>
     );
+}
+
+function sellerUsageLabels(profiles: StoreProfileRecord[], sellerId: string) {
+    return profiles
+        .filter(profile => profile.channel.seller?.id === sellerId)
+        .map(profile => `${storeName(profile)}（Channel：${profile.channel.code}）`);
 }

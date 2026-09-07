@@ -142,7 +142,10 @@ export function TranslationsModule() {
                 {query.loading && !query.data ? (
                     <LoadingState />
                 ) : query.error ? (
-                    <ErrorState message={query.error.message} onRetry={() => void query.refetch()} />
+                    <ErrorState
+                        message={toUserFacingError(query.error, '翻译任务数据读取失败')}
+                        onRetry={() => void query.refetch()}
+                    />
                 ) : (
                     audit && (
                         <>

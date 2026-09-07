@@ -58,6 +58,7 @@ import {
 } from '../../graphql/management.graphql';
 import { usePageSize } from '../../hooks/use-page-size';
 import { useUrlTab } from '../../hooks/use-url-tab';
+import { copyAdminText } from '../../utils/admin-clipboard';
 import { getRoleCodeLabel, getRoleLabel, getStatusLabel } from '../../utils/status-labels';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatDateTime } from '../Sales/sales-utils';
@@ -195,9 +196,19 @@ export function SystemOpsModule() {
                 ) : !data && !query.error ? (
                     <SettingsContentSkeleton label="正在读取系统运维数据" sections={2} />
                 ) : tab === 'HEALTH' ? (
-                    <HealthPanel data={data} graphQLError={query.error?.message} />
+                    <HealthPanel
+                        data={data}
+                        graphQLError={
+                            query.error
+                                ? toUserFacingError(query.error, '管理服务健康信息读取失败')
+                                : undefined
+                        }
+                    />
                 ) : query.error && !data ? (
-                    <ErrorState message={query.error.message} onRetry={() => void query.refetch()} />
+                    <ErrorState
+                        message={toUserFacingError(query.error, '系统运维数据读取失败')}
+                        onRetry={() => void query.refetch()}
+                    />
                 ) : (
                     data && (
                         <>
@@ -1390,8 +1401,7 @@ function SecretDialog({ title, value, onClose }: { title: string; value: string;
                 <button
                     type="button"
                     onClick={async () => {
-                        await navigator.clipboard.writeText(value);
-                        setCopied(true);
+                        if (await copyAdminText(value, 'API 密钥')) setCopied(true);
                     }}
                     className={secondaryButton}
                 >

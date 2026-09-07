@@ -7,6 +7,10 @@ function readPage(searchParams: URLSearchParams, parameter: string) {
     return Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage - 1 : 0;
 }
 
+/**
+ * Search terms here are committed URL state, updated through router navigation.
+ * Bind editable searches with SearchInput so their synchronous IME draft stays outside the router.
+ */
 export function useUrlListState(
     searchParameter = 'search',
     pageParameter = 'page',

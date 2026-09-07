@@ -253,7 +253,13 @@ describe('CartPage guest cart', () => {
             ...cart,
             checkoutOrder: {
                 ...checkoutOrder,
-                discounts: [{ description: '店铺自动优惠', amountWithTax: -500 }],
+                discounts: [
+                    {
+                        adjustmentSource: 'Promotion:automatic-discount',
+                        description: '店铺自动优惠',
+                        amountWithTax: -500,
+                    },
+                ],
             },
         };
         const unselectedMarkup = renderCart(cartWithAutomaticDiscount, [], [coupon()]);

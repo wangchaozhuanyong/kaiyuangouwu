@@ -1,5 +1,6 @@
 import { Boxes, Image as ImageIcon, Link2, Package, Tag, X } from 'lucide-react';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
+import { ImageAssetUploadButton, type UploadedImageAsset } from '../../components/ImageAssetUploadButton';
 import { useProductEditor } from './ProductEditorContext';
 
 export function ProductEditorSidebar() {
@@ -16,6 +17,7 @@ export function ProductEditorSidebar() {
         setFeaturedAssetId,
         featuredAssetPreview,
         setFeaturedAssetPreview,
+        setKnownAssets,
         setIsAssetPickerOpen,
         setAssetPickerMode,
         effectiveFulfillmentType,
@@ -27,6 +29,13 @@ export function ProductEditorSidebar() {
         isDirty,
         saving,
     } = useProductEditor();
+
+    const setUploadedFeaturedAsset = ([asset]: UploadedImageAsset[]) => {
+        if (!asset) return;
+        setKnownAssets(current => ({ ...current, [asset.id]: asset }));
+        setFeaturedAssetId(asset.id);
+        setFeaturedAssetPreview(asset.preview);
+    };
 
     if (!isCreateMode && !productData?.product) return null;
 
@@ -61,19 +70,27 @@ export function ProductEditorSidebar() {
                                 商品主图
                                 <FeatureHelpButton topic="catalog.product-assets" title="商品主图" />
                             </span>
-                            {featuredAssetId && (
-                                <button
-                                    type="button"
+                            <div className="flex flex-wrap items-center justify-end gap-2">
+                                <ImageAssetUploadButton
+                                    ariaLabel="上传商品主图"
+                                    label="上传"
                                     disabled={saving}
-                                    onClick={() => {
-                                        setAssetPickerMode('FEATURED');
-                                        setIsAssetPickerOpen(true);
-                                    }}
-                                    className="text-[11px] font-bold text-blue-600 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-                                >
-                                    更换主图
-                                </button>
-                            )}
+                                    onUploaded={setUploadedFeaturedAsset}
+                                />
+                                {featuredAssetId && (
+                                    <button
+                                        type="button"
+                                        disabled={saving}
+                                        onClick={() => {
+                                            setAssetPickerMode('FEATURED');
+                                            setIsAssetPickerOpen(true);
+                                        }}
+                                        className="text-[11px] font-bold text-blue-600 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                        更换主图
+                                    </button>
+                                )}
+                            </div>
                         </div>
                         {featuredAssetPreview ? (
                             <div className="group relative aspect-[4/3] overflow-hidden rounded-lg border border-slate-200 bg-slate-50">

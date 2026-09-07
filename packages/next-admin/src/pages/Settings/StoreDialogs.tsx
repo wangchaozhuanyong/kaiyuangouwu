@@ -22,8 +22,10 @@ import {
     type StoreManagementResult,
     type StoreProfileRecord,
 } from '../../graphql/management.graphql';
+import { copyAdminText } from '../../utils/admin-clipboard';
 import { getChannelDisplayName } from '../../utils/channel-display';
 import { omitUnchangedEnglish } from '../../utils/english-edit-intent';
+import { toUserFacingError } from '../../utils/user-facing-error';
 import { StoreBrandAssets } from './StoreBrandAssets';
 import {
     Field,
@@ -373,7 +375,6 @@ export function StoreDeprovisionDialog({
     onCompleted: (message: string) => Promise<void>;
     onError: (message: string) => void;
 }) {
-    const requestConfirmation = useConfirmDialog();
     const [currentPassword, setCurrentPassword] = useState('');
     const [confirmCode, setConfirmCode] = useState('');
     const [expectedUpdatedAt, setExpectedUpdatedAt] = useState(profile.updatedAt);
@@ -440,14 +441,6 @@ export function StoreDeprovisionDialog({
             setLocalError(`请输入完整店铺编码“${impact.channelCode}”`);
             return;
         }
-        const confirmation = await requestConfirmation({
-            title: '最后确认：彻底清退空店铺？',
-            description:
-                '系统将删除该空店铺的 Channel、店铺档案、专属管理员与专属角色。该操作不可撤销，但后端仍会再次检查订单、商品、客户及扩展数据。',
-            confirmLabel: '确认彻底清退',
-            tone: 'danger',
-        });
-        if (!confirmation) return;
         setLocalError('');
         try {
             const response = await deprovisionStore({
@@ -486,7 +479,11 @@ export function StoreDeprovisionDialog({
                 </div>
             ) : impactQuery.error || !impact ? (
                 <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-xs text-rose-700">
-                    <p>{impactQuery.error?.message ?? '清退影响读取失败'}</p>
+                    <p>
+                        {impactQuery.error
+                            ? toUserFacingError(impactQuery.error, '店铺清退影响读取失败')
+                            : '店铺清退影响读取失败'}
+                    </p>
                     <button
                         type="button"
                         onClick={() => void impactQuery.refetch()}
@@ -558,6 +555,9 @@ export function StoreDeprovisionDialog({
                             />
                         </Field>
                     </div>
+                    <p className="mt-3 text-[11px] leading-5 text-rose-700">
+                        输入当前管理员密码和完整店铺编码后，点击下方按钮将立即执行不可撤销的安全清退，不会再出现第二个确认弹窗。
+                    </p>
                     <div className="mt-6 flex flex-col-reverse gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:justify-end">
                         <button type="button" onClick={onClose} disabled={busy} className={secondaryButton}>
                             关闭
@@ -584,7 +584,10 @@ export function StoreDeprovisionDialog({
                             type="button"
                             onClick={() => void deprovision()}
                             disabled={
-                                !impact.canDeprovision || busy || confirmCode.trim() !== impact.channelCode
+                                !impact.canDeprovision ||
+                                busy ||
+                                !currentPassword ||
+                                confirmCode.trim() !== impact.channelCode
                             }
                             className="flex items-center justify-center gap-1.5 rounded-lg bg-rose-600 px-4 py-2 text-xs font-bold text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
                         >
@@ -593,7 +596,7 @@ export function StoreDeprovisionDialog({
                             ) : (
                                 <Trash2 className="h-3.5 w-3.5" />
                             )}
-                            彻底清退空店铺
+                            验证并彻底清退空店铺
                         </button>
                     </div>
                 </>
@@ -683,8 +686,9 @@ export function ProvisionStoreDialog({
                         <button
                             type="button"
                             onClick={async () => {
-                                await navigator.clipboard.writeText(result.temporaryPassword);
-                                setCopied(true);
+                                if (await copyAdminText(result.temporaryPassword, '临时管理员密码')) {
+                                    setCopied(true);
+                                }
                             }}
                             className={secondaryButton}
                         >

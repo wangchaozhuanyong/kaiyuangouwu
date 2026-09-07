@@ -401,11 +401,13 @@
     }
 
     .primary-category-strip {
+        height: 79px;
+        padding-block: 0 11px;
         grid-template-columns: minmax(0, 1fr) 62px;
     }
 
     .primary-categories {
-        padding: 10px 32px 7px;
+        padding: 0 32px;
         justify-content: safe center;
         gap: 8px;
         scroll-padding-inline: 32px;

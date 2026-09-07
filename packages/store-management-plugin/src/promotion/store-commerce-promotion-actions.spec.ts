@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/require-await -- Promotion action mocks preserve async APIs. */
-import { ConfigArg } from '@vendure/common/lib/generated-types';
+import { ConfigArg, LanguageCode } from '@vendure/common/lib/generated-types';
 import { describe, expect, it, vi } from 'vitest';
 
 import { CustomerCoupon } from '../entities/customer-coupon.entity';
@@ -14,6 +14,29 @@ import {
 } from './store-commerce-promotion-actions';
 
 describe('store commerce promotion actions', () => {
+    it('exposes Chinese business labels for currency-aware promotion fields', () => {
+        const context = {
+            languageCode: LanguageCode.zh_Hans,
+            channel: { defaultLanguageCode: LanguageCode.zh_Hans },
+        } as any;
+
+        expect(currencyMinimumOrderAmount.toGraphQlType(context)).toMatchObject({
+            description: '订单商品小计满指定币种金额',
+            args: [
+                { name: 'amount', label: '最低商品小计' },
+                { name: 'currencyCode', label: '金额币种' },
+                { name: 'taxInclusive', label: '按含税商品小计判断' },
+            ],
+        });
+        expect(currencyOrderFixedDiscount.toGraphQlType(context)).toMatchObject({
+            description: '订单按指定币种固定金额立减',
+            args: [
+                { name: 'discount', label: '固定减免金额' },
+                { name: 'currencyCode', label: '减免金额币种' },
+            ],
+        });
+    });
+
     it('requires a server-side customer coupon entitlement before a promotion can apply', async () => {
         const queryBuilder: Record<string, any> = {};
         for (const method of ['select', 'where', 'andWhere', 'limit']) {

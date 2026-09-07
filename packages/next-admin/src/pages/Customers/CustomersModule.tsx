@@ -26,7 +26,9 @@ import { useNavigate } from 'react-router-dom';
 
 import { sensitiveActionContext } from '../../apollo';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
+import { SearchInput } from '../../components/SearchInput';
 import { SensitiveActionDialog } from '../../components/SensitiveActionDialog';
+import { SortableTableHeader } from '../../components/SortableTableHeader';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
 import { DynamicCustomFieldsForm } from '../../custom-fields/DynamicCustomFieldsForm';
 import type { CustomFieldValueMap } from '../../custom-fields/custom-field-types';
@@ -69,6 +71,8 @@ import {
 import { useAccessibleDialog } from '../../hooks/use-accessible-dialog';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { useUrlListState } from '../../hooks/use-url-list-state';
+import { type SortDirection, useUrlSortState } from '../../hooks/use-url-sort-state';
+import { isInputMethodKey } from '../../utils/input-method';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import {
     formatDateTime,
@@ -93,6 +97,9 @@ const emptyCustomerForm: CustomerForm = {
     emailAddress: '',
     phoneNumber: '',
 };
+
+const CUSTOMER_SORT_FIELDS = ['createdAt', 'lastName', 'emailAddress', 'phoneNumber'] as const;
+type CustomerSortField = (typeof CUSTOMER_SORT_FIELDS)[number];
 
 interface CustomerAddressForm {
     fullName: string;
@@ -184,6 +191,11 @@ export function CustomersModule() {
     const canUpdateCustomer = hasAnyPermission(['UpdateCustomer']);
     const { page, pageSize, setPageSize, searchParams, searchTerm, setFilter, setPage, setSearchTerm } =
         useUrlListState();
+    const { sortDirection, sortField, toggleSort } = useUrlSortState({
+        fields: CUSTOMER_SORT_FIELDS,
+        defaultField: 'createdAt',
+        defaultDirection: 'DESC',
+    });
     const selectedGroupId = searchParams.get('group') ?? 'ALL';
     const setSelectedGroupId = (groupId: string) => setFilter('group', groupId, 'ALL');
     const deferredSearchTerm = useDeferredValue(searchTerm);
@@ -212,10 +224,10 @@ export function CustomersModule() {
         () => ({
             skip: page * pageSize,
             take: pageSize,
-            sort: { createdAt: 'DESC', id: 'DESC' },
+            sort: { [sortField]: sortDirection },
             filter: customerFilter(deferredSearchTerm),
         }),
-        [deferredSearchTerm, page, pageSize],
+        [deferredSearchTerm, page, pageSize, sortDirection, sortField],
     );
 
     const allCustomers = useQuery<CustomersResult>(CUSTOMERS_QUERY, {
@@ -369,6 +381,10 @@ export function CustomersModule() {
             setActionError(errorText(cause));
         }
     };
+    const changeSort = (field: CustomerSortField, initialDirection?: SortDirection) => {
+        toggleSort(field, initialDirection);
+        setSelectedCustomerIds([]);
+    };
 
     return (
         <div className="flex h-full flex-col bg-slate-50">
@@ -437,11 +453,9 @@ export function CustomersModule() {
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                         <div className="relative min-w-0 flex-1 lg:max-w-md">
                             <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                            <input
+                            <SearchInput
                                 value={searchTerm}
-                                onChange={event => {
-                                    setSearchTerm(event.target.value);
-                                }}
+                                onValueChange={setSearchTerm}
                                 aria-label="搜索客户"
                                 placeholder="搜索姓名、手机号或邮箱"
                                 className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-9 text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
@@ -547,7 +561,7 @@ export function CustomersModule() {
                     <LoadingState label="正在读取客户数据…" />
                 ) : activeQuery.error ? (
                     <ErrorState
-                        message={activeQuery.error.message}
+                        message={toUserFacingError(activeQuery.error, '客户数据读取失败')}
                         onRetry={() => void activeQuery.refetch()}
                     />
                 ) : !list?.items.length ? (
@@ -578,18 +592,30 @@ export function CustomersModule() {
                                                 }}
                                             />
                                         </th>
-                                        <th
-                                            scope="col"
+                                        <SortableTableHeader
+                                            label="姓名"
+                                            sortField="lastName"
+                                            activeSortField={sortField}
+                                            sortDirection={sortDirection}
+                                            onSort={changeSort}
                                             className="sticky left-10 z-20 w-44 whitespace-nowrap bg-slate-50 px-3 py-3"
-                                        >
-                                            姓名
-                                        </th>
-                                        <th scope="col" className="w-56 whitespace-nowrap px-3 py-3">
-                                            邮箱
-                                        </th>
-                                        <th scope="col" className="w-36 whitespace-nowrap px-3 py-3">
-                                            手机
-                                        </th>
+                                        />
+                                        <SortableTableHeader
+                                            label="邮箱"
+                                            sortField="emailAddress"
+                                            activeSortField={sortField}
+                                            sortDirection={sortDirection}
+                                            onSort={changeSort}
+                                            className="w-56 whitespace-nowrap px-3 py-3"
+                                        />
+                                        <SortableTableHeader
+                                            label="手机"
+                                            sortField="phoneNumber"
+                                            activeSortField={sortField}
+                                            sortDirection={sortDirection}
+                                            onSort={changeSort}
+                                            className="w-36 whitespace-nowrap px-3 py-3"
+                                        />
                                         <th scope="col" className="w-28 whitespace-nowrap px-3 py-3">
                                             账号状态
                                         </th>
@@ -605,9 +631,15 @@ export function CustomersModule() {
                                         <th scope="col" className="w-40 whitespace-nowrap px-3 py-3">
                                             最近下单时间
                                         </th>
-                                        <th scope="col" className="w-40 whitespace-nowrap px-3 py-3">
-                                            注册时间
-                                        </th>
+                                        <SortableTableHeader
+                                            label="注册时间"
+                                            sortField="createdAt"
+                                            activeSortField={sortField}
+                                            sortDirection={sortDirection}
+                                            onSort={changeSort}
+                                            initialDirection="DESC"
+                                            className="w-40 whitespace-nowrap px-3 py-3"
+                                        />
                                         <th
                                             scope="col"
                                             className="sticky right-0 z-20 w-28 whitespace-nowrap border-l border-slate-200 bg-slate-50 px-3 py-3 text-right"
@@ -1032,7 +1064,10 @@ function CustomerDrawer({
                     {loading && !customer ? (
                         <LoadingState label="正在读取客户详情…" />
                     ) : error ? (
-                        <ErrorState message={error.message} onRetry={() => void refetch()} />
+                        <ErrorState
+                            message={toUserFacingError(error, '客户详情读取失败')}
+                            onRetry={() => void refetch()}
+                        />
                     ) : !customer ? (
                         <EmptyState
                             icon={CircleUserRound}
@@ -1695,6 +1730,7 @@ function GroupManager({
                         value={newName}
                         onChange={event => setNewName(event.target.value)}
                         onKeyDown={event => {
+                            if (isInputMethodKey(event.nativeEvent)) return;
                             if (event.key === 'Enter') void create();
                         }}
                         maxLength={80}

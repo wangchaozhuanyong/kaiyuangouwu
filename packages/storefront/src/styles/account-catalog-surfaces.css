@@ -1,4 +1,4 @@
-/* Decorative account artwork has a fixed palette, independent of the store skin. */
+/* The account foreground palette stays fixed; managed content can replace only the artwork. */
 .page.account-page {
     background: #fafafd;
 }
@@ -8,7 +8,11 @@
     padding: 28px 18px 26px;
     overflow: hidden;
     border-radius: 0 0 50% 50% / 0 0 12px 12px;
-    background: #a8a8ee url('../assets/ui/account-refraction.webp') center / cover no-repeat;
+    background-color: #a8a8ee;
+    background-image: var(--account-hero-image, none), url('../assets/ui/account-refraction.webp');
+    background-position: center;
+    background-size: cover;
+    background-repeat: no-repeat;
     color: #18145b;
 }
 .account-hero-content {
@@ -181,7 +185,8 @@
     background: rgb(255 255 255 / 22%);
     color: #221956;
 }
-.account-hero :is(.account-hero-asset, .account-hero-settings, .account-hero-profile, .account-hero-register):hover {
+.account-hero
+    :is(.account-hero-asset, .account-hero-settings, .account-hero-profile, .account-hero-register):hover {
     background: rgb(255 255 255 / 18%);
 }
 .account-hero button:focus-visible {
@@ -524,6 +529,14 @@
         border-radius: 20px;
         background-size: auto 100%;
         background-position: right center;
+    }
+    .account-hero.has-custom-background {
+        background-position:
+            center,
+            right center;
+        background-size:
+            cover,
+            auto 100%;
     }
     .account-hero-identity {
         max-width: 640px;

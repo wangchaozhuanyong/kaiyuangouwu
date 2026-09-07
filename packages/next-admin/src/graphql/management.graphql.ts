@@ -294,10 +294,12 @@ export const STORE_MANAGEMENT_QUERY = gql`
             args {
                 name
                 type
+                list
                 required
                 defaultValue
                 label
                 description
+                ui
             }
         }
         paymentMethodHandlers {
@@ -306,10 +308,12 @@ export const STORE_MANAGEMENT_QUERY = gql`
             args {
                 name
                 type
+                list
                 required
                 defaultValue
                 label
                 description
+                ui
             }
         }
         shippingEligibilityCheckers {
@@ -318,10 +322,12 @@ export const STORE_MANAGEMENT_QUERY = gql`
             args {
                 name
                 type
+                list
                 required
                 defaultValue
                 label
                 description
+                ui
             }
         }
         shippingCalculators {
@@ -330,10 +336,12 @@ export const STORE_MANAGEMENT_QUERY = gql`
             args {
                 name
                 type
+                list
                 required
                 defaultValue
                 label
                 description
+                ui
             }
         }
         fulfillmentHandlers {
@@ -342,10 +350,12 @@ export const STORE_MANAGEMENT_QUERY = gql`
             args {
                 name
                 type
+                list
                 required
                 defaultValue
                 label
                 description
+                ui
             }
         }
     }
@@ -375,6 +385,18 @@ export const BUSINESS_SETTINGS_QUERY = gql`
             defaultShippingZone {
                 id
                 name
+            }
+        }
+        channels(options: { take: 1000 }) {
+            items {
+                id
+                code
+                defaultTaxZone {
+                    id
+                }
+                defaultShippingZone {
+                    id
+                }
             }
         }
         globalSettings {
@@ -438,6 +460,19 @@ export const UPDATE_BUSINESS_CHANNEL_MUTATION = gql`
             ... on Channel {
                 id
                 code
+                defaultLanguageCode
+                availableLanguageCodes
+                defaultCurrencyCode
+                availableCurrencyCodes
+                pricesIncludeTax
+                trackInventory
+                outOfStockThreshold
+                defaultTaxZone {
+                    id
+                }
+                defaultShippingZone {
+                    id
+                }
             }
             ... on ErrorResult {
                 errorCode
@@ -1111,10 +1146,12 @@ export interface ConfigurableOperationDefinitionRecord {
     args: Array<{
         name: string;
         type: string;
+        list?: boolean;
         required: boolean;
         defaultValue: unknown;
         label: string | null;
         description: string | null;
+        ui?: unknown;
     }>;
 }
 
@@ -1205,6 +1242,14 @@ export interface BusinessSettingsResult {
         customFields?: Record<string, unknown> | null;
         defaultTaxZone: { id: string; name: string } | null;
         defaultShippingZone: { id: string; name: string } | null;
+    };
+    channels: {
+        items: Array<{
+            id: string;
+            code: string;
+            defaultTaxZone: { id: string } | null;
+            defaultShippingZone: { id: string } | null;
+        }>;
     };
     globalSettings: {
         availableLanguages: string[];

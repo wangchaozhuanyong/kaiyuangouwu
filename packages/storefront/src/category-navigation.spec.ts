@@ -109,6 +109,22 @@ describe('category navigation responsive spacing', () => {
         ).toHaveLength(3);
     });
 
+    it('balances the primary category row and uses a category-list symbol for the all entry', () => {
+        expect(stylesheet).toMatch(
+            /\.primary-category-strip\s*\{[^}]*height:\s*81px;[^}]*padding:\s*0 0 12px;/,
+        );
+        expect(stylesheet).toMatch(/\.primary-categories\s*\{[^}]*padding:\s*0 4px 0 10px;/);
+        expect(stylesheet).toMatch(/\.primary-categories-all\s*\{[^}]*padding:\s*0 4px 0 0;/);
+        expect(stylesheet).toMatch(
+            /@media \(min-width:\s*1024px\)[\s\S]*?\.primary-category-strip\s*\{[^}]*height:\s*79px;[^}]*padding-block:\s*0 11px;/,
+        );
+        expect(categoryPageSource).toContain('<svg viewBox="0 0 40 40" fill="none">');
+        expect(categoryPageSource).not.toContain('allCategoriesGoldIcon');
+        expect(stylesheet).toMatch(
+            /\.primary-categories-all-icon\s*\{[^}]*border:\s*1px solid color-mix\([^}]*color:\s*var\(--accent\);/,
+        );
+    });
+
     it('aligns the mobile all-category row with the sort toolbar', () => {
         expect(stylesheet).toMatch(/\.category-subcat-sidebar\s*\{[^}]*padding:\s*0 0 12px;/);
         expect(stylesheet).toMatch(
