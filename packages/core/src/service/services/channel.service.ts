@@ -422,23 +422,20 @@ export class ChannelService {
             return defaultLanguageValidationResult;
         }
         const updatedChannel = patchEntity(channel, input);
-        if (input.defaultTaxZoneId) {
-            updatedChannel.defaultTaxZone = await this.connection.getEntityOrThrow(
-                ctx,
-                Zone,
-                input.defaultTaxZoneId,
-            );
+        if (input.defaultTaxZoneId !== undefined) {
+            updatedChannel.defaultTaxZone = input.defaultTaxZoneId
+                ? await this.connection.getEntityOrThrow(ctx, Zone, input.defaultTaxZoneId)
+                : null;
         }
-        if (input.defaultShippingZoneId) {
-            updatedChannel.defaultShippingZone = await this.connection.getEntityOrThrow(
-                ctx,
-                Zone,
-                input.defaultShippingZoneId,
-            );
+        if (input.defaultShippingZoneId !== undefined) {
+            updatedChannel.defaultShippingZone = input.defaultShippingZoneId
+                ? await this.connection.getEntityOrThrow(ctx, Zone, input.defaultShippingZoneId)
+                : null;
         }
-        if (input.sellerId) {
-            const seller = await this.connection.getEntityOrThrow(ctx, Seller, input.sellerId);
-            updatedChannel.seller = seller;
+        if (input.sellerId !== undefined) {
+            updatedChannel.seller = input.sellerId
+                ? await this.connection.getEntityOrThrow(ctx, Seller, input.sellerId)
+                : null;
         }
         if (input.currencyCode) {
             updatedChannel.defaultCurrencyCode = input.currencyCode;

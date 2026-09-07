@@ -460,6 +460,19 @@ export const UPDATE_BUSINESS_CHANNEL_MUTATION = gql`
             ... on Channel {
                 id
                 code
+                defaultLanguageCode
+                availableLanguageCodes
+                defaultCurrencyCode
+                availableCurrencyCodes
+                pricesIncludeTax
+                trackInventory
+                outOfStockThreshold
+                defaultTaxZone {
+                    id
+                }
+                defaultShippingZone {
+                    id
+                }
             }
             ... on ErrorResult {
                 errorCode

@@ -13,6 +13,7 @@ import {
     DELETE_BUSINESS_TAX_CATEGORY_MUTATION,
     DELETE_BUSINESS_TAX_RATE_MUTATION,
     DELETE_BUSINESS_ZONE_MUTATION,
+    UPDATE_BUSINESS_CHANNEL_MUTATION,
     type BusinessSettingsResult,
 } from '../../graphql/management.graphql';
 
@@ -139,6 +140,113 @@ describe('BusinessBasicsPanel', () => {
         expect(html).toContain('请选择要添加的国家/地区');
         expect(html).not.toContain('placeholder="zh_Hans, en"');
         expect(html).not.toContain('placeholder="CNY, USD"');
+    });
+
+    it('sends explicit nulls for cleared default Zones and verifies the persisted server state', async () => {
+        const persistedSettings: BusinessSettingsResult = {
+            ...businessSettings,
+            activeChannel: {
+                ...businessSettings.activeChannel,
+                defaultTaxZone: null,
+                defaultShippingZone: null,
+            },
+        };
+        const updateChannel = vi.fn().mockResolvedValue({
+            data: {
+                updateChannel: {
+                    __typename: 'Channel',
+                    ...persistedSettings.activeChannel,
+                },
+            },
+        });
+        const onChanged = vi.fn().mockResolvedValue(undefined);
+        refetch.mockResolvedValue({ data: persistedSettings });
+        apolloMocks.useMutation.mockImplementation(document =>
+            document === UPDATE_BUSINESS_CHANNEL_MUTATION
+                ? [updateChannel, { loading: false }]
+                : [vi.fn(), { loading: false }],
+        );
+
+        await act(async () => {
+            root.render(
+                <FeatureHelpProvider>
+                    <ConfirmDialogContext.Provider value={async () => false}>
+                        <BusinessBasicsPanel onChanged={onChanged} onError={() => undefined} />
+                    </ConfirmDialogContext.Provider>
+                </FeatureHelpProvider>,
+            );
+        });
+
+        const taxZoneSelect = findFieldSelect('默认计税区域');
+        const shippingZoneSelect = findFieldSelect('默认配送区域');
+        await act(async () => {
+            taxZoneSelect.value = '';
+            taxZoneSelect.dispatchEvent(new Event('change', { bubbles: true }));
+            shippingZoneSelect.value = '';
+            shippingZoneSelect.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+
+        const saveButton = Array.from(container.querySelectorAll('button')).find(
+            button => button.textContent?.trim() === '保存基础参数',
+        );
+        expect(saveButton).toBeDefined();
+        await act(async () => saveButton?.dispatchEvent(new MouseEvent('click', { bubbles: true })));
+
+        expect(updateChannel).toHaveBeenCalledWith(
+            expect.objectContaining({
+                variables: expect.objectContaining({
+                    input: expect.objectContaining({
+                        defaultTaxZoneId: null,
+                        defaultShippingZoneId: null,
+                    }),
+                }),
+                context: { adminFeedback: false },
+            }),
+        );
+        expect(refetch).toHaveBeenCalledTimes(1);
+        expect(onChanged).toHaveBeenCalledWith('当前店铺的语言、币种和业务参数已更新');
+    });
+
+    it('reports a persistence error instead of success when the server returns old settings', async () => {
+        const updateChannel = vi.fn().mockResolvedValue({
+            data: {
+                updateChannel: {
+                    __typename: 'Channel',
+                    ...businessSettings.activeChannel,
+                },
+            },
+        });
+        const onChanged = vi.fn().mockResolvedValue(undefined);
+        const onError = vi.fn();
+        apolloMocks.useMutation.mockImplementation(document =>
+            document === UPDATE_BUSINESS_CHANNEL_MUTATION
+                ? [updateChannel, { loading: false }]
+                : [vi.fn(), { loading: false }],
+        );
+
+        await act(async () => {
+            root.render(
+                <FeatureHelpProvider>
+                    <ConfirmDialogContext.Provider value={async () => false}>
+                        <BusinessBasicsPanel onChanged={onChanged} onError={onError} />
+                    </ConfirmDialogContext.Provider>
+                </FeatureHelpProvider>,
+            );
+        });
+
+        const taxZoneSelect = findFieldSelect('默认计税区域');
+        await act(async () => {
+            taxZoneSelect.value = '';
+            taxZoneSelect.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+        const saveButton = Array.from(container.querySelectorAll('button')).find(
+            button => button.textContent?.trim() === '保存基础参数',
+        );
+        await act(async () => saveButton?.dispatchEvent(new MouseEvent('click', { bubbles: true })));
+
+        expect(onError).toHaveBeenCalledWith('设置未真正保存，服务端回读仍是旧值：默认计税区域');
+        expect(refetch).not.toHaveBeenCalled();
+        expect(onChanged).not.toHaveBeenCalled();
     });
 
     it('collects the password in the delete confirmation and sends it with each mutation', async () => {
@@ -288,4 +396,13 @@ describe('BusinessBasicsPanel', () => {
 
 function renderToStaticMarkup(element: ReactElement) {
     return renderMarkup(<FeatureHelpProvider>{element}</FeatureHelpProvider>);
+}
+
+function findFieldSelect(label: string) {
+    const field = Array.from(container.querySelectorAll('label')).find(element =>
+        element.textContent?.includes(label),
+    );
+    const select = field?.querySelector('select');
+    if (!select) throw new Error(`找不到字段：${label}`);
+    return select;
 }

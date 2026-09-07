@@ -1,6 +1,6 @@
 import { gql } from '@apollo/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { channelRequestContext, client, uploadAdminFiles } from './apollo';
+import { channelRequestContext, client, getLocalizedAdminApiUrl, uploadAdminFiles } from './apollo';
 
 function storage(values: Record<string, string> = {}) {
     const items = new Map(Object.entries(values));
@@ -24,6 +24,11 @@ afterEach(async () => {
 });
 
 describe('admin channel request routing', () => {
+    it('uses Simplified Chinese as the display language for all Admin API requests', () => {
+        const url = new URL(getLocalizedAdminApiUrl(), 'http://localhost');
+        expect(url.searchParams.get('displayLanguageCode')).toBe('zh_Hans');
+    });
+
     it('uploads multipart files into the selected store and retains the session', async () => {
         request.mockResolvedValue(Response.json({ data: { createAssets: [{ id: 'asset' }] } }));
         const file = new File(['image'], 'icon.png', { type: 'image/png' });
@@ -32,6 +37,11 @@ describe('admin channel request routing', () => {
         }));
         expect(result).toEqual({ createAssets: [{ id: 'asset' }] });
         const init = request.mock.calls[0][1]!;
+        expect(
+            new URL(String(request.mock.calls[0][0]), 'http://localhost').searchParams.get(
+                'displayLanguageCode',
+            ),
+        ).toBe('zh_Hans');
         expect(init.headers).toEqual({ 'vendure-token': 'store-a', authorization: 'Bearer test-session' });
         expect(init.credentials).toBe('include');
         const form = init.body as FormData;

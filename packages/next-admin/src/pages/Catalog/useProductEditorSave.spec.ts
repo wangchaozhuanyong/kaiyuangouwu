@@ -279,7 +279,12 @@ describe('product save orchestration', () => {
         expect(mocks.mutations.get(UPDATE_PRODUCT)).toHaveBeenCalledOnce();
         expect(input.data.refetchProduct).toHaveBeenCalledOnce();
         expect(input.controls.showError).toHaveBeenCalledWith(expect.stringContaining('部分内容已保存'));
-        expect(input.controls.showError).toHaveBeenCalledWith(expect.stringContaining('SKU write failed'));
+        expect(input.controls.showError).toHaveBeenCalledWith(
+            expect.stringContaining('现有 SKU 变体更新失败'),
+        );
+        expect(input.controls.showError).not.toHaveBeenCalledWith(
+            expect.stringContaining('SKU write failed'),
+        );
         expect(input.controls.showNotice).not.toHaveBeenCalled();
         expect(input.controls.setSaving).toHaveBeenLastCalledWith(false);
     });

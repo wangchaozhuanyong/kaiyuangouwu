@@ -66,10 +66,10 @@ export class Channel extends VendureEntity {
 
     @Index()
     @ManyToOne(type => Seller, seller => seller.channels)
-    seller?: Seller;
+    seller?: Seller | null;
 
     @EntityId({ nullable: true })
-    sellerId?: ID;
+    sellerId?: ID | null;
 
     @Column('varchar') defaultLanguageCode: LanguageCode;
 
@@ -78,11 +78,11 @@ export class Channel extends VendureEntity {
 
     @Index()
     @ManyToOne(type => Zone, zone => zone.defaultTaxZoneChannels)
-    defaultTaxZone: Zone;
+    defaultTaxZone: Zone | null;
 
     @Index()
     @ManyToOne(type => Zone, zone => zone.defaultShippingZoneChannels)
-    defaultShippingZone: Zone;
+    defaultShippingZone: Zone | null;
 
     @Column('varchar')
     defaultCurrencyCode: CurrencyCode;

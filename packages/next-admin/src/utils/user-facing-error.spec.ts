@@ -31,4 +31,13 @@ describe('toUserFacingError', () => {
         expect(message).toContain('先解除关联');
         expect(message).not.toContain('FK_channel_seller');
     });
+
+    it('does not expose unlocalized English prose in the Chinese admin UI', () => {
+        const message = toUserFacingError(
+            new Error('The requested operation could not be completed'),
+            '保存失败',
+        );
+        expect(message).toContain('保存失败');
+        expect(message).not.toContain('The requested operation could not be completed');
+    });
 });

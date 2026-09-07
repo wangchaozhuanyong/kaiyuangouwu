@@ -11,9 +11,18 @@ const AUTH_PERSISTENCE_KEY = 'vendure-auth-persistence';
 const AUTH_TOKEN_HEADER = 'vendure-auth-token';
 const ACTIVE_CHANNEL_HEADER = 'vendure-token';
 const ACTIVE_CHANNEL_TOKEN_KEY = 'vendure-active-channel-token';
+const ADMIN_DISPLAY_LANGUAGE = 'zh_Hans';
 export { sensitiveActionContext } from './apollo-sensitive-action';
 
 export const ADMIN_API_URL = import.meta.env.VITE_VENDURE_ADMIN_API_URL?.trim() || '/admin-api';
+
+export const getLocalizedAdminApiUrl = () => {
+    const isAbsoluteUrl = /^(?:[a-z][a-z\d+.-]*:)?\/\//iu.test(ADMIN_API_URL);
+    const origin = typeof window === 'undefined' ? 'http://localhost' : window.location.origin;
+    const url = new URL(ADMIN_API_URL, origin);
+    url.searchParams.set('displayLanguageCode', ADMIN_DISPLAY_LANGUAGE);
+    return isAbsoluteUrl ? url.toString() : `${url.pathname}${url.search}${url.hash}`;
+};
 
 export const getServerHealthUrl = () => {
     const apiUrl = new URL(ADMIN_API_URL, window.location.origin);
@@ -110,7 +119,7 @@ export const uploadAdminFiles = async <T>(
             files.forEach((file, index) => formData.append(String(index), file, file.name));
 
             const token = getAuthToken();
-            const response = await vendureFetch(ADMIN_API_URL, {
+            const response = await vendureFetch(getLocalizedAdminApiUrl(), {
                 method: 'POST',
                 headers: {
                     ...channelContext.headers,
@@ -136,7 +145,7 @@ export const uploadAdminFiles = async <T>(
 
 // 指向 Vendure 真实的 Admin GraphQL API，并同时支持 Cookie 与 Bearer Token。
 const httpLink = createHttpLink({
-    uri: ADMIN_API_URL,
+    uri: () => getLocalizedAdminApiUrl(),
     credentials: 'include',
     fetch: vendureFetch,
 });
