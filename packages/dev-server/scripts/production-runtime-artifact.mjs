@@ -93,6 +93,7 @@ export const REQUIRED_RUNTIME_FILES = Object.freeze([
     'packages/two-factor-dashboard-plugin/dist/index.js',
     'packages/telemetry-plugin/dist/index.js',
     'packages/storefront/dist/index.html',
+    'packages/dev-server/scripts/catalog-cigarette-media.mjs',
     'packages/dev-server/scripts/sync-storefront-media.mjs',
     'packages/dev-server/scripts/sync-auth-visuals.mjs',
     'packages/dev-server/scripts/sync-moyao-brand.mjs',
@@ -259,6 +260,7 @@ async function copyRuntimeBuildOutputs(stagingRoot) {
 
 export async function copyStorefrontMediaReleaseInputs(stagingRoot) {
     const releaseScripts = [
+        'catalog-cigarette-media.mjs',
         'sync-storefront-media.mjs',
         'sync-auth-visuals.mjs',
         'sync-moyao-brand.mjs',

@@ -3,6 +3,8 @@ import test from 'node:test';
 
 import {
     assetTags,
+    catalogCigaretteMediaManifest,
+    existingAssetTags,
     findContentBlock,
     isLocalApiOrigin,
     parseChannelCodes,
@@ -10,6 +12,7 @@ import {
     parseMediaKeys,
     prepareStorefrontMediaManifest,
     selectStorefrontMediaChannels,
+    selectStorefrontMediaEntries,
     storefrontMediaManifest,
     syncStorefrontMedia,
 } from './sync-storefront-media.mjs';
@@ -66,6 +69,128 @@ test('storefront media manifest has readable, hashed and uniquely targeted files
         ]),
         /targeted by both product-codex-plus and duplicate-product-target/,
     );
+});
+
+test('existing catalog Assets use exact metadata and original source provenance', async () => {
+    const reference = catalogCigaretteMediaManifest[0];
+    const [prepared] = await prepareStorefrontMediaManifest([reference]);
+
+    assert.equal(prepared.bytes, undefined);
+    assert.equal(prepared.file, undefined);
+    assert.equal(prepared.hash, reference.existingAsset.sourceSha256);
+    assert.deepEqual(prepared.tags, existingAssetTags(reference.key, reference.existingAsset.sourceSha256));
+    await assert.rejects(
+        prepareStorefrontMediaManifest([{ ...reference, file: '/tmp/unreviewed.png' }]),
+        /exactly one of file or existingAsset/u,
+    );
+});
+
+test('the reviewed cigarette group expands to the exact versioned manifest', () => {
+    const selected = selectStorefrontMediaEntries(catalogCigaretteMediaManifest, [
+        'catalog-cigarettes-20260907',
+    ]);
+
+    assert.deepEqual(
+        selected.map(item => item.key),
+        catalogCigaretteMediaManifest.map(item => item.key),
+    );
+});
+
+test('apply reuses and tags one exact existing Asset without uploading it again', async () => {
+    const requests = [];
+    let tagged = false;
+    const reference = {
+        ...catalogCigaretteMediaManifest[0],
+        key: 'catalog-cigarette-test-existing',
+        productSkus: undefined,
+        assetOnly: { purpose: 'catalog-cigarette-test-existing' },
+    };
+    const fetchImpl = async (_url, init) => {
+        const request =
+            init.body instanceof FormData
+                ? JSON.parse(String(init.body.get('operations')))
+                : JSON.parse(init.body);
+        requests.push(request);
+        if (request.query.includes('StorefrontMediaLogin')) {
+            return new Response(
+                JSON.stringify({ data: { login: { id: 'admin-1', channels: [defaultChannel] } } }),
+                { headers: { 'vendure-auth-token': 'auth-token' } },
+            );
+        }
+        if (request.query.includes('StorefrontMediaContentBlocks')) {
+            return Response.json({ data: { storefrontContentBlocks: [] } });
+        }
+        if (/query\s+StorefrontMediaAsset\b/u.test(request.query)) {
+            return Response.json({
+                data: { assets: { items: tagged ? [{ id: 'existing-asset-1' }] : [] } },
+            });
+        }
+        if (request.query.includes('StorefrontMediaExistingAsset')) {
+            return Response.json({
+                data: {
+                    assets: {
+                        items: [
+                            {
+                                id: 'existing-asset-1',
+                                name: reference.existingAsset.name,
+                                width: reference.existingAsset.width,
+                                height: reference.existingAsset.height,
+                                tags: [{ value: '后台上传' }],
+                            },
+                        ],
+                    },
+                },
+            });
+        }
+        if (request.query.includes('TagStorefrontMediaAsset')) {
+            tagged = true;
+            return Response.json({
+                data: {
+                    updateAsset: {
+                        id: 'existing-asset-1',
+                        tags: request.variables.input.tags.map(value => ({ value })),
+                    },
+                },
+            });
+        }
+        if (request.query.includes('AssignStorefrontMediaAsset')) {
+            return Response.json({ data: { assignAssetsToChannel: [{ id: 'existing-asset-1' }] } });
+        }
+        if (request.operationName === 'CreateStorefrontMediaAsset') {
+            throw new Error('existing Asset must not be uploaded again');
+        }
+        throw new Error(`Unexpected GraphQL request: ${request.query}`);
+    };
+
+    const result = await syncStorefrontMedia({
+        apiOrigin: 'http://127.0.0.1:3000',
+        username: 'admin',
+        password: 'secret',
+        channelCodes: [defaultChannel.code],
+        apply: true,
+        fetchImpl,
+        manifest: [reference],
+    });
+
+    assert.equal(result.results[0].assetAction, 'reuse-existing');
+    assert.equal(result.results[0].assetId, 'existing-asset-1');
+    assert.equal(result.results[0].sourceAssetName, reference.existingAsset.name);
+    assert.deepEqual(result.results[0].productNames, reference.productNames);
+    const tagRequest = requests.find(request => request.query.includes('TagStorefrontMediaAsset'));
+    assert.deepEqual(tagRequest.variables.input.tags, [
+        '后台上传',
+        'storefront-media',
+        ...existingAssetTags(reference.key, reference.existingAsset.sourceSha256),
+    ]);
+    assert.deepEqual(result.results[0].verification, [
+        {
+            channelCode: defaultChannel.code,
+            kind: 'asset-library',
+            purpose: reference.assetOnly.purpose,
+            assetId: 'existing-asset-1',
+            adminChannelVerified: true,
+        },
+    ]);
 });
 
 test('content target uses code first and a unique type/settings fallback second', () => {
