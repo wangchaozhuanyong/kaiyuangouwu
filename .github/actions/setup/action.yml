@@ -4,7 +4,6 @@ inputs:
     node-version:
         description: 'Node.js version'
         required: false
-        # Exact default used by non-matrix CI jobs and production release validation.
         default: '24.19.0'
     bun-version:
         description: 'Bun version'

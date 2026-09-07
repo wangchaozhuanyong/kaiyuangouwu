@@ -58,7 +58,6 @@
 | 1694a933 | core | Preserve trailing payment audit fields (#15) | COMPAT | - | Correct fix |
 | 919b9048 | core | Audit production Channel USDT wallets (#14) | PERMANENT | - | Correct fix |
 | 7a15cb3b | core | Diagnose image generation residual alerts (#12) | COMPAT | - | Correct fix |
-| 78808fa7 | core | Strengthen production release evidence (#11) | COMPAT | - | Correct fix |
 | 95d44745 | core | Align production MySQL commerce schema | ABSORB | storefront-shell | Needs review |
 | e836b596 | core | Scope saleable stock to shop API | PERMANENT | - | Correct fix |
 | aff47728 | dashboard | Add extension framework and safe store cleanup (#8) | COMPAT | - | Correct fix |
@@ -191,17 +190,13 @@
 | 005f76c4 | cart | Keep login independent from cart projection | COMPAT | - | Correct fix |
 | c6e32592 | core | Repair fixed-money JSON encoding | ABSORB | storefront-api | Needs review |
 | 8c5bc0a3 | core | Align production schema metadata | PERMANENT | - | Correct fix |
-| 139f7768 | deploy | Restore failed production rollbacks | COMPAT | - | Correct fix |
 | 63ec0534 | dashboard | Remove CSP and navigation translation warnings | PERMANENT | - | Correct fix |
 | 24126b6e | core | Preserve fixed-money source currency | ABSORB | backend-services | Needs review |
 | 9f98e0e7 | cart | Ignore admin login events | COMPAT | - | Correct fix |
-| cb457b0c | deploy | Pass migration readiness flags | COMPAT | - | Correct fix |
-| 3abafa27 | deploy | Add OIDC production release path | PERMANENT | - | Correct fix |
 | dab2518f | core | Reconcile production branch integrations | ABSORB | legacy-dashboard | Needs review |
 | 1cb2c498 | core | Consolidate audited commerce updates | ABSORB | backend-services | Needs review |
 | 1f23bc79 | core | Patch pacote security advisory | ABSORB | backend-services | Needs review |
 | f31d6bcc | storefront | Publish auth visual content | ABSORB | admin-catalog | Needs review |
-| 8dbfaf36 | deploy | Package image generation runtime | PERMANENT | - | Correct fix |
 | bfb3360d | image | Integrate image studio for production | ABSORB | admin-catalog | Needs review |
 | 21730b84 | storefront | Expose image studio entry points | ABSORB | admin-catalog | Needs review |
 | 2a3325f3 | image | Add AI image generation plugin | PERMANENT | - | Correct fix |

@@ -1,8 +1,7 @@
 # Architecture stabilization plan
 
 This repository is in stabilization mode. Refactoring work must reduce structural debt without changing
-business behaviour, database meaning, public GraphQL contracts, or production release controls in the same
-pull request.
+business behaviour, database meaning, or public GraphQL contracts in the same pull request.
 
 ## Current baseline
 
