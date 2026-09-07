@@ -180,11 +180,25 @@ export class AssetServer {
                 targetMode = matchingPreset.mode;
             }
         }
+        const transformsImage =
+            targetWidth ||
+            targetHeight ||
+            parameters.quality ||
+            (parameters.fpx && parameters.fpy) ||
+            (parameters.preset && this.presets.some(p => p.name === parameters.preset));
+        // Sharp rasterizes SVG transformations to PNG by default. The cache extension must
+        // describe those bytes so both generated responses and later cache hits use the right MIME type.
+        const format =
+            parameters.format ??
+            (transformsImage && path.extname(this.sanitizeFilePath(req.path)).toLowerCase() === '.svg'
+                ? 'png'
+                : undefined);
         return {
             ...parameters,
             width: targetWidth,
             height: targetHeight,
             mode: targetMode,
+            format,
         };
     }
 

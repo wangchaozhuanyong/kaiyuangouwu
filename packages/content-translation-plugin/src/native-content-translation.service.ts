@@ -197,6 +197,11 @@ export class NativeContentTranslationService implements OnApplicationBootstrap {
             await this.translateEntity(ctx, entity, { translations: [source] });
             return;
         }
+        const existingStates = await this.translations.findStates(
+            ctx,
+            { channelId: ctx.channelId, entityType, entityId: entity.id },
+            true,
+        );
         for (const field of definition.fields) {
             if (!Object.prototype.hasOwnProperty.call(targetInput, field.path)) continue;
             const sourceText = String(source[field.path] ?? '');
@@ -212,17 +217,28 @@ export class NativeContentTranslationService implements OnApplicationBootstrap {
                 );
             }
             if (!sourceText.trim() && !targetText.trim()) continue;
-            await this.translations.recordState(ctx, {
-                channelId: ctx.channelId,
-                entityType,
-                entityId: entity.id,
-                fieldPath: field.path,
-                sourceText,
-                translatedText: targetText,
-                status: 'MANUAL_LOCKED',
-                origin: 'MANUAL',
-                locked: true,
-            });
+            // Native translations belong to the entity, not a Channel. A reviewed field
+            // must refresh its existing audit copies, including historical Channel states.
+            // Do not create records for unrelated Channels or touch unsubmitted fields.
+            const stateChannels = new Set<string | null>([
+                String(ctx.channelId),
+                ...existingStates
+                    .filter(state => state.fieldPath === field.path)
+                    .map(state => state.channelId),
+            ]);
+            for (const channelId of stateChannels) {
+                await this.translations.recordState(ctx, {
+                    channelId,
+                    entityType,
+                    entityId: entity.id,
+                    fieldPath: field.path,
+                    sourceText,
+                    translatedText: targetText,
+                    status: 'MANUAL_LOCKED',
+                    origin: 'MANUAL',
+                    locked: true,
+                });
+            }
         }
     }
 

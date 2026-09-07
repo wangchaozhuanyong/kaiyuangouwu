@@ -84,9 +84,7 @@ const IMAGE_PRESETS: Record<StorefrontImageKind, ImagePresetGroup> = {
 };
 
 function isTransformableAsset(url: URL): boolean {
-    return (
-        /\/assets\/(?:preview|source)\//.test(url.pathname) && !url.pathname.toLowerCase().endsWith('.svg')
-    );
+    return /\/assets\/(?:preview|source)\//.test(url.pathname);
 }
 
 function imageUrl(source: string, preset: string, quality: number): string | null {

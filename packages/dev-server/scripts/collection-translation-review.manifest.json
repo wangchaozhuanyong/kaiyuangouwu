@@ -1,0 +1,44 @@
+[
+    {
+        "slug": "zhengpin-baijiu",
+        "sourceName": "精品白酒",
+        "fields": {
+            "name": { "source": "精品白酒", "from": "Authentic baijiu", "to": "Premium baijiu" },
+            "slug": { "source": "zhengpin-baijiu", "from": "authentic-baijiu", "to": "authentic-baijiu" }
+        }
+    },
+    {
+        "slug": "tank-kafei",
+        "sourceName": "坦克咖啡",
+        "fields": { "slug": { "source": "tank-kafei", "from": "tank-coffee", "to": "tank-coffee" } }
+    },
+    {
+        "slug": "shangye-fuwu",
+        "sourceName": "签证留学",
+        "fields": {
+            "name": { "source": "签证留学", "from": "Business services", "to": "Visa & study abroad" },
+            "slug": { "source": "shangye-fuwu", "from": "business-services", "to": "business-services" }
+        }
+    },
+    {
+        "slug": "zhengpin-xiangyan",
+        "sourceName": "正品烟草",
+        "fields": {
+            "name": { "source": "正品烟草", "from": "Authentic cigarettes", "to": "Authentic cigarettes" }
+        }
+    },
+    {
+        "slug": "zhengpin-binglang",
+        "sourceName": "正厂槟榔",
+        "fields": {
+            "name": { "source": "正厂槟榔", "from": "Authentic betel nut", "to": "Authentic betel nut" }
+        }
+    },
+    {
+        "slug": "ruanjian-dingyue",
+        "sourceName": "AI 订阅",
+        "fields": {
+            "name": { "source": "AI 订阅", "from": "Software subscriptions", "to": "AI subscriptions" }
+        }
+    }
+]
