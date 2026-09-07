@@ -3,12 +3,14 @@ import {
     AlertCircle,
     CheckCircle2,
     ChevronDown,
+    ChevronLeft,
     ChevronRight,
     Edit3,
     Eye,
     FolderTree,
     Plus,
     RefreshCw,
+    Search,
     Sliders,
     Tag,
     Trash2,
@@ -56,6 +58,7 @@ import type {
 import { useUrlTab } from '../../hooks/use-url-tab';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { CategoryImageField, type CategoryImageAsset } from './CategoryImageField';
+import { OptionGroupProductsDialog } from './OptionGroupProductsDialog';
 
 type ActiveTab = 'CATEGORIES' | 'OPTION_TEMPLATES' | 'FACETS';
 const CATEGORY_TABS = { categories: 'CATEGORIES', options: 'OPTION_TEMPLATES', facets: 'FACETS' } as const;
@@ -127,6 +130,7 @@ const EMPTY_COLLECTIONS: CollectionItem[] = [];
 const EMPTY_OPTION_GROUPS: OptionGroupItem[] = [];
 const EMPTY_FACETS: FacetItem[] = [];
 const SOURCE_LANGUAGE_CODE = 'zh_Hans';
+const OPTION_GROUP_PAGE_SIZE = 20;
 
 const getSourceTranslation = (item: { translations: TranslationItem[] }) =>
     item.translations.find(translation => translation.languageCode === SOURCE_LANGUAGE_CODE) ??
@@ -180,6 +184,9 @@ export function CategoriesModule() {
     const [customFieldValues, setCustomFieldValues] = useState<CustomFieldValueMap>({});
     const [saving, setSaving] = useState(false);
     const [expandedCollectionIds, setExpandedCollectionIds] = useState<Set<string> | null>(null);
+    const [optionGroupSearch, setOptionGroupSearch] = useState('');
+    const [optionGroupPage, setOptionGroupPage] = useState(0);
+    const [usageGroup, setUsageGroup] = useState<OptionGroupItem | null>(null);
 
     const { data, loading, error, refetch, fetchMore } = useQuery<CatalogTaxonomyData>(taxonomyDocument, {
         variables: {
@@ -277,6 +284,22 @@ export function CategoriesModule() {
     const facets = data?.facets.items ?? EMPTY_FACETS;
     // 内容翻译插件要求所有原生目录内容都从简体中文源语言写入。
     const languageCode = SOURCE_LANGUAGE_CODE;
+
+    const matchingOptionGroups = useMemo(() => {
+        const search = optionGroupSearch.trim().toLocaleLowerCase();
+        if (!search) return optionGroups;
+        return optionGroups.filter(group =>
+            [group.name, group.code, ...group.options.map(option => option.name)].some(value =>
+                value.toLocaleLowerCase().includes(search),
+            ),
+        );
+    }, [optionGroupSearch, optionGroups]);
+    const optionGroupPageCount = Math.max(1, Math.ceil(matchingOptionGroups.length / OPTION_GROUP_PAGE_SIZE));
+    const visibleOptionGroupPage = Math.min(optionGroupPage, optionGroupPageCount - 1);
+    const visibleOptionGroups = matchingOptionGroups.slice(
+        visibleOptionGroupPage * OPTION_GROUP_PAGE_SIZE,
+        (visibleOptionGroupPage + 1) * OPTION_GROUP_PAGE_SIZE,
+    );
 
     const collectionTree = useMemo(() => {
         const nodes = new Map<string, CollectionTreeNode>();
@@ -874,50 +897,139 @@ export function CategoriesModule() {
                         </div>
                     </div>
                 ) : activeTab === 'OPTION_TEMPLATES' ? (
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                        {optionGroups.map(group => (
-                            <div
-                                key={group.id}
-                                className="space-y-3 rounded-xl border border-slate-200 bg-white p-5 shadow-2xs"
-                            >
-                                <div className="flex items-start justify-between border-b border-slate-100 pb-3">
-                                    <div>
-                                        <div className="text-sm font-bold text-slate-900">{group.name}</div>
-                                        <div className="font-mono text-[11px] text-slate-400">
-                                            {group.code} · {group.productCount} 个商品使用
-                                        </div>
-                                    </div>
-                                    <div className="flex gap-1">
-                                        <button
-                                            type="button"
-                                            onClick={() => openEditor(group)}
-                                            aria-label={`编辑规格模板：${group.name}`}
-                                            className="p-1.5 text-slate-400 hover:text-blue-600"
-                                        >
-                                            <Edit3 className="h-3.5 w-3.5" />
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => handleDelete(group)}
-                                            aria-label={`删除规格模板：${group.name}`}
-                                            className="p-1.5 text-slate-400 hover:text-rose-600"
-                                        >
-                                            <Trash2 className="h-3.5 w-3.5" />
-                                        </button>
-                                    </div>
+                    <div className="space-y-4">
+                        <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-2xs sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                                <div className="text-xs font-bold text-slate-800">
+                                    规格模板共 {data?.productOptionGroups.totalItems ?? optionGroups.length}{' '}
+                                    个
                                 </div>
-                                <div className="flex flex-wrap gap-2">
-                                    {group.options.map(option => (
-                                        <span
-                                            key={option.id}
-                                            className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs text-slate-700"
-                                        >
-                                            {option.name}
-                                        </span>
-                                    ))}
+                                <div className="mt-0.5 text-[11px] text-slate-400">
+                                    点击“查看关联商品”可确认具体哪些商品正在使用该模板
                                 </div>
                             </div>
-                        ))}
+                            <div className="relative w-full sm:max-w-xs">
+                                <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                                <input
+                                    aria-label="搜索规格模板"
+                                    value={optionGroupSearch}
+                                    onChange={event => {
+                                        setOptionGroupSearch(event.target.value);
+                                        setOptionGroupPage(0);
+                                    }}
+                                    placeholder="搜索模板名、编码或选项值"
+                                    className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-3 text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15"
+                                />
+                            </div>
+                        </div>
+
+                        {visibleOptionGroups.length === 0 ? (
+                            <div className="rounded-xl border border-slate-200 bg-white p-12 text-center">
+                                <p className="text-sm font-bold text-slate-700">没有找到匹配的规格模板</p>
+                                <p className="mt-1 text-xs text-slate-400">请尝试其他名称、编码或选项值</p>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                {visibleOptionGroups.map(group => (
+                                    <div
+                                        key={group.id}
+                                        className="space-y-3 rounded-xl border border-slate-200 bg-white p-5 shadow-2xs"
+                                    >
+                                        <div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-3">
+                                            <div className="min-w-0">
+                                                <div className="truncate text-sm font-bold text-slate-900">
+                                                    {group.name}
+                                                </div>
+                                                <div className="truncate font-mono text-[11px] text-slate-400">
+                                                    {group.code}
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setUsageGroup(group)}
+                                                    className="mt-1 inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:text-blue-800 hover:underline focus-visible:rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30"
+                                                    aria-label={`查看使用规格模板《${group.name}》的 ${group.productCount} 个商品`}
+                                                >
+                                                    查看 {group.productCount} 个关联商品
+                                                    <ChevronRight className="h-3 w-3" />
+                                                </button>
+                                            </div>
+                                            <div className="flex shrink-0 gap-1">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => openEditor(group)}
+                                                    aria-label={`编辑规格模板：${group.name}`}
+                                                    className="p-1.5 text-slate-400 hover:text-blue-600"
+                                                >
+                                                    <Edit3 className="h-3.5 w-3.5" />
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleDelete(group)}
+                                                    disabled={group.productCount > 0}
+                                                    aria-label={`删除规格模板：${group.name}`}
+                                                    title={
+                                                        group.productCount > 0
+                                                            ? `正在被 ${group.productCount} 个商品使用，请先移除关联`
+                                                            : '删除规格模板'
+                                                    }
+                                                    className="p-1.5 text-slate-400 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:text-slate-400"
+                                                >
+                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div className="flex flex-wrap gap-2">
+                                            {group.options.map(option => (
+                                                <span
+                                                    key={option.id}
+                                                    className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs text-slate-700"
+                                                >
+                                                    {option.name}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {matchingOptionGroups.length > OPTION_GROUP_PAGE_SIZE && (
+                            <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 text-[11px] text-slate-500">
+                                <span>
+                                    共 {matchingOptionGroups.length} 个模板 · 第 {visibleOptionGroupPage + 1}{' '}
+                                    / {optionGroupPageCount} 页
+                                </span>
+                                <div className="flex items-center gap-1.5">
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            setOptionGroupPage(Math.max(0, visibleOptionGroupPage - 1))
+                                        }
+                                        disabled={visibleOptionGroupPage === 0}
+                                        className="rounded-lg border border-slate-200 bg-white p-1.5 text-slate-500 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-30"
+                                        aria-label="上一页规格模板"
+                                    >
+                                        <ChevronLeft className="h-4 w-4" />
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            setOptionGroupPage(
+                                                Math.min(
+                                                    optionGroupPageCount - 1,
+                                                    visibleOptionGroupPage + 1,
+                                                ),
+                                            )
+                                        }
+                                        disabled={visibleOptionGroupPage >= optionGroupPageCount - 1}
+                                        className="rounded-lg border border-slate-200 bg-white p-1.5 text-slate-500 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-30"
+                                        aria-label="下一页规格模板"
+                                    >
+                                        <ChevronRight className="h-4 w-4" />
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 ) : (
                     <div className="space-y-4">
@@ -975,6 +1087,10 @@ export function CategoriesModule() {
                 )}
             </div>
 
+            {usageGroup && (
+                <OptionGroupProductsDialog group={usageGroup} onClose={() => setUsageGroup(null)} />
+            )}
+
             {isEditorOpen && (
                 <div
                     className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs"
@@ -1005,6 +1121,30 @@ export function CategoriesModule() {
                                 <X className="h-5 w-5" />
                             </button>
                         </div>
+                        {activeTab === 'OPTION_TEMPLATES' &&
+                            editingItem &&
+                            'productCount' in editingItem &&
+                            editingItem.productCount > 0 && (
+                                <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                                    <div className="font-bold">
+                                        此模板正在被 {editingItem.productCount} 个商品使用
+                                    </div>
+                                    <p className="mt-1 leading-5">
+                                        修改名称或选项值会影响这些商品，删除前必须先移除所有关联。
+                                    </p>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setIsEditorOpen(false);
+                                            setEditingItem(null);
+                                            setUsageGroup(editingItem);
+                                        }}
+                                        className="mt-2 font-bold text-amber-900 underline underline-offset-2"
+                                    >
+                                        先查看关联商品
+                                    </button>
+                                </div>
+                            )}
                         <div>
                             <label className="mb-1 block text-xs font-bold text-slate-700">中文名称 *</label>
                             <input

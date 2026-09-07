@@ -118,6 +118,21 @@ export const GET_CATALOG_TAXONOMY = gql`
     }
 `;
 
+export const GET_PRODUCTS_BY_OPTION_GROUP = gql`
+    query GetProductsByOptionGroup($options: ProductListOptions) {
+        products(options: $options) {
+            items {
+                id
+                name
+                slug
+                enabled
+                updatedAt
+            }
+            totalItems
+        }
+    }
+`;
+
 export const PREVIEW_COLLECTION_VARIANTS = gql`
     query NextAdminPreviewCollectionVariants(
         $input: PreviewCollectionVariantsInput!

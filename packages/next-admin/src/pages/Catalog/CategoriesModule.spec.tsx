@@ -28,11 +28,49 @@ const newImage = {
 };
 const cleanups: Array<() => void> = [];
 
+interface TestOptionGroup {
+    id: string;
+    name: string;
+    code: string;
+    productCount: number;
+    translations: Array<{ id: string; languageCode: string; name: string }>;
+    options: Array<{
+        id: string;
+        name: string;
+        code: string;
+        translations: Array<{ id: string; languageCode: string; name: string }>;
+    }>;
+}
+
+interface TestLinkedProduct {
+    id: string;
+    name: string;
+    slug: string;
+    enabled: boolean;
+    updatedAt: string;
+}
+
+interface RenderCategoriesOptions {
+    canReadAssets?: boolean;
+    assetError?: boolean;
+    saveError?: boolean;
+    optionGroups?: TestOptionGroup[];
+    linkedProducts?: TestLinkedProduct[];
+    initialEntry?: string;
+}
+
 afterEach(async () => {
     await act(async () => cleanups.splice(0).forEach(cleanup => cleanup()));
 });
 
-async function renderCategories({ canReadAssets = true, assetError = false, saveError = false } = {}) {
+async function renderCategories({
+    canReadAssets = true,
+    assetError = false,
+    saveError = false,
+    optionGroups = [],
+    linkedProducts = [],
+    initialEntry = '/catalog/categories',
+}: RenderCategoriesOptions = {}) {
     (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     let featuredAsset: typeof oldImage | null = oldImage;
     const requests = vi.fn();
@@ -73,10 +111,22 @@ async function renderCategories({ canReadAssets = true, assetError = false, save
                                         },
                                     ],
                                 },
-                                productOptionGroups: { totalItems: 0, items: [] },
+                                productOptionGroups: {
+                                    totalItems: optionGroups.length,
+                                    items: optionGroups,
+                                },
                                 facets: { totalItems: 0, items: [] },
                                 activeChannel: { id: 'channel-1', defaultLanguageCode: 'zh_Hans' },
                                 collectionFilters: [],
+                            },
+                        });
+                    } else if (operation.operationName === 'GetProductsByOptionGroup') {
+                        observer.next({
+                            data: {
+                                products: {
+                                    totalItems: linkedProducts.length,
+                                    items: linkedProducts,
+                                },
                             },
                         });
                     } else if (operation.operationName === 'GetAssets') {
@@ -131,7 +181,7 @@ async function renderCategories({ canReadAssets = true, assetError = false, save
     await act(async () => {
         root.render(
             <ApolloProvider client={client}>
-                <MemoryRouter>
+                <MemoryRouter initialEntries={[initialEntry]}>
                     <ConfirmDialogContext.Provider value={async () => false}>
                         <AdminPermissionsContext.Provider
                             value={{ permissions: [], hasAnyPermission: () => canReadAssets }}
@@ -258,5 +308,63 @@ describe('category image editing', () => {
         await restricted.click('编辑分类 茶叶');
         expect(restricted.container.textContent).toContain('需要素材读取权限');
         expect(restricted.requests.mock.calls.some(([name]) => name === 'GetAssets')).toBe(false);
+    });
+});
+
+describe('option group usage', () => {
+    it('opens the exact linked-product list from the template card', async () => {
+        const group: TestOptionGroup = {
+            id: 'group-volume',
+            name: '容量',
+            code: 'volume',
+            productCount: 2,
+            translations: [{ id: 'group-translation', languageCode: 'zh_Hans', name: '容量' }],
+            options: [
+                {
+                    id: 'option-330',
+                    name: '330ml',
+                    code: '330ml',
+                    translations: [{ id: 'option-translation', languageCode: 'zh_Hans', name: '330ml' }],
+                },
+            ],
+        };
+        const linkedProducts: TestLinkedProduct[] = [
+            {
+                id: 'product-cola',
+                name: '无糖可乐',
+                slug: 'zero-cola',
+                enabled: true,
+                updatedAt: '2026-09-07T00:00:00.000Z',
+            },
+            {
+                id: 'product-water',
+                name: '苏打水',
+                slug: 'soda-water',
+                enabled: false,
+                updatedAt: '2026-09-06T00:00:00.000Z',
+            },
+        ];
+        const { container, requests, click } = await renderCategories({
+            optionGroups: [group],
+            linkedProducts,
+            initialEntry: '/catalog/categories?tab=options',
+        });
+
+        expect(container.textContent).toContain('查看 2 个关联商品');
+        expect(
+            container.querySelector<HTMLButtonElement>('[aria-label="删除规格模板：容量"]')?.disabled,
+        ).toBe(true);
+        await click('查看使用规格模板《容量》的 2 个商品');
+
+        expect(container.querySelector('[role="dialog"]')?.textContent).toContain('无糖可乐');
+        expect(container.querySelector('[role="dialog"]')?.textContent).toContain('苏打水');
+        expect(requests).toHaveBeenCalledWith(
+            'GetProductsByOptionGroup',
+            expect.objectContaining({
+                options: expect.objectContaining({
+                    filter: { optionGroupId: { eq: 'group-volume' } },
+                }),
+            }),
+        );
     });
 });
