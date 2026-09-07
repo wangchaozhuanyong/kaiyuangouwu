@@ -10,6 +10,10 @@ import { CONTENT_TRANSLATION_OPTIONS } from './constants.js';
 import { ContentTranslationState } from './entities/content-translation-state.entity.js';
 import { TranslationProviderError } from './translation-provider-error.js';
 import {
+    CachedTranslationPartialError,
+    TranslationResultCacheService,
+} from './translation-result-cache.service.js';
+import {
     ContentTranslationPluginOptions,
     ContentTranslationRequest,
     ContentTranslationResult,
@@ -25,6 +29,7 @@ export class ContentTranslationService {
         private readonly connection: TransactionalConnection,
         @Inject(CONTENT_TRANSLATION_OPTIONS)
         private readonly options: Required<ContentTranslationPluginOptions>,
+        private readonly resultCache?: TranslationResultCacheService,
     ) {}
 
     isConfigured(): boolean {
@@ -132,7 +137,6 @@ export class ContentTranslationService {
         }
         if (segments.length) {
             try {
-                if (!this.isConfigured()) throw new TranslationProviderError('CONFIGURATION');
                 const result = await this.translate({ segments });
                 if (
                     segments.some(
@@ -172,9 +176,30 @@ export class ContentTranslationService {
                 }
             } catch (error) {
                 if (!(error instanceof TranslationProviderError)) throw error;
+                const cached = new Map(
+                    error instanceof CachedTranslationPartialError
+                        ? error.translations.map(item => [item.key, item.text])
+                        : [],
+                );
                 for (const segment of segments) {
                     const source = fields.find(field => field.path === segment.key);
                     if (!source) throw new Error('Missing source field');
+                    const cachedText = cached.get(segment.key);
+                    const cacheTooLong =
+                        cachedText != null &&
+                        source.maxTargetLength != null &&
+                        cachedText.length > source.maxTargetLength;
+                    if (isUsableEnglishTranslation(cachedText) && !cacheTooLong) {
+                        prepared.set(segment.key, {
+                            path: segment.key,
+                            sourceText: segment.text,
+                            translatedText: cachedText,
+                            status: 'AUTO_TRANSLATED',
+                            origin: 'AUTO',
+                            locked: false,
+                        });
+                        continue;
+                    }
                     prepared.set(segment.key, {
                         path: segment.key,
                         sourceText: segment.text,
@@ -184,7 +209,9 @@ export class ContentTranslationService {
                         status: 'PENDING',
                         origin: 'AUTO',
                         locked: false,
-                        error: error.message,
+                        error: cacheTooLong
+                            ? new TranslationProviderError('TEXT_TOO_LONG').message
+                            : error.message,
                     });
                 }
             }
@@ -281,12 +308,15 @@ export class ContentTranslationService {
     async translate(
         request: Omit<ContentTranslationRequest, 'sourceLanguageCode' | 'targetLanguageCode' | 'glossary'>,
     ): Promise<ContentTranslationResult> {
-        return this.options.provider.translate({
+        const translationRequest: ContentTranslationRequest = {
             sourceLanguageCode: this.options.sourceLanguageCode,
             targetLanguageCode: this.options.targetLanguageCode,
             glossary: this.options.glossary,
             ...request,
-        });
+        };
+        if (this.resultCache) return this.resultCache.translate(translationRequest, this.options.provider);
+        if (!this.isConfigured()) throw new TranslationProviderError('CONFIGURATION');
+        return this.options.provider.translate(translationRequest);
     }
 
     async recordState(

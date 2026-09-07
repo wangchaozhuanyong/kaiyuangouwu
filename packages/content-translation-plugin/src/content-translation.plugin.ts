@@ -1,4 +1,4 @@
-import { PluginCommonModule, VendurePlugin } from '@vendure/core';
+import { Permission, PluginCommonModule, VendurePlugin } from '@vendure/core';
 
 import { adminApiExtensions } from './api-extensions.js';
 import { CONTENT_TRANSLATION_OPTIONS } from './constants.js';
@@ -9,6 +9,7 @@ import { retryPendingContentTranslations } from './content-translation.tasks.js'
 import { ContentTranslationState } from './entities/content-translation-state.entity.js';
 import { NativeContentTranslationService } from './native-content-translation.service.js';
 import { UnavailableTranslationProvider } from './providers/unavailable-translation.provider.js';
+import { TranslationResultCacheService } from './translation-result-cache.service.js';
 import { ContentTranslationPluginOptions } from './types.js';
 
 @VendurePlugin({
@@ -18,6 +19,7 @@ import { ContentTranslationPluginOptions } from './types.js';
         ContentTranslationService,
         NativeContentTranslationService,
         ContentTranslationRetryService,
+        TranslationResultCacheService,
         {
             provide: CONTENT_TRANSLATION_OPTIONS,
             useFactory: () => ContentTranslationPlugin.options,
@@ -25,6 +27,11 @@ import { ContentTranslationPluginOptions } from './types.js';
     ],
     exports: [ContentTranslationService],
     configuration: config => {
+        config.settingsStoreFields ??= {};
+        config.settingsStoreFields.contentTranslationCache = [
+            ...(config.settingsStoreFields.contentTranslationCache ?? []),
+            { name: 'result', readonly: true, requiresPermission: Permission.SuperAdmin },
+        ];
         config.schedulerOptions.tasks.push(retryPendingContentTranslations);
         return config;
     },

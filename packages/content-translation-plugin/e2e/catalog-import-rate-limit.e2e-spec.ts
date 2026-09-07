@@ -1,5 +1,6 @@
 import {
     Collection,
+    ConfigService,
     DefaultJobQueuePlugin,
     DefaultSearchPlugin,
     LanguageCode,
@@ -8,6 +9,7 @@ import {
     ProductVariant,
     RequestContext,
     RequestContextService,
+    SettingsStoreEntry,
     StockLevel,
     TransactionalConnection,
 } from '@vendure/core';
@@ -27,9 +29,11 @@ import {
 } from '../../catalog-management-plugin/src/dashboard/catalog-local-file';
 import { ContentTranslationRetryService } from '../src/content-translation-retry.service';
 import { ContentTranslationPlugin } from '../src/content-translation.plugin';
+import { ContentTranslationService } from '../src/content-translation.service';
 import { ContentTranslationState } from '../src/entities/content-translation-state.entity';
 import { NativeContentTranslationService } from '../src/native-content-translation.service';
 import { GoogleCloudTranslationProvider } from '../src/providers/google-cloud-translation.provider';
+import { translationResultCacheKey } from '../src/translation-result-cache.service';
 import { type ContentTranslationProvider } from '../src/types';
 
 let ready = false;
@@ -258,4 +262,43 @@ describe('catalog import survives Google rate limits with a real isolated databa
             '测试文具BATCH0',
         );
     }, 120_000);
+
+    it('wires the shared cache into normal saves and serves it when the provider is unavailable', async () => {
+        const translate = vi.fn<ContentTranslationProvider['translate']>(request =>
+            Promise.resolve({
+                provider: 'cache-fixture',
+                translations: request.segments.map(segment => ({
+                    key: segment.key,
+                    text: 'Cached help text',
+                })),
+            }),
+        );
+        activeProvider = { name: 'cache-fixture', isConfigured: () => true, translate };
+        const translations = server.app.get(ContentTranslationService);
+        const first = await translations.prepareLocalizedFields([
+            { path: 'title', sourceText: '共享缓存验收专用说明' },
+            { path: 'label', sourceText: '共享缓存验收专用说明' },
+        ]);
+        expect(first.every(field => field.translatedText === 'Cached help text')).toBe(true);
+        expect(translate).toHaveBeenCalledOnce();
+        expect(translate.mock.calls[0][0].segments).toHaveLength(1);
+        activeProvider.isConfigured = () => false;
+        const [cached, missing] = await translations.prepareLocalizedFields([
+            { path: 'anotherEntityTitle', sourceText: '共享缓存验收专用说明' },
+            { path: 'missingDescription', sourceText: '没有缓存的另一段说明' },
+        ]);
+        expect(cached).toMatchObject({ translatedText: 'Cached help text', status: 'AUTO_TRANSLATED' });
+        expect(missing).toMatchObject({ translatedText: '', status: 'PENDING' });
+        expect(translate).toHaveBeenCalledOnce();
+        expect(
+            await connection.rawConnection
+                .getRepository(SettingsStoreEntry)
+                .countBy({ key: translationResultCacheKey }),
+        ).toBeGreaterThan(0);
+        expect(server.app.get(ConfigService).settingsStoreFields.contentTranslationCache).toContainEqual({
+            name: 'result',
+            readonly: true,
+            requiresPermission: 'SuperAdmin',
+        });
+    });
 });
