@@ -111,7 +111,7 @@ jobs:
                     echo 'release plan contains invalid reviewed media keys' >&2
                     exit 1
                   fi
-                  if [[ -n "$MEDIA_CHANNEL_CODES" ]] && [[ ! "$MEDIA_CHANNEL_CODES" =~ ^[a-z0-9_][a-z0-9_-]*(,[a-z0-9_][a-z0-9_-]*)*$ ]]; then
+                  if [[ -n "$MEDIA_CHANNEL_CODES" ]] && [[ "$MEDIA_CHANNEL_CODES" != "美宜佳" ]] && [[ ! "$MEDIA_CHANNEL_CODES" =~ ^[a-z0-9_][a-z0-9_-]*(,[a-z0-9_][a-z0-9_-]*)*$ ]]; then
                     echo 'release plan contains invalid reviewed Channel codes' >&2
                     exit 1
                   fi

@@ -48,6 +48,7 @@ if [[ -n "${reviewed_storefront_media_keys}" && \
     fail 'reviewed storefront media keys are invalid'
 fi
 if [[ -n "${reviewed_storefront_media_channel_codes}" && \
+    "${reviewed_storefront_media_channel_codes}" != "美宜佳" && \
     ! "${reviewed_storefront_media_channel_codes}" =~ ^[a-z0-9_][a-z0-9_-]*(,[a-z0-9_][a-z0-9_-]*)*$ ]]; then
     fail 'reviewed storefront media Channel codes are invalid'
 fi

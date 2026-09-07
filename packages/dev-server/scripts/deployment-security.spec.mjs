@@ -303,6 +303,7 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.match(script, /VENDURE_REVIEWED_STOREFRONT_MEDIA_CHANNEL_CODES/u);
     assert.match(script, /reviewed Channel codes are required for managed publishers/u);
     assert.match(script, /reviewed storefront media Channel codes are invalid/u);
+    assert.match(script, /reviewed_storefront_media_channel_codes\}" != "美宜佳"/u);
     assert.match(script, /VENDURE_REVIEWED_AUTH_VISUALS/u);
     assert.match(script, /managed auth visual publisher changed/u);
     assert.match(script, /VENDURE_REVIEWED_MOYAO_BRAND/u);
@@ -415,6 +416,7 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.match(workflow, /archiveSha256/u);
     assert.match(workflow, /VENDURE_REVIEWED_STOREFRONT_MEDIA_KEYS/u);
     assert.match(workflow, /VENDURE_REVIEWED_STOREFRONT_MEDIA_CHANNEL_CODES/u);
+    assert.match(workflow, /MEDIA_CHANNEL_CODES" != "美宜佳"/u);
     assert.match(workflow, /VENDURE_REVIEWED_AUTH_VISUALS/u);
     assert.match(workflow, /VENDURE_REVIEWED_MOYAO_BRAND/u);
     assert.match(workflow, /MOYAO_BRAND/u);
@@ -430,6 +432,7 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
 
     assert.match(artifactWorkflow, /media_keys:/u);
     assert.match(artifactWorkflow, /channel_codes:/u);
+    assert.match(artifactWorkflow, /MEDIA_CHANNEL_CODES" != "美宜佳"/u);
     assert.match(artifactWorkflow, /auth_visuals:/u);
     assert.match(artifactWorkflow, /moyao_brand:/u);
     assert.match(artifactWorkflow, /damatong_storefront:/u);
@@ -610,6 +613,42 @@ void test('experimental UI examples do not commit Google API keys', async () => 
     );
 
     assert.doesNotMatch(locationMap, /AIza[A-Za-z0-9_-]{30,}/u);
+});
+
+void test('production media preflight accepts the exact reviewed Unicode Channel code only', async () => {
+    const script = await readFile(path.join(repositoryRoot, 'deploy/deploy-production-from-s3.sh'), 'utf8');
+    const preflight = script.slice(0, script.indexOf('umask 027'));
+    const sha = 'a'.repeat(40);
+    const cases = [
+        ['美宜佳', 0],
+        ['my-malaysia', 0],
+        ['__default_channel__', 0],
+        ['美宜佳,other', 1],
+        ["美宜佳';exit 0", 1],
+        [' 美宜佳', 1],
+    ];
+    for (const [channelCode, expectedStatus] of cases) {
+        const result = spawnSync(
+            'bash',
+            [
+                '-s',
+                '--',
+                sha,
+                `${sha}-1-1-linux-x64`,
+                `s3://yunqiao-vendure-prod-backup-079740175286-apne1/deployments/${sha}`,
+            ],
+            {
+                input: preflight,
+                encoding: 'utf8',
+                env: {
+                    PATH: process.env.PATH,
+                    VENDURE_REVIEWED_STOREFRONT_MEDIA_KEYS: 'catalog-cigarettes-20260907',
+                    VENDURE_REVIEWED_STOREFRONT_MEDIA_CHANNEL_CODES: channelCode,
+                },
+            },
+        );
+        assert.equal(result.status, expectedStatus, `${channelCode}: ${result.stderr}`);
+    }
 });
 
 void test('referral poster release scope rejects unreviewed values before any production operation', async () => {
