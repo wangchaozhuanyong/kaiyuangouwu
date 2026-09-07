@@ -214,6 +214,7 @@ fi
 
 mapfile -t managed_storefront_changes < <(
     git diff --name-only "${deployed_sha}" "${target_sha}" -- \
+        packages/dev-server/scripts/catalog-cigarette-media.mjs \
         packages/dev-server/scripts/sync-storefront-media.mjs \
         packages/dev-server/scripts/repair-inventory-inheritance.mjs \
         packages/storefront/src/assets/storefront/ | \
@@ -224,7 +225,8 @@ if [[ "${#managed_storefront_changes[@]}" -gt 0 ]]; then
         fail 'managed storefront data changed; provide reviewed media keys in the production release plan'
     for managed_storefront_change in "${managed_storefront_changes[@]}"; do
         case "${managed_storefront_change}" in
-            packages/dev-server/scripts/sync-storefront-media.mjs | \
+            packages/dev-server/scripts/catalog-cigarette-media.mjs | \
+                packages/dev-server/scripts/sync-storefront-media.mjs | \
                 packages/storefront/src/assets/storefront/*)
                 ;;
             *)

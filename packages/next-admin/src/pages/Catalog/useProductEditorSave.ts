@@ -37,6 +37,8 @@ import { useProductEditorData } from './useProductEditorData';
 export type ProductEditorSaveDraft = ProductEditorSnapshotInput;
 interface ProductEditorSaveInput {
     draft: ProductEditorSaveDraft;
+    baselineDraft: ProductEditorSaveDraft | null;
+    activeCurrencyCode: string;
     data: Pick<
         ReturnType<typeof useProductEditorData>,
         'productData' | 'catalogChannelsData' | 'refetchCollections' | 'refetchProduct'
@@ -55,8 +57,96 @@ interface ProductEditorSaveInput {
     };
 }
 
+export interface ProductEditorChangeSet {
+    translations: boolean;
+    status: boolean;
+    customFields: boolean;
+    assets: boolean;
+    facets: boolean;
+    collections: boolean;
+    channels: boolean;
+    optionGroups: boolean;
+    variants: boolean;
+}
+
+const sameValue = (left: unknown, right: unknown) => JSON.stringify(left) === JSON.stringify(right);
+const sortedIds = (ids: string[]) => [...ids].sort();
+const comparableVariant = (variant: ProductEditorSaveDraft['variants'][number]) => ({
+    id: variant.id ?? null,
+    sku: variant.sku,
+    name: variant.name,
+    price: variant.price,
+    stockOnHand: variant.stockOnHand,
+    enabled: variant.enabled,
+    digitalDeliveryMode: variant.digitalDeliveryMode,
+    digitalStockPolicy: variant.digitalStockPolicy,
+    optionIds: sortedIds(variant.optionIds),
+    isNew: Boolean(variant.isNew),
+});
+
+export const productVariantChanged = (
+    variant: ProductEditorSaveDraft['variants'][number],
+    baselineVariant: ProductEditorSaveDraft['variants'][number] | undefined,
+) => !baselineVariant || !sameValue(comparableVariant(variant), comparableVariant(baselineVariant));
+
+export function productEditorChanges(
+    draft: ProductEditorSaveDraft,
+    baseline: ProductEditorSaveDraft | null,
+): ProductEditorChangeSet {
+    if (!baseline) {
+        return {
+            translations: true,
+            status: true,
+            customFields: true,
+            assets: true,
+            facets: true,
+            collections: true,
+            channels: true,
+            optionGroups: true,
+            variants: true,
+        };
+    }
+    return {
+        translations: !sameValue(
+            [draft.productName, draft.slug, draft.description],
+            [baseline.productName, baseline.slug, baseline.description],
+        ),
+        status: draft.enabled !== baseline.enabled,
+        customFields: !sameValue(
+            [
+                draft.fulfillmentType,
+                draft.refundPolicy,
+                draft.manualDeliverySlaMinutes,
+                draft.dynamicCustomFields,
+            ],
+            [
+                baseline.fulfillmentType,
+                baseline.refundPolicy,
+                baseline.manualDeliverySlaMinutes,
+                baseline.dynamicCustomFields,
+            ],
+        ),
+        assets:
+            draft.featuredAssetId !== baseline.featuredAssetId ||
+            !sameValue(draft.selectedAssetIds, baseline.selectedAssetIds),
+        facets: !sameValue(sortedIds(draft.selectedFacetValueIds), sortedIds(baseline.selectedFacetValueIds)),
+        collections: !sameValue(
+            sortedIds(draft.selectedCollectionIds),
+            sortedIds(baseline.selectedCollectionIds),
+        ),
+        channels: !sameValue(sortedIds(draft.selectedChannelIds), sortedIds(baseline.selectedChannelIds)),
+        optionGroups: !sameValue(
+            sortedIds(draft.selectedOptionGroupIds),
+            sortedIds(baseline.selectedOptionGroupIds),
+        ),
+        variants: !sameValue(draft.variants.map(comparableVariant), baseline.variants.map(comparableVariant)),
+    };
+}
+
 export function useProductEditorSave({
     draft,
+    baselineDraft,
+    activeCurrencyCode,
     data,
     productId,
     productExtensionFields,
@@ -203,15 +293,21 @@ export function useProductEditorSave({
         ]);
     };
 
+    const changes = productEditorChanges(draft, baselineDraft);
+    const hasChanges = Object.values(changes).some(Boolean);
+
     const validateForm = (): boolean => {
         const errors: ProductEditorFormErrors = {};
-        if (!productName.trim()) {
-            errors.name = '请输入名称';
-        }
-        if (!description.trim()) {
-            errors.description = '请输入中文商品详情';
+        if (isCreateMode || changes.translations) {
+            if (!productName.trim()) {
+                errors.name = '请输入名称';
+            }
+            if (!description.trim()) {
+                errors.description = '请输入中文商品详情';
+            }
         }
         if (
+            (isCreateMode || changes.customFields) &&
             effectiveFulfillmentType === 'digital' &&
             (!Number.isInteger(manualDeliverySlaMinutes) ||
                 manualDeliverySlaMinutes < 5 ||
@@ -222,39 +318,41 @@ export function useProductEditorSave({
             return false;
         }
 
-        const variantErrors: Record<number, { sku?: string; price?: string; stock?: string }> = {};
-        const skuCounts = variants.reduce<Record<string, number>>((counts, variant) => {
-            const sku = variant.sku.trim().toLowerCase();
-            if (sku) counts[sku] = (counts[sku] ?? 0) + 1;
-            return counts;
-        }, {});
-        variants.forEach((v, index) => {
-            const rowErr: { sku?: string; price?: string; stock?: string } = {};
-            if (!v.sku.trim()) {
-                rowErr.sku = 'SKU 编码为必填项';
-            } else if (skuCounts[v.sku.trim().toLowerCase()] > 1) {
-                rowErr.sku = '同一商品内的 SKU 编码不能重复';
-            }
-            if (v.price === '' || isNaN(parseFloat(v.price)) || parseFloat(v.price) < 0) {
-                rowErr.price = '请输入有效的非负金额';
-            }
-            const requiresManualStock =
-                effectiveFulfillmentType === 'physical' ||
-                (v.digitalDeliveryMode !== 'auto_card' && v.digitalStockPolicy === 'limited');
-            if (
-                requiresManualStock &&
-                v.stockOnHand !== '' &&
-                (!Number.isInteger(Number(v.stockOnHand)) || Number(v.stockOnHand) < 0)
-            ) {
-                rowErr.stock = '库存必须为非负整数';
-            }
-            if (Object.keys(rowErr).length > 0) {
-                variantErrors[index] = rowErr;
-            }
-        });
+        if (isCreateMode || changes.variants) {
+            const variantErrors: Record<number, { sku?: string; price?: string; stock?: string }> = {};
+            const skuCounts = variants.reduce<Record<string, number>>((counts, variant) => {
+                const sku = variant.sku.trim().toLowerCase();
+                if (sku) counts[sku] = (counts[sku] ?? 0) + 1;
+                return counts;
+            }, {});
+            variants.forEach((v, index) => {
+                const rowErr: { sku?: string; price?: string; stock?: string } = {};
+                if (!v.sku.trim()) {
+                    rowErr.sku = 'SKU 编码为必填项';
+                } else if (skuCounts[v.sku.trim().toLowerCase()] > 1) {
+                    rowErr.sku = '同一商品内的 SKU 编码不能重复';
+                }
+                if (v.price === '' || isNaN(parseFloat(v.price)) || parseFloat(v.price) < 0) {
+                    rowErr.price = `请输入有效的 ${activeCurrencyCode} 非负金额`;
+                }
+                const requiresManualStock =
+                    effectiveFulfillmentType === 'physical' ||
+                    (v.digitalDeliveryMode !== 'auto_card' && v.digitalStockPolicy === 'limited');
+                if (
+                    requiresManualStock &&
+                    v.stockOnHand !== '' &&
+                    (!Number.isInteger(Number(v.stockOnHand)) || Number(v.stockOnHand) < 0)
+                ) {
+                    rowErr.stock = '库存必须为非负整数';
+                }
+                if (Object.keys(rowErr).length > 0) {
+                    variantErrors[index] = rowErr;
+                }
+            });
 
-        if (Object.keys(variantErrors).length > 0) {
-            errors.variants = variantErrors;
+            if (Object.keys(variantErrors).length > 0) {
+                errors.variants = variantErrors;
+            }
         }
 
         setFormErrors(errors);
@@ -267,7 +365,11 @@ export function useProductEditorSave({
 
         if (errors.variants) {
             setActiveTab('VARIANTS');
-            showError('SKU 规格变体列表中存在未填写的编码或格式错误金额，请核对');
+            const [indexText, firstError] = Object.entries(errors.variants)[0];
+            const index = Number(indexText);
+            const variant = variants[index];
+            const label = variant?.sku.trim() ? `SKU ${variant.sku.trim()}` : `第 ${index + 1} 行 SKU`;
+            showError(`${label}：${firstError.sku ?? firstError.price ?? firstError.stock ?? '填写有误'}`);
             return false;
         }
 
@@ -275,13 +377,22 @@ export function useProductEditorSave({
     };
 
     const handleSave = async () => {
+        if (!isCreateMode && !hasChanges) {
+            showNotice('没有需要保存的修改');
+            return;
+        }
         if (!validateForm()) return;
 
-        const customFieldErrors = validateCustomFieldValues(productExtensionFields, dynamicCustomFieldValues);
-        if (Object.keys(customFieldErrors).length > 0) {
-            setActiveTab('BASIC');
-            showError(Object.values(customFieldErrors)[0] ?? '商品扩展字段校验失败');
-            return;
+        if (isCreateMode || changes.customFields) {
+            const customFieldErrors = validateCustomFieldValues(
+                productExtensionFields,
+                dynamicCustomFieldValues,
+            );
+            if (Object.keys(customFieldErrors).length > 0) {
+                setActiveTab('BASIC');
+                showError(Object.values(customFieldErrors)[0] ?? '商品扩展字段校验失败');
+                return;
+            }
         }
 
         setSaving(true);
@@ -443,12 +554,18 @@ export function useProductEditorSave({
             } else {
                 const existingVariants = variants.filter(v => v.id && !v.isNew);
                 const newVariants = variants.filter(v => v.isNew);
-                const changesVariantEnabledState = existingVariants.some(
+                const changedExistingVariants = existingVariants.filter(variant =>
+                    productVariantChanged(
+                        variant,
+                        baselineDraft?.variants.find(original => original.id === variant.id),
+                    ),
+                );
+                const changesVariantEnabledState = changedExistingVariants.some(
                     variant =>
                         productData?.product?.variants.find(original => original.id === variant.id)
                             ?.enabled !== variant.enabled,
                 );
-                const changesProductEnabledState = productData?.product?.enabled !== enabled;
+                const changesProductEnabledState = changes.status;
                 let enabledMutationContext: ReturnType<typeof sensitiveActionContext> | undefined;
                 if (changesProductEnabledState || changesVariantEnabledState) {
                     const confirmation = await requestConfirmation({
@@ -463,51 +580,67 @@ export function useProductEditorSave({
                     enabledMutationContext = sensitiveActionContext(confirmation.currentPassword ?? '');
                 }
 
-                // 编辑模式: 更新 SPU 与 Facet
-                try {
-                    await updateProductMutation({
-                        variables: {
-                            input: {
-                                id: productId,
-                                ...(changesProductEnabledState ? { enabled } : {}),
-                                featuredAssetId,
-                                assetIds: selectedAssetIds,
-                                facetValueIds: selectedFacetValueIds,
-                                customFields: {
-                                    fulfillmentType: effectiveFulfillmentType,
-                                    refundPolicy,
-                                    manualDeliverySlaMinutes,
-                                    ...customFieldInputFromValues(
-                                        productExtensionFields,
-                                        dynamicCustomFieldValues,
-                                    ),
-                                },
-                                translations: updateTranslations,
-                            },
-                        },
-                        context: changesProductEnabledState ? enabledMutationContext : undefined,
-                    });
-                    completedStages.push('商品基础信息');
-                } catch (err: unknown) {
-                    throw new Error(`[商品属性更新失败] ${toUserFacingError(err, '请稍后重试')}`);
+                const hasProductChanges =
+                    changes.translations ||
+                    changes.status ||
+                    changes.customFields ||
+                    changes.assets ||
+                    changes.facets;
+                if (hasProductChanges) {
+                    const productInput: Record<string, unknown> = { id: productId };
+                    if (changes.status) productInput.enabled = enabled;
+                    if (changes.assets) {
+                        productInput.featuredAssetId = featuredAssetId;
+                        productInput.assetIds = selectedAssetIds;
+                    }
+                    if (changes.facets) productInput.facetValueIds = selectedFacetValueIds;
+                    if (changes.customFields) {
+                        productInput.customFields = {
+                            fulfillmentType: effectiveFulfillmentType,
+                            refundPolicy,
+                            manualDeliverySlaMinutes,
+                            ...customFieldInputFromValues(productExtensionFields, dynamicCustomFieldValues),
+                        };
+                    }
+                    if (changes.translations || changes.customFields) {
+                        productInput.translations = updateTranslations;
+                    }
+                    try {
+                        await updateProductMutation({
+                            variables: { input: productInput },
+                            context: changesProductEnabledState ? enabledMutationContext : undefined,
+                        });
+                        const labels = [
+                            changes.assets ? '商品图片' : '',
+                            changes.translations ? '商品文案' : '',
+                            changes.status ? '上下架状态' : '',
+                            changes.customFields ? '商品属性' : '',
+                            changes.facets ? '标签属性' : '',
+                        ].filter(Boolean);
+                        completedStages.push(labels.join('、'));
+                    } catch (err: unknown) {
+                        throw new Error(`[商品属性更新失败] ${toUserFacingError(err, '请稍后重试')}`);
+                    }
                 }
 
-                try {
-                    const originalGroupIds = Array.isArray(productData?.product?.optionGroups)
-                        ? productData.product.optionGroups.map(group => group.id)
-                        : [];
-                    await syncProductOptionGroups(productId, originalGroupIds);
-                    completedStages.push('规格模板关联');
-                } catch (err: unknown) {
-                    throw new Error(`[规格模板关联更新失败] ${toUserFacingError(err, '请稍后重试')}`);
+                if (changes.optionGroups) {
+                    try {
+                        const originalGroupIds = Array.isArray(productData?.product?.optionGroups)
+                            ? productData.product.optionGroups.map(group => group.id)
+                            : [];
+                        await syncProductOptionGroups(productId, originalGroupIds);
+                        completedStages.push('规格模板关联');
+                    } catch (err: unknown) {
+                        throw new Error(`[规格模板关联更新失败] ${toUserFacingError(err, '请稍后重试')}`);
+                    }
                 }
 
                 // 更新已有变体与创建新加变体
-                if (existingVariants.length > 0) {
+                if (changedExistingVariants.length > 0) {
                     try {
                         await updateVariantsMutation({
                             variables: {
-                                input: existingVariants.map(v => {
+                                input: changedExistingVariants.map(v => {
                                     const original = productData?.product?.variants.find(
                                         item => item.id === v.id,
                                     );
@@ -561,19 +694,33 @@ export function useProductEditorSave({
                     }
                 }
 
-                try {
-                    await syncProductChannels(
-                        productId,
-                        productData?.product?.channels.map(channel => channel.id) ?? [],
-                    );
-                    await syncProductCollections(productId);
-                    completedStages.push('销售店铺与商品分类');
-                } catch (err: unknown) {
-                    throw new Error(`[销售店铺或商品分类更新失败] ${toUserFacingError(err, '请稍后重试')}`);
+                if (changes.channels || changes.collections) {
+                    try {
+                        if (changes.channels) {
+                            await syncProductChannels(
+                                productId,
+                                productData?.product?.channels.map(channel => channel.id) ?? [],
+                            );
+                        }
+                        if (changes.collections) await syncProductCollections(productId);
+                        completedStages.push(
+                            [changes.channels ? '销售店铺' : '', changes.collections ? '商品分类' : '']
+                                .filter(Boolean)
+                                .join('、'),
+                        );
+                    } catch (err: unknown) {
+                        throw new Error(
+                            `[销售店铺或商品分类更新失败] ${toUserFacingError(err, '请稍后重试')}`,
+                        );
+                    }
                 }
 
                 await refetchProduct();
-                showNotice(`商品《${productName}》及规格变体已全部保存至数据库！`);
+                showNotice(
+                    completedStages.length > 0
+                        ? `商品《${productName}》已保存（${completedStages.join('、')}）！`
+                        : '商品数据已同步至最新状态',
+                );
             }
         } catch (err: unknown) {
             if (!isCreateMode && completedStages.length > 0) {

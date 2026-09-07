@@ -260,10 +260,10 @@ export function useProductEditorForm() {
         () => serializeProductEditor(currentEditorDraft),
         [currentEditorDraft],
     );
-    const baselineEditorSnapshot = useMemo(() => {
+    const baselineEditorDraft = useMemo<ProductEditorSaveDraft | null>(() => {
         const activeChannelId = catalogChannelsData?.activeChannel.id;
         if (isCreateMode) {
-            return serializeProductEditor({
+            return {
                 productName: '',
                 slug: '',
                 enabled: true,
@@ -279,13 +279,11 @@ export function useProductEditorForm() {
                 selectedOptionGroupIds: [],
                 variants: [],
                 dynamicCustomFields: {},
-            });
+            };
         }
         const product = productData?.product;
         if (!product) return null;
-        return serializeProductEditor(
-            productEditorDraft(product, fixedFulfillmentType, productExtensionFields),
-        );
+        return productEditorDraft(product, fixedFulfillmentType, productExtensionFields);
     }, [
         catalogChannelsData?.activeChannel.id,
         fixedFulfillmentType,
@@ -293,6 +291,10 @@ export function useProductEditorForm() {
         productData,
         productExtensionFields,
     ]);
+    const baselineEditorSnapshot = useMemo(
+        () => (baselineEditorDraft ? serializeProductEditor(baselineEditorDraft) : null),
+        [baselineEditorDraft],
+    );
     const hasUnsavedChanges =
         !productLoading &&
         baselineEditorSnapshot !== null &&
@@ -469,6 +471,8 @@ export function useProductEditorForm() {
 
     const { handleSave } = useProductEditorSave({
         draft: currentEditorDraft,
+        baselineDraft: isCreateMode ? null : baselineEditorDraft,
+        activeCurrencyCode,
         data: { productData, catalogChannelsData, refetchCollections, refetchProduct },
         productId,
         productExtensionFields,
