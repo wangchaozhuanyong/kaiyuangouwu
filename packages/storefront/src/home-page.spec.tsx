@@ -257,6 +257,17 @@ describe('HomePage hero carousel', () => {
         expect(markup).toContain('<strong>测试店铺</strong>');
     });
 
+    it('renders an uploaded SVG brand icon with a format-specific source', () => {
+        const markup = renderHome({ logoUrl: '/assets/source/brand-icon.svg' });
+        const header = markup.match(/<button class="brand"[\s\S]*?<\/button>/u)?.[0];
+
+        expect(header).toContain('<img');
+        expect(header).toContain('/assets/source/brand-icon.svg?preset=storefront-thumbnail-320');
+        expect(header).toContain('format=webp');
+        expect(header).not.toContain('lucide-store');
+        expect(header).toContain('<strong>测试店铺</strong>');
+    });
+
     it.each(['大马通', '美宜佳', 'Damatong'])(
         'keeps %s visible without borrowing another brand when its logo is missing',
         storefrontName => {
