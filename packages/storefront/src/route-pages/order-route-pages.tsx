@@ -137,6 +137,7 @@ export function AddressesRoutePage() {
                     customer={runtime.customer}
                     market={runtime.market}
                     availableCountries={runtime.availableCountries}
+                    availableProvinces={runtime.availableProvinces}
                     language={runtime.language}
                     commerceMode={runtime.commerceMode}
                     onBack={runtime.goBack}

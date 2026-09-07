@@ -647,6 +647,7 @@ export interface StorefrontConfig {
         code: string;
         name: string;
     }>;
+    availableProvinces?: StorefrontProvince[];
     logoUrl?: string | null;
     logoOnLightUrl?: string | null;
     logoOnDarkUrl?: string | null;
@@ -665,6 +666,12 @@ export interface StorefrontConfig {
         storefrontNameZh?: string | null;
         storefrontNameEn?: string | null;
     };
+}
+
+export interface StorefrontProvince {
+    code: string;
+    name: string;
+    countryCode: string;
 }
 
 export interface StorefrontCurrencyConfiguration {

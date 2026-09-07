@@ -3,6 +3,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { ArrowLeft, CircleCheck, Mail, MapPin, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { FormEvent, ReactNode, useEffect, useId, useRef, useState } from 'react';
 
+import { provinceCodeForValue, provinceDisplayName, provincesForCountry } from './address-region-options';
 import { ShopApi } from './api';
 import { languageCodeFor } from './i18n';
 import {
@@ -23,6 +24,7 @@ import {
     StoreCommerceMode,
     StorefrontConfig,
     StorefrontLanguage,
+    StorefrontProvince,
 } from './types';
 
 function formText(data: FormData, name: string, fallback = ''): string {
@@ -35,6 +37,7 @@ export function AddressesPage({
     customer,
     market,
     availableCountries,
+    availableProvinces = [],
     language,
     commerceMode: initialCommerceMode,
     onBack,
@@ -45,6 +48,7 @@ export function AddressesPage({
     customer: ActiveCustomer | null;
     market: MarketConfig;
     availableCountries: StorefrontConfig['availableCountries'];
+    availableProvinces?: StorefrontProvince[];
     language: StorefrontLanguage;
     commerceMode?: StoreCommerceMode | null;
     onBack: () => void;
@@ -56,6 +60,8 @@ export function AddressesPage({
     const vendureLanguage = languageCodeFor(language);
     const [open, setOpen] = useState(false);
     const [editingAddress, setEditingAddress] = useState<CustomerAddress | null>(null);
+    const [addressCountryCode, setAddressCountryCode] = useState(market.countryCode);
+    const [addressProvince, setAddressProvince] = useState('');
     const [submitting, setSubmitting] = useState(false);
     const [formError, setFormError] = useState('');
     const [emailOpen, setEmailOpen] = useState(false);
@@ -195,6 +201,8 @@ export function AddressesPage({
     };
     const startEdit = (address: CustomerAddress | null) => {
         setEditingAddress(address);
+        setAddressCountryCode(address?.country.code ?? market.countryCode);
+        setAddressProvince(address?.province ?? '');
         setFormError('');
         setOpen(true);
     };
@@ -323,7 +331,7 @@ export function AddressesPage({
                                     <span>{address.phoneNumber}</span>
                                     {address.defaultShippingAddress && <em>{isZh ? '默认' : 'Default'}</em>}
                                 </header>
-                                <p>{addressText(address)}</p>
+                                <p>{addressText(address, availableProvinces)}</p>
                                 <footer>
                                     <span>{address.country.name}</span>
                                     <div className="address-actions">
@@ -418,6 +426,11 @@ export function AddressesPage({
                         <CountryField
                             countries={availableCountries}
                             defaultCountryCode={editingAddress?.country.code ?? market.countryCode}
+                            value={addressCountryCode}
+                            onChange={countryCode => {
+                                setAddressCountryCode(countryCode);
+                                setAddressProvince('');
+                            }}
                             language={language}
                         />
                         <Field
@@ -432,10 +445,12 @@ export function AddressesPage({
                             defaultValue={editingAddress?.phoneNumber ?? ''}
                             wide
                         />
-                        <Field
-                            name="province"
-                            label={isZh ? '省/州' : 'Province'}
-                            defaultValue={editingAddress?.province ?? ''}
+                        <ProvinceField
+                            provinces={availableProvinces}
+                            countryCode={addressCountryCode}
+                            value={addressProvince}
+                            onChange={setAddressProvince}
+                            language={language}
                         />
                         <Field
                             name="city"
@@ -606,23 +621,84 @@ function Field({
 function CountryField({
     countries,
     defaultCountryCode,
+    value,
+    onChange,
     language,
 }: {
     countries: StorefrontConfig['availableCountries'];
     defaultCountryCode: string;
+    value: string;
+    onChange: (countryCode: string) => void;
     language: StorefrontLanguage;
 }) {
     const options = countries.length ? countries : [{ code: defaultCountryCode, name: defaultCountryCode }];
-    const selected = options.some(country => country.code === defaultCountryCode)
-        ? defaultCountryCode
-        : options[0].code;
+    const selected = options.some(country => country.code === value)
+        ? value
+        : options.some(country => country.code === defaultCountryCode)
+          ? defaultCountryCode
+          : options[0].code;
     return (
         <label className="field-wide">
             <span>{language === 'zh' ? '国家/地区' : 'Country/region'}</span>
-            <select name="countryCode" defaultValue={selected} required>
+            <select
+                name="countryCode"
+                value={selected}
+                onChange={event => onChange(event.target.value)}
+                required
+            >
                 {options.map(country => (
                     <option key={country.code} value={country.code}>
                         {country.name}
+                    </option>
+                ))}
+            </select>
+        </label>
+    );
+}
+function ProvinceField({
+    provinces,
+    countryCode,
+    value,
+    onChange,
+    language,
+}: {
+    provinces: readonly StorefrontProvince[];
+    countryCode: string;
+    value: string;
+    onChange: (province: string) => void;
+    language: StorefrontLanguage;
+}) {
+    const options = provincesForCountry(provinces, countryCode);
+    const selected = provinceCodeForValue(provinces, countryCode, value);
+    const hasLegacyValue = Boolean(selected && !options.some(province => province.code === selected));
+    const label = language === 'zh' ? '省/州' : 'State/Province';
+    if (!options.length) {
+        return (
+            <label>
+                <span>{label}</span>
+                <input
+                    name="province"
+                    value={value}
+                    onChange={event => onChange(event.target.value)}
+                    required
+                />
+            </label>
+        );
+    }
+    return (
+        <label>
+            <span>{label}</span>
+            <select
+                name="province"
+                value={selected}
+                onChange={event => onChange(event.target.value)}
+                required
+            >
+                <option value="">{language === 'zh' ? '请选择省/州' : 'Select a state/province'}</option>
+                {hasLegacyValue && <option value={selected}>{selected}</option>}
+                {options.map(province => (
+                    <option key={province.code} value={province.code}>
+                        {province.name}
                     </option>
                 ))}
             </select>
@@ -715,8 +791,14 @@ function Sheet({
         </div>
     );
 }
-function addressText(address: CustomerAddress) {
-    return [address.province, address.city, address.streetLine1, address.streetLine2, address.postalCode]
+function addressText(address: CustomerAddress, provinces: readonly StorefrontProvince[]) {
+    return [
+        provinceDisplayName(provinces, address.country.code, address.province),
+        address.city,
+        address.streetLine1,
+        address.streetLine2,
+        address.postalCode,
+    ]
         .filter(Boolean)
         .join(' ');
 }

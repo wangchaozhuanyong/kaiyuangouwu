@@ -25,6 +25,10 @@ const market: MarketConfig = {
     locale: 'zh-CN',
     label: 'Malaysia',
 };
+const availableProvinces = [
+    { code: 'MY-10', name: '雪兰莪', countryCode: 'MY' },
+    { code: 'MY-14', name: '吉隆坡', countryCode: 'MY' },
+];
 
 function variant(fulfillmentType: 'physical' | 'digital', id: string): ProductVariant {
     return {
@@ -152,6 +156,7 @@ function renderCheckout(
             customer,
             market,
             availableCountries: [{ code: 'MY', name: '马来西亚' }],
+            availableProvinces,
             locale: market.locale,
             language: 'zh' as const,
             onBack: vi.fn(),
@@ -208,6 +213,9 @@ describe('CheckoutPage digital delivery', () => {
         expect(markup).toContain('填写地址后计算');
         expect(markup).toContain('name="deliveryEmail"');
         expect(markup).toContain('name="confirmDeliveryEmail"');
+        expect(markup).toContain('<select name="province"');
+        expect(markup).toContain('value="MY-10"');
+        expect(markup).toContain('雪兰莪');
     });
 
     it('does not use red focus styling for delivery email inputs or the saved-email trigger', () => {

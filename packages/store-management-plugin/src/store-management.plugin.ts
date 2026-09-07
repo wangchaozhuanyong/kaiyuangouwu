@@ -113,6 +113,7 @@ import {
     StorefrontBrandingAdminResolver,
     StorefrontBrandingShopResolver,
 } from './storefront-branding.resolver';
+import { StorefrontRegionShopResolver } from './storefront-region.resolver';
 import {
     SystemAnnouncementAdminResolver,
     SystemAnnouncementShopResolver,
@@ -288,6 +289,7 @@ import {
         schema: shopApiExtensions,
         resolvers: [
             StorefrontBrandingShopResolver,
+            StorefrontRegionShopResolver,
             CustomerAvatarShopResolver,
             StoreCurrencySettingsShopResolver,
             StorePromotionCampaignShopResolver,

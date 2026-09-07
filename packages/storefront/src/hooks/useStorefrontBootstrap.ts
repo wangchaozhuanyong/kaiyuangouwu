@@ -69,6 +69,9 @@ export function useStorefrontBootstrap() {
     const [storefrontDescription, setStorefrontDescription] = useState('');
     const [storefrontTagline, setStorefrontTagline] = useState('');
     const [availableCountries, setAvailableCountries] = useState<StorefrontConfig['availableCountries']>([]);
+    const [availableProvinces, setAvailableProvinces] = useState<
+        NonNullable<StorefrontConfig['availableProvinces']>
+    >([]);
     const [availableCurrencyCodes, setAvailableCurrencyCodes] = useState<string[]>([]);
     const [currencySelectorEnabled, setCurrencySelectorEnabled] = useState(false);
 
@@ -166,6 +169,7 @@ export function useStorefrontBootstrap() {
                 : selectedDisplayCurrency;
         const nextMarket = { ...configuredMarket, currencyCode: selectedSettlementCurrency };
         setAvailableCountries(config.availableCountries);
+        setAvailableProvinces(config.availableProvinces ?? []);
         setAvailableCurrencyCodes(nextAvailableCurrencyCodes);
         setCurrencySelectorEnabled(currencyConfiguration?.selectorEnabled === true);
         setDisplayCurrencyCode(selectedDisplayCurrency);
@@ -262,6 +266,7 @@ export function useStorefrontBootstrap() {
         storefrontDescription,
         storefrontTagline,
         availableCountries,
+        availableProvinces,
         availableCurrencyCodes,
         currencySelectorEnabled,
         locale,

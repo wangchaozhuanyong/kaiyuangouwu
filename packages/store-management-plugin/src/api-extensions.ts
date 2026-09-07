@@ -1324,6 +1324,7 @@ export const shopApiExtensions = gql`
 
     extend type Query {
         storefrontBranding: StorefrontBranding!
+        availableStorefrontProvinces: [StorefrontProvinceOption!]!
         myCustomerAvatar: Asset
         storefrontCurrencyConfiguration: StoreCurrencyConfiguration!
         activeStorefrontCoupons: [StorefrontCoupon!]!
