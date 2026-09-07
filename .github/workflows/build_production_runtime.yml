@@ -15,7 +15,7 @@ on:
                 required: true
                 type: string
             media_keys:
-                description: 'Optional reviewed comma-separated storefront media manifest keys'
+                description: 'Optional reviewed comma-separated storefront media keys or versioned group keys'
                 required: false
                 default: ''
                 type: string

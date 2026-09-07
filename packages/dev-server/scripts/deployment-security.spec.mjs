@@ -297,6 +297,7 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.doesNotMatch(script, /--dashboard-url https:\/\/console\.damatong\.net/u);
     assert.match(script, /--release-id "\$\{target_sha\}"/u);
     assert.match(script, /managed storefront data changed/u);
+    assert.match(script, /packages\/dev-server\/scripts\/catalog-cigarette-media\.mjs/u);
     assert.match(script, /VENDURE_REVIEWED_STOREFRONT_MEDIA_KEYS/u);
     assert.match(script, /reviewed storefront media keys are invalid/u);
     assert.match(script, /VENDURE_REVIEWED_STOREFRONT_MEDIA_CHANNEL_CODES/u);
