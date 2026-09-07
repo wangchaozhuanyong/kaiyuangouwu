@@ -46,8 +46,8 @@ export function ProductVariantsTab() {
     if (!isCreateMode && !productData?.product) return null;
 
     return (
-        <div className="space-y-6">
-            <section className="rounded-xl border border-blue-200 bg-blue-50/60 p-5 shadow-2xs">
+        <div className="space-y-4">
+            <section className="rounded-xl border border-blue-200 bg-blue-50/60 p-4 shadow-2xs sm:p-5">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div>
                         <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
@@ -112,7 +112,7 @@ export function ProductVariantsTab() {
             </section>
 
             <div className="bg-white rounded-xl shadow-2xs border border-slate-200 overflow-hidden">
-                <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-slate-50/50 p-4 sm:p-5">
                     <div>
                         <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                             {effectiveFulfillmentType === 'digital'
@@ -135,7 +135,7 @@ export function ProductVariantsTab() {
                     </button>
                 </div>
 
-                <div className="border-b border-slate-100 p-5 space-y-3">
+                <div className="space-y-3 border-b border-slate-100 p-4 sm:p-5">
                     <div className="flex items-center justify-between">
                         <div>
                             <div className="text-xs font-bold text-slate-800">套用规格模板</div>
@@ -220,7 +220,7 @@ export function ProductVariantsTab() {
                 </div>
 
                 {variants.length === 0 ? (
-                    <div className="p-12 text-center text-slate-400 space-y-3">
+                    <div className="space-y-3 p-8 text-center text-slate-400">
                         <Layers className="w-8 h-8 mx-auto text-slate-300" />
                         <div className="text-xs font-bold text-slate-600">
                             当前商品未配置任何 SKU 规格变体
