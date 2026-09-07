@@ -49,6 +49,7 @@ import {
 } from '../../graphql/sales.graphql';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { getChannelDisplayName } from '../../utils/channel-display';
+import { isInputMethodKey } from '../../utils/input-method';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { OrderProfitExpensePanel } from './OrderProfitExpensePanel';
 import {
@@ -1011,6 +1012,7 @@ export function OrderEditor() {
                                             value={newNote}
                                             onChange={event => setNewNote(event.target.value)}
                                             onKeyDown={event => {
+                                                if (isInputMethodKey(event.nativeEvent)) return;
                                                 if (event.key === 'Enter') handleAddNote();
                                             }}
                                             placeholder="输入仅管理员可见的跟进备注"

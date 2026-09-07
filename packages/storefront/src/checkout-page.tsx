@@ -22,6 +22,7 @@ import { smartParseAddressText } from './address-parser';
 import { provinceCodeForValue, provinceDisplayName, provincesForCountry } from './address-region-options';
 import { ShopApi } from './api';
 import { compactUiCopy } from './i18n';
+import { isInputMethodKey } from './input-method';
 import { formatDisplayMoney } from './money-display';
 import { variantCanIncreaseQuantity } from './product-availability';
 import { acquireBodyScrollLock } from './scroll-lock';
@@ -1446,6 +1447,7 @@ function Sheet({
             );
         const frame = requestAnimationFrame(() => (focusable()[0] ?? dialog).focus());
         const keydown = (event: KeyboardEvent) => {
+            if (isInputMethodKey(event)) return;
             if (event.key === 'Escape') {
                 event.preventDefault();
                 onCloseRef.current();

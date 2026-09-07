@@ -19,6 +19,8 @@ import { useDeferredValue, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
+import { SearchInput } from '../../components/SearchInput';
+import { SortableTableHeader } from '../../components/SortableTableHeader';
 import {
     ADD_ORDER_FULFILLMENT,
     CREATE_DRAFT_ORDER,
@@ -27,6 +29,7 @@ import {
 } from '../../graphql/sales.graphql';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { useUrlListState } from '../../hooks/use-url-list-state';
+import { type SortDirection, useUrlSortState } from '../../hooks/use-url-sort-state';
 import { useUrlTab } from '../../hooks/use-url-tab';
 import { toUserFacingError } from '../../utils/user-facing-error';
 
@@ -128,6 +131,15 @@ interface FulfillmentMutationData {
 }
 
 const ORDER_TAB_RESET_PARAMETERS = ['page'];
+const ORDER_SORT_FIELDS = [
+    'orderPlacedAt',
+    'code',
+    'totalQuantity',
+    'customerLastName',
+    'totalWithTax',
+    'state',
+] as const;
+type OrderSortField = (typeof ORDER_SORT_FIELDS)[number];
 const EMPTY_ORDERS: SalesOrderItem[] = [];
 const FULFILLABLE_STATES = ['PaymentAuthorized', 'PaymentSettled', 'PartiallyShipped', 'PartiallyDelivered'];
 const tabs: Array<{ id: OrderTab; label: string }> = [
@@ -162,6 +174,11 @@ export function SalesModule() {
         ORDER_TAB_RESET_PARAMETERS,
     );
     const { page, pageSize, setPageSize, searchTerm, setPage, setSearchTerm } = useUrlListState();
+    const { sortDirection, sortField, toggleSort } = useUrlSortState({
+        fields: ORDER_SORT_FIELDS,
+        defaultField: 'orderPlacedAt',
+        defaultDirection: 'DESC',
+    });
     const deferredSearchTerm = useDeferredValue(searchTerm);
     const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
     const [isBatchOpen, setIsBatchOpen] = useState(false);
@@ -189,11 +206,11 @@ export function SalesModule() {
             options: {
                 skip: page * pageSize,
                 take: pageSize,
-                sort: { orderPlacedAt: 'DESC', id: 'DESC' },
+                sort: { [sortField]: sortDirection },
                 filter: { _and: filters },
             },
         };
-    }, [activeTab, deferredSearchTerm, page, pageSize]);
+    }, [activeTab, deferredSearchTerm, page, pageSize, sortDirection, sortField]);
 
     const { data, loading, error, refetch } = useQuery<SalesOrdersData>(GET_SALES_ORDERS, {
         variables: queryVariables,
@@ -254,6 +271,10 @@ export function SalesModule() {
                 ...new Set([...current, ...selectableOrders.map(order => order.id)]),
             ]);
         }
+    };
+    const changeSort = (field: OrderSortField, initialDirection?: SortDirection) => {
+        toggleSort(field, initialDirection);
+        setSelectedOrderIds([]);
     };
     const openBatchFulfillment = () => {
         if (selectedOrders.length === 0) return;
@@ -507,10 +528,10 @@ export function SalesModule() {
                         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/70 p-4">
                             <div className="relative min-w-[17rem] flex-1 sm:max-w-md">
                                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                                <input
+                                <SearchInput
                                     value={searchTerm}
-                                    onChange={event => {
-                                        setSearchTerm(event.target.value);
+                                    onValueChange={value => {
+                                        setSearchTerm(value);
                                         setSelectedOrderIds([]);
                                     }}
                                     aria-label="搜索订单"
@@ -584,15 +605,23 @@ export function SalesModule() {
                                                         className="h-4 w-4 rounded"
                                                     />
                                                 </th>
-                                                <th
-                                                    scope="col"
+                                                <SortableTableHeader
+                                                    label="订单号"
+                                                    sortField="code"
+                                                    activeSortField={sortField}
+                                                    sortDirection={sortDirection}
+                                                    onSort={changeSort}
                                                     className="sticky left-12 z-20 w-48 whitespace-nowrap bg-slate-50 px-3 py-3"
-                                                >
-                                                    订单号
-                                                </th>
-                                                <th scope="col" className="w-40 whitespace-nowrap px-3 py-3">
-                                                    下单时间
-                                                </th>
+                                                />
+                                                <SortableTableHeader
+                                                    label="下单时间"
+                                                    sortField="orderPlacedAt"
+                                                    activeSortField={sortField}
+                                                    sortDirection={sortDirection}
+                                                    onSort={changeSort}
+                                                    initialDirection="DESC"
+                                                    className="w-40 whitespace-nowrap px-3 py-3"
+                                                />
                                                 <th scope="col" className="w-24 whitespace-nowrap px-3 py-3">
                                                     商品类型
                                                 </th>
@@ -605,27 +634,47 @@ export function SalesModule() {
                                                 <th scope="col" className="w-40 whitespace-nowrap px-3 py-3">
                                                     SKU
                                                 </th>
-                                                <th
-                                                    scope="col"
+                                                <SortableTableHeader
+                                                    label="购买数量"
+                                                    sortField="totalQuantity"
+                                                    activeSortField={sortField}
+                                                    sortDirection={sortDirection}
+                                                    onSort={changeSort}
+                                                    initialDirection="DESC"
+                                                    align="center"
                                                     className="w-24 whitespace-nowrap px-3 py-3 text-center"
-                                                >
-                                                    购买数量
-                                                </th>
-                                                <th scope="col" className="w-40 whitespace-nowrap px-3 py-3">
-                                                    买家
-                                                </th>
+                                                />
+                                                <SortableTableHeader
+                                                    label="买家"
+                                                    sortField="customerLastName"
+                                                    activeSortField={sortField}
+                                                    sortDirection={sortDirection}
+                                                    onSort={changeSort}
+                                                    className="w-40 whitespace-nowrap px-3 py-3"
+                                                />
                                                 <th scope="col" className="w-56 whitespace-nowrap px-3 py-3">
                                                     联系方式
                                                 </th>
                                                 <th scope="col" className="w-72 whitespace-nowrap px-3 py-3">
                                                     收货地址
                                                 </th>
-                                                <th scope="col" className="w-36 whitespace-nowrap px-3 py-3">
-                                                    实付金额
-                                                </th>
-                                                <th scope="col" className="w-32 whitespace-nowrap px-3 py-3">
-                                                    订单状态
-                                                </th>
+                                                <SortableTableHeader
+                                                    label="实付金额"
+                                                    sortField="totalWithTax"
+                                                    activeSortField={sortField}
+                                                    sortDirection={sortDirection}
+                                                    onSort={changeSort}
+                                                    initialDirection="DESC"
+                                                    className="w-36 whitespace-nowrap px-3 py-3"
+                                                />
+                                                <SortableTableHeader
+                                                    label="订单状态"
+                                                    sortField="state"
+                                                    activeSortField={sortField}
+                                                    sortDirection={sortDirection}
+                                                    onSort={changeSort}
+                                                    className="w-32 whitespace-nowrap px-3 py-3"
+                                                />
                                                 <th scope="col" className="w-28 whitespace-nowrap px-3 py-3">
                                                     履约状态
                                                 </th>

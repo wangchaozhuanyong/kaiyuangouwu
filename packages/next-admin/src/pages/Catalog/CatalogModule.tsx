@@ -23,6 +23,8 @@ import { useNavigate } from 'react-router-dom';
 import { sensitiveActionContext, switchActiveChannel } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
+import { SearchInput } from '../../components/SearchInput';
+import { SortableTableHeader } from '../../components/SortableTableHeader';
 import { NextAdminActions } from '../../extensions/extension-hosts';
 import {
     CATALOG_PRODUCT_OPERATIONS_QUERY,
@@ -42,6 +44,7 @@ import {
     type StoreCommerceModeData,
 } from '../../graphql/commerce.graphql';
 import { useUrlListState } from '../../hooks/use-url-list-state';
+import { useUrlSortState } from '../../hooks/use-url-sort-state';
 import {
     getCatalogEmptyStateDescription,
     getChannelDisplayLabel,
@@ -134,6 +137,8 @@ interface CollectionFilterItem {
     name: string;
 }
 
+const PRODUCT_SORT_FIELDS = ['updatedAt', 'name', 'slug'] as const;
+
 const formatMoney = (amount: number, currencyCode: string) => {
     try {
         return new Intl.NumberFormat('zh-CN', {
@@ -173,6 +178,11 @@ export function CatalogModule() {
     const navigate = useNavigate();
     const { page, pageSize, setPageSize, searchParams, searchTerm, setFilter, setPage, setSearchTerm } =
         useUrlListState();
+    const { sortDirection, sortField, toggleSort } = useUrlSortState({
+        fields: PRODUCT_SORT_FIELDS,
+        defaultField: 'updatedAt',
+        defaultDirection: 'DESC',
+    });
     const statusParameter = searchParams.get('status');
     const categoryId = searchParams.get('category') ?? '';
     const statusFilter: 'ALL' | 'ENABLED' | 'DISABLED' =
@@ -227,10 +237,10 @@ export function CatalogModule() {
                 skip: page * pageSize,
                 take: pageSize,
                 filter: Object.keys(filter).length > 0 ? filter : undefined,
-                sort: { updatedAt: 'DESC' as const, id: 'DESC' as const },
+                sort: { [sortField]: sortDirection },
             },
         };
-    }, [categoryId, deferredSearchTerm, statusFilter, page, pageSize]);
+    }, [categoryId, deferredSearchTerm, statusFilter, page, pageSize, sortDirection, sortField]);
 
     const { data, loading, error, refetch } = useQuery<GetProductsData>(GET_PRODUCTS, {
         variables: queryVariables,
@@ -444,12 +454,10 @@ export function CatalogModule() {
                             </select>
                             <div className="relative">
                                 <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
-                                <input
+                                <SearchInput
                                     type="text"
                                     value={searchTerm}
-                                    onChange={e => {
-                                        setSearchTerm(e.target.value);
-                                    }}
+                                    onValueChange={setSearchTerm}
                                     aria-label="搜索商品"
                                     placeholder="搜索名称"
                                     className="pl-9 pr-8 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 w-64 bg-white"
@@ -535,15 +543,22 @@ export function CatalogModule() {
                                         >
                                             主图
                                         </th>
-                                        <th
-                                            scope="col"
+                                        <SortableTableHeader
+                                            label="商品名称"
+                                            sortField="name"
+                                            activeSortField={sortField}
+                                            sortDirection={sortDirection}
+                                            onSort={toggleSort}
                                             className="sticky left-14 z-20 w-60 bg-slate-50 px-3 py-3"
-                                        >
-                                            名称
-                                        </th>
-                                        <th scope="col" className="w-56 px-3 py-3">
-                                            SPU Slug
-                                        </th>
+                                        />
+                                        <SortableTableHeader
+                                            label="SPU Slug"
+                                            sortField="slug"
+                                            activeSortField={sortField}
+                                            sortDirection={sortDirection}
+                                            onSort={toggleSort}
+                                            className="w-56 px-3 py-3"
+                                        />
                                         <th scope="col" className="w-48 px-3 py-3">
                                             一级分类
                                         </th>

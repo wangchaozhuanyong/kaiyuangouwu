@@ -27,6 +27,7 @@ import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurfac
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { PageSizeSelect } from '../../components/PageSizeSelect';
+import { SortableTableHeader } from '../../components/SortableTableHeader';
 import {
     CREATE_STOCK_LOCATION,
     DELETE_STOCK_LOCATION,
@@ -42,6 +43,7 @@ import {
 } from '../../graphql/catalog-operations.graphql';
 import { UPDATE_PRODUCT_VARIANTS } from '../../graphql/catalog.graphql';
 import { usePageSize } from '../../hooks/use-page-size';
+import { type SortDirection, useUrlSortState } from '../../hooks/use-url-sort-state';
 import { useUrlTab } from '../../hooks/use-url-tab';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatMoney } from '../Sales/sales-utils';
@@ -156,6 +158,8 @@ interface InventoryLotDraft {
 const EMPTY_VARIANTS: ProductVariantItem[] = [];
 const EMPTY_LOCATIONS: StockLocationItem[] = [];
 const EMPTY_CATALOG_EXPORT_ROWS: CatalogExportRowRecord[] = [];
+const INVENTORY_SORT_FIELDS = ['updatedAt', 'name', 'sku', 'price', 'stockOnHand', 'stockAllocated'] as const;
+type InventorySortField = (typeof INVENTORY_SORT_FIELDS)[number];
 const movementLabels: Record<StockMovementItem['type'], string> = {
     ADJUSTMENT: '库存盘点调整',
     ALLOCATION: '订单占用',
@@ -187,6 +191,11 @@ export function InventoryWarehouseModule() {
     const deferredSearchTerm = useDeferredValue(searchTerm.trim());
     const [page, setPage] = useState(0);
     const [pageSize, setPageSize] = usePageSize(setPage);
+    const { sortDirection, sortField, toggleSort } = useUrlSortState({
+        fields: INVENTORY_SORT_FIELDS,
+        defaultField: 'updatedAt',
+        defaultDirection: 'DESC',
+    });
     const [notification, setNotification] = useState('');
     const [actionError, setActionError] = useState('');
     const [selectedStock, setSelectedStock] = useState<StockRow | null>(null);
@@ -211,7 +220,7 @@ export function InventoryWarehouseModule() {
             variantOptions: {
                 skip: page * pageSize,
                 take: pageSize,
-                sort: { updatedAt: 'DESC', id: 'DESC' },
+                sort: { [sortField]: sortDirection },
                 filter: deferredSearchTerm
                     ? {
                           _or: [
@@ -707,6 +716,11 @@ export function InventoryWarehouseModule() {
         setPage(nextPage);
         setSelectedVariantIds([]);
     };
+    const changeSort = (field: InventorySortField, initialDirection?: SortDirection) => {
+        toggleSort(field, initialDirection);
+        setPage(0);
+        setSelectedVariantIds([]);
+    };
 
     const lowStockCount = stockList.filter(stock => stock.status === 'LOW_STOCK').length;
     const outOfStockCount = stockList.filter(stock => stock.status === 'OUT_OF_STOCK').length;
@@ -959,23 +973,51 @@ export function InventoryWarehouseModule() {
                                                 scope="col"
                                                 className="sticky left-12 z-20 w-56 whitespace-nowrap bg-slate-50 px-3 py-3"
                                             >
-                                                名称
+                                                商品名称
                                             </th>
-                                            <th scope="col" className="w-56 whitespace-nowrap px-3 py-3">
-                                                规格名称
-                                            </th>
-                                            <th scope="col" className="w-44 whitespace-nowrap px-3 py-3">
-                                                SKU
-                                            </th>
-                                            <th scope="col" className="w-36 whitespace-nowrap px-3 py-3">
-                                                销售价
-                                            </th>
-                                            <th scope="col" className="w-24 whitespace-nowrap px-3 py-3">
-                                                在手
-                                            </th>
-                                            <th scope="col" className="w-24 whitespace-nowrap px-3 py-3">
-                                                锁定
-                                            </th>
+                                            <SortableTableHeader
+                                                label="规格名称"
+                                                sortField="name"
+                                                activeSortField={sortField}
+                                                sortDirection={sortDirection}
+                                                onSort={changeSort}
+                                                className="w-56 whitespace-nowrap px-3 py-3"
+                                            />
+                                            <SortableTableHeader
+                                                label="SKU"
+                                                sortField="sku"
+                                                activeSortField={sortField}
+                                                sortDirection={sortDirection}
+                                                onSort={changeSort}
+                                                className="w-44 whitespace-nowrap px-3 py-3"
+                                            />
+                                            <SortableTableHeader
+                                                label="当前店铺价格"
+                                                sortField="price"
+                                                activeSortField={sortField}
+                                                sortDirection={sortDirection}
+                                                onSort={changeSort}
+                                                initialDirection="DESC"
+                                                className="w-36 whitespace-nowrap px-3 py-3"
+                                            />
+                                            <SortableTableHeader
+                                                label="在手"
+                                                sortField="stockOnHand"
+                                                activeSortField={sortField}
+                                                sortDirection={sortDirection}
+                                                onSort={changeSort}
+                                                initialDirection="DESC"
+                                                className="w-24 whitespace-nowrap px-3 py-3"
+                                            />
+                                            <SortableTableHeader
+                                                label="锁定"
+                                                sortField="stockAllocated"
+                                                activeSortField={sortField}
+                                                sortDirection={sortDirection}
+                                                onSort={changeSort}
+                                                initialDirection="DESC"
+                                                className="w-24 whitespace-nowrap px-3 py-3"
+                                            />
                                             <th scope="col" className="w-24 whitespace-nowrap px-3 py-3">
                                                 状态
                                             </th>
@@ -1135,23 +1177,45 @@ export function InventoryWarehouseModule() {
                                                 scope="col"
                                                 className="sticky left-0 z-20 w-56 whitespace-nowrap bg-slate-50 px-3 py-3"
                                             >
-                                                名称
+                                                商品名称
                                             </th>
-                                            <th scope="col" className="w-56 whitespace-nowrap px-3 py-3">
-                                                规格名称
-                                            </th>
-                                            <th scope="col" className="w-44 whitespace-nowrap px-3 py-3">
-                                                SKU
-                                            </th>
+                                            <SortableTableHeader
+                                                label="规格名称"
+                                                sortField="name"
+                                                activeSortField={sortField}
+                                                sortDirection={sortDirection}
+                                                onSort={changeSort}
+                                                className="w-56 whitespace-nowrap px-3 py-3"
+                                            />
+                                            <SortableTableHeader
+                                                label="SKU"
+                                                sortField="sku"
+                                                activeSortField={sortField}
+                                                sortDirection={sortDirection}
+                                                onSort={changeSort}
+                                                className="w-44 whitespace-nowrap px-3 py-3"
+                                            />
                                             <th scope="col" className="w-44 whitespace-nowrap px-3 py-3">
                                                 库存点
                                             </th>
-                                            <th scope="col" className="w-20 whitespace-nowrap px-3 py-3">
-                                                在手
-                                            </th>
-                                            <th scope="col" className="w-20 whitespace-nowrap px-3 py-3">
-                                                已锁定
-                                            </th>
+                                            <SortableTableHeader
+                                                label="在手"
+                                                sortField="stockOnHand"
+                                                activeSortField={sortField}
+                                                sortDirection={sortDirection}
+                                                onSort={changeSort}
+                                                initialDirection="DESC"
+                                                className="w-20 whitespace-nowrap px-3 py-3"
+                                            />
+                                            <SortableTableHeader
+                                                label="已锁定"
+                                                sortField="stockAllocated"
+                                                activeSortField={sortField}
+                                                sortDirection={sortDirection}
+                                                onSort={changeSort}
+                                                initialDirection="DESC"
+                                                className="w-20 whitespace-nowrap px-3 py-3"
+                                            />
                                             <th scope="col" className="w-20 whitespace-nowrap px-3 py-3">
                                                 可售
                                             </th>

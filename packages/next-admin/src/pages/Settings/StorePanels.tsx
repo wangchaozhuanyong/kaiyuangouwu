@@ -27,6 +27,7 @@ import {
     type StoreProfileRecord,
 } from '../../graphql/management.graphql';
 import { getChannelDisplayName } from '../../utils/channel-display';
+import { isInputMethodKey } from '../../utils/input-method';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatDateTime } from '../Sales/sales-utils';
 import {
@@ -460,6 +461,7 @@ export function DomainsPanel({
                             value={domain}
                             onChange={event => setDomain(event.target.value)}
                             onKeyDown={event => {
+                                if (isInputMethodKey(event.nativeEvent)) return;
                                 if (event.key === 'Enter') void add();
                             }}
                             placeholder="shop.example.com"

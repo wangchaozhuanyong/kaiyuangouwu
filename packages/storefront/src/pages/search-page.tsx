@@ -8,6 +8,7 @@ import type { RouteState } from '../storefront-router';
 import { ShopApi } from '../api';
 import { ProductRow } from '../components/common/product-row';
 import { languageCodeFor } from '../i18n';
+import { isInputMethodKey } from '../input-method';
 import { offlineLoadError } from '../loading-state';
 import {
     PUBLIC_QUERY_GC_TIME,
@@ -143,7 +144,9 @@ export function SearchPage() {
                         type="search"
                         value={query}
                         onChange={event => setQuery(event.target.value)}
-                        onKeyDown={event => event.key === 'Enter' && submit()}
+                        onKeyDown={event => {
+                            if (!isInputMethodKey(event.nativeEvent) && event.key === 'Enter') submit();
+                        }}
                         placeholder={isZh ? '搜索商品、分类' : 'Search products'}
                     />
                 </label>

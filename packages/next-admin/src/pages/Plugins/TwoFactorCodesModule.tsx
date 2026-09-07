@@ -35,6 +35,7 @@ import {
     type DashboardTwoFactorAccountsResult,
 } from '../../graphql/two-factor.graphql';
 import { copyAdminText, readAdminText } from '../../utils/admin-clipboard';
+import { isInputMethodKey } from '../../utils/input-method';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import {
     clearLegacyTwoFactorSessionStorage,
@@ -552,6 +553,7 @@ function QuickQueryCard({
                     value={input}
                     onChange={event => onInputChange(event.target.value)}
                     onKeyDown={event => {
+                        if (isInputMethodKey(event.nativeEvent)) return;
                         if (event.key === 'Enter') {
                             event.preventDefault();
                             onQuery();

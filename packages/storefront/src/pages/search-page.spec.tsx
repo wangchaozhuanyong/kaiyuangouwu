@@ -64,6 +64,7 @@ describe('search result cache publication', () => {
     }
 
     beforeEach(() => {
+        navigate.mockClear();
         client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
         client.setQueryData(searchKey, {
             pages: [{ items: [product], totalItems: 1 }],
@@ -107,5 +108,62 @@ describe('search result cache publication', () => {
                 storefrontQueryKeys.product(storefrontQueryKeys.market(market), 'en', nextProduct.id),
             ),
         ).toEqual(nextProduct);
+    });
+
+    it('does not submit unfinished Chinese text when Enter confirms an IME candidate', async () => {
+        const catalog = vi.fn().mockResolvedValue({ items: [], totalItems: 0 });
+        const storeHistory = vi.spyOn(Storage.prototype, 'setItem');
+        try {
+            await act(async () => {
+                root.render(
+                    <QueryClientProvider client={client}>
+                        <SearchPageContext.Provider
+                            value={{
+                                api: { catalog } as unknown as ShopApi,
+                                products: [],
+                                market,
+                                locale: 'zh-CN',
+                                language: 'zh',
+                                storefrontCode: market.code,
+                                initialQuery: '',
+                            }}
+                        >
+                            <SearchPage />
+                        </SearchPageContext.Provider>
+                    </QueryClientProvider>,
+                );
+            });
+            const input = container.querySelector('input');
+            const valueDescriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+            if (!input || !valueDescriptor?.set) throw new Error('Search input was not mounted');
+            await act(async () => {
+                valueDescriptor.set.call(input, '中华');
+                input.dispatchEvent(new InputEvent('input', { bubbles: true }));
+            });
+            for (const options of [{ isComposing: true }, { isComposing: false, keyCode: 229 }]) {
+                await act(async () => {
+                    input.dispatchEvent(
+                        new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, ...options }),
+                    );
+                });
+                expect(navigate).not.toHaveBeenCalled();
+                expect(catalog).not.toHaveBeenCalled();
+                expect(storeHistory).not.toHaveBeenCalled();
+            }
+            await act(async () => {
+                input.dispatchEvent(
+                    new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, keyCode: 13 }),
+                );
+                await Promise.resolve();
+            });
+            expect(navigate).toHaveBeenCalledTimes(1);
+            expect(catalog).toHaveBeenCalledWith(
+                expect.objectContaining({ term: '中华' }),
+                expect.anything(),
+            );
+            expect(storeHistory).toHaveBeenCalledWith(expect.any(String), JSON.stringify(['中华']));
+        } finally {
+            storeHistory.mockRestore();
+        }
     });
 });
