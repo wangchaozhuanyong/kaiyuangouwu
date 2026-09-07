@@ -17,6 +17,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { gzipSync } from 'node:zlib';
 
 const require = createRequire(import.meta.url);
 const repositoryRoot = fileURLToPath(new URL('../../../', import.meta.url));
@@ -35,6 +36,25 @@ void test('release workflow ships the fixed live preflight inputs and migration 
     assert.match(workflow, /deploy\/usdt-migration-guard\.cjs/u);
     assert.match(workflow, /packages\/dev-server\/migrations\/index\.ts/u);
     assert.match(workflow, /ref: \$\{\{ inputs\.source_sha \|\| github\.sha \}\}/u);
+    assert.match(workflow, /import gzip/u);
+    assert.match(workflow, /gzip\.compress\(.+mtime=0\)/u);
+    assert.equal((workflow.match(/\| gzip -d >/gu) ?? []).length, 7);
+
+    const bundledFiles = [
+        'deploy/production-operations.cjs',
+        'deploy/systemd/vendure-production-release-retention.cjs',
+        'deploy/two-factor-key-backup.py',
+        'deploy/verify-runtime-security-dependencies.cjs',
+        'deploy/storefront-configuration-guard.mjs',
+        'deploy/usdt-migration-guard.cjs',
+        'packages/dev-server/migrations/index.ts',
+    ];
+    const encodedBytes = bundledFiles.reduce(
+        (total, file) =>
+            total + gzipSync(readFileSync(path.join(repositoryRoot, file))).toString('base64').length,
+        0,
+    );
+    assert.ok(encodedBytes < 90 * 1024, `compressed SSM payload is too large: ${encodedBytes} bytes`);
 });
 
 void test('read-only storefront inspection accepts an older running ancestor but rejects unrelated revisions', () => {
