@@ -1,4 +1,4 @@
-import { TranslationProviderError, type TranslationProviderFailure } from '../translation-provider-error.js';
+import { TranslationProviderError } from '../translation-provider-error.js';
 import {
     ContentTranslationFormat,
     ContentTranslationProvider,
@@ -30,8 +30,6 @@ export class GoogleCloudTranslationProvider implements ContentTranslationProvide
     readonly name = 'google-cloud-translation-basic';
     private readonly apiKey: string;
     private readonly endpoint: string;
-    private retryAfter = 0;
-    private lastFailure: TranslationProviderFailure = 'RATE_LIMIT';
 
     constructor(options: GoogleCloudTranslationProviderOptions) {
         this.apiKey = options.apiKey.trim();
@@ -46,7 +44,6 @@ export class GoogleCloudTranslationProvider implements ContentTranslationProvide
         if (!this.isConfigured()) {
             throw new TranslationProviderError('CONFIGURATION');
         }
-        if (Date.now() < this.retryAfter) throw new TranslationProviderError(this.lastFailure);
         const translations = new Map<string, string>();
         for (const format of ['TEXT', 'HTML'] as const) {
             const segments = request.segments.filter(segment => (segment.format ?? 'TEXT') === format);
@@ -76,7 +73,15 @@ export class GoogleCloudTranslationProvider implements ContentTranslationProvide
         sourceLanguageCode: string,
         targetLanguageCode: string,
     ): Promise<Array<{ key: string; text: string }>> {
+        if (segments.length > 128) throw new TranslationProviderError('TEXT_TOO_LONG');
         const protectedSegments = segments.map(segment => protectText(segment.text, glossary));
+        const payload = JSON.stringify({
+            q: protectedSegments.map(segment => segment.text),
+            source: toGoogleLanguageCode(sourceLanguageCode),
+            target: toGoogleLanguageCode(targetLanguageCode),
+            format: format === 'HTML' ? 'html' : 'text',
+        });
+        if (Buffer.byteLength(payload, 'utf8') > 100_000) throw new TranslationProviderError('TEXT_TOO_LONG');
         let response: Response;
         let body: GoogleTranslationResponse;
         try {
@@ -84,34 +89,35 @@ export class GoogleCloudTranslationProvider implements ContentTranslationProvide
                 method: 'POST',
                 signal: AbortSignal.timeout(10_000),
                 headers: { 'content-type': 'application/json; charset=utf-8' },
-                body: JSON.stringify({
-                    q: protectedSegments.map(segment => segment.text),
-                    source: toGoogleLanguageCode(sourceLanguageCode),
-                    target: toGoogleLanguageCode(targetLanguageCode),
-                    format: format === 'HTML' ? 'html' : 'text',
-                }),
+                body: payload,
             });
         } catch {
-            throw this.pause('UNAVAILABLE');
+            throw new TranslationProviderError('UNAVAILABLE');
         }
         try {
             body = (await response.json()) as GoogleTranslationResponse;
         } catch {
-            throw this.pause(response.ok ? 'INVALID_RESPONSE' : 'UNAVAILABLE');
+            throw new TranslationProviderError(response.ok ? 'INVALID_RESPONSE' : 'UNAVAILABLE');
         }
-        if (!body || typeof body !== 'object') throw this.pause('INVALID_RESPONSE');
+        if (!body || typeof body !== 'object') throw new TranslationProviderError('INVALID_RESPONSE');
         if (!response.ok) {
             const reason = [
                 body.error?.message,
                 ...(body.error?.errors?.map(error => error.reason) ?? []),
             ].join(' ');
             if (response.status === 429 || /user.?rate.?limit|rateLimitExceeded/i.test(reason)) {
-                throw this.pause('RATE_LIMIT');
+                throw new TranslationProviderError(
+                    'RATE_LIMIT',
+                    retryAfterMilliseconds(response.headers?.get('retry-after')),
+                );
             }
             if (/daily.?limit|dailyLimitExceeded|quotaExceeded/i.test(reason)) {
-                throw this.pause('QUOTA');
+                throw new TranslationProviderError(
+                    'QUOTA',
+                    retryAfterMilliseconds(response.headers?.get('retry-after')),
+                );
             }
-            throw this.pause(response.status >= 500 ? 'UNAVAILABLE' : 'CONFIGURATION');
+            throw new TranslationProviderError(response.status >= 500 ? 'UNAVAILABLE' : 'CONFIGURATION');
         }
         const results = body.data?.translations ?? [];
         if (!Array.isArray(results) || results.length !== segments.length) {
@@ -128,12 +134,6 @@ export class GoogleCloudTranslationProvider implements ContentTranslationProvide
             }
             return { key: segments[index].key, text: restored };
         });
-    }
-
-    private pause(code: TranslationProviderFailure): TranslationProviderError {
-        this.retryAfter = Date.now() + 60_000;
-        this.lastFailure = code;
-        return new TranslationProviderError(code);
     }
 }
 
@@ -186,3 +186,10 @@ function decodeHtmlEntities(value: string): string {
 }
 
 export const googleTranslationInternals = { protectText, decodeHtmlEntities, toGoogleLanguageCode };
+
+function retryAfterMilliseconds(value: string | null | undefined): number | undefined {
+    if (!value) return undefined;
+    const seconds = Number(value);
+    const delay = Number.isFinite(seconds) ? seconds * 1000 : Date.parse(value) - Date.now();
+    return Number.isFinite(delay) ? Math.max(0, delay) : undefined;
+}

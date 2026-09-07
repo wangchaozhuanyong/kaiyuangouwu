@@ -1,5 +1,6 @@
 import { Injectable, OnApplicationBootstrap, OnApplicationShutdown } from '@nestjs/common';
 import type { ID } from '@vendure/common/lib/shared-types';
+import { TranslationProviderState } from '@vendure/content-translation-plugin';
 import {
     Asset,
     AssetChannelEvent,
@@ -63,6 +64,9 @@ interface RealtimeChange {
 export class StorefrontRealtimeService implements OnApplicationBootstrap, OnApplicationShutdown {
     private readonly clients = new Map<string, StorefrontRealtimeClient>();
     private readonly subscriptions = new Subscription();
+    private translationPoll?: ReturnType<typeof setInterval>;
+    private translationVersion = '';
+    private translationPolling = false;
 
     constructor(
         private readonly eventBus: EventBus,
@@ -70,6 +74,11 @@ export class StorefrontRealtimeService implements OnApplicationBootstrap, OnAppl
     ) {}
 
     onApplicationBootstrap(): void {
+        // Worker and API processes do not share EventBus or SSE clients. Observe the durable generation.
+        this.translationPoll = setInterval(() => {
+            void this.pollTranslationChanges();
+        }, 3000);
+        this.translationPoll.unref();
         this.subscribe(ProductEvent, event =>
             this.publishEntityChange('Product', Product, event.entity.id, event.ctx.channelId, ['catalog']),
         );
@@ -191,8 +200,32 @@ export class StorefrontRealtimeService implements OnApplicationBootstrap, OnAppl
     }
 
     onApplicationShutdown(): void {
+        if (this.translationPoll) clearInterval(this.translationPoll);
         this.subscriptions.unsubscribe();
         this.clients.clear();
+    }
+
+    async pollTranslationChanges(): Promise<void> {
+        if (this.translationPolling || !this.clients.size) return;
+        this.translationPolling = true;
+        try {
+            const states = await this.connection.rawConnection.getRepository(TranslationProviderState).find({
+                select: { provider: true, notificationVersion: true },
+                order: { provider: 'ASC' },
+            });
+            const version = JSON.stringify(states);
+            if (version !== this.translationVersion) {
+                this.publish({
+                    allChannels: true,
+                    topics: ['catalog', 'content', 'config', 'reviews', 'referral'],
+                });
+                this.translationVersion = version;
+            }
+        } catch {
+            // Keep the previous generation so a transient database failure is retried on the next tick.
+        } finally {
+            this.translationPolling = false;
+        }
     }
 
     addClient(client: StorefrontRealtimeClient): () => void {

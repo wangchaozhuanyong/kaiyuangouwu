@@ -82,3 +82,24 @@ describe('StorefrontRealtimeService', () => {
         expect(healthy).toHaveBeenCalledTimes(2);
     });
 });
+
+it('observes worker translation commits from SQL state and retries failed polling', async () => {
+    const find = vi.fn().mockResolvedValue([{ provider: 'google', notificationVersion: 1 }]);
+    const realtime = new StorefrontRealtimeService(
+        {} as never,
+        {
+            rawConnection: { getRepository: () => ({ find }) },
+        } as never,
+    );
+    const send = vi.fn();
+    realtime.addClient({ channelId: 'store-a', send });
+    await realtime.pollTranslationChanges();
+    await realtime.pollTranslationChanges();
+    expect(send).toHaveBeenCalledTimes(1);
+    find.mockRejectedValueOnce(new Error('database offline'));
+    await realtime.pollTranslationChanges();
+    find.mockResolvedValue([{ provider: 'google', notificationVersion: 2 }]);
+    await realtime.pollTranslationChanges();
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(send.mock.calls[1][0].topics).toContain('config');
+});

@@ -90,7 +90,8 @@ export function StorefrontModule() {
     const homepageBlocks = homepageRows.flatMap(row => row.blocks);
     const configuredTypes = new Set(homepageBlocks.map(block => block.type));
     const visibleBlocks = allBlocks.filter(
-        block => isHomepageBlock(block) && contentPublicationStatus(block) === 'PUBLISHED',
+        block =>
+            isHomepageBlock(block) && contentPublicationStatus(block, undefined, 'zh_Hans') === 'PUBLISHED',
     );
     const visibleRows = storefrontHomepageRows(visibleBlocks);
     const heroes = homepageBlocks.filter(block => block.type === 'HERO');
@@ -129,7 +130,7 @@ export function StorefrontModule() {
     };
 
     const saveEditor = async (block: StorefrontContentBlock) => {
-        if (!(block.id ? canUpdate : canCreate) || query.loading || query.error) return;
+        if (savePending || !(block.id ? canUpdate : canCreate) || query.loading || query.error) return;
         setActionPending(true);
         setActionError('');
         try {
@@ -140,21 +141,15 @@ export function StorefrontModule() {
                         input: {
                             id: block.id,
                             expectedUpdatedAt: block.updatedAt,
-                            ...storefrontBlockInput(block),
+                            ...storefrontBlockInput(block, editing),
                         },
                     },
                 });
             } else {
-                await createBlock({ variables: { input: storefrontBlockInput(block) } });
+                await createBlock({ variables: { input: storefrontBlockInput(block, editing) } });
             }
             setEditing(null);
-            showNotice(
-                block.type === 'HERO'
-                    ? '轮播图已保存'
-                    : block.id
-                      ? '楼层内容已保存，客户端按发布状态展示'
-                      : '新楼层已创建',
-            );
+            showNotice('中文已保存，英文待同步；人工英文保持原设置');
             try {
                 const refreshed = await query.refetch();
                 if (!block.id && block.type === 'HERO' && canUpdate && refreshed.data) {
@@ -297,7 +292,7 @@ export function StorefrontModule() {
                         <Metric
                             label="已发布楼层"
                             value={`${visibleRows.length} 个`}
-                            detail="已通过内容检查；实际显示还取决于商品、活动等数据"
+                            detail="已按中文内容、排期和图片检查；实际显示还取决于商品、活动等数据"
                         />
                         <Metric
                             label="当前店铺"
@@ -563,7 +558,9 @@ function CarouselRow({
 }) {
     const { hasAnyPermission } = useAdminPermissions();
     const canUpdate = hasAnyPermission(['UpdateStorefrontContent']);
-    const visible = blocks.filter(block => contentPublicationStatus(block) === 'PUBLISHED').length;
+    const visible = blocks.filter(
+        block => contentPublicationStatus(block, undefined, 'zh_Hans') === 'PUBLISHED',
+    ).length;
     return (
         <article aria-label="首页轮播" className="flex flex-wrap items-center gap-3 p-4 hover:bg-slate-50">
             {dragHandle}
@@ -865,7 +862,7 @@ function BlockRow({
     const canUpdate = hasAnyPermission(['UpdateStorefrontContent']);
     const canDelete = hasAnyPermission(['DeleteStorefrontContent']);
     const translation = blockTranslation(block, 'zh_Hans');
-    const status = contentPublicationStatus(block);
+    const status = contentPublicationStatus(block, undefined, 'zh_Hans');
     const scheduled = status !== 'PUBLISHED' && block.enabled;
     return (
         <article

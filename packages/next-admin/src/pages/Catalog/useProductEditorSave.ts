@@ -297,25 +297,31 @@ export function useProductEditorSave({
             );
             return Object.keys(customFields).length > 0 ? { customFields } : {};
         };
+        const englishCustomFields = localizedFieldsFor('en');
         const updateTranslations = productData?.product
             ? [
-                  ...productData.product.translations.map(translation => ({
-                      id: translation.id,
-                      languageCode: translation.languageCode,
-                      name:
-                          translation.languageCode === SOURCE_LANGUAGE_CODE
-                              ? productName.trim()
-                              : translation.name,
-                      slug:
-                          translation.languageCode === SOURCE_LANGUAGE_CODE
-                              ? generatedSlug
-                              : translation.slug,
-                      description:
-                          translation.languageCode === SOURCE_LANGUAGE_CODE
-                              ? description.trim()
-                              : translation.description,
-                      ...localizedFieldsFor(translation.languageCode),
-                  })),
+                  ...(Object.keys(englishCustomFields).length > 0
+                      ? [{ languageCode: 'en', ...englishCustomFields }]
+                      : []),
+                  ...productData.product.translations
+                      .filter(translation => translation.languageCode !== 'en')
+                      .map(translation => ({
+                          id: translation.id,
+                          languageCode: translation.languageCode,
+                          name:
+                              translation.languageCode === SOURCE_LANGUAGE_CODE
+                                  ? productName.trim()
+                                  : translation.name,
+                          slug:
+                              translation.languageCode === SOURCE_LANGUAGE_CODE
+                                  ? generatedSlug
+                                  : translation.slug,
+                          description:
+                              translation.languageCode === SOURCE_LANGUAGE_CODE
+                                  ? description.trim()
+                                  : translation.description,
+                          ...localizedFieldsFor(translation.languageCode),
+                      })),
                   ...(productData.product.translations.some(
                       translation => translation.languageCode === SOURCE_LANGUAGE_CODE,
                   )

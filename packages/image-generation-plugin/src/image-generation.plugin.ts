@@ -1,3 +1,4 @@
+import { ContentTranslationPlugin } from '@vendure/content-translation-plugin';
 import { PluginCommonModule, VendurePlugin } from '@vendure/core';
 import { StoreManagementPlugin } from '@vendure/store-management-plugin';
 
@@ -43,7 +44,7 @@ import { ImagePrivateController } from './storage/image-private.controller';
 import { ImageGenerationPluginOptions } from './types';
 
 @VendurePlugin({
-    imports: [PluginCommonModule, StoreManagementPlugin],
+    imports: [PluginCommonModule, StoreManagementPlugin, ContentTranslationPlugin],
     entities: [
         ImageGenerationConfig,
         ImageComplianceAuditEvent,

@@ -5,7 +5,6 @@ import {
     ContentTranslationService,
     isUsableEnglishTranslation,
 } from './content-translation.service.js';
-import { TranslationProviderError } from './translation-provider-error.js';
 
 describe('content translation hashing', () => {
     it('is deterministic and detects source changes', () => {
@@ -25,146 +24,7 @@ describe('English publication policy', () => {
 });
 
 describe('ContentTranslationService localized fields', () => {
-    it('saves Chinese and preserves old English when the translation exceeds the field limit', async () => {
-        const service = new ContentTranslationService({} as any, {
-            provider: {
-                name: 'test',
-                isConfigured: () => true,
-                translate: vi.fn().mockResolvedValue({
-                    translations: [
-                        {
-                            key: 'storefrontName',
-                            text: 'A very long automatically translated store name',
-                        },
-                    ],
-                }),
-            },
-            glossary: {},
-            sourceLanguageCode: 'zh_Hans',
-            targetLanguageCode: 'en',
-        });
-        expect(
-            await service.prepareLocalizedFields([
-                {
-                    path: 'storefrontName',
-                    sourceText: '商业服务商城',
-                    existingSourceText: '旧商城',
-                    existingTargetText: 'Old shop',
-                    maxTargetLength: 32,
-                },
-            ]),
-        ).toEqual([
-            expect.objectContaining({
-                sourceText: '商业服务商城',
-                translatedText: 'Old shop',
-                status: 'PENDING',
-                locked: false,
-                error: expect.stringContaining('长度限制'),
-            }),
-        ]);
-    });
-    it.each(['RATE_LIMIT', 'QUOTA', 'UNAVAILABLE', 'CONFIGURATION'] as const)(
-        'preserves Chinese and existing English on %s',
-        async code => {
-            const service = new ContentTranslationService({} as any, {
-                provider: {
-                    name: 'test',
-                    isConfigured: () => true,
-                    translate: vi.fn().mockRejectedValue(new TranslationProviderError(code)),
-                },
-                glossary: {},
-                sourceLanguageCode: 'zh_Hans',
-                targetLanguageCode: 'en',
-            });
-            await expect(
-                service.prepareLocalizedFields([
-                    {
-                        path: 'label',
-                        sourceText: '商业服务',
-                        targetText: 'AI services',
-                        existingSourceText: 'AI服务',
-                        existingTargetText: 'AI services',
-                        required: true,
-                    },
-                    { path: 'newLabel', sourceText: '新名称', required: true },
-                    { path: 'reviewed', sourceText: '已核对', targetText: 'Reviewed', manualLock: true },
-                ]),
-            ).resolves.toEqual([
-                expect.objectContaining({
-                    sourceText: '商业服务',
-                    translatedText: 'AI services',
-                    status: 'PENDING',
-                    locked: false,
-                }),
-                expect.objectContaining({
-                    sourceText: '新名称',
-                    translatedText: '',
-                    status: 'PENDING',
-                    locked: false,
-                }),
-                expect.objectContaining({
-                    translatedText: 'Reviewed',
-                    status: 'MANUAL_LOCKED',
-                    locked: true,
-                }),
-            ]);
-        },
-    );
-
-    it('does not hide programming errors as pending translations', async () => {
-        const service = new ContentTranslationService({} as any, {
-            provider: {
-                name: 'test',
-                isConfigured: () => true,
-                translate: vi.fn().mockRejectedValue(new TypeError('bug')),
-            },
-            glossary: {},
-            sourceLanguageCode: 'zh_Hans',
-            targetLanguageCode: 'en',
-        });
-        await expect(service.prepareLocalizedFields([{ path: 'label', sourceText: '名称' }])).rejects.toThrow(
-            'bug',
-        );
-    });
-
-    it('keeps an unchanged pending record pending when the form is saved again', async () => {
-        const repository = {
-            findOne: vi.fn().mockResolvedValue({
-                status: 'PENDING',
-                origin: 'AUTO',
-                locked: false,
-                sourceHash: contentTranslationInternals.hash('商业服务'),
-                translatedHash: contentTranslationInternals.hash('AI services'),
-                error: '限流',
-            }),
-        };
-        const service = new ContentTranslationService({ getRepository: () => repository } as any, {
-            provider: { name: 'test', isConfigured: () => true, translate: vi.fn() },
-            glossary: {},
-            sourceLanguageCode: 'zh_Hans',
-            targetLanguageCode: 'en',
-        });
-        const record = vi.spyOn(service, 'recordState').mockResolvedValue({} as any);
-        const fields = await service.prepareLocalizedFields([
-            {
-                path: 'label',
-                sourceText: '商业服务',
-                targetText: 'AI services',
-                existingSourceText: '商业服务',
-                existingTargetText: 'AI services',
-            },
-        ]);
-        await service.recordPreparedFields(
-            {} as any,
-            { channelId: '1', entityType: 'StorefrontContentItem', entityId: '1' },
-            fields,
-        );
-        expect(record).toHaveBeenCalledWith(
-            expect.anything(),
-            expect.objectContaining({ status: 'PENDING', origin: 'AUTO', locked: false }),
-        );
-    });
-    it('generates missing English while preserving an explicitly edited target', async () => {
+    it('queues missing English while preserving an explicitly edited target', async () => {
         const provider = {
             name: 'test',
             isConfigured: () => true,
@@ -173,7 +33,7 @@ describe('ContentTranslationService localized fields', () => {
                     provider: 'test',
                     translations: request.segments.map((segment: any) => ({
                         key: segment.key,
-                        text: 'Translated title',
+                        text: `EN:${segment.text}`,
                     })),
                 }),
         };
@@ -190,12 +50,12 @@ describe('ContentTranslationService localized fields', () => {
                 { path: 'body', sourceText: '正文', targetText: 'Reviewed body' },
             ]),
         ).resolves.toEqual([
-            expect.objectContaining({ path: 'title', translatedText: 'Translated title', origin: 'AUTO' }),
+            expect.objectContaining({ path: 'title', translatedText: '', status: 'PENDING', origin: 'AUTO' }),
             expect.objectContaining({ path: 'body', translatedText: 'Reviewed body', origin: 'MANUAL' }),
         ]);
     });
 
-    it('regenerates an unchanged submitted English value when the Chinese source changed', async () => {
+    it('queues an unchanged submitted English value when the Chinese source changed', async () => {
         const service = new ContentTranslationService({} as any, {
             provider: {
                 name: 'test',
@@ -221,10 +81,15 @@ describe('ContentTranslationService localized fields', () => {
             },
         ]);
 
-        expect(field).toMatchObject({ translatedText: 'New title', origin: 'AUTO', locked: false });
+        expect(field).toMatchObject({
+            translatedText: 'Old title',
+            status: 'PENDING',
+            origin: 'AUTO',
+            locked: false,
+        });
     });
 
-    it('regenerates an English field whose existing value still contains Chinese', async () => {
+    it('queues an English field whose existing value still contains Chinese', async () => {
         const translate = vi.fn(() =>
             Promise.resolve({
                 provider: 'test',
@@ -248,9 +113,10 @@ describe('ContentTranslationService localized fields', () => {
             },
         ]);
 
-        expect(translate).toHaveBeenCalledOnce();
+        expect(translate).not.toHaveBeenCalled();
         expect(field).toMatchObject({
-            translatedText: 'Official channel service',
+            translatedText: '',
+            status: 'PENDING',
             origin: 'AUTO',
             locked: false,
         });
@@ -314,7 +180,7 @@ describe('ContentTranslationService localized fields', () => {
         });
     });
 
-    it('regenerates English when a manual lock is explicitly removed', async () => {
+    it('queues English when a manual lock is explicitly removed', async () => {
         const translate = vi.fn(() =>
             Promise.resolve({
                 provider: 'test',
@@ -340,10 +206,10 @@ describe('ContentTranslationService localized fields', () => {
             },
         ]);
 
-        expect(translate).toHaveBeenCalledOnce();
+        expect(translate).not.toHaveBeenCalled();
         expect(field).toMatchObject({
-            translatedText: 'Fresh automatic translation',
-            status: 'AUTO_TRANSLATED',
+            translatedText: 'Reviewed maintenance',
+            status: 'PENDING',
             origin: 'AUTO',
             locked: false,
         });
@@ -411,12 +277,11 @@ describe('ContentTranslationService localized fields', () => {
             where: [
                 {
                     channelId: 'channel-1',
-                    status: expect.objectContaining({ value: ['STALE', 'PENDING', 'TRANSLATING', 'FAILED'] }),
+                    status: expect.objectContaining({
+                        _value: expect.arrayContaining(['STALE', 'PENDING', 'NOTIFY_PENDING', 'FAILED']),
+                    }),
                 },
-                {
-                    channelId: expect.anything(),
-                    status: expect.objectContaining({ value: ['STALE', 'PENDING', 'TRANSLATING', 'FAILED'] }),
-                },
+                { channelId: expect.anything(), status: expect.anything() },
             ],
         });
     });

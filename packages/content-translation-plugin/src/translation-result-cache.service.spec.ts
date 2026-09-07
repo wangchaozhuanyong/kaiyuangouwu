@@ -28,6 +28,7 @@ const service = () =>
     new ContentTranslationService(
         connection(),
         { provider, sourceLanguageCode: 'zh_Hans', targetLanguageCode: 'en', glossary: {} },
+        undefined,
         cache,
     );
 
@@ -176,9 +177,7 @@ describe('persistent translation result cache', () => {
             status: 'PENDING',
             error: expect.stringContaining('长度限制'),
         });
-        expect(translate.mock.calls[1][0].segments.map(segment => segment.text)).toEqual([
-            '尚未缓存的新说明',
-        ]);
+        expect(translate).toHaveBeenCalledOnce();
     });
 
     it('does not cache provider failures and retries a later successful request', async () => {
@@ -249,7 +248,8 @@ describe('persistent translation result cache', () => {
         const [automatic] = await service().prepareLocalizedFields([
             { path: 'other', sourceText: '普通文具' },
         ]);
-        expect(automatic.translatedText).toBe('Translation 1 item 0');
+        expect(automatic).toMatchObject({ translatedText: '', status: 'PENDING' });
+        expect(translate).not.toHaveBeenCalled();
     });
 
     it('reuses unchanged existing English without a request or assuming its historical translation rules', async () => {

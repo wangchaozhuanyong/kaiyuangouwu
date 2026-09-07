@@ -113,3 +113,22 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function readString(value: unknown) {
     return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
+
+/** Chinese authoring mutations share the same save/translation contract across modules. */
+export function hasChineseSaveInput(operationName: string | undefined, variables: unknown): boolean {
+    if (
+        !/^(?:NextAdmin|Admin)?(?:Create|Update|Save|Apply|Provision|Reply|Resolve)/u.test(
+            operationName ?? '',
+        )
+    )
+        return false;
+    const visit = (value: unknown): boolean => {
+        if (Array.isArray(value)) return value.some(visit);
+        if (!isRecord(value)) return false;
+        if (value.languageCode === 'zh_Hans') return true;
+        return Object.entries(value).some(
+            ([key, item]) => (key.endsWith('Zh') && typeof item === 'string' && !!item.trim()) || visit(item),
+        );
+    };
+    return visit(variables);
+}

@@ -157,7 +157,7 @@ describe('admin saves survive the shared Google translation rate limit', () => {
                     f.native.translateEntity(ctx, new Entity({ id: 'entity-1' }), {
                         translations: [f.source],
                     }),
-                ).resolves.toBe(false);
+                ).resolves.toBe(true);
                 expect(f.source).toEqual(sourceBefore);
                 expect(f.repository.save).toHaveBeenCalledWith(
                     expect.objectContaining({
@@ -176,7 +176,7 @@ describe('admin saves survive the shared Google translation rate limit', () => {
                         locked: false,
                     }),
                 );
-                expect(f.fetchMock).toHaveBeenCalledTimes(1);
+                expect(f.fetchMock).not.toHaveBeenCalled();
             },
         );
     }
@@ -212,36 +212,14 @@ describe('admin saves survive the shared Google translation rate limit', () => {
         },
     );
 
-    it('shares the cooldown across coupon and product saves, then retries after recovery', async () => {
-        vi.useFakeTimers();
+    it('never calls Google during consecutive coupon and product saves', async () => {
         const f = fixture();
         await f.native.translateEntity(ctx, new Promotion({ id: 'coupon-1' }), { translations: [f.source] });
         await f.native.translateEntity(ctx, new Product({ id: 'product-1' }), { translations: [f.source] });
-        expect(f.fetchMock).toHaveBeenCalledTimes(1);
+        expect(f.fetchMock).not.toHaveBeenCalled();
         expect(
             new Set(f.recorded.filter(row => row.status === 'PENDING').map(row => row.entityType)),
         ).toEqual(new Set(['Promotion', 'Product']));
-
-        vi.advanceTimersByTime(60_000);
-        f.fetchMock.mockResolvedValueOnce(
-            new Response(
-                JSON.stringify({
-                    data: {
-                        translations: [
-                            { translatedText: 'Welcome offer' },
-                            { translatedText: 'Offer details' },
-                        ],
-                    },
-                }),
-                { status: 200 },
-            ),
-        );
-        await f.native.translateEntity(ctx, new Promotion({ id: 'coupon-1' }), { translations: [f.source] });
-        expect(f.repository.save).toHaveBeenLastCalledWith(
-            expect.objectContaining({ name: 'Welcome offer' }),
-            { reload: false },
-        );
-        expect(f.fetchMock).toHaveBeenCalledTimes(2);
     });
 
     it('still rejects missing required Chinese instead of hiding a real validation error', async () => {

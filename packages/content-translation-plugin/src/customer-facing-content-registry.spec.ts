@@ -19,10 +19,9 @@ const requiredContentTypes = [
     'SystemAnnouncement',
     'StorefrontContentBlock',
     'StorefrontContentItem',
-    'StorePromotionCampaign',
     'AutoCardConfig',
-    'StorefrontReviewMerchantResponse',
-    'AfterSalesResolution',
+    'StorefrontReview',
+    'AfterSalesRequest',
     'ReferralPosterTemplate',
     'ImageGenerationConfig',
     'ImageModelConfig',
@@ -41,12 +40,12 @@ describe('customerFacingContentRegistry', () => {
         }
     });
 
-    it('marks the content that must keep explicit bilingual human review', () => {
+    it('declares Chinese-first authoring for previously bilingual forms', () => {
         const reviewedTypes = Object.entries(customerFacingContentRegistry)
             .filter(
                 ([, definition]) =>
                     'authoringPolicy' in definition &&
-                    definition.authoringPolicy === 'BILINGUAL_HUMAN_REVIEW_REQUIRED',
+                    definition.authoringPolicy === 'CHINESE_SOURCE_AUTO_TRANSLATED',
             )
             .map(([type]) => type)
             .sort();

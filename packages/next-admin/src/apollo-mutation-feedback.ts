@@ -5,6 +5,7 @@ import { createAdminFeedbackId, publishAdminFeedback } from './utils/admin-feedb
 import {
     extractMutationFailure,
     getMutationFeedbackCopy,
+    hasChineseSaveInput,
     isMutationDocument,
     type AdminMutationFeedbackContext,
     type AdminMutationFeedbackOptions,
@@ -72,7 +73,14 @@ export const adminMutationFeedbackLink = new ApolloLink((operation, forward) => 
                         finishWithError(businessFailure);
                     } else if (!completedFeedback && !options.skipSuccess) {
                         completedFeedback = true;
-                        publishAdminFeedback({ id: feedbackId, kind: 'success', title: copy.success });
+                        publishAdminFeedback({
+                            id: feedbackId,
+                            kind: 'success',
+                            title: copy.success,
+                            ...(hasChineseSaveInput(operation.operationName, operation.variables)
+                                ? { message: '中文已保存，英文待同步；人工锁定的英文会保留' }
+                                : {}),
+                        });
                     }
                 }
                 observer.next(result);

@@ -144,3 +144,16 @@ describe('storefront support content editor', () => {
         ).toBe(true);
     });
 });
+
+it('only submits edited English fields and keeps cleared English explicit', () => {
+    const original = newContentBlock('CORE_CATEGORIES', 0);
+    const edited = cloneContentBlock(original);
+    edited.translations.find(item => item.languageCode === 'zh_Hans')!.title = '中文最新标题';
+    expect(storefrontBlockInput(edited, original).translations.map(item => item.languageCode)).toEqual([
+        'zh_Hans',
+    ]);
+    edited.translations.find(item => item.languageCode === 'en')!.title = '';
+    expect(
+        storefrontBlockInput(edited, original).translations.find(item => item.languageCode === 'en'),
+    ).toMatchObject({ title: '', updatedFields: ['title'] });
+});

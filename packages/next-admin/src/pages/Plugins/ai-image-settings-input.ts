@@ -3,6 +3,7 @@ import type {
     ImageModelRecord,
     ImageProviderProtocol,
 } from '../../graphql/plugins.graphql';
+import { omitUnchangedEnglish } from '../../utils/english-edit-intent';
 
 export interface ImageGenerationConfigEdits {
     enabled: boolean;
@@ -31,7 +32,7 @@ export function buildImageGenerationConfigInput(
     edits: ImageGenerationConfigEdits,
 ) {
     return {
-        ...edits,
+        ...omitUnchangedEnglish(edits, value),
         promptRateLimitPerMinute: value.promptRateLimitPerMinute,
         promptDailyFreeLimit: value.promptDailyFreeLimit,
         promptDailyFreeUnlimited: value.promptDailyFreeUnlimited,
@@ -44,7 +45,7 @@ export function buildImageGenerationConfigInput(
 export function buildImageModelInput(value: ImageModelRecord, edits: ImageModelEdits) {
     return {
         code: value.code,
-        ...edits,
+        ...omitUnchangedEnglish(edits, value),
         unitPrice2K: value.unitPrice2K,
         unitPrice4K: value.unitPrice4K,
         isDefault: value.isDefault,
