@@ -58,9 +58,41 @@ function fixture(): SaveInput {
             },
         ],
     };
+    const baselineDraft: SaveInput['draft'] = {
+        productName: '原名称',
+        slug: 'original',
+        enabled: true,
+        description: '原详情',
+        fulfillmentType: 'digital',
+        refundPolicy: 'MERCHANT_REVIEW',
+        manualDeliverySlaMinutes: 1440,
+        featuredAssetId: null,
+        selectedAssetIds: [],
+        selectedFacetValueIds: [],
+        selectedCollectionIds: [],
+        selectedChannelIds: [],
+        selectedOptionGroupIds: [],
+        dynamicCustomFields: {},
+        variants: [
+            {
+                id: 'variant-1',
+                enabled: true,
+                name: '规格',
+                sku: 'SKU-1',
+                price: '10.00',
+                stockOnHand: 5,
+                stockAllocated: 0,
+                digitalDeliveryMode: 'manual_service',
+                digitalStockPolicy: 'limited',
+                optionIds: [],
+            },
+        ],
+    };
     return {
         productId: product.id,
         productExtensionFields: [],
+        baselineDraft,
+        activeCurrencyCode: 'MYR',
         draft: {
             productName: '新名称',
             slug: 'updated',
@@ -145,6 +177,98 @@ describe('product save orchestration', () => {
         expect(input.controls.showNotice).toHaveBeenCalledOnce();
         expect(input.controls.showError).not.toHaveBeenCalled();
         expect(input.controls.setSaving).toHaveBeenLastCalledWith(false);
+    });
+
+    it('saves only product assets when untouched legacy SKU prices are blank', async () => {
+        const input = fixture();
+        input.baselineDraft = {
+            ...input.baselineDraft!,
+            description: '',
+            variants: input.baselineDraft!.variants.map(variant => ({ ...variant, price: '' })),
+        };
+        input.draft = {
+            ...input.baselineDraft,
+            featuredAssetId: 'asset-2',
+            selectedAssetIds: ['asset-2'],
+        };
+
+        await useProductEditorSave(input).handleSave();
+
+        expect(mocks.mutations.get(UPDATE_PRODUCT)).toHaveBeenCalledWith({
+            variables: {
+                input: {
+                    id: 'product-1',
+                    featuredAssetId: 'asset-2',
+                    assetIds: ['asset-2'],
+                },
+            },
+        });
+        expect(mocks.mutations.get(UPDATE_PRODUCT_VARIANTS)).not.toHaveBeenCalled();
+        expect(input.controls.setActiveTab).not.toHaveBeenCalled();
+        expect(input.controls.showError).not.toHaveBeenCalled();
+        expect(input.controls.showNotice).toHaveBeenCalledWith('商品《原名称》已保存（商品图片）！');
+    });
+
+    it('identifies the SKU and active currency when an edited price is invalid', async () => {
+        const input = fixture();
+        input.draft = {
+            ...input.baselineDraft!,
+            variants: input.baselineDraft!.variants.map(variant => ({ ...variant, price: '' })),
+        };
+
+        await useProductEditorSave(input).handleSave();
+
+        for (const mutation of mocks.mutations.values()) expect(mutation).not.toHaveBeenCalled();
+        expect(input.controls.showError).toHaveBeenCalledWith('SKU SKU-1：请输入有效的 MYR 非负金额');
+    });
+
+    it('updates only the existing SKU whose editable fields changed', async () => {
+        const input = fixture();
+        const secondVariant = {
+            ...input.baselineDraft!.variants[0],
+            id: 'variant-2',
+            sku: 'SKU-2',
+            price: '20.00',
+        };
+        input.baselineDraft = {
+            ...input.baselineDraft!,
+            variants: [...input.baselineDraft!.variants, secondVariant],
+        };
+        input.draft = {
+            ...input.baselineDraft,
+            variants: input.baselineDraft.variants.map(variant =>
+                variant.id === 'variant-1' ? { ...variant, price: '11.00' } : variant,
+            ),
+        };
+        const product = input.data.productData?.product;
+        if (!product) throw new Error('fixture product is required');
+        product.variants.push({
+            ...product.variants[0],
+            id: 'variant-2',
+            sku: 'SKU-2',
+            price: 2000,
+        });
+
+        await useProductEditorSave(input).handleSave();
+
+        expect(mocks.mutations.get(UPDATE_PRODUCT)).not.toHaveBeenCalled();
+        const variantInput = mocks.mutations.get(UPDATE_PRODUCT_VARIANTS)!.mock.calls[0][0].variables.input;
+        expect(variantInput).toHaveLength(1);
+        expect(variantInput[0]).toMatchObject({ id: 'variant-1', price: 1100 });
+    });
+
+    it('uses a truthful fallback notice after an already-completed SKU deletion', async () => {
+        const input = fixture();
+        input.draft = {
+            ...input.baselineDraft!,
+            variants: [],
+        };
+
+        await useProductEditorSave(input).handleSave();
+
+        for (const mutation of mocks.mutations.values()) expect(mutation).not.toHaveBeenCalled();
+        expect(input.data.refetchProduct).toHaveBeenCalledOnce();
+        expect(input.controls.showNotice).toHaveBeenCalledWith('商品数据已同步至最新状态');
     });
 
     it('reloads committed data and reports partial completion if a later stage fails', async () => {
