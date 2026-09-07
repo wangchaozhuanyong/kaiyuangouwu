@@ -15,7 +15,7 @@ export class CachedTranslationPartialError extends TranslationProviderError {
         failure: TranslationProviderError,
         readonly translations: Array<{ key: string; text: string }>,
     ) {
-        super(failure.code);
+        super(failure.code, failure.retryAfterMs);
     }
 }
 
@@ -34,6 +34,43 @@ export class TranslationResultCacheService {
     private readonly inFlight = new Map<string, Promise<string>>();
 
     constructor(private readonly connection: TransactionalConnection) {}
+
+    /** Business saves may read existing results, but must never invoke the provider. */
+    async lookup(request: ContentTranslationRequest, providerName: string) {
+        const normalized = { ...request, glossary: canonicalGlossary(request.glossary) };
+        const scopes = request.segments.map(segment => resultScope(normalized, providerName, segment));
+        const uniqueScopes = [...new Set(scopes)];
+        const cached = new Map<string, string>();
+        const repository =
+            this.connection.rawConnection.getRepository<CachedTranslationEntry>(SettingsStoreEntry);
+        for (let offset = 0; offset < uniqueScopes.length; offset += 200) {
+            const rows = await repository
+                .find({
+                    where: {
+                        key: translationResultCacheKey,
+                        scope: In(uniqueScopes.slice(offset, offset + 200)),
+                    },
+                })
+                .catch(() => {
+                    throw new TranslationProviderError('UNAVAILABLE');
+                });
+            for (const row of rows) {
+                const value: unknown = row.value;
+                if (
+                    row.scope &&
+                    typeof value === 'object' &&
+                    value !== null &&
+                    'text' in value &&
+                    isUsableEnglishTranslation(value.text)
+                )
+                    cached.set(row.scope, value.text.trim());
+            }
+        }
+        return request.segments.flatMap((segment, index) => {
+            const text = cached.get(scopes[index]);
+            return text === undefined ? [] : [{ key: segment.key, text }];
+        });
+    }
 
     async translate(request: ContentTranslationRequest, provider: ContentTranslationProvider) {
         // Canonicalize both the cache identity and the actual provider input.
@@ -76,32 +113,17 @@ export class TranslationResultCacheService {
         try {
             const repository =
                 this.connection.rawConnection.getRepository<CachedTranslationEntry>(SettingsStoreEntry);
-            const cached = new Map<string, string>();
-            for (let offset = 0; offset < owned.length; offset += 200) {
-                const rows = await repository
-                    .find({
-                        where: {
-                            key: translationResultCacheKey,
-                            scope: In(owned.slice(offset, offset + 200).map(item => item.scope)),
+            const cached = new Map(
+                (
+                    await this.lookup(
+                        {
+                            ...request,
+                            segments: owned.map(item => ({ ...item.segment, key: item.scope })),
                         },
-                    })
-                    .catch(() => {
-                        // Do not turn a temporary cache outage into either a save failure or a request burst.
-                        throw new TranslationProviderError('UNAVAILABLE');
-                    });
-                for (const row of rows) {
-                    const value: unknown = row.value;
-                    if (
-                        row.scope &&
-                        typeof value === 'object' &&
-                        value !== null &&
-                        'text' in value &&
-                        isUsableEnglishTranslation(value.text)
-                    ) {
-                        cached.set(row.scope, value.text.trim());
-                    }
-                }
-            }
+                        provider.name,
+                    )
+                ).map(item => [item.key, item.text]),
+            );
             const missing: PendingTranslation[] = [];
             for (const item of owned) {
                 const text = cached.get(item.scope);

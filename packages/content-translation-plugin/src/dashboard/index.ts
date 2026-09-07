@@ -14,9 +14,8 @@ const staleTranslationAlert: DashboardAlertDefinition<number> = {
         return result.contentTranslationStaleCount;
     },
     shouldShow: count => count > 0,
-    title: count => `${count} 项英文内容待复核`,
-    description:
-        '中文内容已保存并自动翻译；之前人工修改过的英文不会被覆盖，因此已标记待复核。日常录入仍只需填写中文。',
+    title: count => `${count} 项英文待同步或复核`,
+    description: '中文已保存，英文在后台同步；人工锁定的译文会保留，需要管理员复核。',
     severity: 'warning',
     recheckInterval: 15_000,
 };

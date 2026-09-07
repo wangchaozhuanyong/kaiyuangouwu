@@ -259,6 +259,7 @@ function AutoCardSetupEditor({
     canReadOrders: boolean;
     onRefresh: () => Promise<void>;
 }) {
+    const [originalConfig] = useState(config);
     const initialPreset = inferAutoCardFormatPreset(config?.fields ?? ACCOUNT_PASSWORD_FIELDS);
     const [enabled, setEnabled] = useState(config?.enabled ?? true);
     const [formatPreset, setFormatPreset] = useState<AutoCardFormatPreset>(initialPreset);
@@ -337,11 +338,18 @@ function AutoCardSetupEditor({
                     fields: fields.map(field => ({
                         key: field.key.trim(),
                         label: field.label.trim(),
-                        labelEn: field.labelEn.trim() || null,
+                        ...(field.labelEn.trim() !==
+                        (
+                            originalConfig?.fields.find(previous => previous.key === field.key)?.labelEn ?? ''
+                        ).trim()
+                            ? { labelEn: field.labelEn.trim() }
+                            : {}),
                         secret: field.secret,
                     })),
                     instructionsZh: instructionsZh.trim() || null,
-                    instructionsEn: instructionsEn.trim() || null,
+                    ...(instructionsEn.trim() !== (originalConfig?.instructionsEn ?? '').trim()
+                        ? { instructionsEn: instructionsEn.trim() }
+                        : {}),
                     lowStockThreshold: threshold,
                 },
             },
@@ -353,8 +361,12 @@ function AutoCardSetupEditor({
         setNotice('');
         try {
             await persistConfig();
-            setNotice('自动发卡设置已保存');
-            await onRefresh();
+            setNotice('中文发卡文案已保存，英文待同步');
+            try {
+                await onRefresh();
+            } catch {
+                setError('设置已保存，刷新失败，请稍后刷新页面');
+            }
         } catch (cause) {
             setError(toUserFacingError(cause, '自动发卡设置保存失败'));
         }

@@ -23,6 +23,7 @@
         "@nestjs/graphql": "~13.4.4",
         "@vendure/common": "3.7.2",
         "@vendure/core": "3.7.2",
+        "@vendure/content-translation-plugin": "0.1.0",
         "@vendure/store-management-plugin": "0.1.0",
         "file-type": "21.3.4",
         "graphql-tag": "^2.12.6",

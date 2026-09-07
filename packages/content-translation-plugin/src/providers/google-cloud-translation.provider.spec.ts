@@ -17,7 +17,7 @@ describe('GoogleCloudTranslationProvider', () => {
         segments: [{ key: 'label', text: '商业服务' }],
     };
 
-    it('recognizes Google 403 rate limits and cools down before another request', async () => {
+    it('classifies Google 403 so the shared executor can persist its cooldown', async () => {
         vi.useFakeTimers();
         const fetchMock = vi
             .fn()
@@ -31,9 +31,7 @@ describe('GoogleCloudTranslationProvider', () => {
         vi.stubGlobal('fetch', fetchMock);
         const provider = new GoogleCloudTranslationProvider({ apiKey: 'test-key' });
         await expect(provider.translate(request)).rejects.toMatchObject({ code: 'RATE_LIMIT' });
-        await expect(provider.translate(request)).rejects.toMatchObject({ code: 'RATE_LIMIT' });
         expect(fetchMock).toHaveBeenCalledTimes(1);
-        vi.advanceTimersByTime(60_000);
         await expect(provider.translate(request)).resolves.toMatchObject({
             translations: [{ key: 'label', text: 'Business services' }],
         });
@@ -66,14 +64,14 @@ describe('GoogleCloudTranslationProvider', () => {
 
     it('protects glossary terms, variables and URLs', () => {
         const protectedValue = googleTranslationInternals.protectText(
-            '模钥 优惠 {discount}，访问 https://example.com',
-            { 模钥: 'MOYAO AI' },
+            '大马通优惠 {discount}，访问 https://example.com',
+            { 大马通: 'Damatong' },
         );
 
-        expect(protectedValue.text).not.toContain('模钥');
+        expect(protectedValue.text).not.toContain('大马通');
         expect(protectedValue.text).not.toContain('{discount}');
         expect(protectedValue.restore(protectedValue.text)).toBe(
-            'MOYAO AI 优惠 {discount}，访问 https://example.com',
+            'Damatong优惠 {discount}，访问 https://example.com',
         );
     });
 

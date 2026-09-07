@@ -57,7 +57,7 @@ export const customerFacingContentRegistry = {
     Province: { storage: 'VENDURE_TRANSLATIONS', fields: [text('name')] },
     StoreProfile: {
         storage: 'LOCALIZED_COLUMNS',
-        fields: [text('storefrontName'), text('description')],
+        fields: [text('storefrontName'), text('description'), text('tagline', false)],
     },
     SystemAnnouncement: {
         storage: 'LOCALIZED_COLUMNS',
@@ -71,25 +71,21 @@ export const customerFacingContentRegistry = {
         storage: 'CUSTOM_TRANSLATIONS',
         fields: [text('label'), text('description', false)],
     },
-    StorePromotionCampaign: {
-        storage: 'VENDURE_TRANSLATIONS',
-        fields: [text('name'), text('description', false)],
-    },
     AutoCardConfig: {
         storage: 'LOCALIZED_COLUMNS',
         fields: [text('fieldLabels'), html('instructions')],
     },
-    StorefrontReviewMerchantResponse: {
+    StorefrontReview: {
         storage: 'LOCALIZED_COLUMNS',
         fields: [text('merchantResponse')],
     },
-    AfterSalesResolution: {
+    AfterSalesRequest: {
         storage: 'LOCALIZED_COLUMNS',
         fields: [text('resolution')],
     },
     ReferralPosterTemplate: {
         storage: 'LOCALIZED_COLUMNS',
-        authoringPolicy: 'BILINGUAL_HUMAN_REVIEW_REQUIRED',
+        authoringPolicy: 'CHINESE_SOURCE_AUTO_TRANSLATED',
         fields: [
             text('title'),
             text('headline'),
@@ -116,12 +112,12 @@ export const customerFacingContentRegistry = {
     },
     ImageGenerationConfig: {
         storage: 'LOCALIZED_COLUMNS',
-        authoringPolicy: 'BILINGUAL_HUMAN_REVIEW_REQUIRED',
+        authoringPolicy: 'CHINESE_SOURCE_AUTO_TRANSLATED',
         fields: [text('terms')],
     },
     ImageModelConfig: {
         storage: 'LOCALIZED_COLUMNS',
-        authoringPolicy: 'BILINGUAL_HUMAN_REVIEW_REQUIRED',
+        authoringPolicy: 'CHINESE_SOURCE_AUTO_TRANSLATED',
         fields: [text('displayName'), text('description')],
     },
 } as const satisfies Record<string, RegisteredContentDefinition>;

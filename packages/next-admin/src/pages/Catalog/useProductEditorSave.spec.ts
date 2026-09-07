@@ -125,7 +125,7 @@ describe('product save orchestration', () => {
         expect(input.controls.showNotice).not.toHaveBeenCalled();
     });
 
-    it('preserves other languages and saves SKU prices in minor units', async () => {
+    it('omits untouched English and saves SKU prices in minor units', async () => {
         const input = fixture();
         await useProductEditorSave(input).handleSave();
         const productMutation = mocks.mutations.get(UPDATE_PRODUCT)!;
@@ -133,7 +133,6 @@ describe('product save orchestration', () => {
         const saved = productMutation.mock.calls[0][0].variables.input;
         expect(saved.translations).toEqual([
             { id: 'zh', languageCode: 'zh_Hans', name: '新名称', slug: 'updated', description: '新详情' },
-            input.data.productData!.product!.translations[1],
         ]);
         expect(variantMutation.mock.calls[0][0].variables.input[0]).toMatchObject({
             id: 'variant-1',

@@ -17,6 +17,7 @@ import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
     BACKFILL_CONTENT_TRANSLATIONS_MUTATION,
     CONTENT_TRANSLATION_AUDIT_QUERY,
+    RETRY_CONTENT_TRANSLATIONS_MUTATION,
     TEST_CONTENT_TRANSLATION_MUTATION,
     type ContentTranslationAuditResult,
     type ContentTranslationStateRecord,
@@ -45,13 +46,15 @@ const entityOptions = [
     ['SystemAnnouncement', '系统公告'],
     ['StorefrontContentBlock', '店铺内容区块'],
     ['StorefrontContentItem', '店铺内容子项'],
-    ['StorePromotionCampaign', '店铺促销'],
     ['AutoCardConfig', '卡密交付配置'],
-    ['StorefrontReviewMerchantResponse', '评价商家回复'],
-    ['AfterSalesResolution', '售后处理结果'],
+    ['StorefrontReview', '评价商家回复'],
+    ['AfterSalesRequest', '售后处理结果'],
+    ['ReferralPosterTemplate', '邀请海报'],
+    ['ImageGenerationConfig', '生图条款'],
+    ['ImageModelConfig', '生图模型文案'],
 ] as const;
 
-const backfillEntityOptions = [['ALL', '全部 Vendure 原生内容'], ...entityOptions.slice(1, 13)] as const;
+const backfillEntityOptions = entityOptions;
 
 export function TranslationsModule() {
     const [search, setSearch] = useState('');
@@ -182,7 +185,7 @@ export function TranslationsModule() {
                             {!audit.configured && (
                                 <section className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs leading-5 text-amber-900">
                                     <strong>自动翻译服务未配置。</strong>
-                                    当前可以查看已有审计记录，但不能执行测试或历史补齐。API Key
+                                    中文保存和历史入队仍可使用；配置恢复后可重试待处理翻译。API Key
                                     需要由部署环境变量提供，不在页面中明文保存。
                                 </section>
                             )}
@@ -341,6 +344,9 @@ export function TranslationsModule() {
 }
 
 function AuditRow({ item }: { item: ContentTranslationStateRecord }) {
+    const [retry, retryState] = useMutation(RETRY_CONTENT_TRANSLATIONS_MUTATION, {
+        refetchQueries: [CONTENT_TRANSLATION_AUDIT_QUERY],
+    });
     return (
         <tr className="group h-[52px] hover:bg-slate-50">
             <td className="sticky left-0 z-10 h-[52px] max-w-40 bg-white px-3 py-0 font-bold text-slate-800 group-hover:bg-slate-50">
@@ -388,8 +394,25 @@ function AuditRow({ item }: { item: ContentTranslationStateRecord }) {
             </td>
             <td className="h-[52px] whitespace-nowrap px-3 py-0 font-mono text-[10px] text-slate-400">
                 {formatDateTime(item.updatedAt)}
+                <div title={item.lastErrorCode ?? undefined}>重试 {item.attempts} 次</div>
+                {item.nextAttemptAt && <div>下次：{formatDateTime(item.nextAttemptAt)}</div>}
             </td>
             <td className="sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 bg-white px-3 py-0 group-hover:bg-slate-50">
+                {!item.locked && ['PENDING', 'FAILED', 'NOTIFY_PENDING'].includes(item.status) && (
+                    <button
+                        type="button"
+                        disabled={retryState.loading}
+                        className="mr-3 text-blue-600 disabled:opacity-50"
+                        onClick={() => void retry({ variables: { ids: [item.id] } }).catch(() => undefined)}
+                    >
+                        {retryState.loading ? '排队中' : '重试'}
+                    </button>
+                )}
+                {retryState.error && (
+                    <span role="alert" className="mr-2 text-rose-600">
+                        {toUserFacingError(retryState.error)}
+                    </span>
+                )}
                 {item.entityType === 'SystemAnnouncement' ? (
                     <Link
                         to={`/storefront/content?tab=announcements&announcementId=${encodeURIComponent(item.entityId)}`}
@@ -422,6 +445,7 @@ function BackfillDialog({
         total: number;
         scanned: number;
         processed: number;
+        queued: number;
         skipped: number;
         failed: number;
         nextOffset: number;
@@ -434,6 +458,7 @@ function BackfillDialog({
             total: number;
             scanned: number;
             processed: number;
+            queued: number;
             skipped: number;
             failed: number;
             nextOffset: number;
@@ -443,7 +468,7 @@ function BackfillDialog({
         };
     }>(BACKFILL_CONTENT_TRANSLATIONS_MUTATION);
     const run = async () => {
-        if (!configured) return;
+        if (state.loading) return;
         try {
             const response = await backfill({
                 variables: { entityType: entityType === 'ALL' ? null : entityType, limit: 100, offset },
@@ -454,7 +479,7 @@ function BackfillDialog({
             setOffset(next.nextOffset);
             if (!next.hasMore)
                 await onCompleted(
-                    `历史翻译补齐完成：处理 ${next.processed} 项，跳过 ${next.skipped} 项，失败 ${next.failed} 项`,
+                    `本页扫描完成：已排队 ${next.queued} 项，已就绪 ${next.processed} 项，跳过 ${next.skipped} 项，失败 ${next.failed} 项。英文将在后台补齐。`,
                 );
         } catch (error) {
             onError(errorText(error));
@@ -486,7 +511,7 @@ function BackfillDialog({
             </Field>
             {!configured && (
                 <p className="mt-3 rounded-lg bg-amber-50 p-3 text-xs text-amber-800">
-                    翻译服务未配置，无法执行补齐。
+                    翻译服务未配置，仍可登记待译内容；配置恢复后再重试。
                 </p>
             )}
             {result && (
@@ -494,7 +519,8 @@ function BackfillDialog({
                     <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
                         <ResultMetric label="总量" value={result.total} />
                         <ResultMetric label="本批扫描" value={result.scanned} />
-                        <ResultMetric label="已处理" value={result.processed} />
+                        <ResultMetric label="已就绪" value={result.processed} />
+                        <ResultMetric label="已排队" value={result.queued} />
                         <ResultMetric label="缺少中文源" value={result.skipped} />
                         <ResultMetric label="失败" value={result.failed} />
                     </div>
