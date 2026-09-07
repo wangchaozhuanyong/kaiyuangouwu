@@ -1,0 +1,10 @@
+[Unit]
+Description=Apply Vendure MySQL backup retention every day
+
+[Timer]
+OnCalendar=*-*-* 19:45:00 UTC
+Persistent=true
+Unit=vendure-mysql-backup-retention.service
+
+[Install]
+WantedBy=timers.target

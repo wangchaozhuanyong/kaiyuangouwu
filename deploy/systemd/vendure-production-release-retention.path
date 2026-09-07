@@ -1,0 +1,9 @@
+[Unit]
+Description=Run Vendure release retention after the production marker changes
+
+[Path]
+PathChanged=/var/www/kaiyuangouwu-releases/current-sha
+Unit=vendure-production-release-retention.service
+
+[Install]
+WantedBy=multi-user.target

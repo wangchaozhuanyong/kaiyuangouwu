@@ -17,9 +17,15 @@
 
 字段登记与存储映射集中在 `customer-facing-content-registry.ts`、`translation-content-adapter.ts`。新内容类型必须同时登记字段、归属关系和事务入队入口。
 
+## 迁移与上线
+
+先执行 dev-server 中 `AddTranslationOutbox1788739200000`，再启动新版 API 和 worker。迁移只新增翻译状态字段、提供方状态表及索引；down 保留新增状态和内容。代码回退不会删除数据，但旧代码可能恢复同步翻译行为，需结合旧版本评估。没有运行 worker 时中文照常保存，英文队列等待 worker 恢复。
+
+生产上线需独立授权、备份、正式迁移及真实业务验收；普通 PR 的 Build & Test 不执行部署。
+
 ## 本地验证
 
-在仓库根运行相关包的 `check-types`、`test`、`build`，以及 `bun run lint:check`、`bun run check:migration-registry`。
+在仓库根运行相关包的 `check-types`、`test`、`build`，以及 `bun run lint:check`、`bun run check:migration-registry`、`bun run check:storefront-publishing`。
 
 真实 Admin/Shop API 集成测试：在 `packages/storefront-content-plugin` 运行：
 

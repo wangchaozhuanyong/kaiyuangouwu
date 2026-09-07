@@ -1,0 +1,118 @@
+name: Production Release
+
+on:
+    push:
+        branches:
+            - main
+        paths:
+            - 'packages/image-generation-plugin/skill/image-prompt-pro/**'
+            - 'packages/image-generation-plugin/src/prompt/prompt-rules.bundle.json'
+            - 'packages/image-generation-plugin/src/prompt/prompt-rules.bundle.ts'
+    workflow_dispatch:
+        inputs:
+            target_sha:
+                description: 'Full 40-character SHA currently at origin/main'
+                required: true
+                type: string
+            media_keys:
+                description: 'Optional reviewed comma-separated storefront media keys or versioned group keys'
+                required: false
+                default: ''
+                type: string
+            channel_codes:
+                description: 'Required reviewed Channel codes when any managed publisher is selected'
+                required: false
+                default: ''
+                type: string
+            auth_visuals:
+                description: 'Publish the reviewed auth visual manifest through Admin API'
+                required: false
+                default: false
+                type: boolean
+            moyao_brand:
+                description: 'Publish the reviewed MOYAO AI brand manifest to the primary Channel'
+                required: false
+                default: false
+                type: boolean
+            referral_posters:
+                description: 'Reviewed poster scope: five neutral templates per store and AI custom for the primary store'
+                required: false
+                default: none
+                type: choice
+                options:
+                    - none
+                    - primary
+                    - both-stores
+            homepage_carousel:
+                description: 'Publish the reviewed three-slide homepage carousel to the primary Channel'
+                required: false
+                default: false
+                type: boolean
+            damatong_storefront:
+                description: 'Publish the reviewed Damatong storefront bundle through Admin API'
+                required: false
+                default: false
+                type: boolean
+            damatong_channel_token:
+                description: 'Required public Channel token when publishing the Damatong storefront bundle'
+                required: false
+                default: ''
+                type: string
+            damatong_publish_review:
+                description: 'preserve-existing for publisher-only fixes, or the exact reviewed dry-run SHA-256 for writes'
+                required: false
+                default: ''
+                type: string
+
+permissions:
+    actions: read
+    contents: read
+    id-token: write
+
+# Keep the active release and only the newest pending candidate. This prevents
+# stale releases from reaching production while avoiding a many-hour backlog.
+concurrency:
+    group: production-release
+    cancel-in-progress: false
+
+jobs:
+    preflight:
+        name: verify live production prerequisites
+        uses: ./.github/workflows/production_operations.yml
+        with:
+            operation: preflight-release
+            source_sha: ${{ inputs.target_sha || github.sha }}
+            expected_channel_codes: ${{ inputs.channel_codes || '' }}
+        permissions:
+            contents: read
+            id-token: write
+
+    build:
+        name: build immutable runtime
+        needs: preflight
+        uses: ./.github/workflows/build_production_runtime.yml
+        with:
+            target_sha: ${{ inputs.target_sha || github.sha }}
+            media_keys: ${{ inputs.media_keys || '' }}
+            channel_codes: ${{ inputs.channel_codes || '' }}
+            auth_visuals: ${{ inputs.auth_visuals || false }}
+            moyao_brand: ${{ inputs.moyao_brand || false }}
+            referral_posters: ${{ inputs.referral_posters || 'none' }}
+            homepage_carousel: ${{ inputs.homepage_carousel || false }}
+            damatong_storefront: ${{ inputs.damatong_storefront || false }}
+            damatong_channel_token: ${{ inputs.damatong_channel_token || '' }}
+            damatong_publish_review: ${{ inputs.damatong_publish_review || '' }}
+        permissions:
+            actions: read
+            contents: read
+
+    deploy:
+        name: deploy the verified runtime
+        needs: build
+        uses: ./.github/workflows/deploy_production_runtime.yml
+        with:
+            target_sha: ${{ inputs.target_sha || github.sha }}
+        permissions:
+            actions: read
+            contents: read
+            id-token: write
