@@ -283,6 +283,10 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.match(script, /Created verified MySQL backup:/u);
     assert.match(script, /offsite=yes/u);
     assert.match(script, /DEPLOY_BACKUP_OK/u);
+    assert.match(script, /runtime-only:reuse-recent-or-create\|managed-content:fresh\|schema:fresh/u);
+    assert.match(script, /backup_age_seconds <= 86400/u);
+    assert.match(script, /production-release-impact\.mjs/u);
+    assert.match(script, /DEPLOY_IMPACT_OK/u);
     assert.match(script, /initialize-production-usdt-secrets\.mjs/u);
     assert.match(script, /export STOREFRONT_PROMOTION_GATE_ENABLED=false/u);
     assert.ok(
@@ -304,6 +308,12 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.match(script, /--dashboard-url https:\/\/console\.moyaoai\.com\/dashboard\//u);
     assert.doesNotMatch(script, /--dashboard-url https:\/\/console\.damatong\.net/u);
     assert.match(script, /--release-id "\$\{target_sha\}"/u);
+    assert.match(script, /--storefront-url https:\/\/moyaoai\.com/u);
+    assert.match(script, /--expected-channel-code __default_channel__/u);
+    assert.match(script, /--storefront-url https:\/\/damatong\.net/u);
+    assert.match(script, /--expected-channel-code 美宜佳/u);
+    assert.match(script, /verify-storefront-realtime\.mjs/u);
+    assert.match(script, /PRODUCTION_AFFECTED_ACCEPTANCE_OK/u);
     assert.match(script, /managed storefront data changed/u);
     assert.match(script, /packages\/dev-server\/scripts\/catalog-cigarette-media\.mjs/u);
     assert.match(script, /VENDURE_REVIEWED_STOREFRONT_MEDIA_KEYS/u);
@@ -429,6 +439,13 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.match(workflow, /i-041a146558e432cbf/u);
     assert.match(workflow, /AWS-RunShellScript/u);
     assert.match(workflow, /release-plan\.json/u);
+    assert.match(workflow, /\.format == 2/u);
+    assert.match(workflow, /VENDURE_RELEASE_BASE_SHA/u);
+    assert.match(workflow, /VENDURE_RELEASE_DATA_RISK/u);
+    assert.match(workflow, /VENDURE_RELEASE_BACKUP_POLICY/u);
+    assert.match(workflow, /VENDURE_RELEASE_AFFECTED_CHECKS/u);
+    assert.match(workflow, /gzip\.compress\(Path\('deploy\/deploy-production-from-s3\.sh'\)/u);
+    assert.match(workflow, /Fixed deployment SSM payload exceeds the safe request limit/u);
     assert.match(workflow, /archiveSha256/u);
     assert.match(workflow, /VENDURE_REVIEWED_STOREFRONT_MEDIA_KEYS/u);
     assert.match(workflow, /VENDURE_REVIEWED_STOREFRONT_MEDIA_CHANNEL_CODES/u);
@@ -449,7 +466,13 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.match(releaseWorkflow, /^name: Production Release$/mu);
     assert.match(releaseWorkflow, /group: production-release/u);
     assert.match(releaseWorkflow, /cancel-in-progress: false/u);
+    assert.match(releaseWorkflow, /lock exact revision and reject duplicate full runs/u);
+    assert.match(releaseWorkflow, /gh run rerun \$\{prior_id\} --failed/u);
+    assert.match(releaseWorkflow, /a no-change full rerun is forbidden/u);
     assert.match(releaseWorkflow, /operation: preflight-release/u);
+    assert.match(releaseWorkflow, /operation: postflight-release/u);
+    assert.match(releaseWorkflow, /base_sha: \$\{\{ needs\.preflight\.outputs\.deployed_sha \}\}/u);
+    assert.match(releaseWorkflow, /verify all stores and affected public functions/u);
     assert.ok(
         releaseWorkflow.indexOf('needs: preflight') < releaseWorkflow.indexOf('needs: build'),
         'release must run preflight, build and deploy in order',
@@ -468,6 +491,10 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.match(artifactWorkflow, /damatong_storefront:/u);
     assert.match(artifactWorkflow, /damatong_channel_token:/u);
     assert.match(artifactWorkflow, /release-plan\.json/u);
+    assert.match(artifactWorkflow, /production-release-impact\.mjs/u);
+    assert.match(artifactWorkflow, /backupPolicy/u);
+    assert.match(artifactWorkflow, /affectedChecks/u);
+    assert.match(artifactWorkflow, /dataRisk/u);
     assert.match(artifactWorkflow, /release-plan\.json\.sha256/u);
     assert.match(artifactWorkflow, /archiveSha256/u);
     assert.match(artifactWorkflow, /mediaChannelCodes/u);
@@ -672,6 +699,10 @@ void test('production media preflight accepts the exact reviewed Unicode Channel
                 encoding: 'utf8',
                 env: {
                     PATH: process.env.PATH,
+                    VENDURE_RELEASE_AFFECTED_CHECKS: '["all-store-basics"]',
+                    VENDURE_RELEASE_BACKUP_POLICY: 'reuse-recent-or-create',
+                    VENDURE_RELEASE_BASE_SHA: sha,
+                    VENDURE_RELEASE_DATA_RISK: 'runtime-only',
                     VENDURE_REVIEWED_STOREFRONT_MEDIA_KEYS: 'catalog-cigarettes-20260907',
                     VENDURE_REVIEWED_STOREFRONT_MEDIA_CHANNEL_CODES: channelCode,
                 },
@@ -698,7 +729,14 @@ void test('referral poster release scope rejects unreviewed values before any pr
             {
                 input: preflight,
                 encoding: 'utf8',
-                env: { PATH: process.env.PATH, VENDURE_REVIEWED_REFERRAL_POSTERS: scope },
+                env: {
+                    PATH: process.env.PATH,
+                    VENDURE_RELEASE_AFFECTED_CHECKS: '["all-store-basics"]',
+                    VENDURE_RELEASE_BACKUP_POLICY: 'reuse-recent-or-create',
+                    VENDURE_RELEASE_BASE_SHA: sha,
+                    VENDURE_RELEASE_DATA_RISK: 'runtime-only',
+                    VENDURE_REVIEWED_REFERRAL_POSTERS: scope,
+                },
             },
         );
         assert.equal(
@@ -735,6 +773,6 @@ void test('poster guard ships before data and verifies both APIs before promotin
     assert.match(artifact, /referral_posters:[\s\S]*default: none/u);
     assert.match(artifact, /referralPosters: \$referralPosters/u);
     assert.match(workflow, /\.referralPosters \| type == "string"/u);
-    assert.match(workflow, /VENDURE_REVIEWED_REFERRAL_POSTERS='\$\{REFERRAL_POSTERS\}'/u);
+    assert.match(workflow, /VENDURE_REVIEWED_REFERRAL_POSTERS=\{quote\('REFERRAL_POSTERS'\)\}/u);
     assert.match(script, /REFERRAL_POSTER_BACKUP_FILE=/u);
 });

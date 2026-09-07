@@ -76,8 +76,67 @@ concurrency:
     cancel-in-progress: false
 
 jobs:
+    lock:
+        name: lock exact revision and reject duplicate full runs
+        runs-on: ubuntu-24.04
+        timeout-minutes: 5
+        permissions:
+            actions: read
+            contents: read
+        env:
+            TARGET_SHA: ${{ inputs.target_sha || github.sha }}
+        steps:
+            - name: Lock latest main and enforce one release run per revision
+              env:
+                  GH_TOKEN: ${{ github.token }}
+              run: |
+                  set -Eeuo pipefail
+                  [[ "$GITHUB_REF" == "refs/heads/main" ]] || {
+                    echo 'Production Release must be started from main' >&2
+                    exit 1
+                  }
+                  [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] || {
+                    echo 'target_sha must be a full lowercase Git SHA' >&2
+                    exit 1
+                  }
+                  latest_main="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)"
+                  [[ "$TARGET_SHA" == "$latest_main" ]] || {
+                    echo "target_sha is not current main; start a new release for ${latest_main}" >&2
+                    exit 1
+                  }
+
+                  runs="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/production_release.yml/runs?branch=main&per_page=100")"
+                  prior="$(
+                    jq -r --arg sha "$TARGET_SHA" --argjson current "$GITHUB_RUN_ID" '
+                      .workflow_runs
+                      | map(select(.head_sha == $sha and .id < $current))
+                      | sort_by(.id)
+                      | .[0]
+                      | if . then [.id, .status, (.conclusion // ""), .html_url] | @tsv else empty end
+                    ' <<< "$runs"
+                  )"
+                  if [[ -n "$prior" ]]; then
+                    IFS=$'\t' read -r prior_id prior_status prior_conclusion prior_url <<< "$prior"
+                    if [[ "$prior_status" == "completed" && "$prior_conclusion" != "success" ]]; then
+                      echo "Release ${TARGET_SHA} already has run ${prior_id}. Re-run failed jobs on that run: gh run rerun ${prior_id} --failed" >&2
+                    elif [[ "$prior_status" == "completed" ]]; then
+                      echo "Release ${TARGET_SHA} was already completed by ${prior_url}; a no-change full rerun is forbidden" >&2
+                    else
+                      echo "Release ${TARGET_SHA} is already ${prior_status} in ${prior_url}; wait for that fixed run" >&2
+                    fi
+                    exit 1
+                  fi
+                  {
+                    echo '## Locked production release'
+                    echo
+                    echo "- Target SHA: \`$TARGET_SHA\`"
+                    echo "- Workflow run: \`$GITHUB_RUN_ID\`"
+                    echo '- Retry policy: use **Re-run failed jobs** on this run; do not dispatch the same SHA again.'
+                  } >> "$GITHUB_STEP_SUMMARY"
+
     preflight:
         name: verify live production prerequisites
+        needs: lock
         uses: ./.github/workflows/production_operations.yml
         with:
             operation: preflight-release
@@ -92,6 +151,7 @@ jobs:
         needs: preflight
         uses: ./.github/workflows/build_production_runtime.yml
         with:
+            base_sha: ${{ needs.preflight.outputs.deployed_sha }}
             target_sha: ${{ inputs.target_sha || github.sha }}
             media_keys: ${{ inputs.media_keys || '' }}
             channel_codes: ${{ inputs.channel_codes || '' }}
@@ -116,3 +176,95 @@ jobs:
             actions: read
             contents: read
             id-token: write
+
+    postflight:
+        name: verify exact running revision and store configuration
+        needs: deploy
+        uses: ./.github/workflows/production_operations.yml
+        with:
+            operation: postflight-release
+            source_sha: ${{ inputs.target_sha || github.sha }}
+            expected_channel_codes: ${{ inputs.channel_codes || '' }}
+        permissions:
+            contents: read
+            id-token: write
+
+    acceptance:
+        name: verify all stores and affected public functions
+        needs:
+            - build
+            - deploy
+            - postflight
+        runs-on: ubuntu-24.04
+        timeout-minutes: 15
+        permissions:
+            actions: read
+            contents: read
+        env:
+            AFFECTED_CHECKS: ${{ needs.build.outputs.affected_checks }}
+            TARGET_SHA: ${{ inputs.target_sha || github.sha }}
+        steps:
+            - name: Check out the locked revision
+              uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+              with:
+                  ref: ${{ inputs.target_sha || github.sha }}
+                  persist-credentials: false
+
+            - name: Setup Node.js
+              uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+              with:
+                  node-version: '24.19.0'
+
+            - name: Download the verified release plan
+              uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+              with:
+                  name: production-runtime-${{ inputs.target_sha || github.sha }}
+                  path: artifacts
+
+            - name: Validate affected acceptance plan
+              run: |
+                  set -Eeuo pipefail
+                  [[ "$(git rev-parse HEAD^{commit})" == "$TARGET_SHA" ]]
+                  jq -e --argjson expected "$AFFECTED_CHECKS" --arg runId "$GITHUB_RUN_ID" --arg sha "$TARGET_SHA" '
+                    .format == 2 and
+                    .sourceRunId == $runId and
+                    .targetSha == $sha and
+                    .affectedChecks == $expected and
+                    (.affectedChecks | index("all-store-basics") != null)
+                  ' artifacts/release-plan.json >/dev/null
+
+            - name: Verify both storefronts and the canonical Dashboard
+              run: |
+                  node deploy/verify-production-release.mjs \
+                    --storefront-url https://moyaoai.com \
+                    --dashboard-url https://console.moyaoai.com/dashboard/ \
+                    --expected-channel-code __default_channel__ \
+                    --release-id "$TARGET_SHA"
+                  node deploy/verify-production-release.mjs \
+                    --storefront-url https://damatong.net \
+                    --dashboard-url https://console.moyaoai.com/dashboard/ \
+                    --expected-channel-code 美宜佳 \
+                    --release-id "$TARGET_SHA"
+
+            - name: Verify affected realtime delivery
+              if: contains(needs.build.outputs.affected_checks, 'storefront-realtime')
+              run: |
+                  node deploy/verify-storefront-realtime.mjs \
+                    --mode public-smoke \
+                    --url https://moyaoai.com/storefront-realtime/events \
+                    --release-id "$TARGET_SHA"
+                  node deploy/verify-storefront-realtime.mjs \
+                    --mode public-smoke \
+                    --url https://damatong.net/storefront-realtime/events \
+                    --release-id "$TARGET_SHA"
+
+            - name: Record acceptance evidence
+              run: |
+                  {
+                    echo '## Production acceptance'
+                    echo
+                    echo "- Exact running SHA: \`$TARGET_SHA\` (verified by postflight)"
+                    echo '- Stores: `moyaoai.com` and `damatong.net`'
+                    echo '- Dashboard: `console.moyaoai.com/dashboard/`'
+                    echo "- Automatic affected checks: \`$AFFECTED_CHECKS\`"
+                  } >> "$GITHUB_STEP_SUMMARY"

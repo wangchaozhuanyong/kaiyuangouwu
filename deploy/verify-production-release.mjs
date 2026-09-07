@@ -1,7 +1,7 @@
 import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 
-const SHOP_API_PROBE = Object.freeze({ query: '{__typename}' });
+const SHOP_API_PROBE = Object.freeze({ query: '{__typename activeChannel { code }}' });
 const ENTRY_COOKIE_NAME = 'storefront-entry';
 const DEFAULT_TIMEOUT_MS = 10_000;
 const MAX_DASHBOARD_ASSETS = 500;
@@ -238,6 +238,7 @@ function shopApiRequest(cookie) {
 export async function verifyProductionRelease({
     storefrontUrl,
     dashboardUrl,
+    expectedChannelCode,
     fetchImpl = globalThis.fetch,
     timeoutMs = DEFAULT_TIMEOUT_MS,
     releaseId = String(Date.now()),
@@ -284,6 +285,14 @@ export async function verifyProductionRelease({
         throw new Error('Public Shop API: GraphQL probe did not return Query');
     }
     checks.push('public Shop API');
+    if (expectedChannelCode) {
+        if (publicShopBody?.data?.activeChannel?.code !== expectedChannelCode) {
+            throw new Error(
+                `Public Shop API: expected Channel ${expectedChannelCode}, received ${publicShopBody?.data?.activeChannel?.code ?? '(missing)'}`,
+            );
+        }
+        checks.push('expected Channel');
+    }
 
     const storefrontResponse = await fetchWithTimeout(
         fetchImpl,
@@ -348,6 +357,7 @@ async function main() {
         options: {
             'storefront-url': { type: 'string' },
             'dashboard-url': { type: 'string' },
+            'expected-channel-code': { type: 'string' },
             'timeout-ms': { type: 'string', default: String(DEFAULT_TIMEOUT_MS) },
             'release-id': { type: 'string', default: String(Date.now()) },
         },
@@ -362,6 +372,7 @@ async function main() {
     const checks = await verifyProductionRelease({
         storefrontUrl: values['storefront-url'],
         dashboardUrl: values['dashboard-url'],
+        expectedChannelCode: values['expected-channel-code'],
         timeoutMs,
         releaseId: values['release-id'],
     });

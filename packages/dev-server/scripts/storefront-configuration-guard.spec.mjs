@@ -473,7 +473,10 @@ void test('release plan, bootstrap and fixed inspection wire the new review and 
     assert.match(build, /damatong_publish_review:/u);
     assert.match(build, /damatongPublishReview: \$damatongPublishReview/u);
     assert.match(workflow, /\.damatongPublishReview \| type == "string"/u);
-    assert.match(workflow, /VENDURE_REVIEWED_DAMATONG_PUBLISH_REVIEW='\$\{DAMATONG_PUBLISH_REVIEW\}'/u);
+    assert.match(
+        workflow,
+        /VENDURE_REVIEWED_DAMATONG_PUBLISH_REVIEW=\{quote\('DAMATONG_PUBLISH_REVIEW'\)\}/u,
+    );
     assert.match(deploy, /storefront-configuration-guard\.mjs" review/u);
     assert.match(deploy, /storefront-configuration-guard\.mjs" capture/u);
     assert.match(deploy, /storefront-configuration-guard\.mjs" verify/u);
