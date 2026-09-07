@@ -114,7 +114,7 @@ describe('search result cache publication', () => {
         const catalog = vi.fn().mockResolvedValue({ items: [], totalItems: 0 });
         const storeHistory = vi.spyOn(Storage.prototype, 'setItem');
         try {
-            await act(async () => {
+            act(() => {
                 root.render(
                     <QueryClientProvider client={client}>
                         <SearchPageContext.Provider
@@ -134,14 +134,13 @@ describe('search result cache publication', () => {
                 );
             });
             const input = container.querySelector('input');
-            const valueDescriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
-            if (!input || !valueDescriptor?.set) throw new Error('Search input was not mounted');
-            await act(async () => {
-                valueDescriptor.set.call(input, '中华');
+            if (!input) throw new Error('Search input was not mounted');
+            act(() => {
+                setNativeInputValue(input, '中华');
                 input.dispatchEvent(new InputEvent('input', { bubbles: true }));
             });
             for (const options of [{ isComposing: true }, { isComposing: false, keyCode: 229 }]) {
-                await act(async () => {
+                act(() => {
                     input.dispatchEvent(
                         new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, ...options }),
                     );
@@ -167,3 +166,9 @@ describe('search result cache publication', () => {
         }
     });
 });
+
+function setNativeInputValue(input: HTMLInputElement, value: string) {
+    const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+    if (!descriptor?.set) throw new Error('Native input setter is unavailable');
+    descriptor.set.call(input, value);
+}
