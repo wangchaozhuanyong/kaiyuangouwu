@@ -916,7 +916,14 @@ function BlockRow({
                     icon={ArrowDown}
                 />
                 <ActionIcon
-                    label={block.enabled ? '停用' : '启用'}
+                    label={block.enabled ? '停用楼层' : '启用楼层'}
+                    tooltip={
+                        block.enabled
+                            ? scheduled
+                                ? '当前已启用（排期中），点击后停用'
+                                : '当前展示中，点击后停用'
+                            : '当前已停用，点击后启用'
+                    }
                     disabled={pending || !canUpdate}
                     onClick={onToggle}
                     icon={block.enabled ? EyeOff : Eye}
@@ -1087,12 +1094,14 @@ function ErrorState({ message, onRetry }: { message: string; onRetry: () => void
 }
 function ActionIcon({
     label,
+    tooltip,
     disabled,
     onClick,
     icon: Icon,
     danger = false,
 }: {
     label: string;
+    tooltip?: string;
     disabled: boolean;
     onClick: () => void;
     icon: typeof ArrowUp;
@@ -1103,7 +1112,7 @@ function ActionIcon({
     return (
         <button
             type="button"
-            title={label}
+            title={tooltip ?? label}
             aria-label={label}
             disabled={disabled || !canAct}
             onClick={onClick}
