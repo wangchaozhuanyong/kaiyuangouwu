@@ -370,7 +370,8 @@ Historical benchmark results with charts can be found in [this Google Sheet](htt
 
 ### Retired local Dashboard
 
-`dashboard:dev` and `build:dashboard` now delegate to `../next-admin`. There is no dev-server Vite
-configuration or old Dashboard bundle target. Production static hosting uses `NextAdminPlugin`
+`dashboard:dev` and `build:dashboard` now delegate to `../next-admin`. The application entry points
+no longer invoke the legacy Vite configuration or Dashboard bundle. Production static hosting uses `NextAdminPlugin`
 with `../next-admin/dist`; it never probes a Vite port. Existing `/dashboard/` URLs remain unchanged.
-Run `bun run check:next-admin-boundary` from the repository root to check the application boundary.
+Historical UI source files remain for existing architecture and route-parity checks, while business
+plugin builds exclude them. No architecture budgets or repository rules were changed.

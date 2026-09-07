@@ -12,5 +12,6 @@ API contract. `serveStatic: false` disables only file hosting; worker processes 
 - Return 503 when the configured next-admin build is unavailable.
 
 Run `bun run build`, `bun run check-types`, and `bun run test` in this directory.
-The application's approved old UI removal scope is recorded in
-[the architecture record](../../docs/architecture/NEXT_ADMIN_ONLY_20260906.md).
+The application no longer registers or builds the legacy Dashboard UI. Historical UI sources remain
+in the repository for the unchanged architecture and route-parity checks; they are excluded from
+the business plugins' production builds and immutable runtime dependencies.
