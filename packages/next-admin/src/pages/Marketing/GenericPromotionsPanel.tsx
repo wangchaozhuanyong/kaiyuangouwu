@@ -4,6 +4,10 @@ import { useEffect, useState } from 'react';
 
 import { sensitiveActionContext } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
+import {
+    ConfigurableOperationField,
+    ConfigurableOperationTechnicalDetails,
+} from '../../components/ConfigurableOperationFields';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { SensitiveActionDialog } from '../../components/SensitiveActionDialog';
 import {
@@ -19,6 +23,11 @@ import {
     type OperationDefinition,
     type OperationValue,
 } from '../../graphql/generic-promotions.graphql';
+import {
+    configurableArgumentLabel,
+    configurableOperationLabel,
+    serializeConfigurableListValue,
+} from '../../utils/configurable-operation-localization';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatDateTime, getMutationError } from '../Sales/sales-utils';
 
@@ -96,8 +105,7 @@ export function GenericPromotionsPanel() {
                             />
                         </h2>
                         <p className="mt-1 text-xs text-slate-500">
-                            直接编辑当前服务端已注册的任意 PromotionCondition 和
-                            PromotionAction，不限制为优惠券或秒杀模板。
+                            管理当前服务端支持的全部促销条件与优惠动作，不限制为优惠券或秒杀模板。
                         </p>
                     </div>
                     <div className="flex gap-2">
@@ -286,7 +294,7 @@ export function PromotionEditor({
                             {id === 'new' ? '新建通用促销' : '编辑通用促销'}
                         </h2>
                         <p className="mt-1 text-xs text-slate-500">
-                            参数值按服务端 ConfigArgDefinition 类型提交；列表参数需填写 JSON 数组。
+                            请按中文提示配置促销规则；列表类参数每行填写一项。
                         </p>
                     </div>
                     <button type="button" onClick={onClose} aria-label="关闭">
@@ -429,7 +437,7 @@ function OperationList({
                         <option value="">请选择</option>
                         {definitions.map(item => (
                             <option key={item.code} value={item.code}>
-                                {item.description || item.code}
+                                {configurableOperationLabel(item, `${title}规则`)}
                             </option>
                         ))}
                     </select>
@@ -447,11 +455,13 @@ function OperationList({
                             <div className="flex items-start justify-between gap-3">
                                 <div>
                                     <strong className="text-xs">
-                                        {definition?.description || operation.code}
+                                        {definition
+                                            ? configurableOperationLabel(definition, `${title}规则`)
+                                            : `${title}规则`}
                                     </strong>
-                                    <span className="ml-2 font-mono text-[10px] text-slate-500">
-                                        {operation.code}
-                                    </span>
+                                    {definition && (
+                                        <ConfigurableOperationTechnicalDetails definition={definition} />
+                                    )}
                                 </div>
                                 <button
                                     type="button"
@@ -478,9 +488,10 @@ function OperationList({
                                         ui: null,
                                     }))
                                 ).map(arg => (
-                                    <OperationArg
+                                    <ConfigurableOperationField
                                         key={arg.name}
                                         definition={arg}
+                                        operationCode={operation.code}
                                         value={
                                             operation.arguments.find(item => item.name === arg.name)?.value ??
                                             ''
@@ -516,45 +527,6 @@ function OperationList({
         </section>
     );
 }
-function OperationArg({
-    definition,
-    value,
-    onChange,
-}: {
-    definition: OperationArgDefinition;
-    value: string;
-    onChange: (value: string) => void;
-}) {
-    const label = definition.label || definition.name;
-    if (definition.type === 'boolean' && !definition.list)
-        return (
-            <label className={labelClass}>
-                {label}
-                {definition.required ? ' *' : ''}
-                <select value={value} onChange={event => onChange(event.target.value)} className={inputClass}>
-                    <option value="true">true</option>
-                    <option value="false">false</option>
-                </select>
-                <small className="mt-1 block font-normal text-slate-400">{definition.description}</small>
-            </label>
-        );
-    return (
-        <label className={labelClass}>
-            {label}
-            {definition.required ? ' *' : ''}
-            <input
-                value={value}
-                onChange={event => onChange(event.target.value)}
-                placeholder={definition.list ? '["id-1", "id-2"]' : definition.type}
-                className={`${inputClass} ${definition.list ? 'font-mono' : ''}`}
-            />
-            <small className="mt-1 block font-normal text-slate-400">
-                {definition.description}
-                {definition.list ? ' · JSON 数组' : ''}
-            </small>
-        </label>
-    );
-}
 function promotionInput(
     draft: PromotionDraft,
     languageCode: string,
@@ -585,19 +557,25 @@ function validateOperations(values: OperationValue[], definitions: OperationDefi
         if (!definition) throw new Error(`服务端未注册操作 ${operation.code}`);
         const args = definition.args.map(arg => {
             const value = operation.arguments.find(item => item.name === arg.name)?.value.trim() ?? '';
+            const label = configurableArgumentLabel(arg, definition.code);
             if (arg.required && value === '')
-                throw new Error(`${definition.description} 的 ${arg.label || arg.name} 不能为空`);
-            if (arg.list && value) {
-                const parsed = JSON.parse(value);
-                if (!Array.isArray(parsed)) throw new Error(`${arg.label || arg.name} 必须是 JSON 数组`);
+                throw new Error(`${configurableOperationLabel(definition)}的“${label}”不能为空`);
+            let serializedValue = value;
+            if (arg.list) {
+                try {
+                    serializedValue = serializeConfigurableListValue(value, arg.type);
+                } catch (cause) {
+                    throw new Error(`${label}：${cause instanceof Error ? cause.message : '列表内容无效'}`);
+                }
             }
             if (
+                !arg.list &&
                 ['int', 'float', 'money'].includes(arg.type.toLowerCase()) &&
                 value &&
                 !Number.isFinite(Number(value))
             )
-                throw new Error(`${arg.label || arg.name} 必须是数字`);
-            return { name: arg.name, value };
+                throw new Error(`${label}必须是数字`);
+            return { name: arg.name, value: serializedValue };
         });
         return { code: operation.code, arguments: args };
     });

@@ -294,10 +294,12 @@ export const STORE_MANAGEMENT_QUERY = gql`
             args {
                 name
                 type
+                list
                 required
                 defaultValue
                 label
                 description
+                ui
             }
         }
         paymentMethodHandlers {
@@ -306,10 +308,12 @@ export const STORE_MANAGEMENT_QUERY = gql`
             args {
                 name
                 type
+                list
                 required
                 defaultValue
                 label
                 description
+                ui
             }
         }
         shippingEligibilityCheckers {
@@ -318,10 +322,12 @@ export const STORE_MANAGEMENT_QUERY = gql`
             args {
                 name
                 type
+                list
                 required
                 defaultValue
                 label
                 description
+                ui
             }
         }
         shippingCalculators {
@@ -330,10 +336,12 @@ export const STORE_MANAGEMENT_QUERY = gql`
             args {
                 name
                 type
+                list
                 required
                 defaultValue
                 label
                 description
+                ui
             }
         }
         fulfillmentHandlers {
@@ -342,10 +350,12 @@ export const STORE_MANAGEMENT_QUERY = gql`
             args {
                 name
                 type
+                list
                 required
                 defaultValue
                 label
                 description
+                ui
             }
         }
     }
@@ -1123,10 +1133,12 @@ export interface ConfigurableOperationDefinitionRecord {
     args: Array<{
         name: string;
         type: string;
+        list?: boolean;
         required: boolean;
         defaultValue: unknown;
         label: string | null;
         description: string | null;
+        ui?: unknown;
     }>;
 }
 
