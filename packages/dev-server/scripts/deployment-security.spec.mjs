@@ -335,6 +335,14 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
         ).length,
         3,
     );
+    assert.match(
+        script,
+        /if \[\[ "\$\{reviewed_storefront_media_channel_codes\}" == "美宜佳" \]\]; then\s+storefront_media_shop_origin='https:\/\/damatong\.net'/u,
+    );
+    assert.equal(
+        (script.match(/VENDURE_STOREFRONT_URL="\$\{storefront_media_shop_origin\}"/gu) ?? []).length,
+        3,
+    );
     assert.equal(
         (
             script.match(
@@ -365,7 +373,7 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.match(script, /sync-moyao-brand\.mjs --dry-run/u);
     assert.match(script, /sync-moyao-brand\.mjs --apply --allow-remote/u);
     assert.match(script, /sync-moyao-brand\.mjs --verify/u);
-    assert.equal((script.match(/^\s*VENDURE_STOREFRONT_URL=https:\/\/moyaoai\.com/gmu) ?? []).length, 12);
+    assert.equal((script.match(/^\s*VENDURE_STOREFRONT_URL=https:\/\/moyaoai\.com/gmu) ?? []).length, 9);
     assert.match(script, /DAMATONG_PREFLIGHT_BEGIN/u);
     assert.match(script, /DAMATONG_PREFLIGHT_OK/u);
     assert.match(script, /DAMATONG_PUBLISH_BEGIN/u);
