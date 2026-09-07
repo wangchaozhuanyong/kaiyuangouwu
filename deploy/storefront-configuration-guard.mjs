@@ -221,6 +221,22 @@ export function configurationSummary(snapshot) {
     };
 }
 
+export function assertExpectedProductionScope(snapshot, expectedChannelCodes = []) {
+    const stores = Array.isArray(snapshot?.stores) ? snapshot.stores : [];
+    const domains = new Set(stores.map(store => store.profile?.primaryDomain));
+    for (const domain of ['moyaoai.com', 'damatong.net']) {
+        assert.ok(domains.has(domain), `Production preflight cannot access required storefront ${domain}`);
+    }
+    const channelCodes = new Set(stores.map(store => store.channelCode));
+    for (const code of expectedChannelCodes) {
+        assert.ok(channelCodes.has(code), `Production preflight cannot access required Channel ${code}`);
+    }
+    return {
+        requiredDomains: ['moyaoai.com', 'damatong.net'],
+        verifiedChannelCount: channelCodes.size,
+    };
+}
+
 /** Read saved configuration and both public locales. Session and Channel tokens never leave this function. */
 export async function captureStorefrontConfiguration({
     username,
@@ -338,8 +354,14 @@ async function main() {
         validatePublishReview(file === 'true', review, changedFiles);
         return;
     }
-    assert.ok(['capture', 'verify', 'inspect'].includes(mode), 'Unsupported configuration guard mode');
-    assert.ok(mode === 'inspect' ? !file : Boolean(file), 'Configuration snapshot path is required');
+    assert.ok(
+        ['capture', 'verify', 'inspect', 'preflight'].includes(mode),
+        'Unsupported configuration guard mode',
+    );
+    assert.ok(
+        ['inspect', 'preflight'].includes(mode) ? !review : Boolean(file),
+        'Configuration snapshot path is required',
+    );
     const snapshot = await captureStorefrontConfiguration({
         username: process.env.SUPERADMIN_USERNAME,
         password: process.env.SUPERADMIN_PASSWORD,
@@ -347,6 +369,10 @@ async function main() {
     if (mode === 'capture') await writeFile(file, JSON.stringify(snapshot), { mode: 0o600, flag: 'wx' });
     if (mode === 'verify') assertConfigurationPreserved(JSON.parse(await readFile(file, 'utf8')), snapshot);
     const summary = configurationSummary(snapshot);
+    if (mode === 'preflight') {
+        const expectedChannelCodes = file ? file.split(',') : [];
+        summary.productionScope = assertExpectedProductionScope(snapshot, expectedChannelCodes);
+    }
     if (mode !== 'inspect') summary.stores = summary.stores.map(({ images, sharing, ...counts }) => counts);
     const output = `${JSON.stringify(summary)}\nSTOREFRONT_CONFIGURATION_${mode.toUpperCase()}_OK\n`;
     assert.ok(Buffer.byteLength(output) <= 18000, 'Configuration summary exceeds the SSM evidence limit');

@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
     assertConfigurationPreserved,
+    assertExpectedProductionScope,
     assertPublishedMatchesSaved,
     captureStorefrontConfiguration,
     configurationSummary,
@@ -65,6 +66,23 @@ function storeFixture(id = '1') {
 function snapshot() {
     return { format: 1, stores: [storeFixture(), storeFixture('2')] };
 }
+
+void test('release preflight requires both production domains and every reviewed Channel', () => {
+    const production = snapshot();
+    production.stores[0].profile.primaryDomain = 'moyaoai.com';
+    production.stores[0].channelCode = '__default_channel__';
+    production.stores[1].profile.primaryDomain = 'damatong.net';
+    production.stores[1].channelCode = 'my-malaysia';
+    assert.deepEqual(assertExpectedProductionScope(production, ['my-malaysia']), {
+        requiredDomains: ['moyaoai.com', 'damatong.net'],
+        verifiedChannelCount: 2,
+    });
+    assert.throws(
+        () => assertExpectedProductionScope({ ...production, stores: production.stores.slice(0, 1) }),
+        /damatong\.net/u,
+    );
+    assert.throws(() => assertExpectedProductionScope(production, ['missing-channel']), /missing-channel/u);
+});
 
 void test('publisher-only mode fails closed for changed manifests, media or missing review', () => {
     assert.equal(validatePublishReview(false, ''), 'none');

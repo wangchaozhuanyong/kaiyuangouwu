@@ -42,17 +42,33 @@ function validateRequest(environment) {
             'verify-two-factor-backup',
             'verify-security-dependencies',
             'inspect-storefront-config',
+            'preflight-release',
         ].includes(operation),
         'Unsupported production operation',
     );
     assert.match(environment.OPS_SOURCE_SHA || '', /^[a-f0-9]{40}$/u, 'Invalid operations source SHA');
     const expectedPlanSha256 = environment.OPS_EXPECTED_PLAN_SHA256 || '';
+    const expectedChannelCodes = environment.OPS_EXPECTED_CHANNEL_CODES || '';
     if (['retain-reviewed', 'backup-two-factor-reviewed'].includes(operation)) {
         assert.match(expectedPlanSha256, /^[a-f0-9]{64}$/u, 'A reviewed retention plan SHA-256 is required');
     } else {
         assert.equal(expectedPlanSha256, '', 'A read-only diagnosis does not accept a retention approval');
     }
-    return { operation, sourceSha: environment.OPS_SOURCE_SHA, expectedPlanSha256 };
+    assert.ok(
+        !expectedChannelCodes ||
+            expectedChannelCodes === '美宜佳' ||
+            /^[a-z0-9_][a-z0-9_-]*(,[a-z0-9_][a-z0-9_-]*)*$/u.test(expectedChannelCodes),
+        'Invalid expected Channel codes',
+    );
+    if (operation !== 'preflight-release') {
+        assert.equal(expectedChannelCodes, '', 'Expected Channel codes are only valid for release preflight');
+    }
+    return {
+        operation,
+        sourceSha: environment.OPS_SOURCE_SHA,
+        expectedPlanSha256,
+        expectedChannelCodes,
+    };
 }
 
 function planDigest(plan, sourceSha) {
@@ -286,6 +302,48 @@ function storefrontInspectionFailure(result) {
 
 function runLocked(environment = process.env) {
     const request = validateRequest(environment);
+    if (request.operation === 'preflight-release') {
+        const plan = inspectProductionReleases();
+        assertStorefrontInspectionRevision(plan.markerSha, request.sourceSha);
+        const storefront = spawnSync(
+            '/usr/bin/node',
+            [
+                '--env-file=/var/www/kaiyuangouwu/packages/dev-server/.env',
+                path.join(__dirname, 'storefront-configuration-guard.mjs'),
+                'preflight',
+                request.expectedChannelCodes,
+            ],
+            { encoding: 'utf8', timeout: 240000, maxBuffer: 65536, stdio: ['ignore', 'pipe', 'pipe'] },
+        );
+        assert.equal(storefront.status, 0, storefrontInspectionFailure(storefront));
+        assert.ok(
+            storefront.stdout.endsWith('STOREFRONT_CONFIGURATION_PREFLIGHT_OK\n'),
+            'Storefront preflight evidence is incomplete',
+        );
+        const migrations = spawnSync(
+            '/usr/bin/node',
+            [
+                path.join(__dirname, 'usdt-migration-guard.cjs'),
+                'plan',
+                plan.currentRuntime,
+                '',
+                path.join(__dirname, 'repository'),
+            ],
+            { encoding: 'utf8', timeout: 120000, maxBuffer: 65536, stdio: ['ignore', 'pipe', 'pipe'] },
+        );
+        assert.equal(migrations.status, 0, 'Production migration preflight failed');
+        assert.ok(
+            migrations.stdout.endsWith('USDT_RUNTIME_GUARD_OK operation=plan\n'),
+            'Migration preflight evidence is incomplete',
+        );
+        process.stdout.write(
+            `PRODUCTION_PREFLIGHT_REVISIONS source=${request.sourceSha} runtime=${plan.markerSha}\n`,
+        );
+        process.stdout.write(storefront.stdout);
+        process.stdout.write(migrations.stdout);
+        process.stdout.write('PRODUCTION_OPERATIONS_COMPLETE operation=preflight-release\n');
+        return;
+    }
     if (request.operation === 'inspect-storefront-config') {
         const plan = inspectProductionReleases();
         // A failed deployment can leave the previous immutable runtime active. Inspect it without promoting it.

@@ -6,6 +6,7 @@ import {
     existsSync,
     mkdirSync,
     mkdtempSync,
+    readFileSync,
     rmSync,
     statSync,
     symlinkSync,
@@ -15,11 +16,26 @@ import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
+const repositoryRoot = fileURLToPath(new URL('../../../', import.meta.url));
 const operations = require('../../../deploy/production-operations.cjs');
 const retention = require('../../../deploy/systemd/vendure-production-release-retention.cjs');
 const sourceSha = 'a'.repeat(40);
+
+void test('release workflow ships the fixed live preflight inputs and migration registry', () => {
+    const workflow = readFileSync(
+        path.join(repositoryRoot, '.github/workflows/production_operations.yml'),
+        'utf8',
+    );
+    assert.match(workflow, /workflow_call:/u);
+    assert.match(workflow, /preflight-release/u);
+    assert.match(workflow, /OPS_EXPECTED_CHANNEL_CODES/u);
+    assert.match(workflow, /deploy\/usdt-migration-guard\.cjs/u);
+    assert.match(workflow, /packages\/dev-server\/migrations\/index\.ts/u);
+    assert.match(workflow, /ref: \$\{\{ inputs\.source_sha \|\| github\.sha \}\}/u);
+});
 
 void test('read-only storefront inspection accepts an older running ancestor but rejects unrelated revisions', () => {
     const deployedSha = 'b'.repeat(40);
@@ -215,6 +231,36 @@ void test('diagnostics are the default; unknown commands and unreviewed retentio
     assert.throws(() => operations.validateRequest({ OPS_SOURCE_SHA: 'main' }));
     assert.throws(() =>
         operations.validateRequest({ OPS_SOURCE_SHA: sourceSha, OPS_EXPECTED_PLAN_SHA256: 'a'.repeat(64) }),
+    );
+});
+
+void test('release preflight accepts only a reviewed Channel scope', () => {
+    assert.deepEqual(
+        operations.validateRequest({
+            OPS_OPERATION: 'preflight-release',
+            OPS_SOURCE_SHA: sourceSha,
+            OPS_EXPECTED_CHANNEL_CODES: '__default_channel__,my-malaysia',
+        }),
+        {
+            operation: 'preflight-release',
+            sourceSha,
+            expectedPlanSha256: '',
+            expectedChannelCodes: '__default_channel__,my-malaysia',
+        },
+    );
+    assert.throws(() =>
+        operations.validateRequest({
+            OPS_OPERATION: 'diagnose',
+            OPS_SOURCE_SHA: sourceSha,
+            OPS_EXPECTED_CHANNEL_CODES: 'my-malaysia',
+        }),
+    );
+    assert.throws(() =>
+        operations.validateRequest({
+            OPS_OPERATION: 'preflight-release',
+            OPS_SOURCE_SHA: sourceSha,
+            OPS_EXPECTED_CHANNEL_CODES: 'my-malaysia;id',
+        }),
     );
 });
 

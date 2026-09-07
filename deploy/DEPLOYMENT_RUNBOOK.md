@@ -1,6 +1,6 @@
 # Vendure 生产发布手册
 
-最后核对：2026-09-05
+最后核对：2026-09-07
 
 本文件只记录稳定的部署入口和无密钥操作流程，不保存密码、令牌、数据库连接值或私钥内容。
 
@@ -22,13 +22,13 @@
 2. 生产只允许部署 `origin/main` 当前完整的 40 位提交 SHA，或指向 `main` 中该提交的不可变正式版本标签。禁止从功能分支、脏工作树、历史副本、可移动标签或人工挑选的 `dist` 目录部署。
 3. `main` 只允许普通快进更新，禁止强推；正式版本标签一经用于生产不得移动、覆盖或复用。验证后如果 `origin/main` 前移，必须停止并用新提交重新测试、构建和记录。
 4. 已合并的远程功能分支或热修复分支，只能在生产部署、线上验收和发布记录全部完成后删除。仍在维护的长期分支必须明确用途和负责人；生产回滚依据是已验证的不可变制品，不是保留旧功能分支。
-5. 每次部署记录必须固定保存：来源分支、生产引用（`main` 或正式标签）、完整 commit SHA、正式版本标签（如使用）、CI 制品名称、制品 SHA-256、制品工作流运行编号、部署工作流运行编号、环境、UTC 部署时间、操作人、上一个生产 SHA 和验收结果。当前非容器发布以制品名称和 SHA-256 为准；以后使用容器时还必须记录不可变镜像 digest，只有镜像版本名或 tag 不合格。
+5. 每次部署记录必须固定保存：来源分支、生产引用（`main` 或正式标签）、完整 commit SHA、正式版本标签（如使用）、CI 制品名称、制品 SHA-256、唯一的 `Production Release` 运行编号、环境、UTC 部署时间、操作人、上一个生产 SHA 和验收结果。兼容旧模板时，制品与部署工作流编号填写同一个运行编号。当前非容器发布以制品名称和 SHA-256 为准；以后使用容器时还必须记录不可变镜像 digest，只有镜像版本名或 tag 不合格。
 6. 缺少分支祖先关系、不可变制品标识、发布记录或上线验收证据时必须停止发布，禁止以手工复制、服务器现场构建或跳过门禁的方式继续。
 7. 回滚只允许切换到上一个已验证的不可变制品，并记录原因、`ROLLBACK_SHA` 和回滚验收结果；禁止强制回退 `main`、从旧分支重新构建或把旧 `dist` 覆盖到当前运行目录。
 
 GitHub 仓库设置中的“Automatically delete head branches”必须保持关闭。发布收尾使用
 `Cleanup Merged Production Branches` 手动工作流，填写精确 `production_sha`、成功的
-`Deploy Production Runtime` 运行编号和同一 SHA 的手动 `Monitor Production Health` 验收运行编号。
+`Production Release` 运行编号和同一 SHA 的手动 `Monitor Production Health` 验收运行编号。
 必须先保持 `apply=false` 执行 dry-run 并审核候选清单，再以相同证据设置 `apply=true`。
 工作流会通过 SSM 复核服务器当前 SHA，只删除名称以 `feat/`、`fix/`、`hotfix/` 或 `release/`
 开头、没有开放 PR 且分支头已包含在该生产 SHA 中的远程分支；`backup/`、`archive/`、`artifact/`
@@ -134,7 +134,7 @@ bun run --cwd packages/dev-server build:production-runtime -- --require-platform
 
 最后一条命令只能在与 EC2 匹配的 `linux/x64` 干净构建机上执行。产物目录会包含平台、完整 Git SHA、`bun.lock` SHA-256、运行包清单、`RUNTIME-AUDIT.json` 和文件校验清单，并拒绝 `esbuild`、`less`、`tar`、`typescript`、`vite`、`webpack` 或达到指定审计阈值的包进入运行目录。使用 `--allow-dirty` 生成的产物只允许本地演练，不得部署。
 
-正式制品优先使用 GitHub Actions 的 `Production Runtime Artifact` 工作流生成。常规发布手动输入 `origin/main` 当前完整的 40 位小写 SHA；若包含已审核的店铺媒体，同时在唯一的可选 `media_keys` 和 `channel_codes` 输入中填写逗号分隔的 manifest key 与明确 Channel 范围，两者必须同时出现。媒体 key 与 Channel 范围会连同目标 SHA、制品名与制品 SHA-256 写入单独校验的 `release-plan.json`，下游只能使用同一制品运行生成的发布计划。当 `main` 只变更 `packages/image-generation-plugin/skill/image-prompt-pro/**` 或对应的已编译 bundle 时，工作流也会使用该 push 的完整 SHA 自动运行。若同一批 push 混入任何其他路径，自动任务会停止，必须按常规发布流程人工审核。正式制品只接受经过审核的双父 `main` 合并提交：第一父必须已被 PR 头提交包含，最终 `main` 源码树必须与 PR 头源码树完全相同，且该 PR 头必须存在成功的 `Build & Test` 运行。在这些证据都精确匹配后，制品阶段不再重复全仓单测、开发工作流测试和变更 lint，只使用 Node `24.19.0`、Bun `1.3.14` 和 `ubuntu-24.04` x64 执行冻结安装、全仓审计、Skill 回归、生产构建、发布专属结构检查、运行产物 High+ 门禁和自验证。任一 CI 证据、分支包含关系、源码树、SHA、源码清洁性、平台或发布门禁不匹配时都不会上传制品。依赖审计将同一份绑定 `bun.lock` 的 JSON 证据用于全仓与运行时门禁，按实际 severity 阻断 High+；仅对 Bun 明确返回的网络超时、连接关闭或底层传输错误最多尝试三次，退避为 15 秒和 60 秒；漏洞、其他命令错误、无效输出或重试耗尽仍立即失败关闭。
+正式入口统一为 GitHub Actions 的 `Production Release`。它在同一个 `production-release` 并发组内按“现场预检 → 不可变制品构建 → 部署”串行运行：当前发布不会被取消，等待区只保留最新候选，旧候选不会形成数小时积压。现场预检在昂贵构建前验证当前运行目录/版本、两个生产店铺域名和已审核 Channel 均可访问，并确认待执行迁移只来自审核清单；预检失败时停止，不消耗后续构建和部署时间。常规发布手动输入 `origin/main` 当前完整的 40 位小写 SHA；若包含已审核的店铺媒体，同时在唯一的可选 `media_keys` 和 `channel_codes` 输入中填写逗号分隔的 manifest key 与明确 Channel 范围，两者必须同时出现。媒体 key 与 Channel 范围会连同目标 SHA、制品名与制品 SHA-256 写入单独校验的 `release-plan.json`，下游只能使用同一运行生成的发布计划。当 `main` 只变更 `packages/image-generation-plugin/skill/image-prompt-pro/**` 或对应的已编译 bundle 时，工作流也会使用该 push 的完整 SHA 自动运行。若同一批 push 混入任何其他路径，自动任务会停止，必须按常规发布流程人工审核。正式制品只接受经过审核的双父 `main` 合并提交：第一父必须已被 PR 头提交包含，最终 `main` 源码树必须与 PR 头源码树完全相同，且该 PR 头必须存在成功的 `Build & Test` 运行。在这些证据都精确匹配后，制品阶段不再重复全仓单测、开发工作流测试和变更 lint，只使用 Node `24.19.0`、Bun `1.3.14` 和 `ubuntu-24.04` x64 执行冻结安装、全仓审计、Skill 回归、生产构建、发布专属结构检查、运行产物 High+ 门禁和自验证。任一 CI 证据、分支包含关系、源码树、SHA、源码清洁性、平台或发布门禁不匹配时都不会上传制品。依赖审计将同一份绑定 `bun.lock` 的 JSON 证据用于全仓与运行时门禁，按实际 severity 阻断 High+；仅对 Bun 明确返回的网络超时、连接关闭或底层传输错误最多尝试三次，退避为 15 秒和 60 秒；漏洞、其他命令错误、无效输出或重试耗尽仍立即失败关闭。
 
 登录视觉或 MOYAO AI 品牌变更必须在同一制品调度分别勾选 `auth_visuals` 或 `moyao_brand`，并填写已审核 `channel_codes`。品牌发布只接受 `channel_codes=__default_channel__`。这些字段也写入并校验 `release-plan.json`；缺少审核、Channel 不正确，或在没有对应变更时携带发布范围，都必须在备份和运行时切换前失败关闭。
 
@@ -150,11 +150,11 @@ bun run --cwd packages/dev-server build:production-runtime -- --require-platform
 
 大马通整店受管内容使用独立的 `damatong_storefront` 与 `damatong_channel_token` 发布范围，不复用容易混淆 Channel code 与 token 的通用字段。生产只接受公开的受审选择器 `damatong_channel_token=my-malaysia`；该字段不是生产 Channel 凭据。发布脚本先从 `damatong.net` 的 Shop API 读取域名实际路由的 Channel code，再在已认证的 Admin Channel 列表中精确匹配，并只在进程内使用真实 token，日志不得输出该 token。首次启用必须先单独发布本工作流和服务器保护逻辑，且该门禁引导版本不得携带大马通内容或勾选发布范围；确认生产已安装新保护逻辑后，第二个正式版本才可携带发布器、图片与内容并勾选该范围。
 
-制品工作流成功后，`Deploy Production Runtime` 会自动接管手动制品任务和仅由上述 Skill 路径触发的 `main` push 发布。它使用 GitHub OIDC 临时凭证承担
+同一次 `Production Release` 的制品任务成功后，可复用部署任务会在同一运行内自动接管手动任务和仅由上述 Skill 路径触发的 `main` push 发布。它使用 GitHub OIDC 临时凭证承担
 `arn:aws:iam::079740175286:role/yunqiao-vendure-github-deploy`，只把当前 SHA 的不可变归档写入
 `s3://yunqiao-vendure-prod-backup-079740175286-apne1/deployments/<sha>/`，再只向
 `i-041a146558e432cbf` 发送 `AWS-RunShellScript`。仓库和 GitHub 均不保存长期 AWS Access Key；常规发布在
-GitHub 的 `main` 分支手动运行一次 `Production Runtime Artifact`，Skill 规则路径变更则自动触发，两者都无需登录 AWS 控制台。
+GitHub 的 `main` 分支手动运行一次 `Production Release`，Skill 规则路径变更则自动触发，两者都无需登录 AWS 控制台。
 
 自动发布入口为 `/usr/local/sbin/vendure-production-deploy-from-s3`，来源必须是已提交的
 `deploy/deploy-production-from-s3.sh`。脚本在同一个生产锁内完成源码快进、S3 外层校验、运行产物自验证、
@@ -387,15 +387,15 @@ VENDURE_API_ORIGIN=http://127.0.0.1:3002 VENDURE_STOREFRONT_URL=https://moyaoai.
 
 Channel 默认复用 `STOREFRONT_MEDIA_CHANNEL_CODES`，需要独立范围时才设置 `HOMEPAGE_CAROUSEL_CHANNEL_CODES`。脚本会保留轮播以外的装修区块及排序；上传图片前先校验全部目标 Channel、轮播和分类，存在多个未登记旧 Hero 或分类缺失时直接失败。写后必须同时通过 Admin API 与中英文 Shop API 的图片 ID/地址、文案、统计标签、主题颜色、启用状态、跳转目标、轮播数量和顺序反查；Shop API 反查同时传递 `languageCode=<locale>` 查询参数和 `language-code: <locale>` 请求头。验证失败时删除本批新建 Hero 并恢复原 Hero 与顺序。正式发布必须先完成独立门禁引导版本，再使用 `homepage_carousel=true`、主 Channel 和精确三张 media keys 调度；不得通过手工 SSH 绕过。分类 slug 以 `languageCode=zh_Hans` 和同名语言头查询，避免英文翻译 slug 导致目标缺失。恢复批次返回后还必须回读 Admin API，确认原区块、字段和排序确实恢复，才可报告回滚成功。
 
-登录/注册页文案、色板和标签属于 Vendure 内容，不得只改客户端。在 `Production Runtime Artifact` 中勾选 `auth_visuals`，并填写已审核 Channel；发布链会先 dry-run，再以带 `expectedUpdatedAt` 的单个 Admin API 批次原子写入，随后运行独立只读 `--verify` 反查 Admin 与中英文 Shop API，并记录 `AUTH_VISUAL_VERIFY_OK`。验证失败时恢复原内容并停止切换。
+登录/注册页文案、色板和标签属于 Vendure 内容，不得只改客户端。在 `Production Release` 中勾选 `auth_visuals`，并填写已审核 Channel；发布链会先 dry-run，再以带 `expectedUpdatedAt` 的单个 Admin API 批次原子写入，随后运行独立只读 `--verify` 反查 Admin 与中英文 Shop API，并记录 `AUTH_VISUAL_VERIFY_OK`。验证失败时恢复原内容并停止切换。
 发布器的回归样本必须包含当前生产中文/英文配对。若修改中文源文时再次提交与线上完全相同的英文，内容翻译服务可能把该英文判定为过期自动翻译并重新生成。这种发布必须改为新的已审核英文，或使用接口明确支持的人工锁定；不得假设 GraphQL 输入会原样持久化，必须以写入后 Admin/Shop 反查值为准。
 中英文 Shop API 反查必须复制真实客户端的语言路由：同时传递 `languageCode=<locale>` 查询参数与 `language-code: <locale>` 请求头，并分别校验 `zh_Hans` 和 `en`。仅使用请求头的探针不得作为客户端语言一致性证据。
 
 当版本包含已审核的店铺媒体、登录/注册内容或 MOYAO AI 品牌变更时，直接在目标 `main` 完整 SHA 的
-`Production Runtime Artifact` 唯一入口填写完整 manifest key/勾选 `auth_visuals`/勾选 `moyao_brand`，并填写已审核 Channel code；大马通整店内容则勾选 `damatong_storefront` 并填写 `damatong_channel_token=my-malaysia`。不再另行触发第二个内容发布工作流，也不回退到服务器默认 Channel。
+`Production Release` 唯一入口填写完整 manifest key/勾选 `auth_visuals`/勾选 `moyao_brand`，并填写已审核 Channel code；大马通整店内容则勾选 `damatong_storefront` 并填写 `damatong_channel_token=my-malaysia`。不再另行触发第二个内容发布工作流，也不回退到服务器默认 Channel。
 下游部署会校验发布计划、制品 SHA-256 与源工作流 run ID，然后只将已审核的 publisher 范围、key 和 Channel 交给持有生产锁的脚本。脚本在备份、迁移和 PM2 切换前，先通过当前健康 API 执行只读 dry-run，校验登录、Channel 权限、SKU/内容目标和现有素材；仅预检通过后才备份、迁移和启动候选 API，再执行受保护 apply。预检失败不会停止或重启 PM2。
 
-若目标提交包含 MOYAO AI 品牌更新，必须在该 SHA 的 `Production Runtime Artifact` 中设置 `moyao_brand=true` 与 `channel_codes=__default_channel__`。下游将它与制品 SHA-256 作为同一份发布计划校验，并在唯一生产锁内先预演，再把三套官方品牌素材、双语品牌名/口号和色板一次性绑定到主 Channel：
+若目标提交包含 MOYAO AI 品牌更新，必须在该 SHA 的 `Production Release` 中设置 `moyao_brand=true` 与 `channel_codes=__default_channel__`。下游将它与制品 SHA-256 作为同一份发布计划校验，并在唯一生产锁内先预演，再把三套官方品牌素材、双语品牌名/口号和色板一次性绑定到主 Channel：
 
 ```bash
 cd "${CANDIDATE}"
@@ -478,18 +478,20 @@ sudo -n systemctl reload nginx
 
 ## 标准发布流程
 
+发布期间冻结新的生产合并：发现已有 `Production Release` 正在运行时，后续 PR 保持 ready 状态但不合并。普通代码发布目标为 30–45 分钟；包含审核数据或数据库迁移时目标为 45–90 分钟。超过 90 分钟立即停止启动新发布，按预检、构建、上传、部署、验收标记具体阻塞阶段，不以重复调度掩盖问题。已对同一 SHA 和相同输入成功的门禁不得无故重复；报告、分支清理和非阻塞工作树整理放在生产切换与验收之后。
+
 1. 将来源分支更新到最新 `origin/main`，检查完整 diff 和变更文件清单，只保留本次经过审核的修改；设计验收截图、测试报告、历史快照和其他未跟踪资料不进入发布提交。
 2. 将审核后的修改合并进 `main`，使用普通快进推送，确认远端 `main` 的完整 SHA；禁止强推。若同一需求同时改变 publisher 生产门禁与被该门禁保护的 publisher/数据，必须先拆出并完成门禁引导发布，再合并第二阶段。若使用正式版本标签，标签必须指向这个已在 `main` 中的 SHA，且发布后不得移动或复用。
 3. 从该 SHA 创建隔离的干净工作树，运行测试和生产构建；必须显式执行 `@vendure/operations-dashboard-plugin` 菜单回归测试，禁止仅依赖根命令的工作区自动发现。
 4. 创建发布记录并先填写来源分支、生产引用、`TARGET_SHA`、正式标签（如使用）、上一个生产 SHA、环境和操作人；信息不完整时停止。
-5. 对该 SHA 手动运行一次 `Production Runtime Artifact` 工作流；如果本版本包含已审核店铺媒体、登录视觉或 MOYAO AI 品牌，在同一次调度填写 `media_keys`/勾选 `auth_visuals`/勾选 `moyao_brand`，并填写对应已审核 `channel_codes`。大马通整店内容必须勾选 `damatong_storefront` 并填写 `damatong_channel_token=my-malaysia`。成功后 `Deploy Production Runtime` 会通过 OIDC、私有 S3 和 SSM 自动完成后续部署。或在受控 `linux/x64` 构建机生成唯一的 production runtime 目录并走人工发布。两种方式都必须完成自验证并记录外层校验和。
+5. 对该 SHA 手动运行一次 `Production Release` 工作流；如果本版本包含已审核店铺媒体、登录视觉或 MOYAO AI 品牌，在同一次调度填写 `media_keys`/勾选 `auth_visuals`/勾选 `moyao_brand`，并填写对应已审核 `channel_codes`。大马通整店内容必须勾选 `damatong_storefront` 并填写 `damatong_channel_token=my-malaysia`。现场预检、制品和部署使用同一个运行编号。或在受控 `linux/x64` 构建机生成唯一的 production runtime 目录并走人工发布。两种方式都必须完成自验证并记录外层校验和。
 6. 自动路径由工作流上传归档并调用 `/usr/local/sbin/vendure-production-deploy-from-s3`；人工路径将工作流归档或整个产物目录原样传入 `/var/www/kaiyuangouwu-releases/<sha>-<唯一标识>-linux-x64`。禁止在 EC2 安装依赖或构建。
 7. 服务器校验外层清单哈希、产物内全部文件、符号链接、平台、Git SHA 和运行依赖清单。
 8. 记录当前稳定指针；如果发布计划包含任一受管 publisher，先使用当前健康 API 完成只读 dry-run。数据库迁移只在该预检和生产环境审计明确通过且备份完成后，通过专用迁移入口执行一次。部署日志必须包含 `DEPLOY_BACKUP_OK file=<本地备份> offsite=yes invocation_id=<systemd invocation>`，缺失精确备份文件、校验文件或异地上传证据时停止迁移。
 9. PM2 从候选目录直接启动已编译的 Worker 和 API，不使用 Vendure CLI；等待 `127.0.0.1:3002/health` 与 `127.0.0.1:3002/image-generation/health` 成功，并递归验证候选 Dashboard 的入口、样式、主包与懒加载 JS/CSS 全部可访问。
 10. 从候选产物预演并执行本次审核过的库存继承修复、店铺图片同步、登录/注册内容批次和 MOYAO AI 品牌同步；所有远程写入都必须使用 `--apply --allow-remote`，媒体随后还必须通过 `--verify`，并且必须已通过第 8 步的只读预检。全部成功后才原子切换 `kaiyuangouwu-current`。
 11. 验收前台、后台、Shop API、Admin API、静态资源和 PM2 状态，确认线上 Git SHA。
-12. 完成发布记录中的制品名称、制品 SHA-256、制品与部署工作流编号、UTC 时间和验收结果；记录必须能够唯一定位生产运行的代码和制品。
+12. 完成发布记录中的制品名称、制品 SHA-256、`Production Release` 工作流编号、UTC 时间和验收结果；兼容旧记录字段时，制品与部署工作流编号填写同一个 `Production Release` 运行编号。记录必须能够唯一定位生产运行的代码和制品。
 13. 发布与验收成功后，先用 `Cleanup Merged Production Branches` 的 dry-run 核对候选，再以 `apply=true` 删除已包含在当前生产 SHA 且不再使用的远程功能/热修复/release 分支；撤销临时 SSH 规则，仅保留原有固定规则。候选和回滚包按策略保留，不删除用户数据。
 
 ## 上线验收
@@ -579,7 +581,6 @@ node deploy/verify-storefront-realtime.mjs \
 - 回滚目标是上一个已通过健康检查、仍保留在 `kaiyuangouwu-releases` 中的不可变运行产物。
 - 先对回滚产物重新执行 `verify-runtime.mjs --expected-sha <ROLLBACK_SHA>`，再将 PM2 和 `kaiyuangouwu-current` 指回该目录，最后重复上线验收。不单独拷贝旧 `dist` 或 `node_modules`。
 - 不回滚或删除数据库、上传资产、订单、客户、店铺配置和测试数据，除非另有经过确认的数据恢复方案。
-
 
 ### 精确修正轮播遮罩
 
