@@ -69,7 +69,7 @@
         background-color: var(--admin-surface);
     }
 
-    .dark :where(.bg-white\/90, .bg-white\/85) {
+    .dark :where(.bg-white\/95, .bg-white\/90, .bg-white\/85) {
         background-color: rgb(17 24 39 / 94%);
     }
 
@@ -81,7 +81,7 @@
         background-color: var(--admin-page);
     }
 
-    .dark :where(.bg-slate-50\/80, .bg-slate-50\/70, .bg-slate-50\/60, .bg-slate-50\/50) {
+    .dark :where(.bg-slate-50\/80, .bg-slate-50\/70, .bg-slate-50\/60, .bg-slate-50\/50, .bg-slate-50\/40) {
         background-color: rgb(11 18 32 / 78%);
     }
 
@@ -91,6 +91,10 @@
 
     .dark :where(.bg-slate-200) {
         background-color: #334155;
+    }
+
+    .dark :where(.bg-slate-200\/70) {
+        background-color: rgb(51 65 85 / 82%);
     }
 
     .dark :where(.bg-slate-300) {
@@ -138,7 +142,7 @@
         border-color: rgb(96 165 250 / 42%);
     }
 
-    .dark :where(.bg-rose-50, .bg-rose-100) {
+    .dark :where(.bg-rose-50, .bg-rose-50\/50, .bg-rose-100) {
         background-color: rgb(225 29 72 / 16%);
     }
 
@@ -162,7 +166,7 @@
         border-color: rgb(251 191 36 / 36%);
     }
 
-    .dark :where(.bg-emerald-50, .bg-emerald-100) {
+    .dark :where(.bg-emerald-50, .bg-emerald-50\/50, .bg-emerald-100) {
         background-color: rgb(5 150 105 / 16%);
     }
 
@@ -186,12 +190,20 @@
         border-color: rgb(248 113 113 / 36%);
     }
 
-    .dark :where(.bg-violet-50) {
+    .dark :where(.bg-violet-50, .bg-violet-100) {
         background-color: rgb(124 58 237 / 16%);
     }
 
     .dark :where(.text-violet-700, .text-violet-600) {
         color: #a78bfa;
+    }
+
+    .dark :where(.bg-cyan-50) {
+        background-color: rgb(8 145 178 / 16%);
+    }
+
+    .dark :where(.text-cyan-700) {
+        color: #22d3ee;
     }
 
     .dark :where(.text-orange-600) {
@@ -230,7 +242,7 @@
         background-color: rgb(30 41 59 / 82%);
     }
 
-    .dark :where(.hover\:bg-slate-50, .hover\:bg-slate-50\/80):hover {
+    .dark :where(.hover\:bg-slate-50, .hover\:bg-slate-50\/80, .hover\:bg-slate-50\/70):hover {
         background-color: var(--admin-surface-subtle);
     }
 
@@ -259,9 +271,21 @@
         background-color: rgb(37 99 235 / 32%);
     }
 
+    .dark .hover\:bg-blue-200:hover {
+        background-color: rgb(37 99 235 / 38%);
+    }
+
+    .dark .group:hover .group-hover\:bg-blue-50 {
+        background-color: rgb(37 99 235 / 22%);
+    }
+
     .dark :where(.hover\:text-blue-800, .hover\:text-blue-700, .hover\:text-blue-600):hover,
     .dark .group:hover :where(.group-hover\:text-blue-700, .group-hover\:text-blue-600, .group-hover\:text-blue-500) {
         color: #93c5fd;
+    }
+
+    .dark :where(.hover\:text-rose-700, .hover\:text-rose-600):hover {
+        color: #fda4af;
     }
 
     .dark :where(.hover\:bg-rose-50, .hover\:bg-rose-100):hover {
@@ -271,6 +295,14 @@
     .dark .hover\:bg-emerald-50:hover,
     .dark .hover\:bg-emerald-100:hover {
         background-color: rgb(5 150 105 / 22%);
+    }
+
+    .dark .hover\:bg-amber-200:hover {
+        background-color: rgb(217 119 6 / 28%);
+    }
+
+    .dark .focus\:text-blue-700:focus {
+        color: #93c5fd;
     }
 
     .dark :where(.disabled\:bg-slate-50, .disabled\:bg-slate-100):disabled {
