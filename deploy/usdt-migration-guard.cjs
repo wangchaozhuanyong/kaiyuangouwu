@@ -9,6 +9,7 @@ const REVIEWED_MIGRATIONS = [
     'AddUsdtActiveAmountKey1788703200000',
     'ReleaseUsdtHistoricalAmountKeys1788706800000',
     'SeedCheckoutProvinces1788742800000',
+    'AlignCheckoutProvinceCountries1788746400000',
 ];
 const TABLE = 'storefront_usdt_payment_intent';
 
