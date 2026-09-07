@@ -1,0 +1,27 @@
+{
+    "name": "@vendure/next-admin-plugin",
+    "version": "0.1.0",
+    "private": true,
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "scripts": {
+        "build": "tsc --project tsconfig.build.json",
+        "check-types": "tsc --project tsconfig.json --noEmit",
+        "test": "vitest run"
+    },
+    "dependencies": {
+        "@nestjs/common": "^11.0.12",
+        "@nestjs/graphql": "~13.4.4",
+        "@vendure/common": "3.7.2",
+        "@vendure/core": "3.7.2",
+        "date-fns": "^4.0.0",
+        "express": "^5.1.0",
+        "express-rate-limit": "^7.5.0",
+        "graphql-tag": "^2.12.6"
+    },
+    "devDependencies": {
+        "@types/express": "^5.0.1",
+        "typescript": "5.9.3",
+        "vitest": "^3.2.4"
+    }
+}

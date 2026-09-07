@@ -3,7 +3,7 @@ export {
     MAX_CATALOG_APPEND_ROWS,
     catalogAppendRequestBytes,
     createCatalogImportBatches,
-} from './dashboard/catalog-import-batches.js';
+} from './browser/catalog-import-batches.js';
 export {
     CATALOG_BROWSER_PARSER_VERSION,
     CATALOG_EXCLUDED_HEADERS,
@@ -18,15 +18,15 @@ export {
     type CatalogWorkerResponse,
     type LocalCatalogFile,
     type LocalCatalogRowError,
-} from './dashboard/catalog-local-file.js';
+} from './browser/catalog-local-file.js';
 export type { NormalizedCatalogRow } from './types.js';
 
 export {
     downloadCatalogBlob,
     exportCatalogRowsLocally,
     type CatalogExportFormat,
-} from './dashboard/catalog-export-file.js';
-export type { CatalogExportRowRecord } from './dashboard/catalog-management.graphql.js';
+} from './browser/catalog-export-file.js';
+export type { CatalogExportRowRecord } from './browser/catalog-export-types.js';
 
 export {
     MAX_ORDER_EXPENSE_IMPORT_ROWS,

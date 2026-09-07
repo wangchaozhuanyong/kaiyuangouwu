@@ -10,7 +10,6 @@
         "test": "vitest run"
     },
     "dependencies": {
-        "@lingui/react": "^5.9.3",
         "@nestjs/common": "^11.0.12",
         "@nestjs/graphql": "~13.4.4",
         "@vendure/common": "3.7.2",
@@ -23,9 +22,5 @@
         "@types/express": "^5.0.0",
         "typescript": "5.8.2",
         "vitest": "^3.2.4"
-    },
-    "peerDependencies": {
-        "@vendure/dashboard": "3.7.2",
-        "react": "^19.2.4"
     }
 }

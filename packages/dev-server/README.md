@@ -30,30 +30,30 @@ fixed ports.
 The main checkout uses:
 
 - API: `https://vendure.localhost`
-- Dashboard: `https://dashboard.vendure.localhost/dashboard/`
+- Dashboard: `https://dashboard.vendure.localhost/`
 
 Linked worktrees are automatically prefixed with their branch name. A worktree for `fix-order-list`
 uses:
 
 - API: `https://fix-order-list.vendure.localhost`
-- Dashboard: `https://fix-order-list.dashboard.vendure.localhost/dashboard/`
+- Dashboard: `https://fix-order-list.dashboard.vendure.localhost/`
 
 The Dashboard calls its matching worktree API directly. Browser sessions are isolated by the
 worktree-specific API hostname, while Docker resources and database data remain shared.
 
 Before starting any long-running process, `dev` builds the package entry points required by the API
-and Dashboard Vite server. It then supervises:
+and next-admin Vite server. It then supervises:
 
 - the Vendure API server;
-- the Dashboard Vite development server;
+- the next-admin Vite development server;
 - the `@vendure/common` and `@vendure/core` watchers;
-- the Dashboard Vite-plugin and backend-plugin watchers.
+- the next-admin backend-plugin watcher and existing business-plugin watchers.
 
 Successful dependency rebuilds restart the process that loaded those compiled modules. Dashboard
 application changes continue to use Vite HMR.
 
-The workflow keeps the Dashboard backend plugin active for its API and settings features, but does
-not build or serve a second static Dashboard. Use the Portless Dashboard URL above. It also skips
+The workflow keeps NextAdminPlugin active for its metrics and settings APIs, with static hosting
+disabled while the next-admin Vite server provides the UI. Use the Portless Dashboard URL above. It also skips
 the standalone GraphiQL frontend. Running `dev:server` directly retains static Dashboard and
 GraphiQL serving for workflows that have already built their frontend assets.
 
@@ -94,7 +94,7 @@ The output has this shape:
     "pid": 12345,
     "worktreePath": "/path/to/worktree",
     "apiUrl": "https://fix-order-list.vendure.localhost",
-    "dashboardUrl": "https://fix-order-list.dashboard.vendure.localhost/dashboard/",
+    "dashboardUrl": "https://fix-order-list.dashboard.vendure.localhost/",
     "statusFile": "/path/to/worktree/.vendure/dev-server.json"
 }
 ```
@@ -367,3 +367,11 @@ The results of the test are saved to the [`./load-testing/results`](./load-testi
 - `load-test-<date>-<product-count>-<script-name>.csv` Contains time-series data which can be used to create charts
 
 Historical benchmark results with charts can be found in [this Google Sheet](https://docs.google.com/spreadsheets/d/1UaNhmokbNmKDehrnh4m9XO6-DJte-AI-l_Lnji47Qn8/edit?usp=sharing)
+
+### Retired local Dashboard
+
+`dashboard:dev` and `build:dashboard` now delegate to `../next-admin`. The application entry points
+no longer invoke the legacy Vite configuration or Dashboard bundle. Production static hosting uses `NextAdminPlugin`
+with `../next-admin/dist`; it never probes a Vite port. Existing `/dashboard/` URLs remain unchanged.
+Historical UI source files remain for existing architecture and route-parity checks, while business
+plugin builds exclude them. No architecture budgets or repository rules were changed.

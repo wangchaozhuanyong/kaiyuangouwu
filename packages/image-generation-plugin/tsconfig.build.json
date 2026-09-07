@@ -9,11 +9,10 @@
             "@vendure/store-management-plugin": ["../store-management-plugin/dist/index.d.ts"],
             "@vendure/store-management-plugin/currency-conversion": [
                 "../store-management-plugin/dist/store-currency-price-selection-strategy.d.ts"
-            ],
-            "@/vdb/*": ["../dashboard/src/lib/*"]
+            ]
         }
     },
     "files": ["./src/index.ts"],
     "include": [],
-    "exclude": ["./src/**/*.spec.ts"]
+    "exclude": ["./src/**/*.spec.ts", "./src/dashboard", "./src/admin"]
 }

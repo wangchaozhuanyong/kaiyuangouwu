@@ -26,7 +26,6 @@
         "test:coupon-e2e": "cross-env PACKAGE=store-management-plugin vitest --config ../../e2e-common/vitest.config.mts --run e2e/coupon-lifecycle.e2e-spec.ts"
     },
     "dependencies": {
-        "@lingui/react": "^5.9.3",
         "@nestjs/common": "^11.0.12",
         "@nestjs/core": "^11.0.12",
         "@nestjs/graphql": "~13.4.4",
@@ -39,19 +38,13 @@
         "@vendure/storefront-content-plugin": "0.1.0",
         "cheerio": "1.0.0",
         "graphql-tag": "^2.12.6",
-        "lucide-react": "^0.475.0",
         "markdown-it": "14.3.0",
         "reflect-metadata": "^0.2.2",
         "typeorm": "^0.3.21"
     },
     "devDependencies": {
         "@types/express": "^5.0.0",
-        "@types/react": "^19.2.14",
         "typescript": "5.8.2",
         "vitest": "^3.2.4"
-    },
-    "peerDependencies": {
-        "@vendure/dashboard": "3.7.2",
-        "react": "^19.2.4"
     }
 }

@@ -37,7 +37,6 @@ import {
     VendureConfig,
     VendurePlugin,
 } from '@vendure/core';
-import { DashboardPlugin } from '@vendure/dashboard/plugin';
 import {
     defaultEmailHandlers,
     EmailEventHandlerWithAsyncData,
@@ -50,6 +49,7 @@ import {
 } from '@vendure/email-plugin';
 import { HardenPlugin } from '@vendure/harden-plugin';
 import { ImageGenerationPlugin } from '@vendure/image-generation-plugin';
+import { NextAdminPlugin } from '@vendure/next-admin-plugin';
 import { OperationsDashboardPlugin } from '@vendure/operations-dashboard-plugin';
 import {
     StoreDomain,
@@ -1051,12 +1051,11 @@ export const devConfig: VendureConfig = {
         DefaultSchedulerPlugin.init({}),
         EmailPlugin.init(emailPluginOptions()),
         ...(IS_INSTRUMENTED ? [loadPackage('@vendure/telemetry-plugin').TelemetryPlugin.init({})] : []),
-        SERVE_STATIC_DASHBOARD
-            ? DashboardPlugin.init({
-                  route: 'dashboard',
-                  appDir: dashboardAppDir,
-              })
-            : DashboardPlugin,
+        NextAdminPlugin.init({
+            route: 'dashboard',
+            appDir: dashboardAppDir,
+            serveStatic: SERVE_STATIC_DASHBOARD,
+        }),
     ],
 };
 

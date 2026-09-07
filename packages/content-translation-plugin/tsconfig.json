@@ -4,5 +4,5 @@
         "lib": ["es2019", "esnext.asynciterable", "dom", "dom.iterable"]
     },
     "include": ["src/**/*.ts"],
-    "exclude": ["src/dashboard"]
+    "exclude": ["./src/dashboard", "./src/admin"]
 }

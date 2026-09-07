@@ -22,8 +22,5 @@
     "devDependencies": {
         "typescript": "5.8.2",
         "vitest": "^3.2.4"
-    },
-    "peerDependencies": {
-        "@vendure/dashboard": "3.7.2"
     }
 }

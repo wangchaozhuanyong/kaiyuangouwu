@@ -62,7 +62,7 @@ VITE_VENDURE_ADMIN_API_URL=http://localhost:3000/admin-api
 
 生产构建固定挂载在 `/dashboard/`，未显式设置 `VITE_VENDURE_ADMIN_API_URL` 时使用同域
 `/admin-api`。生产运行产物必须包含 `packages/next-admin/dist`，并由 Vendure
-`DashboardPlugin` 提供 SPA 路由回退。
+`NextAdminPlugin` 提供 SPA 路由回退。旧 Dashboard 已退出应用注册和构建；历史源码保留，旧 URL 继续兼容跳转。
 
 ## 后端联调
 

@@ -194,18 +194,12 @@
         "@vendure/common": "3.7.2",
         "@vendure/core": "3.7.2",
         "graphql-tag": "^2.12.6",
-        "lucide-react": "^0.475.0",
         "typeorm": "^0.3.21",
         "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
       },
       "devDependencies": {
-        "@types/react": "^19.2.14",
         "typescript": "5.8.2",
         "vitest": "^3.2.4",
-      },
-      "peerDependencies": {
-        "@vendure/dashboard": "3.7.2",
-        "react": "^19.2.4",
       },
     },
     "packages/cli": {
@@ -281,9 +275,6 @@
       "devDependencies": {
         "typescript": "5.8.2",
         "vitest": "^3.2.4",
-      },
-      "peerDependencies": {
-        "@vendure/dashboard": "3.7.2",
       },
     },
     "packages/core": {
@@ -502,10 +493,10 @@
         "@vendure/common": "3.7.2",
         "@vendure/content-translation-plugin": "0.1.0",
         "@vendure/core": "3.7.2",
-        "@vendure/dashboard": "3.7.2",
         "@vendure/email-plugin": "3.7.2",
         "@vendure/harden-plugin": "3.7.2",
         "@vendure/image-generation-plugin": "0.1.0",
+        "@vendure/next-admin-plugin": "0.1.0",
         "@vendure/operations-dashboard-plugin": "0.1.0",
         "@vendure/store-domain-plugin": "0.1.0",
         "@vendure/store-management-plugin": "0.1.0",
@@ -521,7 +512,6 @@
         "@typescript/native-preview": "7.0.0-dev.20260515.1",
         "@vendure/cli": "3.7.2",
         "@vendure/testing": "3.7.2",
-        "@vendure/ui-devkit": "3.7.2",
         "commander": "^12.0.0",
         "concurrently": "^9.2.0",
         "csv-stringify": "^6.4.6",
@@ -609,20 +599,14 @@
         "@vendure/store-management-plugin": "0.1.0",
         "file-type": "21.3.4",
         "graphql-tag": "^2.12.6",
-        "lucide-react": "^0.475.0",
         "sharp": "0.35.3",
         "typeorm": "^0.3.21",
       },
       "devDependencies": {
         "@types/express": "^5.0.0",
-        "@types/react": "^19.2.14",
         "@vendure/storefront-cart-plugin": "0.1.0",
         "typescript": "5.8.2",
         "vitest": "^3.2.4",
-      },
-      "peerDependencies": {
-        "@vendure/dashboard": "3.7.2",
-        "react": "^19.2.4",
       },
     },
     "packages/job-queue-plugin": {
@@ -673,34 +657,41 @@
         "vite": "^7.3.6",
       },
     },
+    "packages/next-admin-plugin": {
+      "name": "@vendure/next-admin-plugin",
+      "version": "0.1.0",
+      "dependencies": {
+        "@nestjs/common": "^11.0.12",
+        "@nestjs/graphql": "~13.4.4",
+        "@vendure/common": "3.7.2",
+        "@vendure/core": "3.7.2",
+        "date-fns": "^4.0.0",
+        "express": "^5.1.0",
+        "express-rate-limit": "^7.5.0",
+        "graphql-tag": "^2.12.6",
+      },
+      "devDependencies": {
+        "@types/express": "^5.0.1",
+        "typescript": "5.9.3",
+        "vitest": "^3.2.4",
+      },
+    },
     "packages/operations-dashboard-plugin": {
       "name": "@vendure/operations-dashboard-plugin",
       "version": "0.1.0",
       "dependencies": {
-        "@lingui/core": "^5.9.3",
-        "@lingui/react": "^5.9.3",
         "@nestjs/common": "^11.0.12",
         "@nestjs/graphql": "~13.4.4",
         "@vendure/common": "3.7.2",
         "@vendure/core": "3.7.2",
         "graphql-tag": "^2.12.6",
-        "lucide-react": "^0.475.0",
         "typeorm": "^0.3.21",
-      },
-      "devDependencies": {
-        "@types/react": "^19.2.14",
-        "@types/react-dom": "^19.2.3",
-      },
-      "peerDependencies": {
-        "@vendure/dashboard": "3.7.2",
-        "react": "^19.2.4",
       },
     },
     "packages/store-domain-plugin": {
       "name": "@vendure/store-domain-plugin",
       "version": "0.1.0",
       "dependencies": {
-        "@lingui/react": "^5.9.3",
         "@nestjs/common": "^11.0.12",
         "@nestjs/graphql": "~13.4.4",
         "@vendure/common": "3.7.2",
@@ -714,16 +705,11 @@
         "typescript": "5.8.2",
         "vitest": "^3.2.4",
       },
-      "peerDependencies": {
-        "@vendure/dashboard": "3.7.2",
-        "react": "^19.2.4",
-      },
     },
     "packages/store-management-plugin": {
       "name": "@vendure/store-management-plugin",
       "version": "0.1.0",
       "dependencies": {
-        "@lingui/react": "^5.9.3",
         "@nestjs/common": "^11.0.12",
         "@nestjs/core": "^11.0.12",
         "@nestjs/graphql": "~13.4.4",
@@ -736,20 +722,14 @@
         "@vendure/storefront-content-plugin": "0.1.0",
         "cheerio": "1.0.0",
         "graphql-tag": "^2.12.6",
-        "lucide-react": "^0.475.0",
         "markdown-it": "14.3.0",
         "reflect-metadata": "^0.2.2",
         "typeorm": "^0.3.21",
       },
       "devDependencies": {
         "@types/express": "^5.0.0",
-        "@types/react": "^19.2.14",
         "typescript": "5.8.2",
         "vitest": "^3.2.4",
-      },
-      "peerDependencies": {
-        "@vendure/dashboard": "3.7.2",
-        "react": "^19.2.4",
       },
     },
     "packages/storefront": {
@@ -818,25 +798,18 @@
       "name": "@vendure/storefront-content-plugin",
       "version": "0.1.0",
       "dependencies": {
-        "@lingui/react": "^5.9.3",
         "@nestjs/common": "^11.0.12",
         "@nestjs/graphql": "~13.4.4",
         "@vendure/common": "3.7.2",
         "@vendure/content-translation-plugin": "0.1.0",
         "@vendure/core": "3.7.2",
         "graphql-tag": "^2.12.6",
-        "lucide-react": "^0.475.0",
         "reflect-metadata": "^0.2.2",
         "typeorm": "^0.3.21",
       },
       "devDependencies": {
-        "@types/react": "^19.2.14",
         "typescript": "5.8.2",
         "vitest": "^3.2.4",
-      },
-      "peerDependencies": {
-        "@vendure/dashboard": "3.7.2",
-        "react": "^19.2.4",
       },
     },
     "packages/storefront-review-plugin": {
@@ -914,27 +887,18 @@
       "name": "@vendure/two-factor-dashboard-plugin",
       "version": "0.1.0",
       "dependencies": {
-        "@lingui/core": "^5.9.3",
-        "@lingui/react": "^5.9.3",
         "@nestjs/common": "^11.0.12",
         "@nestjs/core": "^11.0.12",
         "@nestjs/graphql": "~13.4.4",
         "@vendure/core": "3.7.2",
         "graphql-tag": "^2.12.6",
-        "lucide-react": "^0.475.0",
         "typeorm": "^0.3.21",
       },
       "devDependencies": {
         "@playwright/test": "^1.58.2",
-        "@types/react": "^19.2.14",
-        "@types/react-dom": "^19.2.3",
         "@vendure/testing": "3.7.2",
         "typescript": "5.9.3",
         "vitest": "^3.2.4",
-      },
-      "peerDependencies": {
-        "@vendure/dashboard": "3.7.2",
-        "react": "^19.2.4",
       },
     },
     "packages/ui-devkit": {
@@ -3164,6 +3128,8 @@
     "@vendure/image-generation-plugin": ["@vendure/image-generation-plugin@workspace:packages/image-generation-plugin"],
 
     "@vendure/job-queue-plugin": ["@vendure/job-queue-plugin@workspace:packages/job-queue-plugin"],
+
+    "@vendure/next-admin-plugin": ["@vendure/next-admin-plugin@workspace:packages/next-admin-plugin"],
 
     "@vendure/ngx-translate-extract": ["@vendure/ngx-translate-extract@10.2.0", "", { "dependencies": { "@phenomnomnominal/tsquery": "^6.2.0", "braces": "^3.0.3", "flat": "^6.0.1", "gettext-parser": "^9.0.2", "glob": "^13.0.6", "yargs": "^18.0.0" }, "peerDependencies": { "@angular/compiler": ">=20.0.0", "typescript": ">=5.8.0" }, "bin": { "ngx-translate-extract": "cli.js" } }, "sha512-dIRBTa4uA7wGjt/WzLIrOQBkQulrwSQU086U3c6W29MysQM/Oz0pWClqZNCyIzpF5wpDrbl9+MIQV7T11DtwQA=="],
 
