@@ -116,6 +116,12 @@ case "${reviewed_referral_posters}" in
     *) fail 'invalid reviewed referral poster scope' ;;
 esac
 
+storefront_media_shop_origin='https://moyaoai.com'
+if [[ "${reviewed_storefront_media_channel_codes}" == "美宜佳" ]]; then
+    storefront_media_shop_origin='https://damatong.net'
+fi
+readonly storefront_media_shop_origin
+
 umask 027
 
 if [[ "${VENDURE_DEPLOY_LOCK_HELD:-0}" == "1" ]]; then
@@ -402,7 +408,7 @@ if [[ -n "${reviewed_storefront_media_keys}" ]]; then
     cd "${candidate}"
     STOREFRONT_MEDIA_CHANNEL_CODES="${reviewed_storefront_media_channel_codes}" \
         VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
-        VENDURE_STOREFRONT_URL=https://moyaoai.com \
+        VENDURE_STOREFRONT_URL="${storefront_media_shop_origin}" \
         node packages/dev-server/scripts/sync-storefront-media.mjs \
             --keys "${reviewed_storefront_media_keys}" --dry-run
     cd "${repository}"
@@ -596,12 +602,12 @@ if [[ -n "${reviewed_storefront_media_keys}" ]]; then
     cd "${candidate}"
     STOREFRONT_MEDIA_CHANNEL_CODES="${reviewed_storefront_media_channel_codes}" \
         VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
-        VENDURE_STOREFRONT_URL=https://moyaoai.com \
+        VENDURE_STOREFRONT_URL="${storefront_media_shop_origin}" \
         node packages/dev-server/scripts/sync-storefront-media.mjs \
             --keys "${reviewed_storefront_media_keys}" --apply --allow-remote
     STOREFRONT_MEDIA_CHANNEL_CODES="${reviewed_storefront_media_channel_codes}" \
         VENDURE_API_ORIGIN=http://127.0.0.1:3002 \
-        VENDURE_STOREFRONT_URL=https://moyaoai.com \
+        VENDURE_STOREFRONT_URL="${storefront_media_shop_origin}" \
         node packages/dev-server/scripts/sync-storefront-media.mjs \
             --keys "${reviewed_storefront_media_keys}" --verify
     cd "${repository}"
