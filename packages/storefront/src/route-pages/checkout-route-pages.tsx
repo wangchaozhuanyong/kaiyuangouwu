@@ -22,6 +22,7 @@ function CheckoutRoutePage({ mode }: { mode?: 'purchase' }) {
                     customer={runtime.customer}
                     market={runtime.market}
                     availableCountries={runtime.availableCountries}
+                    availableProvinces={runtime.availableProvinces}
                     locale={runtime.locale}
                     language={runtime.language}
                     onBack={runtime.goBack}

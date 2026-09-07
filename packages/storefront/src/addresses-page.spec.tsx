@@ -82,6 +82,7 @@ describe('AddressesPage zero-flicker rendering', () => {
                     customer: mockCustomer,
                     market,
                     availableCountries: [{ code: 'CN', name: '中国' }],
+                    availableProvinces: [{ code: 'CN-GD', name: '广东省', countryCode: 'CN' }],
                     language: 'zh',
                     commerceMode: 'DIGITAL_ONLY',
                     onBack: vi.fn(),

@@ -11,6 +11,7 @@ const fallbackFields = {
         'StorefrontContentItem.settings',
     ]),
     coupons: new Set(['Query.activeStorefrontCoupons']),
+    provinces: new Set(['Query.availableStorefrontProvinces']),
     visualPreset: new Set(['Query.storefrontVisualPreset']),
     desktopLayout: new Set(['StorefrontVisualPreset.desktopLayout']),
 };
