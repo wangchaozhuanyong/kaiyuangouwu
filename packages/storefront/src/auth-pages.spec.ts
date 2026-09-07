@@ -215,6 +215,8 @@ describe('auth password visibility controls', () => {
         );
 
         expect(markup).toContain('managed-login.webp');
+        expect(markup).toContain('preset=storefront-original-preview');
+        expect(markup).not.toContain('preset=storefront-hero-');
         expect(markup).toContain('后台登录主标题');
         expect(markup).toContain('后台卖点3');
         expect(markup).toContain('--auth-visual-background:#010203');

@@ -528,6 +528,14 @@ describe('unified storefront Admin API to Shop API', () => {
                                     )
                                     .toBe(true);
                                 await browserExpect(imageLocator).toHaveCSS('object-fit', 'cover');
+                                await browserExpect(imageLocator).toHaveCSS('filter', 'none');
+                                expect(
+                                    await page.locator('.auth-hero').evaluate(hero =>
+                                        ['::before', '::after'].every(
+                                            pseudo => getComputedStyle(hero, pseudo).display === 'none',
+                                        ),
+                                    ),
+                                ).toBe(true);
                                 const heroBox = await page.locator('.auth-hero').boundingBox();
                                 const copyBox = await page.locator('.auth-hero-copy').boundingBox();
                                 const formBox = await page.locator('.login-content').boundingBox();

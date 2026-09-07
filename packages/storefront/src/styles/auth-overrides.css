@@ -16,30 +16,26 @@
     background: #06183d;
 }
 
-.auth-hero::after {
-    background:
-        radial-gradient(ellipse 70% 96% at 28% 48%, rgb(17 91 202 / 18%) 0%, transparent 72%),
-        linear-gradient(116deg, rgb(2 13 44 / 82%) 0%, rgb(4 25 76 / 25%) 58%, rgb(2 16 56 / 56%) 100%);
-}
-
+.auth-hero::after,
 .auth-hero::before {
-    background-image: radial-gradient(rgb(188 231 255 / 42%) 0.7px, transparent 0.7px);
-    opacity: 0.12;
+    display: none;
+    background: none;
+    content: none;
 }
 
 .auth-hero > .safe-image-frame {
     background-color: #06183d;
 }
 
-.auth-hero > picture > img {
-    filter: saturate(1.02) contrast(1.04);
+.auth-hero > .safe-image-frame > img {
+    filter: none;
 }
 
-.auth-page-login .auth-hero > picture > img {
+.auth-page-login .auth-hero > .safe-image-frame > img {
     object-position: 32% 50%;
 }
 
-.auth-page-register .auth-hero > picture > img {
+.auth-page-register .auth-hero > .safe-image-frame > img {
     object-position: 52% 50%;
 }
 
@@ -762,28 +758,8 @@
         height: var(--auth-managed-hero-height);
     }
 
-    .auth-page .auth-hero-managed::before {
-        display: none;
-    }
-
-    .auth-page .auth-hero-managed::after {
-        background:
-            linear-gradient(
-                90deg,
-                color-mix(in srgb, var(--auth-hero-overlay-color) 88%, transparent) 0%,
-                color-mix(in srgb, var(--auth-hero-overlay-color) 52%, transparent) 42%,
-                color-mix(in srgb, var(--auth-hero-overlay-color) 28%, transparent) 100%
-            ),
-            linear-gradient(
-                0deg,
-                color-mix(in srgb, var(--auth-hero-overlay-color) 46%, transparent) 0%,
-                transparent 62%
-            );
-    }
-
-    .auth-page .auth-hero-managed > picture > img {
+    .auth-page .auth-hero-managed > .safe-image-frame > img {
         object-position: 50% 50%;
-        filter: saturate(1.06) contrast(1.03);
     }
 
     .auth-page .auth-hero-message-managed {
@@ -910,11 +886,17 @@
 }
 
 /* SVG and image fallbacks use a span frame instead of picture. */
-.auth-page .auth-hero > .safe-image-frame {
+.auth-page .auth-hero > .safe-image-frame,
+.auth-page .auth-hero > .image-placeholder {
     position: absolute;
     inset: 0;
     width: 100%;
     height: 100%;
+}
+
+.auth-page .auth-hero > .image-placeholder {
+    background: var(--auth-hero-overlay-color);
+    color: var(--auth-hero-text-color);
 }
 
 .auth-page .auth-hero > .safe-image-frame > img {
@@ -931,27 +913,27 @@
 }
 
 @media (min-width: 1024px) {
-    .auth-page .auth-hero-managed::after {
-        background: linear-gradient(
-            0deg,
-            color-mix(in srgb, var(--auth-hero-overlay-color) 96%, transparent) 0%,
-            color-mix(in srgb, var(--auth-hero-overlay-color) 90%, transparent) 44%,
-            transparent 82%
-        );
-    }
-
-    .auth-page .auth-hero-message-managed h2 {
-        text-shadow: none;
-    }
-
     .auth-page .auth-hero-message-managed p,
     .auth-page .auth-hero-message-managed .auth-hero-tags > span {
         color: var(--auth-hero-text-color);
     }
+}
 
-    .auth-page .auth-hero-message-managed .auth-hero-tags > span {
-        background: var(--auth-hero-overlay-color);
-    }
+/* Keep copy legible within the approved layout without tinting the whole image. */
+.auth-page .auth-hero-message-managed .auth-hero-copy:not(:empty) {
+    border-radius: 2px;
+    background: var(--auth-hero-overlay-color);
+    box-shadow: 0 0 0 6px var(--auth-hero-overlay-color);
+}
+
+.auth-page .auth-hero-message-managed h2 {
+    text-shadow: none;
+}
+
+.auth-page .auth-hero-message-managed .auth-hero-eyebrow,
+.auth-page .auth-hero-message-managed .auth-hero-tags > span,
+.auth-page .auth-hero-message-managed .auth-hero-tags > span:first-child {
+    background: var(--auth-hero-overlay-color);
 }
 
 /* Mobile authentication flow approved in the interactive design review. */
