@@ -58,9 +58,13 @@ export class ContentReviewsApi extends BaseDomainApi {
     }
 
     async storefrontConfig(signal?: AbortSignal): Promise<StorefrontConfig> {
-        const result = await this.request<{
-            activeChannel: Omit<StorefrontConfig, 'availableCountries' | 'logoUrl' | 'description'>;
+        type StorefrontConfigResponse = {
+            activeChannel: Omit<
+                StorefrontConfig,
+                'availableCountries' | 'availableProvinces' | 'logoUrl' | 'description'
+            >;
             availableCountries: StorefrontConfig['availableCountries'];
+            availableStorefrontProvinces?: NonNullable<StorefrontConfig['availableProvinces']>;
             storefrontBranding: {
                 logoUrl: string | null;
                 logoOnLightUrl: string | null;
@@ -77,8 +81,10 @@ export class ContentReviewsApi extends BaseDomainApi {
                 privacyEmail: string | null;
             };
             storefrontCurrencyConfiguration: StorefrontCurrencyConfiguration;
-        }>(
-            `
+        };
+        const loadConfig = (includeProvinces: boolean) =>
+            this.request<StorefrontConfigResponse>(
+                `
             query StorefrontConfig {
                 activeChannel {
                     code
@@ -92,6 +98,15 @@ export class ContentReviewsApi extends BaseDomainApi {
                 availableCountries {
                     code
                     name
+                }
+                ${
+                    includeProvinces
+                        ? `availableStorefrontProvinces {
+                    code
+                    name
+                    countryCode
+                }`
+                        : ''
                 }
                 storefrontBranding {
                     logoUrl
@@ -124,12 +139,20 @@ export class ContentReviewsApi extends BaseDomainApi {
                 }
             }
         `,
-            undefined,
-            signal,
-        );
+                undefined,
+                signal,
+            );
+        let result: StorefrontConfigResponse;
+        try {
+            result = await loadConfig(true);
+        } catch (error) {
+            if (!isSupportedContentSchemaFallback(error, 'provinces')) throw error;
+            result = await loadConfig(false);
+        }
         return {
             ...result.activeChannel,
             availableCountries: result.availableCountries,
+            availableProvinces: result.availableStorefrontProvinces ?? [],
             logoUrl: result.storefrontBranding?.logoUrl ?? null,
             logoOnLightUrl: result.storefrontBranding?.logoOnLightUrl ?? null,
             logoOnDarkUrl: result.storefrontBranding?.logoOnDarkUrl ?? null,

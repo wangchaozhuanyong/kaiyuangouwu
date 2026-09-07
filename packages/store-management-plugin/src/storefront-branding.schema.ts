@@ -1,6 +1,9 @@
 import { gql } from 'graphql-tag';
 
+import { storefrontRegionSchema } from './storefront-region.schema';
+
 export const storefrontBrandingSchema = gql`
+    ${storefrontRegionSchema}
     type StorefrontBranding {
         logoAssetId: ID
         logoOnLightAssetId: ID

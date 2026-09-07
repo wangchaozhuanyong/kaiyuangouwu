@@ -19,6 +19,7 @@ import {
 import { FormEvent, ReactNode, useEffect, useId, useRef, useState } from 'react';
 
 import { smartParseAddressText } from './address-parser';
+import { provinceCodeForValue, provinceDisplayName, provincesForCountry } from './address-region-options';
 import { ShopApi } from './api';
 import { compactUiCopy } from './i18n';
 import { formatDisplayMoney } from './money-display';
@@ -44,6 +45,7 @@ import {
     StorefrontCheckoutSession,
     StorefrontConfig,
     StorefrontLanguage,
+    StorefrontProvince,
 } from './types';
 
 const checkoutPageClassName = (className?: string | false | null) =>
@@ -61,6 +63,7 @@ export function CheckoutPage({
     customer,
     market,
     availableCountries,
+    availableProvinces = [],
     locale,
     language,
     onBack,
@@ -86,6 +89,7 @@ export function CheckoutPage({
     customer: ActiveCustomer | null;
     market: MarketConfig;
     availableCountries: StorefrontConfig['availableCountries'];
+    availableProvinces?: StorefrontProvince[];
     locale: string;
     language: StorefrontLanguage;
     onBack: () => void;
@@ -158,6 +162,7 @@ export function CheckoutPage({
     const [manualAddressDraft, setManualAddressDraft] = useState({
         fullName: '',
         phoneNumber: '',
+        countryCode: market.countryCode,
         province: '',
         city: '',
         streetLine1: '',
@@ -649,6 +654,7 @@ export function CheckoutPage({
                                             setManualAddressDraft({
                                                 fullName: parsed.fullName,
                                                 phoneNumber: parsed.phoneNumber,
+                                                countryCode: manualAddressDraft.countryCode,
                                                 province: parsed.province,
                                                 city: parsed.city,
                                                 streetLine1: parsed.streetLine1,
@@ -698,7 +704,7 @@ export function CheckoutPage({
                                             )}
                                         </div>
                                         <small className={checkoutPageClassName('chip-card-address')}>
-                                            {addressText(addr)}
+                                            {addressText(addr, availableProvinces)}
                                         </small>
                                     </button>
                                 ))}
@@ -717,7 +723,7 @@ export function CheckoutPage({
                                         <strong>
                                             {defaultAddress.fullName} {defaultAddress.phoneNumber}
                                         </strong>
-                                        <small>{addressText(defaultAddress)}</small>
+                                        <small>{addressText(defaultAddress, availableProvinces)}</small>
                                     </span>
                                     <ChevronRight />
                                 </button>
@@ -742,6 +748,14 @@ export function CheckoutPage({
                                 <CountryField
                                     countries={availableCountries}
                                     defaultCountryCode={market.countryCode}
+                                    value={manualAddressDraft.countryCode}
+                                    onChange={countryCode =>
+                                        setManualAddressDraft(current => ({
+                                            ...current,
+                                            countryCode,
+                                            province: '',
+                                        }))
+                                    }
                                     language={language}
                                 />
                                 <Field
@@ -756,11 +770,14 @@ export function CheckoutPage({
                                     defaultValue={manualAddressDraft.phoneNumber || undefined}
                                     key={`phone-${manualAddressDraft.phoneNumber}`}
                                 />
-                                <Field
-                                    name="province"
-                                    label={isZh ? '省/州' : 'Province'}
-                                    defaultValue={manualAddressDraft.province || undefined}
-                                    key={`prov-${manualAddressDraft.province}`}
+                                <ProvinceField
+                                    provinces={availableProvinces}
+                                    countryCode={manualAddressDraft.countryCode}
+                                    value={manualAddressDraft.province}
+                                    onChange={province =>
+                                        setManualAddressDraft(current => ({ ...current, province }))
+                                    }
+                                    language={language}
                                 />
                                 <Field
                                     name="city"
@@ -1571,23 +1588,84 @@ function Field({
 function CountryField({
     countries,
     defaultCountryCode,
+    value,
+    onChange,
     language,
 }: {
     countries: StorefrontConfig['availableCountries'];
     defaultCountryCode: string;
+    value: string;
+    onChange: (countryCode: string) => void;
     language: StorefrontLanguage;
 }) {
     const options = countries.length ? countries : [{ code: defaultCountryCode, name: defaultCountryCode }];
-    const selected = options.some(country => country.code === defaultCountryCode)
-        ? defaultCountryCode
-        : options[0].code;
+    const selected = options.some(country => country.code === value)
+        ? value
+        : options.some(country => country.code === defaultCountryCode)
+          ? defaultCountryCode
+          : options[0].code;
     return (
         <label className={checkoutPageClassName('field-wide')}>
             <span>{language === 'zh' ? '国家/地区' : 'Country/region'}</span>
-            <select name="countryCode" defaultValue={selected} required>
+            <select
+                name="countryCode"
+                value={selected}
+                onChange={event => onChange(event.target.value)}
+                required
+            >
                 {options.map(country => (
                     <option key={country.code} value={country.code}>
                         {country.name}
+                    </option>
+                ))}
+            </select>
+        </label>
+    );
+}
+function ProvinceField({
+    provinces,
+    countryCode,
+    value,
+    onChange,
+    language,
+}: {
+    provinces: readonly StorefrontProvince[];
+    countryCode: string;
+    value: string;
+    onChange: (province: string) => void;
+    language: StorefrontLanguage;
+}) {
+    const options = provincesForCountry(provinces, countryCode);
+    const selected = provinceCodeForValue(provinces, countryCode, value);
+    const hasLegacyValue = Boolean(selected && !options.some(province => province.code === selected));
+    const label = language === 'zh' ? '省/州' : 'State/Province';
+    if (!options.length) {
+        return (
+            <label>
+                <span>{label}</span>
+                <input
+                    name="province"
+                    value={value}
+                    onChange={event => onChange(event.target.value)}
+                    required
+                />
+            </label>
+        );
+    }
+    return (
+        <label>
+            <span>{label}</span>
+            <select
+                name="province"
+                value={selected}
+                onChange={event => onChange(event.target.value)}
+                required
+            >
+                <option value="">{language === 'zh' ? '请选择省/州' : 'Select a state/province'}</option>
+                {hasLegacyValue && <option value={selected}>{selected}</option>}
+                {options.map(province => (
+                    <option key={province.code} value={province.code}>
+                        {province.name}
                     </option>
                 ))}
             </select>
@@ -1607,8 +1685,14 @@ function ProductVariantImage({ variant, alt }: { variant: ProductVariant; alt: s
 function formatMoney(value: number, currency: string, locale: string) {
     return formatDisplayMoney(value, currency, locale);
 }
-function addressText(address: CustomerAddress) {
-    return [address.province, address.city, address.streetLine1, address.streetLine2, address.postalCode]
+function addressText(address: CustomerAddress, provinces: readonly StorefrontProvince[]) {
+    return [
+        provinceDisplayName(provinces, address.country.code, address.province),
+        address.city,
+        address.streetLine1,
+        address.streetLine2,
+        address.postalCode,
+    ]
         .filter(Boolean)
         .join(' ');
 }

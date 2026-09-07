@@ -56,4 +56,14 @@ describe('content schema compatibility boundary', () => {
             false,
         );
     });
+
+    it('keeps province fallback limited to the new root field', () => {
+        const provinceField = 'Cannot query field "availableStorefrontProvinces" on type "Query".';
+        expect(
+            isSupportedContentSchemaFallback(new ShopApiGraphQlError([provinceField], 200), 'provinces'),
+        ).toBe(true);
+        expect(isSupportedContentSchemaFallback(new ShopApiGraphQlError([missing], 200), 'provinces')).toBe(
+            false,
+        );
+    });
 });

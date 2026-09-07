@@ -43,6 +43,7 @@ describe('ShopApi storefront config', () => {
                 customFields: { storefrontNameZh: 'MOYAO AI｜模钥', storefrontNameEn: 'MOYAO AI' },
             },
             availableCountries: [],
+            availableStorefrontProvinces: [{ code: 'MY-10', name: 'Selangor', countryCode: 'MY' }],
             storefrontBranding: {
                 legalEntityName: 'MOYAO AI Example Limited',
                 legalRegistrationCountry: 'Malaysia',
@@ -53,6 +54,7 @@ describe('ShopApi storefront config', () => {
         });
 
         await expect(new ShopApi(market).storefrontConfig()).resolves.toMatchObject({
+            availableProvinces: [{ code: 'MY-10', name: 'Selangor', countryCode: 'MY' }],
             legalEntityName: 'MOYAO AI Example Limited',
             legalRegistrationCountry: 'Malaysia',
             supportEmail: 'support@moyaoai.com',
@@ -63,6 +65,50 @@ describe('ShopApi storefront config', () => {
         expect(request.query).toContain('legalRegistrationCountry');
         expect(request.query).toContain('supportEmail');
         expect(request.query).toContain('privacyEmail');
+        expect(request.query).toContain('availableStorefrontProvinces');
+    });
+
+    it('keeps the storefront available when rolling back to a schema without province options', async () => {
+        const legacyConfig = {
+            activeChannel: {
+                code: 'moyao-ai-main',
+                defaultLanguageCode: 'zh_Hans',
+                defaultCurrencyCode: 'CNY',
+                customFields: { storefrontNameZh: '模钥', storefrontNameEn: 'MOYAO AI' },
+            },
+            availableCountries: [{ code: 'CN', name: '中国' }],
+            storefrontBranding: {},
+            storefrontCurrencyConfiguration: undefined,
+        };
+        const fetchMock = vi
+            .fn()
+            .mockResolvedValueOnce(
+                new Response(
+                    JSON.stringify({
+                        errors: [
+                            {
+                                message: 'Cannot query field "availableStorefrontProvinces" on type "Query".',
+                            },
+                        ],
+                    }),
+                    { status: 200, headers: { 'content-type': 'application/json' } },
+                ),
+            )
+            .mockResolvedValueOnce(
+                new Response(JSON.stringify({ data: legacyConfig }), {
+                    status: 200,
+                    headers: { 'content-type': 'application/json' },
+                }),
+            );
+        vi.stubGlobal('fetch', fetchMock);
+
+        await expect(new ShopApi(market).storefrontConfig()).resolves.toMatchObject({
+            availableCountries: [{ code: 'CN', name: '中国' }],
+            availableProvinces: [],
+        });
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        const retry = JSON.parse(jsonRequestBody(fetchMock.mock.calls[1][1])) as { query: string };
+        expect(retry.query).not.toContain('availableStorefrontProvinces');
     });
 });
 
