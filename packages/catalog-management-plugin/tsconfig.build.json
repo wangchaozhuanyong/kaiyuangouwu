@@ -4,12 +4,9 @@
         "declaration": true,
         "noEmit": false,
         "outDir": "./dist",
-        "rootDir": "./src",
-        "paths": {
-            "@/vdb/*": ["../dashboard/src/lib/*"]
-        }
+        "rootDir": "./src"
     },
     "files": ["./src/index.ts", "./src/browser.ts"],
     "include": [],
-    "exclude": ["./src/**/*.spec.ts"]
+    "exclude": ["./src/**/*.spec.ts", "./src/dashboard", "./src/admin"]
 }

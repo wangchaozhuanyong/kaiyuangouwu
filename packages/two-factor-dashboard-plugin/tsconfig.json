@@ -2,13 +2,11 @@
     "extends": "../../tsconfig.json",
     "compilerOptions": {
         "lib": ["dom", "es2020", "esnext.asynciterable"],
-        "jsx": "react-jsx",
         "baseUrl": ".",
-        "paths": {
-            "@/vdb/*": ["../dashboard/src/lib/*"]
-        },
         "types": ["node", "vitest/globals"],
-        "noEmit": true
+        "noEmit": true,
+        "jsx": "react-jsx"
     },
-    "include": ["src/**/*.ts", "src/**/*.tsx", "../dashboard/src/vite-env.d.ts"]
+    "include": ["src/**/*.ts"],
+    "exclude": ["./src/dashboard", "./src/admin"]
 }

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { DASHBOARD_API_PORT_FROM_PAGE, resolveDevelopmentNetwork } from './dev-network-config.mjs';
+import { resolveDevelopmentNetwork } from './dev-network-config.mjs';
 
 test('starts the Portless proxy before resolving public URLs', () => {
     const calls = [];
@@ -25,14 +25,9 @@ test('does not duplicate a custom Portless proxy port in Dashboard API URLs', ()
         getPortlessUrl: name => `https://${name}.localhost:1355`,
     });
 
-    assert.equal(network.sharedEnv.VITE_ADMIN_API_HOST, 'https://vendure.localhost');
-    assert.equal(network.sharedEnv.VITE_ADMIN_API_PORT, DASHBOARD_API_PORT_FROM_PAGE);
     assert.equal(network.sharedEnv.VENDURE_SERVE_GRAPHIQL, 'false');
     assert.equal(network.sharedEnv.VENDURE_SERVE_STATIC_DASHBOARD, 'false');
-    assert.equal(
-        getDashboardApiBaseUrl(network.sharedEnv, 'https://dashboard.vendure.localhost:1355'),
-        'https://vendure.localhost:1355',
-    );
+    assert.equal(network.sharedEnv.VITE_VENDURE_ADMIN_API_URL, 'https://vendure.localhost:1355/admin-api');
 });
 
 test('uses distinct fixed ports for direct-mode server and Dashboard processes', () => {
@@ -48,13 +43,6 @@ test('uses distinct fixed ports for direct-mode server and Dashboard processes',
     assert.deepEqual(network.dashboardEnv, { API_PORT: '3000', PORT: '5173' });
     assert.equal(network.apiOrigin, 'http://localhost:3000');
     assert.equal(network.dashboardOrigin, 'http://localhost:5173');
+    assert.equal(network.dashboardUrl, 'http://localhost:5173');
+    assert.equal(network.sharedEnv.VITE_VENDURE_ADMIN_API_URL, 'http://localhost:3000/admin-api');
 });
-
-function getDashboardApiBaseUrl(env, dashboardOrigin) {
-    const dashboardUrl = new URL(dashboardOrigin);
-    const port =
-        env.VITE_ADMIN_API_PORT === DASHBOARD_API_PORT_FROM_PAGE
-            ? dashboardUrl.port
-            : env.VITE_ADMIN_API_PORT;
-    return `${env.VITE_ADMIN_API_HOST}${port ? `:${port}` : ''}`;
-}

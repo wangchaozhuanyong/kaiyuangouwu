@@ -18,6 +18,8 @@ import {
 const require = createRequire(import.meta.url);
 const devServerDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const repoRoot = path.resolve(devServerDir, '../..');
+const nextAdminDir = path.join(repoRoot, 'packages/next-admin');
+const viteCliPath = resolvePackageBin(import.meta.resolve('vite'), 'vite', 'vite');
 const cliPath = path.resolve(devServerDir, '../cli/dist/cli.js');
 const portlessCliPath = resolvePackageBin(import.meta.resolve('portless'), 'portless', 'portless');
 const typescriptCliPath = require.resolve('typescript/bin/tsc');
@@ -90,7 +92,7 @@ process.once('SIGTERM', () => shutdown(143, 'SIGTERM'));
 emitAgentEvent(lifecycle?.status);
 
 try {
-    await buildPrerequisites(sharedDevelopmentEnv);
+    await buildPrerequisites();
 } catch (error) {
     if (shuttingDown) {
         process.exit(process.exitCode ?? 1);
@@ -154,21 +156,11 @@ const dashboard = new RestartableProcess({
     spawnProcess: onClose =>
         spawnPrefixed({
             label: 'dashboard',
+            cwd: nextAdminDir,
             command: process.execPath,
             args: usePortless
-                ? [
-                      portlessCliPath,
-                      'run',
-                      '--name',
-                      'dashboard.vendure',
-                      process.execPath,
-                      cliPath,
-                      'dev',
-                      'dashboard',
-                      '--vite-config',
-                      './vite.config.mts',
-                  ]
-                : [cliPath, 'dev', 'dashboard', '--vite-config', './vite.config.mts'],
+                ? [portlessCliPath, 'run', '--name', 'dashboard.vendure', process.execPath, viteCliPath]
+                : [viteCliPath],
             env: { ...sharedDevelopmentEnv, ...dashboardEnv },
             onClose,
         }),
@@ -317,28 +309,14 @@ const watchers = [
         env: watcherEnvironment,
         onSuccessfulRebuild: () => server.restart(),
     }),
+
     startWatcher({
-        label: 'dashboard-vite',
+        label: 'next-admin-plugin',
         command: process.execPath,
         args: [
             typescriptCliPath,
             '--project',
-            path.join(repoRoot, 'packages/dashboard/tsconfig.vite.json'),
-            '--watch',
-            '--preserveWatchOutput',
-            '--locale',
-            'en',
-        ],
-        env: watcherEnvironment,
-        onSuccessfulRebuild: () => dashboard.restart(),
-    }),
-    startWatcher({
-        label: 'dashboard-plugin',
-        command: process.execPath,
-        args: [
-            typescriptCliPath,
-            '--project',
-            path.join(repoRoot, 'packages/dashboard/tsconfig.plugin.json'),
+            path.join(repoRoot, 'packages/next-admin-plugin/tsconfig.build.json'),
             '--watch',
             '--preserveWatchOutput',
             '--locale',
@@ -392,11 +370,12 @@ function ensurePortlessProxy() {
     }
 }
 
-async function buildPrerequisites(env) {
+async function buildPrerequisites() {
     const builds = [
         ['@vendure/common', path.join(repoRoot, 'packages/common')],
         ['@vendure/core', path.join(repoRoot, 'packages/core')],
         ['@vendure/cli', path.join(repoRoot, 'packages/cli')],
+        ['@vendure/next-admin-plugin', path.join(repoRoot, 'packages/next-admin-plugin')],
         ['@vendure/asset-server-plugin', path.join(repoRoot, 'packages/asset-server-plugin')],
         ['@vendure/email-plugin', path.join(repoRoot, 'packages/email-plugin')],
         ['@vendure/commerce-fulfillment-plugin', path.join(repoRoot, 'packages/commerce-fulfillment-plugin')],
@@ -414,20 +393,6 @@ async function buildPrerequisites(env) {
         console.log(`\nBuilding ${label}...`);
         await runForeground(packageManager, ['run', '--cwd', cwd, 'build']);
     }
-
-    console.log('\nBuilding the Dashboard Vite plugin...');
-    await runForeground(
-        packageManager,
-        ['run', '--cwd', path.join(repoRoot, 'packages/dashboard'), 'build:vite'],
-        env,
-    );
-
-    console.log('\nBuilding the Dashboard server plugin...');
-    await runForeground(
-        packageManager,
-        ['run', '--cwd', path.join(repoRoot, 'packages/dashboard'), 'build:plugin'],
-        env,
-    );
 }
 
 function runForeground(command, args, env = {}) {
@@ -618,9 +583,9 @@ function handleReadinessFailure(error) {
     shutdown(1);
 }
 
-function spawnPrefixed({ label, command, args, env, onClose }) {
+function spawnPrefixed({ label, command, args, env, onClose, cwd = devServerDir }) {
     const child = spawn(command, args, {
-        cwd: devServerDir,
+        cwd,
         env: { ...process.env, ...env },
         stdio: ['inherit', 'pipe', 'pipe'],
     });

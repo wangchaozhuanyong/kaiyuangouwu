@@ -1,11 +1,9 @@
 {
     "extends": "../../tsconfig.json",
     "compilerOptions": {
-        "jsx": "react-jsx",
         "lib": ["es2019", "esnext.asynciterable", "dom", "dom.iterable"],
-        "paths": {
-            "@/vdb/*": ["../dashboard/src/lib/*"]
-        }
+        "jsx": "react-jsx"
     },
-    "include": ["src/**/*.ts", "src/**/*.tsx", "../dashboard/src/vite-env.d.ts"]
+    "include": ["src/**/*.ts"],
+    "exclude": ["./src/dashboard", "./src/admin"]
 }

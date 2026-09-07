@@ -1,8 +1,16 @@
 import { useNavigate, useRouter, useRouterState } from '@tanstack/react-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { routeFromRouterLocation, routePath, routeSearch, RouteState, SortMode } from '../storefront-router';
-import { FulfillmentType, type CollectionSummary } from '../types';
+import { categoryTargetSelection } from '../category-navigation';
+import {
+    routeFromHash,
+    routeFromRouterLocation,
+    routePath,
+    routeSearch,
+    RouteState,
+    SortMode,
+} from '../storefront-router';
+import { FulfillmentType, StorefrontContentTargetType, type CollectionSummary } from '../types';
 export function useStorefrontNavigation({ collections }: { collections: CollectionSummary[] }) {
     const router = useRouter();
 
@@ -141,7 +149,54 @@ export function useStorefrontNavigation({ collections }: { collections: Collecti
         },
         [navigate],
     );
+    const openContentTarget = useCallback(
+        (targetType: StorefrontContentTargetType, targetValue: string | null) => {
+            const value = targetValue?.trim();
+            if (targetType === 'NONE' || !value) return;
+            if (targetType === 'PRODUCT') {
+                navigate({ name: 'product', id: value });
+                return;
+            }
+            if (targetType === 'COLLECTION' || targetType === 'CATEGORY') {
+                const target = categoryTargetSelection(collections, value);
+                setActiveCollectionId(target.collectionId);
+                setActiveChildId(target.childId);
+                navigate({ name: 'category', ...target });
+                return;
+            }
+            if (targetType === 'SEARCH') {
+                navigate({ name: 'search', term: value });
+                return;
+            }
+            if (targetType === 'PAGE') {
+                navigate(routeFromHash(value.startsWith('#') ? value : `#/${value.replace(/^\//, '')}`));
+                return;
+            }
+            if (targetType === 'SUPPORT') {
+                if (value === '/support' || value === 'support' || value === '#/support') {
+                    navigate({ name: 'support' });
+                } else if (/^(mailto:|tel:)/i.test(value)) {
+                    window.location.assign(value);
+                } else if (/^https?:\/\//i.test(value)) {
+                    window.open(value, '_blank', 'noopener,noreferrer');
+                } else {
+                    navigate({ name: 'support' });
+                }
+                return;
+            }
+            if (value.startsWith('#/')) {
+                navigate(routeFromHash(value));
+            } else if (value.startsWith('/')) {
+                window.location.assign(value);
+            } else {
+                window.open(value, '_blank', 'noopener,noreferrer');
+            }
+        },
+        [collections, navigate],
+    );
+
     return {
+        openContentTarget,
         route,
         displayedRoute,
         displayedRouterLocation,

@@ -296,7 +296,6 @@ import {
             StorefrontTrafficShopResolver,
         ],
     },
-    dashboard: '../src/dashboard/index.tsx',
     compatibility: '^3.7.0',
 })
 export class StoreManagementPlugin implements NestModule, OnApplicationBootstrap {

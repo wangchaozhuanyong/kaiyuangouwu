@@ -5,7 +5,6 @@
         "sourceMap": true,
         "jsx": "react-jsx",
         "paths": {
-            "@vendure/admin-ui/*": ["../admin-ui/package/*"],
             "@vendure/catalog-management-plugin": ["../catalog-management-plugin/src/index.ts"],
             "@vendure/commerce-fulfillment-plugin": ["../commerce-fulfillment-plugin/src/index.ts"],
             "@vendure/content-translation-plugin": ["../content-translation-plugin/src/index.ts"],
@@ -16,7 +15,8 @@
             "@vendure/storefront-cart-plugin": ["../storefront-cart-plugin/src/index.ts"],
             "@vendure/storefront-content-plugin": ["../storefront-content-plugin/src/index.ts"],
             "@vendure/store-domain-plugin": ["../store-domain-plugin/src/index.ts"],
-            "@plugins/*": ["./test-plugins/*"]
+            "@plugins/*": ["./test-plugins/*"],
+            "@vendure/next-admin-plugin": ["../next-admin-plugin/src/index.ts"]
         }
     },
     "exclude": ["node_modules"]

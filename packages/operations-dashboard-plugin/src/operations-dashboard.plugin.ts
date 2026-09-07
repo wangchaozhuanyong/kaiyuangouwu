@@ -40,7 +40,6 @@ import { TelegramNotificationWorkerService } from './telegram-notification-worke
         schema: adminNotificationApiExtensions,
         resolvers: [AdminNotificationResolver],
     },
-    dashboard: '../src/dashboard/index.tsx',
     compatibility: '^3.7.0',
 })
 export class OperationsDashboardPlugin {}

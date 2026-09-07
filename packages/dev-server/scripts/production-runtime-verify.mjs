@@ -389,7 +389,7 @@ function verifyRuntimeModules(root) {
     runNode(root, ['--check', 'packages/dev-server/dist/run-migrations.js']);
     const probe = [
         "require.resolve('@vendure/core')",
-        "require.resolve('@vendure/dashboard/plugin')",
+        "require.resolve('@vendure/next-admin-plugin')",
         "require.resolve('dotenv/config')",
         "require('./packages/dev-server/dist/dev-config.js')",
     ].join(';');

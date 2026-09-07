@@ -87,4 +87,24 @@ describe('storefront navigation state', () => {
         expect(value.route.name).toBe('product');
         expect(value.displayedRoute.name).toBe('category');
     });
+
+    it('opens a content product target and ignores empty targets', () => {
+        act(() => root.render(<Harness />));
+        act(() => value.openContentTarget('PRODUCT', ' product-a '));
+        expect(router.navigate).toHaveBeenLastCalledWith(
+            expect.objectContaining({ to: '/product', search: expect.objectContaining({ id: 'product-a' }) }),
+        );
+        router.navigate.mockClear();
+        act(() => value.openContentTarget('NONE', 'product-a'));
+        act(() => value.openContentTarget('PRODUCT', '   '));
+        expect(router.navigate).not.toHaveBeenCalled();
+    });
+
+    it('opens configured support and legacy page targets through the current router', () => {
+        act(() => root.render(<Harness />));
+        act(() => value.openContentTarget('SUPPORT', '#/support'));
+        expect(router.navigate).toHaveBeenLastCalledWith(expect.objectContaining({ to: '/support' }));
+        act(() => value.openContentTarget('PAGE', '/cart'));
+        expect(router.navigate).toHaveBeenLastCalledWith(expect.objectContaining({ to: '/cart' }));
+    });
 });

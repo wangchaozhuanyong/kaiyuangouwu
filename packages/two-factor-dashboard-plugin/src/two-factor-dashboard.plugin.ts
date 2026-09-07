@@ -44,7 +44,6 @@ import { TwoFactorCipherService } from './two-factor-cipher.service';
         schema: adminApiExtensions,
         resolvers: [TwoFactorAccountResolver, AdminTwoFactorResolver],
     },
-    dashboard: '../src/dashboard/index.tsx',
     compatibility: '^3.7.0',
 })
 export class TwoFactorDashboardPlugin {}

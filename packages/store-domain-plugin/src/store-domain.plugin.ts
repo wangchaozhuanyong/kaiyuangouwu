@@ -28,7 +28,6 @@ import { ResolvedStoreDomainPluginOptions, StoreDomainPluginOptions } from './ty
         schema: adminApiExtensions,
         resolvers: [StoreDomainAdminResolver, StoreDomainEntityResolver],
     },
-    dashboard: '../src/dashboard/index.tsx',
     compatibility: '^3.7.0',
 })
 export class StoreDomainPlugin implements NestModule, OnApplicationBootstrap {

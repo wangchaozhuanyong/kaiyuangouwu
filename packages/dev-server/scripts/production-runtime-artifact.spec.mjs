@@ -41,6 +41,9 @@ void test('runtime artifact includes the telemetry plugin required by dev-server
 
 void test('runtime artifact serves the standalone next-admin application', () => {
     assert.deepEqual(RUNTIME_PACKAGE_ASSETS['next-admin'], ['dist']);
+    assert.deepEqual(RUNTIME_PACKAGE_ASSETS['next-admin-plugin'], ['dist']);
+    assert.equal(RUNTIME_PACKAGE_ASSETS.dashboard, undefined);
+    assert.ok(REQUIRED_RUNTIME_FILES.includes('packages/next-admin-plugin/dist/index.js'));
     assert.ok(REQUIRED_RUNTIME_FILES.includes('packages/next-admin/dist/index.html'));
     assert.ok(!REQUIRED_RUNTIME_FILES.includes('packages/dev-server/dist/dashboard/index.html'));
 });
