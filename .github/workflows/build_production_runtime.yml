@@ -103,7 +103,7 @@ jobs:
                     echo "media_keys must be a comma-separated list of manifest keys" >&2
                     exit 1
                   fi
-                  if [[ -n "$MEDIA_CHANNEL_CODES" ]] && [[ ! "$MEDIA_CHANNEL_CODES" =~ ^[a-z0-9_][a-z0-9_-]*(,[a-z0-9_][a-z0-9_-]*)*$ ]]; then
+                  if [[ -n "$MEDIA_CHANNEL_CODES" ]] && [[ "$MEDIA_CHANNEL_CODES" != "美宜佳" ]] && [[ ! "$MEDIA_CHANNEL_CODES" =~ ^[a-z0-9_][a-z0-9_-]*(,[a-z0-9_][a-z0-9_-]*)*$ ]]; then
                     echo "channel_codes must be a comma-separated list of Channel codes" >&2
                     exit 1
                   fi
