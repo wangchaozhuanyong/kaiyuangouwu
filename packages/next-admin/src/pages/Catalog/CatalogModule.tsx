@@ -47,7 +47,7 @@ import {
     getChannelDisplayLabel,
     isDefaultChannelCode,
 } from '../../utils/channel-display';
-import { collectionSummary } from '../../utils/commerce-mode';
+import { collectionHierarchySummary } from '../../utils/commerce-mode';
 
 interface ProductVariantItem {
     id: string;
@@ -95,6 +95,11 @@ interface ProductItem {
         id: string;
         name: string;
         slug: string;
+        parent?: {
+            id: string;
+            name: string;
+            slug: string;
+        } | null;
     }>;
 }
 
@@ -518,7 +523,7 @@ export function CatalogModule() {
 
                         {/* 真实数据列表 */}
                         {productList.length > 0 && (
-                            <table className="w-full min-w-[1880px] border-collapse text-left text-xs">
+                            <table className="w-full min-w-[2060px] border-collapse text-left text-xs">
                                 <thead>
                                     <tr className="border-b border-slate-200 bg-slate-50/70 text-slate-500 font-bold whitespace-nowrap">
                                         <th
@@ -537,7 +542,10 @@ export function CatalogModule() {
                                             SPU Slug
                                         </th>
                                         <th scope="col" className="w-48 px-3 py-3">
-                                            分类归属
+                                            一级分类
+                                        </th>
+                                        <th scope="col" className="w-48 px-3 py-3">
+                                            二级分类
                                         </th>
                                         <th scope="col" className="w-28 px-3 py-3">
                                             商品类型
@@ -598,7 +606,7 @@ export function CatalogModule() {
                                             product.customFields?.fulfillmentType === 'physical'
                                                 ? 'physical'
                                                 : 'digital';
-                                        const category = collectionSummary(product.collections);
+                                        const categories = collectionHierarchySummary(product.collections);
                                         const unlimitedDigitalStock =
                                             fulfillmentType === 'digital' &&
                                             variants.length > 0 &&
@@ -670,16 +678,32 @@ export function CatalogModule() {
                                                     </span>
                                                 </td>
 
-                                                {/* Category ownership */}
+                                                {/* First-level category */}
                                                 <td className="h-[52px] whitespace-nowrap px-3 py-0">
                                                     <span
-                                                        className={`inline-flex items-center rounded-md px-2 py-1 text-[11px] font-bold ${category.primary === '未分类' ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-700'}`}
+                                                        className={`inline-flex items-center rounded-md px-2 py-1 text-[11px] font-bold ${categories.topLevel.primary === '未分类' ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-700'}`}
                                                     >
-                                                        {category.primary}
+                                                        {categories.topLevel.primary}
                                                     </span>
-                                                    {category.extraCount > 0 && (
+                                                    {categories.topLevel.extraCount > 0 && (
                                                         <span className="ml-1 text-[10px] text-slate-400">
-                                                            +{category.extraCount}
+                                                            +{categories.topLevel.extraCount}
+                                                        </span>
+                                                    )}
+                                                </td>
+
+                                                {/* Second-level category */}
+                                                <td className="h-[52px] whitespace-nowrap px-3 py-0">
+                                                    <span
+                                                        className={`inline-flex items-center rounded-md px-2 py-1 text-[11px] font-bold ${categories.secondLevel.primary === '未分类' ? 'bg-slate-50 text-slate-400' : 'bg-cyan-50 text-cyan-700'}`}
+                                                    >
+                                                        {categories.secondLevel.primary === '未分类'
+                                                            ? '未设置'
+                                                            : categories.secondLevel.primary}
+                                                    </span>
+                                                    {categories.secondLevel.extraCount > 0 && (
+                                                        <span className="ml-1 text-[10px] text-slate-400">
+                                                            +{categories.secondLevel.extraCount}
                                                         </span>
                                                     )}
                                                 </td>
