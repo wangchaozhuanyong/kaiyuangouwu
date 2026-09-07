@@ -91,26 +91,66 @@ async function renderModule() {
     });
 }
 
-function card(index: number) {
-    return [...container.querySelectorAll('section')].filter(section => section.querySelector('h2'))[index];
+function providerRow(name: string) {
+    const row = [...container.querySelectorAll('article')].find(article =>
+        article.querySelector('h3')?.textContent?.includes(name),
+    );
+    expect(row).toBeDefined();
+    return row as HTMLElement;
 }
 
-async function clickButton(section: HTMLElement, label: string) {
-    const button = [...section.querySelectorAll('button')].find(button => button.textContent === label);
+function drawer() {
+    return container.querySelector<HTMLElement>('[role="dialog"]');
+}
+
+async function clickButton(section: ParentNode, label: string) {
+    const button = [...section.querySelectorAll('button')].find(
+        button => button.textContent?.trim() === label,
+    );
     expect(button).toBeDefined();
     expect(button?.disabled).toBe(false);
     await act(async () => button?.click());
 }
 
+async function openProvider(name: string) {
+    await clickButton(providerRow(name), '设置修改');
+    expect(drawer()).not.toBeNull();
+    return drawer()!;
+}
+
 describe('AiImageAccessModule credential controls', () => {
+    it('keeps provider forms out of the overview until a right-side drawer is opened', async () => {
+        await renderModule();
+
+        expect(container.querySelectorAll('article')).toHaveLength(2);
+        expect(
+            [...container.querySelectorAll('button')].filter(
+                button => button.textContent?.trim() === '设置修改',
+            ),
+        ).toHaveLength(2);
+        expect(container.querySelector('input')).toBeNull();
+
+        const panel = await openProvider(backup.name);
+        expect(panel.className).toContain('justify-end');
+        expect(panel.getAttribute('aria-label')).toBe(`设置服务商：${backup.name}`);
+        expect(panel.textContent).toContain('API Base URL');
+        expect(panel.textContent).toContain('保存凭据');
+
+        await act(async () => {
+            document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        });
+        expect(drawer()).toBeNull();
+    });
+
     it('tests the selected backup by ID when two Gemini keys share the same visible suffix', async () => {
         await renderModule();
-        await clickButton(card(1), '测试连通性');
+        const panel = await openProvider(backup.name);
+        await clickButton(panel, '测试连通性');
 
         expect(test).toHaveBeenCalledExactlyOnceWith({ variables: { id: '4' } });
-        expect(card(0).querySelector('h2')?.textContent).toBe(primary.name);
-        expect(card(1).querySelector('h2')?.textContent).toBe(backup.name);
-        expect(card(1).textContent).toContain('备用凭据连接正常');
+        expect(providerRow(primary.name).querySelector('h3')?.textContent).toBe(primary.name);
+        expect(providerRow(backup.name).querySelector('h3')?.textContent).toBe(backup.name);
+        expect(panel.textContent).toContain('备用凭据连接正常');
         expect(refetch).toHaveBeenCalledOnce();
         expect(save).not.toHaveBeenCalled();
     });
@@ -124,8 +164,9 @@ describe('AiImageAccessModule credential controls', () => {
                 refetch,
             });
             await renderModule();
-            await act(async () => card(1).querySelector<HTMLInputElement>('input[type="checkbox"]')?.click());
-            await clickButton(card(1), '保存凭据');
+            const panel = await openProvider(credential.name);
+            await act(async () => panel.querySelector<HTMLInputElement>('input[type="checkbox"]')?.click());
+            await clickButton(panel, '保存凭据');
 
             expect(save).toHaveBeenCalledExactlyOnceWith({
                 variables: {
@@ -146,14 +187,15 @@ describe('AiImageAccessModule credential controls', () => {
                     },
                 },
             });
-            expect(card(0).querySelector<HTMLInputElement>('input[type="checkbox"]')?.checked).toBe(true);
             expect(refetch).toHaveBeenCalledOnce();
+            expect(drawer()).toBeNull();
         },
     );
 
     it('uses the saved canonical URL so a trimmed edit no longer blocks connection testing', async () => {
         await renderModule();
-        const input = card(1).querySelector('input')!;
+        let panel = await openProvider(backup.name);
+        const input = panel.querySelector('input')!;
         await act(async () => {
             Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(
                 input,
@@ -161,18 +203,20 @@ describe('AiImageAccessModule credential controls', () => {
             );
             input.dispatchEvent(new Event('input', { bubbles: true }));
         });
-        await clickButton(card(1), '保存凭据');
+        await clickButton(panel, '保存凭据');
 
-        expect(card(1).querySelector('input')?.value).toBe(backup.baseUrl);
-        await clickButton(card(1), '测试连通性');
+        panel = await openProvider(backup.name);
+        expect(panel.querySelector('input')?.value).toBe(backup.baseUrl);
+        await clickButton(panel, '测试连通性');
         expect(test).toHaveBeenCalledExactlyOnceWith({ variables: { id: backup.id } });
     });
 
     it('keeps an API failure visible without reporting a successful save', async () => {
         save.mockRejectedValue(new Error('保存失败，请重试'));
         await renderModule();
-        await act(async () => card(0).querySelector<HTMLInputElement>('input[type="checkbox"]')?.click());
-        await clickButton(card(0), '保存凭据');
+        const panel = await openProvider(primary.name);
+        await act(async () => panel.querySelector<HTMLInputElement>('input[type="checkbox"]')?.click());
+        await clickButton(panel, '保存凭据');
 
         expect(container.textContent).toContain('保存失败，请重试');
         expect(container.textContent).not.toContain('凭据已加密保存');
