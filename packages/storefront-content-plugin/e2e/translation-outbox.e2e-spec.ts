@@ -295,6 +295,11 @@ describe('real Admin API saves and Shop API publication with the translation out
         expect(result.queued).toBe(15);
         expect(result.failed).toBe(0);
         expect(translate).not.toHaveBeenCalled();
+        expect(await db.getRepository(metadata.target).countBy({ languageCode: 'en', label: '' })).toBe(15);
+        const applied = await server.app.get(ContentTranslationRetryService).retryPending();
+        expect(applied.translated).toBe(15);
+        expect(await db.getRepository(metadata.target).countBy({ languageCode: 'en', label: '' })).toBe(0);
+        expect(translate).not.toHaveBeenCalled();
     });
 
     it('rolls back the content and outbox on an invalid child in a real save transaction', async () => {

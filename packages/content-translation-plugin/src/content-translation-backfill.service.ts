@@ -155,6 +155,7 @@ export class ContentTranslationBackfillService {
                 existingTargetText: snapshot.target,
                 existingSourceText: snapshot.source,
                 format: snapshot.format,
+                maxTargetLength: snapshot.maxTargetLength,
             });
         }
         if (!fields.length) return 'skipped';
@@ -173,15 +174,15 @@ export class ContentTranslationBackfillService {
                 const state = existing.find(item => item.fieldPath === field.path);
                 return !state || (!state.locked && ['MISSING', 'STALE'].includes(state.status));
             })
-            .map(field =>
-                field.status === 'PENDING'
-                    ? {
-                          ...field,
-                          translatedText:
-                              fields.find(item => item.path === field.path)?.existingTargetText ?? '',
-                      }
-                    : field,
-            );
+            .map(field => {
+                const currentTarget = fields.find(item => item.path === field.path)?.existingTargetText ?? '';
+                // Discovery only records work. Cached values still need the worker's guarded writeback
+                // and durable notification before they can be marked as applied to historical content.
+                return field.status === 'PENDING' ||
+                    (field.status === 'AUTO_TRANSLATED' && field.translatedText !== currentTarget)
+                    ? { ...field, status: 'PENDING' as const, translatedText: currentTarget }
+                    : field;
+            });
         for (const field of missing) {
             await this.translations.recordState(ctx, {
                 ...identity,
