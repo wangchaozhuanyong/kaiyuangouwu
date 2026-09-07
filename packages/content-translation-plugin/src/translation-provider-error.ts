@@ -30,3 +30,13 @@ export class TranslationProviderError extends Error {
         this.name = 'TranslationProviderError';
     }
 }
+
+/** A sequential provider may finish fields before its quota or request deadline is reached. */
+export class PartialTranslationProviderError extends TranslationProviderError {
+    constructor(
+        failure: TranslationProviderError,
+        readonly translations: Array<{ key: string; text: string }>,
+    ) {
+        super(failure.code, failure.retryAfterMs);
+    }
+}

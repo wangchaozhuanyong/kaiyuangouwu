@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 import { In } from 'typeorm';
 
 import { contentTranslationLoggerCtx } from './constants.js';
-import { TranslationProviderError } from './translation-provider-error.js';
+import { PartialTranslationProviderError, TranslationProviderError } from './translation-provider-error.js';
 import { ContentTranslationProvider, ContentTranslationRequest, ContentTranslationSegment } from './types.js';
 
 export const translationResultCacheKey = 'contentTranslationCache.result';
@@ -133,16 +133,24 @@ export class TranslationResultCacheService {
             // Cached translations remain usable during cooldowns, quota failures or missing credentials.
             if (!missing.length) return;
             if (!provider.isConfigured()) throw new TranslationProviderError('CONFIGURATION');
-            const result = await provider.translate({
-                ...request,
-                segments: missing.map(item => ({ ...item.segment, key: item.scope })),
-            });
-            const values = missing.map(item => {
+            let partialFailure: PartialTranslationProviderError | undefined;
+            const result = await provider
+                .translate({
+                    ...request,
+                    segments: missing.map(item => ({ ...item.segment, key: item.scope })),
+                })
+                .catch((error: unknown) => {
+                    if (!(error instanceof PartialTranslationProviderError)) throw error;
+                    partialFailure = error;
+                    return { provider: provider.name, translations: error.translations };
+                });
+            const values = missing.flatMap(item => {
                 const matches = result.translations.filter(translation => translation.key === item.scope);
                 const text = matches[0]?.text;
+                if (partialFailure && matches.length === 0) return [];
                 if (matches.length !== 1 || !isUsableEnglishTranslation(text))
                     throw new TranslationProviderError('INVALID_RESPONSE');
-                return { item, text: text.trim() };
+                return [{ item, text: text.trim() }];
             });
             // Only valid automatic results enter the shared cache. Manual English stays on its own record.
             try {
@@ -160,6 +168,10 @@ export class TranslationResultCacheService {
                 Logger.warn('翻译已完成，但共享缓存暂时写入失败', contentTranslationLoggerCtx);
             }
             for (const { item, text } of values) item.resolve(text);
+            if (partialFailure) {
+                const completed = new Set(values.map(value => value.item.scope));
+                for (const item of missing) if (!completed.has(item.scope)) item.reject(partialFailure);
+            }
         } catch (error) {
             // Do not cache failed requests, empty results or untranslated Chinese.
             for (const item of owned) item.reject(error);
