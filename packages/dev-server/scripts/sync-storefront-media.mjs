@@ -6,8 +6,6 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { catalogCigaretteMediaManifest } from './catalog-cigarette-media.mjs';
-
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const storefrontAssets = path.resolve(scriptDirectory, '../../storefront/src/assets/storefront');
 
@@ -87,12 +85,6 @@ export const storefrontMediaManifest = [
         },
     },
 ];
-
-export { catalogCigaretteMediaManifest };
-export const storefrontMediaCatalog = [...storefrontMediaManifest, ...catalogCigaretteMediaManifest];
-export const storefrontMediaGroups = Object.freeze({
-    'catalog-cigarettes-20260907': catalogCigaretteMediaManifest.map(item => item.key),
-});
 
 const LOGIN_MUTATION = `
     mutation StorefrontMediaLogin($username: String!, $password: String!) {
@@ -181,23 +173,9 @@ const SHOP_CONTENT_BLOCKS_QUERY = `
 
 const ASSET_QUERY = `
     query StorefrontMediaAsset($tags: [String!]) {
-        assets(options: { take: 2, tags: $tags, tagsOperator: AND }) {
+        assets(options: { take: 1, tags: $tags, tagsOperator: AND }) {
             items {
                 id
-            }
-        }
-    }
-`;
-
-const EXISTING_ASSET_QUERY = `
-    query StorefrontMediaExistingAsset($name: String!) {
-        assets(options: { take: 100, filter: { name: { contains: $name } } }) {
-            items {
-                id
-                name
-                width
-                height
-                tags { value }
             }
         }
     }
@@ -223,15 +201,6 @@ const UPDATE_VARIANT_MUTATION = `
     mutation UpdateStorefrontMediaVariant($input: UpdateProductVariantInput!) {
         updateProductVariant(input: $input) {
             id
-        }
-    }
-`;
-
-const UPDATE_ASSET_TAGS_MUTATION = `
-    mutation TagStorefrontMediaAsset($input: UpdateAssetInput!) {
-        updateAsset(input: $input) {
-            id
-            tags { value }
         }
     }
 `;
@@ -283,16 +252,6 @@ export function parseMediaKeys(value) {
     return keys;
 }
 
-export function selectStorefrontMediaEntries(manifest, mediaKeys) {
-    if (!mediaKeys) return manifest;
-    const expandedKeys = Array.from(new Set(mediaKeys.flatMap(key => storefrontMediaGroups[key] ?? [key])));
-    return expandedKeys.map(key => {
-        const entry = manifest.find(item => item.key === key);
-        assert.ok(entry, `Unknown storefront media key: ${key}`);
-        return entry;
-    });
-}
-
 export function selectStorefrontMediaChannels(availableChannels, channelCodes) {
     if (channelCodes?.length) {
         const channelsByCode = new Map(availableChannels.map(channel => [channel.code, channel]));
@@ -318,10 +277,6 @@ export function createUploadMap(variablePath) {
 
 export function assetTags(key, hash) {
     return [`storefront-media:${key}`, `storefront-media-sha256:${hash}`];
-}
-
-export function existingAssetTags(key, sourceHash) {
-    return [`storefront-media:${key}`, `storefront-media-source-sha256:${sourceHash}`];
 }
 
 export function findContentBlock(blocks, target) {
@@ -391,45 +346,17 @@ export async function prepareStorefrontMediaManifest(manifest = storefrontMediaM
             );
             assetOnlyTargets.set(entry.assetOnly.purpose, entry.key);
         }
-        assert.notEqual(
-            Boolean(entry.file),
-            Boolean(entry.existingAsset),
-            `Media ${entry.key} must specify exactly one of file or existingAsset`,
-        );
+        assert.ok(entry.names?.en && entry.names?.zh, `Media ${entry.key} requires bilingual names`);
         keys.add(entry.key);
 
-        if (entry.file) {
-            assert.ok(entry.names?.en && entry.names?.zh, `Media ${entry.key} requires bilingual names`);
-            const bytes = await readFile(entry.file);
-            assert.ok(bytes.byteLength > 0, `Media file is empty: ${entry.file}`);
-            const hash = createHash('sha256').update(bytes).digest('hex');
-            prepared.push({
-                ...entry,
-                bytes,
-                hash,
-                tags: assetTags(entry.key, hash),
-            });
-            continue;
-        }
-
-        assert.ok(entry.existingAsset.name?.trim(), `Media ${entry.key} requires an exact Asset name`);
-        assert.ok(
-            Number.isInteger(entry.existingAsset.width) && entry.existingAsset.width > 0,
-            `Media ${entry.key} requires a positive existing Asset width`,
-        );
-        assert.ok(
-            Number.isInteger(entry.existingAsset.height) && entry.existingAsset.height > 0,
-            `Media ${entry.key} requires a positive existing Asset height`,
-        );
-        assert.match(
-            entry.existingAsset.sourceSha256,
-            /^[a-f0-9]{64}$/u,
-            `Media ${entry.key} requires the original source SHA-256`,
-        );
+        const bytes = await readFile(entry.file);
+        assert.ok(bytes.byteLength > 0, `Media file is empty: ${entry.file}`);
+        const hash = createHash('sha256').update(bytes).digest('hex');
         prepared.push({
             ...entry,
-            hash: entry.existingAsset.sourceSha256,
-            tags: existingAssetTags(entry.key, entry.existingAsset.sourceSha256),
+            bytes,
+            hash,
+            tags: assetTags(entry.key, hash),
         });
     }
     return prepared;
@@ -478,78 +405,7 @@ async function findAsset(fetchImpl, apiOrigin, authToken, channel, tags) {
         { tags },
         requestHeaders(authToken, channel.token),
     );
-    assert.ok(
-        result.data.assets.items.length <= 1,
-        `Reviewed media tags resolve to multiple Assets in Channel ${channel.code}`,
-    );
     return result.data.assets.items[0] ?? null;
-}
-
-function assertExistingAssetMatchesReference(asset, reference, channelCode) {
-    assert.equal(
-        asset.name,
-        reference.name,
-        `Existing Asset name differs from ${reference.name} in Channel ${channelCode}`,
-    );
-    assert.equal(
-        asset.width,
-        reference.width,
-        `Existing Asset ${reference.name} width differs in Channel ${channelCode}`,
-    );
-    assert.equal(
-        asset.height,
-        reference.height,
-        `Existing Asset ${reference.name} height differs in Channel ${channelCode}`,
-    );
-}
-
-async function findExistingAsset(fetchImpl, apiOrigin, authToken, channel, reference) {
-    const result = await graphql(
-        fetchImpl,
-        apiOrigin,
-        'admin-api',
-        EXISTING_ASSET_QUERY,
-        { name: reference.name },
-        requestHeaders(authToken, channel.token),
-    );
-    const candidates = result.data.assets.items.filter(asset => asset.name === reference.name);
-    assert.equal(
-        candidates.length,
-        1,
-        `Expected one existing Asset named ${reference.name} in Channel ${channel.code}, found ${String(candidates.length)}`,
-    );
-    assertExistingAssetMatchesReference(candidates[0], reference, channel.code);
-    return candidates[0];
-}
-
-function tagValues(asset) {
-    return (asset.tags ?? []).map(tag => tag.value);
-}
-
-async function tagExistingAsset(fetchImpl, apiOrigin, authToken, channel, asset, media) {
-    const before = tagValues(asset);
-    const desired = Array.from(new Set([...before, 'storefront-media', ...media.tags]));
-    if (desired.length === before.length && desired.every(tag => before.includes(tag))) {
-        return null;
-    }
-    await graphql(
-        fetchImpl,
-        apiOrigin,
-        'admin-api',
-        UPDATE_ASSET_TAGS_MUTATION,
-        { input: { id: asset.id, tags: desired } },
-        requestHeaders(authToken, channel.token),
-    );
-    return async () => {
-        await graphql(
-            fetchImpl,
-            apiOrigin,
-            'admin-api',
-            UPDATE_ASSET_TAGS_MUTATION,
-            { input: { id: asset.id, tags: before } },
-            requestHeaders(authToken, channel.token),
-        );
-    };
 }
 
 function mimeType(file) {
@@ -989,7 +845,13 @@ export async function syncStorefrontMedia({
         assert.ok(allowRemote, 'Remote or production writes require both --apply and --allow-remote');
     }
 
-    const selectedManifest = selectStorefrontMediaEntries(manifest, mediaKeys);
+    const selectedManifest = mediaKeys
+        ? mediaKeys.map(key => {
+              const entry = manifest.find(item => item.key === key);
+              assert.ok(entry, `Unknown storefront media key: ${key}`);
+              return entry;
+          })
+        : manifest;
     const normalizedApiOrigin = apiOrigin.replace(/\/$/, '');
     const normalizedShopOrigin = shopOrigin.replace(/\/$/, '');
     const prepared = await prepareStorefrontMediaManifest(selectedManifest);
@@ -1013,26 +875,7 @@ export async function syncStorefrontMedia({
             assetChannel,
             media.tags,
         );
-        let action = asset ? 'reuse' : 'upload';
-        if (media.existingAsset) {
-            const referencedAsset = await findExistingAsset(
-                fetchImpl,
-                normalizedApiOrigin,
-                session.authToken,
-                assetChannel,
-                media.existingAsset,
-            );
-            if (asset) {
-                assert.equal(
-                    String(asset.id),
-                    String(referencedAsset.id),
-                    `Tagged Asset differs from the exact existing Asset for ${media.key}`,
-                );
-            } else {
-                action = 'reuse-existing';
-            }
-            asset = referencedAsset;
-        }
+        const action = asset ? 'reuse' : 'upload';
         const targets = [];
 
         for (const state of channelStates) {
@@ -1078,17 +921,6 @@ export async function syncStorefrontMedia({
                         assetChannel,
                         media,
                     ));
-                if (media.existingAsset) {
-                    const tagRollback = await tagExistingAsset(
-                        fetchImpl,
-                        normalizedApiOrigin,
-                        session.authToken,
-                        assetChannel,
-                        asset,
-                        media,
-                    );
-                    if (tagRollback) rollbacks.push(tagRollback);
-                }
                 for (const channel of selectedChannels) {
                     await assignAsset(
                         fetchImpl,
@@ -1186,9 +1018,7 @@ export async function syncStorefrontMedia({
 
         results.push({
             key: media.key,
-            file: media.file ?? null,
-            sourceAssetName: media.existingAsset?.name ?? null,
-            productNames: media.productNames ?? [],
+            file: media.file,
             hash: media.hash,
             assetAction: action,
             assetId: asset?.id ?? null,
@@ -1235,10 +1065,8 @@ export function parseCliArguments(args) {
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
     const options = parseCliArguments(process.argv.slice(2));
-    const availableManifest = options.mediaKeys ? storefrontMediaCatalog : storefrontMediaManifest;
     if (options.validate) {
-        const selectedManifest = selectStorefrontMediaEntries(availableManifest, options.mediaKeys);
-        const prepared = await prepareStorefrontMediaManifest(selectedManifest);
+        const prepared = await prepareStorefrontMediaManifest();
         process.stdout.write(
             `${JSON.stringify({ ok: true, mode: 'validate', mediaCount: prepared.length, keys: prepared.map(item => item.key) }, null, 2)}\n`,
         );
@@ -1258,7 +1086,6 @@ if (isMain) {
             username: process.env.SUPERADMIN_USERNAME,
             password: process.env.SUPERADMIN_PASSWORD,
             channelCodes,
-            manifest: availableManifest,
             mediaKeys: options.mediaKeys,
             apply: options.apply,
             verify: options.verify,
@@ -1274,8 +1101,6 @@ if (isMain) {
                     channelCodes: result.channelCodes,
                     media: result.results.map(item => ({
                         key: item.key,
-                        sourceAssetName: item.sourceAssetName,
-                        productNames: item.productNames,
                         assetAction: item.assetAction,
                         assetId: item.assetId,
                         targets: item.targets,

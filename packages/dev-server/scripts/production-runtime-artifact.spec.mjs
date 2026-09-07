@@ -87,7 +87,6 @@ void test('runtime artifact includes release publishers and every media manifest
     const fixtureRoot = await mkdtemp(path.join(tmpdir(), 'vendure-runtime-storefront-media-'));
     try {
         await copyStorefrontMediaReleaseInputs(fixtureRoot);
-        await access(path.join(fixtureRoot, 'packages/dev-server/scripts/catalog-cigarette-media.mjs'));
         await access(path.join(fixtureRoot, 'packages/dev-server/scripts/sync-storefront-media.mjs'));
         await access(path.join(fixtureRoot, 'packages/dev-server/scripts/sync-auth-visuals.mjs'));
         await access(path.join(fixtureRoot, 'packages/dev-server/scripts/sync-moyao-brand.mjs'));
