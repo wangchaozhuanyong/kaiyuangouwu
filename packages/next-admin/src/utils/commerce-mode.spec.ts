@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+    collectionHierarchySummary,
     collectionSummary,
     commerceModeAllowsPath,
     fulfillmentTypeForMode,
@@ -33,6 +34,39 @@ describe('commerce mode rules', () => {
         expect(collectionSummary([{ name: '软件' }, { name: '新品' }])).toEqual({
             primary: '软件',
             extraCount: 1,
+        });
+    });
+
+    it('separates product collections into first-level and second-level category summaries', () => {
+        const root = { id: 'root', name: '__root_collection__' };
+        const tobacco = { id: 'tobacco', name: '正品烟草' };
+        const cigarettes = { id: 'cigarettes', name: '香烟' };
+        const cigars = { id: 'cigars', name: '雪茄' };
+
+        expect(
+            collectionHierarchySummary([
+                { ...tobacco, parent: root },
+                { ...cigarettes, parent: tobacco },
+                { ...cigars, parent: tobacco },
+            ]),
+        ).toEqual({
+            topLevel: { primary: '正品烟草', extraCount: 0 },
+            secondLevel: { primary: '香烟', extraCount: 1 },
+        });
+    });
+
+    it('uses the parent relationship when only a child collection is assigned', () => {
+        expect(
+            collectionHierarchySummary([
+                {
+                    id: 'cigarettes',
+                    name: '香烟',
+                    parent: { id: 'tobacco', name: '正品烟草' },
+                },
+            ]),
+        ).toEqual({
+            topLevel: { primary: '正品烟草', extraCount: 0 },
+            secondLevel: { primary: '香烟', extraCount: 0 },
         });
     });
 });

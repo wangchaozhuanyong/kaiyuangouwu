@@ -53,6 +53,11 @@ export const GET_PRODUCTS = gql`
                     id
                     name
                     slug
+                    parent {
+                        id
+                        name
+                        slug
+                    }
                 }
             }
             totalItems
