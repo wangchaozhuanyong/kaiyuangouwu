@@ -207,23 +207,6 @@ Apply to a local Vendure instance:
 bun run sync:storefront-media -- --apply
 ```
 
-For a production release, set `VENDURE_API_ORIGIN`, `VENDURE_STOREFRONT_URL`,
-`SUPERADMIN_USERNAME`, `SUPERADMIN_PASSWORD`, and `STOREFRONT_MEDIA_CHANNEL_CODES` in the release
-environment, then run the sync after the API is healthy and before the new storefront is promoted.
-The Admin origin may point at the loopback candidate, but the Shop origin must be the reviewed public
-store domain so domain-to-Channel routing is exercised:
-
-```bash
-bun run sync:storefront-media -- --apply --allow-remote
-```
-
-Re-run the hard, read-only Admin API and Shop API reconciliation when independent release evidence
-is required:
-
-```bash
-bun run sync:storefront-media -- --verify
-```
-
 Remote writes require both flags. Existing asset records are not deleted: an unchanged file is
 reused by its SHA-256 tag, while a changed file creates a new asset and moves the configured
 bindings to it. Existing product and variant galleries are preserved. Apply does not return success
@@ -241,25 +224,6 @@ bun run sync:auth-visuals -- --dry-run
 bun run sync:auth-visuals -- --apply --allow-remote
 bun run sync:auth-visuals -- --verify
 ```
-
-MOYAO AI 的品牌名、双语简介/口号、色板和三组 Logo 由 StoreProfile 品牌发布器管理，
-不得只在客户端写死。生产发布必须固定主 Channel，依次执行预演、受保护写入和独立只读
-验证。正式发布必须在 `Production Runtime Artifact` 同一份经校验的发布计划中
-设置 `moyao_brand=true` 和 `channel_codes=__default_channel__`：
-
-```bash
-bun run sync:moyao-brand -- --dry-run --channel-code __default_channel__
-bun run sync:moyao-brand -- --apply --allow-remote --channel-code __default_channel__
-bun run sync:moyao-brand -- --verify --channel-code __default_channel__
-```
-
-写入会同时校验 Admin StoreProfile 和中英文 Shop API。校验失败时发布器按写入后的版本号恢复
-原名称、文案、色板和 Logo Asset ID，并复验恢复状态；独立 `--verify` 未通过不得切换客户端。
-发布计划未显式审核品牌、审核了错误 Channel，或者在没有品牌变更时携带品牌标志，都必须在备份和切换前失败关闭。
-
-Run `bun run check:storefront-publishing` before review. It rejects unclassified storefront media,
-direct managed-media imports outside the fallback registry, and hard-coded remote media URLs in
-runtime client code.
 
 ## Repairing reviewed inventory inheritance targets
 

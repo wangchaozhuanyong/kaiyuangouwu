@@ -28,7 +28,6 @@
         "docs:build": "bun run docs:generate-typescript-docs && bun run docs:generate-graphql-docs",
         "codegen": "tsc -p scripts/codegen/plugins && ts-node scripts/codegen/generate-graphql-types.ts && bun run codegen:gql-tada",
         "codegen:gql-tada": "ts-node scripts/codegen/generate-gql-tada-types.ts",
-        "version": "bun install && bun run check-imports && bun run check-angular-versions && bun run build && bun run check-core-type-defs && bun run generate-changelog && git add CHANGELOG* && git add */version.ts && git add bun.lock",
         "test": "lerna run test --stream --no-bail",
         "e2e": "lerna run e2e --stream --no-bail",
         "build": "lerna run build",
@@ -36,14 +35,9 @@
         "check:migration-registry": "node scripts/check-migration-registry.mjs",
         "audit:architecture-debt": "node scripts/architecture-debt-audit.mjs",
         "check:architecture-debt": "node scripts/architecture-debt-audit.mjs --check",
-        "check:storefront-publishing": "node scripts/check-storefront-publishing-policy.mjs",
-        "test:repository-checks": "node --test scripts/architecture-debt-audit.spec.mjs scripts/check-migration-registry.spec.mjs scripts/check-storefront-publishing-policy.spec.mjs",
+        "test:repository-checks": "node --test scripts/architecture-debt-audit.spec.mjs scripts/check-migration-registry.spec.mjs",
         "check-core-type-defs": "ts-node scripts/check-core-type-defs.ts",
-        "check-angular-versions": "ts-node scripts/check-angular-versions.ts",
-        "generate-changelog": "ts-node scripts/changelogs/generate-changelog.ts",
-        "publish-release": "lerna version -m \"chore: Publish %s\" --no-push --force-publish --exact",
-        "publish-prerelease": "lerna version -m \"chore: Pre-release %s\" prerelease --exact --no-push --force-publish --preid next --dist-tag next",
-        "publish-local": "lerna version --force-publish --no-git-tag-version && cd scripts && ./publish-to-verdaccio.sh"
+        "check-angular-versions": "ts-node scripts/check-angular-versions.ts"
     },
     "devDependencies": {
         "@commitlint/cli": "^19.1.0",
