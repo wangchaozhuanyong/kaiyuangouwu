@@ -1,6 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, useLayoutEffect } from 'react';
 
 import { configuredColor, readableColor } from '../../../storefront-content-plugin/src/shared/auth-visual';
+import { type StorefrontVisualPresetId } from '../../../storefront-content-plugin/src/visual-presets';
 import { productDescriptionText } from '../rich-text';
 import { NEUTRAL_STOREFRONT_IMAGE, NEUTRAL_STOREFRONT_SOCIAL_IMAGE } from '../storefront-images';
 import { type RouteName, type RouteState } from '../storefront-router';
@@ -8,27 +9,32 @@ import { productImage, setMetaContent, trimText } from '../storefront-utils';
 import { cacheLogoUrl } from '../StorefrontErrorBoundary';
 import { type Product, type StorefrontConfig } from '../types';
 
-export function useStorefrontBrandColors(config: StorefrontConfig | undefined) {
-    useEffect(() => {
+export function useStorefrontBrandColors(
+    config: StorefrontConfig | undefined,
+    presetId: StorefrontVisualPresetId = 'classic',
+) {
+    useLayoutEffect(() => {
         const root = document.documentElement;
-        const background = configuredColor(config?.brandBackgroundColor);
-        const primary = configuredColor(config?.brandPrimaryColor);
+        // An explicit skin owns the UI palette. Keep raw brand tokens for branded details,
+        // and remove inline palette overrides so the skin CSS and block colors can inherit.
+        const palette = presetId === 'classic' ? config : undefined;
+        const background = configuredColor(palette?.brandBackgroundColor);
+        const primary = configuredColor(palette?.brandPrimaryColor);
         const colors = {
-            // Page surfaces belong to the selected skin, independently of brand artwork colors.
-            '--store-background': config?.brandBackgroundColor,
-            '--store-primary': config?.brandPrimaryColor,
-            '--store-highlight': config?.brandHighlightColor,
+            '--store-background': palette?.brandBackgroundColor,
+            '--store-primary': palette?.brandPrimaryColor,
+            '--store-highlight': palette?.brandHighlightColor,
             '--store-foreground': background ? readableColor(background) : undefined,
-            '--auth-store-background': config?.brandBackgroundColor,
+            '--auth-store-background': palette?.brandBackgroundColor,
             '--brand-background': config?.brandBackgroundColor,
             '--brand-primary': config?.brandPrimaryColor,
             '--auth-store-foreground': background ? readableColor(background) : undefined,
             '--accent-foreground': primary ? readableColor(primary) : undefined,
             '--brand-accent': config?.brandAccentColor,
             '--brand-highlight': config?.brandHighlightColor,
-            '--accent': config?.brandPrimaryColor,
-            '--accent-hover': config?.brandHighlightColor,
-            '--accent-ink': config?.brandPrimaryColor,
+            '--accent': palette?.brandPrimaryColor,
+            '--accent-hover': palette?.brandHighlightColor,
+            '--accent-ink': palette?.brandPrimaryColor,
         } as const;
         for (const [property, value] of Object.entries(colors)) {
             if (value && /^#[0-9A-F]{6}$/iu.test(value)) root.style.setProperty(property, value);
@@ -37,7 +43,7 @@ export function useStorefrontBrandColors(config: StorefrontConfig | undefined) {
         return () => {
             for (const property of Object.keys(colors)) root.style.removeProperty(property);
         };
-    }, [config]);
+    }, [config, presetId]);
 }
 
 export function useStorefrontMetadata({

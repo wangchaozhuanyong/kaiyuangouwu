@@ -60,7 +60,8 @@ export function attributionWithinWindow(
 ): StoredReferralAttribution | null {
     if (!attribution) return null;
     const elapsed = now - attribution.capturedAt;
-    return elapsed >= 0 && elapsed <= windowDays * 86_400_000 ? attribution : null;
+    // Zero keeps the captured invitation indefinitely; positive values remain day-based windows.
+    return elapsed >= 0 && (windowDays === 0 || elapsed <= windowDays * 86_400_000) ? attribution : null;
 }
 
 export function referralShareUrl(code: string, source: ReferralSource = 'LINK'): string {

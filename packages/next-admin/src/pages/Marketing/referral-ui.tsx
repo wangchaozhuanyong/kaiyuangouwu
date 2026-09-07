@@ -346,10 +346,10 @@ export function programDraftError(draft: ProgramDraft) {
     if (draft.maxRewardPerOrder && Number(draft.maxRewardPerOrder) <= 0) return '单笔返利上限必须大于0或留空';
     if (
         !Number.isInteger(draft.attributionWindowDays) ||
-        draft.attributionWindowDays < 1 ||
+        draft.attributionWindowDays < 0 ||
         draft.attributionWindowDays > 365
     )
-        return '归因有效期必须是1到365天的整数';
+        return '归因有效期必须是0到365的整数，0表示永久有效';
     return '';
 }
 export function posterDraft(source: ReferralPosterRecord | 'NEW'): PosterDraft {

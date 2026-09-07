@@ -41,7 +41,7 @@ import { claimableCouponCampaigns } from '../coupon-center-state';
 import { heroIndexAfterManualMove, isCompletedHeroSwipe } from '../hero-carousel';
 import { heroThemeStyle } from '../hero-theme';
 import { selectCategoryPromotionProducts, selectManagedProducts } from '../home-merchandising';
-import { desktopIntroModuleOrder, homepageModuleEntries } from '../homepage-module-order';
+import { homepageModuleEntries } from '../homepage-module-order';
 import { resolveManagedContentCopy } from '../managed-content-copy';
 import { managedContentStyle } from '../managed-content-style';
 import { PageSkeleton } from '../route-loading';
@@ -467,8 +467,7 @@ export interface HomePageProps {
     onRetry: () => void;
 }
 
-export function HomePage({ embedded = false }: { embedded?: boolean } = {}) {
-    const PageTag = embedded ? 'section' : 'main';
+export function HomePage() {
     const navigate = useNavigate();
     const navigateTo = (route: RouteState) => void navigate(routeNavigateOptions(route) as never);
     const {
@@ -556,7 +555,6 @@ export function HomePage({ embedded = false }: { embedded?: boolean } = {}) {
     });
     const heroTransitionRef = useRef(0);
     const heroCount = managedHeroes.length;
-    const desktopIntroOrder = heroCount > 0 ? desktopIntroModuleOrder(homepageModules) : null;
     const managedHero = managedHeroes[heroIndex];
     const managedHeroProduct =
         managedHero?.targetType === 'PRODUCT'
@@ -807,7 +805,7 @@ export function HomePage({ embedded = false }: { embedded?: boolean } = {}) {
     const colorfulQuickLinks = isColorfulHomepageStyle(quickBlock?.settings?.visualStyle);
 
     return (
-        <PageTag className={`page home-page${embedded ? ' is-embedded' : ''}`}>
+        <main className="page home-page">
             <header className="topbar home-topbar">
                 <button
                     className="brand"
@@ -916,12 +914,7 @@ export function HomePage({ embedded = false }: { embedded?: boolean } = {}) {
                                 <ChevronRight aria-hidden="true" />
                             </button>
                         ) : null}
-                        <div
-                            className={`home-intro-grid${
-                                desktopIntroOrder === null ? '' : ' is-desktop-grouped'
-                            }`}
-                            style={desktopIntroOrder === null ? undefined : { order: desktopIntroOrder }}
-                        >
+                        <div className="home-intro-grid">
                             {hasHomepageModule('HERO') && heroCount > 0 && (
                                 <section
                                     className={`hero${heroCount > 1 ? ' is-swipeable' : ''}`}
@@ -1089,7 +1082,7 @@ export function HomePage({ embedded = false }: { embedded?: boolean } = {}) {
                             </div>
                         ))}
 
-                        {!embedded && !products.length && (
+                        {!products.length && (
                             <div
                                 className={homepageSectionShellClassName}
                                 style={{ order: homepageModules.length }}
@@ -1171,7 +1164,7 @@ export function HomePage({ embedded = false }: { embedded?: boolean } = {}) {
                         ) : null}
                     </div>
 
-                    {showFooter && !embedded ? (
+                    {showFooter ? (
                         <LegalFooter
                             storefrontName={storefrontName}
                             language={language}
@@ -1181,7 +1174,7 @@ export function HomePage({ embedded = false }: { embedded?: boolean } = {}) {
                     ) : null}
                 </>
             )}
-        </PageTag>
+        </main>
     );
 }
 

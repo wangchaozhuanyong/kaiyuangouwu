@@ -179,16 +179,39 @@ describe('referral program attribution window validation', () => {
         defaultPosterTemplate: 'BRAND_MINIMAL',
     });
 
-    it.each([180, 365])('accepts an attribution window of %i days', attributionWindowDays => {
+    it.each([0, 1, 30, 180, 365])('accepts an attribution window of %i days', attributionWindowDays => {
         expect(() =>
             (service as any).validateProgramInput(programInput(attributionWindowDays)),
         ).not.toThrow();
     });
 
-    it('rejects an attribution window longer than 365 days', () => {
-        expect(() => (service as any).validateProgramInput(programInput(366))).toThrow(
-            '邀请来源有效期必须在1至365天之间',
+    it.each([-1, 0.5, 366, NaN, Infinity])('rejects an invalid attribution window: %s', days => {
+        expect(() => (service as any).validateProgramInput(programInput(days))).toThrow(
+            '邀请归因有效期必须是0至365的整数，0表示永久有效',
         );
+    });
+
+    it('defaults new store programs to permanent attribution and preserves existing settings', async () => {
+        const existing = { id: 'config-1', attributionWindowDays: 30 };
+        const findOne = vi.fn().mockResolvedValueOnce(null).mockResolvedValueOnce(existing);
+        const save = vi.fn().mockImplementation(config => Promise.resolve(config));
+        const configService = new ReferralService(
+            { getRepository: () => ({ findOne, save }) } as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            { signingSecret: 'test-storefront-visitor-hash-secret' } as any,
+        );
+        const ctx = { channelId: 'channel-1', channel: { defaultCurrencyCode: 'CNY' } };
+
+        expect(await (configService as any).getOrCreateConfig(ctx)).toMatchObject({
+            attributionWindowDays: 0,
+        });
+        expect(save).toHaveBeenCalledWith(expect.objectContaining({ attributionWindowDays: 0 }));
+        expect(await (configService as any).getOrCreateConfig(ctx)).toBe(existing);
+        expect(save).toHaveBeenCalledTimes(1);
     });
 });
 

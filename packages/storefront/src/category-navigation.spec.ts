@@ -80,14 +80,18 @@ describe('category navigation responsive spacing', () => {
         );
     });
 
-    it('uses a polished full-width search bar for the category header', () => {
+    it('uses the connected search treatment without a duplicate visible title', () => {
         expect(categoryPageSource).not.toContain('category-title-lockup');
+        expect(categoryPageSource).not.toContain('category-mobile-heading');
         expect(categoryPageSource).not.toContain("{isZh ? '选购商品' : 'Shop'}");
         expect(stylesheet).toMatch(
-            /\.category-topbar\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);[^}]*padding-inline:\s*12px;/,
+            /\.category-topbar\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);[^}]*padding-inline:\s*16px;/,
         );
         expect(stylesheet).toMatch(
-            /\.search-trigger\s*\{[^}]*border-radius:\s*var\(--radius-md\);[^}]*box-shadow:/,
+            /\.category-topbar > \.search-trigger\s*\{[^}]*padding:\s*0;[^}]*border-radius:\s*8px;[^}]*box-shadow:\s*none;/,
+        );
+        expect(stylesheet).toMatch(
+            /\.category-topbar \.search-trigger-action\s*\{[^}]*height:\s*auto;[^}]*align-self:\s*stretch;[^}]*border-radius:\s*0;/,
         );
         expect(stylesheet).toMatch(
             /\.category-topbar > \.search-trigger\s*\{[^}]*width:\s*100%;[^}]*height:\s*44px;/,

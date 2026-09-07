@@ -432,7 +432,7 @@ export function useStorefrontAppState() {
         setStorefrontTagline(config.tagline?.trim() ?? '');
     }, [configQuery.data, configQuery.dataUpdatedAt, language, market, queryClient, vendureLanguageCode]);
 
-    useStorefrontBrandColors(configQuery.data);
+    useStorefrontBrandColors(configQuery.data, visualConfig.presetId);
 
     useEffect(() => {
         if (productsQuery.data) cacheProducts(productsQuery.data);
@@ -1102,7 +1102,6 @@ export function useStorefrontAppState() {
     );
 
     const storefrontContextValue = {
-        desktopLayout: visualConfig.desktopLayout,
         route,
         api,
         products,

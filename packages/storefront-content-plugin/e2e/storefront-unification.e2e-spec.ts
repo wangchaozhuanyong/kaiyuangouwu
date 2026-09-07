@@ -665,22 +665,20 @@ describe('unified storefront Admin API to Shop API', () => {
                         'modern-oriental',
                     );
                     for (const language of ['zh', 'en']) {
-                        if (language === 'en')
-                            await (
-                                width >= 1024
-                                    ? page.getByRole('button', { name: '切换为英文' })
-                                    : page.locator('.language-button')
-                            ).click();
-                        await browserExpect(page.locator('.desktop-catalog-main')).toHaveCount(
-                            width >= 1024 ? 1 : 0,
-                        );
+                        if (language === 'en') await page.locator('.language-button').click();
+                        // Even legacy catalog settings use the sole responsive storefront.
+                        await browserExpect(
+                            page.locator('.desktop-catalog-main, .desktop-header'),
+                        ).toHaveCount(0);
+                        await browserExpect(page.locator('.home-page')).toHaveCount(1);
+                        await browserExpect(page.locator('.is-desktop-grouped')).toHaveCount(0);
                         if (index < 2) await browserExpect(page.locator('.quick-grid button')).toHaveCount(8);
                         await browserExpect(page.locator('details.desktop-store-highlights')).toHaveCount(0);
                         expect(
                             await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
                         ).toBe(true);
                         await page.screenshot({
-                            path: join(output, `catalog-${name}-${language}-${width}.png`),
+                            path: join(output, `fixed-layout-${name}-${language}-${width}.png`),
                             fullPage: true,
                             animations: 'disabled',
                         });
@@ -730,16 +728,16 @@ describe('unified storefront Admin API to Shop API', () => {
                 .catch(async () => {
                     throw new Error(await first.locator('body').innerText());
                 });
-            await browserExpect(stale.locator('input[name="desktopLayout"][value="catalog"]')).toBeChecked();
+            await browserExpect(stale.locator('input[name="desktopLayout"]')).toHaveCount(0);
             await first.locator('input[name="presetId"][value="classic"]').check();
             await first.getByRole('button', { name: '保存到当前店铺' }).click();
             await browserExpect(first.getByRole('status').filter({ hasText: '已保存' })).toBeVisible();
-            await stale.locator('input[name="desktopLayout"][value="classic"]').check();
+            await stale.locator('input[name="presetId"][value="classic"]').check();
             await stale.getByRole('button', { name: '保存到当前店铺' }).click();
             await browserExpect(stale.getByRole('alert')).toContainText('其他管理员');
             await stale.getByRole('button', { name: '重新读取' }).click();
             await browserExpect(stale.locator('input[name="presetId"][value="classic"]')).toBeChecked();
-            await stale.locator('input[name="desktopLayout"][value="classic"]').check();
+            await stale.locator('input[name="presetId"][value="modern-oriental"]').check();
             await stale.route('**/admin-api', async route => {
                 if (route.request().postData()?.includes('NextAdminUpdateStorefrontVisualPreset'))
                     await route.fulfill({
@@ -751,7 +749,9 @@ describe('unified storefront Admin API to Shop API', () => {
             });
             await stale.getByRole('button', { name: '保存到当前店铺' }).click();
             await browserExpect(stale.getByRole('alert')).toBeVisible();
-            await browserExpect(stale.locator('input[name="desktopLayout"][value="classic"]')).toBeChecked();
+            await browserExpect(
+                stale.locator('input[name="presetId"][value="modern-oriental"]'),
+            ).toBeChecked();
             await stale.unroute('**/admin-api');
             let releaseResponse = () => undefined;
             let markRequested = () => undefined;
@@ -777,7 +777,7 @@ describe('unified storefront Admin API to Shop API', () => {
             ).toBeChecked();
             releaseResponse();
             await browserExpect(stale.getByRole('button', { name: '保存到当前店铺' })).toBeDisabled();
-            await browserExpect(stale.locator('input[name="desktopLayout"][value="catalog"]')).toBeChecked();
+            await browserExpect(stale.locator('input[name="desktopLayout"]')).toHaveCount(0);
             await browserExpect(stale.getByRole('status')).toHaveCount(0);
             shopClient.setChannelToken(stores[1].token);
             expect((await shopClient.query(READ_VISUAL)).storefrontVisualPreset).toMatchObject({
@@ -787,7 +787,7 @@ describe('unified storefront Admin API to Shop API', () => {
             for (const [index, store] of stores.entries()) {
                 await stale.getByRole('combobox', { name: '测试店铺' }).selectOption(store.token);
                 await browserExpect(stale.locator('input[type="radio"]:disabled')).toHaveCount(0);
-                await browserExpect(stale.locator('input[type="radio"]')).toHaveCount(4);
+                await browserExpect(stale.locator('input[type="radio"]')).toHaveCount(2);
                 await stale.screenshot({
                     path: join(output, `admin-appearance-store-${index}.png`),
                     fullPage: true,
@@ -919,7 +919,7 @@ describe('unified storefront Admin API to Shop API', () => {
             await adminClient.asSuperAdmin();
         }
     });
-    it('matches the real admin auth preview and applies block then brand then skin color inheritance', async () => {
+    it('matches the real admin auth preview with explicit block colors, skin colors and classic brand inheritance', async () => {
         const readVisual = gql`
             query {
                 storefrontVisualPreset {
@@ -994,7 +994,8 @@ describe('unified storefront Admin API to Shop API', () => {
             const previewUrl = `http://127.0.0.1:5301/e2e/storefront-visual/index.html?stores=${stores.map(store => store.token).join(',')}&preview=auth`;
             for (const [state, background, accent] of [
                 ['explicit', 'rgb(32, 51, 70)', 'rgb(166, 61, 50)'],
-                ['inherited', 'rgb(238, 232, 224)', 'rgb(21, 128, 61)'],
+                ['inherited', 'rgb(246, 242, 234)', 'rgb(166, 61, 50)'],
+                ['classic', 'rgb(238, 232, 224)', 'rgb(21, 128, 61)'],
             ]) {
                 if (state === 'inherited')
                     await adminClient.query(UPDATE, {
@@ -1006,6 +1007,16 @@ describe('unified storefront Admin API to Shop API', () => {
                             settings: { ...original.settings, accentColor: '' },
                         },
                     });
+                if (state === 'classic') {
+                    const current = (await adminClient.query(readVisual)).storefrontVisualPreset;
+                    await adminClient.query(saveVisual, {
+                        input: {
+                            channelId: stores[0].id,
+                            expectedRevision: current.revision,
+                            presetId: 'classic',
+                        },
+                    });
+                }
                 await page.goto(pageUrl);
                 await preview.goto(previewUrl);
                 await preview.evaluate(() => document.documentElement.classList.add('dark'));
@@ -1019,7 +1030,7 @@ describe('unified storefront Admin API to Shop API', () => {
                 );
                 await browserExpect(page.locator('html')).toHaveAttribute(
                     'data-storefront-preset',
-                    'modern-oriental',
+                    state === 'classic' ? 'classic' : 'modern-oriental',
                 );
                 await browserExpect(page.locator('.auth-hero')).toHaveCSS('background-color', background);
                 await browserExpect(page.locator('.wide-action')).toHaveCSS('background-color', accent);

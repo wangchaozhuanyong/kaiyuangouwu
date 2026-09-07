@@ -251,13 +251,14 @@ function HeroBlockPreview({
             ? brandingQuery.data?.storefrontPreviewBranding
             : undefined;
     const oriental = branding && brandingQuery.data?.storefrontVisualPreset.presetId === 'modern-oriental';
-    const background = configuredColor(branding?.backgroundColor);
+    const palette = oriental ? undefined : branding;
+    const background = configuredColor(palette?.backgroundColor);
     const imageSources = responsiveImageSources(imageUrl, 'hero');
     const style = {
         '--store-background': background,
         '--store-foreground': background ? readableColor(background) : undefined,
-        '--store-primary': configuredColor(branding?.primaryColor),
-        '--store-highlight': configuredColor(branding?.highlightColor),
+        '--store-primary': configuredColor(palette?.primaryColor),
+        '--store-highlight': configuredColor(palette?.highlightColor),
     } as CSSProperties;
     const document =
         '<!doctype html>' +
@@ -415,8 +416,8 @@ function AuthBlockPreview({
     const oriental = Boolean(
         branding && brandingQuery.data?.storefrontVisualPreset.presetId === 'modern-oriental',
     );
-    const background = configuredColor(branding?.backgroundColor);
-    const accent = configuredColor(branding?.primaryColor);
+    const background = configuredColor(oriental ? undefined : branding?.backgroundColor);
+    const accent = configuredColor(oriental ? undefined : branding?.primaryColor);
     const content: AuthVisualData = {
         ...blockTranslation(block, language),
         imageUrl: block.imageAsset?.preview ?? block.imageUrl,

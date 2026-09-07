@@ -13,6 +13,7 @@ html[data-storefront-preset='modern-oriental'] {
     --accent: #a63d32;
     --accent-hover: #8b3027;
     --accent-ink: #94362b;
+    --accent-foreground: #fffdf8;
     --accent-soft: #f4e5df;
     --oriental-gold: #a58b58;
     --studio-accent: var(--accent);

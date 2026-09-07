@@ -68,6 +68,7 @@ const PROGRAM = gql`
             rewardRate
             allowBalanceSpend
             posterTemplates
+            attributionWindowDays
         }
     }
 `;
@@ -80,6 +81,7 @@ const UPDATE_PROGRAM = gql`
             rewardRate
             releaseDelayDays
             allowBalanceSpend
+            attributionWindowDays
         }
     }
 `;
@@ -519,6 +521,7 @@ describe('referral rebate closed loop', () => {
     it('binds an invitation, rewards paid product spend, claws back refunds, spends balance and handles an authorized withdrawal', async () => {
         const disabled = await shopClient.query(PROGRAM);
         expect(disabled.referralProgram.enabled).toBe(false);
+        expect(disabled.referralProgram.attributionWindowDays).toBe(0);
         const adminProgram = await adminClient.query(PROGRAM);
 
         await recordTrafficVisit('referral-e2e-visitor-0001');
@@ -536,11 +539,17 @@ describe('referral rebate closed loop', () => {
                 minimumOrderAmount: 0,
                 maxRewardPerOrder: null,
                 allowBalanceSpend: true,
-                attributionWindowDays: 30,
+                attributionWindowDays: 0,
                 defaultPosterTemplate: 'BRAND_MINIMAL',
             },
         });
-        expect(updated.updateReferralProgram).toMatchObject({ enabled: true, rewardRate: 10 });
+        expect(updated.updateReferralProgram).toMatchObject({
+            enabled: true,
+            rewardRate: 10,
+            attributionWindowDays: 0,
+        });
+        expect((await adminClient.query(PROGRAM)).referralProgram.attributionWindowDays).toBe(0);
+        expect((await shopClient.query(PROGRAM)).referralProgram.attributionWindowDays).toBe(0);
 
         await register('inviter@example.com');
         await shopClient.asUserWithCredentials('inviter@example.com', 'ReferralPass123!');

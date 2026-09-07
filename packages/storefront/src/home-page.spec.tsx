@@ -652,19 +652,19 @@ describe('HomePage desktop intro layout', () => {
         items: [],
     };
 
-    it('uses the desktop composition only for adjacent modules in canonical order', () => {
+    it('keeps adjacent hero, trust and shortcuts as independent full-width floors', () => {
         const markup = renderHome({
             contentBlocks: [positionedHeroBlock, positionedTrustBlock, quickLinksBlock],
         });
         const stylesheet = readStorefrontStylesheet();
 
-        expect(markup).toContain('class="home-intro-grid is-desktop-grouped"');
-        expect(stylesheet).toMatch(
-            /\.homepage-modules > \.home-intro-grid\.is-desktop-grouped\s*\{[^}]*display:\s*grid;/,
-        );
+        expect(markup).toContain('class="home-intro-grid"');
+        expect(markup).not.toContain('is-desktop-grouped');
+        expect(stylesheet).not.toContain('is-desktop-grouped');
+        expect(stylesheet).toMatch(/\.home-intro-grid\s*\{[^}]*display:\s*contents;/);
     });
 
-    it('keeps merchant-reordered intro modules out of the desktop composition', () => {
+    it('uses the same floor layout after merchant reordering', () => {
         const markup = renderHome({
             contentBlocks: [
                 positionedHeroBlock,
