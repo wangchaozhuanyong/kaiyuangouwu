@@ -248,10 +248,9 @@ export function CategoryPage() {
     }).length;
 
     return (
-        <main className="page category-page">
+        <main className="page category-page" aria-label={isZh ? '商品' : 'Products'}>
             <div className="category-navigation-shell">
                 <header className="topbar category-topbar">
-                    <h1 className="category-mobile-heading">{isZh ? '商品' : 'Products'}</h1>
                     <button
                         className="search-trigger"
                         type="button"

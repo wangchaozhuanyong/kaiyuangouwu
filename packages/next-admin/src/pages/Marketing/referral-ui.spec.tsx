@@ -1,7 +1,33 @@
 import { describe, expect, it } from 'vitest';
 import { referralPosterCopy } from '../../../../store-management-plugin/src/referral/referral-poster-presets';
-import type { ReferralPosterRecord } from '../../graphql/marketing.graphql';
-import { posterDraft, posterDraftError } from './referral-ui';
+import type { ReferralPosterRecord, ReferralProgramRecord } from '../../graphql/marketing.graphql';
+import { posterDraft, posterDraftError, programDraft, programDraftError } from './referral-ui';
+
+describe('referral attribution settings', () => {
+    const program = {
+        updatedAt: '2026-09-06T00:00:00Z',
+        enabled: true,
+        rewardRate: 5,
+        releaseDelayDays: 7,
+        minimumOrderAmount: 0,
+        maxRewardPerOrder: null,
+        allowBalanceSpend: true,
+        attributionWindowDays: 0,
+        defaultPosterTemplate: 'BRAND_MINIMAL',
+        posterTemplates: ['BRAND_MINIMAL'],
+    } as ReferralProgramRecord;
+
+    it.each([0, 1, 30, 180, 365])('preserves and accepts %i days from the API', attributionWindowDays => {
+        const draft = programDraft({ ...program, attributionWindowDays });
+        expect(draft.attributionWindowDays).toBe(attributionWindowDays);
+        expect(programDraftError(draft)).toBe('');
+    });
+
+    it.each([-1, 0.5, 366, NaN, Infinity])('rejects invalid days: %s', attributionWindowDays => {
+        const draft = programDraft({ ...program, attributionWindowDays });
+        expect(programDraftError(draft)).toBe('归因有效期必须是0到365的整数，0表示永久有效');
+    });
+});
 
 const source = {
     ...referralPosterCopy,

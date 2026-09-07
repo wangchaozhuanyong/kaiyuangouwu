@@ -112,6 +112,7 @@ function ReferralManagement() {
 
     const saveProgram = async () => {
         if (!canUpdate || !draft) return;
+        setActionError('');
         const validation = programDraftError(draft);
         if (validation) return setActionError(validation);
         const minimumOrderAmount = majorInputToMoney(draft.minimumOrderAmount, currencyCode);

@@ -34,6 +34,7 @@ const cleanups: Array<() => void> = [];
 afterEach(async () => {
     await act(async () => cleanups.splice(0).forEach(cleanup => cleanup()));
     state.data.storefrontPreviewBranding.channelId = 'preview-store';
+    state.data.storefrontVisualPreset.presetId = 'modern-oriental';
 });
 
 async function preview() {
@@ -84,8 +85,8 @@ describe('carousel draft preview', () => {
         const doc = await render('en');
         expect(doc.querySelector('.hero')!.getAttribute('style')).not.toBe(high);
         expect(doc.querySelector('.hero-rich-title')?.textContent).toBe('Draft title');
-        expect(doc.body.style.getPropertyValue('--store-background')).toBe('#FFF7F5');
-        expect(doc.body.style.getPropertyValue('--store-foreground')).toBeTruthy();
+        expect(doc.body.style.getPropertyValue('--store-background')).toBe('');
+        expect(doc.body.style.getPropertyValue('--store-foreground')).toBe('');
         expect(doc.documentElement.dataset.storefrontPreset).toBe('modern-oriental');
         expect(container.querySelector('iframe')?.getAttribute('sandbox')).toBe('');
         expect(doc.querySelectorAll('script,a')).toHaveLength(0);
@@ -119,6 +120,15 @@ describe('carousel draft preview', () => {
         expect(doc.querySelector('script')).toBeNull();
         expect(doc.querySelector('.hero-rich-title')?.textContent).toBe('<script>alert(1)</script>');
         expect(doc.querySelector('.hero-stat-badge')).toBeNull();
+    });
+
+    it('restores saved brand colors when the classic skin is selected', async () => {
+        const { render } = await preview();
+        state.data.storefrontVisualPreset.presetId = 'classic';
+        const doc = await render();
+        expect(doc.body.style.getPropertyValue('--store-background')).toBe('#FFF7F5');
+        expect(doc.body.style.getPropertyValue('--store-primary')).toBe('#DC2626');
+        expect(doc.documentElement.dataset.storefrontPreset).toBe('classic');
     });
 });
 
