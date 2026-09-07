@@ -17,6 +17,10 @@ on:
                 required: false
                 default: ''
                 type: string
+        outputs:
+            deployed_sha:
+                description: Exact immutable runtime SHA observed by release preflight
+                value: ${{ jobs.operate.outputs.deployed_sha }}
     workflow_dispatch:
         inputs:
             operation:
@@ -62,6 +66,8 @@ jobs:
         name: run reviewed production operations through AWS SSM
         runs-on: ubuntu-24.04
         timeout-minutes: 15
+        outputs:
+            deployed_sha: ${{ steps.operation.outputs.deployed_sha }}
         env:
             AWS_REGION: ap-northeast-1
             AWS_ACCOUNT_ID: '079740175286'
@@ -84,7 +90,7 @@ jobs:
                   }
                   [[ "$OPS_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
                   case "$OPS_OPERATION" in
-                    preflight-release|diagnose|plan-two-factor-backup|verify-two-factor-backup|verify-security-dependencies|inspect-storefront-config)
+                    preflight-release|postflight-release|diagnose|plan-two-factor-backup|verify-two-factor-backup|verify-security-dependencies|inspect-storefront-config)
                       [[ -z "$OPS_EXPECTED_PLAN_SHA256" ]] || {
                         echo 'Read-only operations must not include an expected plan' >&2
                         exit 1
@@ -105,8 +111,8 @@ jobs:
                     echo 'expected_channel_codes must be a comma-separated list of Channel codes' >&2
                     exit 1
                   fi
-                  if [[ "$OPS_OPERATION" != "preflight-release" && -n "$OPS_EXPECTED_CHANNEL_CODES" ]]; then
-                    echo 'Only release preflight accepts expected Channel codes' >&2
+                  if [[ "$OPS_OPERATION" != "preflight-release" && "$OPS_OPERATION" != "postflight-release" && -n "$OPS_EXPECTED_CHANNEL_CODES" ]]; then
+                    echo 'Only release validation accepts expected Channel codes' >&2
                     exit 1
                   fi
                   latest_main="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)"
@@ -227,6 +233,18 @@ jobs:
                   jq -e --arg completion "PRODUCTION_OPERATIONS_COMPLETE operation=${OPS_OPERATION}" \
                     '.Status == "Success" and .ResponseCode == 0 and (.Output | endswith($completion + "\n"))' \
                     "$RUNNER_TEMP/production-operations-result.json" >/dev/null
+                  if [[ "$OPS_OPERATION" == "preflight-release" ]]; then
+                    revision_evidence="$(
+                      jq -r '.Output' "$RUNNER_TEMP/production-operations-result.json" |
+                        grep -E "^PRODUCTION_PREFLIGHT_REVISIONS source=${OPS_SOURCE_SHA} runtime=[a-f0-9]{40}$" |
+                        tail -n 1
+                    )"
+                    [[ "$revision_evidence" =~ runtime=([a-f0-9]{40})$ ]] || {
+                      echo 'Production preflight did not return an exact deployed runtime SHA' >&2
+                      exit 1
+                    }
+                    printf 'deployed_sha=%s\n' "${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+                  fi
 
             - name: Record production operation result
               if: ${{ always() }}

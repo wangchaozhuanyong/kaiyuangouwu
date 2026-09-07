@@ -156,11 +156,11 @@ bun run --cwd packages/dev-server build:production-runtime -- --require-platform
 `i-041a146558e432cbf` 发送 `AWS-RunShellScript`。仓库和 GitHub 均不保存长期 AWS Access Key；常规发布在
 GitHub 的 `main` 分支手动运行一次 `Production Release`，Skill 规则路径变更则自动触发，两者都无需登录 AWS 控制台。
 
-自动发布入口为 `/usr/local/sbin/vendure-production-deploy-from-s3`，来源必须是已提交的
-`deploy/deploy-production-from-s3.sh`。脚本在同一个生产锁内完成源码快进、S3 外层校验、运行产物自验证、
-受管 publisher 权限与目标的只读预检、数据库备份和迁移、PM2 切换、已审核媒体/登录视觉/品牌写入、Nginx 检查、公网健康检查、版本标记与失败回滚。若目标提交改动了受管数据但发布计划没有对应的精确审核范围，或者改动了库存修复发布器等不受支持的数据路径，脚本会在备份、迁移和运行时切换前停止。已处于目标 SHA 的重复调度会返回 `PRODUCTION_DEPLOY_ALREADY_CURRENT`，不重复备份、迁移或重启。
+`Production Release` 是唯一固定发布入口。每个准确的 `main` SHA 只允许创建一个运行；若同一版本出现网络、Runner、S3、SSM 或公网探针等临时失败，必须在原运行使用 **Re-run failed jobs**（CLI 为 `gh run rerun <run-id> --failed`），从失败任务继续并复用该运行已经通过校验的不可变制品。不得再次 dispatch 同一 SHA，也不得用 Re-run all jobs 重做已经成功的长构建。若失败需要修改代码，必须提交独立修复 PR；合并后的新 SHA 重新执行完整预检、构建和验收。
 
-新增或修改某类受管 publisher 的生产门禁时必须拆成两次发布：第一版只上线工作流、制品清单和服务器引导门禁，确认生产入口已运行新门禁；第二版才上线 publisher/受管数据改动，并携带新门禁要求的审核范围。当前服务器会在快进并重新执行目标脚本之前先按旧门禁检查差异，因此禁止用手工复制、跳过检查或伪造媒体 key 把两阶段合成一次发布。
+自动发布入口由工作流从目标 SHA 传送并校验固定的 `deploy/deploy-production-from-s3.sh`，成功后再安装到 `/usr/local/sbin/vendure-production-deploy-from-s3`。脚本在同一个生产锁内完成源码快进、S3 外层校验、运行产物自验证、受管 publisher 权限与目标的只读预检、按实际差异自动分级的数据库备份和迁移、PM2 切换、已审核媒体/登录视觉/品牌写入、Nginx 检查、双店公网基础检查、受影响功能验收、版本标记与失败回滚。Schema 或受管内容写入必须创建新的已验证异地备份；纯运行时代码可复用 24 小时内校验通过且有异地上传证据的备份，缺失、过期或校验失败时自动新建。若目标提交改动了受管数据但发布计划没有对应的精确审核范围，或者改动了库存修复发布器等不受支持的数据路径，制品任务会在完整构建前停止，服务器再次独立核对。已处于目标 SHA 的失败任务重跑会返回 `PRODUCTION_DEPLOY_ALREADY_CURRENT`，不重复备份、迁移或重启，并继续由后置任务核对准确运行 SHA、两店 Channel、Shop API、首页资源、Dashboard 资源图及受影响的实时链路。
+
+新增或修改某类受管 publisher 的生产门禁时仍必须拆成两次发布：第一版只上线工作流、制品清单和服务器引导门禁，确认固定入口及新门禁已运行；第二版才上线 publisher/受管数据改动，并携带新门禁要求的审核范围。禁止用手工复制、跳过检查或伪造媒体 key 把两阶段合成一次发布。
 
 分享海报使用独立审核范围 `referral_posters=none|primary|both-stores`，默认为 `none`。`primary` 只解析 moyaoai.com 的实际 Channel；`both-stores` 另解析 damatong.net，两个域名必须对应不同 Channel。五款通用背景按各 Channel 发布，AI 自定义模板仅归主店；域名仅用于审核发布目标，海报文字和二维码仍由客户端当前店铺生成。第一阶段只部署工作流、制品和服务器门禁，保持 `none`，以 `PRODUCTION_BOOTSTRAP_VERIFIED ... referral_poster_guard=enabled` 为完成证据。第二阶段才加入发布器、模板配置和图片，选择已审核范围。发布器须通过环境变量读取 `REFERRAL_POSTER_SCOPE`、凭据及备份路径；当前 API 先只读预检，候选 API 健康后再次预演，再执行 `--apply --allow-remote`、独立 `--verify`，最终以 `REFERRAL_POSTERS_VERIFY_OK` 放行客户端切换。导入前在 releases 目录保存原绑定备份，失败恢复本批绑定；不得删除历史图片或其他店铺数据。
 

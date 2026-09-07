@@ -3,6 +3,9 @@ name: Production Runtime Artifact
 on:
     workflow_call:
         inputs:
+            base_sha:
+                required: true
+                type: string
             target_sha:
                 required: true
                 type: string
@@ -42,6 +45,16 @@ on:
                 required: false
                 default: ''
                 type: string
+        outputs:
+            affected_checks:
+                description: JSON array of automatic post-deploy acceptance scopes
+                value: ${{ jobs.build.outputs.affected_checks }}
+            backup_policy:
+                description: Automatic production backup policy
+                value: ${{ jobs.build.outputs.backup_policy }}
+            data_risk:
+                description: Automatic production data-risk classification
+                value: ${{ jobs.build.outputs.data_risk }}
 
 permissions:
     actions: read
@@ -65,11 +78,20 @@ jobs:
         name: build verified linux/x64 runtime
         runs-on: ubuntu-24.04
         timeout-minutes: 120
+        outputs:
+            affected_checks: ${{ steps.impact.outputs.affected_checks }}
+            backup_policy: ${{ steps.impact.outputs.backup_policy }}
+            data_risk: ${{ steps.impact.outputs.data_risk }}
         steps:
             - name: Validate target input
               env:
+                  BASE_SHA: ${{ inputs.base_sha }}
                   TARGET_SHA: ${{ inputs.target_sha }}
               run: |
+                  if [[ ! "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+                    echo "base_sha must be a lowercase 40-character Git SHA" >&2
+                    exit 1
+                  fi
                   if [[ ! "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]; then
                     echo "target_sha must be a lowercase 40-character Git SHA" >&2
                     exit 1
@@ -150,6 +172,7 @@ jobs:
 
             - name: Enforce release source invariants
               env:
+                  BASE_SHA: ${{ inputs.base_sha }}
                   TARGET_SHA: ${{ inputs.target_sha }}
               run: |
                   test "$(uname -m)" = "x86_64"
@@ -157,6 +180,37 @@ jobs:
                   test -z "$(git status --porcelain)"
                   git fetch origin main --no-tags --prune
                   test "$(git rev-parse refs/remotes/origin/main^{commit})" = "$TARGET_SHA"
+                  git merge-base --is-ancestor "$BASE_SHA" "$TARGET_SHA"
+
+            - name: Determine data risk and affected acceptance
+              id: impact
+              env:
+                  BASE_SHA: ${{ inputs.base_sha }}
+                  TARGET_SHA: ${{ inputs.target_sha }}
+              run: |
+                  IMPACT_PATH="$RUNNER_TEMP/production-release-impact.json"
+                  node deploy/production-release-impact.mjs \
+                    --base-sha "$BASE_SHA" \
+                    --target-sha "$TARGET_SHA" \
+                    --media-keys "$MEDIA_KEYS" \
+                    --channel-codes "$MEDIA_CHANNEL_CODES" \
+                    --auth-visuals "$AUTH_VISUALS" \
+                    --moyao-brand "$MOYAO_BRAND" \
+                    --damatong-storefront "$DAMATONG_STOREFRONT" \
+                    --homepage-carousel "$HOMEPAGE_CAROUSEL" \
+                    --referral-posters "$REFERRAL_POSTERS" \
+                    --output "$IMPACT_PATH"
+                  jq -e '
+                    (.dataRisk == "runtime-only" or .dataRisk == "managed-content" or .dataRisk == "schema") and
+                    (.backupPolicy == "reuse-recent-or-create" or .backupPolicy == "fresh") and
+                    (.affectedChecks | type == "array" and length > 0) and
+                    (.changedFileCount | type == "number" and . > 0) and
+                    (.changedFilesSha256 | test("^[a-f0-9]{64}$"))
+                  ' "$IMPACT_PATH" >/dev/null
+                  echo "IMPACT_PATH=$IMPACT_PATH" >> "$GITHUB_ENV"
+                  echo "affected_checks=$(jq -c '.affectedChecks' "$IMPACT_PATH")" >> "$GITHUB_OUTPUT"
+                  echo "backup_policy=$(jq -r '.backupPolicy' "$IMPACT_PATH")" >> "$GITHUB_OUTPUT"
+                  echo "data_risk=$(jq -r '.dataRisk' "$IMPACT_PATH")" >> "$GITHUB_OUTPUT"
 
             - name: Verify the exact release tree passed Build & Test
               env:
@@ -330,6 +384,8 @@ jobs:
                   jq -n \
                     --arg archiveName "$(basename "$ARCHIVE_PATH")" \
                     --arg archiveSha256 "$(cut -d ' ' -f 1 "$ARCHIVE_PATH.sha256")" \
+                    --arg baseSha "${{ inputs.base_sha }}" \
+                    --slurpfile impact "$IMPACT_PATH" \
                     --argjson authVisuals "$AUTH_VISUALS" \
                     --argjson damatongStorefront "$DAMATONG_STOREFRONT" \
                     --arg damatongChannelToken "$DAMATONG_CHANNEL_TOKEN" \
@@ -341,7 +397,7 @@ jobs:
                     --arg mediaKeys "$MEDIA_KEYS" \
                     --arg sourceRunId "$GITHUB_RUN_ID" \
                     --arg targetSha "$TARGET_SHA" \
-                    '{archiveName: $archiveName, archiveSha256: $archiveSha256, authVisuals: $authVisuals, damatongChannelToken: $damatongChannelToken, damatongStorefront: $damatongStorefront, damatongPublishReview: $damatongPublishReview, format: 1, referralPosters: $referralPosters, homepageCarousel: $homepageCarousel, mediaChannelCodes: $mediaChannelCodes, mediaKeys: $mediaKeys, moyaoBrand: $moyaoBrand, sourceRunId: $sourceRunId, targetSha: $targetSha}' \
+                    '{affectedChecks: $impact[0].affectedChecks, archiveName: $archiveName, archiveSha256: $archiveSha256, authVisuals: $authVisuals, backupPolicy: $impact[0].backupPolicy, baseSha: $baseSha, changedFileCount: $impact[0].changedFileCount, changedFilesSha256: $impact[0].changedFilesSha256, damatongChannelToken: $damatongChannelToken, damatongStorefront: $damatongStorefront, damatongPublishReview: $damatongPublishReview, dataRisk: $impact[0].dataRisk, format: 2, referralPosters: $referralPosters, homepageCarousel: $homepageCarousel, mediaChannelCodes: $mediaChannelCodes, mediaKeys: $mediaKeys, moyaoBrand: $moyaoBrand, sourceRunId: $sourceRunId, targetSha: $targetSha}' \
                     > "$ARCHIVE_DIR/release-plan.json"
                   (
                     cd "$ARCHIVE_DIR"
@@ -361,6 +417,7 @@ jobs:
                     echo "## Production runtime"
                     echo
                     echo "- Target SHA: \`$TARGET_SHA\`"
+                    echo "- Deployed base SHA: \`${{ inputs.base_sha }}\`"
                     echo "- Runner: \`linux/x64\`"
                     echo "- Node: \`$(node --version)\`"
                     echo "- Bun: \`$(bun --version)\`"
@@ -369,6 +426,9 @@ jobs:
                     echo "- Source tree: \`$TARGET_TREE\`"
                     echo "- Archive: \`$(basename "$ARCHIVE_PATH")\`"
                     echo "- Archive SHA-256: \`$(cut -d ' ' -f 1 "$ARCHIVE_CHECKSUM_PATH")\`"
+                    echo "- Data risk: \`$(jq -r '.dataRisk' "$IMPACT_PATH")\`"
+                    echo "- Backup policy: \`$(jq -r '.backupPolicy' "$IMPACT_PATH")\`"
+                    echo "- Affected acceptance: \`$(jq -c '.affectedChecks' "$IMPACT_PATH")\`"
                     if [[ -n "$MEDIA_KEYS" ]]; then
                       echo "- Reviewed media keys: \`$MEDIA_KEYS\`"
                     else

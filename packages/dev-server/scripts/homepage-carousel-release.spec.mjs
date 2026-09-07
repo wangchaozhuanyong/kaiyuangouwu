@@ -17,6 +17,10 @@ const sha = 'a'.repeat(40);
 function guardEnvironment(carousel, channel = '__default_channel__', media = keys) {
     return {
         PATH: process.env.PATH,
+        VENDURE_RELEASE_AFFECTED_CHECKS: '["all-store-basics"]',
+        VENDURE_RELEASE_BACKUP_POLICY: 'reuse-recent-or-create',
+        VENDURE_RELEASE_BASE_SHA: sha,
+        VENDURE_RELEASE_DATA_RISK: 'runtime-only',
         VENDURE_REVIEWED_HOMEPAGE_CAROUSEL: carousel,
         VENDURE_REVIEWED_STOREFRONT_MEDIA_CHANNEL_CODES: channel,
         VENDURE_REVIEWED_STOREFRONT_MEDIA_KEYS: media,
@@ -67,6 +71,7 @@ void test('workflow rejects invalid carousel scope before checkout', () => {
         const result = spawnSync('bash', ['-c', source], {
             env: {
                 PATH: process.env.PATH,
+                BASE_SHA: sha,
                 TARGET_SHA: sha,
                 HOMEPAGE_CAROUSEL: carousel,
                 REFERRAL_POSTERS: 'none',
