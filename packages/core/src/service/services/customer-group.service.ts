@@ -20,6 +20,7 @@ import { Instrument } from '../../common/instrument-decorator';
 import { assertFound, idsAreEqual } from '../../common/utils';
 import { TransactionalConnection } from '../../connection/transactional-connection';
 import { CustomerGroup } from '../../entity/customer-group/customer-group.entity';
+// eslint-disable-next-line import/order -- Prettier sorts the hyphenated customer-group path first.
 import { Customer } from '../../entity/customer/customer.entity';
 import { EventBus } from '../../event-bus/event-bus';
 import { CustomerGroupChangeEvent } from '../../event-bus/events/customer-group-change-event';
