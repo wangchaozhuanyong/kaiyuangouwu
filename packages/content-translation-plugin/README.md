@@ -63,6 +63,43 @@ TRANSLATION_TEST_POSTGRES=1 bunx vitest run --config vitest.config.mts migration
 
 跨进程共享已完成的缓存结果；同一进程内正在执行的相同请求合并等待。多个进程同时首次请求同一未缓存原文时，仍通过数据库提供方租约串行执行；数据库唯一键保证只保留一条缓存结果。持久化缓存会随不同原文数量增长，本次不自动删除已有缓存或业务数据。
 
+## 免费备用渠道
+
+Google 保持主渠道。dev-server 通过 `VENDURE_TRANSLATION_FALLBACK_AZURE=true` 启用 Azure，通过 `VENDURE_TRANSLATION_FALLBACK_MYMEMORY=true` 启用 MyMemory，默认均关闭。顺序为：所有启用渠道的已有成功缓存 → Google → Azure → MyMemory；未启用的渠道不查询缓存、不发送请求。两个开关互相独立，启用 Azure 不会同时启用 MyMemory。
+
+### Azure Translator F0
+
+创建独立的 Azure Translator 服务资源并选择 **F0** 免费档（每月 200 万字符），在 Azure 控制台核对实际 SKU 为 F0 后配置：
+
+```dotenv
+VENDURE_TRANSLATION_FALLBACK_AZURE=true
+VENDURE_AZURE_TRANSLATION_API_KEY=
+VENDURE_AZURE_TRANSLATION_REGION=
+```
+
+Key 只保存在服务端环境变量中，不传入前端、不写日志。Global 资源的 region 留空；区域资源填写其 Azure location（例如 `eastasia`）。只调用官方标准 NMT v3 文本接口，支持 TEXT/HTML，保留术语、链接和插值。不创建 LLM、文档翻译或其他收费资源。API Key 本身不携带可验证的定价档信息，因此不能仅凭环境变量声称资源免费；实际免费档必须在开通及验收时核对，不得换成付费 Key。
+
+每组请求最多 1,000 段、合计 50,000 个 Unicode 字符，TEXT/HTML 分批；单次超时 10 秒，整个调用预算 20 秒。组间额度耗尽时，已经完成的字段继续写入共享缓存。HTTP 403 / `403001` 映射为 QUOTA，至少冷却 1 小时并遵守更长的 Retry-After；HTTP 429 进入限流退避。凭据错误和额度耗尽分别处理，不自动提高额度或修改套餐。
+
+已有 Azure 译文按 `azure-translator-v3` 身份持久化缓存，API/worker 重启后可复用。Google 恢复后，未命中的新文字重新优先走 Google，Azure 已缓存译文不重新调用 Google。所有渠道不可用时，中文照常保存，英文等待队列补齐。Azure 订阅需保持有效，F0 资源的免费档与 Azure 新用户试用订阅生命周期分别管理。
+
+官方资料：[创建 F0 资源](https://learn.microsoft.com/en-us/azure/ai-services/translator/how-to/create-translator-resource)、[价格](https://azure.microsoft.com/en-us/pricing/details/translator/)、[接口](https://learn.microsoft.com/en-us/azure/ai-services/translator/text-translation/reference/v3/translate)、[错误码](https://learn.microsoft.com/en-us/azure/ai-services/translator/text-translation/reference/status-response-codes)。
+
+### MyMemory 免费备用
+
+Google 保持主渠道。dev-server 设置 `VENDURE_TRANSLATION_FALLBACK_MYMEMORY=true` 后启用官方 MyMemory 匿名 API；默认关闭。不需要账号、邮箱或 API Key，不会自动开通收费方案。官方匿名额度为每天 5,000 字符，每个请求最多 500 UTF-8 字节；这不是无限免费额度。启用前需接受其条款：提交文本会被保留，可能由合作方处理，因此只用于允许发送给该服务的客户可见公开文案，不用于私人或保密内容。
+
+可选设置 `VENDURE_MYMEMORY_CONTACT_EMAIL` 为已获所有者同意、能够收到联系的真实邮箱，通过官方 `de` 参数申请每天 50,000 字符的免费使用额度，无需注册、密码或绑卡。留空保持匿名；格式不合法时禁用该提供方并返回配置错误，不向外发送请求。不会从 Azure 登录、其他账号或业务数据中自动提取邮箱，也不轮换邮箱规避限额。请求禁止跟随重定向，不在错误消息中回显邮箱或上游 URL。是否接受邮箱及实际剩余额度由 MyMemory 决定，本地格式检查不代表额度已获确认。设置邮箱不改变提供方缓存身份，已有匿名成功译文仍可直接复用。
+
+- 每次先读所有启用渠道的已有成功缓存，再将未命中文字按配置顺序交给提供方；限流、额度耗尽、暂时故障、未配置或忙碌时自动尝试下一渠道。
+- 两个渠道分别持有数据库租约和冷却时间。MyMemory 确认额度耗尽后至少冷却 1 小时；Google 冷却到期后，新文字重新优先尝试 Google。已命中 MyMemory 的译文不会因 Google 恢复而再次付费翻译。
+- MyMemory 成功译文存入同一共享缓存表，但按自身供应商身份隔离。批次中途失败时，已成功的完整字段仍写缓存；失败或半个字段不进入缓存。两个渠道都不可用时，中文照常保存，缺译字段保留待补译状态。
+- MyMemory 按段落及字节限制拆分，串行请求，每轮最多执行 20 秒，然后交回后台队列。术语、链接和插值保持不变；富文本只翻译文本节点并转义返回值，保持原标签和属性。含中文属性或 script/style/pre/code 的复杂 HTML 留待 Google 恢复。
+
+配置入口为 `packages/dev-server/content-translation-config.ts`。更换或增加已获授权的渠道可扩展插件 `fallbackProviders` 数组，不修改 Google 配额，不轮换身份规避供应商额度。关闭 MyMemory 开关会同时停用该渠道及其缓存读取，保留已存数据。
+
+官方资料：[接口](https://mymemory.translated.net/doc/spec.php)、[免费额度](https://mymemory.translated.net/doc/usagelimits.php)、[条款](https://mymemory.translated.net/terms-and-conditions)。
+
 ## 商品导入回归
 
 保留商品导入专项回归，并按后台翻译流程验证：失败行重试和 362 行批量保存时请求数为 0；随后由 worker 注入 Google 403、退避及恢复。验证 SKU 不重复、价格库存、两级分类和英文补齐，不连接生产数据库。

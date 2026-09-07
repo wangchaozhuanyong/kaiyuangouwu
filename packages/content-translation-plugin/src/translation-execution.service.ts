@@ -6,7 +6,11 @@ import { IsNull, LessThanOrEqual, MoreThan } from 'typeorm';
 import { CONTENT_TRANSLATION_OPTIONS } from './constants.js';
 import { TranslationProviderState } from './entities/translation-provider-state.entity.js';
 import { TranslationProviderError } from './translation-provider-error.js';
-import { ContentTranslationPluginOptions, ContentTranslationRequest } from './types.js';
+import {
+    ContentTranslationProvider,
+    ContentTranslationRequest,
+    ResolvedContentTranslationOptions,
+} from './types.js';
 
 export const translationBackoff = (attempts: number) =>
     Math.min(900_000, 60_000 * 2 ** Math.min(4, Math.max(0, attempts - 1)));
@@ -17,32 +21,37 @@ export class TranslationExecutionService {
     constructor(
         private readonly connection: TransactionalConnection,
         @Inject(CONTENT_TRANSLATION_OPTIONS)
-        private readonly options: Required<ContentTranslationPluginOptions>,
+        private readonly options: ResolvedContentTranslationOptions,
     ) {}
 
-    async state() {
+    async state(provider: ContentTranslationProvider = this.options.provider) {
         const repository = this.connection.rawConnection.getRepository(TranslationProviderState);
         await repository
             .createQueryBuilder()
             .insert()
-            .values({ provider: this.options.provider.name })
+            .values({ provider: provider.name })
             .orIgnore()
             .execute();
-        return repository.findOneByOrFail({ provider: this.options.provider.name });
+        return repository.findOneByOrFail({ provider: provider.name });
     }
 
     async reset() {
-        await this.state();
-        await this.connection.rawConnection
-            .getRepository(TranslationProviderState)
-            .update(
-                { provider: this.options.provider.name, blocked: true },
-                { blocked: false, attempts: 0, nextAttemptAt: new Date(Date.now()), lastErrorCode: null },
-            );
+        for (const provider of [this.options.provider, ...(this.options.fallbackProviders ?? [])]) {
+            await this.state(provider);
+            await this.connection.rawConnection
+                .getRepository(TranslationProviderState)
+                .update(
+                    { provider: provider.name, blocked: true },
+                    { blocked: false, attempts: 0, nextAttemptAt: new Date(Date.now()), lastErrorCode: null },
+                );
+        }
     }
 
-    async translate(request: ContentTranslationRequest) {
-        const state = await this.state();
+    async translate(
+        request: ContentTranslationRequest,
+        provider: ContentTranslationProvider = this.options.provider,
+    ) {
+        const state = await this.state(provider);
         const repository = this.connection.rawConnection.getRepository(TranslationProviderState);
         const now = new Date(Date.now());
         if (state.blocked) throw new TranslationProviderError('CONFIGURATION');
@@ -65,8 +74,8 @@ export class TranslationExecutionService {
                 Math.max(1000, (state.nextAttemptAt?.getTime() ?? 0) - now.getTime()),
             );
         try {
-            if (!this.options.provider.isConfigured()) throw new TranslationProviderError('CONFIGURATION');
-            const result = await this.options.provider.translate(request);
+            if (!provider.isConfigured()) throw new TranslationProviderError('CONFIGURATION');
+            const result = await provider.translate(request);
             const released = await repository.update(
                 { provider: state.provider, leaseToken: token, leaseUntil: MoreThan(new Date(Date.now())) },
                 {

@@ -12,10 +12,7 @@ import {
     summarizeOrderFulfillment,
 } from '@vendure/commerce-fulfillment-plugin';
 import { ADMIN_API_PATH, API_PORT, SHOP_API_PATH } from '@vendure/common/lib/shared-constants';
-import {
-    ContentTranslationPlugin,
-    GoogleCloudTranslationProvider,
-} from '@vendure/content-translation-plugin';
+import { ContentTranslationPlugin } from '@vendure/content-translation-plugin';
 import {
     DefaultJobQueuePlugin,
     DefaultLogger,
@@ -79,6 +76,7 @@ import {
     buildSignedStorefrontAccountActionUrl,
 } from './account-auth';
 import { catalogAdminApiMiddleware } from './catalog-admin-api-middleware';
+import { contentTranslationOptions } from './content-translation-config';
 import { emailLanguageVariables, localizedEmailSubjects, localizedEmailText } from './email-localization';
 import { devServerMigrations } from './migrations';
 import {
@@ -968,17 +966,9 @@ export const devConfig: VendureConfig = {
         TwoFactorDashboardPlugin,
         ...(!BOOTSTRAP_BASE_SCHEMA
             ? [
-                  ContentTranslationPlugin.init({
-                      provider: new GoogleCloudTranslationProvider({
-                          apiKey: contentTranslationApiKey,
-                      }),
-                      glossary: {
-                          模钥: 'MOYAO AI',
-                          'ChatGPT- plus': 'ChatGPT Plus',
-                          ChatGPT: 'ChatGPT',
-                          Codex: 'Codex',
-                      },
-                  }),
+                  ContentTranslationPlugin.init(
+                      contentTranslationOptions(contentTranslationApiKey, process.env),
+                  ),
                   StorefrontCartPlugin,
                   CommerceFulfillmentPlugin.init({ testPaymentsEnabled }),
                   CatalogManagementPlugin,

@@ -16,9 +16,10 @@ import { ContentTranslationRetryService } from './content-translation-retry.serv
 import { ContentTranslationService, contentTranslationInternals } from './content-translation.service.js';
 import { ContentTranslationState } from './entities/content-translation-state.entity.js';
 import { TranslationProviderState } from './entities/translation-provider-state.entity.js';
+import { AzureTranslationProvider } from './providers/azure-translation.provider.js';
 import { TranslationContentAdapter } from './translation-content-adapter.js';
 import { TranslationExecutionService } from './translation-execution.service.js';
-import { TranslationProviderError } from './translation-provider-error.js';
+import { PartialTranslationProviderError, TranslationProviderError } from './translation-provider-error.js';
 import { TranslationResultCacheService } from './translation-result-cache.service.js';
 
 // These SQL fixtures mirror real ownership: an item has blockId, never a direct channelId.
@@ -152,6 +153,7 @@ beforeEach(async () => {
 });
 afterEach(async () => {
     await db?.destroy();
+    vi.unstubAllGlobals();
     vi.restoreAllMocks();
 });
 const readState = () => db.getRepository(ContentTranslationState).findOneByOrFail({ id: state.id });
@@ -551,5 +553,198 @@ describe('shared native Channel ownership and manual review', () => {
             execution.translate({ ...options, segments: [{ key: 'preview', text: '服务' }] }),
         ).rejects.toMatchObject({ code: 'BUSY' });
         expect(translate).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('free provider fallback with shared SQL state and cache', () => {
+    const enableFallback = () => {
+        const fallback = {
+            name: 'free-test',
+            isConfigured: () => true,
+            translate: vi.fn((input: any) =>
+                Promise.resolve({
+                    provider: 'free-test',
+                    translations: input.segments.map((segment: any) => ({
+                        key: segment.key,
+                        text: 'Free stationery',
+                    })),
+                }),
+            ),
+        };
+        options.fallbackProviders = [fallback];
+        const cache = new TranslationResultCacheService(connection);
+        service = new ContentTranslationService(connection, options, execution, cache);
+        retry = new ContentTranslationRetryService(connection, service, adapter);
+        return { fallback, cache };
+    };
+
+    it('switches on primary quota exhaustion, persists the actual provider identity and writes back the outbox', async () => {
+        const { fallback, cache } = enableFallback();
+        translate.mockRejectedValue(new TranslationProviderError('QUOTA'));
+        expect((await retry.retryPending()).translated).toBe(1);
+        expect(await english()).toBe('Free stationery');
+        expect((await readState()).status).toBe('AUTO_TRANSLATED');
+        expect(translate).toHaveBeenCalledOnce();
+        expect(fallback.translate).toHaveBeenCalledOnce();
+        expect(
+            await cache.lookup({ ...options, segments: [{ key: 'title', text: source.label }] }, 'test'),
+        ).toEqual([]);
+        expect(
+            await cache.lookup({ ...options, segments: [{ key: 'title', text: source.label }] }, 'free-test'),
+        ).toEqual([{ key: 'title', text: 'Free stationery' }]);
+        expect((await execution.state()).lastErrorCode).toBe('QUOTA');
+        expect((await execution.state(fallback)).lastErrorCode).toBeNull();
+    });
+
+    it('reads fallback cache after recreating services without any provider calls, even after the primary recovers', async () => {
+        const { fallback } = enableFallback();
+        translate.mockRejectedValueOnce(new TranslationProviderError('RATE_LIMIT'));
+        await service.translate({ segments: [{ key: 'a', text: source.label }] });
+        advance(61_000);
+        const restarted = new ContentTranslationService(
+            connection,
+            options,
+            new TranslationExecutionService(connection, options),
+            new TranslationResultCacheService(connection),
+        );
+        expect(
+            (await restarted.translate({ segments: [{ key: 'b', text: source.label }] })).translations,
+        ).toEqual([{ key: 'b', text: 'Free stationery' }]);
+        expect(
+            await restarted.cachedTranslations({ segments: [{ key: 'save', text: source.label }] }),
+        ).toEqual([{ key: 'save', text: 'Free stationery' }]);
+        expect(translate).toHaveBeenCalledOnce();
+        expect(fallback.translate).toHaveBeenCalledOnce();
+        await restarted.translate({ segments: [{ key: 'new', text: '不同商品' }] });
+        expect(translate).toHaveBeenCalledTimes(2);
+        expect(fallback.translate).toHaveBeenCalledOnce();
+    });
+
+    it('skips a cooling primary for new text and keeps fallback cooldown independent', async () => {
+        const { fallback } = enableFallback();
+        translate.mockRejectedValue(new TranslationProviderError('RATE_LIMIT'));
+        await service.translate({ segments: [{ key: 'a', text: '第一件' }] });
+        advance(1001);
+        await service.translate({ segments: [{ key: 'b', text: '第二件' }] });
+        expect(translate).toHaveBeenCalledOnce();
+        expect(fallback.translate).toHaveBeenCalledTimes(2);
+    });
+
+    it('retains cached fields when every provider is unavailable', async () => {
+        const { fallback, cache } = enableFallback();
+        await cache.translate({ ...options, segments: [{ key: 'warm', text: source.label }] }, fallback);
+        translate.mockRejectedValue(new TranslationProviderError('QUOTA'));
+        fallback.translate.mockRejectedValue(new TranslationProviderError('QUOTA', 3_600_000));
+        await expect(
+            service.translate({
+                segments: [
+                    { key: 'cached', text: source.label },
+                    { key: 'new', text: '没有翻译过' },
+                ],
+            }),
+        ).rejects.toMatchObject({
+            code: 'QUOTA',
+            translations: [{ key: 'cached', text: 'Free stationery' }],
+        });
+        expect(await db.getRepository(SettingsStoreEntry).count()).toBe(1);
+        expect((await execution.state(fallback)).nextAttemptAt?.getTime()).toBeGreaterThanOrEqual(
+            clock + 3_600_000,
+        );
+    });
+
+    it('caches completed fallback fields when its quota runs out midway through a batch', async () => {
+        const { fallback } = enableFallback();
+        translate.mockRejectedValue(new TranslationProviderError('QUOTA'));
+        fallback.translate.mockImplementationOnce(input =>
+            Promise.reject(
+                new PartialTranslationProviderError(new TranslationProviderError('QUOTA'), [
+                    { key: input.segments[0].key, text: 'Completed field' },
+                ]),
+            ),
+        );
+        await expect(
+            service.translate({
+                segments: [
+                    { key: 'a', text: '已完成' },
+                    { key: 'b', text: '未完成' },
+                ],
+            }),
+        ).rejects.toMatchObject({ code: 'QUOTA', translations: [{ key: 'a', text: 'Completed field' }] });
+        expect(await db.getRepository(SettingsStoreEntry).count()).toBe(1);
+        await expect(
+            service.translate({ segments: [{ key: 'read', text: '已完成' }] }),
+        ).resolves.toMatchObject({ translations: [{ key: 'read', text: 'Completed field' }] });
+        expect(fallback.translate).toHaveBeenCalledOnce();
+    });
+
+    it('uses the Azure adapter after primary failure, writes the outbox and reuses only its own cached result', async () => {
+        const azure = new AzureTranslationProvider({ apiKey: 'test-key' });
+        const fetch = vi
+            .fn()
+            .mockResolvedValue(
+                new Response(
+                    JSON.stringify([{ translations: [{ to: 'en', text: 'Azure business services' }] }]),
+                ),
+            );
+        vi.stubGlobal('fetch', fetch);
+        options.fallbackProviders = [azure];
+        const cache = new TranslationResultCacheService(connection);
+        service = new ContentTranslationService(connection, options, execution, cache);
+        retry = new ContentTranslationRetryService(connection, service, adapter);
+        translate.mockRejectedValue(new TranslationProviderError('RATE_LIMIT'));
+        expect((await retry.retryPending()).translated).toBe(1);
+        expect(await english()).toBe('Azure business services');
+        expect((await readState()).status).toBe('AUTO_TRANSLATED');
+        expect((await execution.state(azure)).lastErrorCode).toBeNull();
+        service = new ContentTranslationService(
+            connection,
+            options,
+            execution,
+            new TranslationResultCacheService(connection),
+        );
+        expect(
+            await service.translate({ segments: [{ key: 'new-product', text: source.label }] }),
+        ).toMatchObject({ translations: [{ key: 'new-product', text: 'Azure business services' }] });
+        expect(fetch).toHaveBeenCalledOnce();
+        expect(translate).toHaveBeenCalledOnce();
+        expect(
+            await cache.lookup({ ...options, segments: [{ key: 'a', text: source.label }] }, 'test'),
+        ).toEqual([]);
+        expect(
+            await cache.lookup({ ...options, segments: [{ key: 'a', text: source.label }] }, azure.name),
+        ).toEqual([{ key: 'a', text: 'Azure business services' }]);
+    });
+
+    it('persists Azure F0 quota cooldown and switches to an explicitly configured third provider', async () => {
+        const { fallback } = enableFallback();
+        const azure = new AzureTranslationProvider({ apiKey: 'test-key' });
+        options.fallbackProviders = [azure, fallback];
+        const fetch = vi
+            .fn()
+            .mockImplementation(() =>
+                Promise.resolve(new Response(JSON.stringify({ error: { code: 403001 } }), { status: 403 })),
+            );
+        vi.stubGlobal('fetch', fetch);
+        translate.mockRejectedValue(new TranslationProviderError('QUOTA'));
+        await service.translate({ segments: [{ key: 'first', text: '第一件商品' }] });
+        const azureState = await execution.state(azure);
+        expect(azureState.blocked).toBe(false);
+        expect(azureState.lastErrorCode).toBe('QUOTA');
+        expect(azureState.nextAttemptAt?.getTime()).toBeGreaterThanOrEqual(clock + 3_600_000);
+        advance(1001);
+        await service.translate({ segments: [{ key: 'second', text: '第二件商品' }] });
+        expect(fetch).toHaveBeenCalledOnce();
+        expect(translate).toHaveBeenCalledOnce();
+        expect(fallback.translate).toHaveBeenCalledTimes(2);
+    });
+
+    it('keeps unsupported fallback content pending until the primary can recover', async () => {
+        const { fallback } = enableFallback();
+        translate.mockRejectedValue(new TranslationProviderError('QUOTA'));
+        fallback.translate.mockRejectedValue(new TranslationProviderError('INVALID_CONTENT'));
+        await expect(
+            service.translate({ segments: [{ key: 'html', text: '<pre>代码</pre>', format: 'HTML' }] }),
+        ).rejects.toMatchObject({ code: 'QUOTA' });
+        expect(await db.getRepository(SettingsStoreEntry).count()).toBe(0);
     });
 });

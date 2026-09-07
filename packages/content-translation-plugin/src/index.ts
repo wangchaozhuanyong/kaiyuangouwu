@@ -30,3 +30,6 @@ export { TranslationExecutionService } from './translation-execution.service.js'
 export { TranslationProviderError } from './translation-provider-error.js';
 
 export { TranslationProviderState } from './entities/translation-provider-state.entity.js';
+
+export { AzureTranslationProvider } from './providers/azure-translation.provider.js';
+export { MyMemoryTranslationProvider } from './providers/mymemory-translation.provider.js';
