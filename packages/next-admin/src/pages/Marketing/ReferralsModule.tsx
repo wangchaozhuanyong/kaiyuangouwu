@@ -92,6 +92,7 @@ function ReferralManagement() {
         },
         fetchPolicy: 'cache-and-network',
     });
+    const reportError = reports.error ? toUserFacingError(reports.error, '分销报表读取失败') : undefined;
     const [updateProgram, updateState] = useMutation(UPDATE_REFERRAL_PROGRAM_MUTATION);
 
     const currencyCode = program.data?.activeChannel.defaultCurrencyCode ?? 'CNY';
@@ -308,11 +309,7 @@ function ReferralManagement() {
                                     onPageSizeChange={setPageSize}
                                     data={reports.data}
                                     loading={reports.loading}
-                                    error={
-                                        reports.error
-                                            ? toUserFacingError(reports.error, '推广员报表读取失败')
-                                            : undefined
-                                    }
+                                    error={reportError}
                                     search={search}
                                     skips={skips}
                                     changeSkip={changeSkip}
@@ -325,11 +322,7 @@ function ReferralManagement() {
                                     onPageSizeChange={setPageSize}
                                     data={reports.data}
                                     loading={reports.loading}
-                                    error={
-                                        reports.error
-                                            ? toUserFacingError(reports.error, '返利报表读取失败')
-                                            : undefined
-                                    }
+                                    error={reportError}
                                     search={search}
                                     skip={skips.rewards}
                                     changeSkip={value => changeSkip('rewards', value)}
@@ -342,11 +335,7 @@ function ReferralManagement() {
                                     onPageSizeChange={setPageSize}
                                     data={reports.data}
                                     loading={reports.loading}
-                                    error={
-                                        reports.error
-                                            ? toUserFacingError(reports.error, '返利流水读取失败')
-                                            : undefined
-                                    }
+                                    error={reportError}
                                     search={search}
                                     skip={skips.ledger}
                                     changeSkip={value => changeSkip('ledger', value)}
@@ -359,11 +348,7 @@ function ReferralManagement() {
                                     onPageSizeChange={setPageSize}
                                     data={reports.data}
                                     loading={reports.loading}
-                                    error={
-                                        reports.error
-                                            ? toUserFacingError(reports.error, '提款报表读取失败')
-                                            : undefined
-                                    }
+                                    error={reportError}
                                     search={search}
                                     skip={skips.withdrawals}
                                     changeSkip={value => changeSkip('withdrawals', value)}
