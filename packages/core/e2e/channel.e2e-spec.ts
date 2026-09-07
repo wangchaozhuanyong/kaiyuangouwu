@@ -203,7 +203,7 @@ describe('Channels', () => {
         expect(rejectedDeletion.deleteSeller).toEqual({
             result: DeletionResult.NOT_DELETED,
             message:
-                '无法删除所选商家主体，因为以下店铺仍绑定该主体：second-channel。请先调整这些店铺的商家主体绑定',
+                '无法删除商家主体“Channel assignment test seller”，因为以下店铺 Channel 仍在使用它：second-channel。请先将这些 Channel 改绑到其他商家主体；整间店铺不再使用时，请执行安全清退',
         });
 
         const { updateChannel: unassignedChannel } = await adminClient.query(updateChannelDocument, {

@@ -244,7 +244,9 @@ describe('BusinessBasicsPanel', () => {
         );
         await act(async () => saveButton?.dispatchEvent(new MouseEvent('click', { bubbles: true })));
 
-        expect(onError).toHaveBeenCalledWith('设置未真正保存，服务端回读仍是旧值：默认计税区域');
+        expect(onError).toHaveBeenCalledWith(
+            '设置未真正保存，服务端回读仍是旧值：默认计税区域。处理方法：刷新当前数据后重试；如果持续发生，请提供本次操作编号给系统管理员。',
+        );
         expect(refetch).not.toHaveBeenCalled();
         expect(onChanged).not.toHaveBeenCalled();
     });

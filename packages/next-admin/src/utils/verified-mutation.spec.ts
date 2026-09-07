@@ -44,7 +44,9 @@ describe('runVerifiedMutation', () => {
         ).rejects.toThrow('默认计税区域仍是旧值');
 
         expect(events.map(event => event.kind)).toEqual(['loading', 'error']);
-        expect(events.at(-1)?.message).toBe('设置未真正保存：默认计税区域仍是旧值');
+        expect(events.at(-1)?.message).toBe(
+            '设置未真正保存：默认计税区域仍是旧值。处理方法：刷新当前数据后重试；如果持续发生，请提供本次操作编号给系统管理员。',
+        );
     });
 });
 

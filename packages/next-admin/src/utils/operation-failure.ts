@@ -87,9 +87,12 @@ export function normalizeOperationFailure(
     const rawMessage = explicitUserMessage || descriptor.message;
     const code = classifyFailure(descriptor.code, rawMessage);
     const safeMessage = isSafeUserMessage(rawMessage) ? rawMessage : '';
+    const safeExplicitUserMessage = isSafeUserMessage(explicitUserMessage) ? explicitUserMessage : '';
     const fallbackReason = shouldUseFallbackReason(code)
         ? normalizeFallbackReason(options.fallbackReason)
         : '';
+    const applicableFallbackReason =
+        code !== 'UNKNOWN' && isConciseFailureReason(fallbackReason) ? '' : fallbackReason;
     const defaults = defaultFailureCopy(code);
     const details =
         readDetails(extensions) ??
@@ -108,9 +111,9 @@ export function normalizeOperationFailure(
     return {
         code,
         reason:
-            (options.preferFallbackReason ? fallbackReason : '') ||
-            (explicitUserMessage || shouldKeepDetectedReason(code, safeMessage) ? safeMessage : '') ||
-            fallbackReason ||
+            (options.preferFallbackReason ? applicableFallbackReason : '') ||
+            (safeExplicitUserMessage || shouldKeepDetectedReason(code, safeMessage) ? safeMessage : '') ||
+            applicableFallbackReason ||
             defaults.reason,
         ...(details?.length ? { details } : {}),
         resolution,
@@ -387,11 +390,17 @@ function normalizeFallbackReason(value: string | undefined) {
     if (
         !normalized ||
         normalized === '管理服务没有返回可识别的失败原因' ||
-        genericFallbackPattern.test(normalized) ||
+        (genericFallbackPattern.test(normalized) && !isConciseFailureReason(normalized)) ||
         technicalPattern.test(normalized)
     )
         return '';
     return normalized;
+}
+
+function isConciseFailureReason(value: string) {
+    return /^(?:操作|保存|创建|删除|上传|下载|提交|执行|处理|更新|加载|读取|配置|审核|发布|切换|刷新|导入|导出|登录|验证|请求|数据|服务).{0,8}失败[。！]?$/u.test(
+        value,
+    );
 }
 
 function isSafeUserMessage(message: string) {
@@ -399,6 +408,8 @@ function isSafeUserMessage(message: string) {
     if (!normalized || normalized.length > 240) return false;
     if (technicalPattern.test(normalized)) return false;
     if (/^[A-Z][A-Z0-9_]+$/u.test(normalized)) return false;
+    if (!/\p{Script=Han}/u.test(normalized) && /[A-Za-z]{2}/u.test(normalized)) return false;
+    if (/[A-Za-z][A-Za-z'’-]*\s+[A-Za-z][A-Za-z'’-]*/u.test(normalized)) return false;
     return true;
 }
 
