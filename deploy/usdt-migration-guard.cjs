@@ -5,7 +5,11 @@ const { readFileSync, writeFileSync } = require('node:fs');
 const { createRequire } = require('node:module');
 const path = require('node:path');
 
-const MIGRATIONS = ['AddUsdtActiveAmountKey1788703200000', 'ReleaseUsdtHistoricalAmountKeys1788706800000'];
+const REVIEWED_MIGRATIONS = [
+    'AddUsdtActiveAmountKey1788703200000',
+    'ReleaseUsdtHistoricalAmountKeys1788706800000',
+    'SeedCheckoutProvinces1788742800000',
+];
 const TABLE = 'storefront_usdt_payment_intent';
 
 function assertStopped(processes) {
@@ -29,7 +33,7 @@ function assertCompatible(schema, activeRuntime) {
 
 function assertPending(pending) {
     assert.ok(
-        pending.every(name => MIGRATIONS.includes(name)),
+        pending.every(name => REVIEWED_MIGRATIONS.includes(name)),
         'Unreviewed pending migrations; inspect the exact list before release',
     );
 }
