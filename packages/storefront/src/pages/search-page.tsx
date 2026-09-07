@@ -1,7 +1,7 @@
 import { keepPreviousData, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useRouter } from '@tanstack/react-router';
 import { ArrowLeft, CircleAlert, Download, LayoutGrid, Search, ShoppingBag, Trash2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 // eslint-disable-next-line import/order -- organize-imports keeps relative type imports after packages.
 import type { RouteState } from '../storefront-router';
 
@@ -71,7 +71,11 @@ export function SearchPage() {
         placeholderData: keepPreviousData,
         meta: publicQueryMeta(),
     });
-    const results = searchQuery.data?.pages.flatMap(page => page.items) ?? [];
+    // Keep cache publication tied to new result pages while a destination route is loading.
+    const results = useMemo(
+        () => searchQuery.data?.pages.flatMap(page => page.items) ?? [],
+        [searchQuery.data?.pages],
+    );
     const totalItems = searchQuery.data?.pages[0]?.totalItems ?? 0;
     const searching = searchQuery.isLoading;
     const loadingMore = searchQuery.isFetchingNextPage;
