@@ -75,8 +75,8 @@ export function AccountHeroImagePanel({
                         className="absolute inset-0 size-full object-cover"
                     />
                     <div className="absolute inset-0 bg-gradient-to-r from-white/20 via-transparent to-slate-950/5" />
-                    <div className="absolute inset-x-0 top-0 flex items-center gap-3 p-5 text-indigo-950">
-                        <span className="grid size-12 place-items-center rounded-full border-2 border-white/90 bg-white/25 text-base font-bold">
+                    <div className="absolute inset-x-0 top-0 flex items-center gap-3 p-5 text-indigo-950 dark:text-indigo-100">
+                        <span className="grid size-12 place-items-center rounded-full border-2 border-white/90 bg-white/25 text-base font-bold dark:bg-white/10">
                             个人
                         </span>
                         <span>
@@ -84,7 +84,7 @@ export function AccountHeroImagePanel({
                             <small className="mt-1 block text-[11px]">查看个人资料 ›</small>
                         </span>
                     </div>
-                    <div className="absolute inset-x-4 bottom-4 grid grid-cols-4 gap-2 text-center text-[10px] font-medium text-indigo-950">
+                    <div className="absolute inset-x-4 bottom-4 grid grid-cols-4 gap-2 text-center text-[10px] font-medium text-indigo-950 dark:text-indigo-100">
                         {['我的收藏', '优惠券', '网站公告', '邀请返利'].map(label => (
                             <span
                                 key={label}
