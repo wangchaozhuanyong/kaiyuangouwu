@@ -7,15 +7,19 @@ import { In, IsNull } from 'typeorm';
 import { CONTENT_TRANSLATION_OPTIONS } from './constants.js';
 import { ContentTranslationState } from './entities/content-translation-state.entity.js';
 import { TranslationExecutionService } from './translation-execution.service.js';
-import { TranslationProviderError } from './translation-provider-error.js';
-import { TranslationResultCacheService } from './translation-result-cache.service.js';
+import { PartialTranslationProviderError, TranslationProviderError } from './translation-provider-error.js';
 import {
-    ContentTranslationPluginOptions,
+    CachedTranslationPartialError,
+    TranslationResultCacheService,
+} from './translation-result-cache.service.js';
+import {
+    ContentTranslationProvider,
     ContentTranslationRequest,
     ContentTranslationResult,
     LocalizedContentFieldInput,
     PreparedLocalizedContentField,
     RecordTranslationStateInput,
+    ResolvedContentTranslationOptions,
     TranslationStateIdentity,
 } from './types.js';
 
@@ -26,7 +30,7 @@ export class ContentTranslationService {
     constructor(
         private readonly connection: TransactionalConnection,
         @Inject(CONTENT_TRANSLATION_OPTIONS)
-        private readonly options: Required<ContentTranslationPluginOptions>,
+        private readonly options: ResolvedContentTranslationOptions,
         private readonly execution: TranslationExecutionService = new TranslationExecutionService(
             connection,
             options,
@@ -35,7 +39,7 @@ export class ContentTranslationService {
     ) {}
 
     isConfigured(): boolean {
-        return this.options.provider.isConfigured();
+        return this.providers().some(provider => provider.isConfigured());
     }
 
     providerName(): string {
@@ -290,15 +294,12 @@ export class ContentTranslationService {
     ): Promise<Array<{ key: string; text: string }>> {
         if (!this.resultCache || !request.segments.length) return [];
         try {
-            return await this.resultCache.lookup(
-                {
-                    ...request,
-                    sourceLanguageCode: this.options.sourceLanguageCode,
-                    targetLanguageCode: this.options.targetLanguageCode,
-                    glossary: this.options.glossary,
-                },
-                this.providerName(),
-            );
+            return await this.lookupAllCaches({
+                ...request,
+                sourceLanguageCode: this.options.sourceLanguageCode,
+                targetLanguageCode: this.options.targetLanguageCode,
+                glossary: this.options.glossary,
+            });
         } catch (error) {
             if (!(error instanceof TranslationProviderError)) throw error;
             return [];
@@ -314,13 +315,80 @@ export class ContentTranslationService {
             glossary: this.options.glossary,
             ...request,
         };
-        if (this.resultCache)
-            return this.resultCache.translate(translationRequest, {
-                name: this.providerName(),
-                isConfigured: () => this.isConfigured(),
-                translate: input => this.execution.translate(input),
-            });
-        return this.execution.translate(translationRequest);
+        // Read every configured provider's cache before making any external request.
+        const values = new Map(
+            (await this.lookupAllCaches(translationRequest)).map(item => [item.key, item.text]),
+        );
+        let lastFailure = new TranslationProviderError('CONFIGURATION');
+        let resultProvider = this.providerName();
+        let recoverableFailure: TranslationProviderError | undefined;
+        for (const provider of this.providers()) {
+            const segments = translationRequest.segments.filter(segment => !values.has(segment.key));
+            if (!segments.length) break;
+            try {
+                const input = { ...translationRequest, segments };
+                const result = this.resultCache
+                    ? await this.resultCache.translate(input, {
+                          name: provider.name,
+                          isConfigured: () => provider.isConfigured(),
+                          translate: pending => this.execution.translate(pending, provider),
+                      })
+                    : await this.execution.translate(input, provider);
+                result.translations.forEach(item => values.set(item.key, item.text));
+                resultProvider = provider.name;
+            } catch (error) {
+                if (!(error instanceof TranslationProviderError)) throw error;
+                if (
+                    error instanceof CachedTranslationPartialError ||
+                    error instanceof PartialTranslationProviderError
+                )
+                    error.translations.forEach(item => values.set(item.key, item.text));
+                if (['RATE_LIMIT', 'QUOTA', 'UNAVAILABLE', 'CONFIGURATION', 'BUSY'].includes(error.code)) {
+                    recoverableFailure = error;
+                    lastFailure = error;
+                } else {
+                    // Unsupported fallback content may still succeed when the primary recovers.
+                    lastFailure = recoverableFailure ?? error;
+                    break;
+                }
+            }
+        }
+        const translations = translationRequest.segments.flatMap(segment => {
+            const text = values.get(segment.key);
+            return text === undefined ? [] : [{ key: segment.key, text }];
+        });
+        if (translations.length !== translationRequest.segments.length) {
+            if (translations.length) throw new CachedTranslationPartialError(lastFailure, translations);
+            throw lastFailure;
+        }
+        return { provider: resultProvider, translations };
+    }
+
+    private providers(): ContentTranslationProvider[] {
+        return [
+            ...new Map(
+                [this.options.provider, ...(this.options.fallbackProviders ?? [])].map(provider => [
+                    provider.name,
+                    provider,
+                ]),
+            ).values(),
+        ];
+    }
+
+    private async lookupAllCaches(request: ContentTranslationRequest) {
+        const values = new Map<string, string>();
+        if (this.resultCache) {
+            for (const provider of this.providers()) {
+                const segments = request.segments.filter(segment => !values.has(segment.key));
+                if (!segments.length) break;
+                const cached = await this.resultCache.lookup({ ...request, segments }, provider.name);
+                cached.forEach(item => values.set(item.key, item.text));
+            }
+        }
+        return request.segments.flatMap(segment => {
+            const text = values.get(segment.key);
+            return text === undefined ? [] : [{ key: segment.key, text }];
+        });
     }
 
     async recordState(

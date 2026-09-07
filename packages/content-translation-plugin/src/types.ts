@@ -40,6 +40,7 @@ export interface ContentTranslationProvider {
 
 export interface ContentTranslationPluginOptions {
     provider?: ContentTranslationProvider;
+    fallbackProviders?: ContentTranslationProvider[];
     glossary?: Record<string, string>;
     sourceLanguageCode?: 'zh_Hans';
     targetLanguageCode?: 'en';
@@ -87,3 +88,8 @@ export interface PreparedLocalizedContentField {
     clearLock?: boolean;
     requestLock?: boolean;
 }
+
+export type ResolvedContentTranslationOptions = Required<
+    Omit<ContentTranslationPluginOptions, 'fallbackProviders'>
+> &
+    Pick<ContentTranslationPluginOptions, 'fallbackProviders'>;
