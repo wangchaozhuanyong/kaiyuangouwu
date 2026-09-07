@@ -5,6 +5,7 @@ import { posterLayoutFields, type PosterCopyField } from '../../../../storefront
 import { sensitiveActionContext } from '../../apollo';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
+import { ImageAssetUploadButton, type UploadedImageAsset } from '../../components/ImageAssetUploadButton';
 import { GET_ASSETS } from '../../graphql/catalog.graphql';
 import {
     ADJUST_REFERRAL_BALANCE_MUTATION,
@@ -520,6 +521,19 @@ export function PosterEditor({
         }
         setDraft(current => ({ ...current, [field]: assetId }));
     };
+    const selectUploadedAsset = (
+        field: 'posterBackgroundAssetId' | 'shareBackgroundAssetId',
+        uploaded: UploadedImageAsset[],
+    ) => {
+        const [asset] = uploaded;
+        if (!asset) return;
+        setKnownAssets(current =>
+            current.some(item => item.id === asset.id) ? current : [...current, asset],
+        );
+        setDraft(current => ({ ...current, [field]: asset.id }));
+        setAssetSearch('');
+        if (canReadAssets) void assetQuery.refetch().catch(() => undefined);
+    };
     const validation = posterDraftError(draft);
     const submit = async () => {
         if (createState.loading || updateState.loading) return;
@@ -604,22 +618,38 @@ export function PosterEditor({
                             )}
                         </div>
                     </div>
-                    <FormSelect
-                        label="海报背景图"
-                        value={draft.posterBackgroundAssetId}
-                        onChange={posterBackgroundAssetId =>
-                            selectAsset('posterBackgroundAssetId', posterBackgroundAssetId)
-                        }
-                        options={[['', '不使用图片'], ...assets.map(asset => [asset.id, asset.name])]}
-                    />
-                    <FormSelect
-                        label="分享背景图"
-                        value={draft.shareBackgroundAssetId}
-                        onChange={shareBackgroundAssetId =>
-                            selectAsset('shareBackgroundAssetId', shareBackgroundAssetId)
-                        }
-                        options={[['', '不使用图片'], ...assets.map(asset => [asset.id, asset.name])]}
-                    />
+                    <div>
+                        <FormSelect
+                            label="海报背景图"
+                            value={draft.posterBackgroundAssetId}
+                            onChange={posterBackgroundAssetId =>
+                                selectAsset('posterBackgroundAssetId', posterBackgroundAssetId)
+                            }
+                            options={[['', '不使用图片'], ...assets.map(asset => [asset.id, asset.name])]}
+                        />
+                        <ImageAssetUploadButton
+                            className="mt-2"
+                            ariaLabel="上传并设为海报背景图"
+                            label="上传海报背景"
+                            onUploaded={uploaded => selectUploadedAsset('posterBackgroundAssetId', uploaded)}
+                        />
+                    </div>
+                    <div>
+                        <FormSelect
+                            label="分享背景图"
+                            value={draft.shareBackgroundAssetId}
+                            onChange={shareBackgroundAssetId =>
+                                selectAsset('shareBackgroundAssetId', shareBackgroundAssetId)
+                            }
+                            options={[['', '不使用图片'], ...assets.map(asset => [asset.id, asset.name])]}
+                        />
+                        <ImageAssetUploadButton
+                            className="mt-2"
+                            ariaLabel="上传并设为分享背景图"
+                            label="上传分享背景"
+                            onUploaded={uploaded => selectUploadedAsset('shareBackgroundAssetId', uploaded)}
+                        />
+                    </div>
                     {posterLayoutFields
                         .filter(field => field.field.endsWith('Zh'))
                         .flatMap(field => {

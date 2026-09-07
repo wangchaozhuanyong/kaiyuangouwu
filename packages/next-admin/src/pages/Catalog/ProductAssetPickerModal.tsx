@@ -1,5 +1,6 @@
 import { AlertCircle, Image as ImageIcon, Search, X } from 'lucide-react';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
+import { ImageAssetUploadButton, type UploadedImageAsset } from '../../components/ImageAssetUploadButton';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { LookupPager } from './LookupPager';
 import { useProductEditor } from './ProductEditorContext';
@@ -27,6 +28,25 @@ export function ProductAssetPickerModal() {
         setKnownAssets,
     } = useProductEditor();
 
+    const selectUploadedAssets = (assets: UploadedImageAsset[]) => {
+        if (assets.length === 0) return;
+        setKnownAssets(current => ({
+            ...current,
+            ...Object.fromEntries(assets.map(asset => [asset.id, asset])),
+        }));
+        setAssetSearch('');
+        setAssetPage(0);
+        if (assetPickerMode === 'FEATURED') {
+            const [asset] = assets;
+            setFeaturedAssetId(asset.id);
+            setFeaturedAssetPreview(asset.preview);
+            setIsAssetPickerOpen(false);
+        } else {
+            setSelectedAssetIds(current => [...new Set([...current, ...assets.map(asset => asset.id)])]);
+        }
+        void refetchAssets().catch(() => undefined);
+    };
+
     if (!isAssetPickerOpen) return null;
 
     return (
@@ -51,14 +71,22 @@ export function ProductAssetPickerModal() {
                                 : '可连续选择或取消多个后端素材'}
                         </p>
                     </div>
-                    <button
-                        type="button"
-                        onClick={() => setIsAssetPickerOpen(false)}
-                        className="p-1 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-600"
-                        aria-label="关闭"
-                    >
-                        <X className="w-5 h-5" />
-                    </button>
+                    <div className="flex items-start gap-2">
+                        <ImageAssetUploadButton
+                            ariaLabel={assetPickerMode === 'FEATURED' ? '上传商品主图' : '上传商品详情图'}
+                            label={assetPickerMode === 'FEATURED' ? '上传主图' : '上传详情图'}
+                            multiple={assetPickerMode === 'GALLERY'}
+                            onUploaded={selectUploadedAssets}
+                        />
+                        <button
+                            type="button"
+                            onClick={() => setIsAssetPickerOpen(false)}
+                            className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                            aria-label="关闭"
+                        >
+                            <X className="h-5 w-5" />
+                        </button>
+                    </div>
                 </div>
 
                 <div className="relative">
@@ -102,7 +130,7 @@ export function ProductAssetPickerModal() {
                         (!assetsData?.assets?.items || assetsData.assets.items.length === 0) && (
                             <div className="p-12 text-center text-slate-400 text-xs space-y-2">
                                 <ImageIcon className="w-8 h-8 mx-auto text-slate-300" />
-                                <div>素材库中暂无图片，请在【店铺 ➡️ 素材中心】中先上传素材文件。</div>
+                                <div>素材库中暂无图片，可使用上方按钮直接上传。</div>
                             </div>
                         )}
 

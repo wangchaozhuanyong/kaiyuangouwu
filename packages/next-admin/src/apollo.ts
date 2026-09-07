@@ -87,6 +87,7 @@ export const uploadAdminFiles = async <T>(
     query: string,
     files: File[],
     buildVariables: (filePlaceholders: null[]) => Record<string, unknown>,
+    options?: { channelToken?: string },
 ): Promise<T> => {
     const feedbackId = createAdminFeedbackId('admin-upload');
     publishAdminFeedback({
@@ -97,7 +98,7 @@ export const uploadAdminFiles = async <T>(
     });
 
     try {
-        const channelContext = channelRequestContext(getActiveChannelToken() ?? '');
+        const channelContext = channelRequestContext(options?.channelToken ?? getActiveChannelToken() ?? '');
         const formData = new FormData();
         const variables = buildVariables(files.map(() => null));
         const fileMap = Object.fromEntries(

@@ -1,5 +1,6 @@
 import { Image as ImageIcon, X } from 'lucide-react';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
+import { ImageAssetUploadButton, type UploadedImageAsset } from '../../components/ImageAssetUploadButton';
 import { DynamicCustomFieldsForm } from '../../custom-fields/DynamicCustomFieldsForm';
 import type { RefundPolicy } from '../../graphql/commerce.graphql';
 import { useProductEditor } from './ProductEditorContext';
@@ -34,6 +35,7 @@ export function ProductBasicTab() {
         setIsAssetPickerOpen,
         setAssetPickerMode,
         knownAssets,
+        setKnownAssets,
         formErrors,
         setFormErrors,
         commerceMode,
@@ -42,6 +44,26 @@ export function ProductBasicTab() {
         effectiveFulfillmentType,
         saving,
     } = useProductEditor();
+
+    const rememberUploadedAssets = (assets: UploadedImageAsset[]) => {
+        setKnownAssets(current => ({
+            ...current,
+            ...Object.fromEntries(assets.map(asset => [asset.id, asset])),
+        }));
+    };
+
+    const setUploadedFeaturedAsset = (assets: UploadedImageAsset[]) => {
+        const [asset] = assets;
+        if (!asset) return;
+        rememberUploadedAssets(assets);
+        setFeaturedAssetId(asset.id);
+        setFeaturedAssetPreview(asset.preview);
+    };
+
+    const addUploadedGalleryAssets = (assets: UploadedImageAsset[]) => {
+        rememberUploadedAssets(assets);
+        setSelectedAssetIds(current => [...new Set([...current, ...assets.map(asset => asset.id)])]);
+    };
 
     if (!isCreateMode && !productData?.product) return null;
 
@@ -246,7 +268,7 @@ export function ProductBasicTab() {
             <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xs">
                 <div className="grid lg:grid-cols-[minmax(20rem,0.8fr)_minmax(0,1.2fr)]">
                     <section className="p-6">
-                        <div className="flex min-h-12 items-start justify-between gap-4 border-b border-slate-100 pb-3">
+                        <div className="flex min-h-12 flex-col items-start justify-between gap-3 border-b border-slate-100 pb-3 sm:flex-row sm:gap-4">
                             <div>
                                 <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                                     商品主图
@@ -259,17 +281,25 @@ export function ProductBasicTab() {
                                     用于商品列表、搜索结果和详情页首屏
                                 </p>
                             </div>
-                            <button
-                                type="button"
-                                disabled={saving}
-                                onClick={() => {
-                                    setAssetPickerMode('FEATURED');
-                                    setIsAssetPickerOpen(true);
-                                }}
-                                className="shrink-0 cursor-pointer rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700 transition-colors hover:bg-blue-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                                {featuredAssetId ? '更换主图' : '选择主图'}
-                            </button>
+                            <div className="flex w-full shrink-0 flex-wrap justify-start gap-2 sm:w-auto sm:justify-end">
+                                <ImageAssetUploadButton
+                                    ariaLabel="上传商品主图"
+                                    label="上传主图"
+                                    disabled={saving}
+                                    onUploaded={setUploadedFeaturedAsset}
+                                />
+                                <button
+                                    type="button"
+                                    disabled={saving}
+                                    onClick={() => {
+                                        setAssetPickerMode('FEATURED');
+                                        setIsAssetPickerOpen(true);
+                                    }}
+                                    className="shrink-0 cursor-pointer rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700 transition-colors hover:bg-blue-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                    {featuredAssetId ? '更换主图' : '选择主图'}
+                                </button>
+                            </div>
                         </div>
 
                         {featuredAssetPreview ? (
@@ -321,7 +351,7 @@ export function ProductBasicTab() {
                     </section>
 
                     <section className="border-t border-slate-200 bg-slate-50/40 p-6 lg:border-l lg:border-t-0">
-                        <div className="flex min-h-12 items-start justify-between gap-4 border-b border-slate-200 pb-3">
+                        <div className="flex min-h-12 flex-col items-start justify-between gap-3 border-b border-slate-200 pb-3 sm:flex-row sm:gap-4">
                             <div>
                                 <h3 className="text-sm font-bold text-slate-900">
                                     商品详情图
@@ -331,17 +361,26 @@ export function ProductBasicTab() {
                                     可多选素材，用于展示商品细节、功能和使用说明
                                 </p>
                             </div>
-                            <button
-                                type="button"
-                                disabled={saving}
-                                onClick={() => {
-                                    setAssetPickerMode('GALLERY');
-                                    setIsAssetPickerOpen(true);
-                                }}
-                                className="shrink-0 cursor-pointer rounded-lg bg-slate-200/70 px-3 py-1.5 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                                管理详情图 ({selectedAssetIds.length})
-                            </button>
+                            <div className="flex w-full shrink-0 flex-wrap justify-start gap-2 sm:w-auto sm:justify-end">
+                                <ImageAssetUploadButton
+                                    ariaLabel="上传商品详情图"
+                                    label="上传详情图"
+                                    multiple
+                                    disabled={saving}
+                                    onUploaded={addUploadedGalleryAssets}
+                                />
+                                <button
+                                    type="button"
+                                    disabled={saving}
+                                    onClick={() => {
+                                        setAssetPickerMode('GALLERY');
+                                        setIsAssetPickerOpen(true);
+                                    }}
+                                    className="shrink-0 cursor-pointer rounded-lg bg-slate-200/70 px-3 py-1.5 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                    管理详情图 ({selectedAssetIds.length})
+                                </button>
+                            </div>
                         </div>
 
                         {selectedAssetIds.length > 0 ? (

@@ -1,6 +1,7 @@
 import { Image as ImageIcon } from 'lucide-react';
 import { useState } from 'react';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
+import { ImageAssetUploadButton } from '../../components/ImageAssetUploadButton';
 import { BrandAssetPickerDialog } from './BrandAssetPickerDialog';
 import { secondaryButton } from './settings-ui';
 import {
@@ -31,7 +32,7 @@ export function StoreBrandAssets({
                 <FeatureHelpButton topic="settings.store-profile" title="品牌图片" />
             </h3>
             <p className="mt-1 text-xs leading-5 text-slate-500">
-                从素材库选择图片，保存店铺档案后同步到店铺前台。
+                可直接上传或从素材库选择图片，保存店铺档案后同步到店铺前台。
             </p>
             <div className="mt-3 grid gap-3 sm:grid-cols-3">
                 {BRAND_ASSET_SLOTS.map(({ field, label, description }) => (
@@ -52,6 +53,20 @@ export function StoreBrandAssets({
                         <p className="mt-2 text-xs font-bold text-slate-800">{label}</p>
                         <p className="mt-1 min-h-8 text-[10px] leading-4 text-slate-500">{description}</p>
                         <div className="mt-2 flex flex-wrap gap-2">
+                            <ImageAssetUploadButton
+                                ariaLabel={`上传${label}`}
+                                label="直接上传"
+                                disabled={disabled}
+                                channelToken={channel.token}
+                                onUploaded={uploaded => {
+                                    const [asset] = uploaded;
+                                    if (!asset) return;
+                                    onChange({
+                                        ...assets,
+                                        [field]: { ...asset, sourceChannelToken: channel.token },
+                                    });
+                                }}
+                            />
                             <button
                                 type="button"
                                 disabled={disabled}
