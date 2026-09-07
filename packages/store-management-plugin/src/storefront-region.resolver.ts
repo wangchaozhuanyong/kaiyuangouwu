@@ -1,31 +1,46 @@
 import { Query, Resolver } from '@nestjs/graphql';
-import { Allow, Ctx, Permission, ProvinceService, RequestContext } from '@vendure/core';
+import { SortOrder } from '@vendure/common/lib/generated-types';
+import { Allow, CountryService, Ctx, Permission, ProvinceService, RequestContext } from '@vendure/core';
 
 @Resolver()
 export class StorefrontRegionShopResolver {
-    constructor(private readonly provinceService: ProvinceService) {}
+    constructor(
+        private readonly provinceService: ProvinceService,
+        private readonly countryService: CountryService,
+    ) {}
 
     @Query()
     @Allow(Permission.Public)
     async availableStorefrontProvinces(@Ctx() ctx: RequestContext) {
-        const result = await this.provinceService.findAll(
-            ctx,
-            {
-                take: 500,
-                filter: { enabled: { eq: true } },
-            },
-            ['parent'],
+        const countries = new Map(
+            (await this.countryService.findAllAvailable(ctx)).map(country => [
+                String(country.id),
+                country.code,
+            ]),
         );
+        const options: Array<{ code: string; name: string; countryCode: string }> = [];
+        let skip = 0;
+        while (true) {
+            // Omitting take lets ProvinceService use the configured public API limit.
+            const result = await this.provinceService.findAll(ctx, {
+                skip,
+                sort: { id: SortOrder.ASC },
+                filter: { enabled: { eq: true } },
+            });
 
-        return result.items
-            .flatMap(province => {
-                const country = province.parent;
-                if (country?.type !== 'country' || !country.enabled) return [];
-                return [{ code: province.code, name: province.name, countryCode: country.code }];
-            })
-            .sort(
-                (left, right) =>
-                    left.countryCode.localeCompare(right.countryCode) || left.name.localeCompare(right.name),
-            );
+            for (const province of result.items) {
+                const countryCode = countries.get(String(province.parentId));
+                if (countryCode) {
+                    options.push({ code: province.code, name: province.name, countryCode });
+                }
+            }
+            skip += result.items.length;
+            if (!result.items.length || skip >= result.totalItems) break;
+        }
+
+        return options.sort(
+            (left, right) =>
+                left.countryCode.localeCompare(right.countryCode) || left.name.localeCompare(right.name),
+        );
     }
 }
