@@ -308,6 +308,22 @@ describe('AssetServerPlugin', () => {
             await testMimeTypeOfAssetWithExt('svg', 'image/svg+xml');
         });
 
+        it('serves transformed SVG uploads and cache hits as PNG', async () => {
+            const svg = testImages.find(image => image.source?.endsWith('.svg'));
+            expect(svg?.source).toBeTruthy();
+            const url = `${svg!.source}?preset=thumb`;
+            const first = await fetch(url);
+            const bytes = Buffer.from(await first.arrayBuffer());
+            expect(first.status).toBe(200);
+            expect(first.headers.get('content-type')).toBe('image/png');
+            expect(bytes.subarray(0, 8)).toEqual(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+
+            const cached = await fetch(url);
+            expect(cached.headers.get('content-type')).toBe('image/png');
+            expect(Buffer.from(await cached.arrayBuffer())).toEqual(bytes);
+            await testMimeTypeOfAssetWithExt('svg', 'image/svg+xml');
+        });
+
         it('tiff', async () => {
             await testMimeTypeOfAssetWithExt('tiff', 'image/tiff');
         });
