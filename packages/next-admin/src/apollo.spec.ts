@@ -47,6 +47,22 @@ describe('admin channel request routing', () => {
         expect(request).not.toHaveBeenCalled();
     });
 
+    it('uploads into an explicitly selected source library without changing the active store', async () => {
+        request.mockResolvedValue(Response.json({ data: { createAssets: [{ id: 'shared-asset' }] } }));
+        const file = new File(['image'], 'shared.png', { type: 'image/png' });
+        await uploadAdminFiles(
+            'mutation Upload { createAssets { id } }',
+            [file],
+            files => ({ input: files.map(upload => ({ file: upload })) }),
+            { channelToken: 'store-shared' },
+        );
+        expect(request.mock.calls[0][1]?.headers).toMatchObject({
+            'vendure-token': 'store-shared',
+            authorization: 'Bearer test-session',
+        });
+        expect(localStorage.getItem('vendure-active-channel-token')).toBe('store-a');
+    });
+
     it('uses explicit store context without changing the globally selected store', async () => {
         request.mockResolvedValue(Response.json({ data: { activeChannel: { id: 'b' } } }));
         await client.query({

@@ -1,23 +1,16 @@
 import { useQuery } from '@apollo/client/react';
-import { ChevronLeft, ChevronRight, Image as ImageIcon, Search, UploadCloud, X } from 'lucide-react';
-import { useDeferredValue, useRef, useState } from 'react';
-import { uploadAdminFiles } from '../../apollo';
+import { ChevronLeft, ChevronRight, Image as ImageIcon, Search, X } from 'lucide-react';
+import { useDeferredValue, useState } from 'react';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
+import { ImageAssetUploadButton, type UploadedImageAsset } from '../../components/ImageAssetUploadButton';
 import { PageSizeSelect } from '../../components/PageSizeSelect';
-import { CREATE_ASSETS_MULTIPART } from '../../graphql/catalog-admin.graphql';
 import { GET_ASSETS } from '../../graphql/catalog.graphql';
 import { type StorefrontAssetRef } from '../../graphql/storefront.graphql';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { usePageSize } from '../../hooks/use-page-size';
 import { toUserFacingError } from '../../utils/user-facing-error';
-import {
-    AssetQueryResult,
-    CreateAssetsData,
-    inputClass,
-    MAX_IMAGE_SIZE_BYTES,
-    supportedImageTypes,
-} from './storefront-editor-model';
+import { AssetQueryResult, inputClass } from './storefront-editor-model';
 
 export function AssetPicker({
     label,
@@ -34,13 +27,9 @@ export function AssetPicker({
 }) {
     const { hasAnyPermission } = useAdminPermissions();
     const canReadAssets = hasAnyPermission(['ReadCatalog', 'ReadAsset']);
-    const canCreateAssets = hasAnyPermission(['CreateCatalog', 'CreateAsset']);
     const [open, setOpen] = useState(false);
     const [search, setSearch] = useState('');
     const [page, setPage] = useState(0);
-    const [uploading, setUploading] = useState(false);
-    const [uploadError, setUploadError] = useState('');
-    const uploadInputRef = useRef<HTMLInputElement>(null);
     const [pageSize, setPageSize] = usePageSize(setPage);
     const deferredSearch = useDeferredValue(search.trim());
     const assets = useQuery<AssetQueryResult>(GET_ASSETS, {
@@ -62,51 +51,13 @@ export function AssetPicker({
     const totalItems = assets.data?.assets.totalItems ?? 0;
     const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
     const preview = value?.preview ?? fallbackUrl;
-    const uploadImage = async (file: File) => {
-        if (!canCreateAssets) return;
-        if (!supportedImageTypes.has(file.type)) {
-            setUploadError('仅支持 JPG、PNG 或 WebP 图片');
-            return;
-        }
-        if (file.size > MAX_IMAGE_SIZE_BYTES) {
-            setUploadError('图片不能超过 20 MB');
-            return;
-        }
-
-        setUploading(true);
-        setUploadError('');
-        try {
-            const result = await uploadAdminFiles<CreateAssetsData>(
-                CREATE_ASSETS_MULTIPART,
-                [file],
-                ([filePlaceholder]) => ({
-                    input: [{ file: filePlaceholder, tags: ['后台上传'] }],
-                }),
-            );
-            const uploaded = result.createAssets[0];
-            if (
-                uploaded?.__typename !== 'Asset' ||
-                !uploaded.id ||
-                !uploaded.name ||
-                !uploaded.preview ||
-                !uploaded.source
-            ) {
-                throw new Error(uploaded?.message || 'Vendure 未返回有效的图片素材');
-            }
-            onChange({
-                id: uploaded.id,
-                name: uploaded.name,
-                preview: uploaded.preview,
-                source: uploaded.source,
-            });
-            setSearch('');
-            setPage(0);
-            if (canReadAssets) void assets.refetch().catch(() => undefined);
-        } catch (error) {
-            setUploadError(toUserFacingError(error, '图片上传失败，请稍后重试'));
-        } finally {
-            setUploading(false);
-        }
+    const selectUploadedImage = ([uploaded]: UploadedImageAsset[]) => {
+        if (!uploaded) return;
+        onChange(uploaded);
+        setSearch('');
+        setPage(0);
+        setOpen(false);
+        if (canReadAssets) void assets.refetch().catch(() => undefined);
     };
     return (
         <div>
@@ -130,28 +81,7 @@ export function AssetPicker({
                         {value?.name ?? (preview ? '外部图片' : '未选择素材')}
                     </div>
                     <div className="mt-2 flex flex-wrap gap-2">
-                        <input
-                            ref={uploadInputRef}
-                            type="file"
-                            accept="image/jpeg,image/png,image/webp"
-                            disabled={uploading || !canCreateAssets}
-                            className="sr-only"
-                            aria-label={`上传${label}`}
-                            onChange={event => {
-                                const file = event.currentTarget.files?.[0];
-                                event.currentTarget.value = '';
-                                if (file) void uploadImage(file);
-                            }}
-                        />
-                        <button
-                            type="button"
-                            onClick={() => uploadInputRef.current?.click()}
-                            disabled={uploading || !canCreateAssets}
-                            className="flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-blue-700 disabled:opacity-50"
-                        >
-                            <UploadCloud className={`h-3.5 w-3.5 ${uploading ? 'animate-pulse' : ''}`} />
-                            {uploading ? '上传中…' : '上传图片'}
-                        </button>
+                        <ImageAssetUploadButton ariaLabel={`上传${label}`} onUploaded={selectUploadedImage} />
                         <button
                             type="button"
                             onClick={() => setOpen(true)}
@@ -173,11 +103,6 @@ export function AssetPicker({
                     </div>
                 </div>
             </div>
-            {uploadError && (
-                <p className="mt-1.5 text-[11px] text-rose-600" role="alert">
-                    {uploadError}
-                </p>
-            )}
             {open && canReadAssets && (
                 <div
                     className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/50 p-4"
@@ -201,14 +126,20 @@ export function AssetPicker({
                                 </h3>
                                 <p className="mt-1 text-xs text-slate-400">读取商品管理中的真实素材库</p>
                             </div>
-                            <button
-                                type="button"
-                                onClick={() => setOpen(false)}
-                                className="p-2 text-slate-400"
-                                aria-label="关闭"
-                            >
-                                <X className="h-5 w-5" />
-                            </button>
+                            <div className="flex items-center gap-2">
+                                <ImageAssetUploadButton
+                                    ariaLabel={`上传${label}`}
+                                    onUploaded={selectUploadedImage}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setOpen(false)}
+                                    className="p-2 text-slate-400"
+                                    aria-label="关闭"
+                                >
+                                    <X className="h-5 w-5" />
+                                </button>
+                            </div>
                         </div>
                         <div className="relative mt-4">
                             <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />

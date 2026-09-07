@@ -2,6 +2,7 @@ import { useQuery } from '@apollo/client/react';
 import { Image as ImageIcon } from 'lucide-react';
 import { useDeferredValue, useState } from 'react';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
+import { ImageAssetUploadButton } from '../../components/ImageAssetUploadButton';
 import { GET_ASSETS } from '../../graphql/catalog.graphql';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { usePageSize } from '../../hooks/use-page-size';
@@ -71,6 +72,19 @@ export function CategoryImageField({
                         {value?.name || '未设置分类图片'}
                     </div>
                     <div className="mt-2 flex flex-wrap gap-2">
+                        <ImageAssetUploadButton
+                            ariaLabel="上传分类图片"
+                            label="上传图片"
+                            disabled={disabled}
+                            onUploaded={assets => {
+                                const [asset] = assets;
+                                if (!asset) return;
+                                onChange(asset);
+                                setSearch('');
+                                setPage(0);
+                                setOpen(false);
+                            }}
+                        />
                         <button
                             type="button"
                             onClick={() => setOpen(current => !current)}
@@ -94,7 +108,7 @@ export function CategoryImageField({
                 </div>
             </div>
             <p className="text-[11px] leading-5 text-slate-500">
-                保存后用于商城分类展示。新图片请先在“商品管理 → 素材媒体库”上传，移除图片不会删除素材。
+                保存后用于商城分类展示。直接上传的图片会自动进入当前店铺素材库，移除图片不会删除素材。
             </p>
             {!canReadAssets && (
                 <p className="text-xs text-amber-700">需要素材读取权限才能选择图片，请联系管理员。</p>
@@ -129,7 +143,7 @@ export function CategoryImageField({
                         </p>
                     ) : !data?.assets.items.length ? (
                         <p className="py-4 text-center text-xs text-slate-500">
-                            暂无匹配图片，请调整搜索或先上传素材。
+                            暂无匹配图片，请调整搜索或使用上方按钮直接上传。
                         </p>
                     ) : (
                         <div className="grid max-h-64 grid-cols-2 gap-3 overflow-y-auto sm:grid-cols-4">

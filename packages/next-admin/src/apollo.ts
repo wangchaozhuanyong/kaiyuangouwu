@@ -86,6 +86,7 @@ export const uploadAdminFiles = async <T>(
     query: string,
     files: File[],
     buildVariables: (filePlaceholders: null[]) => Record<string, unknown>,
+    options?: { channelToken?: string },
 ): Promise<T> => {
     return runAdminActionWithFeedback(
         {
@@ -95,7 +96,9 @@ export const uploadAdminFiles = async <T>(
             resolution: ['检查文件格式、大小和当前账号权限后重试'],
         },
         async () => {
-            const channelContext = channelRequestContext(getActiveChannelToken() ?? '');
+            const channelContext = channelRequestContext(
+                options?.channelToken ?? getActiveChannelToken() ?? '',
+            );
             const formData = new FormData();
             const variables = buildVariables(files.map(() => null));
             const fileMap = Object.fromEntries(

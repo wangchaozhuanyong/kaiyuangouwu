@@ -22,19 +22,6 @@ export interface AssetQueryResult {
     assets: { items: Array<StorefrontAssetRef & { type: string; mimeType: string }>; totalItems: number };
 }
 
-export interface CreateAssetResult extends Partial<StorefrontAssetRef> {
-    __typename: 'Asset' | 'MimeTypeError';
-    message?: string;
-}
-
-export interface CreateAssetsData {
-    createAssets: CreateAssetResult[];
-}
-
-export const MAX_IMAGE_SIZE_BYTES = 20 * 1024 * 1024;
-
-export const supportedImageTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
-
 export const targetOptions: Array<[StorefrontTargetType, string]> = [
     ['NONE', '无跳转'],
     ['URL', '网址'],
