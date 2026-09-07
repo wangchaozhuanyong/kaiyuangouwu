@@ -7,8 +7,11 @@ import {
     ChevronRight,
     CircleDollarSign,
     Cpu,
+    FileText,
     Image as ImageIcon,
     LoaderCircle,
+    PanelRightOpen,
+    Power,
     RefreshCw,
     RotateCcw,
     Save,
@@ -47,6 +50,7 @@ type OutputAction =
     { kind: 'RETRY'; jobId: string; outputId: string } | { kind: 'REFUND'; jobId: string; outputId: string };
 type JobStateFilter =
     'ALL' | 'QUEUED' | 'RUNNING' | 'PARTIAL_SUCCESS' | 'SUCCEEDED' | 'FAILED' | 'UNKNOWN' | 'CANCELLED';
+type ConfigEditor = { kind: 'SERVICE' } | { kind: 'MODEL'; modelId: string } | { kind: 'TERMS' };
 
 const JOB_STATE_OPTIONS: Array<[JobStateFilter, string]> = [
     ['ALL', '全部状态'],
@@ -189,7 +193,7 @@ export function AiImageSettingsModule() {
                     <ErrorState message={query.error.message} onRetry={() => void query.refetch()} />
                 ) : config && tab === 'CONFIG' ? (
                     <ConfigPanel
-                        key={`${config.id}-${config.defaultModelCode}-${config.models.map(model => `${model.code}:${model.lastTestedAt ?? model.healthStatus}:${model.unitPrice}`).join('|')}`}
+                        key={config.id}
                         value={config}
                         currencyCode={query.data?.activeChannel.defaultCurrencyCode ?? 'CNY'}
                         onSaved={async message => {
@@ -257,7 +261,8 @@ function ConfigPanel({
     onSaved: (message: string) => Promise<void>;
     onError: (error: unknown) => void;
 }) {
-    const [originalValue] = useState(value);
+    const [editor, setEditor] = useState<ConfigEditor | null>(null);
+    const [editorError, setEditorError] = useState('');
     const [enabled, setEnabled] = useState(value.enabled);
     const [optimization, setOptimization] = useState(value.promptOptimizationEnabled);
     const [defaultModelCode, setDefaultModelCode] = useState(value.defaultModelCode);
@@ -266,29 +271,45 @@ function ConfigPanel({
     const [termsEn, setTermsEn] = useState(value.termsEn);
     const [saveConfig, saveState] = useMutation(SAVE_IMAGE_GENERATION_CONFIG_MUTATION);
     const enabledModels = value.models.filter(model => model.enabled);
-    const validation =
+    const defaultModel = value.models.find(model => model.code === value.defaultModelCode);
+    const selectedModel =
+        editor?.kind === 'MODEL' ? value.models.find(model => model.id === editor.modelId) : undefined;
+    const serviceValidation =
         enabled && !enabledModels.length
             ? '启用图片工坊前至少需要启用一个模型'
             : enabled && !enabledModels.some(model => model.code === defaultModelCode)
               ? '默认模型必须处于启用状态'
-              : !termsVersion.trim()
-                ? '请填写条款版本'
-                : !termsZh.trim()
-                  ? '中文服务条款不能为空，英文会在后台补齐'
-                  : null;
-    const dirty =
+              : !value.termsVersion.trim() || !value.termsZh.trim()
+                ? '请先完成买家服务条款设置'
+                : null;
+    const termsValidation = !termsVersion.trim()
+        ? '请填写条款版本'
+        : !termsZh.trim()
+          ? '请填写中文服务条款，英文由系统自动维护'
+          : null;
+    const serviceDirty =
         enabled !== value.enabled ||
         optimization !== value.promptOptimizationEnabled ||
-        defaultModelCode !== value.defaultModelCode ||
-        termsVersion !== value.termsVersion ||
-        termsZh !== value.termsZh ||
-        termsEn !== value.termsEn;
-    const submit = async () => {
-        if (saveState.loading || validation) return;
+        defaultModelCode !== value.defaultModelCode;
+    const termsDirty =
+        termsVersion !== value.termsVersion || termsZh !== value.termsZh || termsEn !== value.termsEn;
+
+    const openEditor = (nextEditor: ConfigEditor) => {
+        setEditorError('');
+        setEnabled(value.enabled);
+        setOptimization(value.promptOptimizationEnabled);
+        setDefaultModelCode(value.defaultModelCode);
+        setTermsVersion(value.termsVersion);
+        setTermsZh(value.termsZh);
+        setTermsEn(value.termsEn);
+        setEditor(nextEditor);
+    };
+    const submit = async (message: string) => {
+        if (editor?.kind === 'SERVICE' ? serviceValidation : termsValidation) return;
         try {
             await saveConfig({
                 variables: {
-                    input: buildImageGenerationConfigInput(originalValue, {
+                    input: buildImageGenerationConfigInput(value, {
                         enabled,
                         promptOptimizationEnabled: optimization,
                         defaultModelCode,
@@ -298,158 +319,273 @@ function ConfigPanel({
                     }),
                 },
             });
-            await onSaved('中文已保存，英文待同步');
+            await onSaved(message);
+            setEditor(null);
         } catch (error) {
+            setEditorError(errorText(error));
             onError(error);
         }
     };
+
     return (
-        <div className="space-y-5">
-            <section className="rounded-xl border border-slate-200 bg-white p-5">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
+        <>
+            <div className="mx-auto w-full max-w-5xl space-y-4">
+                <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                    <div className="border-b border-slate-100 px-4 py-3.5 sm:px-5">
                         <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                            店铺服务开关
-                            <FeatureHelpButton topic="plugins.ai-settings" title="AI 店铺服务开关" />
+                            基础设置
+                            <FeatureHelpButton topic="plugins.ai-settings" title="基础设置" />
                         </h2>
-                        <p className="mt-1 text-[11px] text-slate-400">
-                            只有凭据健康且模型测试通过时，买家端才会真正开放
+                        <p className="mt-1 text-[11px] text-slate-500">
+                            先查看当前状态，需要调整时再从右侧打开设置。
                         </p>
                     </div>
-                    <button
-                        type="button"
-                        onClick={() => void submit()}
-                        disabled={saveState.loading || !dirty || Boolean(validation)}
-                        className="flex items-center gap-1.5 self-start rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
-                    >
-                        <Save className="h-3.5 w-3.5" />
-                        {saveState.loading ? '正在保存…' : '保存全局配置'}
-                    </button>
-                </div>
-                <div className="mt-4 grid gap-4 sm:grid-cols-3">
-                    <ToggleCard
-                        label="开放 AI 图片工坊"
-                        detail="控制买家端整个功能入口"
-                        value={enabled}
-                        onChange={setEnabled}
-                    />
-                    <ToggleCard
-                        label="提示词自动优化"
-                        detail="需要服务商的文本模型可用"
-                        value={optimization}
-                        onChange={setOptimization}
-                    />
-                    <Field label="默认生图模型">
-                        <select
-                            value={defaultModelCode}
-                            onChange={event => setDefaultModelCode(event.target.value)}
-                            className={inputClass}
+                    <div className="divide-y divide-slate-100">
+                        <ConfigSettingRow
+                            icon={Power}
+                            title="店铺服务开关"
+                            helpTitle="AI 店铺服务开关"
+                            description={
+                                '默认模型：' +
+                                (defaultModel?.displayNameZh || value.defaultModelCode || '未设置')
+                            }
+                            onOpen={() => openEditor({ kind: 'SERVICE' })}
                         >
-                            {value.models.map(model => (
-                                <option
-                                    key={model.code}
-                                    value={model.code}
-                                    disabled={enabled && !model.enabled}
-                                >
-                                    {model.displayNameZh} {model.enabled ? '' : '（已停用）'}
-                                </option>
-                            ))}
-                        </select>
-                    </Field>
-                </div>
-                {validation && <p className="mt-3 text-xs text-rose-600">{validation}</p>}
-                {!value.credentialEnabled && (
-                    <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-                        当前没有启用的平台服务商凭据，即使打开服务，买家端也不会展示可用模型。
+                            <StatusPill tone={value.enabled ? 'success' : 'neutral'}>
+                                {value.enabled ? '买家端已开放' : '买家端已关闭'}
+                            </StatusPill>
+                            <StatusPill tone={value.promptOptimizationEnabled ? 'info' : 'neutral'}>
+                                提示词优化{value.promptOptimizationEnabled ? '已开启' : '已关闭'}
+                            </StatusPill>
+                            {!value.credentialEnabled && (
+                                <StatusPill tone="warning">服务凭据未启用</StatusPill>
+                            )}
+                        </ConfigSettingRow>
+                        <ConfigSettingRow
+                            icon={FileText}
+                            title="买家服务条款与免责声明"
+                            helpTitle="买家服务条款与免责声明"
+                            description="条款版本会写入每个生图任务快照，便于后续审计。"
+                            onOpen={() => openEditor({ kind: 'TERMS' })}
+                        >
+                            <StatusPill tone="info">版本 {value.termsVersion || '未设置'}</StatusPill>
+                            <StatusPill tone={value.termsZh.trim() ? 'success' : 'warning'}>
+                                中文{value.termsZh.trim() ? '已配置' : '待配置'}
+                            </StatusPill>
+                            <StatusPill tone={value.termsEn.trim() ? 'success' : 'neutral'}>
+                                英文{value.termsEn.trim() ? '已配置' : '未配置'}
+                            </StatusPill>
+                        </ConfigSettingRow>
                     </div>
-                )}
-            </section>
-            <section>
-                <div className="mb-3">
-                    <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                        生图模型与单张定价
-                        <FeatureHelpButton topic="plugins.ai-settings" title="生图模型与单张定价" />
-                    </h2>
-                    <p className="mt-1 text-[11px] text-slate-400">
-                        价格按 Vendure 最小货币单位结算，不使用虚构“算力点”
-                    </p>
-                </div>
-                <div className="space-y-3">
-                    {value.models.map(model => (
-                        <ModelEditor
-                            key={`${model.id}-${model.healthStatus}-${model.lastTestedAt ?? ''}-${model.unitPrice}`}
-                            value={model}
-                            fallbackCurrency={currencyCode}
-                            onSaved={onSaved}
-                            onError={onError}
+                </section>
+
+                <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                    <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3.5 sm:px-5">
+                        <div>
+                            <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                                生图模型与单张定价
+                                <FeatureHelpButton topic="plugins.ai-settings" title="生图模型与单张定价" />
+                            </h2>
+                            <p className="mt-1 text-[11px] text-slate-500">
+                                每个模型单独设置，价格按 Vendure 货币单位结算。
+                            </p>
+                        </div>
+                        <span className="shrink-0 rounded-lg bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-600">
+                            {value.models.length} 个模型
+                        </span>
+                    </div>
+                    <div className="divide-y divide-slate-100">
+                        {value.models.map(model => (
+                            <ConfigSettingRow
+                                key={model.id}
+                                icon={ImageIcon}
+                                title={model.displayNameZh}
+                                description={
+                                    '官方标识 ' +
+                                    model.officialModelId +
+                                    ' · ' +
+                                    formatMoney(model.unitPrice, model.currencyCode || currencyCode) +
+                                    ' / 张'
+                                }
+                                onOpen={() => openEditor({ kind: 'MODEL', modelId: model.id })}
+                            >
+                                {model.isDefault && <StatusPill tone="info">默认模型</StatusPill>}
+                                <StatusPill tone={model.enabled ? 'success' : 'neutral'}>
+                                    {model.enabled ? '已开放' : '已停用'}
+                                </StatusPill>
+                                <HealthBadge status={model.healthStatus} />
+                                <span className="font-mono text-[10px] text-slate-400">{model.code}</span>
+                            </ConfigSettingRow>
+                        ))}
+                        {!value.models.length && (
+                            <div className="p-8 text-center text-xs text-slate-400">当前没有可配置模型</div>
+                        )}
+                    </div>
+                </section>
+            </div>
+
+            {editor?.kind === 'SERVICE' && (
+                <SettingsDrawer
+                    title="店铺服务开关"
+                    description="控制买家端入口、提示词优化与默认生图模型。"
+                    pending={saveState.loading}
+                    error={editorError}
+                    onClose={() => setEditor(null)}
+                    footer={
+                        <DrawerFooter
+                            dirty={serviceDirty}
+                            validation={serviceValidation}
+                            pending={saveState.loading}
+                            onClose={() => setEditor(null)}
+                            onSave={() => void submit('AI 图片工坊服务设置已保存')}
+                            saveLabel="保存服务设置"
                         />
-                    ))}
-                </div>
-            </section>
-            <section className="rounded-xl border border-slate-200 bg-white p-5">
-                <div>
-                    <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                        买家服务条款与免责声明
-                        <FeatureHelpButton topic="plugins.ai-settings" title="买家服务条款与免责声明" />
-                    </h2>
-                    <p className="mt-1 text-[11px] text-slate-400">
-                        条款版本将写入每个生图任务快照，用于后续审计
-                    </p>
-                </div>
-                <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                    <Field label="条款版本 *">
-                        <input
-                            value={termsVersion}
-                            onChange={event => setTermsVersion(event.target.value)}
-                            className={`${inputClass} font-mono`}
+                    }
+                >
+                    <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
+                        <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                            服务状态
+                            <FeatureHelpButton topic="plugins.ai-settings" title="服务状态" />
+                        </h3>
+                        <p className="mt-1 text-[11px] leading-5 text-slate-500">
+                            只有凭据健康且至少一个模型可用时，买家端才会真正开放。
+                        </p>
+                        <div className="mt-4 space-y-3">
+                            <ToggleCard
+                                label="开放 AI 图片工坊"
+                                detail="控制买家端整个功能入口"
+                                value={enabled}
+                                onChange={setEnabled}
+                            />
+                            <ToggleCard
+                                label="提示词自动优化"
+                                detail="需要服务商的文本模型可用"
+                                value={optimization}
+                                onChange={setOptimization}
+                            />
+                        </div>
+                    </section>
+                    <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
+                        <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                            默认生图模型
+                            <FeatureHelpButton topic="plugins.ai-settings" title="默认生图模型" />
+                        </h3>
+                        <p className="mt-1 text-[11px] leading-5 text-slate-500">
+                            新任务会优先使用这里选择且已启用的模型。
+                        </p>
+                        <div className="mt-4">
+                            <Field label="默认模型">
+                                <select
+                                    value={defaultModelCode}
+                                    onChange={event => setDefaultModelCode(event.target.value)}
+                                    className={inputClass}
+                                >
+                                    {value.models.map(model => (
+                                        <option
+                                            key={model.code}
+                                            value={model.code}
+                                            disabled={enabled && !model.enabled}
+                                        >
+                                            {model.displayNameZh} {model.enabled ? '' : '（已停用）'}
+                                        </option>
+                                    ))}
+                                </select>
+                            </Field>
+                        </div>
+                        {!value.credentialEnabled && (
+                            <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900">
+                                当前没有启用的平台服务商凭据，即使打开服务，买家端也不会展示可用模型。
+                            </div>
+                        )}
+                    </section>
+                </SettingsDrawer>
+            )}
+            {editor?.kind === 'TERMS' && (
+                <SettingsDrawer
+                    title="买家服务条款与免责声明"
+                    description="条款版本会写入每个生图任务快照，用于后续审计。"
+                    pending={saveState.loading}
+                    error={editorError}
+                    onClose={() => setEditor(null)}
+                    footer={
+                        <DrawerFooter
+                            dirty={termsDirty}
+                            validation={termsValidation}
+                            pending={saveState.loading}
+                            onClose={() => setEditor(null)}
+                            onSave={() => void submit('买家服务条款已保存')}
+                            saveLabel="保存服务条款"
                         />
-                    </Field>
-                    <div />
-                    <Field label="中文条款 *">
-                        <textarea
-                            rows={8}
-                            value={termsZh}
-                            onChange={event => setTermsZh(event.target.value)}
-                            className={`${inputClass} leading-6`}
-                        />
-                    </Field>
-                    <Field label="English terms *">
-                        <textarea
-                            rows={8}
-                            value={termsEn}
-                            onChange={event => setTermsEn(event.target.value)}
-                            className={`${inputClass} leading-6`}
-                        />
-                    </Field>
-                </div>
-                <div className="mt-4 flex justify-end">
-                    <button
-                        type="button"
-                        onClick={() => void submit()}
-                        disabled={saveState.loading || !dirty || Boolean(validation)}
-                        className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
-                    >
-                        <Save className="h-3.5 w-3.5" />
-                        保存条款与全局配置
-                    </button>
-                </div>
-            </section>
-        </div>
+                    }
+                >
+                    <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
+                        <Field label="条款版本 *">
+                            <input
+                                value={termsVersion}
+                                onChange={event => setTermsVersion(event.target.value)}
+                                className={inputClass + ' font-mono'}
+                            />
+                        </Field>
+                        <Field label="中文条款 *">
+                            <textarea
+                                rows={10}
+                                value={termsZh}
+                                onChange={event => setTermsZh(event.target.value)}
+                                className={inputClass + ' resize-y leading-6'}
+                            />
+                        </Field>
+                        <Field label="英文条款（自动生成，可选修改）">
+                            <textarea
+                                rows={10}
+                                value={termsEn}
+                                onChange={event => setTermsEn(event.target.value)}
+                                className={inputClass + ' resize-y leading-6'}
+                            />
+                        </Field>
+                    </section>
+                </SettingsDrawer>
+            )}
+            {editor?.kind === 'MODEL' && selectedModel && (
+                <ModelConfigDrawer
+                    key={
+                        selectedModel.id +
+                        '-' +
+                        selectedModel.healthStatus +
+                        '-' +
+                        (selectedModel.lastTestedAt ?? '') +
+                        '-' +
+                        selectedModel.unitPrice
+                    }
+                    value={selectedModel}
+                    fallbackCurrency={currencyCode}
+                    onSaved={onSaved}
+                    onError={error => {
+                        setEditorError(errorText(error));
+                        onError(error);
+                    }}
+                    error={editorError}
+                    onClose={() => setEditor(null)}
+                />
+            )}
+        </>
     );
 }
 
-function ModelEditor({
+function ModelConfigDrawer({
     value,
     fallbackCurrency,
     onSaved,
     onError,
+    error,
+    onClose,
 }: {
     value: ImageModelRecord;
     fallbackCurrency: string;
     onSaved: (message: string) => Promise<void>;
     onError: (error: unknown) => void;
+    error: string;
+    onClose: () => void;
 }) {
-    const [originalValue] = useState(value);
     const [enabled, setEnabled] = useState(value.enabled);
     const [nameZh, setNameZh] = useState(value.displayNameZh);
     const [nameEn, setNameEn] = useState(value.displayNameEn);
@@ -463,13 +599,15 @@ function ModelEditor({
     const [testModel, testState] = useMutation<{
         testImageModel: { ok: boolean; message: string; testedAt: string };
     }>(TEST_IMAGE_MODEL_MUTATION);
-    const [testResult, setTestResult] = useState<{ ok: boolean; message: string; testedAt: string } | null>(
-        null,
-    );
+    const [testResult, setTestResult] = useState<{
+        ok: boolean;
+        message: string;
+        testedAt: string;
+    } | null>(null);
     const currency = value.currencyCode || fallbackCurrency;
     const priceMoney = majorInputToMoney(unitPrice, currency);
     const validation = !nameZh.trim()
-        ? '中文模型名称不能为空，英文会在后台补齐'
+        ? '请填写中文模型名称，英文由系统自动维护'
         : !providerModelId.trim()
           ? '请填写服务商模型 ID'
           : priceMoney == null || (enabled && priceMoney <= 0)
@@ -486,11 +624,11 @@ function ModelEditor({
         priceMoney !== value.unitPrice ||
         Number(position) !== value.position;
     const submit = async () => {
-        if (saveState.loading || validation || priceMoney == null) return;
+        if (validation || priceMoney == null) return;
         try {
             await saveModel({
                 variables: {
-                    input: buildImageModelInput(originalValue, {
+                    input: buildImageModelInput(value, {
                         enabled,
                         displayNameZh: nameZh.trim(),
                         displayNameEn: nameEn.trim(),
@@ -504,8 +642,8 @@ function ModelEditor({
                     }),
                 },
             });
-            setTestResult(null);
-            await onSaved(`模型《${nameZh}》已保存`);
+            await onSaved('模型《' + nameZh + '》已保存');
+            onClose();
         } catch (error) {
             onError(error);
         }
@@ -514,141 +652,338 @@ function ModelEditor({
         try {
             const result = await testModel({ variables: { code: value.code } });
             if (result.data) setTestResult(result.data.testImageModel);
-            await onSaved(`模型《${value.displayNameZh}》健康检查已完成`);
+            await onSaved('模型《' + value.displayNameZh + '》健康检查已完成');
         } catch (error) {
             onError(error);
         }
     };
     const health = testResult ? (testResult.ok ? 'HEALTHY' : 'UNHEALTHY') : value.healthStatus;
+    const pending = saveState.loading || testState.loading;
+
     return (
-        <article className="rounded-xl border border-slate-200 bg-white p-5">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="text-sm font-bold text-slate-900">{value.displayNameZh}</h3>
-                        <span className="rounded bg-slate-100 px-2 py-0.5 font-mono text-[9px] text-slate-500">
-                            {value.code}
-                        </span>
-                        {value.isDefault && (
-                            <span className="rounded bg-blue-50 px-2 py-0.5 text-[9px] font-bold text-blue-700">
-                                默认
-                            </span>
-                        )}
-                        <HealthBadge status={health} />
-                    </div>
-                    <p className="mt-1 font-mono text-[10px] text-slate-400">
-                        官方标识 {value.officialModelId} · {formatMoney(value.unitPrice, currency)} / 张
+        <SettingsDrawer
+            title={'设置模型：' + value.displayNameZh}
+            description={'模型编码 ' + value.code + ' · 官方标识 ' + value.officialModelId}
+            pending={pending}
+            error={error}
+            onClose={onClose}
+            footer={
+                <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <p
+                        className={
+                            'min-w-0 text-xs ' +
+                            (validation ? 'text-rose-600' : dirty ? 'text-blue-700' : 'text-slate-500')
+                        }
+                    >
+                        {validation ?? (dirty ? '有未保存修改' : '没有待保存修改')}
                     </p>
-                    {(testResult?.message ?? value.healthMessage) && (
-                        <p className="mt-2 text-[11px] text-slate-500">
-                            {testResult?.message ?? value.healthMessage}
+                    <div className="flex shrink-0 flex-wrap justify-end gap-2">
+                        <button
+                            type="button"
+                            onClick={() => void test()}
+                            disabled={pending || dirty}
+                            title={dirty ? '请先保存模型变更' : undefined}
+                            className="flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-40"
+                        >
+                            <Activity className="h-3.5 w-3.5" />
+                            {testState.loading ? '测试中…' : '测试模型'}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            disabled={pending}
+                            className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-bold text-slate-700"
+                        >
+                            取消
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => void submit()}
+                            disabled={saveState.loading || !dirty || Boolean(validation)}
+                            className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
+                        >
+                            <Save className="h-3.5 w-3.5" />
+                            {saveState.loading ? '正在保存…' : '保存模型'}
+                        </button>
+                    </div>
+                </div>
+            }
+        >
+            <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
+                <div className="flex flex-wrap items-center gap-2">
+                    <HealthBadge status={health} />
+                    {value.isDefault && <StatusPill tone="info">默认模型</StatusPill>}
+                    <StatusPill tone={enabled ? 'success' : 'neutral'}>
+                        {enabled ? '向买家开放' : '未向买家开放'}
+                    </StatusPill>
+                </div>
+                {(testResult?.message ?? value.healthMessage) && (
+                    <p className="mt-3 text-xs leading-5 text-slate-500">
+                        {testResult?.message ?? value.healthMessage}
+                    </p>
+                )}
+            </section>
+            <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
+                <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                    模型名称与服务商
+                    <FeatureHelpButton topic="plugins.ai-settings" title="模型名称与服务商" />
+                </h3>
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                    <Field label="中文名称">
+                        <input
+                            value={nameZh}
+                            onChange={event => setNameZh(event.target.value)}
+                            className={inputClass}
+                        />
+                    </Field>
+                    <Field label="英文名称（自动生成，可选修改）">
+                        <input
+                            value={nameEn}
+                            onChange={event => setNameEn(event.target.value)}
+                            className={inputClass}
+                        />
+                    </Field>
+                    <Field label="服务商模型 ID">
+                        <input
+                            value={providerModelId}
+                            onChange={event => setProviderModelId(event.target.value)}
+                            className={inputClass + ' font-mono'}
+                        />
+                    </Field>
+                    <Field label="协议">
+                        <select
+                            value={protocol}
+                            onChange={event => setProtocol(event.target.value as ImageProviderProtocol)}
+                            className={inputClass}
+                        >
+                            {protocolOptions.map(item => (
+                                <option key={item} value={item}>
+                                    {item}
+                                </option>
+                            ))}
+                        </select>
+                    </Field>
+                </div>
+            </section>
+            <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
+                <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                    展示与定价
+                    <FeatureHelpButton topic="plugins.ai-settings" title="展示与定价" />
+                </h3>
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                    <Field label={'单张价格 (' + currency + ')'}>
+                        <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={unitPrice}
+                            onChange={event => setUnitPrice(event.target.value)}
+                            className={inputClass + ' font-mono'}
+                        />
+                    </Field>
+                    <Field label="排序">
+                        <input
+                            type="number"
+                            min="0"
+                            max="1000"
+                            value={position}
+                            onChange={event => setPosition(event.target.value)}
+                            className={inputClass}
+                        />
+                    </Field>
+                    <Field label="中文说明">
+                        <input
+                            value={descriptionZh}
+                            onChange={event => setDescriptionZh(event.target.value)}
+                            className={inputClass}
+                        />
+                    </Field>
+                    <Field label="英文说明（自动生成，可选修改）">
+                        <input
+                            value={descriptionEn}
+                            onChange={event => setDescriptionEn(event.target.value)}
+                            className={inputClass}
+                        />
+                    </Field>
+                </div>
+                <div className="mt-4">
+                    <ToggleCard
+                        label="向买家开放模型"
+                        detail="关闭后，新任务将不能选择这个模型。"
+                        value={enabled}
+                        onChange={setEnabled}
+                    />
+                </div>
+            </section>
+        </SettingsDrawer>
+    );
+}
+
+function ConfigSettingRow({
+    icon: Icon,
+    title,
+    helpTitle,
+    description,
+    onOpen,
+    children,
+}: {
+    icon: typeof Cpu;
+    title: string;
+    helpTitle?: string;
+    description: string;
+    onOpen: () => void;
+    children: React.ReactNode;
+}) {
+    return (
+        <article className="flex flex-col gap-4 px-4 py-4 transition-colors hover:bg-slate-50/70 sm:flex-row sm:items-center sm:px-5">
+            <div className="flex min-w-0 flex-1 items-start gap-3">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                    <Icon className="h-4 w-4" />
+                </span>
+                <div className="min-w-0">
+                    <h3 className="flex items-center gap-2 text-xs font-bold text-slate-900">
+                        {title}
+                        {helpTitle && <FeatureHelpButton topic="plugins.ai-settings" title={helpTitle} />}
+                    </h3>
+                    <p className="mt-1 break-words text-[11px] leading-5 text-slate-500">{description}</p>
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">{children}</div>
+                </div>
+            </div>
+            <button
+                type="button"
+                onClick={onOpen}
+                className="flex w-full shrink-0 items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 sm:w-auto"
+            >
+                <PanelRightOpen className="h-3.5 w-3.5" />
+                设置修改
+            </button>
+        </article>
+    );
+}
+
+function StatusPill({
+    tone,
+    children,
+}: {
+    tone: 'success' | 'warning' | 'info' | 'neutral';
+    children: React.ReactNode;
+}) {
+    const classes = {
+        success: 'bg-emerald-50 text-emerald-700',
+        warning: 'bg-amber-50 text-amber-700',
+        info: 'bg-blue-50 text-blue-700',
+        neutral: 'bg-slate-100 text-slate-600',
+    }[tone];
+    return <span className={'rounded px-2 py-0.5 text-[9px] font-bold ' + classes}>{children}</span>;
+}
+
+function SettingsDrawer({
+    title,
+    description,
+    pending,
+    error,
+    onClose,
+    footer,
+    children,
+}: {
+    title: string;
+    description: string;
+    pending: boolean;
+    error?: string;
+    onClose: () => void;
+    footer: React.ReactNode;
+    children: React.ReactNode;
+}) {
+    return (
+        <AccessibleDialogSurface
+            accessibleName={title}
+            onRequestClose={() => {
+                if (!pending) onClose();
+            }}
+            onMouseDown={event => {
+                if (!pending && event.target === event.currentTarget) onClose();
+            }}
+            className="fixed inset-0 z-50 flex justify-end bg-slate-950/45 backdrop-blur-xs"
+        >
+            <div className="flex h-full w-full max-w-2xl flex-col bg-slate-50 shadow-2xl">
+                <header className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-200 bg-white px-5 py-4 sm:px-6">
+                    <div className="min-w-0">
+                        <h2 className="text-base font-bold text-slate-900">{title}</h2>
+                        <p className="mt-1 text-xs leading-5 text-slate-500">{description}</p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        disabled={pending}
+                        aria-label={'关闭' + title}
+                        className="shrink-0 rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
+                    >
+                        <X className="h-5 w-5" />
+                    </button>
+                </header>
+                <div className="flex-1 space-y-4 overflow-y-auto p-4 sm:p-6">
+                    {error && (
+                        <p
+                            role="alert"
+                            className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs leading-5 text-rose-800"
+                        >
+                            {error}
                         </p>
                     )}
+                    {children}
                 </div>
-                <div className="flex gap-2">
-                    <button
-                        type="button"
-                        onClick={() => void test()}
-                        disabled={testState.loading || dirty}
-                        title={dirty ? '请先保存模型变更' : undefined}
-                        className="flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-2 text-[11px] font-bold text-slate-700 disabled:opacity-40"
-                    >
-                        <Activity className="h-3.5 w-3.5" />
-                        测试
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => void submit()}
-                        disabled={saveState.loading || !dirty || Boolean(validation)}
-                        className="flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-2 text-[11px] font-bold text-white disabled:opacity-50"
-                    >
-                        <Save className="h-3.5 w-3.5" />
-                        保存
-                    </button>
-                </div>
+                <footer className="shrink-0 border-t border-slate-200 bg-white px-4 py-3 sm:px-6">
+                    {footer}
+                </footer>
             </div>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                <Field label="中文名称">
-                    <input
-                        value={nameZh}
-                        onChange={event => setNameZh(event.target.value)}
-                        className={inputClass}
-                    />
-                </Field>
-                <Field label="English name">
-                    <input
-                        value={nameEn}
-                        onChange={event => setNameEn(event.target.value)}
-                        className={inputClass}
-                    />
-                </Field>
-                <Field label="服务商模型 ID">
-                    <input
-                        value={providerModelId}
-                        onChange={event => setProviderModelId(event.target.value)}
-                        className={`${inputClass} font-mono`}
-                    />
-                </Field>
-                <Field label="协议">
-                    <select
-                        value={protocol}
-                        onChange={event => setProtocol(event.target.value as ImageProviderProtocol)}
-                        className={inputClass}
-                    >
-                        {protocolOptions.map(item => (
-                            <option key={item} value={item}>
-                                {item}
-                            </option>
-                        ))}
-                    </select>
-                </Field>
-                <Field label={`单张价格 (${currency})`}>
-                    <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={unitPrice}
-                        onChange={event => setUnitPrice(event.target.value)}
-                        className={`${inputClass} font-mono`}
-                    />
-                </Field>
-                <Field label="排序">
-                    <input
-                        type="number"
-                        min="0"
-                        max="1000"
-                        value={position}
-                        onChange={event => setPosition(event.target.value)}
-                        className={inputClass}
-                    />
-                </Field>
-                <Field label="中文说明">
-                    <input
-                        value={descriptionZh}
-                        onChange={event => setDescriptionZh(event.target.value)}
-                        className={inputClass}
-                    />
-                </Field>
-                <Field label="English description">
-                    <input
-                        value={descriptionEn}
-                        onChange={event => setDescriptionEn(event.target.value)}
-                        className={inputClass}
-                    />
-                </Field>
+        </AccessibleDialogSurface>
+    );
+}
+
+function DrawerFooter({
+    dirty,
+    validation,
+    pending,
+    onClose,
+    onSave,
+    saveLabel,
+}: {
+    dirty: boolean;
+    validation: string | null;
+    pending: boolean;
+    onClose: () => void;
+    onSave: () => void;
+    saveLabel: string;
+}) {
+    return (
+        <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p
+                className={
+                    'text-xs ' + (validation ? 'text-rose-600' : dirty ? 'text-blue-700' : 'text-slate-500')
+                }
+            >
+                {validation ?? (dirty ? '有未保存修改' : '没有待保存修改')}
+            </p>
+            <div className="flex shrink-0 justify-end gap-2">
+                <button
+                    type="button"
+                    onClick={onClose}
+                    disabled={pending}
+                    className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-bold text-slate-700"
+                >
+                    取消
+                </button>
+                <button
+                    type="button"
+                    onClick={onSave}
+                    disabled={pending || !dirty || Boolean(validation)}
+                    className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
+                >
+                    <Save className="h-3.5 w-3.5" />
+                    {pending ? '正在保存…' : saveLabel}
+                </button>
             </div>
-            <div className="mt-3 flex items-center justify-between">
-                <label className="flex items-center gap-2 text-xs font-bold text-slate-700">
-                    <input
-                        type="checkbox"
-                        checked={enabled}
-                        onChange={event => setEnabled(event.target.checked)}
-                    />
-                    向买家开放模型
-                </label>
-                {validation && <p className="text-[10px] text-rose-600">{validation}</p>}
-            </div>
-        </article>
+        </div>
     );
 }
 
