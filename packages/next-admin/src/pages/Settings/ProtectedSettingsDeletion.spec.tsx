@@ -133,6 +133,7 @@ describe('protected settings deletion', () => {
             root.render(
                 <ConfirmDialogContext.Provider value={requestConfirmation}>
                     <PaymentShippingManager
+                        section="payment"
                         data={storeManagementData}
                         paymentMethodCustomFields={[]}
                         shippingMethodCustomFields={[]}
@@ -143,11 +144,31 @@ describe('protected settings deletion', () => {
             );
         });
 
-        for (const label of ['删除支付方式银行卡', '删除配送方式全马配送']) {
-            const button = container.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
-            expect(button, label).not.toBeNull();
-            await act(async () => button?.dispatchEvent(new MouseEvent('click', { bubbles: true })));
-        }
+        const paymentButton = container.querySelector<HTMLButtonElement>(
+            'button[aria-label="删除支付方式银行卡"]',
+        );
+        expect(paymentButton).not.toBeNull();
+        await act(async () => paymentButton?.dispatchEvent(new MouseEvent('click', { bubbles: true })));
+
+        await act(async () => {
+            root.render(
+                <ConfirmDialogContext.Provider value={requestConfirmation}>
+                    <PaymentShippingManager
+                        section="shipping"
+                        data={storeManagementData}
+                        paymentMethodCustomFields={[]}
+                        shippingMethodCustomFields={[]}
+                        onChanged={async () => undefined}
+                        onError={() => undefined}
+                    />
+                </ConfirmDialogContext.Provider>,
+            );
+        });
+        const shippingButton = container.querySelector<HTMLButtonElement>(
+            'button[aria-label="删除配送方式全马配送"]',
+        );
+        expect(shippingButton).not.toBeNull();
+        await act(async () => shippingButton?.dispatchEvent(new MouseEvent('click', { bubbles: true })));
 
         expect(requestConfirmation).toHaveBeenCalledTimes(2);
         for (const [options] of requestConfirmation.mock.calls) {

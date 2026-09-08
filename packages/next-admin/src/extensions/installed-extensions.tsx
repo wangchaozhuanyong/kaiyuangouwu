@@ -22,7 +22,7 @@ import { routeModuleLoaders } from '../route-modules';
 
 import { defineNextAdminExtension } from './extension-api';
 
-export const STORE_CURRENCY_COMPATIBILITY_TARGET = '/settings/store-profile?tab=payment-shipping';
+export const STORE_CURRENCY_COMPATIBILITY_TARGET = '/settings/store-profile?tab=payment';
 
 const AiImageSettingsModule = lazy(() =>
     routeModuleLoaders.aiImageSettings().then(module => ({

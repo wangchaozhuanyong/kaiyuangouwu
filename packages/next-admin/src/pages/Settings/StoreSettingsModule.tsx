@@ -8,6 +8,7 @@ import {
     ReceiptText,
     RefreshCw,
     Store,
+    Truck,
     WalletCards,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -161,7 +162,7 @@ export function StoreSettingsModule() {
                             <FeatureHelpButton topic="settings.store-profile" title="店铺综合设置" />
                         </h1>
                         <p className="mt-1 text-xs text-slate-500">
-                            店铺、域名、商家、支付交付及平台业务基础配置集中管理
+                            店铺、域名、商家、支付、配送及平台业务基础配置集中管理
                         </p>
                     </div>
                     <div className="flex gap-2">
@@ -220,11 +221,18 @@ export function StoreSettingsModule() {
                             商家主体
                         </TabButton>
                         <TabButton
-                            active={tab === 'PAYMENT_SHIPPING'}
-                            onClick={() => setTab('PAYMENT_SHIPPING')}
+                            active={tab === 'PAYMENT'}
+                            onClick={() => setTab('PAYMENT')}
                             icon={<CreditCard className="h-3.5 w-3.5" />}
                         >
-                            支付与交付
+                            支付
+                        </TabButton>
+                        <TabButton
+                            active={tab === 'SHIPPING'}
+                            onClick={() => setTab('SHIPPING')}
+                            icon={<Truck className="h-3.5 w-3.5" />}
+                        >
+                            配送
                         </TabButton>
                         {canReadFinance && (
                             <TabButton
@@ -307,8 +315,10 @@ export function StoreSettingsModule() {
                                 onError={setActionError}
                             />
                         )}
-                        {tab === 'PAYMENT_SHIPPING' && (
+                        {(tab === 'PAYMENT' || tab === 'SHIPPING') && (
                             <PaymentShippingManager
+                                key={tab}
+                                section={tab === 'PAYMENT' ? 'payment' : 'shipping'}
                                 data={initializedStoreSettings}
                                 paymentMethodCustomFields={paymentMethodCustomFields}
                                 shippingMethodCustomFields={shippingMethodCustomFields}
