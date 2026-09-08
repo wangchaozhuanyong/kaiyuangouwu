@@ -121,7 +121,7 @@ function StorefrontClientPluginPage() {
     }, [activeChannel?.id, contentQuery.isError, contentQuery.isPending, pluginBlock]);
 
     const saveMutation = useMutation({
-        mutationFn: async (block: ContentBlock) => {
+        mutationFn: (block: ContentBlock) => {
             const input = clientPluginBlockInput(block);
             return block.id
                 ? api.mutate(updateStorefrontContentBlockMutation, {
