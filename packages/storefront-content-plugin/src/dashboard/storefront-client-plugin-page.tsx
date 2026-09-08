@@ -205,12 +205,12 @@ function StorefrontClientPluginPage() {
                     ) : null}
 
                     {contentQuery.isPending || (!draft && !contentQuery.isError) ? (
-                        <div className="grid gap-4 md:grid-cols-2" aria-busy="true">
+                        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6" aria-busy="true">
                             <Skeleton className="h-44 w-full" />
                             <Skeleton className="h-44 w-full" />
                         </div>
                     ) : (
-                        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
                             {clientPluginCatalog.map(definition => (
                                 <PluginCatalogCard
                                     key={definition.code}
@@ -256,9 +256,9 @@ function StorefrontClientPluginPage() {
                             </span>
                         </div>
                     ) : (
-                        <div className="space-y-3">
+                        <div className="grid gap-3 2xl:grid-cols-2">
                             {!valid ? (
-                                <Alert variant="destructive">
+                                <Alert variant="destructive" className="2xl:col-span-2">
                                     <AlertDescription>
                                         插件配置不完整，请选择有效位置；使用“指定分类”时至少选择一个分类。
                                     </AlertDescription>
