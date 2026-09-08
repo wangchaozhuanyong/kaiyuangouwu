@@ -387,6 +387,7 @@ export function PaymentShippingManager({
                         <div className="border-b border-slate-100 p-5">
                             <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                                 <Truck className="h-4 w-4 text-blue-600" /> 配送方式
+                                <FeatureHelpButton topic="settings.payment-shipping" title="配送方式" />
                             </h2>
                             <p className="mt-1 text-xs text-slate-400">
                                 管理资格检查器、运费计算器和履约处理器
