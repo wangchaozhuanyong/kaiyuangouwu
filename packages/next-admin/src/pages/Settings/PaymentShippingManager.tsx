@@ -91,12 +91,14 @@ function TestPaymentAvailabilityNotice({
 }
 
 export function PaymentShippingManager({
+    section,
     data,
     paymentMethodCustomFields,
     shippingMethodCustomFields,
     onChanged,
     onError,
 }: {
+    section: 'payment' | 'shipping';
     data: StoreManagementResult;
     paymentMethodCustomFields: CustomFieldDefinition[];
     shippingMethodCustomFields: CustomFieldDefinition[];
@@ -180,126 +182,139 @@ export function PaymentShippingManager({
     const testMethod = data.paymentMethods.items.find(item => item.handler.code === testPaymentHandler);
     return (
         <>
-            <div className={`grid gap-4 ${commerceMode === 'DIGITAL_ONLY' ? '' : 'xl:grid-cols-2'}`}>
-                <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-                    <div className="flex items-start justify-between gap-3 border-b border-slate-100 p-5">
-                        <div>
-                            <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                                <CreditCard className="h-4 w-4 text-blue-600" /> 支付方式
-                                <FeatureHelpButton topic="settings.payment-shipping" title="支付方式" />
-                            </h2>
-                            <p className="mt-1 text-xs text-slate-400">
-                                管理名称、处理器、资格检查器与启停状态
-                            </p>
+            <div className="space-y-4">
+                {section === 'payment' && (
+                    <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                        <div className="flex items-start justify-between gap-3 border-b border-slate-100 p-5">
+                            <div>
+                                <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                                    <CreditCard className="h-4 w-4 text-blue-600" /> 支付方式
+                                    <FeatureHelpButton topic="settings.payment-shipping" title="支付方式" />
+                                </h2>
+                                <p className="mt-1 text-xs text-slate-400">
+                                    管理名称、处理器、资格检查器与启停状态
+                                </p>
+                            </div>
+                            {canCreatePayment && (
+                                <button
+                                    type="button"
+                                    onClick={() => setEditor({ kind: 'payment' })}
+                                    className={primaryButton}
+                                >
+                                    <Plus className="h-3.5 w-3.5" /> 新增
+                                </button>
+                            )}
                         </div>
-                        {canCreatePayment && (
-                            <button
-                                type="button"
-                                onClick={() => setEditor({ kind: 'payment' })}
-                                className={primaryButton}
-                            >
-                                <Plus className="h-3.5 w-3.5" /> 新增
-                            </button>
-                        )}
-                    </div>
-                    <div className="px-5 pt-4 empty:hidden">
-                        <TestPaymentAvailabilityNotice
-                            definitions={data.paymentMethodHandlers}
-                            onConfigure={
-                                (testMethod ? canUpdatePayment : canCreatePayment)
-                                    ? () =>
-                                          setEditor({ kind: 'payment', item: testMethod, testPayment: true })
-                                    : undefined
-                            }
-                        />
-                    </div>
-                    <div className="divide-y divide-slate-100">
-                        {data.paymentMethods.items.map(item => {
-                            const systemManaged = isSystemManagedUsdtPaymentMethod(item);
-                            return (
-                                <div key={item.id} className="flex items-center justify-between gap-4 p-5">
-                                    <div className="min-w-0">
-                                        <div className="flex flex-wrap items-center gap-2">
-                                            <strong className="text-xs text-slate-900">{item.name}</strong>
+                        <div className="px-5 pt-4 empty:hidden">
+                            <TestPaymentAvailabilityNotice
+                                definitions={data.paymentMethodHandlers}
+                                onConfigure={
+                                    (testMethod ? canUpdatePayment : canCreatePayment)
+                                        ? () =>
+                                              setEditor({
+                                                  kind: 'payment',
+                                                  item: testMethod,
+                                                  testPayment: true,
+                                              })
+                                        : undefined
+                                }
+                            />
+                        </div>
+                        <div className="divide-y divide-slate-100">
+                            {data.paymentMethods.items.map(item => {
+                                const systemManaged = isSystemManagedUsdtPaymentMethod(item);
+                                return (
+                                    <div
+                                        key={item.id}
+                                        className="flex items-center justify-between gap-4 p-5"
+                                    >
+                                        <div className="min-w-0">
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <strong className="text-xs text-slate-900">
+                                                    {item.name}
+                                                </strong>
+                                                {systemManaged && (
+                                                    <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[9px] font-bold text-emerald-700">
+                                                        系统管理
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <p className="mt-1 font-mono text-[9px] text-slate-400">
+                                                {item.code} · {item.handler.code}
+                                            </p>
+                                            {item.description && (
+                                                <p className="mt-1 line-clamp-2 text-[10px] text-slate-500">
+                                                    {item.description}
+                                                </p>
+                                            )}
                                             {systemManaged && (
-                                                <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[9px] font-bold text-emerald-700">
-                                                    系统管理
-                                                </span>
+                                                <p className="mt-1 text-[10px] text-emerald-700">
+                                                    由下方 USDT 收款地址审核状态自动启停和分配。
+                                                </p>
                                             )}
                                         </div>
-                                        <p className="mt-1 font-mono text-[9px] text-slate-400">
-                                            {item.code} · {item.handler.code}
-                                        </p>
-                                        {item.description && (
-                                            <p className="mt-1 line-clamp-2 text-[10px] text-slate-500">
-                                                {item.description}
-                                            </p>
-                                        )}
-                                        {systemManaged && (
-                                            <p className="mt-1 text-[10px] text-emerald-700">
-                                                由下方 USDT 收款地址审核状态自动启停和分配。
-                                            </p>
-                                        )}
-                                    </div>
-                                    <div className="flex shrink-0 items-center gap-2">
-                                        {systemManaged ? (
-                                            <span className="text-[10px] font-bold text-slate-500">
-                                                {item.enabled ? '已启用' : '等待系统启用'}
-                                            </span>
-                                        ) : (
-                                            <>
-                                                {canUpdatePayment && (
-                                                    <label className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500">
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={item.enabled}
-                                                            onChange={event =>
-                                                                void changePayment(
-                                                                    item.id,
-                                                                    event.target.checked,
-                                                                )
+                                        <div className="flex shrink-0 items-center gap-2">
+                                            {systemManaged ? (
+                                                <span className="text-[10px] font-bold text-slate-500">
+                                                    {item.enabled ? '已启用' : '等待系统启用'}
+                                                </span>
+                                            ) : (
+                                                <>
+                                                    {canUpdatePayment && (
+                                                        <label className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={item.enabled}
+                                                                onChange={event =>
+                                                                    void changePayment(
+                                                                        item.id,
+                                                                        event.target.checked,
+                                                                    )
+                                                                }
+                                                                disabled={toggleState.loading}
+                                                            />
+                                                            {item.enabled ? '启用' : '停用'}
+                                                        </label>
+                                                    )}
+                                                    {canUpdatePayment && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() =>
+                                                                setEditor({ kind: 'payment', item })
                                                             }
-                                                            disabled={toggleState.loading}
-                                                        />
-                                                        {item.enabled ? '启用' : '停用'}
-                                                    </label>
-                                                )}
-                                                {canUpdatePayment && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setEditor({ kind: 'payment', item })}
-                                                        className="rounded-md p-1.5 text-blue-600 hover:bg-blue-50"
-                                                        aria-label={`编辑支付方式${item.name}`}
-                                                    >
-                                                        <Pencil className="h-3.5 w-3.5" />
-                                                    </button>
-                                                )}
-                                                {canDeletePayment && (
-                                                    <button
-                                                        type="button"
-                                                        disabled={deleting}
-                                                        onClick={() =>
-                                                            void removeMethod({ kind: 'payment', item })
-                                                        }
-                                                        className="rounded-md p-1.5 text-rose-600 hover:bg-rose-50"
-                                                        aria-label={`删除支付方式${item.name}`}
-                                                    >
-                                                        <Trash2 className="h-3.5 w-3.5" />
-                                                    </button>
-                                                )}
-                                            </>
-                                        )}
+                                                            className="rounded-md p-1.5 text-blue-600 hover:bg-blue-50"
+                                                            aria-label={`编辑支付方式${item.name}`}
+                                                        >
+                                                            <Pencil className="h-3.5 w-3.5" />
+                                                        </button>
+                                                    )}
+                                                    {canDeletePayment && (
+                                                        <button
+                                                            type="button"
+                                                            disabled={deleting}
+                                                            onClick={() =>
+                                                                void removeMethod({ kind: 'payment', item })
+                                                            }
+                                                            className="rounded-md p-1.5 text-rose-600 hover:bg-rose-50"
+                                                            aria-label={`删除支付方式${item.name}`}
+                                                        >
+                                                            <Trash2 className="h-3.5 w-3.5" />
+                                                        </button>
+                                                    )}
+                                                </>
+                                            )}
+                                        </div>
                                     </div>
-                                </div>
-                            );
-                        })}
-                        {!data.paymentMethods.items.length && (
-                            <div className="p-10 text-center text-xs text-slate-400">未配置支付方式</div>
-                        )}
-                    </div>
-                </section>
+                                );
+                            })}
+                            {!data.paymentMethods.items.length && (
+                                <div className="p-10 text-center text-xs text-slate-400">未配置支付方式</div>
+                            )}
+                        </div>
+                    </section>
+                )}
 
-                {commerceMode !== 'DIGITAL_ONLY' && (
+                {section === 'shipping' && commerceMode !== 'DIGITAL_ONLY' && (
                     <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
                         <div className="flex items-start justify-between gap-3 border-b border-slate-100 p-5">
                             <div>
@@ -367,8 +382,26 @@ export function PaymentShippingManager({
                         </div>
                     </section>
                 )}
+                {section === 'shipping' && commerceMode === 'DIGITAL_ONLY' && (
+                    <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                        <div className="border-b border-slate-100 p-5">
+                            <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                                <Truck className="h-4 w-4 text-blue-600" /> 配送方式
+                                <FeatureHelpButton topic="settings.payment-shipping" title="配送方式" />
+                            </h2>
+                            <p className="mt-1 text-xs text-slate-400">
+                                管理资格检查器、运费计算器和履约处理器
+                            </p>
+                        </div>
+                        <div className="p-10 text-center text-xs text-slate-400">
+                            当前为纯数字商品模式，无需配置配送方式
+                        </div>
+                    </section>
+                )}
             </div>
-            <UsdtPaymentSetupPanel key={data.activeChannel.id} onChanged={onChanged} onError={onError} />
+            {section === 'payment' && (
+                <UsdtPaymentSetupPanel key={data.activeChannel.id} onChanged={onChanged} onError={onError} />
+            )}
             {editor && (
                 <MethodEditorDialog
                     state={editor}

@@ -1,15 +1,5 @@
 import { useQuery } from '@apollo/client/react';
-import {
-    Building2,
-    CircleDollarSign,
-    CreditCard,
-    Globe2,
-    Plus,
-    ReceiptText,
-    RefreshCw,
-    Store,
-    WalletCards,
-} from 'lucide-react';
+import { Plus, RefreshCw, Store } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 
@@ -26,7 +16,6 @@ import {
     ErrorState,
     Message,
     SettingsContentSkeleton,
-    TabButton,
     inputClass,
     mergeById,
     primaryButton,
@@ -47,6 +36,7 @@ import {
 } from './StoreDialogs';
 import { CurrencyAndRatesPanel, StoreUsdtPanel } from './StoreFinancePanel';
 import { CommerceModePanel, DomainsPanel, SellersPanel, StoresPanel } from './StorePanels';
+import { StoreSettingsNavigation } from './StoreSettingsNavigation';
 
 const directoryOptions = (skip: number) => ({ skip, take: 100, sort: dataTableSortPolicy.newestCreated });
 
@@ -161,7 +151,7 @@ export function StoreSettingsModule() {
                             <FeatureHelpButton topic="settings.store-profile" title="店铺综合设置" />
                         </h1>
                         <p className="mt-1 text-xs text-slate-500">
-                            店铺、域名、商家、支付交付及平台业务基础配置集中管理
+                            店铺、域名、商家、支付、配送及平台业务基础配置集中管理
                         </p>
                     </div>
                     <div className="flex gap-2">
@@ -197,63 +187,12 @@ export function StoreSettingsModule() {
                     </Message>
                 )}
                 <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-                    <div className="scrollbar-hidden flex w-max max-w-full overflow-x-auto rounded-lg border border-slate-200 bg-white p-1">
-                        <TabButton
-                            active={tab === 'STORES'}
-                            onClick={() => setTab('STORES')}
-                            icon={<Store className="h-3.5 w-3.5" />}
-                        >
-                            店铺实例
-                        </TabButton>
-                        <TabButton
-                            active={tab === 'DOMAINS'}
-                            onClick={() => setTab('DOMAINS')}
-                            icon={<Globe2 className="h-3.5 w-3.5" />}
-                        >
-                            独立域名
-                        </TabButton>
-                        <TabButton
-                            active={tab === 'SELLERS'}
-                            onClick={() => setTab('SELLERS')}
-                            icon={<Building2 className="h-3.5 w-3.5" />}
-                        >
-                            商家主体
-                        </TabButton>
-                        <TabButton
-                            active={tab === 'PAYMENT_SHIPPING'}
-                            onClick={() => setTab('PAYMENT_SHIPPING')}
-                            icon={<CreditCard className="h-3.5 w-3.5" />}
-                        >
-                            支付与交付
-                        </TabButton>
-                        {canReadFinance && (
-                            <TabButton
-                                active={tab === 'CURRENCY'}
-                                onClick={() => setTab('CURRENCY')}
-                                icon={<CircleDollarSign className="h-3.5 w-3.5" />}
-                            >
-                                币种与汇率
-                            </TabButton>
-                        )}
-                        {canReadFinance && (
-                            <TabButton
-                                active={tab === 'USDT'}
-                                onClick={() => setTab('USDT')}
-                                icon={<WalletCards className="h-3.5 w-3.5" />}
-                            >
-                                USDT 收款
-                            </TabButton>
-                        )}
-                        {canReadBusinessSettings && (
-                            <TabButton
-                                active={tab === 'BUSINESS'}
-                                onClick={() => setTab('BUSINESS')}
-                                icon={<ReceiptText className="h-3.5 w-3.5" />}
-                            >
-                                业务基础
-                            </TabButton>
-                        )}
-                    </div>
+                    <StoreSettingsNavigation
+                        tab={tab}
+                        onTabChange={setTab}
+                        canReadFinance={canReadFinance}
+                        canReadBusinessSettings={canReadBusinessSettings}
+                    />
                     {tab === 'DOMAINS' && profiles.length > 0 && (
                         <select
                             value={selectedProfile?.id ?? ''}
@@ -307,8 +246,10 @@ export function StoreSettingsModule() {
                                 onError={setActionError}
                             />
                         )}
-                        {tab === 'PAYMENT_SHIPPING' && (
+                        {(tab === 'PAYMENT' || tab === 'SHIPPING') && (
                             <PaymentShippingManager
+                                key={tab}
+                                section={tab === 'PAYMENT' ? 'payment' : 'shipping'}
                                 data={initializedStoreSettings}
                                 paymentMethodCustomFields={paymentMethodCustomFields}
                                 shippingMethodCustomFields={shippingMethodCustomFields}

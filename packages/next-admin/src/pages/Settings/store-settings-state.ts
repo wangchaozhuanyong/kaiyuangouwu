@@ -5,13 +5,16 @@ import { useCustomFieldDefinitions } from '../../custom-fields/custom-fields-con
 import { STORE_MANAGEMENT_QUERY, type StoreManagementResult } from '../../graphql/management.graphql';
 
 export type StoreSettingsTab =
-    'STORES' | 'DOMAINS' | 'SELLERS' | 'PAYMENT_SHIPPING' | 'BUSINESS' | 'CURRENCY' | 'USDT';
+    'STORES' | 'DOMAINS' | 'SELLERS' | 'PAYMENT' | 'SHIPPING' | 'BUSINESS' | 'CURRENCY' | 'USDT';
 
 export const STORE_SETTINGS_TABS = {
     stores: 'STORES',
     domains: 'DOMAINS',
     sellers: 'SELLERS',
-    'payment-shipping': 'PAYMENT_SHIPPING',
+    payment: 'PAYMENT',
+    shipping: 'SHIPPING',
+    // Preserve existing bookmarks while the combined page is split into two tabs.
+    'payment-shipping': 'PAYMENT',
     business: 'BUSINESS',
     currency: 'CURRENCY',
     usdt: 'USDT',

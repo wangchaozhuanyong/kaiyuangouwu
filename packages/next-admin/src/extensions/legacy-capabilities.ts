@@ -89,7 +89,7 @@ export const LEGACY_ROUTE_CAPABILITIES: LegacyRouteCapability[] = [
     {
         id: 'store-currency-settings',
         legacyPath: '/store-currency-settings',
-        target: '/settings/store-profile?tab=payment-shipping',
+        target: '/settings/store-profile?tab=payment',
         status: 'MIGRATED',
     },
     {
@@ -238,7 +238,7 @@ export const NATIVE_PARITY_CAPABILITIES = [
     { id: 'product-variant-multi-currency-prices', route: '/catalog/products/:id', status: 'MIGRATED' },
     { id: 'product-bulk-channel-operations', route: '/catalog/list', status: 'MIGRATED' },
     { id: 'collection-filter-rules-preview', route: '/catalog/categories', status: 'MIGRATED' },
-    { id: 'shipping-method-test', route: '/settings/store-profile?tab=payment-shipping', status: 'MIGRATED' },
+    { id: 'shipping-method-test', route: '/settings/store-profile?tab=shipping', status: 'MIGRATED' },
     {
         id: 'api-key-name-role-custom-fields-editor',
         route: '/settings/system-ops?tab=api-keys',
@@ -257,12 +257,12 @@ export const NATIVE_PARITY_CAPABILITIES = [
     { id: 'dynamic-custom-fields-collection', route: '/catalog/categories', status: 'MIGRATED' },
     {
         id: 'dynamic-custom-fields-payment-method',
-        route: '/settings/store-profile?tab=payment-shipping',
+        route: '/settings/store-profile?tab=payment',
         status: 'MIGRATED',
     },
     {
         id: 'dynamic-custom-fields-shipping-method',
-        route: '/settings/store-profile?tab=payment-shipping',
+        route: '/settings/store-profile?tab=shipping',
         status: 'MIGRATED',
     },
     { id: 'dynamic-custom-fields-seller', route: '/settings/store-profile?tab=sellers', status: 'MIGRATED' },

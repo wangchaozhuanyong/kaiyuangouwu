@@ -89,6 +89,6 @@ describe('installed next-admin extensions', () => {
     });
 
     it('routes the legacy store currency entry to the USDT payment setup tab', () => {
-        expect(STORE_CURRENCY_COMPATIBILITY_TARGET).toBe('/settings/store-profile?tab=payment-shipping');
+        expect(STORE_CURRENCY_COMPATIBILITY_TARGET).toBe('/settings/store-profile?tab=payment');
     });
 });
