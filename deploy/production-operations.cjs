@@ -43,6 +43,7 @@ function validateRequest(environment) {
             'verify-security-dependencies',
             'inspect-storefront-config',
             'preflight-release',
+            'postflight-release',
         ].includes(operation),
         'Unsupported production operation',
     );
@@ -60,8 +61,12 @@ function validateRequest(environment) {
             /^[a-z0-9_][a-z0-9_-]*(,[a-z0-9_][a-z0-9_-]*)*$/u.test(expectedChannelCodes),
         'Invalid expected Channel codes',
     );
-    if (operation !== 'preflight-release') {
-        assert.equal(expectedChannelCodes, '', 'Expected Channel codes are only valid for release preflight');
+    if (!['preflight-release', 'postflight-release'].includes(operation)) {
+        assert.equal(
+            expectedChannelCodes,
+            '',
+            'Expected Channel codes are only valid for release validation',
+        );
     }
     return {
         operation,
@@ -302,6 +307,33 @@ function storefrontInspectionFailure(result) {
 
 function runLocked(environment = process.env) {
     const request = validateRequest(environment);
+    if (request.operation === 'postflight-release') {
+        const plan = inspectProductionReleases();
+        assert.equal(
+            plan.markerSha,
+            request.sourceSha,
+            'Post-deploy acceptance requires the exact running SHA',
+        );
+        const storefront = spawnSync(
+            '/usr/bin/node',
+            [
+                '--env-file=/var/www/kaiyuangouwu/packages/dev-server/.env',
+                path.join(__dirname, 'storefront-configuration-guard.mjs'),
+                'preflight',
+                request.expectedChannelCodes,
+            ],
+            { encoding: 'utf8', timeout: 240000, maxBuffer: 65536, stdio: ['ignore', 'pipe', 'pipe'] },
+        );
+        assert.equal(storefront.status, 0, storefrontInspectionFailure(storefront));
+        assert.ok(
+            storefront.stdout.endsWith('STOREFRONT_CONFIGURATION_PREFLIGHT_OK\n'),
+            'Post-deploy storefront evidence is incomplete',
+        );
+        process.stdout.write(`PRODUCTION_POSTFLIGHT_REVISION runtime=${plan.markerSha}\n`);
+        process.stdout.write(storefront.stdout);
+        process.stdout.write('PRODUCTION_OPERATIONS_COMPLETE operation=postflight-release\n');
+        return;
+    }
     if (request.operation === 'preflight-release') {
         const plan = inspectProductionReleases();
         assertStorefrontInspectionRevision(plan.markerSha, request.sourceSha);

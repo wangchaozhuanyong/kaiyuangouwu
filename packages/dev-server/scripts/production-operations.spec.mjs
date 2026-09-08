@@ -256,7 +256,7 @@ void test('diagnostics are the default; unknown commands and unreviewed retentio
     );
 });
 
-void test('release preflight accepts only a reviewed Channel scope', () => {
+void test('release preflight and postflight accept only a reviewed Channel scope', () => {
     assert.deepEqual(
         operations.validateRequest({
             OPS_OPERATION: 'preflight-release',
@@ -269,6 +269,14 @@ void test('release preflight accepts only a reviewed Channel scope', () => {
             expectedPlanSha256: '',
             expectedChannelCodes: '__default_channel__,my-malaysia',
         },
+    );
+    assert.equal(
+        operations.validateRequest({
+            OPS_OPERATION: 'postflight-release',
+            OPS_SOURCE_SHA: sourceSha,
+            OPS_EXPECTED_CHANNEL_CODES: 'my-malaysia',
+        }).operation,
+        'postflight-release',
     );
     assert.throws(() =>
         operations.validateRequest({

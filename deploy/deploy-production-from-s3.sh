@@ -25,6 +25,10 @@ readonly homepage_carousel_media_keys="home-hero-token-topup-v1,home-hero-codex-
 readonly reviewed_damatong_storefront="${VENDURE_REVIEWED_DAMATONG_STOREFRONT:-false}"
 readonly reviewed_damatong_channel_token="${VENDURE_REVIEWED_DAMATONG_CHANNEL_TOKEN:-}"
 readonly reviewed_damatong_publish_review="${VENDURE_REVIEWED_DAMATONG_PUBLISH_REVIEW:-}"
+readonly release_base_sha="${VENDURE_RELEASE_BASE_SHA:-}"
+readonly release_data_risk="${VENDURE_RELEASE_DATA_RISK:-}"
+readonly release_backup_policy="${VENDURE_RELEASE_BACKUP_POLICY:-}"
+readonly release_affected_checks="${VENDURE_RELEASE_AFFECTED_CHECKS:-}"
 
 fail() {
     printf 'Production deployment failed: %s\n' "$1" >&2
@@ -40,6 +44,17 @@ fi
 if [[ ! "${artifact_name}" =~ ^${target_sha}-[0-9]+-[0-9]+-linux-x64$ ]]; then
     fail 'artifact name does not match the target SHA and release naming contract'
 fi
+[[ "${release_base_sha}" =~ ^[0-9a-f]{40}$ ]] || fail 'release base SHA must be a full lowercase Git SHA'
+case "${release_data_risk}:${release_backup_policy}" in
+    runtime-only:reuse-recent-or-create|managed-content:fresh|schema:fresh) ;;
+    *) fail 'release data risk and backup policy do not match the reviewed contract' ;;
+esac
+jq -e '
+    type == "array" and
+    length > 0 and
+    index("all-store-basics") != null and
+    all(. == "all-store-basics" or . == "api" or . == "dashboard" or . == "database-migration" or . == "managed-content" or . == "release-controls" or . == "storefront" or . == "storefront-realtime")
+' <<< "${release_affected_checks}" >/dev/null || fail 'release affected checks are invalid'
 if [[ "${artifact_s3_prefix}" != "${expected_s3_prefix}" ]]; then
     fail 'artifact S3 prefix is outside the approved production deployment prefix'
 fi
@@ -146,6 +161,13 @@ git merge-base --is-ancestor "${deployed_sha}" "${target_sha}" ||
     fail 'the deployed runtime is not an ancestor of the requested target SHA'
 [[ -z "$(git status --porcelain --untracked-files=no)" ]] || fail 'the server repository has tracked changes'
 
+if [[ "${deployed_sha}" == "${target_sha}" ]]; then
+    printf 'PRODUCTION_DEPLOY_ALREADY_CURRENT sha=%s\n' "${target_sha}"
+    exit 0
+fi
+[[ "${release_base_sha}" == "${deployed_sha}" ]] ||
+    fail 'the running revision changed after release preflight; start a new release from current main'
+
 auth_visual_change=false
 if ! git diff --quiet "${deployed_sha}" "${target_sha}" -- \
     packages/dev-server/scripts/sync-auth-visuals.mjs; then
@@ -156,11 +178,6 @@ if [[ "${auth_visual_change}" == "true" && "${reviewed_auth_visuals}" != "true" 
 fi
 if [[ "${auth_visual_change}" == "false" && "${reviewed_auth_visuals}" == "true" ]]; then
     fail 'reviewed auth visual scope was supplied without an auth visual publisher change'
-fi
-
-if [[ "${deployed_sha}" == "${target_sha}" ]]; then
-    printf 'PRODUCTION_DEPLOY_ALREADY_CURRENT sha=%s\n' "${target_sha}"
-    exit 0
 fi
 
 brand_change=false
@@ -263,10 +280,38 @@ if [[ "${VENDURE_DEPLOY_REEXECUTED:-0}" != "1" ]]; then
         VENDURE_REVIEWED_DAMATONG_STOREFRONT="${reviewed_damatong_storefront}" \
         VENDURE_REVIEWED_DAMATONG_CHANNEL_TOKEN="${reviewed_damatong_channel_token}" \
         VENDURE_REVIEWED_DAMATONG_PUBLISH_REVIEW="${reviewed_damatong_publish_review}" \
+        VENDURE_RELEASE_BASE_SHA="${release_base_sha}" \
+        VENDURE_RELEASE_DATA_RISK="${release_data_risk}" \
+        VENDURE_RELEASE_BACKUP_POLICY="${release_backup_policy}" \
+        VENDURE_RELEASE_AFFECTED_CHECKS="${release_affected_checks}" \
         "${repository}/deploy/deploy-production-from-s3.sh" \
         "${target_sha}" "${artifact_name}" "${artifact_s3_prefix}"
     exit $?
 fi
+
+readonly computed_release_impact="$({
+    node "${repository}/deploy/production-release-impact.mjs" \
+        --base-sha "${deployed_sha}" \
+        --target-sha "${target_sha}" \
+        --media-keys "${reviewed_storefront_media_keys}" \
+        --channel-codes "${reviewed_storefront_media_channel_codes}" \
+        --auth-visuals "${reviewed_auth_visuals}" \
+        --moyao-brand "${reviewed_moyao_brand}" \
+        --damatong-storefront "${reviewed_damatong_storefront}" \
+        --homepage-carousel "${reviewed_homepage_carousel}" \
+        --referral-posters "${reviewed_referral_posters}"
+})"
+jq -e \
+    --arg dataRisk "${release_data_risk}" \
+    --arg backupPolicy "${release_backup_policy}" \
+    --argjson affectedChecks "${release_affected_checks}" '
+    .dataRisk == $dataRisk and
+    .backupPolicy == $backupPolicy and
+    .affectedChecks == $affectedChecks
+' <<< "${computed_release_impact}" >/dev/null ||
+    fail 'release impact no longer matches the reviewed immutable plan'
+printf 'DEPLOY_IMPACT_OK data_risk=%s backup_policy=%s affected_checks=%s\n' \
+    "${release_data_risk}" "${release_backup_policy}" "${release_affected_checks}"
 
 node "${repository}/deploy/storefront-configuration-guard.mjs" review \
     "${reviewed_damatong_storefront}" "${reviewed_damatong_publish_review}" "${damatong_changes[@]}"
@@ -483,32 +528,47 @@ pm2 stop vendure-worker vendure-api 9>&-
 pm2 save 9>&-
 node "${usdt_guard}" capture "${candidate}" "${usdt_snapshot}"
 printf 'DEPLOY_MIGRATION_BEGIN\n'
-sudo -n systemctl start vendure-mysql-backup.service
-readonly backup_service="vendure-mysql-backup.service"
-readonly backup_result="$(sudo -n systemctl show "${backup_service}" -p Result --value)"
-[[ "${backup_result}" == "success" ]] ||
-    fail 'the pre-migration database backup failed'
-readonly backup_invocation_id="$(
-    sudo -n systemctl show "${backup_service}" -p InvocationID --value
-)"
-[[ "${backup_invocation_id}" =~ ^[0-9a-f]{32}$ ]] ||
-    fail 'the pre-migration database backup invocation is invalid'
-readonly backup_evidence="$(
-    sudo -n journalctl --quiet --no-pager --output=cat \
-        "_SYSTEMD_INVOCATION_ID=${backup_invocation_id}" |
-        grep -E '^Created verified MySQL backup: /var/backups/vendure-mysql/vendure-[0-9]{8}T[0-9]{6}Z\.sql\.gz offsite=yes$' |
-        tail -n 1 || true
-)"
-if [[ "${backup_evidence}" =~ ^Created\ verified\ MySQL\ backup:\ (/var/backups/vendure-mysql/vendure-[0-9]{8}T[0-9]{6}Z\.sql\.gz)\ offsite=yes$ ]]; then
+backup_file=""
+backup_invocation_id=""
+backup_age_seconds=""
+load_verified_backup() {
+    local backup_service="vendure-mysql-backup.service"
+    local backup_result backup_evidence backup_epoch current_epoch
+    backup_result="$(sudo -n systemctl show "${backup_service}" -p Result --value)"
+    [[ "${backup_result}" == "success" ]] || return 1
+    backup_invocation_id="$(sudo -n systemctl show "${backup_service}" -p InvocationID --value)"
+    [[ "${backup_invocation_id}" =~ ^[0-9a-f]{32}$ ]] || return 1
+    backup_evidence="$(
+        sudo -n journalctl --quiet --no-pager --output=cat \
+            "_SYSTEMD_INVOCATION_ID=${backup_invocation_id}" |
+            grep -E '^Created verified MySQL backup: /var/backups/vendure-mysql/vendure-[0-9]{8}T[0-9]{6}Z\.sql\.gz offsite=yes$' |
+            tail -n 1 || true
+    )"
+    [[ "${backup_evidence}" =~ ^Created\ verified\ MySQL\ backup:\ (/var/backups/vendure-mysql/vendure-[0-9]{8}T[0-9]{6}Z\.sql\.gz)\ offsite=yes$ ]] || return 1
     backup_file="${BASH_REMATCH[1]}"
+    sudo -n test -s "${backup_file}" || return 1
+    sudo -n test -s "${backup_file}.sha256" || return 1
+    sudo -n /bin/bash -c 'cd "$1" && sha256sum --check --status "$2"' \
+        backup-check "$(dirname "${backup_file}")" "$(basename "${backup_file}.sha256")" || return 1
+    backup_epoch="$(sudo -n stat --format='%Y' "${backup_file}")"
+    current_epoch="$(date +%s)"
+    [[ "${backup_epoch}" =~ ^[0-9]+$ && "${current_epoch}" =~ ^[0-9]+$ ]] || return 1
+    backup_age_seconds="$((current_epoch - backup_epoch))"
+    ((backup_age_seconds >= 0)) || return 1
+}
+
+backup_action="create"
+if [[ "${release_backup_policy}" == "reuse-recent-or-create" ]] && \
+    load_verified_backup && ((backup_age_seconds <= 86400)); then
+    backup_action="reuse"
 else
-    fail 'the pre-migration database backup evidence is missing or offsite upload was not verified'
+    sudo -n systemctl start vendure-mysql-backup.service
+    load_verified_backup || fail 'the fresh pre-migration database backup or offsite evidence failed'
 fi
-readonly backup_file
-sudo -n test -s "${backup_file}" || fail 'the verified database backup file is missing'
-sudo -n test -s "${backup_file}.sha256" || fail 'the verified database backup checksum is missing'
-printf 'DEPLOY_BACKUP_OK file=%s offsite=yes invocation_id=%s\n' \
-    "${backup_file}" "${backup_invocation_id}"
+readonly backup_file backup_invocation_id backup_age_seconds backup_action
+printf 'DEPLOY_BACKUP_OK policy=%s action=%s data_risk=%s file=%s age_seconds=%s offsite=yes invocation_id=%s\n' \
+    "${release_backup_policy}" "${backup_action}" "${release_data_risk}" "${backup_file}" \
+    "${backup_age_seconds}" "${backup_invocation_id}"
 
 (
     cd "${candidate}"
@@ -683,6 +743,27 @@ curl --fail --silent --show-error --max-time 15 https://damatong.net/health >/de
 node "${repository}/deploy/verify-dashboard-assets.mjs" \
     --dashboard-url https://console.moyaoai.com/dashboard/ \
     --release-id "${target_sha}"
+node "${repository}/deploy/verify-production-release.mjs" \
+    --storefront-url https://moyaoai.com \
+    --dashboard-url https://console.moyaoai.com/dashboard/ \
+    --expected-channel-code __default_channel__ \
+    --release-id "${target_sha}"
+node "${repository}/deploy/verify-production-release.mjs" \
+    --storefront-url https://damatong.net \
+    --dashboard-url https://console.moyaoai.com/dashboard/ \
+    --expected-channel-code 美宜佳 \
+    --release-id "${target_sha}"
+if jq -e 'index("storefront-realtime") != null' <<< "${release_affected_checks}" >/dev/null; then
+    node "${repository}/deploy/verify-storefront-realtime.mjs" \
+        --mode public-smoke \
+        --url https://moyaoai.com/storefront-realtime/events \
+        --release-id "${target_sha}"
+    node "${repository}/deploy/verify-storefront-realtime.mjs" \
+        --mode public-smoke \
+        --url https://damatong.net/storefront-realtime/events \
+        --release-id "${target_sha}"
+fi
+printf 'PRODUCTION_AFFECTED_ACCEPTANCE_OK checks=%s\n' "${release_affected_checks}"
 
 sudo -n install -o root -g root -m 0755 \
     "${repository}/deploy/systemd/vendure-production-release-retention.cjs" \

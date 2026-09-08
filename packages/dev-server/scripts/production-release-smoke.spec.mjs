@@ -39,7 +39,7 @@ async function startFixtureServer({
                 return;
             }
             response.writeHead(200, { 'content-type': 'application/json' });
-            response.end('{"data":{"__typename":"Query"}}');
+            response.end('{"data":{"__typename":"Query","activeChannel":{"code":"fixture-store"}}}');
             return;
         }
         if (request.method === 'GET' && requestUrl.pathname === '/promo') {
@@ -133,6 +133,7 @@ test('verifies the direct storefront, optional promotion entry and production pu
     const checks = await verifyProductionRelease({
         storefrontUrl: fixture.origin,
         dashboardUrl: `${fixture.origin}/dashboard/`,
+        expectedChannelCode: 'fixture-store',
         timeoutMs: 1_000,
     });
 
@@ -140,6 +141,7 @@ test('verifies the direct storefront, optional promotion entry and production pu
         'public health',
         'dashboard health',
         'public Shop API',
+        'expected Channel',
         'direct storefront',
         'optional promotion page',
         'optional promotion entry',
@@ -183,6 +185,21 @@ test('rejects a Shop API that still requires a promotion cookie', async t => {
             timeoutMs: 1_000,
         }),
         /Public Shop API: expected HTTP 200, received 403/u,
+    );
+});
+
+test('rejects a storefront routed to the wrong Channel', async t => {
+    const fixture = await startFixtureServer();
+    t.after(fixture.close);
+
+    await assert.rejects(
+        verifyProductionRelease({
+            storefrontUrl: fixture.origin,
+            dashboardUrl: `${fixture.origin}/dashboard/`,
+            expectedChannelCode: 'another-store',
+            timeoutMs: 1_000,
+        }),
+        /expected Channel another-store, received fixture-store/u,
     );
 });
 
