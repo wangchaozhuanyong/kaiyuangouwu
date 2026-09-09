@@ -13,7 +13,13 @@ import {
 } from 'lucide-react';
 import { PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from 'react';
 
-import { variantCanIncreaseQuantity } from '../product-availability';
+import {
+    cartLineCanSelect,
+    cartSelectionState,
+    productAvailability,
+    quantityStockMessage,
+    variantCanIncreaseQuantity,
+} from '../product-availability';
 import { MarketConfig, StoreCustomerCoupon, StorefrontCart, StorefrontLanguage } from '../types';
 
 import { Sheet } from './page-shell';
@@ -60,7 +66,7 @@ export function CartGroup({
     onShare: (productId: string, productName: string) => Promise<void>;
     onActionOpenChange: (lineId: string | null) => void;
 }) {
-    const allSelected = lines.every(line => line.selected);
+    const allSelected = cartSelectionState(lines) === 'ALL';
     const partiallySelected = !allSelected && lines.some(line => line.selected);
     return (
         <section className="cart-group">
@@ -74,7 +80,10 @@ export function CartGroup({
                             !allSelected,
                         )
                     }
-                    disabled={selectionDisabled}
+                    disabled={
+                        selectionDisabled ||
+                        (!lines.some(cartLineCanSelect) && !lines.some(line => line.selected))
+                    }
                 >
                     <span>{allSelected ? <Check /> : partiallySelected ? <Minus /> : null}</span>
                     <strong>{title}</strong>
@@ -151,6 +160,8 @@ export function SwipeableCartLine({
     const isZh = language === 'zh';
     const variant = line.productVariant;
     const productId = variant?.product.id;
+    const stockError = quantityStockMessage(variant, line.quantity, language);
+    const stock = productAvailability(variant).stock;
     const productName = variant?.name ?? (isZh ? '商品' : 'item');
     const frontRef = useRef<HTMLDivElement>(null);
     const actionsRef = useRef<HTMLDivElement>(null);
@@ -350,7 +361,7 @@ export function SwipeableCartLine({
                         type="checkbox"
                         aria-label={isZh ? `选择 ${productName}` : `Select ${productName}`}
                         checked={line.selected}
-                        disabled={!line.available || selectionDisabled}
+                        disabled={selectionDisabled || (!line.selected && !cartLineCanSelect(line))}
                         onChange={event => onSelect(line.id, event.target.checked)}
                     />
                     <span>
@@ -385,6 +396,20 @@ export function SwipeableCartLine({
                         <ChevronLeft aria-hidden="true" />
                     </button>
                     <strong>{variant?.name ?? (isZh ? '商品已失效' : 'Unavailable item')}</strong>
+                    {stockError && (
+                        <small className="cart-stock-error" role="status">
+                            {stockError}
+                            {stock != null && stock > 0 && (
+                                <button
+                                    type="button"
+                                    disabled={loading}
+                                    onClick={() => onQuantity(line.id, stock)}
+                                >
+                                    {isZh ? `调整为 ${stock} 件` : `Set quantity to ${stock}`}
+                                </button>
+                            )}
+                        </small>
+                    )}
                     <div className="cart-line-purchase-row">
                         <b>
                             {variant

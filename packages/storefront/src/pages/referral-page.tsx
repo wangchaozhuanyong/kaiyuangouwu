@@ -24,6 +24,7 @@ import { referralShareUrl } from '../referral-attribution';
 import { availablePosterTemplates } from '../referral-poster-layout';
 import { ReferralPosterModal } from '../referral-poster-modal';
 import { PageSkeleton } from '../route-loading';
+import { storefrontErrorMessage } from '../storefront-errors';
 import { ReferralPageContext } from '../storefront-page-contexts';
 import { EmptyState, Subpage } from '../storefront-ui/page-shell';
 import { formatMoney } from '../storefront-ui/product-display';
@@ -169,7 +170,7 @@ export function ReferralPage() {
                     title={isZh ? '邀请信息加载失败' : 'Could not load referrals'}
                     detail={
                         overviewQuery.error instanceof Error
-                            ? overviewQuery.error.message
+                            ? storefrontErrorMessage(overviewQuery.error, language)
                             : isZh
                               ? '请稍后重试'
                               : 'Try again later'

@@ -56,13 +56,22 @@ export function useStorefrontMerchandising({
     const showRecommendations =
         Boolean(recommendationsBlock) || !configuredBlockTypes.includes('RECOMMENDATIONS');
 
+    // Keep enough variety for configured sections without loading the previous
+    // 48-product ceiling on every home visit. Larger managed sections still
+    // scale up to the existing API limit.
+    const bestSellerCandidateCount = Math.min(48, Math.max(16, bestSellerDisplayCount));
+    const recommendationCandidateCount = Math.min(
+        48,
+        Math.max(16, recommendationDisplayCount * 2),
+    );
+
     const bestSellerCatalogQuery = useQuery({
         queryKey: storefrontQueryKeys.catalog(storefrontQueryKeys.market(market), vendureLanguageCode, {
             purpose: 'home-best-sellers',
             sort: 'sales',
-            take: 48,
+            take: bestSellerCandidateCount,
         }),
-        queryFn: ({ signal }) => api.catalog({ sort: 'sales', take: 48 }, signal),
+        queryFn: ({ signal }) => api.catalog({ sort: 'sales', take: bestSellerCandidateCount }, signal),
         enabled: storefrontContextResolved && showBestSellers,
         staleTime: PUBLIC_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
@@ -116,9 +125,10 @@ export function useStorefrontMerchandising({
         queryKey: storefrontQueryKeys.catalog(storefrontQueryKeys.market(market), vendureLanguageCode, {
             purpose: 'home-recommendations',
             sort: 'recommended',
-            take: 48,
+            take: recommendationCandidateCount,
         }),
-        queryFn: ({ signal }) => api.catalog({ sort: 'recommended', take: 48 }, signal),
+        queryFn: ({ signal }) =>
+            api.catalog({ sort: 'recommended', take: recommendationCandidateCount }, signal),
         enabled: storefrontContextResolved && showRecommendations,
         staleTime: PUBLIC_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,

@@ -350,7 +350,7 @@ function SafeImageSource({
     const effectivePlaceholderSrc =
         (placeholderSrc && imageKind
             ? (storefrontPlaceholderUrl(placeholderSrc, imageKind) ?? placeholderSrc)
-            : placeholderSrc) ?? responsiveSource?.placeholderSrc;
+            : placeholderSrc) ?? (imageKind === 'hero' ? responsiveSource?.placeholderSrc : undefined);
     const highPriority = imageProps.fetchPriority === 'high';
 
     useEffect(() => {

@@ -281,6 +281,11 @@ export class ApiKeyService {
             relations: { user: { roles: { channels: true } } },
         });
 
+        entity.user.roles = await this.assertActiveUserCanGrantRoles(
+            ctx,
+            entity.user.roles.map(role => role.id),
+        );
+
         const strategy = this.getApiKeyStrategyByApiType(ctx.apiType);
         const secret = await strategy.generateSecret(ctx);
         const apiKey = strategy.constructApiKey(entity.lookupId, secret);

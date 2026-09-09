@@ -16,6 +16,7 @@ import {
     publicQueryMeta,
     storefrontQueryKeys,
 } from '../query-client';
+import { storefrontErrorMessage } from '../storefront-errors';
 import { SearchPageContext } from '../storefront-page-contexts';
 import { routeNavigateOptions } from '../storefront-router';
 import { readStoredStrings, scopedStorageKey, SEARCH_HISTORY_STORAGE_KEY } from '../storefront-storage';
@@ -84,7 +85,7 @@ export function SearchPage() {
         searchQuery.isPaused && searchQuery.data === undefined
             ? offlineLoadError(language)
             : searchQuery.error instanceof Error
-              ? searchQuery.error.message
+              ? storefrontErrorMessage(searchQuery.error, language)
               : '';
     const relatedProducts = products
         .filter(product => !results.some(result => result.id === product.id))

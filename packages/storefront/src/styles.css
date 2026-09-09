@@ -119,6 +119,14 @@ body {
     }
 }
 
+/* Tablets keep the mobile interaction model but should use the available
+   canvas instead of inheriting the 430px phone column. */
+@media (min-width: 431px) and (max-width: 1023px) {
+    :root {
+        --app-width: 960px;
+    }
+}
+
 html::-webkit-scrollbar,
 body::-webkit-scrollbar {
     width: 6px;
@@ -279,6 +287,10 @@ img {
 
 .safe-image {
     opacity: 0;
+    transition: transform 220ms ease;
+}
+
+.safe-image-frame.has-placeholder .safe-image {
     transition:
         opacity 180ms ease,
         transform 220ms ease;
@@ -351,11 +363,26 @@ img {
     animation: route-transition-pulse 1.2s ease-in-out infinite;
 }
 
-.route-transition-mark img {
+.route-transition-mark img,
+.route-transition-placeholder {
     width: 44px;
     height: 34px;
+    grid-area: 1 / 1;
     object-fit: contain;
     filter: drop-shadow(0 3px 7px rgba(0, 102, 255, 0.2));
+}
+
+.route-transition-placeholder {
+    color: var(--text);
+    stroke-width: 1.6;
+}
+
+.route-transition-mark img {
+    visibility: hidden;
+}
+
+.route-transition-mark.is-logo-ready img {
+    visibility: visible;
 }
 
 .route-transition-card strong {
@@ -668,8 +695,8 @@ img {
 .account-topbar button,
 .subpage-header button,
 .notice-button {
-    width: 42px;
-    height: 42px;
+    width: 44px;
+    height: 44px;
     padding: 0;
     border: 0;
     background: transparent;
@@ -760,7 +787,7 @@ img {
 .currency-select {
     width: auto;
     min-width: 58px;
-    height: 40px;
+    height: 44px;
     padding: 0 6px;
     border: 1px solid var(--line);
     border-radius: 10px;
@@ -855,8 +882,8 @@ img {
 
 .language-button,
 .notice-button {
-    width: 40px;
-    height: 40px;
+    width: 44px;
+    height: 44px;
     padding: 0;
     border: 1px solid var(--line);
     border-radius: 7px;
@@ -886,7 +913,7 @@ img {
 .notice-strip {
     width: calc(100% - 24px);
     margin: 8px 12px 10px;
-    min-height: 36px;
+    min-height: 44px;
     padding: 7px 14px;
     border: 1px solid #fed7aa;
     border-radius: 20px;

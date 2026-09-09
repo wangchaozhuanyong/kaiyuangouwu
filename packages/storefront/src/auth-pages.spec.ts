@@ -55,12 +55,12 @@ describe('loginErrorMessage', () => {
         expect(loginErrorMessage(error, 'en')).toContain('has not been verified');
     });
 
-    it('identifies connection failures and preserves unknown Shop API error codes', () => {
+    it('localizes connection failures and rate limits', () => {
         expect(loginErrorMessage(new TypeError('Failed to fetch'), 'zh')).toBe(
-            '网络连接失败，请检查网络后重试',
+            '网络连接失败，请检查网络后重试。',
         );
         expect(loginErrorMessage(new ShopApiError('RATE_LIMIT_ERROR', 'Too many attempts'), 'zh')).toBe(
-            '登录失败（错误代码：RATE_LIMIT_ERROR）',
+            '操作过于频繁，请稍后重试。',
         );
     });
 });
@@ -79,15 +79,15 @@ describe('registerErrorMessage', () => {
         ).toBe('密码不符合安全要求，请重新设置');
         expect(
             registerErrorMessage(new ShopApiError('NATIVE_AUTH_STRATEGY_ERROR', 'Auth unavailable'), 'zh'),
-        ).toBe('账户注册服务暂时不可用，请稍后重试');
+        ).toBe('账户服务暂时不可用，请稍后重试。');
     });
 
-    it('identifies connection failures and preserves unknown Shop API error codes', () => {
+    it('localizes connection failures and rate limits', () => {
         expect(registerErrorMessage(new Error('Network request failed'), 'zh')).toBe(
-            '网络连接失败，请检查网络后重试',
+            '网络连接失败，请检查网络后重试。',
         );
         expect(registerErrorMessage(new ShopApiError('RATE_LIMIT_ERROR', 'Too many attempts'), 'zh')).toBe(
-            '注册失败（错误代码：RATE_LIMIT_ERROR）',
+            '操作过于频繁，请稍后重试。',
         );
     });
 });
@@ -123,7 +123,7 @@ describe('account verification errors', () => {
             ),
         ).toBe('密码不符合安全要求，请重新设置');
         expect(verificationErrorMessage(new TypeError('Failed to fetch'), 'zh')).toBe(
-            '网络连接失败，请检查网络后重试',
+            '网络连接失败，请检查网络后重试。',
         );
     });
 });
@@ -253,6 +253,22 @@ describe('managed auth visual layout', () => {
         expect(styles).toContain('.auth-page .auth-hero-header .auth-back-button');
         expect(styles).toContain('.auth-page .auth-password-toggle svg');
         expect(styles).toContain('.auth-route-tabs');
+        expect(styles).toMatch(
+            /@media \(min-width:\s*1024px\)[\s\S]*?\.auth-page \.auth-hero-tags\s*\{[^}]*width:\s*100%;[^}]*flex-wrap:\s*wrap;[^}]*overflow:\s*visible;/,
+        );
+    });
+
+    it('allows the desktop hero copy to wrap at the 1024px breakpoint', () => {
+        const styles = readStorefrontStylesheet();
+
+        expect(styles).toMatch(
+            // eslint-disable-next-line max-len -- Existing stylesheet regression pattern.
+            /@media \(min-width:\s*1024px\) and \(max-width:\s*1199px\)[\s\S]*?\.auth-page \.auth-hero-message h2\s*\{[^}]*max-width:\s*none;[^}]*-webkit-line-clamp:\s*3;/,
+        );
+        expect(styles).toMatch(
+            // eslint-disable-next-line max-len -- Existing stylesheet regression pattern.
+            /@media \(min-width:\s*1024px\) and \(max-width:\s*1199px\)[\s\S]*?\.auth-page \.auth-hero-tags\s*\{[^}]*width:\s*100%;[^}]*flex-wrap:\s*wrap;[^}]*overflow:\s*visible;/,
+        );
     });
 });
 

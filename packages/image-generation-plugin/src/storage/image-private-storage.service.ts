@@ -1,10 +1,10 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, OnModuleDestroy } from '@nestjs/common';
 import { ID } from '@vendure/common/lib/shared-types';
 import { RequestContext, TransactionalConnection, UserInputError } from '@vendure/core';
 import { fileTypeFromBuffer } from 'file-type';
 import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { mkdir, readFile, readdir, stat, unlink, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, opendir, readFile, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import sharp from 'sharp';
 import { In, LessThan } from 'typeorm';
@@ -26,9 +26,11 @@ export interface UploadedImageFile {
 }
 
 @Injectable()
-export class ImagePrivateStorageService {
+export class ImagePrivateStorageService implements OnModuleDestroy {
     private readonly root: string;
     private readonly signingSecret: string;
+    private orphanScan?: AsyncGenerator<string | undefined>;
+    private purgeInFlight?: Promise<number>;
 
     constructor(
         private readonly connection: TransactionalConnection,
@@ -189,7 +191,19 @@ export class ImagePrivateStorageService {
         }
     }
 
-    async purgeExpired(): Promise<number> {
+    purgeExpired(): Promise<number> {
+        // Reuse the in-flight sweep so overlapping scheduled runs cannot race the cursor.
+        return (this.purgeInFlight ??= this.purgeBatch().finally(() => {
+            this.purgeInFlight = undefined;
+        }));
+    }
+
+    async onModuleDestroy(): Promise<void> {
+        await this.purgeInFlight;
+        await this.orphanScan?.return(undefined);
+    }
+
+    private async purgeBatch(): Promise<number> {
         const repository = this.connection.rawConnection.getRepository(ImagePrivateAsset);
         const expired = await repository
             .createQueryBuilder('asset')
@@ -306,9 +320,25 @@ export class ImagePrivateStorageService {
 
     private async purgeOrphans(limit: number): Promise<number> {
         if (limit <= 0 || !existsSync(this.root)) return 0;
-        const files = await storageFiles(this.root, this.root, Math.max(limit * 4, 200));
+        this.orphanScan ??= storageFiles(this.root);
         const cutoff = Date.now() - 60 * 60_000;
-        const candidates = files.filter(file => file.mtimeMs <= cutoff).slice(0, limit);
+        const candidates: Array<{ path: string; storageKey: string }> = [];
+        // Advance past live and recent files as well as orphans. Directory entries also
+        // consume budget, keeping each run bounded even in a mostly empty tree.
+        for (let scanned = 0; scanned < limit; scanned++) {
+            const next = await this.orphanScan.next();
+            if (next.done) {
+                this.orphanScan = undefined;
+                break;
+            }
+            if (!next.value) continue;
+            const details = await lstat(next.value).catch(() => undefined);
+            if (!details?.isFile() || details.mtimeMs > cutoff) continue;
+            candidates.push({
+                path: next.value,
+                storageKey: path.relative(this.root, next.value).split(path.sep).join('/'),
+            });
+        }
         if (!candidates.length) return 0;
         const existing = await this.connection.rawConnection.getRepository(ImagePrivateAsset).find({
             where: { storageKey: In(candidates.map(file => file.storageKey)) },
@@ -318,6 +348,8 @@ export class ImagePrivateStorageService {
         let removed = 0;
         for (const candidate of candidates) {
             if (known.has(candidate.storageKey)) continue;
+            const current = await lstat(candidate.path).catch(() => undefined);
+            if (!current?.isFile() || current.mtimeMs > cutoff) continue;
             if (
                 await unlink(candidate.path)
                     .then(() => true)
@@ -344,30 +376,15 @@ async function normalizeReferenceImage(bytes: Buffer): Promise<Buffer> {
     }
 }
 
-async function storageFiles(
-    root: string,
-    directory: string,
-    limit: number,
-): Promise<Array<{ path: string; storageKey: string; mtimeMs: number }>> {
-    const found: Array<{ path: string; storageKey: string; mtimeMs: number }> = [];
-    const entries = await readdir(directory, { withFileTypes: true }).catch(() => []);
-    for (const entry of entries) {
-        if (found.length >= limit) break;
+async function* storageFiles(directory: string, depth = 0): AsyncGenerator<string | undefined> {
+    const entries = await opendir(directory).catch(() => undefined);
+    if (!entries) return;
+    for await (const entry of entries) {
         const entryPath = path.join(directory, entry.name);
-        if (entry.isDirectory()) {
-            found.push(...(await storageFiles(root, entryPath, limit - found.length)));
-            continue;
-        }
-        if (!entry.isFile()) continue;
-        const details = await stat(entryPath).catch(() => undefined);
-        if (!details) continue;
-        found.push({
-            path: entryPath,
-            storageKey: path.relative(root, entryPath).split(path.sep).join('/'),
-            mtimeMs: details.mtimeMs,
-        });
+        yield entry.isFile() ? entryPath : undefined;
+        // Never follow symbolic links. Normal storage uses only three directory levels.
+        if (entry.isDirectory() && depth < 32) yield* storageFiles(entryPath, depth + 1);
     }
-    return found;
 }
 
 async function readUpload(upload: UploadedImageFile, maxBytes: number): Promise<Buffer> {

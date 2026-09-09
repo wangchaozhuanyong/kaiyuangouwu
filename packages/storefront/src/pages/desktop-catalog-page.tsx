@@ -16,6 +16,7 @@ import {
     publicQueryMeta,
     storefrontQueryKeys,
 } from '../query-client';
+import { storefrontErrorMessage } from '../storefront-errors';
 import { RouteState } from '../storefront-router';
 import { EmptyState, ListSkeleton } from '../storefront-ui/page-shell';
 import { useStorefront } from '../StorefrontContext';
@@ -65,7 +66,7 @@ export function DesktopCatalogPage() {
     const error = query.isPaused
         ? offlineLoadError(language)
         : query.error instanceof Error
-          ? query.error.message
+          ? storefrontErrorMessage(query.error, language)
           : '';
     const activeCollection = collections.find(collection => collection.id === route.collectionId);
     const activeChild = activeCollection?.children?.find(collection => collection.id === route.childId);

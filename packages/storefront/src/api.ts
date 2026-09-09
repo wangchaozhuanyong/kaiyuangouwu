@@ -150,7 +150,7 @@ export class ShopApi {
         return this.contentReviewsApi.activeCouponCampaigns(signal);
     }
 
-    async products(take = 16, signal?: AbortSignal): Promise<Product[]> {
+    async products(take = 12, signal?: AbortSignal): Promise<Product[]> {
         return this.catalogApi.products(take, signal);
     }
 
@@ -636,7 +636,7 @@ export class ShopApi {
     private assertNoError(result: ErrorResult): void {
         if (result.errorCode) {
             throw new ShopApiError(
-                result.errorCode,
+                result.causeCode ?? result.errorCode,
                 result.message ?? result.errorCode,
                 result.authenticationError,
             );

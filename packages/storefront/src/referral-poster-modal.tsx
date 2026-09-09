@@ -9,6 +9,7 @@ import {
     replacePosterTokens,
 } from './referral-poster-layout';
 import { acquireBodyScrollLock } from './scroll-lock';
+import { storefrontErrorMessage } from './storefront-errors';
 import './styles/modals-and-support.css';
 import { ReferralPosterTemplate, StorefrontLanguage } from './types';
 
@@ -113,7 +114,7 @@ export function ReferralPosterModal({
                         data: '',
                         error:
                             error instanceof Error
-                                ? error.message
+                                ? storefrontErrorMessage(error, language)
                                 : isZh
                                   ? '海报生成失败，请重试'
                                   : 'Could not generate poster',

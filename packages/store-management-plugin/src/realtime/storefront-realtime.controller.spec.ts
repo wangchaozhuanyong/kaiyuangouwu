@@ -3,6 +3,7 @@ import { EventEmitter } from 'node:events';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { StorefrontRealtimeController } from './storefront-realtime.controller';
+import { StorefrontRealtimeService } from './storefront-realtime.service';
 
 const HEARTBEAT_INTERVAL_MS = 15_000;
 const BACKPRESSURE_TIMEOUT_MS = HEARTBEAT_INTERVAL_MS * 2;
@@ -59,6 +60,80 @@ afterEach(() => {
 });
 
 describe('StorefrontRealtimeController', () => {
+    it.each(['customer', 'administrator', 'anonymous'])(
+        "does not expose another customer's events when a %s requests client=admin",
+        async identity => {
+            vi.useFakeTimers();
+            const harness = createHarness();
+            const realtime = new StorefrontRealtimeService({} as never, {} as never);
+            const request = Object.assign(harness.request, {
+                query: { client: 'admin' },
+                get: vi.fn(() => 'Bearer fixture-session'),
+            });
+            const session =
+                identity === 'anonymous'
+                    ? undefined
+                    : {
+                          user: {
+                              id: 'current-user',
+                              channelPermissions: [
+                                  {
+                                      id: 'store-a',
+                                      permissions:
+                                          identity === 'administrator' ? ['SuperAdmin'] : ['Authenticated'],
+                                  },
+                              ],
+                          },
+                          activeOrderId: 'current-cart',
+                      };
+            const controller = new StorefrontRealtimeController(
+                realtime,
+                { resolveRequest: vi.fn().mockResolvedValue({ channelId: 'store-a' }) } as never,
+                { getSessionFromToken: vi.fn().mockResolvedValue(session) } as never,
+            );
+            try {
+                // Include the legacy Nest query argument to reproduce the original bypass.
+                await Reflect.apply(controller.events.bind(controller), controller, [
+                    request,
+                    harness.response,
+                    'admin',
+                ]);
+                harness.response.write.mockClear();
+
+                realtime.publish({
+                    channelIds: ['store-a'],
+                    userIds: ['another-user'],
+                    orderIds: ['another-order'],
+                    topics: ['orders'],
+                    entityIds: ['another-order'],
+                });
+                expect(harness.response.write).not.toHaveBeenCalled();
+
+                realtime.publish({ channelIds: ['store-b'], topics: ['catalog'] });
+                expect(harness.response.write).not.toHaveBeenCalled();
+
+                realtime.publish({ channelIds: ['store-a'], topics: ['catalog'] });
+                expect(harness.response.write).toHaveBeenCalledOnce();
+                harness.response.write.mockClear();
+
+                realtime.publish({
+                    channelIds: ['store-a'],
+                    userIds: ['current-user'],
+                    topics: ['customer'],
+                });
+                realtime.publish({
+                    channelIds: ['store-a'],
+                    orderIds: ['current-cart'],
+                    topics: ['cart'],
+                });
+                expect(harness.response.write).toHaveBeenCalledTimes(identity === 'anonymous' ? 0 : 2);
+            } finally {
+                request.emit('close');
+                realtime.onApplicationShutdown();
+            }
+        },
+    );
+
     it.each([
         ['request close', 'request', 'close', false],
         ['request aborted', 'request', 'aborted', true],

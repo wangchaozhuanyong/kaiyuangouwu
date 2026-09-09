@@ -3,8 +3,10 @@ import { useQuery } from '@tanstack/react-query';
 import { uiCopy } from '../i18n';
 import { offlineLoadError, resolveQueryLoadState } from '../loading-state';
 import { storefrontQueryKeys } from '../query-client';
+import { storefrontErrorMessage } from '../storefront-errors';
 
 import { type StorefrontQueryContext } from './storefront-query-context';
+
 export function useStorefrontCustomerData({
     api,
     market,
@@ -47,7 +49,6 @@ export function useStorefrontCustomerData({
         queryFn: ({ signal }) => api.activeCouponCampaigns(signal),
         enabled: customerQuery.data !== undefined,
         staleTime: 0,
-        refetchInterval: customerQuery.data !== undefined ? 60_000 : false,
     });
 
     const activeCoupons = couponCampaignsQuery.data ?? [];
@@ -63,7 +64,6 @@ export function useStorefrontCustomerData({
         queryFn: ({ signal }) => api.myCoupons(signal),
         enabled: Boolean(customer),
         staleTime: 0,
-        refetchInterval: customer ? 60_000 : false,
     });
 
     const myCoupons = customerCouponsQuery.data ?? [];
@@ -77,7 +77,6 @@ export function useStorefrontCustomerData({
         queryFn: ({ signal }) => api.myCouponUsageRecords(signal),
         enabled: Boolean(customer),
         staleTime: 0,
-        refetchInterval: customer ? 60_000 : false,
     });
 
     const couponUsageRecords = customerCouponUsageRecordsQuery.data ?? [];
@@ -87,7 +86,7 @@ export function useStorefrontCustomerData({
         : customerCouponsQuery.isPaused && customerCouponsQuery.data === undefined
           ? offlineLoadError(language)
           : customerCouponsQuery.error instanceof Error
-            ? customerCouponsQuery.error.message
+            ? storefrontErrorMessage(customerCouponsQuery.error, language)
             : customerCouponsQuery.error
               ? text.loadError
               : '';
@@ -97,7 +96,7 @@ export function useStorefrontCustomerData({
         : customerCouponUsageRecordsQuery.isPaused && customerCouponUsageRecordsQuery.data === undefined
           ? offlineLoadError(language)
           : customerCouponUsageRecordsQuery.error instanceof Error
-            ? customerCouponUsageRecordsQuery.error.message
+            ? storefrontErrorMessage(customerCouponUsageRecordsQuery.error, language)
             : customerCouponUsageRecordsQuery.error
               ? text.loadError
               : '';
@@ -120,7 +119,7 @@ export function useStorefrontCustomerData({
         customerLoadState === 'paused'
             ? offlineLoadError(language)
             : customerQuery.error instanceof Error
-              ? customerQuery.error.message
+              ? storefrontErrorMessage(customerQuery.error, language)
               : text.loadError;
 
     const couponCampaignsLoading =
@@ -134,7 +133,7 @@ export function useStorefrontCustomerData({
             : couponCampaignsQuery.isPaused && couponCampaignsQuery.data === undefined
               ? offlineLoadError(language)
               : couponCampaignsQuery.error instanceof Error
-                ? couponCampaignsQuery.error.message
+                ? storefrontErrorMessage(couponCampaignsQuery.error, language)
                 : couponCampaignsQuery.error
                   ? text.loadError
                   : '';
@@ -143,7 +142,7 @@ export function useStorefrontCustomerData({
         cartLoadState === 'paused'
             ? offlineLoadError(language)
             : cartQuery.error instanceof Error
-              ? cartQuery.error.message
+              ? storefrontErrorMessage(cartQuery.error, language)
               : cartQuery.error
                 ? text.loadError
                 : null;

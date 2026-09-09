@@ -10,6 +10,7 @@ export * from './finite-state-machine/validate-transition-definition';
 export * from './generate-public-id';
 export * from './injector';
 export * from './instrument-decorator';
+export * from './normalize-avatar-image';
 export * from './permission-definition';
 export * from './round-money';
 export * from './self-refreshing-cache';

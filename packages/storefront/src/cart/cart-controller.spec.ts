@@ -312,3 +312,33 @@ describe('unified cart controller', () => {
         expect(controller.getSnapshot().pending).toBe(false);
     });
 });
+
+describe('rejected selection recovery', () => {
+    it('restores the confirmed selection, keeps the stock code, and clears rejection after a successful refresh', async () => {
+        vi.useFakeTimers();
+        const { controller, apply } = await setup();
+        const before = controller.getSnapshot().cart;
+        apply.mockImplementation(async command => ({
+            commandId: command.commandId,
+            status: 'REJECTED',
+            appliedRevision: 0,
+            errorCode: 'INSUFFICIENT_STOCK_ERROR',
+            message: 'INSUFFICIENT_STOCK_ERROR',
+            cart: snapshot(),
+            session: null,
+        }));
+        const pending = controller
+            .execute({ changes: { lines: [{ lineId: '1', selected: false }] } })
+            .catch(error => error);
+        expect(controller.getSnapshot().cart?.selectedQuantity).toBe(1);
+        await vi.advanceTimersByTimeAsync(80);
+        expect(await pending).toMatchObject({
+            errorCode: 'INSUFFICIENT_STOCK_ERROR',
+            selectionRejected: true,
+        });
+        expect(controller.getSnapshot().cart).toEqual(before);
+        expect(controller.getSnapshot().pending).toBe(false);
+        await controller.read();
+        expect(controller.getSnapshot().error).toBeNull();
+    });
+});

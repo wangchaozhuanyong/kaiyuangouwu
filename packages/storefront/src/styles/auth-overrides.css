@@ -279,7 +279,6 @@
 
 @media (min-width: 1024px) {
     .page.auth-page {
-        width: min(calc(100% - 64px), 1200px);
         min-height: min(740px, calc(100dvh - 64px));
         margin: 32px auto;
         grid-template-columns: minmax(0, 1.25fr) minmax(390px, 0.75fr);
@@ -395,6 +394,35 @@
 
     .auth-page-register .login-content form .auth-field {
         margin-bottom: 11px;
+    }
+}
+
+@media (min-width: 1024px) and (max-width: 1199px) {
+    .page.auth-page {
+        grid-template-columns: minmax(0, 1.1fr) minmax(390px, 0.9fr);
+    }
+
+    .auth-page .auth-hero-message {
+        padding: 28px 28px 34px 72px;
+    }
+
+    .auth-page .auth-hero-copy {
+        margin-top: 76px;
+    }
+
+    .auth-page .auth-hero-message h2 {
+        max-width: none;
+        font-size: clamp(28px, 3.1vw, 34px);
+        -webkit-line-clamp: 3;
+    }
+
+    .auth-page .auth-hero-tags {
+        gap: 6px;
+    }
+
+    .auth-page .auth-hero-tags > span {
+        padding: 6px 9px;
+        font-size: 10px;
     }
 }
 

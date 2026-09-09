@@ -5,7 +5,7 @@ import { createRoot } from 'react-dom/client';
 import { expect, it, vi } from 'vitest';
 
 import { ShopApiTimeoutError } from './api/helpers';
-import { CategoryPage } from './pages/category-page';
+import { CategoryPage, categoryFilterActionLabel } from './pages/category-page';
 import { storefrontQueryKeys } from './query-client';
 import { CategoryPageContext } from './storefront-page-contexts';
 
@@ -15,6 +15,82 @@ vi.mock('@tanstack/react-router', async original => ({
 }));
 vi.mock('./components/common/product-row', () => ({ ProductRow: () => null }));
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
+
+it('shows a trusted catalog count or a count-free apply action', () => {
+    expect(categoryFilterActionLabel('zh', 1)).toBe('查看 1 件商品');
+    expect(categoryFilterActionLabel('en', 1)).toBe('View 1 product');
+    expect(categoryFilterActionLabel('en', 2)).toBe('View 2 products');
+    expect(categoryFilterActionLabel('en', null)).toBe('Apply filters');
+});
+
+it('uses the server catalog total in the filter confirmation action', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const container = document.createElement('div');
+    const root = createRoot(container);
+    const product = {
+        id: 'product-1',
+        name: 'Product',
+        slug: 'product',
+        assets: [],
+        featuredAsset: null,
+        collections: [{ id: 'collection-1' }],
+        customFields: {},
+        variants: [{ id: 'variant-1', priceWithTax: 1000, currencyCode: 'MYR', customFields: {} }],
+    };
+    const api = { catalog: vi.fn().mockResolvedValue({ items: [product], totalItems: 1 }) };
+    const noop = () => undefined;
+
+    try {
+        await act(async () => {
+            root.render(
+                <QueryClientProvider client={client}>
+                    <CategoryPageContext.Provider
+                        value={
+                            {
+                                api,
+                                products: [],
+                                collections: [{ id: 'collection-1', name: 'Category', children: [] }],
+                                contentBlocks: [],
+                                loading: false,
+                                error: null,
+                                market: { code: 'my-malaysia', currencyCode: 'MYR' },
+                                locale: 'en-MY',
+                                language: 'en',
+                                activeCollectionId: 'collection-1',
+                                activeChildId: 'collection-1',
+                                sortMode: 'recommended',
+                                fulfillmentFilter: 'all',
+                                inStockOnly: false,
+                                minimumPrice: '',
+                                maximumPrice: '',
+                                onCollectionChange: noop,
+                                onChildChange: noop,
+                                onSortChange: noop,
+                                onFilterChange: noop,
+                                onNotify: noop,
+                                onRetry: noop,
+                            } as any
+                        }
+                    >
+                        <CategoryPage />
+                    </CategoryPageContext.Provider>
+                </QueryClientProvider>,
+            );
+            await new Promise(resolve => setTimeout(resolve, 20));
+        });
+        const filterButton = Array.from(container.querySelectorAll('button')).find(
+            button => button.textContent?.trim() === 'Filter',
+        );
+        expect(filterButton).toBeDefined();
+        void act(() => filterButton?.dispatchEvent(new MouseEvent('click', { bubbles: true })));
+
+        expect(document.body.textContent).toContain('View 1 product');
+        expect(document.body.textContent).not.toContain('View 0 products');
+    } finally {
+        act(() => root.unmount());
+        client.clear();
+    }
+});
 
 it.each(
     [

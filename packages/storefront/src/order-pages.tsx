@@ -34,6 +34,7 @@ import { ORDER_STATUS_REFRESH_INTERVAL, orderNeedsStatusRefresh } from './order-
 import { PUBLIC_QUERY_GC_TIME, ROUTE_QUERY_STALE_TIME, storefrontQueryKeys } from './query-client';
 import { PageSkeleton } from './route-loading';
 import { acquireBodyScrollLock } from './scroll-lock';
+import { storefrontErrorMessage } from './storefront-errors';
 import { routeNavigateOptions } from './storefront-router';
 import { SafeImage } from './storefront-ui/product-display';
 import { orderPageStyles, pageClassName } from './tailwind/order-page-styles';
@@ -163,7 +164,7 @@ export function OrdersPage({
         } catch (requestError) {
             onNotify(
                 requestError instanceof Error
-                    ? requestError.message
+                    ? storefrontErrorMessage(requestError, language)
                     : isZh
                       ? '撤销售后申请失败'
                       : 'Could not cancel the request',
@@ -179,7 +180,7 @@ export function OrdersPage({
         ordersQuery.isPaused && ordersQuery.data === undefined
             ? offlineLoadError(language)
             : ordersQuery.error instanceof Error
-              ? ordersQuery.error.message
+              ? storefrontErrorMessage(ordersQuery.error, language)
               : ordersQuery.error
                 ? isZh
                     ? '订单加载失败'
@@ -292,7 +293,7 @@ export function OrdersPage({
                         afterSalesQuery.isPaused && afterSalesQuery.data === undefined
                             ? offlineLoadError(language)
                             : afterSalesQuery.error instanceof Error
-                              ? afterSalesQuery.error.message
+                              ? storefrontErrorMessage(afterSalesQuery.error, language)
                               : ''
                     }
                     cancellingId={cancellingAfterSalesId}
@@ -449,7 +450,7 @@ export function LogisticsPage({
         logisticsQuery.isPaused && logisticsQuery.data === undefined
             ? offlineLoadError(language)
             : logisticsQuery.error instanceof Error
-              ? logisticsQuery.error.message
+              ? storefrontErrorMessage(logisticsQuery.error, language)
               : logisticsQuery.error
                 ? isZh
                     ? '物流信息加载失败'
@@ -1344,7 +1345,7 @@ function AfterSalesRequestSheet({
         } catch (requestError) {
             setError(
                 requestError instanceof Error
-                    ? requestError.message
+                    ? storefrontErrorMessage(requestError, language)
                     : isZh
                       ? '提交售后申请失败'
                       : 'Could not submit the request',
@@ -1964,7 +1965,7 @@ function CancelOrderSheet({
         } catch (requestError) {
             setError(
                 requestError instanceof Error
-                    ? requestError.message
+                    ? storefrontErrorMessage(requestError, language)
                     : isZh
                       ? '订单取消失败，请稍后重试'
                       : 'Could not cancel the order. Try again later.',

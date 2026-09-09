@@ -829,3 +829,98 @@
         padding-top: 26px;
     }
 }
+
+/* Shared address selection and editing, including the checkout return flow. */
+.address-card.is-selected {
+    box-shadow: inset 3px 0 var(--accent);
+    background: var(--paper);
+}
+.address-selection-control {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    min-height: 44px;
+    color: var(--accent-ink);
+    cursor: pointer;
+}
+.address-selection-control input {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--accent);
+}
+.addresses-page.is-selecting-address {
+    padding-bottom: calc(88px + var(--safe-bottom));
+}
+.address-use-bar {
+    position: fixed;
+    width: min(100%, var(--app-width));
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: 0;
+    padding: 12px 14px calc(12px + var(--safe-bottom));
+    background: var(--paper);
+    border-top: 1px solid var(--line);
+    z-index: 2;
+}
+.address-smart-paste {
+    padding: 12px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--soft);
+}
+.address-smart-paste textarea {
+    display: block;
+    width: 100%;
+    min-height: 84px;
+    resize: vertical;
+    padding: 10px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: var(--paper);
+}
+.address-smart-paste p {
+    margin: 8px 0;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.5;
+}
+.address-smart-paste button {
+    min-height: 40px;
+    padding: 6px 12px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: var(--paper);
+    color: var(--accent-ink);
+}
+.address-smart-paste small {
+    display: block;
+    margin-top: 8px;
+    color: var(--accent-ink);
+}
+.checkout-address-loading {
+    min-height: 72px;
+    display: flex;
+    align-items: center;
+    padding: 12px;
+    background: var(--soft);
+    color: var(--muted);
+    border-radius: 10px;
+}
+.checkout-total-hint {
+    display: block;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: normal;
+}
+
+@media (min-width: 1024px) {
+    .address-use-bar {
+        width: min(calc(100% - 64px), var(--desktop-shell-width));
+        border-radius: 10px;
+        bottom: 24px;
+    }
+}
+
+.address-form-fields {
+    display: contents;
+}

@@ -5,6 +5,7 @@ import { ShopApi } from '../api';
 import { offlineLoadError } from '../loading-state';
 import { PageSkeleton } from '../route-loading';
 import { useProductsByIdsQuery } from '../route-queries';
+import { storefrontErrorMessage } from '../storefront-errors';
 import { BrowsingHistoryPageContext } from '../storefront-page-contexts';
 import { routeNavigateOptions, type RouteState } from '../storefront-router';
 import { EmptyState, SubHeader } from '../storefront-ui/page-shell';
@@ -36,7 +37,7 @@ export function BrowsingHistoryPage() {
         !historyProducts.length && historyQuery.isPaused
             ? offlineLoadError(language)
             : !historyProducts.length && historyQuery.error instanceof Error
-              ? historyQuery.error.message
+              ? storefrontErrorMessage(historyQuery.error, language)
               : '';
 
     return (

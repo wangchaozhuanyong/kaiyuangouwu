@@ -201,10 +201,7 @@ export class UserService {
     }
 
     async softDelete(ctx: RequestContext, userId: ID) {
-        // Dynamic import to avoid the circular dependency of SessionService
-        await this.moduleRef
-            .get((await import('./session.service.js')).SessionService)
-            .deleteSessionsByUser(ctx, new User({ id: userId }));
+        await this.deleteSessionsByUser(ctx, new User({ id: userId }));
         await this.connection.getEntityOrThrow(ctx, User, userId);
         await this.connection.getRepository(ctx, User).update({ id: userId }, { deletedAt: new Date() });
     }
@@ -343,7 +340,9 @@ export class UserService {
                 // a verification.
                 user.verified = true;
             }
-            return this.connection.getRepository(ctx, User).save(user);
+            const savedUser = await this.connection.getRepository(ctx, User).save(user);
+            await this.deleteSessionsByUser(ctx, savedUser);
+            return savedUser;
         } else {
             return new PasswordResetTokenExpiredError();
         }
@@ -465,10 +464,19 @@ export class UserService {
             return new InvalidCredentialsError({ authenticationError: '' });
         }
         nativeAuthMethod.passwordHash = await this.passwordCipher.hash(newPassword);
+        nativeAuthMethod.passwordResetToken = null;
         await this.connection
             .getRepository(ctx, NativeAuthenticationMethod)
             .save(nativeAuthMethod, { reload: false });
+        await this.deleteSessionsByUser(ctx, user);
         return true;
+    }
+
+    private async deleteSessionsByUser(ctx: RequestContext, user: User): Promise<void> {
+        // Dynamic import to avoid the circular dependency of SessionService.
+        await this.moduleRef
+            .get((await import('./session.service.js')).SessionService)
+            .deleteSessionsByUser(ctx, user);
     }
 
     private async validatePassword(

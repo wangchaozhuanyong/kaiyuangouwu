@@ -11,6 +11,7 @@ import {
     publicQueryMeta,
     storefrontQueryKeys,
 } from './query-client';
+import { storefrontErrorMessage } from './storefront-errors';
 import { SubHeader } from './storefront-ui/page-shell';
 import {
     ActiveCustomer,
@@ -119,9 +120,9 @@ export function ReviewCenterPage({
                         reviewsQuery.isPaused || candidatesQuery.isPaused
                             ? offlineLoadError(language)
                             : reviewsQuery.error instanceof Error
-                              ? reviewsQuery.error.message
+                              ? storefrontErrorMessage(reviewsQuery.error, language)
                               : candidatesQuery.error instanceof Error
-                                ? candidatesQuery.error.message
+                                ? storefrontErrorMessage(candidatesQuery.error, language)
                                 : ''
                     }
                     action={isZh ? '重试' : 'Retry'}
@@ -351,7 +352,7 @@ function ReviewComposer({
                 body: body.trim(),
             });
         } catch (submitError) {
-            setError(submitError instanceof Error ? submitError.message : String(submitError));
+            setError(storefrontErrorMessage(submitError, language));
         } finally {
             setSubmitting(false);
         }

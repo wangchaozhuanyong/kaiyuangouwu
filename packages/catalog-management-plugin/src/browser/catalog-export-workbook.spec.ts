@@ -6,6 +6,27 @@ import { buildCatalogExport } from './catalog-export-workbook';
 import { parseCatalogArrayBuffer } from './catalog-local-file';
 
 describe('browser-local catalog export', () => {
+    it.each(['=1+1', ' \t@value', '\r=1+1', '\nordinary'])(
+        'neutralizes every exported CSV text cell: %j',
+        value => {
+            const row = exportRow();
+            row.productName = value;
+            row.description = value;
+            row.tags = [value];
+            row.brand = value;
+            row.stockLevels[0].stockLocationName = value;
+            const output = buildCatalogExport([row], 'csv', 's1');
+            const workbook = XLSX.read(output.buffer, { type: 'array', raw: true });
+            const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(
+                workbook.Sheets[workbook.SheetNames[0]],
+            );
+            for (const field of ['名称', '商品描述', '标签', '品牌', '仓库'])
+                expect(rows[0][field]).toBe("'" + value);
+            const xlsx = XLSX.read(buildCatalogExport([row], 'xlsx', 's1').buffer, { type: 'array' });
+            expect(xlsx.Sheets['商品与SKU'].A2).toMatchObject({ t: 's', v: value });
+            expect(xlsx.Sheets['商品与SKU'].A2.f).toBeUndefined();
+        },
+    );
     it('creates the four standard worksheets with typed source and system dates', () => {
         const output = buildCatalogExport([exportRow()], 'xlsx', 's1');
         const workbook = XLSX.read(output.buffer, { type: 'array', cellDates: true });
@@ -37,10 +58,10 @@ describe('browser-local catalog export', () => {
         const csv = new TextDecoder().decode(output.buffer);
         expect([...bytes.slice(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
         expect(csv).toContain(
-            '名称,一级分类,SKU,仓库,库存量,进货价,销售价,毛利率,库存上限,库存下限,商品状态,商品描述,标签',
+            '"名称","一级分类","SKU","仓库","库存量","进货价","销售价","毛利率","库存上限","库存下限","商品状态","商品描述","标签"',
         );
         expect(csv).toContain('匿名商品');
-        expect(csv).toContain('主仓,10,1.255,2.5');
+        expect(csv).toContain('"主仓","10","1.255","2.50"');
     });
 
     it('round-trips standard product, stock policy and lot data through the browser parser', async () => {

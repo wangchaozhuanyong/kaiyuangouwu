@@ -37,6 +37,8 @@ export class ManualDigitalDeliveryEvent extends VendureEntity {
     @ManyToOne(() => ManualDigitalDelivery, delivery => delivery.events, {
         onDelete: 'CASCADE',
         nullable: false,
+        // Saving an older task snapshot must not detach newly appended audit events.
+        orphanedRowAction: 'disable',
     })
     @JoinColumn({ name: 'deliveryId', foreignKeyConstraintName: 'FK_manual_delivery_event_delivery' })
     delivery: ManualDigitalDelivery;

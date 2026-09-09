@@ -105,6 +105,8 @@ export function ProductRow({
     const variant = product.variants[0];
     const availability = productAvailability(variant);
     const smartInfo = buildProductRowSmartInfo(product, language);
+    const description = trimText(product.description, product.description.length);
+    const showDescription = description && description !== trimText(product.name, product.name.length);
     return (
         <article
             className={`product-row${layout === 'catalog' ? ' product-catalog-card' : ''}`}
@@ -124,7 +126,7 @@ export function ProductRow({
             <div className="product-row-content">
                 <div className="product-row-top">
                     <strong className="product-row-name">{product.name}</strong>
-                    <span className="product-row-desc">{trimText(product.description, 32)}</span>
+                    {showDescription && <span className="product-row-desc">{description}</span>}
                     <span className="product-row-badge product-row-smart-line">{smartInfo.primary}</span>
                     {smartInfo.secondary ? (
                         <span className="product-row-smart-line product-row-warranty">

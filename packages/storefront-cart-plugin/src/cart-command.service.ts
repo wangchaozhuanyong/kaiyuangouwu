@@ -162,7 +162,7 @@ export class CartCommandService {
                     if (isFailure(outcome)) {
                         error =
                             outcome instanceof CartProjectionError
-                                ? { errorCode: outcome.errorCode, message: outcome.causeMessage }
+                                ? { errorCode: outcome.causeCode, message: outcome.causeMessage }
                                 : outcome;
                         await runner.rollbackTransaction();
                     } else {

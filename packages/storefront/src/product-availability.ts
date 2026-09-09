@@ -1,4 +1,4 @@
-import type { ProductVariant, StorefrontLanguage } from './types';
+import type { ProductVariant, StorefrontCart, StorefrontLanguage } from './types';
 
 export interface ProductAvailability {
     stock: number | null;
@@ -45,4 +45,40 @@ export function variantCanIncreaseQuantity(variant: ProductVariant, quantity: nu
 function normalizeStock(value: number | null | undefined, fallback: number): number {
     if (value == null || !Number.isFinite(value)) return fallback;
     return Math.max(0, Math.floor(value));
+}
+
+export function variantHasStock(variant: ProductVariant | null | undefined, quantity: number): boolean {
+    const availability = productAvailability(variant);
+    return (
+        Number.isInteger(quantity) &&
+        quantity > 0 &&
+        (availability.unlimited || quantity <= (availability.stock ?? 0))
+    );
+}
+
+export function cartLineCanSelect(line: StorefrontCart['lines'][number]): boolean {
+    return line.available && variantHasStock(line.productVariant, line.quantity);
+}
+
+export function cartSelectionState(lines: StorefrontCart['lines']): StorefrontCart['selectionState'] {
+    const selectable = lines.filter(cartLineCanSelect);
+    if (!lines.some(line => line.selected)) return 'NONE';
+    return selectable.length > 0 &&
+        selectable.every(line => line.selected) &&
+        lines.every(line => !line.selected || cartLineCanSelect(line))
+        ? 'ALL'
+        : 'PARTIAL';
+}
+
+export function quantityStockMessage(
+    variant: ProductVariant | null | undefined,
+    quantity: number,
+    language: StorefrontLanguage,
+): string | null {
+    if (variantHasStock(variant, quantity)) return null;
+    const { stock, soldOut } = productAvailability(variant);
+    if (soldOut) return language === 'zh' ? '已售罄，暂时无法购买' : 'Sold out; currently unavailable';
+    return language === 'zh'
+        ? `库存不足，当前最多可购买 ${stock} 件，请调整数量`
+        : `Not enough stock. Up to ${stock} available; please reduce the quantity`;
 }

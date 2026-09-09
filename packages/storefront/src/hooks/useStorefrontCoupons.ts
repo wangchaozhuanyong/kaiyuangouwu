@@ -5,6 +5,7 @@ import { markCouponCampaignClaimed } from '../coupon-center-state';
 import { claimAndVerifyCoupon } from '../coupon-claim-verification';
 import { uiCopy } from '../i18n';
 import { storefrontQueryKeys } from '../query-client';
+import { storefrontErrorMessage } from '../storefront-errors';
 import { RouteName, RouteState } from '../storefront-router';
 import { ActiveCustomer, StoreCustomerCoupon, StorefrontCart, StorefrontCouponCampaign } from '../types';
 
@@ -72,7 +73,9 @@ export function useStorefrontCoupons({
                 notify(isZh ? '优惠券已使用' : 'Coupon applied');
                 return null;
             } catch (requestError) {
-                return requestError instanceof Error ? requestError.message : text.loadError;
+                return requestError instanceof Error
+                    ? storefrontErrorMessage(requestError, language)
+                    : text.loadError;
             } finally {
                 setCartLoading(false);
             }
@@ -140,7 +143,9 @@ export function useStorefrontCoupons({
                 notify(isZh ? '优惠券领取成功' : 'Coupon claimed');
                 return null;
             } catch (requestError) {
-                return requestError instanceof Error ? requestError.message : text.loadError;
+                return requestError instanceof Error
+                    ? storefrontErrorMessage(requestError, language)
+                    : text.loadError;
             } finally {
                 setCartLoading(false);
             }
@@ -171,7 +176,9 @@ export function useStorefrontCoupons({
                 notify(isZh ? '已取消使用优惠券' : 'Coupon unapplied');
                 return null;
             } catch (requestError) {
-                return requestError instanceof Error ? requestError.message : text.loadError;
+                return requestError instanceof Error
+                    ? storefrontErrorMessage(requestError, language)
+                    : text.loadError;
             } finally {
                 setCartLoading(false);
             }

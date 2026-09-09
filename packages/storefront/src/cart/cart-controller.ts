@@ -26,7 +26,7 @@ export interface CartState {
     totalsPending: boolean;
     checkoutReady: boolean;
     editingBlocked: boolean;
-    error: string | null;
+    error: Error | null;
 }
 
 /** Owns every first-party cart/order write. Payment charging deliberately has no entry here. */
@@ -100,7 +100,7 @@ export class CartController {
         this.phase = 'unknown';
         await this.recoverPending();
     }
-    private error: string | null = null;
+    private error: Error | null = null;
     private phase: Phase = 'idle';
     private state: CartState = {
         confirmed: null,
@@ -155,6 +155,7 @@ export class CartController {
         }
         if (epoch !== this.epoch) throw new Error('Cart session changed.');
         await this.restore();
+        if (!this.queue.length && this.phase !== 'unknown') this.error = null;
         this.publish();
         return this.repository.snapshot ?? cart;
     }
@@ -200,7 +201,7 @@ export class CartController {
             const unsubscribe = this.subscribe(() => {
                 if (this.phase === 'unknown' || !this.queue.length) {
                     unsubscribe();
-                    if (this.error) reject(new Error(this.error));
+                    if (this.error) reject(this.error);
                     else resolve();
                 }
             });
@@ -299,17 +300,19 @@ export class CartController {
                     this.publish();
                     return;
                 }
-                this.error = pending.command ? '保存结果尚未确认，请重试核对后再结算。' : message(error);
+                this.error = pending.command
+                    ? new ShopApiError('UNKNOWN_RESULT', '保存结果尚未确认，请重试核对后再结算。')
+                    : message(error);
                 if (pending.command) this.phase = 'unknown';
                 else {
                     this.queue.shift();
                     this.phase = 'idle';
                 }
-                for (const waiter of pending.waiters) waiter.reject(new Error(this.error));
+                for (const waiter of pending.waiters) waiter.reject(this.error);
                 pending.waiters = [];
                 // Later operations must not pass a failed or uncertain prerequisite.
                 for (const later of this.queue.slice(pending.command ? 1 : 0))
-                    for (const waiter of later.waiters) waiter.reject(new Error(this.error));
+                    for (const waiter of later.waiters) waiter.reject(this.error);
                 this.queue = pending.command ? [pending] : [];
                 break;
             }
@@ -326,8 +329,16 @@ export class CartController {
         this.remember(null);
         this.queue.shift();
         if (result.status !== 'APPLIED') {
-            this.error = result.message ?? '购物车更新未生效，请检查后重试。';
-            const error = new ShopApiError(result.errorCode ?? 'CART_COMMAND_CANCELLED', this.error);
+            const error = new ShopApiError(
+                result.errorCode ?? 'CART_COMMAND_CANCELLED',
+                result.message ?? '购物车更新未生效，请检查后重试。',
+            );
+            Object.assign(error, {
+                selectionRejected:
+                    'changes' in pending.operation &&
+                    pending.operation.changes.lines?.some(line => line.selected != null),
+            });
+            this.error = error;
             for (const waiter of pending.waiters) waiter.reject(error);
             // A queued checkout must never continue after a rejected edit.
             for (const later of this.queue) for (const waiter of later.waiters) waiter.reject(error);
@@ -368,6 +379,6 @@ export class CartController {
         for (const listener of this.listeners) listener();
     }
 }
-function message(error: unknown): string {
-    return error instanceof Error ? error.message : '购物车暂时无法更新。';
+function message(error: unknown): Error {
+    return error instanceof Error ? error : new Error('购物车暂时无法更新。');
 }
