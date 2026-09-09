@@ -54,8 +54,11 @@ export function ProductVariantsTab() {
 
     return (
         <div className="space-y-4">
-            <section className="rounded-xl border border-blue-200 bg-blue-50/70 p-4 shadow-2xs sm:p-5">
-                <h3 className="text-sm font-bold text-slate-900">这一步只需填好商品的销售规格</h3>
+            <section className="rounded-xl border border-blue-200 bg-blue-50/60 p-4 shadow-2xs sm:p-5">
+                <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                    这一步只需填好商品的销售规格
+                    <FeatureHelpButton topic="catalog.variants" title="商品销售规格填写步骤" />
+                </h3>
                 <div className="mt-3 grid gap-2 text-xs text-slate-700 sm:grid-cols-3">
                     {[
                         ['1', '添加规格', '单一商品只添加一个；颜色、容量等多规格再用模板。'],
@@ -68,7 +71,7 @@ export function ProductVariantsTab() {
                                 : '在本页下方的“SKU 成本与库存”直接填写。',
                         ],
                     ].map(([step, title, description]) => (
-                        <div key={step} className="rounded-lg border border-blue-100 bg-white/80 p-3">
+                        <div key={step} className="rounded-lg border border-blue-100 bg-white p-3">
                             <div className="flex items-center gap-2 font-bold text-slate-900">
                                 <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-[10px] text-white">
                                     {step}
@@ -88,6 +91,10 @@ export function ProductVariantsTab() {
                             <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                                 <FolderTree className="h-4 w-4 text-blue-600" />
                                 销售店铺（无特殊需求不用修改）
+                                <FeatureHelpButton
+                                    topic="catalog.variant-channels"
+                                    title="销售店铺与独立定价"
+                                />
                             </h3>
                             <p className="mt-1 text-xs text-slate-500">
                                 当前为{' '}
