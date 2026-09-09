@@ -100,6 +100,7 @@ export const REQUIRED_RUNTIME_FILES = Object.freeze([
     'packages/dev-server/scripts/damatong-storefront-config.mjs',
     'packages/dev-server/scripts/sync-damatong-storefront.mjs',
     'packages/dev-server/scripts/repair-inventory-inheritance.mjs',
+    'packages/dev-server/scripts/repair-coupon-lifecycle.mjs',
     'packages/image-generation-plugin/dist/index.js',
     ...STOREFRONT_MEDIA_RUNTIME_FILES,
     ...MOYAO_BRAND_RUNTIME_FILES,
@@ -267,6 +268,7 @@ export async function copyStorefrontMediaReleaseInputs(stagingRoot) {
         'damatong-storefront-config.mjs',
         'sync-damatong-storefront.mjs',
         'repair-inventory-inheritance.mjs',
+        'repair-coupon-lifecycle.mjs',
         ...HOMEPAGE_CAROUSEL_RUNTIME_FILES.map(file => path.basename(file)),
     ];
     for (const scriptName of releaseScripts) {
@@ -326,6 +328,7 @@ async function writeRuntimeRootFiles(stagingRoot, rootManifest, metadata) {
         engines: rootManifest.engines,
         scripts: {
             migrate: 'node packages/dev-server/dist/run-migrations.js',
+            'repair:coupon-lifecycle': 'node packages/dev-server/scripts/repair-coupon-lifecycle.mjs',
             'repair:inventory-inheritance':
                 'node packages/dev-server/scripts/repair-inventory-inheritance.mjs',
             'sync:storefront-media': 'node packages/dev-server/scripts/sync-storefront-media.mjs',

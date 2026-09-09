@@ -108,6 +108,7 @@ void test('runtime artifact includes release publishers and every media manifest
         await access(path.join(fixtureRoot, 'packages/dev-server/scripts/damatong-storefront-config.mjs'));
         await access(path.join(fixtureRoot, 'packages/dev-server/scripts/sync-damatong-storefront.mjs'));
         await access(path.join(fixtureRoot, 'packages/dev-server/scripts/repair-inventory-inheritance.mjs'));
+        await access(path.join(fixtureRoot, 'packages/dev-server/scripts/repair-coupon-lifecycle.mjs'));
         for (const entry of storefrontMediaManifest) {
             const relativePath = path.relative(repositoryRoot, entry.file);
             const copied = await readFile(path.join(fixtureRoot, relativePath));
