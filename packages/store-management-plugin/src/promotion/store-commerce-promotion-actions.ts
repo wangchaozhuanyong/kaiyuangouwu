@@ -1,20 +1,21 @@
 import { LanguageCode } from '@vendure/common/lib/generated-types';
-import { ID } from '@vendure/common/lib/shared-types';
 import {
     CurrencyCode,
     idsAreEqual,
-    ProductVariant,
     PromotionCondition,
     PromotionItemAction,
     PromotionOrderAction,
-    RequestContext,
+    RequestContextCacheService,
     TransactionalConnection,
 } from '@vendure/core';
 
 import { CustomerCoupon } from '../entities/customer-coupon.entity';
 import { convertChannelAmount } from '../store-currency-price-selection-strategy';
 
+import { couponCollectionsForVariant } from './store-coupon-collections';
+
 let connection: TransactionalConnection;
+let requestCache: RequestContextCacheService;
 
 export const customerCouponEntitlement = new PromotionCondition({
     code: 'store_customer_coupon_entitlement',
@@ -197,9 +198,17 @@ export const collectionPercentageDiscount = new PromotionItemAction({
     },
     init(injector) {
         connection = injector.get(TransactionalConnection);
+        requestCache = injector.get(RequestContextCacheService);
     },
     async execute(ctx, orderLine, args) {
-        if (!(await variantBelongsToCollections(ctx, orderLine.productVariant.id, args.collectionIds))) {
+        const categoryIds = await couponCollectionsForVariant(
+            ctx,
+            orderLine.productVariant.id,
+            connection,
+            requestCache,
+        );
+        const selected = new Set(args.collectionIds.map(String));
+        if (!categoryIds.some(id => selected.has(id))) {
             return 0;
         }
         const unitPrice = ctx.channel.pricesIncludeTax ? orderLine.unitPriceWithTax : orderLine.unitPrice;
@@ -287,23 +296,4 @@ export function parseFlashSaleVariantRules(value: string): FlashSaleVariantRule[
     } catch {
         return [];
     }
-}
-
-async function variantBelongsToCollections(
-    ctx: RequestContext,
-    variantId: ID,
-    collectionIds: ID[],
-): Promise<boolean> {
-    if (!collectionIds.length) {
-        return false;
-    }
-    const variant = await connection.getRepository(ctx, ProductVariant).findOne({
-        where: { id: variantId },
-        relations: { collections: true },
-    });
-    return Boolean(
-        variant?.collections.some(collection =>
-            collectionIds.some(collectionId => idsAreEqual(collection.id, collectionId)),
-        ),
-    );
 }

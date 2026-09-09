@@ -74,14 +74,48 @@ export function bestProductCouponPrice({
 }: ProductCouponPriceInput): ProductCouponPrice | null {
     if (!Number.isFinite(priceWithTax) || priceWithTax <= 0) return null;
 
-    const usableCampaignIds = new Set(
-        customerCoupons.filter(coupon => coupon.usable).map(coupon => coupon.campaignId),
+    const now = Date.now();
+    const usableCoupons = customerCoupons.filter(
+        coupon =>
+            coupon.usable &&
+            Date.parse(coupon.validFrom) <= now &&
+            (!coupon.validUntil || Date.parse(coupon.validUntil) > now),
     );
+    const usableCampaignIds = new Set(usableCoupons.map(coupon => coupon.campaignId));
+    const candidates = new Map(campaigns.map(campaign => [campaign.id, campaign]));
+    // Issuance may have ended while this customer's entitlement is still valid.
+    for (const coupon of usableCoupons) {
+        candidates.set(coupon.campaignId, {
+            ...candidates.get(coupon.campaignId),
+            id: coupon.campaignId,
+            name: coupon.campaignName,
+            kind: coupon.campaignKind,
+            minimumSpend: coupon.minimumSpend,
+            currencyCode: coupon.currencyCode ?? currencyCode,
+            discountAmount: coupon.discountAmount,
+            discountRate: coupon.discountRate,
+            collectionIds: coupon.collectionIds ?? [],
+            productVariantIds: coupon.productVariantIds ?? [],
+            startsAt: coupon.validFrom,
+            endsAt: coupon.validUntil,
+            claimStartsAt: null,
+            claimEndsAt: null,
+            validityDays: null,
+            remainingIssueCount: null,
+            claimed: true,
+            claimable: false,
+        });
+    }
     const collectionIdSet = new Set(collectionIds);
     let best: ProductCouponPrice | null = null;
 
-    for (const campaign of campaigns) {
-        if (!campaign.claimable && !usableCampaignIds.has(campaign.id)) continue;
+    for (const campaign of candidates.values()) {
+        const owned = usableCampaignIds.has(campaign.id);
+        const claimableNow =
+            campaign.claimable &&
+            (!campaign.claimStartsAt || Date.parse(campaign.claimStartsAt) <= now) &&
+            (!campaign.claimEndsAt || Date.parse(campaign.claimEndsAt) > now);
+        if (!claimableNow && !owned) continue;
         if (campaign.currencyCode && campaign.currencyCode !== currencyCode) continue;
         if (campaign.minimumSpend > priceWithTax) continue;
         if (!couponMatchesProduct(campaign, collectionIdSet, productVariantId)) continue;

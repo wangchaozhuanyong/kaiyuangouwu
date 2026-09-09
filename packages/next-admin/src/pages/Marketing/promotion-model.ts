@@ -62,6 +62,7 @@ export const ledgerLabels: Record<string, string> = {
     EXPIRED: '已过期',
     REVOKED: '已作废',
     REFUND_SETTLED: '退款完成',
+    CORRECTED: '规则修复',
 };
 
 export const PAGE_SIZE = 50;
@@ -155,8 +156,10 @@ export function couponDraftError(draft: CouponDraft) {
             : Number(draft.discountValue) <= 0 || Number(draft.discountValue) >= 10
     )
         return draft.kind === 'ORDER_FIXED' ? '减免金额必须大于0' : '折扣必须大于0折并小于10折';
-    if (!draft.issueLimit || Number(draft.issueLimit) < 1) return '发放总量必须大于0';
-    if (!draft.validityDays || Number(draft.validityDays) < 1) return '有效天数必须大于0';
+    if (!Number.isInteger(Number(draft.issueLimit)) || Number(draft.issueLimit) < 1)
+        return '发放总量必须为正整数';
+    if (!Number.isInteger(Number(draft.validityDays)) || Number(draft.validityDays) < 1)
+        return '有效天数必须为正整数';
     if (Date.parse(draft.claimStartsAt) >= Date.parse(draft.claimEndsAt))
         return '领取结束时间必须晚于开始时间';
     if (draft.kind === 'COLLECTION_PERCENTAGE' && !draft.collectionIds.length)

@@ -4,14 +4,32 @@ import {
     ContentTranslationPlugin,
     type ContentTranslationProvider,
 } from '@vendure/content-translation-plugin';
-import { mergeConfig, PaymentMethodHandler } from '@vendure/core';
+import {
+    ConfigService,
+    EventBus,
+    mergeConfig,
+    Order,
+    OrderService,
+    PaymentMethodHandler,
+    Promotion,
+    Refund,
+    RefundStateTransitionEvent,
+    RequestContextService,
+    TransactionalConnection,
+} from '@vendure/core';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 import { createTestEnvironment } from '@vendure/testing';
+import fs from 'fs/promises';
 import gql from 'graphql-tag';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import path from 'path';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { initialData } from '../../../e2e-common/e2e-initial-data';
 import { TEST_SETUP_TIMEOUT_MS, testConfig } from '../../../e2e-common/test-config';
+import { awaitRunningJobs } from '../../core/e2e/utils/await-running-jobs';
+import { CustomerCoupon } from '../src/entities/customer-coupon.entity';
+import { StoreCouponCampaignConfig } from '../src/entities/store-coupon-campaign-config.entity';
+import { StoreProfile } from '../src/entities/store-profile.entity';
 import { StoreManagementPlugin } from '../src/store-management.plugin';
 
 const couponPaymentHandler = new PaymentMethodHandler({
@@ -129,6 +147,11 @@ const COUPON_FIELDS = gql`
         lockedOrderId
         usedOrderId
         returnCount
+        claimedAt
+        validFrom
+        validUntil
+        collectionIds
+        productVariantIds
         usable
     }
 `;
@@ -669,6 +692,528 @@ describe('coupon lifecycle closed loop', () => {
             ]),
         );
     });
+    it('keeps the old coupon and cart price when an ineligible coupon is selected through either API', async () => {
+        await auditCustomer('invalid-selection');
+        const good = await auditClaim({ name: 'Audit valid', discountAmount: 500 });
+        const bad = await auditClaim({ name: 'Audit minimum not met', minimumSpend: 1_000_000 });
+        await shopClient.query(ADD_ITEM, { productVariantId });
+        await shopClient.query(APPLY_OWNED_COUPON, { id: good.id });
+        const before = (await shopClient.query(AUDIT_ORDER)).activeOrder;
+        await expect(shopClient.query(APPLY_OWNED_COUPON, { id: bad.id })).rejects.toThrow(
+            '不适用于当前购物车',
+        );
+        expect((await shopClient.query(AUDIT_ORDER)).activeOrder).toEqual(before);
+        const cart = (
+            await shopClient.query(gql`
+                query {
+                    storefrontCart {
+                        id
+                        revision
+                    }
+                }
+            `)
+        ).storefrontCart;
+        const result = await shopClient.query(
+            gql`
+                mutation ($input: StorefrontCartCommandInput!) {
+                    applyStorefrontCartCommand(input: $input) {
+                        status
+                        errorCode
+                        cart {
+                            revision
+                        }
+                    }
+                }
+            `,
+            {
+                input: {
+                    cartId: cart.id,
+                    expectedRevision: cart.revision,
+                    commandId: 'audit-ineligible-coupon',
+                    coupon: { action: 'APPLY', couponId: bad.id },
+                },
+            },
+        );
+        expect(result.applyStorefrontCartCommand).toMatchObject({
+            status: 'REJECTED',
+            cart: { revision: cart.revision },
+        });
+        expect((await shopClient.query(AUDIT_ORDER)).activeOrder).toEqual(before);
+        const mine = (await shopClient.query(MY_COUPONS)).myStorefrontCoupons;
+        expect(mine.find((coupon: any) => coupon.id === good.id).status).toBe('LOCKED');
+        expect(mine.find((coupon: any) => coupon.id === bad.id).status).toBe('AVAILABLE');
+    });
+
+    it('rolls back coupon replacement if formal pricing loses the discount after a successful trial', async () => {
+        await auditCustomer('post-apply-rollback');
+        const good = await auditClaim({ name: 'Audit original discount', discountAmount: 500 });
+        const next = await auditClaim({ name: 'Audit replacement discount', discountAmount: 600 });
+        await shopClient.query(ADD_ITEM, { productVariantId });
+        await shopClient.query(APPLY_OWNED_COUPON, { id: good.id });
+        const before = (await shopClient.query(AUDIT_ORDER)).activeOrder;
+        const orders = server.app.get(OrderService);
+        const apply = orders.applyCouponCode.bind(orders);
+        const spy = vi.spyOn(orders, 'applyCouponCode').mockImplementationOnce(async (ctx, orderId, code) => {
+            const result = await apply(ctx, orderId, code);
+            // Inject a real repricing failure inside the request transaction.
+            await orders.removeCouponCode(ctx, orderId, code);
+            return result;
+        });
+        try {
+            await expect(shopClient.query(APPLY_OWNED_COUPON, { id: next.id })).rejects.toThrow(
+                '未产生实际优惠',
+            );
+        } finally {
+            spy.mockRestore();
+        }
+        expect((await shopClient.query(AUDIT_ORDER)).activeOrder).toEqual(before);
+        const mine = (await shopClient.query(MY_COUPONS)).myStorefrontCoupons;
+        expect(mine.find((coupon: any) => coupon.id === good.id).status).toBe('LOCKED');
+        expect(mine.find((coupon: any) => coupon.id === next.id).status).toBe('AVAILABLE');
+    });
+
+    it('isolates a merchant coupon also assigned to the default Channel by Vendure', async () => {
+        await auditCustomer('channel-isolation');
+        const token = 'coupon-audit-secondary-channel';
+        const createdChannel = await adminClient.query(
+            gql`
+                mutation ($input: CreateChannelInput!) {
+                    createChannel(input: $input) {
+                        ... on Channel {
+                            id
+                        }
+                        ... on ErrorResult {
+                            errorCode
+                            message
+                        }
+                    }
+                }
+            `,
+            {
+                input: {
+                    code: token,
+                    token,
+                    defaultLanguageCode: LanguageCode.en,
+                    currencyCode: 'USD',
+                    pricesIncludeTax: true,
+                    defaultShippingZoneId: 'T_1',
+                    defaultTaxZoneId: 'T_1',
+                },
+            },
+        );
+        expect(createdChannel.createChannel.id).toBeTruthy();
+        const merchantContext = await server.app.get(RequestContextService).create({
+            apiType: 'admin',
+            channelOrToken: token,
+        });
+        await server.app
+            .get(TransactionalConnection)
+            .getRepository(merchantContext, StoreProfile)
+            .save(
+                new StoreProfile({
+                    channelId: merchantContext.channelId,
+                    status: 'ACTIVE',
+                    descriptionZh: '',
+                    descriptionEn: '',
+                }),
+            );
+        let merchantCampaignId: string;
+        adminClient.setRequestHeader('vendure-token', token);
+        try {
+            const created = await adminClient.query(CREATE_COUPON, {
+                input: {
+                    name: 'Audit merchant only',
+                    kind: 'ORDER_FIXED',
+                    minimumSpend: 0,
+                    discountAmount: 100,
+                    validityDays: 7,
+                    issueLimit: 10,
+                },
+            });
+            merchantCampaignId = created.createStoreCouponCampaign.id;
+        } finally {
+            adminClient.setRequestHeader('vendure-token', null);
+        }
+        expect(
+            (await shopClient.query(ACTIVE_COUPONS)).activeStorefrontCoupons.some(
+                (item: any) => item.id === merchantCampaignId,
+            ),
+        ).toBe(false);
+        await expect(shopClient.query(CLAIM, { campaignId: merchantCampaignId })).rejects.toThrow('其他店铺');
+        await expect(
+            adminClient.query(
+                gql`
+                    query ($id: ID!) {
+                        storeCouponRepairPreview(campaignId: $id)
+                    }
+                `,
+                { id: merchantCampaignId },
+            ),
+        ).rejects.toThrow('当前店铺');
+        await shopClient.asAnonymousUser();
+        shopClient.setRequestHeader('Authorization', null);
+        shopClient.setRequestHeader('vendure-token', token);
+        try {
+            expect(
+                (await shopClient.query(ACTIVE_COUPONS)).activeStorefrontCoupons.some(
+                    (item: any) => item.id === merchantCampaignId,
+                ),
+            ).toBe(true);
+        } finally {
+            shopClient.setRequestHeader('vendure-token', null);
+        }
+    });
+
+    it('allows full-refund reuse with the same defaults as the admin editor and does not renew expiry', async () => {
+        await auditCustomer('refund-reuse');
+        const coupon = await auditClaim({
+            name: 'Audit refund reuse',
+            issueLimit: 1,
+            usageLimit: 1,
+            perCustomerUsageLimit: 1,
+        });
+        const first = await auditPay(coupon.id);
+        await auditRefund(first);
+        const returned = (await shopClient.query(MY_COUPONS)).myStorefrontCoupons.find(
+            (item: any) => item.id === coupon.id,
+        );
+        expect(returned).toMatchObject({
+            status: 'RETURNED',
+            usedOrderId: null,
+            returnCount: 1,
+            validUntil: coupon.validUntil,
+        });
+        const second = await auditPay(coupon.id);
+        expect(second.id).not.toBe(first.id);
+        expect(
+            (await shopClient.query(MY_COUPONS)).myStorefrontCoupons.find(
+                (item: any) => item.id === coupon.id,
+            ),
+        ).toMatchObject({ status: 'USED', usedOrderId: second.id, validUntil: coupon.validUntil });
+    }, 30_000);
+
+    it('does not return B order redemption when cancelled A is refunded later', async () => {
+        await auditCustomer('late-refund');
+        const coupon = await auditClaim({ name: 'Audit late refund' });
+        const first = await auditPay(coupon.id);
+        adminClient.setRequestHeader('x-vendure-sensitive-action-password', SUPER_ADMIN_USER_PASSWORD);
+        try {
+            const cancelled = await adminClient.query(
+                gql`
+                    mutation ($input: CancelOrderInput!) {
+                        cancelOrder(input: $input) {
+                            ... on Order {
+                                state
+                            }
+                            ... on ErrorResult {
+                                errorCode
+                            }
+                        }
+                    }
+                `,
+                { input: { orderId: first.id, reason: 'Audit cancellation before refund' } },
+            );
+            expect(cancelled.cancelOrder.state).toBe('Cancelled');
+        } finally {
+            adminClient.setRequestHeader('x-vendure-sensitive-action-password', null);
+        }
+        const second = await auditPay(coupon.id);
+        await auditRefund(first);
+        expect(
+            (await shopClient.query(MY_COUPONS)).myStorefrontCoupons.find(
+                (item: any) => item.id === coupon.id,
+            ),
+        ).toMatchObject({ status: 'USED', usedOrderId: second.id, returnCount: 1 });
+    }, 30_000);
+
+    it('starts a full seven-day window at claim and rejects claims after issuance ends', async () => {
+        await auditCustomer('claim-window');
+        const end = new Date(Date.now() + 3_600_000);
+        const coupon = await auditClaim({ name: 'Audit relative validity', endsAt: end, claimEndsAt: end });
+        expect(Date.parse(coupon.validUntil) - Date.parse(coupon.claimedAt)).toBe(7 * 86_400_000);
+        const stopped = await adminClient.query(
+            gql`
+                mutation ($id: ID!, $password: String!) {
+                    stopStoreCouponIssuance(id: $id, password: $password) {
+                        id
+                    }
+                }
+            `,
+            { id: coupon.campaignId, password: SUPER_ADMIN_USER_PASSWORD },
+        );
+        expect(stopped.stopStoreCouponIssuance.id).toBe(coupon.campaignId);
+        await expect(shopClient.query(CLAIM, { campaignId: coupon.campaignId })).rejects.toThrow(
+            '领取已结束',
+        );
+        await shopClient.query(ADD_ITEM, { productVariantId });
+        expect(
+            (await shopClient.query(APPLY_OWNED_COUPON, { id: coupon.id })).applyStorefrontCoupon.status,
+        ).toBe('LOCKED');
+    });
+
+    it('shares variant-specific ancestor scopes with checkout and discounts only matching mixed-cart lines', async () => {
+        await auditCustomer('variant-scope');
+        const product = (
+            await adminClient.query(CREATE_PRODUCT, {
+                input: {
+                    enabled: true,
+                    translations: [
+                        {
+                            languageCode: 'zh_Hans',
+                            name: 'Audit variants',
+                            slug: 'audit-variant-coupon',
+                            description: 'Disposable category coupon integration test',
+                        },
+                    ],
+                },
+            })
+        ).createProduct;
+        const optionGroup = (
+            await adminClient.query(
+                gql`
+                    mutation ($input: CreateProductOptionGroupInput!) {
+                        createProductOptionGroup(input: $input) {
+                            id
+                            options {
+                                id
+                                code
+                            }
+                        }
+                    }
+                `,
+                {
+                    input: {
+                        code: 'audit-size',
+                        translations: [{ languageCode: 'zh_Hans', name: '规格' }],
+                        options: ['a', 'b'].map(code => ({
+                            code,
+                            translations: [{ languageCode: 'zh_Hans', name: code }],
+                        })),
+                    },
+                },
+            )
+        ).createProductOptionGroup;
+        await adminClient.query(
+            gql`
+                mutation ($productId: ID!, $optionGroupId: ID!) {
+                    addOptionGroupToProduct(productId: $productId, optionGroupId: $optionGroupId) {
+                        id
+                    }
+                }
+            `,
+            { productId: product.id, optionGroupId: optionGroup.id },
+        );
+        const variants = (
+            await adminClient.query(CREATE_PRODUCT_VARIANTS, {
+                input: ['a', 'b'].map(code => ({
+                    productId: product.id,
+                    enabled: true,
+                    sku: 'AUDIT-SCOPE-' + code,
+                    price: 2000,
+                    stockOnHand: 10,
+                    trackInventory: 'TRUE',
+                    optionIds: [optionGroup.options.find((option: any) => option.code === code).id],
+                    translations: [{ languageCode: 'zh_Hans', name: code }],
+                })),
+            })
+        ).createProductVariants;
+        const createCollection = async (name: string, variantId?: string, parentId?: string) =>
+            (
+                await adminClient.query(
+                    gql`
+                        mutation ($input: CreateCollectionInput!) {
+                            createCollection(input: $input) {
+                                id
+                            }
+                        }
+                    `,
+                    {
+                        input: {
+                            parentId,
+                            inheritFilters: false,
+                            translations: [{ languageCode: 'zh_Hans', name, slug: name, description: '' }],
+                            filters: variantId
+                                ? [
+                                      {
+                                          code: 'variant-id-filter',
+                                          arguments: [
+                                              { name: 'variantIds', value: JSON.stringify([variantId]) },
+                                              { name: 'combineWithAnd', value: 'true' },
+                                          ],
+                                      },
+                                  ]
+                                : [],
+                        },
+                    },
+                )
+            ).createCollection;
+        const parent = await createCollection('audit-parent');
+        const child = await createCollection('audit-child', variants[0].id, parent.id);
+        await createCollection('audit-other', variants[1].id);
+        await awaitRunningJobs(adminClient, 10_000);
+        const scoped = (
+            await shopClient.query(
+                gql`
+                    query ($id: ID!) {
+                        product(id: $id) {
+                            collections {
+                                id
+                            }
+                            variants {
+                                id
+                                priceWithTax
+                                storeCouponCollectionIds
+                            }
+                        }
+                    }
+                `,
+                { id: product.id },
+            )
+        ).product;
+        const variantA = scoped.variants.find((variant: any) => variant.id === variants[0].id);
+        const variantB = scoped.variants.find((variant: any) => variant.id === variants[1].id);
+        expect(variantA.storeCouponCollectionIds).toEqual(expect.arrayContaining([parent.id, child.id]));
+        expect(variantB.storeCouponCollectionIds).not.toContain(parent.id);
+        const coupon = await auditClaim({
+            name: 'Audit parent category',
+            kind: 'COLLECTION_PERCENTAGE',
+            discountAmount: null,
+            discountRate: 8,
+            collectionIds: [parent.id],
+        });
+        expect(coupon.collectionIds).toEqual([parent.id]);
+        await shopClient.query(ADD_ITEM, { productVariantId: variantB.id });
+        await expect(shopClient.query(APPLY_OWNED_COUPON, { id: coupon.id })).rejects.toThrow(
+            '不适用于当前购物车',
+        );
+        await shopClient.query(ADD_ITEM, { productVariantId: variantA.id });
+        const before = (await shopClient.query(AUDIT_ORDER)).activeOrder.totalWithTax;
+        await shopClient.query(APPLY_OWNED_COUPON, { id: coupon.id });
+        const after = (await shopClient.query(AUDIT_ORDER)).activeOrder.totalWithTax;
+        expect(before - after).toBe(Math.round(variantA.priceWithTax * 0.2));
+    }, 30_000);
+
+    it('previews and repairs old truncated coupons with version checks and an idempotent second pass', async () => {
+        await auditCustomer('repair');
+        const coupon = await auditClaim({ name: 'Audit historical repair', issueLimit: 1 });
+        const connection = server.app.get(TransactionalConnection);
+        const strategy = server.app.get(ConfigService).entityOptions.entityIdStrategy;
+        const couponId = strategy.decodeId(coupon.id);
+        const promotionId = strategy.decodeId(coupon.campaignId);
+        const claimed = new Date(Math.floor((Date.now() - 2 * 86_400_000) / 1000) * 1000);
+        const cutoff = new Date(claimed.getTime() + 86_400_000);
+        await connection.rawConnection.getRepository(CustomerCoupon).update(couponId, {
+            claimedAt: claimed,
+            validFrom: claimed,
+            validUntil: cutoff,
+            status: 'EXPIRED',
+            expiredAt: cutoff,
+        });
+        await connection.rawConnection
+            .getRepository(Promotion)
+            .update(promotionId, { endsAt: cutoff, usageLimit: 1, perCustomerUsageLimit: 1 });
+        await connection.rawConnection
+            .getRepository(StoreCouponCampaignConfig)
+            .update({ promotionId }, { claimEndsAt: cutoff });
+        const previewQuery = gql`
+            query ($campaignId: ID!) {
+                storeCouponRepairPreview(campaignId: $campaignId)
+            }
+        `;
+        const repairMutation = gql`
+            mutation ($campaignId: ID!, $fingerprint: String!, $password: String!) {
+                repairStoreCouponCampaign(
+                    campaignId: $campaignId
+                    fingerprint: $fingerprint
+                    password: $password
+                )
+            }
+        `;
+        const variables = { campaignId: coupon.campaignId, password: SUPER_ADMIN_USER_PASSWORD };
+        const first = (await adminClient.query(previewQuery, variables)).storeCouponRepairPreview;
+        expect(first.changes.coupons).toHaveLength(1);
+        expect(first.changes.coupons[0].after.status).toBe('AVAILABLE');
+        await connection.rawConnection
+            .getRepository(CustomerCoupon)
+            .update(couponId, { campaignName: 'Audit changed since preview' });
+        await expect(
+            adminClient.query(repairMutation, { ...variables, fingerprint: first.fingerprint }),
+        ).rejects.toThrow('数据已变化');
+        const reviewed = (await adminClient.query(previewQuery, variables)).storeCouponRepairPreview;
+        const repaired = (
+            await adminClient.query(repairMutation, { ...variables, fingerprint: reviewed.fingerprint })
+        ).repairStoreCouponCampaign;
+        expect(repaired.changedCoupons).toBe(1);
+        expect(repaired.after.changes).toEqual({ promotion: null, config: null, coupons: [] });
+        const second = (
+            await adminClient.query(repairMutation, { ...variables, fingerprint: repaired.after.fingerprint })
+        ).repairStoreCouponCampaign;
+        expect(second.changedCoupons).toBe(0);
+        const mine = (await shopClient.query(MY_COUPONS)).myStorefrontCoupons.find(
+            (item: any) => item.id === coupon.id,
+        );
+        expect(mine).toMatchObject({
+            status: 'AVAILABLE',
+            usable: true,
+            validUntil: new Date(claimed.getTime() + 7 * 86_400_000).toISOString(),
+        });
+        await shopClient.query(ADD_ITEM, { productVariantId });
+        await shopClient.query(APPLY_OWNED_COUPON, { id: coupon.id });
+        const ledger = await adminClient.query(COUPON_LEDGER, {
+            options: { campaignId: coupon.campaignId, eventType: 'CORRECTED', take: 20 },
+        });
+        expect(ledger.storeCouponLedger.totalItems).toBe(1);
+        await fs.mkdir(path.join(__dirname, '__data__'), { recursive: true });
+        await fs.writeFile(
+            path.join(__dirname, '__data__', 'coupon-repair-audit.json'),
+            JSON.stringify(
+                { database: process.env.DB || 'sqljs', preview: reviewed, receipt: repaired },
+                null,
+                2,
+            ),
+        );
+    }, 30_000);
+
+    it.runIf(process.env.DB === 'mysql')(
+        'serializes repeated refund events with database row locks',
+        async () => {
+            await auditCustomer('concurrent-refund');
+            const coupon = await auditClaim({ name: 'Audit concurrent refunds' });
+            const paid = await auditPay(coupon.id);
+            const refunded = await auditRefund(paid);
+            const connection = server.app.get(TransactionalConnection);
+            const contexts = server.app.get(RequestContextService);
+            const strategy = server.app.get(ConfigService).entityOptions.entityIdStrategy;
+            const refund = await connection.rawConnection
+                .getRepository(Refund)
+                .findOneByOrFail({ id: strategy.decodeId(refunded.id) });
+            const order = await connection.rawConnection
+                .getRepository(Order)
+                .findOneByOrFail({ id: strategy.decodeId(paid.id) });
+            // Restore the pre-callback entitlement only in this disposable test database.
+            await connection.rawConnection
+                .getRepository(CustomerCoupon)
+                .update(strategy.decodeId(coupon.id), {
+                    status: 'USED',
+                    usedOrderId: order.id,
+                    returnCount: 0,
+                });
+            const eventBus = server.app.get(EventBus);
+            const replay = async () => {
+                const ctx = await contexts.create({ apiType: 'admin' });
+                await connection.withTransaction(ctx, tx =>
+                    eventBus.publish(new RefundStateTransitionEvent('Pending', 'Settled', tx, refund, order)),
+                );
+            };
+            await Promise.all([replay(), replay()]);
+            expect(
+                (await shopClient.query(MY_COUPONS)).myStorefrontCoupons.find(
+                    (item: any) => item.id === coupon.id,
+                ),
+            ).toMatchObject({ status: 'RETURNED', returnCount: 1, usedOrderId: null });
+        },
+        30_000,
+    );
 });
 
 async function prepareOrderForPayment(): Promise<any> {
@@ -697,5 +1242,74 @@ function campaign(result: any, targetCampaignId = campaignId): any {
 function assertSuccess(result: { __typename?: string; message?: string }): void {
     if (result.__typename?.endsWith('Error')) {
         throw new Error(`${result.__typename}: ${result.message ?? 'unknown error'}`);
+    }
+}
+
+const AUDIT_ORDER = gql`
+    query {
+        activeOrder {
+            id
+            totalWithTax
+            couponCodes
+        }
+    }
+`;
+
+async function auditCustomer(suffix: string) {
+    await shopClient.query(LOGOUT);
+    const emailAddress = 'coupon-audit-' + suffix + '@example.com';
+    await shopClient.query(REGISTER, {
+        input: { emailAddress, firstName: 'Audit', lastName: suffix, password: 'CouponAudit123!' },
+    });
+    await shopClient.asUserWithCredentials(emailAddress, 'CouponAudit123!');
+}
+
+async function auditClaim(overrides: Record<string, unknown>) {
+    const created = await adminClient.query(CREATE_COUPON, {
+        input: {
+            name: 'Audit coupon',
+            kind: 'ORDER_FIXED',
+            minimumSpend: 0,
+            discountAmount: 1000,
+            validityDays: 7,
+            issueLimit: 20,
+            usageLimit: 20,
+            perCustomerUsageLimit: 1,
+            stackPolicy: 'EXCLUSIVE',
+            returnOnCancellation: true,
+            returnOnFullRefund: true,
+            ...overrides,
+        },
+    });
+    return (await shopClient.query(CLAIM, { campaignId: created.createStoreCouponCampaign.id }))
+        .claimStorefrontCoupon;
+}
+
+async function auditPay(couponId: string) {
+    await shopClient.query(ADD_ITEM, { productVariantId });
+    await shopClient.query(APPLY_OWNED_COUPON, { id: couponId });
+    await prepareOrderForPayment();
+    return payOrder();
+}
+
+async function auditRefund(order: any) {
+    adminClient.setRequestHeader('x-vendure-sensitive-action-password', SUPER_ADMIN_USER_PASSWORD);
+    try {
+        const result = (
+            await adminClient.query(REFUND, {
+                input: {
+                    paymentId: order.payments[0].id,
+                    amount: order.totalWithTax,
+                    lines: [],
+                    shipping: 0,
+                    adjustment: 0,
+                    reason: 'Disposable coupon audit refund',
+                },
+            })
+        ).refundOrder;
+        expect(result.state).toBe('Settled');
+        return result;
+    } finally {
+        adminClient.setRequestHeader('x-vendure-sensitive-action-password', null);
     }
 }

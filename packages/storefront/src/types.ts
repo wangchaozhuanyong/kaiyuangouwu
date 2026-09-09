@@ -26,6 +26,8 @@ export interface CollectionSummary {
 
 export interface ProductVariant {
     id: string;
+    /** Missing on old cached/API responses: do not infer a variant scope from its product. */
+    storeCouponCollectionIds?: string[];
     name: string;
     sku: string;
     priceWithTax: number;
@@ -63,7 +65,11 @@ export interface Product {
     description: string;
     featuredAsset: Asset | null;
     assets: Asset[];
-    collections: Array<Pick<CollectionSummary, 'id' | 'name' | 'slug' | 'parentId'>>;
+    collections: Array<
+        Pick<CollectionSummary, 'id' | 'name' | 'slug' | 'parentId'> & {
+            breadcrumbs?: Array<{ id: string }>;
+        }
+    >;
     variants: ProductVariant[];
     packaging?: ProductPackaging | null;
     customFields?: {
@@ -811,6 +817,8 @@ export interface StoreCustomerCoupon {
     currencyCode?: string;
     discountAmount: number | null;
     discountRate: number | null;
+    collectionIds?: string[];
+    productVariantIds?: string[];
     claimedAt: string;
     validFrom: string;
     validUntil: string | null;

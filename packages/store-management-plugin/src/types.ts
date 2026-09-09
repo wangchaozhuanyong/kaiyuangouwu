@@ -75,7 +75,15 @@ export type StoreCouponStackPolicy = 'EXCLUSIVE' | 'STACKABLE';
 export type StoreCustomerCouponStatus = 'AVAILABLE' | 'LOCKED' | 'USED' | 'RETURNED' | 'EXPIRED' | 'REVOKED';
 
 export type StoreCouponLedgerEventType =
-    'CLAIMED' | 'LOCKED' | 'RELEASED' | 'REDEEMED' | 'RETURNED' | 'EXPIRED' | 'REVOKED' | 'REFUND_SETTLED';
+    | 'CLAIMED'
+    | 'LOCKED'
+    | 'RELEASED'
+    | 'REDEEMED'
+    | 'RETURNED'
+    | 'EXPIRED'
+    | 'REVOKED'
+    | 'REFUND_SETTLED'
+    | 'CORRECTED';
 
 export interface CreateStoreCouponCampaignInput {
     name: string;
@@ -162,6 +170,8 @@ export interface StoreCustomerCouponView {
     currencyCode: CurrencyCode;
     discountAmount: number | null;
     discountRate: number | null;
+    collectionIds: ID[];
+    productVariantIds: ID[];
     claimedAt: Date;
     validFrom: Date;
     validUntil: Date | null;

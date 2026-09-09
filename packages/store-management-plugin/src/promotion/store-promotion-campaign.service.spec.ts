@@ -46,7 +46,8 @@ describe('StorePromotionCampaignService', () => {
                         currencyCode: 'CNY',
                     }),
                 ],
-                perCustomerUsageLimit: 1,
+                perCustomerUsageLimit: undefined,
+                usageLimit: undefined,
             }),
         );
         expect(coupon).toEqual(
