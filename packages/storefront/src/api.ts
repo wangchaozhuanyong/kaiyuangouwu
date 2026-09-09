@@ -36,9 +36,6 @@ import type {
     RegisterCustomerInput,
     ShippingMethod,
     StoreCommerceMode,
-    StoreCouponPage,
-    StoreCouponPageOptions,
-    StoreCouponUsageRecord,
     StoreCustomerCoupon,
     StorefrontCart,
     StorefrontCatalogInput,
@@ -429,31 +426,19 @@ export class ShopApi {
         return this.cartCheckoutApi.reopenCart(expectedRevision);
     }
 
-    async myCouponsPage(
-        options: StoreCouponPageOptions = {},
-        signal?: AbortSignal,
-    ): Promise<StoreCouponPage<StoreCustomerCoupon>> {
-        return this.cartCheckoutApi.myCouponsPage(options, signal);
-    }
+    myCouponsPage: CartCheckoutApi['myCouponsPage'] = (...args) =>
+        this.cartCheckoutApi.myCouponsPage(...args);
 
-    async myCouponUsageRecordsPage(
-        options: StoreCouponPageOptions = {},
-        signal?: AbortSignal,
-    ): Promise<StoreCouponPage<StoreCouponUsageRecord>> {
-        return this.cartCheckoutApi.myCouponUsageRecordsPage(options, signal);
-    }
+    myCouponUsageRecordsPage: CartCheckoutApi['myCouponUsageRecordsPage'] = (...args) =>
+        this.cartCheckoutApi.myCouponUsageRecordsPage(...args);
 
-    async myAvailableCoupons(signal?: AbortSignal): Promise<StoreCustomerCoupon[]> {
-        return this.cartCheckoutApi.myAvailableCoupons(signal);
-    }
+    myAvailableCoupons: CartCheckoutApi['myAvailableCoupons'] = (...args) =>
+        this.cartCheckoutApi.myAvailableCoupons(...args);
 
-    async myCoupons(signal?: AbortSignal): Promise<StoreCustomerCoupon[]> {
-        return this.cartCheckoutApi.myCoupons(signal);
-    }
+    myCoupons: CartCheckoutApi['myCoupons'] = (...args) => this.cartCheckoutApi.myCoupons(...args);
 
-    async myCouponUsageRecords(signal?: AbortSignal): Promise<StoreCouponUsageRecord[]> {
-        return this.cartCheckoutApi.myCouponUsageRecords(signal);
-    }
+    myCouponUsageRecords: CartCheckoutApi['myCouponUsageRecords'] = (...args) =>
+        this.cartCheckoutApi.myCouponUsageRecords(...args);
 
     async claimCoupon(campaignId: string): Promise<StoreCustomerCoupon> {
         return this.cartCheckoutApi.claimCoupon(campaignId);
