@@ -1,11 +1,5 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
-import {
-    AdjustmentType,
-    CurrencyCode,
-    ErrorCode,
-    HistoryEntryType,
-    LanguageCode,
-} from '@vendure/common/lib/generated-types';
+import { CurrencyCode, ErrorCode, HistoryEntryType, LanguageCode } from '@vendure/common/lib/generated-types';
 import { omit } from '@vendure/common/lib/omit';
 import { pick } from '@vendure/common/lib/pick';
 import {
@@ -557,8 +551,8 @@ describe('Promotions applied to Orders', () => {
         });
 
         it('containsProducts', async () => {
-            const item5000 = getVariantBySlug('item-5000')!;
-            const item1000 = getVariantBySlug('item-1000')!;
+            const item5000 = getVariantBySlug('item-5000');
+            const item1000 = getVariantBySlug('item-1000');
             const promotion = await createPromotion({
                 enabled: true,
                 name: 'Free if buying 3 or more offer products',
@@ -602,17 +596,19 @@ describe('Promotions applied to Orders', () => {
 
         // #4889 — minimum of 0 must not create an unconditional discount
         it('containsProducts does not apply when minimum is 0', async () => {
-            const item5000 = getVariantBySlug('item-5000')!;
+            const item5000 = getVariantBySlug('item-5000');
             const promotion = await createPromotion({
                 enabled: true,
                 name: 'Contains products, minimum 0',
-                conditions: [{
-                    code: containsProducts.code,
-                    arguments: [
-                        { name: 'minimum', value: '0' },
-                        { name: 'productVariantIds', value: JSON.stringify([item5000.id]) },
-                    ],
-                }],
+                conditions: [
+                    {
+                        code: containsProducts.code,
+                        arguments: [
+                            { name: 'minimum', value: '0' },
+                            { name: 'productVariantIds', value: JSON.stringify([item5000.id]) },
+                        ],
+                    },
+                ],
                 actions: [freeOrderAction],
             });
             // add an item that is NOT in productVariantIds
@@ -632,13 +628,15 @@ describe('Promotions applied to Orders', () => {
             const promotion = await createPromotion({
                 enabled: true,
                 name: 'Facets, minimum 0',
-                conditions: [{
-                    code: hasFacetValues.code,
-                    arguments: [
-                        { name: 'minimum', value: '0' },
-                        { name: 'facets', value: `["${saleFacetValue.id}"]` },
-                    ],
-                }],
+                conditions: [
+                    {
+                        code: hasFacetValues.code,
+                        arguments: [
+                            { name: 'minimum', value: '0' },
+                            { name: 'facets', value: `["${saleFacetValue.id}"]` },
+                        ],
+                    },
+                ],
                 actions: [freeOrderAction],
             });
             // add an item WITHOUT the Sale facet
@@ -1448,9 +1446,9 @@ describe('Promotions applied to Orders', () => {
                     l => l.productVariant.id === getVariantBySlug('item-sale-1000').id,
                 )!;
                 expect(saleItemLine.discounts.length).toBe(1); // 1x promotion
-                expect(
-                    saleItemLine.discounts.find(a => a.type === AdjustmentType.PROMOTION)?.description,
-                ).toBe('item promo');
+                expect(saleItemLine.discounts.find(a => a.type === 'PROMOTION')?.description).toBe(
+                    'item promo',
+                );
                 expect(apply1.discounts.length).toBe(1);
                 expect(apply1.total).toBe(6000);
                 expect(apply1.totalWithTax).toBe(7200);
@@ -1489,9 +1487,9 @@ describe('Promotions applied to Orders', () => {
                     l => l.productVariant.id === getVariantBySlug('item-sale-1000').id,
                 )!;
                 expect(saleItemLine.discounts.length).toBe(1); // 1x promotion
-                expect(
-                    saleItemLine.discounts.find(a => a.type === AdjustmentType.PROMOTION)?.description,
-                ).toBe('item promo');
+                expect(saleItemLine.discounts.find(a => a.type === 'PROMOTION')?.description).toBe(
+                    'item promo',
+                );
                 expect(apply1.discounts.length).toBe(1);
                 expect(apply1.total).toBe(6000);
                 expect(apply1.totalWithTax).toBe(7200);
@@ -1996,9 +1994,10 @@ describe('Promotions applied to Orders', () => {
                     // Discriminate by __typename rather than duck-typing on field shape:
                     // a future schema change that, say, adds errorCode-shaped fields to
                     // Order would silently break a duck-typed filter.
-                    const orderResults = results.filter(
-                        (r: any) => r.__typename === 'Order',
-                    ) as Array<{ couponCodes: string[]; totalWithTax: number }>;
+                    const orderResults = results.filter((r: any) => r.__typename === 'Order') as Array<{
+                        couponCodes: string[];
+                        totalWithTax: number;
+                    }>;
                     const errorResults = results.filter(
                         (r: any) => r.__typename === 'CouponRemovedDuringCheckoutError',
                     ) as Array<{
@@ -2014,26 +2013,12 @@ describe('Promotions applied to Orders', () => {
                     // Sanity: every result should be classifiable as one or the other.
                     expect(orderResults.length + errorResults.length).toBe(CONCURRENT_ATTEMPTS);
 
-                    // The number of winners is fully determined by the DB's default
-                    // isolation level — no timing non-determinism in either case —
-                    // so we assert each outcome exactly to catch any future drift:
-                    //
-                    //   - Postgres (READ COMMITTED): each non-locking SELECT sees
-                    //     latest committed data, so the last lock holder observes
-                    //     count = 0 and keeps the coupon. Exactly 1 winner.
-                    //   - MySQL/MariaDB (REPEATABLE READ): the consistent-read
-                    //     snapshot is established by the first non-locking SELECT
-                    //     in addPaymentToOrder, before this lock is acquired, so
-                    //     each contender's count query still sees the others as
-                    //     holding the coupon and every transaction strips. Exactly
-                    //     0 winners.
-                    //
-                    // Both outcomes uphold the safety invariant (the bug class we
-                    // guard against — N winners — would fail either branch). When
-                    // the MySQL snapshot gap is closed in a follow-up, this branch
-                    // should flip to 1 and force this assertion to be updated.
-                    // See the JSDoc on revalidateCouponCodesForOrder.
-                    const expectedWinners = process.env.DB === 'postgres' ? 1 : 0;
+                    // Payment starts its outer transaction at READ COMMITTED on
+                    // Postgres, MySQL and MariaDB. After each promotion lock is
+                    // released, the next contender sees the committed removals.
+                    // Exactly one order keeps the usage-limited coupon; the other
+                    // contenders must confirm the recalculated amount before paying.
+                    const expectedWinners = 1;
                     expect(orderResults.length).toBe(expectedWinners);
                     expect(errorResults.length).toBe(CONCURRENT_ATTEMPTS - expectedWinners);
 
@@ -2046,9 +2031,8 @@ describe('Promotions applied to Orders', () => {
                         const errorClientIdx = results.findIndex(
                             (r: any) => r.__typename === 'CouponRemovedDuringCheckoutError',
                         );
-                        const { activeOrder: postOrder } = await clients[errorClientIdx].query(
-                            getActiveOrderDocument,
-                        );
+                        const { activeOrder: postOrder } =
+                            await clients[errorClientIdx].query(getActiveOrderDocument);
                         expectedNewTotal = postOrder!.totalWithTax;
                         // The strip must have increased the total — otherwise the error
                         // should never have been returned.
@@ -2318,7 +2302,7 @@ describe('Promotions applied to Orders', () => {
                     productIds: products.map(p => p.id),
                 },
             });
-            const item1000 = getVariantBySlug('item-1000')!;
+            const item1000 = getVariantBySlug('item-1000');
             const promo100 = await createPromotion({
                 enabled: true,
                 name: '100% discount ',
@@ -2365,7 +2349,7 @@ describe('Promotions applied to Orders', () => {
 
         it('prices exclude tax', async () => {
             await shopClient.asAnonymousUser();
-            const item1000 = getVariantBySlug('item-1000')!;
+            const item1000 = getVariantBySlug('item-1000');
 
             await shopClient.query(applyCouponCodeDocument, { couponCode: couponCode1 });
 
@@ -2389,7 +2373,7 @@ describe('Promotions applied to Orders', () => {
         it('prices include tax', async () => {
             shopClient.setChannelToken(TAX_INCLUDED_CHANNEL_TOKEN_2);
             await shopClient.asAnonymousUser();
-            const item1000 = getVariantBySlug('item-1000')!;
+            const item1000 = getVariantBySlug('item-1000');
 
             await shopClient.query(applyCouponCodeDocument, { couponCode: couponCode1 });
 

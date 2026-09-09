@@ -14,10 +14,12 @@ import {
 import { describe, expect, it, vi } from 'vitest';
 
 import { StoreAdministratorAccess } from './entities/store-administrator-access.entity';
+import { StoreCouponCampaignConfig } from './entities/store-coupon-campaign-config.entity';
 import { MerchantCatalogAccessService } from './merchant-catalog-access.service';
 
 function createService(options?: {
     merchant?: boolean;
+    couponConfigs?: Array<{ promotionId: string; channelId: string }>;
     channelIds?: string[];
     visibleEntityIds?: string[];
     sharedEntityIds?: string[];
@@ -43,6 +45,8 @@ function createService(options?: {
     const fulfillmentRepository = { find: vi.fn().mockResolvedValue(options?.fulfillments ?? []) };
     const connection = {
         getRepository: vi.fn((_ctx, entity) => {
+            if (entity === StoreCouponCampaignConfig)
+                return { find: vi.fn().mockResolvedValue(options?.couponConfigs ?? []) };
             if (entity === StoreAdministratorAccess) return accessRepository;
             if (entity === User) return userRepository;
             if (entity === OrderLine) return orderLineRepository;
@@ -81,6 +85,30 @@ const merchantContext = {
 } as any;
 
 describe('MerchantCatalogAccessService', () => {
+    it.each(['store-a', 'store-b'])(
+        'requires platform coupon operations to use the managed entry for %s',
+        async channelId => {
+            const { service } = createService({
+                merchant: false,
+                couponConfigs: [{ promotionId: 'coupon-1', channelId }],
+            });
+            await expect(
+                service.assertRootFieldAccess(merchantContext, 'Mutation', 'updatePromotion', {
+                    input: { id: 'coupon-1', enabled: false },
+                }),
+            ).rejects.toThrow('优惠券管理入口');
+        },
+    );
+
+    it('preserves ordinary platform promotion editing', async () => {
+        const { service } = createService({ merchant: false });
+        await expect(
+            service.assertRootFieldAccess(merchantContext, 'Mutation', 'updatePromotion', {
+                input: { id: 'ordinary-promotion' },
+            }),
+        ).resolves.toBeUndefined();
+    });
+
     it('does not restrict platform administrators', async () => {
         const { connection, service } = createService({ merchant: false });
 

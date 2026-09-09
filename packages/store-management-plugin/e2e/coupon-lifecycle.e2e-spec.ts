@@ -932,6 +932,67 @@ describe('coupon lifecycle closed loop', () => {
         }
     });
 
+    it('prevents native promotion mutations from bypassing coupon lifecycle management', async () => {
+        await auditCustomer('closure-native-admin');
+        const coupon = await auditClaim({ name: 'Closure native admin guard' });
+        adminClient.setRequestHeader('x-vendure-sensitive-action-password', SUPER_ADMIN_USER_PASSWORD);
+        try {
+            await expect(
+                adminClient.query(
+                    gql`
+                        mutation ($id: ID!) {
+                            updatePromotion(input: { id: $id, enabled: false }) {
+                                __typename
+                            }
+                        }
+                    `,
+                    { id: coupon.campaignId },
+                ),
+            ).rejects.toThrow('优惠券管理入口');
+            await expect(
+                adminClient.query(
+                    gql`
+                        mutation ($id: ID!) {
+                            deletePromotion(id: $id) {
+                                result
+                            }
+                        }
+                    `,
+                    { id: coupon.campaignId },
+                ),
+            ).rejects.toThrow('优惠券管理入口');
+            await expect(
+                adminClient.query(
+                    gql`
+                        mutation ($ids: [ID!]!) {
+                            deletePromotions(ids: $ids) {
+                                result
+                            }
+                        }
+                    `,
+                    { ids: [coupon.campaignId] },
+                ),
+            ).rejects.toThrow('优惠券管理入口');
+            for (const mutation of ['assignPromotionsToChannel', 'removePromotionsFromChannel']) {
+                await expect(
+                    adminClient.query(
+                        gql`mutation ($ids: [ID!]!, $channel: ID!) {
+                    ${mutation}(input: { promotionIds: $ids, channelId: $channel }) { id }
+                }`,
+                        { ids: [coupon.campaignId], channel: 'T_1' },
+                    ),
+                ).rejects.toThrow('优惠券管理入口');
+            }
+            expect(
+                (await shopClient.query(MY_COUPONS)).myStorefrontCoupons.find(
+                    (item: any) => item.id === coupon.id,
+                ).status,
+            ).toBe('AVAILABLE');
+        } finally {
+            adminClient.setRequestHeader('x-vendure-sensitive-action-password', null);
+        }
+    });
+
     it('allows full-refund reuse with the same defaults as the admin editor and does not renew expiry', async () => {
         await auditCustomer('refund-reuse');
         const coupon = await auditClaim({

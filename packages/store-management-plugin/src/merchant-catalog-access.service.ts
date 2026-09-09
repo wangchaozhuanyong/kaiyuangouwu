@@ -20,10 +20,13 @@ import {
     StockLocation,
     TransactionalConnection,
     User,
+    UserInputError,
     VendureEntity,
 } from '@vendure/core';
+import { In } from 'typeorm';
 
 import { StoreAdministratorAccess } from './entities/store-administrator-access.entity';
+import { StoreCouponCampaignConfig } from './entities/store-coupon-campaign-config.entity';
 
 const merchantScopeExemptions = new Set([
     'Query.activeAdministrator',
@@ -110,6 +113,8 @@ export class MerchantCatalogAccessService {
         ) {
             return;
         }
+
+        if (parentType === 'Mutation') await this.assertCouponManagementEntry(ctx, fieldName, args);
 
         const channelIds = await this.getMerchantChannelIds(ctx);
         if (channelIds == null) {
@@ -257,6 +262,36 @@ export class MerchantCatalogAccessService {
         if (stockLocations.length !== uniqueIds.length) {
             throw new ForbiddenError();
         }
+    }
+
+    private async assertCouponManagementEntry(
+        ctx: RequestContext,
+        fieldName: string,
+        args: Record<string, unknown>,
+    ): Promise<void> {
+        if (
+            !managedPromotionMutations.has(fieldName) &&
+            fieldName !== 'assignPromotionsToChannel' &&
+            fieldName !== 'removePromotionsFromChannel'
+        )
+            return;
+        const input = args.input as
+            { id?: ID; promotionIds?: ID[]; conditions?: Array<{ code: string }> } | undefined;
+        if (input?.conditions?.some(condition => condition.code === 'store_customer_coupon_entitlement'))
+            throw new UserInputError('领券活动请通过优惠券管理入口修改');
+        const ids = [
+            input?.id,
+            args.id as ID | undefined,
+            ...((args.ids as ID[]) ?? []),
+            ...(input?.promotionIds ?? []),
+        ].filter((id): id is ID => id != null);
+        if (!ids.length) return;
+        const configs = await this.connection.getRepository(ctx, StoreCouponCampaignConfig).find({
+            where: { promotionId: In(ids) },
+        });
+        if (configs.some(config => !idsAreEqual(config.channelId, ctx.channelId)))
+            throw new UserInputError('该优惠券属于其他店铺，请切换到所属店铺后使用优惠券管理入口');
+        if (configs.length) throw new UserInputError('领券活动请通过优惠券管理入口修改');
     }
 
     private getInputs(args: Record<string, unknown>): CatalogMutationInput[] {
