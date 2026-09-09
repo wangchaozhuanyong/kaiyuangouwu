@@ -131,7 +131,7 @@ describe('product image navigation layers', () => {
         },
     );
 
-    it('keeps square mobile artwork but uses a calmer 4:3 desktop media frame', () => {
+    it('keeps product artwork square without a padded desktop frame', () => {
         const markup = renderToStaticMarkup(
             <ProductCard
                 product={digitalProduct}
@@ -143,7 +143,8 @@ describe('product image navigation layers', () => {
         );
 
         expect(markup).toContain('aspect-square');
-        expect(markup).toContain('min-[900px]:aspect-[4/3]');
+        expect(markup).not.toContain('min-[900px]:aspect-[4/3]');
+        expect(markup).not.toContain('min-[900px]:p-3');
         expect(markup).toContain('[&amp;_img]:object-contain');
     });
 
@@ -316,7 +317,7 @@ describe('product image navigation layers', () => {
         expect(stylesheet).not.toMatch(/\.product-row\s+span\s*,\s*\.product-row\s+small\s*\{/);
     });
 
-    it('shows sold-out status and keeps card title and subtitle on one line', () => {
+    it('shows sold-out status with a wrapping title and compact description', () => {
         const soldOutProduct: Product = {
             ...digitalProduct,
             name: 'A very long product title that must remain on one line',
