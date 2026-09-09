@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
 import { ErrorCode, HistoryEntryType } from '@vendure/common/lib/generated-types';
 import { pick } from '@vendure/common/lib/pick';
+import { RequestContextService, TransactionalConnection, UserService } from '@vendure/core';
 import { createErrorResultGuard, createTestEnvironment, ErrorResultGuard } from '@vendure/testing';
 import * as path from 'path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -14,6 +15,7 @@ import {
     getCustomerDocument,
     getCustomerHistoryDocument,
     getCustomerIdsDocument,
+    MeDocument,
 } from './graphql/shared-definitions';
 import {
     createAddressDocument,
@@ -267,9 +269,44 @@ describe('Shop customers', () => {
                 expect(updateCustomerPassword.message).toBe('The provided credentials are invalid');
                 expect(updateCustomerPassword.errorCode).toBe(ErrorCode.INVALID_CREDENTIALS_ERROR);
             }
+            expect((await shopClient.query(MeDocument)).me?.identifier).toBe(customer.emailAddress);
+        });
+
+        // F-02: session revocation must follow the password transaction on rollback.
+        it('keeps the previous password and session if the password transaction rolls back', async () => {
+            const connection = server.app.get(TransactionalConnection);
+            const userService = server.app.get(UserService);
+            const ctx = await server.app.get(RequestContextService).create({ apiType: 'shop' });
+            const user = await userService.getUserByEmailAddress(ctx, customer.emailAddress);
+            if (!user) throw new Error('Missing test customer');
+            await expect(
+                connection.withTransaction(ctx, async txCtx => {
+                    expect(await userService.updatePassword(txCtx, user.id, 'test', 'test2')).toBe(true);
+                    throw new Error('synthetic transaction rollback');
+                }),
+            ).rejects.toThrow('synthetic transaction rollback');
+            expect((await shopClient.query(MeDocument)).me?.identifier).toBe(customer.emailAddress);
+            const login = await shopClient.query(attemptLoginDocument, {
+                username: customer.emailAddress,
+                password: 'test',
+                rememberMe: false,
+            });
+            expect(login.login).toMatchObject({ identifier: customer.emailAddress });
         });
 
         it('updatePassword works', async () => {
+            // F-02: changing a password must invalidate this device and another live device.
+            const previousTokens = [shopClient.getAuthToken()];
+            await shopClient.query(attemptLoginDocument, {
+                username: customer.emailAddress,
+                password: 'test',
+                rememberMe: false,
+            });
+            previousTokens.push(shopClient.getAuthToken());
+            for (const token of previousTokens) {
+                shopClient.setAuthToken(token);
+                expect((await shopClient.query(MeDocument)).me?.identifier).toBe(customer.emailAddress);
+            }
             const { updateCustomerPassword } = await shopClient.query(updatePasswordDocument, {
                 old: 'test',
                 new: 'test2',
@@ -277,6 +314,13 @@ describe('Shop customers', () => {
             successErrorGuard.assertSuccess(updateCustomerPassword);
 
             expect(updateCustomerPassword.success).toBe(true);
+
+            for (const token of previousTokens) {
+                shopClient.setAuthToken(token);
+                await expect(shopClient.query(MeDocument)).rejects.toThrow(
+                    'You are not currently authorized to perform this action',
+                );
+            }
 
             // Log out and log in with new password
             const loginResult = await shopClient.asUserWithCredentials(customer.emailAddress, 'test2');

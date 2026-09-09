@@ -26,6 +26,7 @@ import { PasswordValidationError } from '../src/common/error/generated-graphql-s
 import { FragmentOf, ResultOf } from './graphql/graphql-admin';
 import {
     MeDocument,
+    attemptLoginDocument,
     getCustomerDocument,
     getCustomerHistoryDocument,
     getCustomerListDocument,
@@ -495,6 +496,20 @@ describe('Shop auth & accounts', () => {
         });
 
         it('resetPassword works with valid token', async () => {
+            // F-02: create two live sessions without the helper's automatic logout.
+            const previousTokens: string[] = [];
+            for (let device = 0; device < 2; device++) {
+                await shopClient.query(attemptLoginDocument, {
+                    username: customer.emailAddress,
+                    password: 'test',
+                    rememberMe: false,
+                });
+                previousTokens.push(shopClient.getAuthToken());
+            }
+            for (const token of previousTokens) {
+                shopClient.setAuthToken(token);
+                expect((await shopClient.query(MeDocument)).me?.identifier).toBe(customer.emailAddress);
+            }
             const { resetPassword } = await shopClient.query(resetPasswordDocument, {
                 token: passwordResetToken,
                 password: 'newPassword',
@@ -502,6 +517,17 @@ describe('Shop auth & accounts', () => {
             currentUserErrorGuard.assertSuccess(resetPassword);
 
             expect(resetPassword.identifier).toBe(customer!.emailAddress);
+
+            const freshToken = shopClient.getAuthToken();
+            expect(previousTokens).not.toContain(freshToken);
+            for (const token of previousTokens) {
+                shopClient.setAuthToken(token);
+                await expect(shopClient.query(MeDocument)).rejects.toThrow(
+                    'You are not currently authorized to perform this action',
+                );
+            }
+            shopClient.setAuthToken(freshToken);
+            expect((await shopClient.query(MeDocument)).me?.identifier).toBe(customer.emailAddress);
 
             const loginResult = await shopClient.asUserWithCredentials(customer!.emailAddress, 'newPassword');
             expect(loginResult.identifier).toBe(customer!.emailAddress);

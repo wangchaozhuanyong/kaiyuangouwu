@@ -1,5 +1,5 @@
 import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
-import { Allow, Ctx, Permission, RequestContext, Transaction } from '@vendure/core';
+import { Allow, Ctx, Permission, RequestContext } from '@vendure/core';
 
 import { CustomerAvatarService, CustomerAvatarUpload } from './customer-avatar.service';
 
@@ -13,7 +13,6 @@ export class CustomerAvatarShopResolver {
         return this.customerAvatarService.findMine(ctx);
     }
 
-    @Transaction()
     @Mutation()
     @Allow(Permission.Authenticated)
     setCustomerAvatar(@Ctx() ctx: RequestContext, @Args('file') file: Promise<CustomerAvatarUpload>) {
