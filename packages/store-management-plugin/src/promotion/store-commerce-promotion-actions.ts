@@ -38,12 +38,13 @@ export const customerCouponEntitlement = new PromotionCondition({
             .andWhere('coupon.customerId = :customerId', { customerId: order.customerId })
             .andWhere('coupon.promotionId = :promotionId', { promotionId: promotion.id })
             .andWhere(
-                "((coupon.status = 'LOCKED' AND coupon.lockedOrderId = :orderId) OR " +
-                    "(coupon.status = 'USED' AND coupon.usedOrderId = :orderId))",
-                { orderId: order.id },
+                "((coupon.status = 'LOCKED' AND coupon.lockedOrderId = :orderId " +
+                    'AND coupon.validFrom <= :now AND (coupon.validUntil IS NULL OR coupon.validUntil > :now)) OR ' +
+                    "(coupon.status = 'USED' AND coupon.usedOrderId = :orderId " +
+                    'AND coupon.validFrom <= coupon.usedAt ' +
+                    'AND (coupon.validUntil IS NULL OR coupon.validUntil > coupon.usedAt)))',
+                { orderId: order.id, now },
             )
-            .andWhere('coupon.validFrom <= :now', { now })
-            .andWhere('(coupon.validUntil IS NULL OR coupon.validUntil > :now)', { now })
             .limit(1)
             .getRawOne<{ id: string }>();
         return Boolean(row);

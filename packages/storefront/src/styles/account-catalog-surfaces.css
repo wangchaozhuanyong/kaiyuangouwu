@@ -542,3 +542,24 @@
         padding: 28px;
     }
 }
+
+.coupon-center-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin: 20px 0;
+    font-size: 13px;
+}
+.coupon-center-pagination button {
+    min-height: 40px;
+    padding: 8px 12px;
+    border: 1px solid currentColor;
+    border-radius: 8px;
+    background: transparent;
+    color: inherit;
+}
+.coupon-center-pagination button:disabled {
+    opacity: 0.45;
+    cursor: default;
+}

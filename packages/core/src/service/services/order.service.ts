@@ -142,6 +142,35 @@ import { StockLevelService } from './stock-level.service';
 @Injectable()
 @Instrument()
 export class OrderService {
+    private readonly checkoutValidators = new Map<
+        string,
+        (
+            ctx: RequestContext,
+            order: Order,
+            input: PaymentInput,
+            source?: 'handler' | 'manual',
+        ) => Promise<{ removedCouponCodes?: string[]; error?: string; preserveReceivedQuote?: boolean }>
+    >();
+
+    /** Plugins may validate entitlements without Core depending on their storage. */
+    registerCheckoutValidator(
+        id: string,
+        validator: (
+            ctx: RequestContext,
+            order: Order,
+            input: PaymentInput,
+            source?: 'handler' | 'manual',
+        ) => Promise<{ removedCouponCodes?: string[]; error?: string; preserveReceivedQuote?: boolean }>,
+    ): void {
+        this.checkoutValidators.set(id, validator);
+    }
+
+    registerPaymentConfirmationValidator(
+        ...args: Parameters<PaymentService['registerConfirmationValidator']>
+    ): void {
+        this.paymentService.registerConfirmationValidator(...args);
+    }
+
     constructor(
         private connection: TransactionalConnection,
         private configService: ConfigService,
@@ -1344,10 +1373,16 @@ export class OrderService {
     ): Promise<Refund | RefundStateTransitionError> {
         // Wrapped in withTransaction so the state save and onTransitionEnd hooks
         // are atomic — see the equivalent comment on transitionToState. #4686.
-        return this.connection.withTransaction(ctx, async txCtx => {
-            const refund = await this.connection.getEntityOrThrow(txCtx, Refund, refundId, {
+        return this.withOrderMutationTransaction(ctx, async txCtx => {
+            let refund = await this.connection.getEntityOrThrow(txCtx, Refund, refundId, {
                 relations: ['payment', 'payment.order'],
             });
+            await this.lockOrderForRefund(txCtx, refund.payment.order.id);
+            refund = await this.connection.getEntityOrThrow(txCtx, Refund, refund.id, {
+                relations: ['payment', 'payment.order'],
+            });
+            if (refund.state === state) return refund;
+
             if (transactionId && refund.transactionId !== transactionId) {
                 refund.transactionId = transactionId;
             }
@@ -1437,10 +1472,25 @@ export class OrderService {
             return new OrderPaymentStateError();
         }
         const totalWithTaxBeforeRevalidation = order.totalWithTax;
-        const removedCouponCodes = await this.revalidateCouponCodesForOrder(ctx, order);
+        const entitlementRemovedCodes: string[] = [];
+        for (const validator of this.checkoutValidators.values()) {
+            const result = await validator(ctx, order, input);
+            if (result.error) return new PaymentFailedError({ paymentErrorMessage: result.error });
+            entitlementRemovedCodes.push(...(result.removedCouponCodes ?? []));
+        }
+        const revalidationOrder = entitlementRemovedCodes.length
+            ? await this.getOrderOrThrow(ctx, orderId)
+            : order;
+        const removedCouponCodes = [
+            ...entitlementRemovedCodes,
+            ...(await this.revalidateCouponCodesForOrder(ctx, revalidationOrder)),
+        ];
         // Re-fetch order if coupons were removed, so totals reflect recalculated prices
         const freshOrder = removedCouponCodes.length ? await this.getOrderOrThrow(ctx, orderId) : order;
-        if (removedCouponCodes.length && totalWithTaxBeforeRevalidation < freshOrder.totalWithTax) {
+        if (
+            entitlementRemovedCodes.length ||
+            (removedCouponCodes.length && totalWithTaxBeforeRevalidation < freshOrder.totalWithTax)
+        ) {
             // A coupon was stripped during revalidation AND that strip
             // increased what the customer would be charged. The most common
             // trigger is a usage-limited coupon's slot being claimed by a
@@ -1661,7 +1711,19 @@ export class OrderService {
         if (order.state !== 'ArrangingAdditionalPayment' && order.state !== 'ArrangingPayment') {
             return new ManualPaymentStateError();
         }
-        const manualRemovedCouponCodes = await this.revalidateCouponCodesForOrder(ctx, order);
+        let preserveReceivedQuote = false;
+        for (const validator of this.checkoutValidators.values()) {
+            const result = await validator(
+                ctx,
+                order,
+                { method: input.method, metadata: input.metadata },
+                'manual',
+            );
+            preserveReceivedQuote ||= result.preserveReceivedQuote === true;
+        }
+        const manualRemovedCouponCodes = preserveReceivedQuote
+            ? []
+            : await this.revalidateCouponCodesForOrder(ctx, order);
         // Re-fetch order so totals reflect any recalculated prices
         const freshManualOrder = manualRemovedCouponCodes.length
             ? await this.getOrderOrThrow(ctx, input.orderId)
@@ -1687,6 +1749,11 @@ export class OrderService {
             .relation('payments')
             .of(freshManualOrder)
             .add(payment);
+        if (payment.metadata?.manualReview?.required) {
+            return Object.assign(new ManualPaymentStateError(), {
+                message: '付款记录已保留，需要人工核对优惠券与实际付款时间，请勿重复登记',
+            });
+        }
         for (const modification of unsettledModifications) {
             modification.payment = payment;
             await this.connection.getRepository(ctx, OrderModification).save(modification);
@@ -1932,6 +1999,38 @@ export class OrderService {
         ctx: RequestContext,
         input: RefundOrderInput,
     ): Promise<ErrorResultUnion<RefundOrderResult, Refund>> {
+        return this.withOrderMutationTransaction(ctx, txCtx => this.refundOrderInTransaction(txCtx, input));
+    }
+
+    /** Establish the isolation level before any refund snapshot is read. */
+    withOrderMutationTransaction<T>(
+        ctx: RequestContext,
+        work: (ctx: RequestContext) => Promise<T>,
+    ): Promise<T> {
+        return this.connection.withTransaction(
+            ctx,
+            work,
+            ['mysql', 'mariadb', 'postgres'].includes(this.connection.rawConnection.options.type)
+                ? 'READ COMMITTED'
+                : undefined,
+        );
+    }
+
+    /** Serialize all refund writers for an order, including separate payment records. */
+    async lockOrderForRefund(ctx: RequestContext, orderId: ID): Promise<void> {
+        await this.connection
+            .getRepository(ctx, Order)
+            .createQueryBuilder()
+            .update()
+            .set({ updatedAt: () => 'updatedAt' })
+            .where('id = :id', { id: orderId })
+            .execute();
+    }
+
+    private async refundOrderInTransaction(
+        ctx: RequestContext,
+        input: RefundOrderInput,
+    ): Promise<ErrorResultUnion<RefundOrderResult, Refund>> {
         if (
             (!input.lines || input.lines.length === 0 || summate(input.lines, 'quantity') === 0) &&
             input.shipping === 0 &&
@@ -1949,7 +2048,8 @@ export class OrderService {
         if (orders && orders.length && !idsAreEqual(payment.order.id, orders[0].id)) {
             return new PaymentOrderMismatchError();
         }
-        const order = payment.order;
+        await this.lockOrderForRefund(ctx, payment.order.id);
+        const order = await this.connection.getEntityOrThrow(ctx, Order, payment.order.id);
         if (
             order.state === 'AddingItems' ||
             order.state === 'ArrangingPayment' ||
@@ -1973,10 +2073,16 @@ export class OrderService {
     async settleRefund(ctx: RequestContext, input: SettleRefundInput): Promise<Refund> {
         // Wrapped in withTransaction so the state save and onTransitionEnd hooks
         // are atomic — see the equivalent comment on transitionToState. #4686.
-        return this.connection.withTransaction(ctx, async txCtx => {
-            const refund = await this.connection.getEntityOrThrow(txCtx, Refund, input.id, {
+        return this.withOrderMutationTransaction(ctx, async txCtx => {
+            let refund = await this.connection.getEntityOrThrow(txCtx, Refund, input.id, {
                 relations: ['payment', 'payment.order'],
             });
+            await this.lockOrderForRefund(txCtx, refund.payment.order.id);
+            refund = await this.connection.getEntityOrThrow(txCtx, Refund, refund.id, {
+                relations: ['payment', 'payment.order'],
+            });
+            if (refund.state === 'Settled') return refund;
+
             refund.transactionId = input.transactionId;
             const fromState = refund.state;
             const toState = 'Settled';

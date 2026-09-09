@@ -36,6 +36,8 @@ import type {
     RegisterCustomerInput,
     ShippingMethod,
     StoreCommerceMode,
+    StoreCouponPage,
+    StoreCouponPageOptions,
     StoreCouponUsageRecord,
     StoreCustomerCoupon,
     StorefrontCart,
@@ -425,6 +427,24 @@ export class ShopApi {
 
     async reopenCart(expectedRevision: number): Promise<StorefrontCart> {
         return this.cartCheckoutApi.reopenCart(expectedRevision);
+    }
+
+    async myCouponsPage(
+        options: StoreCouponPageOptions = {},
+        signal?: AbortSignal,
+    ): Promise<StoreCouponPage<StoreCustomerCoupon>> {
+        return this.cartCheckoutApi.myCouponsPage(options, signal);
+    }
+
+    async myCouponUsageRecordsPage(
+        options: StoreCouponPageOptions = {},
+        signal?: AbortSignal,
+    ): Promise<StoreCouponPage<StoreCouponUsageRecord>> {
+        return this.cartCheckoutApi.myCouponUsageRecordsPage(options, signal);
+    }
+
+    async myAvailableCoupons(signal?: AbortSignal): Promise<StoreCustomerCoupon[]> {
+        return this.cartCheckoutApi.myAvailableCoupons(signal);
     }
 
     async myCoupons(signal?: AbortSignal): Promise<StoreCustomerCoupon[]> {

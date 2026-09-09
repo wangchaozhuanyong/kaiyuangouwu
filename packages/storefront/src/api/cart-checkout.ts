@@ -7,13 +7,14 @@ import type {
     PaymentMethod,
     ShippingMethod,
     StoreCommerceMode,
+    StoreCouponPage,
+    StoreCouponPageOptions,
     StoreCouponUsageRecord,
     StoreCustomerCoupon,
     StorefrontCart,
     StorefrontCheckoutSession,
     StorefrontUsdtCheckoutQuote,
 } from '../types';
-import type { ErrorResult } from './helpers';
 
 import { cartLineCanSelect } from '../product-availability';
 
@@ -25,6 +26,7 @@ import {
     customerCouponFields,
     orderFields,
 } from './fragments';
+import { ShopApiError, type ErrorResult } from './helpers';
 
 export class CartCheckoutApi extends BaseDomainApi {
     controller?: CartController;
@@ -301,6 +303,50 @@ export class CartCheckoutApi extends BaseDomainApi {
             { expectedRevision },
         );
         return this.assertCart(result.reopenStorefrontCart);
+    }
+
+    async myCouponsPage(
+        options: StoreCouponPageOptions = {},
+        signal?: AbortSignal,
+    ): Promise<StoreCouponPage<StoreCustomerCoupon>> {
+        const result = await this.request<{ myStorefrontCouponsPage: StoreCouponPage<StoreCustomerCoupon> }>(
+            `query MyStorefrontCouponsPage($options: StoreCouponPageOptions) {
+                myStorefrontCouponsPage(options: $options) { items { ${customerCouponFields} } totalItems }
+            }`,
+            { options },
+            signal,
+        );
+        return result.myStorefrontCouponsPage;
+    }
+
+    async myCouponUsageRecordsPage(
+        options: StoreCouponPageOptions = {},
+        signal?: AbortSignal,
+    ): Promise<StoreCouponPage<StoreCouponUsageRecord>> {
+        const result = await this.request<{
+            myStorefrontCouponUsageRecordsPage: StoreCouponPage<StoreCouponUsageRecord>;
+        }>(
+            `query MyStorefrontCouponUsageRecordsPage($options: StoreCouponPageOptions) {
+                myStorefrontCouponUsageRecordsPage(options: $options) { items {
+                id customerCouponId campaignId campaignName campaignKind status currencyCode
+                minimumSpend discountAmount discountRate savedAmount usedAt refundedAt orderId orderCode
+            } totalItems } }`,
+            { options },
+            signal,
+        );
+        return result.myStorefrontCouponUsageRecordsPage;
+    }
+
+    async myAvailableCoupons(signal?: AbortSignal): Promise<StoreCustomerCoupon[]> {
+        const items: StoreCustomerCoupon[] = [];
+        while (true) {
+            const page = await this.myCouponsPage(
+                { skip: items.length, take: 200, statuses: ['AVAILABLE', 'RETURNED', 'LOCKED'] },
+                signal,
+            );
+            items.push(...page.items);
+            if (!page.items.length || items.length >= page.totalItems) return items;
+        }
     }
 
     async myCoupons(signal?: AbortSignal): Promise<StoreCustomerCoupon[]> {
@@ -711,18 +757,23 @@ export class CartCheckoutApi extends BaseDomainApi {
     }
 
     async addPaymentToOrder(method: string, metadata: Record<string, unknown> = {}): Promise<Order> {
-        const result = await this.request<{ addPaymentToOrder: Order & ErrorResult }>(
+        const result = await this.request<{
+            addPaymentToOrder: Order & ErrorResult & { paymentErrorMessage?: string };
+        }>(
             `
                 mutation AddStorefrontPayment($input: PaymentInput!) {
                     addPaymentToOrder(input: $input) {
                         __typename
                         ... on Order { ${orderFields} }
                         ... on ErrorResult { errorCode message }
+                        ... on PaymentFailedError { paymentErrorMessage }
                     }
                 }
             `,
             { input: { method, metadata } },
         );
+        if (result.addPaymentToOrder.paymentErrorMessage?.startsWith('PAYMENT_REVIEW_REQUIRED:'))
+            throw new ShopApiError('PAYMENT_REVIEW_REQUIRED', 'PAYMENT_REVIEW_REQUIRED');
         return this.assertOrder(result.addPaymentToOrder);
     }
 }

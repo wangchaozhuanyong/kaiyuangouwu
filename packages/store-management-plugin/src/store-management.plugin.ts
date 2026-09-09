@@ -60,6 +60,7 @@ import {
     customerCouponEntitlement,
     flashSalePriceAction,
 } from './promotion/store-commerce-promotion-actions';
+import { StoreCouponClosureRepairService } from './promotion/store-coupon-closure-repair.service';
 import { StoreCouponLifecycleService } from './promotion/store-coupon-lifecycle.service';
 import { StoreCouponRepairService } from './promotion/store-coupon-repair.service';
 import { reconcileStoreCouponsTask } from './promotion/store-coupon-tasks';
@@ -200,6 +201,7 @@ import {
         StorePromotionCampaignService,
         StoreCouponLifecycleService,
         StoreCouponRepairService,
+        StoreCouponClosureRepairService,
         ReferralService,
         StorefrontTrafficService,
         ReferralWalletSpendService,

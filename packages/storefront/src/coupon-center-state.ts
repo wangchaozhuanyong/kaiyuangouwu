@@ -21,7 +21,7 @@ export function couponCampaignsForCustomer(
 ): StorefrontCouponCampaign[] {
     const claimedCampaignIds = new Set(coupons.map(coupon => coupon.campaignId));
     return campaigns.map(campaign => {
-        const claimed = claimedCampaignIds.has(campaign.id);
+        const claimed = campaign.claimed || claimedCampaignIds.has(campaign.id);
         return {
             ...campaign,
             claimed,

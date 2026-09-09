@@ -16,9 +16,15 @@ export async function runCouponRepair({
     out,
     planFile,
     apply = false,
+    version = 'coupon-lifecycle-v1',
     allowRemote = false,
     fetchImpl = fetch,
 }) {
+    assert.ok(['coupon-lifecycle-v1', 'coupon-closure-v2'].includes(version), 'Unknown repair version');
+    const mutation =
+        version === 'coupon-closure-v2' ? 'repairStoreCouponClosure' : 'repairStoreCouponCampaign';
+    const previewQuery =
+        version === 'coupon-closure-v2' ? 'storeCouponClosureRepairPreview' : 'storeCouponRepairPreview';
     const origin = new URL(apiOrigin).origin;
     assert.ok(username && password, 'SUPERADMIN_USERNAME and SUPERADMIN_PASSWORD are required');
     assert.ok(channelId && campaignId && out, '--channel-id, --campaign-id and --out are required');
@@ -34,6 +40,7 @@ export async function runCouponRepair({
         assert.equal(reviewed.target.channelId, channelId, 'Preview belongs to a different Channel');
         assert.equal(reviewed.target.campaignId, campaignId, 'Preview belongs to a different campaign');
         assert.ok(reviewed.plan.fingerprint, 'Preview fingerprint is missing');
+        assert.equal(reviewed.plan.repairVersion, version, 'Preview belongs to a different repair version');
     }
     const output = await fs.open(out, 'wx', 0o600);
     try {
@@ -75,18 +82,17 @@ export async function runCouponRepair({
             result = (
                 await request(
                     `mutation($campaignId: ID!, $fingerprint: String!, $password: String!) {
-                        repairStoreCouponCampaign(campaignId: $campaignId, fingerprint: $fingerprint, password: $password)
+                        ${mutation}(campaignId: $campaignId, fingerprint: $fingerprint, password: $password)
                     }`,
                     { campaignId, fingerprint: reviewed.plan.fingerprint, password },
                 )
-            ).repairStoreCouponCampaign;
+            )[mutation];
         } else {
             result = (
-                await request(
-                    'query($campaignId: ID!) { storeCouponRepairPreview(campaignId: $campaignId) }',
-                    { campaignId },
-                )
-            ).storeCouponRepairPreview;
+                await request(`query($campaignId: ID!) { ${previewQuery}(campaignId: $campaignId) }`, {
+                    campaignId,
+                })
+            )[previewQuery];
         }
         const artifact = {
             target: { apiOrigin: origin, channelId, campaignId },
@@ -108,6 +114,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
             'campaign-id': { type: 'string' },
             out: { type: 'string' },
             plan: { type: 'string' },
+            version: { type: 'string', default: 'coupon-lifecycle-v1' },
             apply: { type: 'boolean', default: false },
             'allow-remote': { type: 'boolean', default: false },
         },
@@ -118,6 +125,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
         campaignId: values['campaign-id'],
         out: values.out,
         planFile: values.plan,
+        version: values.version,
         username: process.env.SUPERADMIN_USERNAME,
         password: process.env.SUPERADMIN_PASSWORD,
         apply: values.apply,
@@ -130,7 +138,13 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
                     channelId: report.channelId,
                     campaignId: report.campaignId,
                     mode: values.apply ? 'applied' : 'preview',
-                    changedCoupons: result.receipt?.changedCoupons ?? report.changes.coupons.length,
+                    changedCoupons:
+                        result.receipt?.changedCoupons ??
+                        report.changes?.coupons.length ??
+                        report.items.filter(item => item.actions.length).length,
+                    manualReviewCount:
+                        (report.manualReview?.length ?? 0) +
+                        (report.items?.filter(item => item.manualReview.length).length ?? 0),
                     output: values.out,
                 }) + '\n',
             );

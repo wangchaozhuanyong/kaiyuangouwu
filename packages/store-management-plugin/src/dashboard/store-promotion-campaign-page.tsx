@@ -1236,10 +1236,23 @@ function StorePromotionCampaignPage({ mode, route }: { mode: 'COUPONS' | 'FLASH_
             } else if (variables.action.kind === 'STOP_ISSUANCE') {
                 toast.success('优惠券已停止发放，客户已领取券仍可按原规则使用');
             } else if (variables.action.kind === 'REVOKE_OUTSTANDING') {
-                const affectedCount = (
-                    result as { revokeStoreCouponCampaignOutstanding?: { affectedCount: number } }
-                ).revokeStoreCouponCampaignOutstanding?.affectedCount;
-                toast.success(`已作废 ${affectedCount ?? variables.action.affectedCount} 张未使用优惠券`);
+                const outcome = (
+                    result as {
+                        revokeStoreCouponCampaignOutstanding?: {
+                            affectedCount: number;
+                            skippedCount?: number;
+                            failedCount?: number;
+                            outcomes?: Array<{ reason: string }>;
+                        };
+                    }
+                ).revokeStoreCouponCampaignOutstanding;
+                if (!outcome) toast.error('无法读取批量作废结果，请刷新后核对');
+                else {
+                    const reasons = [...new Set(outcome.outcomes?.map(item => item.reason) ?? [])].join('；');
+                    const message = `已作废 ${outcome.affectedCount} 张，跳过 ${outcome.skippedCount ?? 0} 张，失败 ${outcome.failedCount ?? 0} 张${reasons ? `。${reasons}` : ''}`;
+                    if (outcome.failedCount || outcome.skippedCount) toast.warning(message);
+                    else toast.success(message);
+                }
             } else {
                 toast.success('活动已删除');
             }

@@ -632,6 +632,7 @@ export function useStorefrontAppState() {
         customerLoadError,
         customerQuery,
         myCoupons,
+        customerCouponQueryKey,
         customerCouponsQuery,
         customerCouponsError,
         couponUsageRecords,

@@ -128,6 +128,14 @@ export const storefrontErrorCopy = {
         '此支付方式暂时不可用，请选择其他支付方式。',
         'This payment method is unavailable. Please choose another method.',
     ),
+    PAYMENT_REVIEW_REQUIRED: copy(
+        '付款记录需要人工核对，请勿重复付款。请在订单详情中查看处理状态或联系客服。',
+        'Your payment needs review. Do not pay again. Check the order details or contact support.',
+    ),
+    COUPON_REMOVED_DURING_CHECKOUT_ERROR: copy(
+        '优惠券已失效，已更新订单金额。请返回购物车确认后再付款。',
+        'The coupon is no longer valid and the total has changed. Review your cart before paying.',
+    ),
     PAYMENT_FAILED_ERROR: copy(
         '支付未完成，请检查订单状态后重试或更换支付方式。',
         'Payment was not completed. Check the order status before retrying or choosing another method.',

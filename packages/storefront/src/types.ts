@@ -1077,3 +1077,14 @@ export interface CreateImageGenerationInput {
     idempotencyKey: string;
     termsAccepted: boolean;
 }
+
+export interface StoreCouponPageOptions {
+    skip?: number;
+    take?: number;
+    statuses?: string[];
+    usableOnly?: boolean;
+}
+export interface StoreCouponPage<T> {
+    items: T[];
+    totalItems: number;
+}
