@@ -161,7 +161,7 @@ describe('production payment readiness', () => {
             translations: [{ name, description: '' }],
         }) as any;
 
-    it('requires a registered non-test payment handler', () => {
+    it('allows only registered production or controlled test payment handlers', () => {
         const handlers = new Set(['stripe-payment']);
 
         expect(
