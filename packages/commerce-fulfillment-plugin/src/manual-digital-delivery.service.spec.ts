@@ -74,6 +74,34 @@ function createHarness(state: ManualDigitalDelivery['state'] = 'DRAFT') {
 }
 
 describe('ManualDigitalDeliveryService invariants', () => {
+    it.each(['CANCELLED', 'SENT'] as const)(
+        'preserves terminal state %s after old queue results',
+        async state => {
+            const test = createHarness(state);
+            await test.service.recordEmailResult(
+                test.ctx,
+                test.delivery.id,
+                false,
+                new Error('late attempt'),
+            );
+            await test.service.recordEmailResult(test.ctx, test.delivery.id, true);
+            expect(test.delivery.state).toBe(state);
+            expect(test.delivery.attemptCount).toBe(0);
+            expect(test.events).toHaveLength(0);
+            expect(test.orderService.createFulfillment).not.toHaveBeenCalled();
+        },
+    );
+
+    it.each(['CANCELLED', 'SENT', 'DRAFT', 'MANUAL_REVIEW'] as const)(
+        'blocks queued mail for %s',
+        async state => {
+            const test = createHarness(state);
+            await expect(test.service.queuedEmailPayload(test.ctx, test.delivery.id)).rejects.toThrow(
+                '不能发送邮件',
+            );
+        },
+    );
+
     it('rejects foreign or deleted attachments before draft persistence', async () => {
         const test = createHarness();
         await expect(

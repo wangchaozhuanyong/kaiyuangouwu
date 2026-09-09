@@ -78,6 +78,7 @@ export class EmailProcessor {
                 replyTo: data.replyTo,
             };
             const transportSettings = await this.getTransportSettings(ctx);
+            await this.options.beforeSend?.(new Injector(this.moduleRef), ctx, data);
             await this.emailSender.send(emailDetails, transportSettings);
             await this.eventBus.publish(
                 new EmailSendEvent(ctx, emailDetails, true, undefined, data.metadata),

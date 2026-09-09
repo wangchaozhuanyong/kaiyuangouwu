@@ -18,7 +18,7 @@ function createService() {
         getRawOne: vi.fn().mockResolvedValue({ bytes: '0' }),
     };
     query.getExists = vi.fn().mockResolvedValue(false);
-    for (const method of ['where', 'andWhere', 'setLock', 'innerJoin', 'select'])
+    for (const method of ['where', 'andWhere', 'setLock', 'innerJoin', 'select', 'addSelect'])
         query[method] = vi.fn(() => query);
     const repository = {
         createQueryBuilder: vi.fn(() => query),
@@ -99,7 +99,7 @@ describe('CustomerAvatarService', () => {
         expect(replayableUpload.mimetype).toBe('image/webp');
     });
 
-    it.each(['customer quota', 'channel quota', 'frequency'])(
+    it.each(['customer quota', 'channel quota', 'channel file count', 'frequency'])(
         'enforces %s before storage under a database lock',
         async condition => {
             const test = createService();
@@ -107,6 +107,8 @@ describe('CustomerAvatarService', () => {
                 test.assetService.findAll.mockResolvedValue({ items: [], totalItems: 5 });
             if (condition === 'channel quota')
                 test.query.getRawOne.mockResolvedValue({ bytes: String(1024 ** 3) });
+            if (condition === 'channel file count')
+                test.query.getRawOne.mockResolvedValue({ bytes: '10', count: '10000' });
             if (condition === 'frequency') {
                 test.query.getExists.mockResolvedValue(true);
                 test.assetService.findAll.mockResolvedValue({

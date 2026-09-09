@@ -47,6 +47,7 @@ void test('Nginx error logs are sanitized in memory before persistence', async (
         path.join(repositoryRoot, 'deploy/deploy-production-from-s3.sh'),
         'utf8',
     );
+    assert.ok(deployment.includes('[[ "${nginx_worker_user}" == "www-data" ]]'));
     assert.ok(
         deployment.indexOf('systemctl is-active --quiet vendure-nginx-error-log.service') <
             deployment.indexOf('sudo -n nginx -t\n'),

@@ -125,6 +125,15 @@ export interface EmailPluginOptions {
      */
     emailSender?: EmailSender;
     /**
+     * Revalidates queued email immediately before each send attempt, including retries.
+     * Throwing prevents delivery and publishes the usual failed EmailSendEvent.
+     */
+    beforeSend?: (
+        injector: Injector,
+        ctx: RequestContext,
+        email: Readonly<IntermediateEmailDetails>,
+    ) => void | Promise<void>;
+    /**
      * @description
      * An optional allowed EmailGenerator, used to allow custom email generation functionality to
      * better match with custom email sending functionality.
@@ -410,7 +419,7 @@ export interface EmailTemplateConfig {
      * Specifies the channel to which this configuration will apply. If set to `'default'`, it will be applied to all
      * channels.
      */
-    channelCode: string | 'default';
+    channelCode: string;
     /**
      * @description
      * Specifies the languageCode to which this configuration will apply. If set to `'default'`, it will be applied to all

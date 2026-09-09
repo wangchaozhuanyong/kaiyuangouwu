@@ -25,6 +25,7 @@ const CUSTOMER_AVATAR_TAG = 'customer-avatar';
 const CUSTOMER_AVATAR_OWNER_TAG_PREFIX = 'customer-avatar-owner:';
 const AVATAR_CUSTOMER_LIMIT = 5;
 const AVATAR_CHANNEL_MAX_BYTES = 1024 * 1024 * 1024;
+const AVATAR_CHANNEL_MAX_FILES = 10_000;
 
 export interface CustomerAvatarUpload {
     filename: string;
@@ -112,8 +113,12 @@ export class CustomerAvatarService {
                 })
                 .innerJoin('asset.tags', 'tag', 'tag.value = :tag', { tag: CUSTOMER_AVATAR_TAG })
                 .select('COALESCE(SUM(asset.fileSize), 0)', 'bytes')
-                .getRawOne<{ bytes: string }>();
-            if (Number(usage?.bytes ?? 0) + bytes.length > AVATAR_CHANNEL_MAX_BYTES)
+                .addSelect('COUNT(DISTINCT asset.id)', 'count')
+                .getRawOne<{ bytes: string; count: string }>();
+            if (
+                Number(usage?.bytes ?? 0) + bytes.length > AVATAR_CHANNEL_MAX_BYTES ||
+                Number(usage?.count ?? 0) >= AVATAR_CHANNEL_MAX_FILES
+            )
                 throw new UserInputError('店铺头像存储配额已满');
             previous = avatars.items;
             const created = await this.assetService.create(txCtx, {

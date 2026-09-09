@@ -242,10 +242,23 @@ export class ManualDigitalDeliveryService {
         };
     }
 
+    async queuedEmailPayload(ctx: RequestContext, id: ID) {
+        const delivery = await this.ownedDelivery(ctx, id);
+        if (
+            !['SENDING', 'EMAIL_FAILED'].includes(delivery.state) ||
+            delivery.order.state === 'Cancelled' ||
+            delivery.orderLine.quantity === 0
+        ) {
+            throw new UserInputError('人工交付任务已关闭或当前状态不能发送邮件');
+        }
+        return this.emailPayload(ctx, id);
+    }
+
     async recordEmailResult(ctx: RequestContext, id: ID, success: boolean, error?: Error): Promise<void> {
         const delivery = await this.ownedDelivery(ctx, id);
         const wasManualReview = delivery.state === 'MANUAL_REVIEW';
-        if (success && delivery.state === 'SENT') {
+        // Old queued attempts must not reopen a cancelled or already completed task.
+        if (delivery.state === 'CANCELLED' || delivery.state === 'SENT') {
             return;
         }
         delivery.attemptCount += 1;

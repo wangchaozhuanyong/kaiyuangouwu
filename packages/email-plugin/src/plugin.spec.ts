@@ -23,6 +23,7 @@ import { Readable } from 'stream';
 import { afterEach, beforeEach, describe, expect, it, Mock, vi } from 'vitest';
 
 import { EmailProcessor } from './email-processor';
+import { EmailSendEvent } from './email-send-event';
 import { EmailEventListener } from './event-listener';
 import { orderConfirmationHandler } from './handler/default-email-handlers';
 import { EmailEventHandler } from './handler/event-handler';
@@ -90,6 +91,32 @@ describe('EmailPlugin', () => {
     afterEach(async () => {
         if (module) {
             await module.close();
+        }
+    });
+
+    it.each([true, false])('checks current authorization before sending: allowed=%s', async allowed => {
+        const ctx = RequestContext.deserialize({
+            _channel: { code: DEFAULT_CHANNEL_CODE },
+            _languageCode: LanguageCode.en,
+        } as any);
+        const handler = new EmailEventListener('test')
+            .on(MockEvent)
+            .setFrom('fixture@example.invalid')
+            .setRecipient(() => 'recipient@example.invalid')
+            .setSubject('Fixture');
+        const beforeSend = vi.fn(() => {
+            if (!allowed) throw new Error('Synthetic permission revoked');
+        });
+        await initPluginWithHandlers([handler], { beforeSend });
+        const outcomes: boolean[] = [];
+        const subscription = eventBus.ofType(EmailSendEvent).subscribe(event => outcomes.push(event.success));
+        try {
+            await eventBus.publish(new MockEvent(ctx, true));
+            await vi.waitFor(() => expect(outcomes).toEqual([allowed]));
+            expect(beforeSend).toHaveBeenCalledOnce();
+            expect(onSend).toHaveBeenCalledTimes(allowed ? 1 : 0);
+        } finally {
+            subscription.unsubscribe();
         }
     });
 
@@ -512,7 +539,7 @@ describe('EmailPlugin', () => {
             const handler = new EmailEventListener('test')
                 .on(MockEvent)
                 .filter(event => event.shouldSend === true)
-                .loadData(async ({ injector }) => {
+                .loadData(({ injector }) => {
                     callCount++;
                 });
 
@@ -572,11 +599,13 @@ describe('EmailPlugin', () => {
                 .setFrom('"test from" <noreply@test.com>')
                 .setRecipient(() => 'test@test.com')
                 .setSubject('Hello {{ subjectVar }}')
-                .setAttachments(async () => [
-                    {
-                        path: TEST_IMAGE_PATH,
-                    },
-                ]);
+                .setAttachments(() =>
+                    Promise.resolve([
+                        {
+                            path: TEST_IMAGE_PATH,
+                        },
+                    ]),
+                );
 
             await initPluginWithHandlers([handler]);
             await eventBus.publish(new MockEvent(ctx, true));
@@ -952,15 +981,15 @@ describe('EmailPlugin', () => {
                 .setSubject('Hello')
                 .setTemplateVars(event => ({ subjectVar: 'foo' }));
             module = await initPluginWithHandlers([handler], {
-                transport: async (injector, _ctx) => {
+                transport: (injector, _ctx) => {
                     injectorArg = injector;
                     ctxArg = _ctx;
-                    return {
-                        type: 'testing',
+                    return Promise.resolve({
+                        type: 'testing' as const,
                         onSend: () => {
                             /* */
                         },
-                    };
+                    });
                 },
             });
             const ctx = RequestContext.deserialize({
@@ -1042,7 +1071,7 @@ describe('EmailPlugin', () => {
             class CustomLanguageAwareTemplateLoader implements TemplateLoader {
                 constructor(private templateDir: string) {}
 
-                async loadTemplate(
+                loadTemplate(
                     _injector: Injector,
                     context: RequestContext,
                     { type, templateName }: LoadTemplateInput,
@@ -1052,11 +1081,11 @@ describe('EmailPlugin', () => {
                         type,
                         `${templateName}.${context.languageCode}.hbs`,
                     );
-                    return readFileSync(filePath, 'utf-8');
+                    return Promise.resolve(readFileSync(filePath, 'utf-8'));
                 }
 
-                async loadPartials(): Promise<EmailPartial[]> {
-                    return [];
+                loadPartials(): Promise<EmailPartial[]> {
+                    return Promise.resolve([]);
                 }
             }
 

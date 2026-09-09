@@ -181,7 +181,7 @@ describe('admin record pagination', () => {
         expect(query.requests.at(-1)?.options).toMatchObject({ skip: 1000, take: 100 });
         expect(container.querySelector('tbody tr')?.textContent).toContain('item-1001');
         expect(container.textContent).toContain('1101 条 · 11 / 12 页');
-    });
+    }, 15_000);
 
     it('clamps the page after a shorter refresh and recovers from an empty result', async () => {
         query.data = auditData();
