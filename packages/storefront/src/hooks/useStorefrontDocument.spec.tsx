@@ -6,6 +6,7 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { type StorefrontVisualPresetId } from '../../../storefront-content-plugin/src/visual-presets';
+import { type RouteState } from '../storefront-router';
 import { type Product, type StorefrontConfig } from '../types';
 import { applyStorefrontVisualPreset } from '../use-storefront-visual-preset';
 
@@ -19,11 +20,13 @@ function Fixture({
     product,
     background,
     presetId = 'classic',
+    route,
 }: {
     logo: string | null;
     product?: Product;
     background?: string;
     presetId?: StorefrontVisualPresetId;
+    route?: RouteState;
 }) {
     useLayoutEffect(() => applyStorefrontVisualPreset(document.documentElement, presetId), [presetId]);
     useStorefrontBrandColors(
@@ -38,7 +41,7 @@ function Fixture({
     );
     useStorefrontMetadata({
         isZh: true,
-        route: { name: product ? 'product' : 'home' },
+        route: route ?? { name: product ? 'product' : 'home' },
         selectedProduct: product,
         storefrontDescription: '',
         storefrontName: logo ? '当前店铺' : '店铺',
@@ -48,6 +51,7 @@ function Fixture({
 }
 afterEach(() => {
     document.head.innerHTML = '';
+    window.history.replaceState({}, '', '/');
     sessionStorage.clear();
 });
 describe('runtime channel branding', () => {
@@ -131,5 +135,40 @@ describe('runtime channel branding', () => {
         expect(document.documentElement.style.getPropertyValue('--store-background')).toBe('');
         expect(document.title).not.toContain('MOYAO');
         act(() => root.unmount());
+    });
+
+    it('removes sensitive parameters from metadata and prevents private routes from being indexed', () => {
+        document.head.innerHTML = [
+            '<meta name="robots" content="index, follow, max-image-preview:large">',
+            '<meta property="og:url" content="/">',
+            '<link rel="canonical" href="/">',
+        ].join('');
+        window.history.replaceState({}, '', '/reset-password?token=audit-secret');
+        const root = createRoot(host);
+        try {
+            act(() =>
+                root.render(
+                    <Fixture logo={null} route={{ name: 'reset-password', token: 'audit-secret' }} />,
+                ),
+            );
+            const safeUrl = new URL('/reset-password', window.location.origin).href;
+            expect(document.querySelector('meta[name="robots"]')?.getAttribute('content')).toBe(
+                'noindex, nofollow',
+            );
+            expect(document.querySelector('meta[property="og:url"]')?.getAttribute('content')).toBe(safeUrl);
+            expect(document.querySelector('link[rel="canonical"]')?.getAttribute('href')).toBe(safeUrl);
+            expect(document.head.innerHTML).not.toContain('audit-secret');
+
+            window.history.replaceState({}, '', '/product?id=6');
+            act(() => root.render(<Fixture logo={null} route={{ name: 'product', id: '6' }} />));
+            expect(document.querySelector('meta[name="robots"]')?.getAttribute('content')).toBe(
+                'index, follow, max-image-preview:large',
+            );
+            expect(document.querySelector('link[rel="canonical"]')?.getAttribute('href')).toBe(
+                new URL('/product?id=6', window.location.origin).href,
+            );
+        } finally {
+            act(() => root.unmount());
+        }
     });
 });

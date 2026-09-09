@@ -984,6 +984,10 @@
 }
 
 @media (max-width: 1023px) {
+    .auth-page .auth-hero-message-brand-only {
+        padding-left: 104px;
+    }
+
     .auth-route-tabs {
         min-height: 54px;
         margin-bottom: 24px;
