@@ -49,15 +49,22 @@ export function CouponEditor({
 }) {
     const [draft, setDraft] = useState<CouponDraft>(newCouponDraft());
     const [selectorSearch, setSelectorSearch] = useState('');
+    const [topLevelOnly, setTopLevelOnly] = useState(true);
+    const [collectionPage, setCollectionPage] = useState(0);
     const deferredSearch = useDeferredValue(selectorSearch.trim());
     const hasScope = draft.kind === 'COLLECTION_PERCENTAGE' || draft.kind === 'PRODUCT_PERCENTAGE';
     const catalog = useQuery<{
-        collections: { totalItems: number; items: Array<{ id: string; name: string }> };
+        collections: {
+            totalItems: number;
+            items: Array<{ id: string; name: string; breadcrumbs: Array<{ id: string; name: string }> }>;
+        };
         products: { totalItems: number; items: PromotionProductRecord[] };
     }>(MARKETING_CATALOG_LOOKUP_QUERY, {
         variables: {
             collectionOptions: {
                 take: draft.kind === 'COLLECTION_PERCENTAGE' ? 30 : 1,
+                skip: draft.kind === 'COLLECTION_PERCENTAGE' ? collectionPage * 30 : 0,
+                topLevelOnly,
                 sort: dataTableSortPolicy.alphabeticalName,
                 filter:
                     draft.kind === 'COLLECTION_PERCENTAGE' && deferredSearch
@@ -117,9 +124,16 @@ export function CouponEditor({
             onError(errorText(error));
         }
     };
-    const scopedItems =
+    const scopedItems: Array<{ id: string; name: string; label?: string }> =
         draft.kind === 'COLLECTION_PERCENTAGE'
-            ? (catalog.data?.collections.items ?? [])
+            ? (catalog.data?.collections.items.map(collection => ({
+                  ...collection,
+                  label:
+                      collection.breadcrumbs
+                          .slice(1)
+                          .map(item => item.name)
+                          .join(' / ') || collection.name,
+              })) ?? [])
             : (catalog.data?.products.items ?? []);
     const scopedTotal =
         draft.kind === 'COLLECTION_PERCENTAGE'
@@ -151,6 +165,7 @@ export function CouponEditor({
                     value={draft.kind}
                     onChange={value => {
                         setSelectorSearch('');
+                        setCollectionPage(0);
                         setDraft({
                             ...draft,
                             kind: value as StoreCouponKind,
@@ -212,6 +227,27 @@ export function CouponEditor({
                     ]}
                 />
             </div>
+            {draft.kind === 'COLLECTION_PERCENTAGE' && (
+                <div className="mt-4">
+                    <FormSelect
+                        label="分类层级"
+                        value={topLevelOnly ? 'TOP_LEVEL' : 'ALL'}
+                        onChange={value => {
+                            setTopLevelOnly(value === 'TOP_LEVEL');
+                            setCollectionPage(0);
+                            setSelectorSearch('');
+                        }}
+                        options={[
+                            ['TOP_LEVEL', '一级分类'],
+                            ['ALL', '全部分类（含二级及以下）'],
+                        ]}
+                    />
+                    <p className="mt-2 text-[11px] text-slate-500">
+                        选择分类后，该分类及全部下级分类中的商品均可使用优惠券。已选{' '}
+                        {draft.collectionIds.length} 个分类。
+                    </p>
+                </div>
+            )}
             {(draft.kind === 'COLLECTION_PERCENTAGE' || draft.kind === 'PRODUCT_PERCENTAGE') && (
                 <MultiSelector
                     title={draft.kind === 'COLLECTION_PERCENTAGE' ? '适用分类 *' : '适用商品 *'}
@@ -219,11 +255,23 @@ export function CouponEditor({
                     totalItems={scopedTotal}
                     loading={catalog.loading}
                     error={
-                        catalog.error ? toUserFacingError(catalog.error, '促销适用商品读取失败') : undefined
+                        catalog.error
+                            ? toUserFacingError(
+                                  catalog.error,
+                                  draft.kind === 'COLLECTION_PERCENTAGE'
+                                      ? '促销适用分类读取失败'
+                                      : '促销适用商品读取失败',
+                              )
+                            : undefined
                     }
                     selectedIds={selectedIds}
                     search={selectorSearch}
-                    setSearch={setSelectorSearch}
+                    setSearch={value => {
+                        setSelectorSearch(value);
+                        setCollectionPage(0);
+                    }}
+                    page={draft.kind === 'COLLECTION_PERCENTAGE' ? collectionPage : undefined}
+                    onPageChange={draft.kind === 'COLLECTION_PERCENTAGE' ? setCollectionPage : undefined}
                     onChange={updateSelected}
                 />
             )}

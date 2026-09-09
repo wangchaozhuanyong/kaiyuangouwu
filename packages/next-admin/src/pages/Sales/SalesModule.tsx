@@ -33,6 +33,7 @@ import { type SortDirection, useUrlSortState } from '../../hooks/use-url-sort-st
 import { useUrlTab } from '../../hooks/use-url-tab';
 import { toUserFacingError } from '../../utils/user-facing-error';
 
+import { csvCell } from './sales-csv';
 import {
     formatAddress,
     formatDateTime,
@@ -160,7 +161,6 @@ const tabStateFilter: Record<OrderTab, Record<string, unknown>> = {
     DELIVERED: { eq: 'Delivered' },
     CANCELLED: { eq: 'Cancelled' },
 };
-const csvCell = (value: string) => `"${value.replace(/"/g, '""')}"`;
 
 export function SalesModule() {
     const navigate = useNavigate();

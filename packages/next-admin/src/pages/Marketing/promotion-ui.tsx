@@ -13,7 +13,7 @@ import { PageSizeSelect } from '../../components/PageSizeSelect';
 import { useAccessibleDialog } from '../../hooks/use-accessible-dialog';
 import { toUserFacingError } from '../../utils/user-facing-error';
 
-export function MultiSelector<T extends { id: string; name: string }>({
+export function MultiSelector<T extends { id: string; name: string; label?: string }>({
     title,
     items,
     totalItems,
@@ -23,6 +23,8 @@ export function MultiSelector<T extends { id: string; name: string }>({
     search,
     setSearch,
     onChange,
+    page,
+    onPageChange,
 }: {
     title: string;
     items: T[];
@@ -33,6 +35,8 @@ export function MultiSelector<T extends { id: string; name: string }>({
     search: string;
     setSearch: (value: string) => void;
     onChange: (ids: string[]) => void;
+    page?: number;
+    onPageChange?: (page: number) => void;
 }) {
     const visible = items.filter(
         item => !search.trim() || item.name.toLowerCase().includes(search.trim().toLowerCase()),
@@ -43,7 +47,7 @@ export function MultiSelector<T extends { id: string; name: string }>({
                 <div>
                     <h3 className="text-xs font-bold text-slate-800">{title}</h3>
                     <p className="mt-0.5 text-[9px] text-slate-400">
-                        {loading ? '正在查询…' : `匹配 ${totalItems} 条，当前显示前 ${items.length} 条`}
+                        {loading ? '正在查询…' : `匹配 ${totalItems} 条，当前显示 ${items.length} 条`}
                     </p>
                 </div>
                 <div className="relative">
@@ -71,6 +75,7 @@ export function MultiSelector<T extends { id: string; name: string }>({
                         >
                             <input
                                 type="checkbox"
+                                disabled={loading || Boolean(error)}
                                 checked={selectedIds.includes(item.id)}
                                 onChange={event =>
                                     onChange(
@@ -80,7 +85,9 @@ export function MultiSelector<T extends { id: string; name: string }>({
                                     )
                                 }
                             />
-                            <span className="truncate">{item.name}</span>
+                            <span className="truncate" title={item.label ?? item.name}>
+                                {item.label ?? item.name}
+                            </span>
                         </label>
                     ))}
                 </div>
@@ -88,6 +95,29 @@ export function MultiSelector<T extends { id: string; name: string }>({
                     <p className="py-5 text-center text-[11px] text-slate-400">没有匹配项</p>
                 )}
             </div>
+            {page != null && onPageChange && totalItems > 30 && (
+                <div className="mt-2 flex items-center justify-end gap-3 text-[11px] text-slate-500">
+                    <button
+                        type="button"
+                        disabled={loading || page === 0}
+                        onClick={() => onPageChange(page - 1)}
+                        className="rounded border border-slate-200 px-2 py-1 disabled:opacity-40"
+                    >
+                        上一页
+                    </button>
+                    <span>
+                        第 {page + 1} / {Math.ceil(totalItems / 30)} 页
+                    </span>
+                    <button
+                        type="button"
+                        disabled={loading || (page + 1) * 30 >= totalItems}
+                        onClick={() => onPageChange(page + 1)}
+                        className="rounded border border-slate-200 px-2 py-1 disabled:opacity-40"
+                    >
+                        下一页
+                    </button>
+                </div>
+            )}
         </div>
     );
 }

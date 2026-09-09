@@ -12,7 +12,13 @@ export function buildCatalogExport(
 ) {
     if (format === 'csv') {
         const sheet = productSheet(rows, stockLocationId);
-        const csv = `\uFEFF${XLSX.utils.sheet_to_csv(sheet)}`;
+        for (const [address, cell] of Object.entries(sheet)) {
+            if (!address.startsWith('!') && cell.t === 's') {
+                cell.v = safeText(String(cell.v));
+                delete cell.w;
+            }
+        }
+        const csv = `\uFEFF${XLSX.utils.sheet_to_csv(sheet, { forceQuotes: true })}`;
         return {
             buffer: new TextEncoder().encode(csv).buffer,
             mimeType: 'text/csv;charset=utf-8',
@@ -206,7 +212,7 @@ function dateCell(value: string | null): Date | null {
 }
 
 function safeText(value: string): string {
-    return /^[=+\-@]/u.test(value) ? `'${value}` : value;
+    return /^[\s\u0000-\u001f\u007f]*[=+\-@]|^[\t\r\n]/u.test(value) ? `'${value}` : value;
 }
 
 function applyNumberFormat(sheet: XLSX.WorkSheet, rowCount: number, column: string, format: string): void {

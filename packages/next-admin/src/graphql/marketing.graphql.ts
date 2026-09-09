@@ -113,6 +113,10 @@ export const MARKETING_CATALOG_LOOKUP_QUERY = gql`
             items {
                 id
                 name
+                breadcrumbs {
+                    id
+                    name
+                }
             }
         }
         products(options: $productOptions) {
