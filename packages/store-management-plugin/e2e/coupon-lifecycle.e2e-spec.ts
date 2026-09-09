@@ -29,6 +29,7 @@ import { TEST_SETUP_TIMEOUT_MS, testConfig } from '../../../e2e-common/test-conf
 import { awaitRunningJobs } from '../../core/e2e/utils/await-running-jobs';
 import { CustomerCoupon } from '../src/entities/customer-coupon.entity';
 import { StoreCouponCampaignConfig } from '../src/entities/store-coupon-campaign-config.entity';
+import { StoreProfile } from '../src/entities/store-profile.entity';
 import { StoreManagementPlugin } from '../src/store-management.plugin';
 
 const couponPaymentHandler = new PaymentMethodHandler({
@@ -769,6 +770,98 @@ describe('coupon lifecycle closed loop', () => {
         const mine = (await shopClient.query(MY_COUPONS)).myStorefrontCoupons;
         expect(mine.find((coupon: any) => coupon.id === good.id).status).toBe('LOCKED');
         expect(mine.find((coupon: any) => coupon.id === next.id).status).toBe('AVAILABLE');
+    });
+
+    it('isolates a merchant coupon also assigned to the default Channel by Vendure', async () => {
+        await auditCustomer('channel-isolation');
+        const token = 'coupon-audit-secondary-channel';
+        const createdChannel = await adminClient.query(
+            gql`
+                mutation ($input: CreateChannelInput!) {
+                    createChannel(input: $input) {
+                        ... on Channel {
+                            id
+                        }
+                        ... on ErrorResult {
+                            errorCode
+                            message
+                        }
+                    }
+                }
+            `,
+            {
+                input: {
+                    code: token,
+                    token,
+                    defaultLanguageCode: LanguageCode.en,
+                    currencyCode: 'USD',
+                    pricesIncludeTax: true,
+                    defaultShippingZoneId: 'T_1',
+                    defaultTaxZoneId: 'T_1',
+                },
+            },
+        );
+        expect(createdChannel.createChannel.id).toBeTruthy();
+        const merchantContext = await server.app.get(RequestContextService).create({
+            apiType: 'admin',
+            channelOrToken: token,
+        });
+        await server.app
+            .get(TransactionalConnection)
+            .getRepository(merchantContext, StoreProfile)
+            .save(
+                new StoreProfile({
+                    channelId: merchantContext.channelId,
+                    status: 'ACTIVE',
+                    descriptionZh: '',
+                    descriptionEn: '',
+                }),
+            );
+        let merchantCampaignId: string;
+        adminClient.setRequestHeader('vendure-token', token);
+        try {
+            const created = await adminClient.query(CREATE_COUPON, {
+                input: {
+                    name: 'Audit merchant only',
+                    kind: 'ORDER_FIXED',
+                    minimumSpend: 0,
+                    discountAmount: 100,
+                    validityDays: 7,
+                    issueLimit: 10,
+                },
+            });
+            merchantCampaignId = created.createStoreCouponCampaign.id;
+        } finally {
+            adminClient.setRequestHeader('vendure-token', null);
+        }
+        expect(
+            (await shopClient.query(ACTIVE_COUPONS)).activeStorefrontCoupons.some(
+                (item: any) => item.id === merchantCampaignId,
+            ),
+        ).toBe(false);
+        await expect(shopClient.query(CLAIM, { campaignId: merchantCampaignId })).rejects.toThrow('其他店铺');
+        await expect(
+            adminClient.query(
+                gql`
+                    query ($id: ID!) {
+                        storeCouponRepairPreview(campaignId: $id)
+                    }
+                `,
+                { id: merchantCampaignId },
+            ),
+        ).rejects.toThrow('当前店铺');
+        await shopClient.asAnonymousUser();
+        shopClient.setRequestHeader('Authorization', null);
+        shopClient.setRequestHeader('vendure-token', token);
+        try {
+            expect(
+                (await shopClient.query(ACTIVE_COUPONS)).activeStorefrontCoupons.some(
+                    (item: any) => item.id === merchantCampaignId,
+                ),
+            ).toBe(true);
+        } finally {
+            shopClient.setRequestHeader('vendure-token', null);
+        }
     });
 
     it('allows full-refund reuse with the same defaults as the admin editor and does not renew expiry', async () => {

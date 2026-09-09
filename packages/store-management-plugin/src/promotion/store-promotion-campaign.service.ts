@@ -68,7 +68,7 @@ export class StorePromotionCampaignService {
         const promotionIds = couponPromotions.map(({ promotion }) => promotion.id);
         const [configs, statusRows, allocationRows, activeCustomer] = await Promise.all([
             this.connection.getRepository(ctx, StoreCouponCampaignConfig).find({
-                where: { channelId: ctx.channelId, promotionId: In(promotionIds) },
+                where: { promotionId: In(promotionIds) },
             }),
             this.couponStatusRows(ctx, promotionIds),
             this.couponAllocationRows(ctx, promotionIds),
@@ -90,34 +90,41 @@ export class StorePromotionCampaignService {
         const customerCounts = new Map(customerRows.map(row => [String(row.promotionId), Number(row.count)]));
         const statsByPromotion = this.campaignStats(statusRows, allocationRows, ctx.currencyCode);
 
-        return couponPromotions.map(({ promotion, view }) => {
-            const config = configsByPromotion.get(String(promotion.id));
-            const stats = statsByPromotion.get(String(promotion.id)) ?? emptyCampaignStats();
-            const issueLimit = config?.issueLimit ?? promotion.usageLimit ?? null;
-            const remainingIssueCount =
-                issueLimit == null ? null : Math.max(0, issueLimit - stats.claimedCount);
-            const perCustomerClaimLimit = 1;
-            const customerClaimedCount = customerCounts.get(String(promotion.id)) ?? 0;
-            return {
-                ...view,
-                ...stats,
-                claimStartsAt: config?.claimStartsAt ?? promotion.startsAt,
-                claimEndsAt: config?.claimEndsAt ?? promotion.endsAt,
-                validityDays: config?.validityDays ?? null,
-                issueLimit,
-                perCustomerClaimLimit,
-                stackPolicy: config?.stackPolicy ?? 'EXCLUSIVE',
-                returnOnCancellation: config?.returnOnCancellation ?? true,
-                returnOnFullRefund: config?.returnOnFullRefund ?? true,
-                archivedAt: config?.archivedAt ?? null,
-                remainingIssueCount,
-                claimed: customerClaimedCount > 0,
-                claimable:
-                    !config?.archivedAt &&
-                    customerClaimedCount === 0 &&
-                    (remainingIssueCount == null || remainingIssueCount > 0),
-            };
-        });
+        // Vendure also assigns merchant promotions to the default Channel. The
+        // unique campaign config determines which store owns the entitlement.
+        return couponPromotions
+            .filter(({ promotion }) => {
+                const owner = configsByPromotion.get(String(promotion.id));
+                return !owner || idsAreEqual(owner.channelId, ctx.channelId);
+            })
+            .map(({ promotion, view }) => {
+                const config = configsByPromotion.get(String(promotion.id));
+                const stats = statsByPromotion.get(String(promotion.id)) ?? emptyCampaignStats();
+                const issueLimit = config?.issueLimit ?? promotion.usageLimit ?? null;
+                const remainingIssueCount =
+                    issueLimit == null ? null : Math.max(0, issueLimit - stats.claimedCount);
+                const perCustomerClaimLimit = 1;
+                const customerClaimedCount = customerCounts.get(String(promotion.id)) ?? 0;
+                return {
+                    ...view,
+                    ...stats,
+                    claimStartsAt: config?.claimStartsAt ?? promotion.startsAt,
+                    claimEndsAt: config?.claimEndsAt ?? promotion.endsAt,
+                    validityDays: config?.validityDays ?? null,
+                    issueLimit,
+                    perCustomerClaimLimit,
+                    stackPolicy: config?.stackPolicy ?? 'EXCLUSIVE',
+                    returnOnCancellation: config?.returnOnCancellation ?? true,
+                    returnOnFullRefund: config?.returnOnFullRefund ?? true,
+                    archivedAt: config?.archivedAt ?? null,
+                    remainingIssueCount,
+                    claimed: customerClaimedCount > 0,
+                    claimable:
+                        !config?.archivedAt &&
+                        customerClaimedCount === 0 &&
+                        (remainingIssueCount == null || remainingIssueCount > 0),
+                };
+            });
     }
 
     async findActiveCoupons(ctx: RequestContext): Promise<StoreCouponCampaignView[]> {
@@ -840,8 +847,10 @@ export class StorePromotionCampaignService {
     private async configForPromotion(ctx: RequestContext, promotion: Promotion) {
         const repository = this.connection.getRepository(ctx, StoreCouponCampaignConfig);
         let config = await repository.findOne({
-            where: { channelId: ctx.channelId, promotionId: promotion.id },
+            where: { promotionId: promotion.id },
         });
+        if (config && !idsAreEqual(config.channelId, ctx.channelId))
+            throw new UserInputError('该优惠券属于其他店铺');
         if (!config) {
             config = await repository.save(
                 new StoreCouponCampaignConfig({

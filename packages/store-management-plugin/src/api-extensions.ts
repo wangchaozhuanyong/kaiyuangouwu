@@ -1,5 +1,6 @@
 import { gql } from 'graphql-tag';
 
+import { storeCustomerCouponSchema } from './promotion/store-coupon-api.schema';
 import { storeProfileInputSchema } from './store-profile-input.schema';
 import { storefrontBrandingSchema, storefrontPreviewBrandingSchema } from './storefront-branding.schema';
 import { trafficAdminSchema, trafficShopSchema } from './traffic/traffic-api.schema';
@@ -309,30 +310,7 @@ const commonTypes = gql`
         rejectionReason: String
     }
 
-    type StoreCustomerCoupon {
-        id: ID!
-        campaignId: ID!
-        campaignName: String!
-        campaignKind: StoreCouponCampaignKind!
-        status: StoreCustomerCouponStatus!
-        minimumSpend: Money!
-        currencyCode: CurrencyCode!
-        discountAmount: Money
-        discountRate: Float
-        collectionIds: [ID!]!
-        productVariantIds: [ID!]!
-        claimedAt: DateTime!
-        validFrom: DateTime!
-        validUntil: DateTime
-        lockedAt: DateTime
-        usedAt: DateTime
-        returnedAt: DateTime
-        expiredAt: DateTime
-        lockedOrderId: ID
-        usedOrderId: ID
-        returnCount: Int!
-        usable: Boolean!
-    }
+    ${storeCustomerCouponSchema}
 
     type StoreCouponUsageRecord {
         id: ID!

@@ -954,8 +954,10 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
 
     private async configForPromotion(ctx: RequestContext, promotion: Promotion) {
         let config = await this.connection.getRepository(ctx, StoreCouponCampaignConfig).findOne({
-            where: { channelId: ctx.channelId, promotionId: promotion.id },
+            where: { promotionId: promotion.id },
         });
+        if (config && !idsAreEqual(config.channelId, ctx.channelId))
+            throw new UserInputError('该优惠券属于其他店铺');
         if (!config) {
             config = await this.connection.getRepository(ctx, StoreCouponCampaignConfig).save(
                 new StoreCouponCampaignConfig({

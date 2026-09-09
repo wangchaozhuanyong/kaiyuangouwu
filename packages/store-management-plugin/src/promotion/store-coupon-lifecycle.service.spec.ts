@@ -526,6 +526,7 @@ function createIssueHarness({
     };
     const config = {
         id: 'config-1',
+        channelId: 'channel-1',
         promotionId: promotion.id,
         claimStartsAt: null,
         claimEndsAt: null,
