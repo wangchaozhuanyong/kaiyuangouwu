@@ -221,9 +221,8 @@ describe('CheckoutPage digital delivery', () => {
         expect(markup).toContain('添加地址后计算');
         expect(markup).toContain('name="deliveryEmail"');
         expect(markup).toContain('name="confirmDeliveryEmail"');
-        expect(markup).toContain('<select name="province"');
-        expect(markup).toContain('value="MY-10"');
-        expect(markup).toContain('雪兰莪');
+        expect(markup).not.toContain('<select name="province"');
+        expect(markup).toContain('去添加收货地址');
     });
 
     it('does not use red focus styling for delivery email inputs or the saved-email trigger', () => {
@@ -574,25 +573,36 @@ describe('CheckoutPage automatic delivery and drawer', () => {
         await flush(() => element<HTMLButtonElement>('.saved-address').click());
         await flush(() => submitButton().click());
         expect(navigate).toHaveBeenCalledTimes(2);
-        expect(navigate).toHaveBeenLastCalledWith(expect.objectContaining({
-            to: '/addresses', search: expect.objectContaining({ returnTo: 'purchase', checkoutOrderId: 'order-1' }),
-        }));
+        expect(navigate).toHaveBeenLastCalledWith(
+            expect.objectContaining({
+                to: '/addresses',
+                search: expect.objectContaining({ returnTo: 'purchase', checkoutOrderId: 'order-1' }),
+            }),
+        );
         expect(api.setShippingAddress).not.toHaveBeenCalled();
         expect(api.preparePayment).not.toHaveBeenCalled();
     });
 
     it('opens the incomplete saved address for editing and does not quote it', async () => {
         const { api, props } = mount({ manual: true });
-        act(() => root.render(createElement(CheckoutPage, {
-            ...props, customer: { ...props.customer, addresses: [{ ...address, phoneNumber: '' }] },
-        })));
+        act(() =>
+            root.render(
+                createElement(CheckoutPage, {
+                    ...props,
+                    customer: { ...props.customer, addresses: [{ ...address, phoneNumber: '' }] },
+                }),
+            ),
+        );
         await flush();
         expect(submitButton().disabled).toBe(false);
         expect(submitButton().textContent).toBe('去完善收货地址');
         await flush(() => submitButton().click());
-        expect(navigate).toHaveBeenLastCalledWith(expect.objectContaining({
-            to: '/addresses', search: expect.objectContaining({ addressId: address.id, editAddress: true }),
-        }));
+        expect(navigate).toHaveBeenLastCalledWith(
+            expect.objectContaining({
+                to: '/addresses',
+                search: expect.objectContaining({ addressId: address.id, editAddress: true }),
+            }),
+        );
         expect(api.setShippingAddress).not.toHaveBeenCalled();
     });
 
@@ -609,13 +619,29 @@ describe('CheckoutPage automatic delivery and drawer', () => {
 
     it('quotes the returned selection, including apartment, without changing default or order progress', async () => {
         const { api, props, order } = mount({ selectedCode: 'economy' });
-        const second = { ...address, id: 'address-2', fullName: '第二收货人', streetLine2: 'Unit 12', defaultShippingAddress: false };
+        const second = {
+            ...address,
+            id: 'address-2',
+            fullName: '第二收货人',
+            streetLine2: 'Unit 12',
+            defaultShippingAddress: false,
+        };
         order.customFields.customerNote = '到达后电话联系';
         order.couponCodes = ['SAVED'];
-        act(() => root.render(createElement(CheckoutPage, { ...props, order, selectedAddressId: second.id,
-            customer: { ...props.customer, addresses: [address, second] } })));
+        act(() =>
+            root.render(
+                createElement(CheckoutPage, {
+                    ...props,
+                    order,
+                    selectedAddressId: second.id,
+                    customer: { ...props.customer, addresses: [address, second] },
+                }),
+            ),
+        );
         await flush();
-        expect(api.setShippingAddress).toHaveBeenLastCalledWith(expect.objectContaining({fullName: '第二收货人', streetLine2: 'Unit 12'}));
+        expect(api.setShippingAddress).toHaveBeenLastCalledWith(
+            expect.objectContaining({ fullName: '第二收货人', streetLine2: 'Unit 12' }),
+        );
         expect(api.setShippingMethod).toHaveBeenLastCalledWith('standard');
         expect(container.textContent).toContain('到达后电话联系');
         expect(order.couponCodes).toEqual(['SAVED']);
@@ -623,7 +649,6 @@ describe('CheckoutPage automatic delivery and drawer', () => {
         expect(container.querySelectorAll('.saved-address')).toHaveLength(1);
         expect(submitButton().disabled).toBe(false);
     });
-
 });
 
 describe('CheckoutPage submission authentication and recovery', () => {

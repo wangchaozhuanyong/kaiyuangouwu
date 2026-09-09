@@ -914,5 +914,13 @@
 }
 
 @media (min-width: 1024px) {
-    .address-use-bar { width: min(calc(100% - 64px), var(--desktop-shell-width)); border-radius: 10px; bottom: 24px; }
+    .address-use-bar {
+        width: min(calc(100% - 64px), var(--desktop-shell-width));
+        border-radius: 10px;
+        bottom: 24px;
+    }
+}
+
+.address-form-fields {
+    display: contents;
 }

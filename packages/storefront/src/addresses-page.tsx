@@ -147,6 +147,7 @@ export function AddressesPage({
     }
     const save = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
+        if (submitting) return;
         const data = new FormData(event.currentTarget);
         setSubmitting(true);
         setFormError('');
@@ -169,7 +170,10 @@ export function AddressesPage({
             // Keep the saved ID if refreshing fails, so retry updates instead of creating a duplicate.
             setEditingAddress(savedAddress);
             const updatedCustomer = await api.activeCustomer();
-            if (!updatedCustomer?.addresses?.some(address => address.id === savedAddress.id)) {
+            const refreshedAddress = updatedCustomer?.addresses?.find(
+                address => address.id === savedAddress.id,
+            );
+            if (!updatedCustomer || !refreshedAddress) {
                 setFormError(
                     isZh ? '地址已保存，刷新失败，请重试' : 'Address saved. Refresh failed; please retry.',
                 );
@@ -179,7 +183,7 @@ export function AddressesPage({
             setOpen(false);
             setEditingAddress(null);
             onNotify(isZh ? '地址已保存' : 'Address saved');
-            selection?.onUse(updatedCustomer.addresses.find(address => address.id === savedAddress.id)!);
+            selection?.onUse(refreshedAddress);
         } catch (requestError) {
             setFormError(
                 requestError instanceof Error
@@ -538,120 +542,142 @@ export function AddressesPage({
                         setFormError('');
                     }}
                 >
-                    <form className="address-form" onSubmit={event => void save(event)}>
-                        <div className="address-smart-paste field-wide">
-                            <label>
-                                <span>
-                                    {isZh ? '粘贴地址，自动填写' : 'Paste an address to fill in the form'}
-                                </span>
-                                <textarea
-                                    rows={3}
-                                    value={smartPasteText}
-                                    onChange={event => {
-                                        setSmartPasteText(event.target.value);
-                                        setParseMessage('');
-                                    }}
-                                    placeholder={
-                                        isZh
-                                            ? '粘贴收货人、电话和详细地址'
-                                            : 'Paste recipient, phone and street address'
-                                    }
-                                />
-                            </label>
-                            <p>
-                                {isZh
-                                    ? '目前主要识别中文地址；请核对国家、省/州及其他字段。'
-                                    : 'Best suited to Chinese addresses. Check the country, state and all other fields.'}
-                            </p>
-                            <button
-                                type="button"
-                                onClick={parseAddress}
-                                disabled={!smartPasteText.trim() || submitting}
-                            >
-                                {isZh ? '识别并填写' : 'Recognize and fill'}
-                            </button>
-                            {parseMessage && <small role="status">{parseMessage}</small>}
-                        </div>
-                        <CountryField
-                            countries={availableCountries}
-                            defaultCountryCode={editingAddress?.country.code ?? market.countryCode}
-                            value={addressCountryCode}
-                            onChange={countryCode => {
-                                setAddressDraft(current => ({ ...current, countryCode, province: '' }));
-                            }}
-                            language={language}
-                        />
-                        <Field
-                            name="fullName"
-                            label={isZh ? '收货人' : 'Full name'}
-                            value={addressDraft.fullName ?? ''}
-                            onChange={value => setDraftField('fullName', value)}
-                            wide
-                        />
-                        <Field
-                            name="phoneNumber"
-                            label={isZh ? '手机号' : 'Phone'}
-                            value={addressDraft.phoneNumber ?? ''}
-                            onChange={value => setDraftField('phoneNumber', value)}
-                            wide
-                        />
-                        <ProvinceField
-                            provinces={availableProvinces}
-                            countryCode={addressCountryCode}
-                            value={addressProvince}
-                            onChange={value => setDraftField('province', value)}
-                            language={language}
-                        />
-                        <Field
-                            name="city"
-                            label={isZh ? '城市' : 'City'}
-                            value={addressDraft.city ?? ''}
-                            onChange={value => setDraftField('city', value)}
-                        />
-                        <Field
-                            name="streetLine1"
-                            label={isZh ? '详细地址' : 'Street address'}
-                            value={addressDraft.streetLine1 ?? ''}
-                            onChange={value => setDraftField('streetLine1', value)}
-                            wide
-                        />
-                        <Field
-                            name="streetLine2"
-                            label={isZh ? '楼栋、单元等（选填）' : 'Apartment, suite, etc. (optional)'}
-                            value={addressDraft.streetLine2 ?? ''}
-                            onChange={value => setDraftField('streetLine2', value)}
-                            required={false}
-                            wide
-                        />
-                        <Field
-                            name="postalCode"
-                            label={isZh ? '邮政编码' : 'Postal code'}
-                            value={addressDraft.postalCode ?? ''}
-                            onChange={value => setDraftField('postalCode', value)}
-                            wide
-                        />
-                        <label className="address-default-toggle field-wide">
-                            <input
-                                type="checkbox"
-                                name="defaultShippingAddress"
-                                defaultChecked={Boolean(editingAddress?.defaultShippingAddress)}
+                    <form
+                        className="address-form"
+                        onSubmit={event => void save(event)}
+                        aria-busy={submitting}
+                    >
+                        <fieldset className="address-form-fields" disabled={submitting}>
+                            <div className="address-smart-paste field-wide">
+                                <label>
+                                    <span>
+                                        {isZh ? '粘贴地址，自动填写' : 'Paste an address to fill in the form'}
+                                    </span>
+                                    <textarea
+                                        rows={3}
+                                        value={smartPasteText}
+                                        onChange={event => {
+                                            setSmartPasteText(event.target.value);
+                                            setParseMessage('');
+                                        }}
+                                        placeholder={
+                                            isZh
+                                                ? '粘贴收货人、电话和详细地址'
+                                                : 'Paste recipient, phone and street address'
+                                        }
+                                    />
+                                </label>
+                                <p>
+                                    {isZh
+                                        ? '目前主要识别中文地址；请核对国家、省/州及其他字段。'
+                                        : 'Best suited to Chinese addresses. Check the country, state and all other fields.'}
+                                </p>
+                                <button
+                                    type="button"
+                                    onClick={parseAddress}
+                                    disabled={!smartPasteText.trim() || submitting}
+                                >
+                                    {isZh ? '识别并填写' : 'Recognize and fill'}
+                                </button>
+                                {parseMessage && <small role="status">{parseMessage}</small>}
+                            </div>
+                            <CountryField
+                                countries={availableCountries}
+                                defaultCountryCode={editingAddress?.country.code ?? market.countryCode}
+                                value={addressCountryCode}
+                                onChange={countryCode => {
+                                    setAddressDraft(current => ({ ...current, countryCode, province: '' }));
+                                }}
+                                language={language}
                             />
-                            <span>{isZh ? '设为默认收货地址' : 'Set as default shipping address'}</span>
-                        </label>
-                        {formError && <small className="form-error">{formError}</small>}
-                        <button className="primary-action wide-action" type="submit" disabled={submitting}>
-                            {submitting
-                                ? isZh
-                                    ? '保存中'
-                                    : 'Saving'
-                                : selection
-                                  ? isZh
-                                      ? '保存并使用'
-                                      : 'Save and use'
-                                  : isZh
-                                    ? '保存地址'
-                                    : 'Save address'}
-                        </button>
+                            <Field
+                                name="fullName"
+                                label={isZh ? '收货人' : 'Full name'}
+                                value={addressDraft.fullName ?? ''}
+                                onChange={value => setDraftField('fullName', value)}
+                                wide
+                            />
+                            <Field
+                                name="phoneNumber"
+                                label={isZh ? '手机号' : 'Phone'}
+                                value={addressDraft.phoneNumber ?? ''}
+                                onChange={value => setDraftField('phoneNumber', value)}
+                                wide
+                            />
+                            <ProvinceField
+                                provinces={availableProvinces}
+                                countryCode={addressCountryCode}
+                                value={addressProvince}
+                                onChange={value => setDraftField('province', value)}
+                                language={language}
+                            />
+                            <Field
+                                name="city"
+                                label={isZh ? '城市' : 'City'}
+                                value={addressDraft.city ?? ''}
+                                onChange={value => setDraftField('city', value)}
+                            />
+                            <Field
+                                name="streetLine1"
+                                label={isZh ? '详细地址' : 'Street address'}
+                                value={addressDraft.streetLine1 ?? ''}
+                                onChange={value => setDraftField('streetLine1', value)}
+                                wide
+                            />
+                            <Field
+                                name="streetLine2"
+                                label={isZh ? '楼栋、单元等（选填）' : 'Apartment, suite, etc. (optional)'}
+                                value={addressDraft.streetLine2 ?? ''}
+                                onChange={value => setDraftField('streetLine2', value)}
+                                required={false}
+                                wide
+                            />
+                            <Field
+                                name="postalCode"
+                                label={isZh ? '邮政编码' : 'Postal code'}
+                                value={addressDraft.postalCode ?? ''}
+                                onChange={value => setDraftField('postalCode', value)}
+                                wide
+                            />
+                            <label className="address-default-toggle field-wide">
+                                <input
+                                    type="checkbox"
+                                    name="defaultShippingAddress"
+                                    defaultChecked={
+                                        !customer.addresses?.length ||
+                                        Boolean(editingAddress?.defaultShippingAddress)
+                                    }
+                                    disabled={!customer.addresses?.length}
+                                />
+                                <span>
+                                    {!customer.addresses?.length
+                                        ? isZh
+                                            ? '首个地址自动设为默认'
+                                            : 'Your first address is the default'
+                                        : isZh
+                                          ? '设为默认收货地址'
+                                          : 'Set as default shipping address'}
+                                </span>
+                            </label>
+                            {formError && <small className="form-error">{formError}</small>}
+                            <button
+                                className="primary-action wide-action"
+                                type="submit"
+                                disabled={submitting}
+                            >
+                                {submitting
+                                    ? isZh
+                                        ? '保存中'
+                                        : 'Saving'
+                                    : selection
+                                      ? isZh
+                                          ? '保存并使用'
+                                          : 'Save and use'
+                                      : isZh
+                                        ? '保存地址'
+                                        : 'Save address'}
+                            </button>
+                        </fieldset>
                     </form>
                 </Sheet>
             )}

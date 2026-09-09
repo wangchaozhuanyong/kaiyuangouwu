@@ -171,10 +171,16 @@ export function CheckoutPage({
     const shippingAddressKey = JSON.stringify(shippingAddress);
     const lastShippingAddressRef = useRef(shippingAddressKey);
     const missingAddressLabel = customerLoading
-        ? (isZh ? '正在加载地址…' : 'Loading address…')
+        ? isZh
+            ? '正在加载地址…'
+            : 'Loading address…'
         : activeAddress
-          ? (isZh ? '完善地址后计算' : 'Calculated after completing the address')
-          : (isZh ? '添加地址后计算' : 'Calculated after adding an address');
+          ? isZh
+              ? '完善地址后计算'
+              : 'Calculated after completing the address'
+          : isZh
+            ? '添加地址后计算'
+            : 'Calculated after adding an address';
     // Match the managed method created by StoreCommerceSettingsService for every store.
     const defaultShippingCode = `store-${(storefrontCode || market.code).toLowerCase()}-standard-delivery`;
     // Shipping mutations change cart revision and totals too. Only address/item changes need a new quote.
@@ -214,7 +220,8 @@ export function CheckoutPage({
         const addressChanged = lastShippingAddressRef.current !== shippingAddressKey;
         lastShippingAddressRef.current = shippingAddressKey;
         if (addressChanged) shippingSelectionRef.current = '';
-        const preferredShippingCode = selectedAddressId || addressChanged ? undefined : existingShippingCodeRef.current;
+        const preferredShippingCode =
+            selectedAddressId || addressChanged ? undefined : existingShippingCodeRef.current;
         // Serialize order writes so a slower response for an old address cannot win.
         const timer = setTimeout(() => {
             shippingQueueRef.current = shippingQueueRef.current.then(async () => {
@@ -846,7 +853,9 @@ export function CheckoutPage({
                         shippingPending={Boolean(
                             requiresShipping && addressComplete && (!shippingReady || shippingUpdating),
                         )}
-                        shippingUnavailable={requiresShipping && !addressComplete ? missingAddressLabel : undefined}
+                        shippingUnavailable={
+                            requiresShipping && !addressComplete ? missingAddressLabel : undefined
+                        }
                         order={order}
                         locale={locale}
                         language={language}

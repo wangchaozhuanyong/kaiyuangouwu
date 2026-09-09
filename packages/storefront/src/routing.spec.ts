@@ -9,9 +9,21 @@ import {
 
 describe('storefront routing', () => {
     it('round-trips the checkout address continuation without exposing address contents', () => {
-        const route = { name: 'addresses' as const, returnTo: 'purchase' as const, addressId: 'address-2', checkoutOrderId: 'order-1', editAddress: true };
+        const route = {
+            name: 'addresses' as const,
+            returnTo: 'purchase' as const,
+            addressId: 'address-2',
+            checkoutOrderId: 'order-1',
+            editAddress: true,
+        };
         expect(routeFromHash(routeHref(route))).toMatchObject(route);
-        expect(routeFromRouterLocation('/addresses', { editAddress: 'false', addressId: ['invalid'], checkoutOrderId: {} })).toMatchObject({ editAddress: undefined, addressId: undefined, checkoutOrderId: undefined });
+        expect(
+            routeFromRouterLocation('/addresses', {
+                editAddress: 'false',
+                addressId: ['invalid'],
+                checkoutOrderId: {},
+            }),
+        ).toMatchObject({ editAddress: undefined, addressId: undefined, checkoutOrderId: undefined });
     });
     it('round-trips checkout login destinations and rejects arbitrary redirect targets', () => {
         for (const returnTo of ['purchase', 'checkout', 'payment'] as const) {
