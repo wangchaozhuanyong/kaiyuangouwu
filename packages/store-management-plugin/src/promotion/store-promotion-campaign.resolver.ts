@@ -1,5 +1,16 @@
 import { Args, Mutation, Parent, Query, ResolveField, Resolver } from '@nestjs/graphql';
-import { Allow, Ctx, ID, Order, Permission, RequestContext, Transaction } from '@vendure/core';
+import {
+    Allow,
+    Ctx,
+    ID,
+    Order,
+    Permission,
+    ProductVariant,
+    RequestContext,
+    RequestContextCacheService,
+    Transaction,
+    TransactionalConnection,
+} from '@vendure/core';
 import { CartCommandService } from '@vendure/storefront-cart-plugin';
 
 import { MerchantInitialPasswordService } from '../merchant-initial-password.service';
@@ -9,7 +20,9 @@ import {
     StoreCouponLedgerEntryListOptions,
 } from '../types';
 
+import { couponCollectionsForVariant } from './store-coupon-collections';
 import { StoreCouponLifecycleService } from './store-coupon-lifecycle.service';
+import { StoreCouponRepairService } from './store-coupon-repair.service';
 import { StorePromotionCampaignService } from './store-promotion-campaign.service';
 
 @Resolver()
@@ -18,6 +31,7 @@ export class StorePromotionCampaignAdminResolver {
         private readonly campaignService: StorePromotionCampaignService,
         private readonly lifecycleService: StoreCouponLifecycleService,
         private readonly passwordService: MerchantInitialPasswordService,
+        private readonly repairService: StoreCouponRepairService,
         private readonly cartCommands: CartCommandService,
     ) {}
 
@@ -25,6 +39,25 @@ export class StorePromotionCampaignAdminResolver {
     @Allow(Permission.ReadPromotion)
     storeCouponCampaigns(@Ctx() ctx: RequestContext) {
         return this.campaignService.findCoupons(ctx);
+    }
+
+    @Query()
+    @Allow(Permission.ReadPromotion)
+    storeCouponRepairPreview(@Ctx() ctx: RequestContext, @Args('campaignId') campaignId: ID) {
+        return this.repairService.preview(ctx, campaignId);
+    }
+
+    @Transaction()
+    @Mutation()
+    @Allow(Permission.UpdatePromotion)
+    async repairStoreCouponCampaign(
+        @Ctx() ctx: RequestContext,
+        @Args('campaignId') campaignId: ID,
+        @Args('fingerprint') fingerprint: string,
+        @Args('password') password: string,
+    ) {
+        await this.passwordService.assertCurrentPassword(ctx, password);
+        return this.repairService.apply(ctx, campaignId, fingerprint);
     }
 
     @Query()
@@ -233,5 +266,19 @@ export class StoreCouponOrderResolver {
     @Allow(Permission.ReadOrder)
     storeCouponAllocations(@Ctx() ctx: RequestContext, @Parent() order: Order) {
         return this.lifecycleService.findOrderAllocations(ctx, order.id);
+    }
+}
+
+@Resolver('ProductVariant')
+export class StoreCouponVariantResolver {
+    constructor(
+        private readonly connection: TransactionalConnection,
+        private readonly requestCache: RequestContextCacheService,
+    ) {}
+
+    @ResolveField()
+    @Allow(Permission.Public)
+    storeCouponCollectionIds(@Ctx() ctx: RequestContext, @Parent() variant: ProductVariant) {
+        return couponCollectionsForVariant(ctx, variant.id, this.connection, this.requestCache);
     }
 }

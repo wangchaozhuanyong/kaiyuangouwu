@@ -22,6 +22,7 @@ export const couponLedgerEventTypes = [
     'EXPIRED',
     'REVOKED',
     'REFUND_SETTLED',
+    'CORRECTED',
 ] as const;
 
 export type CouponLedgerEventType = (typeof couponLedgerEventTypes)[number];

@@ -42,6 +42,7 @@ export class CatalogApi extends BaseDomainApi {
                     product(id: $id) {
                         ${productFields}
                         ${productPackagingFields}
+                        variants { storeCouponCollectionIds }
                     }
                 }
             `,

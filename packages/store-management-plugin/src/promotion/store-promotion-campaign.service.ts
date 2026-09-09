@@ -263,13 +263,16 @@ export class StorePromotionCampaignService {
                 promotionId: result.id,
                 claimStartsAt: input.claimStartsAt
                     ? this.validDate(input.claimStartsAt, '领取开始时间')
-                    : (result.startsAt ?? null),
+                    : input.startsAt
+                      ? this.validDate(input.startsAt, '领取开始时间')
+                      : null,
                 claimEndsAt: input.claimEndsAt
                     ? this.validDate(input.claimEndsAt, '领取结束时间')
-                    : (result.endsAt ?? null),
+                    : input.endsAt
+                      ? this.validDate(input.endsAt, '领取结束时间')
+                      : null,
                 validityDays: this.optionalPositiveInteger(input.validityDays, '领取后有效天数'),
-                issueLimit:
-                    this.optionalPositiveInteger(input.issueLimit, '发放数量') ?? result.usageLimit ?? null,
+                issueLimit: this.optionalPositiveInteger(input.issueLimit ?? input.usageLimit, '发放数量'),
                 perCustomerClaimLimit: 1,
                 stackPolicy: input.stackPolicy ?? 'EXCLUSIVE',
                 returnOnCancellation: input.returnOnCancellation ?? true,
@@ -464,7 +467,7 @@ export class StorePromotionCampaignService {
         const config = await this.configForPromotion(ctx, promotion);
         const now = new Date();
         if (!config.claimEndsAt || config.claimEndsAt > now) {
-            config.claimEndsAt = now;
+            config.claimEndsAt = new Date(Math.floor(now.getTime() / 1000) * 1000);
             await this.connection
                 .getRepository(ctx, StoreCouponCampaignConfig)
                 .save(config, { reload: false });
@@ -490,7 +493,8 @@ export class StorePromotionCampaignService {
         if (!config.archivedAt) {
             const now = new Date();
             config.archivedAt = now;
-            if (!config.claimEndsAt || config.claimEndsAt > now) config.claimEndsAt = now;
+            if (!config.claimEndsAt || config.claimEndsAt > now)
+                config.claimEndsAt = new Date(Math.floor(now.getTime() / 1000) * 1000);
             await this.connection
                 .getRepository(ctx, StoreCouponCampaignConfig)
                 .save(config, { reload: false });
@@ -598,8 +602,10 @@ export class StorePromotionCampaignService {
                 throw new UserInputError('不支持的优惠券类型');
             }
         }
-        const startsAt = input.startsAt ? this.validDate(input.startsAt, '开始时间') : null;
-        const endsAt = input.endsAt ? this.validDate(input.endsAt, '结束时间') : null;
+        const relativeValidity = this.optionalPositiveInteger(input.validityDays, '领取后有效天数');
+        const startsAt =
+            !relativeValidity && input.startsAt ? this.validDate(input.startsAt, '开始时间') : null;
+        const endsAt = !relativeValidity && input.endsAt ? this.validDate(input.endsAt, '结束时间') : null;
         if (startsAt && endsAt && startsAt >= endsAt) {
             throw new UserInputError('优惠券结束时间必须晚于开始时间');
         }
@@ -608,9 +614,9 @@ export class StorePromotionCampaignService {
             startsAt,
             endsAt,
             couponCode,
-            usageLimit: this.optionalPositiveInteger(input.usageLimit, '总使用次数') ?? undefined,
-            perCustomerUsageLimit:
-                this.optionalPositiveInteger(input.perCustomerUsageLimit, '每位客户使用次数') ?? undefined,
+            // Entitlements and issuance quotas control managed coupons, including refund reuse.
+            usageLimit: undefined,
+            perCustomerUsageLimit: undefined,
             conditions,
             actions,
             translations: promotionTranslations(ctx, name, '店铺优惠券'),

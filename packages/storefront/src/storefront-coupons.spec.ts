@@ -173,6 +173,42 @@ describe('storefront coupons', () => {
         ).toBeNull();
     });
 
+    it('prices a still-valid owned coupon after issuance has ended', () => {
+        const result = bestProductCouponPrice({
+            campaigns: [],
+            customerCoupons: [
+                customerCoupon({ campaignKind: 'COLLECTION_PERCENTAGE', collectionIds: ['parent'] }),
+            ],
+            collectionIds: ['child', 'parent'],
+            productVariantId: 'variant-b',
+            priceWithTax: 2400,
+            currencyCode: 'CNY',
+        });
+        expect(result?.priceWithTax).toBe(1920);
+    });
+
+    it('does not borrow sibling variant categories or show expired entitlements', () => {
+        const input = {
+            campaigns: [],
+            customerCoupons: [
+                customerCoupon({ campaignKind: 'COLLECTION_PERCENTAGE', collectionIds: ['category-a'] }),
+            ],
+            collectionIds: ['category-b'],
+            productVariantId: 'variant-b',
+            priceWithTax: 2400,
+            currencyCode: 'CNY',
+        };
+        expect(bestProductCouponPrice(input)).toBeNull();
+        expect(bestProductCouponPrice({ ...input, collectionIds: [] })).toBeNull();
+        expect(
+            bestProductCouponPrice({
+                ...input,
+                collectionIds: ['category-a'],
+                customerCoupons: [customerCoupon({ validUntil: new Date(Date.now() - 1).toISOString() })],
+            }),
+        ).toBeNull();
+    });
+
     it('keeps the regular price when no coupon matches the product', () => {
         expect(
             bestProductCouponPrice({

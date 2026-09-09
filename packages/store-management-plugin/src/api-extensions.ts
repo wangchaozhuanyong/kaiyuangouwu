@@ -319,6 +319,8 @@ const commonTypes = gql`
         currencyCode: CurrencyCode!
         discountAmount: Money
         discountRate: Float
+        collectionIds: [ID!]!
+        productVariantIds: [ID!]!
         claimedAt: DateTime!
         validFrom: DateTime!
         validUntil: DateTime
@@ -735,6 +737,7 @@ export const adminApiExtensions = gql`
         EXPIRED
         REVOKED
         REFUND_SETTLED
+        CORRECTED
     }
 
     type StoreCouponLedgerEntry implements Node {
@@ -1153,6 +1156,7 @@ export const adminApiExtensions = gql`
         merchantInitialPasswordStatus: MerchantInitialPasswordStatus!
         storefrontPromotionPage: StorefrontPromotionPage!
         storeCouponCampaigns: [StoreCouponCampaign!]!
+        storeCouponRepairPreview(campaignId: ID!): JSON!
         storeCouponLedger(options: StoreCouponLedgerEntryListOptions): StoreCouponLedgerEntryList!
         storeCouponDailyReport(from: DateTime!, to: DateTime!, campaignId: ID): [StoreCouponDailyMetric!]!
         storeFlashSales: [StoreFlashSale!]!
@@ -1193,6 +1197,7 @@ export const adminApiExtensions = gql`
         resetStorefrontPromotionPage: StorefrontPromotionPage!
         previewStorefrontPromotionPage(input: UpdateStorefrontPromotionDraftInput!): String!
         createStoreCouponCampaign(input: CreateStoreCouponCampaignInput!): StoreCouponCampaign!
+        repairStoreCouponCampaign(campaignId: ID!, fingerprint: String!, password: String!): JSON!
         createStoreFlashSale(input: CreateStoreFlashSaleInput!): StoreFlashSale!
         setStorePromotionEnabled(id: ID!, enabled: Boolean!, password: String!): StorePromotionToggleResult!
         updateStorePromotionName(id: ID!, name: String!): StorePromotionNameResult!
@@ -1237,6 +1242,10 @@ export const shopApiExtensions = gql`
     ${trafficShopSchema}
     ${commonTypes}
     ${storefrontBrandingSchema}
+
+    extend type ProductVariant {
+        storeCouponCollectionIds: [ID!]!
+    }
 
     type StoreFlashSaleItem {
         productId: ID!

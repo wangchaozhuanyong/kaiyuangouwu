@@ -265,7 +265,8 @@ export interface StoreCouponLedgerRecord {
         | 'RETURNED'
         | 'EXPIRED'
         | 'REVOKED'
-        | 'REFUND_SETTLED';
+        | 'REFUND_SETTLED'
+        | 'CORRECTED';
     actorType: string;
     campaignId: string;
     campaignName: string;

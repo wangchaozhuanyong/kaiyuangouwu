@@ -47,7 +47,7 @@ import {
     couponLedgerEventTypes,
     usableCustomerCouponStatuses,
 } from './coupon-lifecycle.constants';
-import { numberArg, stringArg } from './promotion-operation-args';
+import { idListArg, numberArg, stringArg } from './promotion-operation-args';
 
 @Injectable()
 export class StoreCouponLifecycleService implements OnApplicationBootstrap {
@@ -203,6 +203,36 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
             },
             relations: { campaignConfig: true, promotion: true },
         });
+        const replacing = otherLocked.filter(
+            existing =>
+                idsAreEqual(existing.promotionId, coupon.promotionId) ||
+                coupon.campaignConfig.stackPolicy === 'EXCLUSIVE' ||
+                existing.campaignConfig.stackPolicy === 'EXCLUSIVE',
+        );
+        const removedCodes = new Set(
+            [coupon.promotion.couponCode, ...replacing.map(existing => existing.promotion.couponCode)]
+                .filter((code): code is string => Boolean(code))
+                .map(code => code.toLocaleLowerCase()),
+        );
+        const baseCodes = (order.couponCodes ?? []).filter(
+            code => !removedCodes.has(code.toLocaleLowerCase()),
+        );
+        const validation = await this.promotionService.validateCouponCode(
+            ctx,
+            coupon.promotion.couponCode,
+            customer.id,
+            order.id,
+        );
+        if (isGraphQlErrorResult(validation)) throw new UserInputError(validation.message);
+        const activePromotions = await this.promotionService.getActivePromotionsInChannel(ctx);
+        const promotion = activePromotions.find(candidate => idsAreEqual(candidate.id, coupon.promotionId));
+        if (
+            !promotion ||
+            (await this.estimateCouponSavings(ctx, order.id, promotion, activePromotions, baseCodes)) <= 0
+        ) {
+            throw new UserInputError('该优惠券不适用于当前购物车，请检查使用门槛及适用商品');
+        }
+
         for (const existing of otherLocked) {
             const sameCampaign = idsAreEqual(existing.promotionId, coupon.promotionId);
             const incompatible =
@@ -228,7 +258,19 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
             coupon.promotion.couponCode,
         );
         if (isGraphQlErrorResult(applyResult)) throw new UserInputError(applyResult.message);
+        // A raw code may already be on the order without an entitlement. Vendure's
+        // applyCouponCode is then a no-op; reprice after acquiring this coupon.
+        if (
+            order.couponCodes?.some(
+                code => code.toLocaleLowerCase() === coupon.promotion.couponCode?.toLocaleLowerCase(),
+            )
+        ) {
+            await this.orderService.applyPriceAdjustments(ctx, applyResult);
+        }
         const pricedOrder = await this.loadOrder(ctx, order.id);
+        if (discountSnapshot(pricedOrder, coupon.promotionId).amountWithTax <= 0) {
+            throw new UserInputError('该优惠券未产生实际优惠，已保留原优惠券，请重新选择');
+        }
         await this.upsertAllocation(ctx, coupon, pricedOrder, 'LOCKED');
         if (!alreadyLockedToThisOrder) {
             await this.addLedger(ctx, coupon, 'LOCKED', {
@@ -351,7 +393,7 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
         const config = await this.configForPromotion(ctx, promotion);
         const now = new Date();
         if (!config.claimEndsAt || config.claimEndsAt > now) {
-            config.claimEndsAt = now;
+            config.claimEndsAt = new Date(Math.floor(now.getTime() / 1000) * 1000);
             await this.connection
                 .getRepository(ctx, StoreCouponCampaignConfig)
                 .save(config, { reload: false });
@@ -557,9 +599,11 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
         if (!promotion?.couponCode || !promotion.enabled)
             throw new UserInputError('优惠券活动不存在或已停用');
         const config = await this.configForPromotion(ctx, promotion);
-        await this.lockRow(ctx, StoreCouponCampaignConfig, config.id);
+        const lockedConfig = await this.lockRow(ctx, StoreCouponCampaignConfig, config.id);
+        if (lockedConfig) Object.assign(config, lockedConfig);
         const now = new Date();
-        if (promotion.endsAt && promotion.endsAt <= now) throw new UserInputError('优惠券活动已结束');
+        if (!config.validityDays && promotion.endsAt && promotion.endsAt <= now)
+            throw new UserInputError('优惠券活动已结束');
         if (config.claimStartsAt && config.claimStartsAt > now)
             throw new UserInputError('优惠券尚未开始领取');
         if (config.claimEndsAt && config.claimEndsAt <= now) throw new UserInputError('优惠券领取已结束');
@@ -582,14 +626,15 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
         if (!rule) throw new UserInputError('优惠券规则无法识别');
         // Date columns use whole seconds on MySQL. An immediately usable coupon must not
         // round into the next second when it is saved and then immediately applied.
+        const claimedAt = new Date(Math.floor(now.getTime() / 1000) * 1000);
         const validFrom =
-            promotion.startsAt && promotion.startsAt > now
+            !config.validityDays && promotion.startsAt && promotion.startsAt > now
                 ? promotion.startsAt
-                : new Date(Math.floor(now.getTime() / 1000) * 1000);
+                : claimedAt;
         const relativeEnd = config.validityDays
-            ? new Date(now.getTime() + config.validityDays * 24 * 60 * 60_000)
+            ? new Date(claimedAt.getTime() + config.validityDays * 24 * 60 * 60_000)
             : null;
-        const validUntil = earliestDate(relativeEnd, promotion.endsAt);
+        const validUntil = relativeEnd ?? promotion.endsAt;
         if (validUntil && validFrom >= validUntil) throw new UserInputError('优惠券领取后已经没有可用时间');
         const coupon = await repository.save(
             new CustomerCoupon({
@@ -604,7 +649,7 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
                 currencyCode: rule.currencyCode ?? ctx.channel.defaultCurrencyCode,
                 discountAmount: rule.discountAmount,
                 discountRate: rule.discountRate,
-                claimedAt: now,
+                claimedAt,
                 validFrom,
                 validUntil,
                 lockedAt: null,
@@ -736,11 +781,13 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
             .flatMap(payment => payment.refunds ?? [])
             .filter(refund => refund.state === 'Settled')
             .reduce((total, refund) => total + refund.total, 0);
-        const fullRefund = settledRefundTotal >= order.totalWithTax;
         const allocations = await this.connection.getRepository(ctx, CouponOrderAllocation).find({
             where: { channelId: ctx.channelId, orderId, status: In(['USED', 'REFUNDED']) },
         });
         for (const allocation of allocations) {
+            const paidTotal =
+                allocation.orderTotalWithTax > 0 ? allocation.orderTotalWithTax : order.totalWithTax;
+            const fullRefund = paidTotal > 0 && settledRefundTotal >= paidTotal;
             const coupon = await this.connection.getRepository(ctx, CustomerCoupon).findOne({
                 where: { id: allocation.customerCouponId },
                 relations: { promotion: true, campaignConfig: true },
@@ -749,8 +796,7 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
             const previousRefundedAmount = allocation.refundedAmount;
             allocation.refundId = refundId;
             allocation.refundedAmount = Math.round(
-                allocation.discountAmountWithTax *
-                    Math.min(1, settledRefundTotal / Math.max(1, order.totalWithTax)),
+                allocation.discountAmountWithTax * Math.min(1, settledRefundTotal / Math.max(1, paidTotal)),
             );
             if (fullRefund) {
                 allocation.status = 'REFUNDED';
@@ -767,7 +813,12 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
                 idempotencyKey: `REFUND_SETTLED:${coupon.id}:${refundId}`,
                 note: fullRefund ? '订单已完成全额退款' : '订单已完成部分退款，优惠券保持已使用',
             });
-            if (fullRefund && coupon.status === 'USED' && coupon.campaignConfig.returnOnFullRefund) {
+            if (
+                fullRefund &&
+                coupon.status === 'USED' &&
+                idsAreEqual(coupon.usedOrderId, orderId) &&
+                coupon.campaignConfig.returnOnFullRefund
+            ) {
                 await this.returnCoupon(ctx, coupon, {
                     orderId,
                     refundId,
@@ -783,23 +834,33 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
         coupon: CustomerCoupon,
         input: { orderId: ID; refundId?: ID; key: string; note: string },
     ) {
-        if (this.isExpired(coupon, new Date())) {
-            await this.expireCoupon(ctx, coupon, `${input.note}，但原有效期已结束`);
-            return;
-        }
-        coupon.status = 'RETURNED';
-        coupon.returnedAt = new Date();
-        coupon.returnCount += 1;
-        coupon.lockedAt = null;
-        coupon.lockExpiresAt = null;
-        coupon.lockedOrderId = null;
-        await this.connection.getRepository(ctx, CustomerCoupon).save(coupon, { reload: false });
-        await this.addLedger(ctx, coupon, 'RETURNED', {
+        if (coupon.status !== 'USED' || !idsAreEqual(coupon.usedOrderId, input.orderId)) return;
+        const now = new Date();
+        const expired = this.isExpired(coupon, now);
+        const changes: Partial<CustomerCoupon> = {
+            status: expired ? 'EXPIRED' : 'RETURNED',
+            expiredAt: expired ? now : coupon.expiredAt,
+            returnedAt: expired ? coupon.returnedAt : now,
+            returnCount: coupon.returnCount + (expired ? 0 : 1),
+            lockedAt: null,
+            lockExpiresAt: null,
+            lockedOrderId: null,
+            usedOrderId: null,
+        };
+        const transition = await this.connection
+            .getRepository(ctx, CustomerCoupon)
+            .update(
+                { id: coupon.id, channelId: ctx.channelId, status: 'USED', usedOrderId: input.orderId },
+                changes,
+            );
+        if (transition.affected !== 1) return;
+        Object.assign(coupon, changes);
+        await this.addLedger(ctx, coupon, expired ? 'EXPIRED' : 'RETURNED', {
             actorType: 'SYSTEM',
             orderId: input.orderId,
             refundId: input.refundId,
-            idempotencyKey: input.key,
-            note: input.note,
+            idempotencyKey: (expired ? 'EXPIRED:' : '') + input.key,
+            note: expired ? input.note + '，但原有效期已结束' : input.note,
         });
     }
 
@@ -1010,7 +1071,7 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
             if (coupon?.lockedOrderId) await this.carts.lockForOrder(ctx, coupon.lockedOrderId);
         }
         try {
-            await this.connection
+            return await this.connection
                 .getRepository(ctx, entity)
                 .createQueryBuilder('row')
                 .setLock('pessimistic_write')
@@ -1040,6 +1101,7 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
             coupon.discountAmount == null
                 ? null
                 : convertChannelAmount(ctx, coupon.discountAmount, coupon.currencyCode, ctx.currencyCode);
+        const rule = coupon.promotion ? couponRuleSnapshot(coupon.promotion) : null;
         return {
             id: coupon.id,
             campaignId: coupon.promotionId,
@@ -1050,6 +1112,8 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
             currencyCode: ctx.currencyCode,
             discountAmount,
             discountRate: coupon.discountRate,
+            collectionIds: rule?.collectionIds ?? [],
+            productVariantIds: rule?.productVariantIds ?? [],
             claimedAt: coupon.claimedAt,
             validFrom: coupon.validFrom,
             validUntil: coupon.validUntil,
@@ -1062,6 +1126,8 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
             returnCount: coupon.returnCount,
             usable:
                 usableCustomerCouponStatuses.includes(coupon.status) &&
+                coupon.validFrom <= new Date() &&
+                !this.isExpired(coupon, new Date()) &&
                 Boolean(coupon.promotion && !coupon.promotion.deletedAt && coupon.promotion.enabled),
         };
     }
@@ -1154,7 +1220,7 @@ function storedPromotionOperations(value: unknown): Promotion['actions'] | null 
 }
 
 function couponRuleSnapshot(promotion: Promotion) {
-    const action = promotion.actions.find(candidate => couponKindForAction(candidate.code));
+    const action = promotion.actions?.find(candidate => couponKindForAction(candidate.code));
     const kind = action ? couponKindForAction(action.code) : null;
     if (!action || !kind) return null;
     const minimumCondition = promotion.conditions.find(
@@ -1165,6 +1231,8 @@ function couponRuleSnapshot(promotion: Promotion) {
     const percentageOff = numberArg(action, 'discount');
     return {
         kind,
+        collectionIds: kind === 'COLLECTION_PERCENTAGE' ? idListArg(action, 'collectionIds') : [],
+        productVariantIds: kind === 'PRODUCT_PERCENTAGE' ? idListArg(action, 'productVariantIds') : [],
         minimumSpend: numberArg(minimumCondition, 'amount'),
         currencyCode: (stringArg(minimumCondition, 'currencyCode') || stringArg(action, 'currencyCode')) as
             CurrencyCode | undefined,
@@ -1181,12 +1249,6 @@ function couponKindForAction(code: string) {
     if (code === 'store_collection_percentage_discount') return 'COLLECTION_PERCENTAGE' as const;
     if (code === 'products_percentage_discount') return 'PRODUCT_PERCENTAGE' as const;
     return null;
-}
-
-function earliestDate(first: Date | null | undefined, second: Date | null | undefined): Date | null {
-    if (!first) return second ?? null;
-    if (!second) return first;
-    return first <= second ? first : second;
 }
 
 interface CouponSavingsEstimate {
