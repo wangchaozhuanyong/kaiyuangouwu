@@ -79,6 +79,9 @@ void test('every production ingress uses credential-safe access logs, including 
         'upstream_status',
         'msec',
         'http_cf_ray',
+        'server_protocol',
+        'connection',
+        'connection_requests',
     ]) {
         assert.ok(accessFormat.includes(`$${field}`), `missing origin correlation field ${field}`);
     }
@@ -194,6 +197,21 @@ void test('production console proxies the dashboard health check to Vendure', as
     assert.ok(healthLocation?.groups?.body);
     assert.match(healthLocation.groups.body, /proxy_pass http:\/\/vendure_backend;/u);
     assert.match(healthLocation.groups.body, /include proxy_params;/u);
+});
+
+void test('production console serves immutable dashboard assets from the active release', async () => {
+    const config = await readFile(path.join(repositoryRoot, 'deploy/nginx/damatong.conf'), 'utf8');
+    const consoleServer = config.slice(config.indexOf('server_name console.moyaoai.com;'));
+    const assetLocation = consoleServer.match(
+        /location \^~ \/dashboard\/assets\/ \{(?<body>[\s\S]*?)\n    \}/u,
+    );
+
+    assert.ok(assetLocation?.groups?.body);
+    assert.match(
+        assetLocation.groups.body,
+        /alias \/var\/www\/kaiyuangouwu-current\/packages\/next-admin\/dist\/assets\//u,
+    );
+    assert.doesNotMatch(assetLocation.groups.body, /proxy_pass/u);
 });
 
 void test('legacy browser fallback files remain exact static routes beside the direct storefront', async () => {
