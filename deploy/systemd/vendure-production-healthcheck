@@ -33,7 +33,7 @@ if ! MYSQL_PWD="${DB_PASSWORD}" mysqladmin --host="${DB_HOST}" --port="${DB_PORT
     failures+=("mysql-unreachable")
 fi
 
-if ! curl --fail --silent --show-error --max-time 10 https://damatong.net/health | grep --quiet '"status":"ok"'; then
+if ! node "${vendure_repo_dir}/deploy/verify-production-storefronts.mjs" --mode health; then
     failures+=("public-health-failed")
 fi
 

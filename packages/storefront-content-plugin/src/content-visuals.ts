@@ -11,12 +11,13 @@ export const heroThemePresets = [
 ] as const;
 
 export function normalizedHomepageVisualStyle(value: unknown): 'standard' | 'colorful' {
-    return ['colorful', 'damatong-colorful', 'damatong-balanced'].includes(String(value))
+    const normalized = String(value);
+    return normalized === 'colorful' || normalized.endsWith('-colorful') || normalized.endsWith('-balanced')
         ? 'colorful'
         : 'standard';
 }
 
 export function normalizedHeroThemePreset(value: unknown): 'standard' | 'warm' | 'bright' {
-    if (['bright', 'cloudbridge-bright', 'marketplace-bright'].includes(String(value))) return 'bright';
+    if (String(value).split('-').at(-1) === 'bright') return 'bright';
     return value === 'warm' ? 'warm' : 'standard';
 }

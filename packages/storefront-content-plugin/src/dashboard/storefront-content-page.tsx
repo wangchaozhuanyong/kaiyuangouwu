@@ -71,6 +71,8 @@ import {
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
+import { normalizedHeroThemePreset } from '../content-visuals';
+
 import { CompactAssetControl, EditorField as Field } from './compact-editor';
 import { applyCoreCategoryDefaults, dualCardTemplateId, dualCardTemplates } from './dual-card-templates';
 import {
@@ -120,8 +122,7 @@ const targetTypes: ContentTargetType[] = [
 
 type ContentImageGuidance = 'hero' | 'banner' | 'contentCard' | 'icon';
 
-const CLOUD_BRIDGE_TARGET_URL = 'https://codexgemini.cc';
-const CLOUD_BRIDGE_HERO_THEME = {
+const DEFAULT_BRIGHT_HERO_THEME = {
     overlayColor: '#FFF7F5',
     titleColor: '#451A1A',
     secondaryTextColor: '#6F3841',
@@ -192,7 +193,7 @@ const zhCopy = {
     textColor: '文字色',
     heroTheme: '轮播文字与配色',
     heroThemeHint: '颜色只作用于网页文字、遮罩和按钮，不会写进轮播图片。',
-    heroThemePreset: '应用云桥科技亮色',
+    heroThemePreset: '应用通用亮色主题',
     heroOverlayColor: '左侧遮罩色',
     heroTitleColor: '标题颜色',
     heroSecondaryTextColor: '说明文字颜色',
@@ -343,7 +344,7 @@ const enCopy: typeof zhCopy = {
     heroTheme: 'Carousel copy and colors',
     heroThemeHint:
         'Colors affect HTML copy, the overlay and the button; they are never baked into the image.',
-    heroThemePreset: 'Apply CloudBridge bright theme',
+    heroThemePreset: 'Apply neutral bright theme',
     heroOverlayColor: 'Left overlay color',
     heroTitleColor: 'Title color',
     heroSecondaryTextColor: 'Supporting text color',
@@ -1789,32 +1790,31 @@ function HeroThemeSettings({
     const settings = draft.settings ?? {};
     const secondaryTextColor = heroSettingColor(
         settings.secondaryTextColor,
-        CLOUD_BRIDGE_HERO_THEME.secondaryTextColor,
+        DEFAULT_BRIGHT_HERO_THEME.secondaryTextColor,
     );
-    const accentColor = heroSettingColor(settings.accentColor, CLOUD_BRIDGE_HERO_THEME.accentColor);
+    const accentColor = heroSettingColor(settings.accentColor, DEFAULT_BRIGHT_HERO_THEME.accentColor);
     const accentSecondaryColor = heroSettingColor(
         settings.accentSecondaryColor,
-        CLOUD_BRIDGE_HERO_THEME.accentSecondaryColor,
+        DEFAULT_BRIGHT_HERO_THEME.accentSecondaryColor,
     );
     const buttonTextColor = heroSettingColor(
         settings.buttonTextColor,
-        CLOUD_BRIDGE_HERO_THEME.buttonTextColor,
+        DEFAULT_BRIGHT_HERO_THEME.buttonTextColor,
     );
     const updateSetting = (key: string, value: string | null) =>
         onChange({ ...draft, settings: { ...settings, [key]: value } });
-    const applyCloudBridgeTheme = () =>
+    const applyBrightTheme = () =>
         onChange({
             ...draft,
-            backgroundColor: CLOUD_BRIDGE_HERO_THEME.overlayColor,
-            textColor: CLOUD_BRIDGE_HERO_THEME.titleColor,
+            backgroundColor: DEFAULT_BRIGHT_HERO_THEME.overlayColor,
+            textColor: DEFAULT_BRIGHT_HERO_THEME.titleColor,
             settings: {
                 ...settings,
-                themePreset: 'cloudbridge-bright',
-                fallbackImage: 'cloudbridge-ai-hub',
-                secondaryTextColor: CLOUD_BRIDGE_HERO_THEME.secondaryTextColor,
-                accentColor: CLOUD_BRIDGE_HERO_THEME.accentColor,
-                accentSecondaryColor: CLOUD_BRIDGE_HERO_THEME.accentSecondaryColor,
-                buttonTextColor: CLOUD_BRIDGE_HERO_THEME.buttonTextColor,
+                themePreset: 'bright',
+                secondaryTextColor: DEFAULT_BRIGHT_HERO_THEME.secondaryTextColor,
+                accentColor: DEFAULT_BRIGHT_HERO_THEME.accentColor,
+                accentSecondaryColor: DEFAULT_BRIGHT_HERO_THEME.accentSecondaryColor,
+                buttonTextColor: DEFAULT_BRIGHT_HERO_THEME.buttonTextColor,
             },
         });
 
@@ -1825,7 +1825,7 @@ function HeroThemeSettings({
                     <h3 className="text-sm font-medium">{text.heroTheme}</h3>
                     <p className="mt-1 text-xs leading-5 text-muted-foreground">{text.heroThemeHint}</p>
                 </div>
-                <Button type="button" size="sm" variant="outline" onClick={applyCloudBridgeTheme}>
+                <Button type="button" size="sm" variant="outline" onClick={applyBrightTheme}>
                     <Sparkles className="size-4" aria-hidden="true" />
                     {text.heroThemePreset}
                 </Button>
@@ -2692,22 +2692,22 @@ function HeroEditorPreview({
     isZh: boolean;
 }>) {
     const settings = draft.settings ?? {};
-    const overlayColor = heroSettingColor(draft.backgroundColor, CLOUD_BRIDGE_HERO_THEME.overlayColor);
-    const titleColor = heroSettingColor(draft.textColor, CLOUD_BRIDGE_HERO_THEME.titleColor);
+    const overlayColor = heroSettingColor(draft.backgroundColor, DEFAULT_BRIGHT_HERO_THEME.overlayColor);
+    const titleColor = heroSettingColor(draft.textColor, DEFAULT_BRIGHT_HERO_THEME.titleColor);
     const bodyColor = heroSettingColor(
         settings.secondaryTextColor,
-        CLOUD_BRIDGE_HERO_THEME.secondaryTextColor,
+        DEFAULT_BRIGHT_HERO_THEME.secondaryTextColor,
     );
-    const accentColor = heroSettingColor(settings.accentColor, CLOUD_BRIDGE_HERO_THEME.accentColor);
+    const accentColor = heroSettingColor(settings.accentColor, DEFAULT_BRIGHT_HERO_THEME.accentColor);
     const accentSecondaryColor = heroSettingColor(
         settings.accentSecondaryColor,
-        CLOUD_BRIDGE_HERO_THEME.accentSecondaryColor,
+        DEFAULT_BRIGHT_HERO_THEME.accentSecondaryColor,
     );
     const buttonTextColor = heroSettingColor(
         settings.buttonTextColor,
-        CLOUD_BRIDGE_HERO_THEME.buttonTextColor,
+        DEFAULT_BRIGHT_HERO_THEME.buttonTextColor,
     );
-    const showImageOverlay = settings.themePreset !== 'cloudbridge-bright';
+    const showImageOverlay = normalizedHeroThemePreset(settings.themePreset) !== 'bright';
     const imageBackground = draft.imageUrl
         ? `url("${draft.imageUrl.replace(/"/g, '%22')}") center / cover no-repeat`
         : 'linear-gradient(135deg, #f4fbff 0%, #67e8f9 43%, #818cf8 72%, #c084fc 100%)';
@@ -3572,57 +3572,38 @@ function globalContentDraft(type: GlobalContentType, position: number): ContentB
 }
 
 function newHeroBlock(position: number, slideNumber: number): ContentBlock {
-    const heroStat = (
-        statPosition: number,
-        labelZh: string,
-        descriptionZh: string,
-        labelEn: string,
-        descriptionEn: string,
-    ): ContentItem => ({
-        ...newItem(statPosition, 'HERO'),
-        translations: [
-            { languageCode: 'zh_Hans', label: labelZh, description: descriptionZh },
-            { languageCode: 'en', label: labelEn, description: descriptionEn },
-        ],
-    });
-
     return {
         ...newBlock(position, 'HERO'),
         internalName: `首页轮播图 ${slideNumber}`,
-        backgroundColor: CLOUD_BRIDGE_HERO_THEME.overlayColor,
-        textColor: CLOUD_BRIDGE_HERO_THEME.titleColor,
-        targetType: 'URL',
-        targetValue: CLOUD_BRIDGE_TARGET_URL,
+        enabled: false,
+        backgroundColor: DEFAULT_BRIGHT_HERO_THEME.overlayColor,
+        textColor: DEFAULT_BRIGHT_HERO_THEME.titleColor,
+        targetType: 'NONE',
+        targetValue: null,
         settings: {
-            themePreset: 'cloudbridge-bright',
-            fallbackImage: 'cloudbridge-ai-hub',
-            secondaryTextColor: CLOUD_BRIDGE_HERO_THEME.secondaryTextColor,
-            accentColor: CLOUD_BRIDGE_HERO_THEME.accentColor,
-            accentSecondaryColor: CLOUD_BRIDGE_HERO_THEME.accentSecondaryColor,
-            buttonTextColor: CLOUD_BRIDGE_HERO_THEME.buttonTextColor,
+            themePreset: 'bright',
+            secondaryTextColor: DEFAULT_BRIGHT_HERO_THEME.secondaryTextColor,
+            accentColor: DEFAULT_BRIGHT_HERO_THEME.accentColor,
+            accentSecondaryColor: DEFAULT_BRIGHT_HERO_THEME.accentSecondaryColor,
+            buttonTextColor: DEFAULT_BRIGHT_HERO_THEME.buttonTextColor,
         },
         translations: [
             {
                 languageCode: 'zh_Hans',
-                title: '模型很多，入口只要一个',
-                subtitle: 'AI API 智能中转',
-                body: '统一接入多种 AI 能力，灵活路由、按需切换，让每一次调用更简单。',
-                ctaLabel: '开启云桥通道',
+                title: '新轮播图',
+                subtitle: '',
+                body: '',
+                ctaLabel: '',
             },
             {
                 languageCode: 'en',
-                // i18n-audit-ignore -- manually paired bilingual CMS seed content
-                title: 'Many models. One gateway.',
-                subtitle: 'Intelligent AI API Relay',
-                body: 'Connect diverse AI capabilities through one flexible gateway and route every request with ease.',
-                ctaLabel: 'Open the gateway',
+                title: 'New carousel slide',
+                subtitle: '',
+                body: '',
+                ctaLabel: '',
             },
         ],
-        items: [
-            heroStat(0, '统一', '多模型接入', 'Unified', 'Multi-model access'),
-            heroStat(1, '灵活', '按需切换', 'Flexible', 'Route on demand'),
-            heroStat(2, '快速', '开发调用', 'Ready', 'Developer friendly'),
-        ],
+        items: [],
     };
 }
 

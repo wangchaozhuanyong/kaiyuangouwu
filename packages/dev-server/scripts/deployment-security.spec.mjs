@@ -304,15 +304,10 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.match(script, /rollback 1/u);
     assert.match(script, /9>&-/u);
     assert.match(script, /PRODUCTION_DEPLOY_OK/u);
-    assert.match(script, /verify-dashboard-assets\.mjs/u);
-    assert.match(script, /--dashboard-url https:\/\/console\.moyaoai\.com\/dashboard\//u);
-    assert.doesNotMatch(script, /--dashboard-url https:\/\/console\.damatong\.net/u);
+    assert.match(script, /verify-production-storefronts\.mjs/u);
+    assert.match(script, /--mode release/u);
     assert.match(script, /--release-id "\$\{target_sha\}"/u);
-    assert.match(script, /--storefront-url https:\/\/moyaoai\.com/u);
-    assert.match(script, /--expected-channel-code __default_channel__/u);
-    assert.match(script, /--storefront-url https:\/\/damatong\.net/u);
-    assert.match(script, /--expected-channel-code 美宜佳/u);
-    assert.match(script, /verify-storefront-realtime\.mjs/u);
+    assert.match(script, /--mode realtime/u);
     assert.match(script, /PRODUCTION_AFFECTED_ACCEPTANCE_OK/u);
     assert.match(script, /managed storefront data changed/u);
     assert.match(script, /packages\/dev-server\/scripts\/catalog-cigarette-media\.mjs/u);
@@ -585,19 +580,17 @@ void test('scheduled production monitor checks memory, processes, and health thr
     assert.match(script, /AI_IMAGE_MISSING_COST model=/u);
     assert.match(script, /REGEXP_SUBSTR\(errorMessage/u);
     assert.doesNotMatch(script, /printf[^\n]*errorMessage/u);
-    assert.match(script, /https:\/\/damatong\.net\/health/u);
+    assert.match(script, /verify-production-storefronts\.mjs/u);
+    assert.match(script, /--mode health/u);
+    assert.match(script, /--mode realtime/u);
     assert.match(script, /verify-storefront-realtime\.mjs/u);
-    assert.match(
-        script,
-        /--mode public-smoke \\\n\s+--url [^\n]+ \\\n\s+--ready-timeout-ms 2000 \\\n\s+--heartbeat-timeout-ms 18000 \\\n\s+--release-id "\$\{target_sha\}"/u,
-    );
     assert.match(script, /AUDIT_STOREFRONT_REALTIME_CAPACITY/u);
     assert.match(script, /--mode origin-full/u);
     assert.match(script, /--connection-limit 12/u);
     assert.match(script, /--safe-concurrency 8/u);
     assert.match(script, /--release-timeout-ms 5000/u);
     assert.match(script, /verify-dashboard-assets\.mjs/u);
-    assert.match(script, /--dashboard-url https:\/\/console\.moyaoai\.com\/dashboard\//u);
+    assert.match(script, /production-storefronts\.mjs" --field dashboard-url/u);
     assert.doesNotMatch(script, /--dashboard-url https:\/\/console\.damatong\.net/u);
     assert.match(script, /require_recent_systemd_success/u);
     assert.match(script, /vendure-production-healthcheck\.timer/u);

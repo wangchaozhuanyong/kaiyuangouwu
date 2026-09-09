@@ -67,21 +67,29 @@ function snapshot() {
     return { format: 1, stores: [storeFixture(), storeFixture('2')] };
 }
 
-void test('release preflight requires both production domains and every reviewed Channel', () => {
+void test('release preflight derives every required domain from the active store set', () => {
     const production = snapshot();
-    production.stores[0].profile.primaryDomain = 'moyaoai.com';
-    production.stores[0].channelCode = '__default_channel__';
-    production.stores[1].profile.primaryDomain = 'damatong.net';
-    production.stores[1].channelCode = 'my-malaysia';
-    assert.deepEqual(assertExpectedProductionScope(production, ['my-malaysia']), {
-        requiredDomains: ['moyaoai.com', 'damatong.net'],
-        verifiedChannelCount: 2,
+    production.stores.push(storeFixture('3'));
+    assert.deepEqual(assertExpectedProductionScope(production, ['store-2']), {
+        requiredDomains: ['store-1.example.test', 'store-2.example.test', 'store-3.example.test'],
+        verifiedChannelCount: 3,
     });
-    assert.throws(
-        () => assertExpectedProductionScope({ ...production, stores: production.stores.slice(0, 1) }),
-        /damatong\.net/u,
+    assert.deepEqual(
+        assertExpectedProductionScope({ ...production, stores: production.stores.slice(0, 1) }),
+        {
+            requiredDomains: ['store-1.example.test'],
+            verifiedChannelCount: 1,
+        },
     );
+    assert.throws(() => assertExpectedProductionScope({ format: 1, stores: [] }), /any storefronts/u);
+    const duplicateDomain = structuredClone(production);
+    duplicateDomain.stores[2].profile.primaryDomain = duplicateDomain.stores[0].profile.primaryDomain;
+    assert.throws(() => assertExpectedProductionScope(duplicateDomain), /domains must be unique/u);
     assert.throws(() => assertExpectedProductionScope(production, ['missing-channel']), /missing-channel/u);
+    assert.deepEqual(assertExpectedProductionScope(production, ['store-1', 'store-3']), {
+        requiredDomains: ['store-1.example.test', 'store-2.example.test', 'store-3.example.test'],
+        verifiedChannelCount: 3,
+    });
 });
 
 void test('publisher-only mode fails closed for changed manifests, media or missing review', () => {
