@@ -63,7 +63,11 @@ export interface Product {
     description: string;
     featuredAsset: Asset | null;
     assets: Asset[];
-    collections: Array<Pick<CollectionSummary, 'id' | 'name' | 'slug' | 'parentId'>>;
+    collections: Array<
+        Pick<CollectionSummary, 'id' | 'name' | 'slug' | 'parentId'> & {
+            breadcrumbs?: Array<{ id: string }>;
+        }
+    >;
     variants: ProductVariant[];
     packaging?: ProductPackaging | null;
     customFields?: {

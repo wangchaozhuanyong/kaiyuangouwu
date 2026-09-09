@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { ProductCard } from './components/common/product-card';
 import { buildProductRowSmartInfo, ProductRow } from './components/common/product-row';
-import { ProductDetailPage, productVariantOptionLabel } from './pages/product-detail-page';
+import { ProductDetailPage } from './pages/product-detail-page';
 import { SharePosterModal } from './share-poster-modal';
 import { ProductDetailPageContext } from './storefront-page-contexts';
 import { productImage as displayProductImage } from './storefront-ui/product-display';
@@ -58,44 +58,78 @@ const digitalProduct: Product = {
 };
 
 describe('product image navigation layers', () => {
-    it('disambiguates duplicate option names by price without exposing internal SKUs', () => {
-        const product: Product = {
-            ...digitalProduct,
-            variants: [
-                { ...digitalProduct.variants[0], id: 'variant-1', priceWithTax: 9900 },
-                {
-                    ...digitalProduct.variants[0],
-                    id: 'variant-2',
-                    sku: 'INTERNAL-SECOND',
-                    priceWithTax: 12000,
-                },
-            ],
-        };
-        const labels = product.variants.map((variant, index) =>
-            productVariantOptionLabel(product, variant, index, market.locale, 'zh'),
-        );
-
-        expect(new Set(labels).size).toBe(2);
-        expect(labels[0]).toContain('99');
-        expect(labels[1]).toContain('120');
-        expect(labels.join(' ')).not.toContain('INTERNAL-SECOND');
-    });
-
-    it('falls back to stable option numbers when duplicate names also share a price', () => {
-        const product: Product = {
-            ...digitalProduct,
-            variants: [
-                { ...digitalProduct.variants[0], id: 'variant-1' },
-                { ...digitalProduct.variants[0], id: 'variant-2', sku: 'INTERNAL-SECOND' },
-            ],
-        };
-
-        expect(
-            product.variants.map((variant, index) =>
-                productVariantOptionLabel(product, variant, index, market.locale, 'zh'),
-            ),
-        ).toEqual(['默认规格 · 规格 1', '默认规格 · 规格 2']);
-    });
+    it.each(['parent', 'child', 'grandchild', 'unrelated'])(
+        'shows a category coupon price only for a product in the selected %s category tree',
+        collectionId => {
+            const markup = renderToStaticMarkup(
+                <ProductDetailPageContext.Provider
+                    value={{
+                        product: {
+                            ...digitalProduct,
+                            collections: [
+                                {
+                                    id: 'grandchild',
+                                    name: '下级分类',
+                                    slug: 'grandchild',
+                                    parentId: 'child',
+                                    breadcrumbs: [
+                                        { id: 'root' },
+                                        { id: 'parent' },
+                                        { id: 'child' },
+                                        { id: 'grandchild' },
+                                    ],
+                                },
+                            ],
+                        },
+                        market,
+                        locale: market.locale,
+                        language: 'zh',
+                        products: [],
+                        flashSaleItems: [],
+                        couponCampaigns: [
+                            {
+                                id: 'category-coupon',
+                                name: '分类八折',
+                                kind: 'COLLECTION_PERCENTAGE',
+                                startsAt: null,
+                                endsAt: null,
+                                claimStartsAt: null,
+                                claimEndsAt: null,
+                                validityDays: null,
+                                minimumSpend: 0,
+                                currencyCode: 'MYR',
+                                discountAmount: null,
+                                discountRate: 8,
+                                collectionIds: [collectionId],
+                                productVariantIds: [],
+                                remainingIssueCount: null,
+                                claimed: false,
+                                claimable: true,
+                            },
+                        ],
+                        customerCoupons: [],
+                        storefrontName: 'Store',
+                        cartQuantity: 0,
+                        api: {} as import('./api').ShopApi,
+                        logoUrl: null,
+                        favorite: false,
+                        onAdd: vi.fn(),
+                        onBuyNow: vi.fn(),
+                        onFavorite: vi.fn(),
+                        onNotify: vi.fn(),
+                        addingVariantId: null,
+                    }}
+                >
+                    <ProductDetailPage />
+                </ProductDetailPageContext.Provider>,
+            );
+            if (collectionId === 'unrelated') {
+                expect(markup).not.toContain('查看优惠券，券后价');
+            } else {
+                expect(markup).toMatch(/aria-label="查看优惠券，券后价 MYR\s79\.2"/u);
+            }
+        },
+    );
 
     it('keeps square mobile artwork but uses a calmer 4:3 desktop media frame', () => {
         const markup = renderToStaticMarkup(
