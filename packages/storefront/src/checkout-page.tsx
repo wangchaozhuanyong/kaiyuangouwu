@@ -4,7 +4,6 @@ import {
     ChevronDown,
     ChevronRight,
     CircleCheck,
-    ClipboardCheck,
     Mail,
     MapPin,
     Minus,
@@ -12,15 +11,14 @@ import {
     Plus,
     RotateCcw,
     ShoppingBag,
-    Sparkles,
     Truck,
     X,
 } from 'lucide-react';
 import { FormEvent, ReactNode, useEffect, useId, useRef, useState } from 'react';
 
-import { smartParseAddressText } from './address-parser';
-import { provinceCodeForValue, provinceDisplayName, provincesForCountry } from './address-region-options';
+import { provinceDisplayName } from './address-region-options';
 import { ShopApi, ShopApiError } from './api';
+import { checkoutAddress, isCompleteShippingAddress, shippingAddressInput } from './checkout-address';
 import { compactUiCopy } from './i18n';
 import { isInputMethodKey } from './input-method';
 import { formatDisplayMoney } from './money-display';
@@ -64,9 +62,10 @@ export function CheckoutPage({
     cart,
     order: confirmedOrder,
     customer,
+    selectedAddressId,
+    customerLoading = false,
     market,
     storefrontCode,
-    availableCountries,
     availableProvinces = [],
     locale,
     language,
@@ -92,9 +91,11 @@ export function CheckoutPage({
     cart: StorefrontCart | null;
     order: Order | null;
     customer: ActiveCustomer | null;
+    selectedAddressId?: string;
+    customerLoading?: boolean;
     market: MarketConfig;
     storefrontCode?: string;
-    availableCountries: StorefrontConfig['availableCountries'];
+    availableCountries?: StorefrontConfig['availableCountries'];
     availableProvinces?: StorefrontProvince[];
     locale: string;
     language: StorefrontLanguage;
@@ -146,43 +147,7 @@ export function CheckoutPage({
     const [noteSaving, setNoteSaving] = useState(false);
     const [noteError, setNoteError] = useState<string | null>(null);
     const formRef = useRef<HTMLFormElement>(null);
-    const [selectedAddressId, setSelectedAddressId] = useState<string>(
-        customer?.addresses?.find(address => address.defaultShippingAddress)?.id ??
-            customer?.addresses?.[0]?.id ??
-            '',
-    );
-    const addressSwitcherRef = useRef<HTMLDivElement>(null);
-    const addressChipRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
-
-    useEffect(() => {
-        const container = addressSwitcherRef.current;
-        const chip = addressChipRefs.current.get(selectedAddressId);
-        if (!container || !chip) return;
-        const containerWidth = container.clientWidth;
-        const targetScrollLeft = chip.offsetLeft - (containerWidth - chip.offsetWidth) / 2;
-        container.scrollTo({
-            left: Math.max(0, targetScrollLeft),
-            behavior: 'smooth',
-        });
-    }, [selectedAddressId]);
-
-    const activeAddress =
-        customer?.addresses?.find(address => address.id === selectedAddressId) ??
-        customer?.addresses?.find(address => address.defaultShippingAddress) ??
-        customer?.addresses?.[0] ??
-        null;
-    const [smartPasteOpen, setSmartPasteOpen] = useState(false);
-    const [smartPasteText, setSmartPasteText] = useState('');
-    const [manualAddressDraft, setManualAddressDraft] = useState({
-        fullName: '',
-        phoneNumber: '',
-        countryCode: market.countryCode,
-        province: '',
-        city: '',
-        streetLine1: '',
-        postalCode: '',
-    });
-    const defaultAddress = activeAddress;
+    const activeAddress = checkoutAddress(customer, selectedAddressId);
     const isDigitalOnly = order?.checkoutFulfillment?.fulfillmentType === 'DIGITAL';
     const requiresShipping =
         !isDigitalOnly &&
@@ -193,22 +158,23 @@ export function CheckoutPage({
     const digitalLines =
         order?.lines.filter(line => line.productVariant.customFields.fulfillmentType === 'digital') ?? [];
     const hasDigitalProducts = digitalLines.length > 0;
-    const shippingAddress: CustomerAddressInput = defaultAddress
-        ? {
-              fullName: defaultAddress.fullName ?? '',
-              phoneNumber: defaultAddress.phoneNumber ?? '',
-              streetLine1: defaultAddress.streetLine1,
-              city: defaultAddress.city ?? '',
-              province: defaultAddress.province ?? '',
-              postalCode: defaultAddress.postalCode ?? '',
-              countryCode: defaultAddress.country.code,
-          }
-        : manualAddressDraft;
-    const addressComplete = Object.entries(shippingAddress).every(
-        ([field, value]) =>
-            (field === 'province' && Boolean(defaultAddress)) || String(value).trim().length > 0,
-    );
+    const shippingAddress = shippingAddressInput(activeAddress);
+    const addressComplete = !customerLoading && isCompleteShippingAddress(activeAddress);
+    const manageAddress = () =>
+        navigateTo({
+            name: 'addresses',
+            returnTo: mode,
+            checkoutOrderId: confirmedOrder?.id,
+            addressId: activeAddress?.id,
+            editAddress: Boolean(activeAddress && !addressComplete) || undefined,
+        });
     const shippingAddressKey = JSON.stringify(shippingAddress);
+    const lastShippingAddressRef = useRef(shippingAddressKey);
+    const missingAddressLabel = customerLoading
+        ? (isZh ? '正在加载地址…' : 'Loading address…')
+        : activeAddress
+          ? (isZh ? '完善地址后计算' : 'Calculated after completing the address')
+          : (isZh ? '添加地址后计算' : 'Calculated after adding an address');
     // Match the managed method created by StoreCommerceSettingsService for every store.
     const defaultShippingCode = `store-${(storefrontCode || market.code).toLowerCase()}-standard-delivery`;
     // Shipping mutations change cart revision and totals too. Only address/item changes need a new quote.
@@ -245,57 +211,55 @@ export function CheckoutPage({
             return;
         }
         setShippingUpdating(true);
-        const preferredShippingCode = existingShippingCodeRef.current;
+        const addressChanged = lastShippingAddressRef.current !== shippingAddressKey;
+        lastShippingAddressRef.current = shippingAddressKey;
+        if (addressChanged) shippingSelectionRef.current = '';
+        const preferredShippingCode = selectedAddressId || addressChanged ? undefined : existingShippingCodeRef.current;
         // Serialize order writes so a slower response for an old address cannot win.
-        const timer = setTimeout(
-            () => {
-                shippingQueueRef.current = shippingQueueRef.current.then(async () => {
+        const timer = setTimeout(() => {
+            shippingQueueRef.current = shippingQueueRef.current.then(async () => {
+                if (cancelled) return;
+                try {
+                    await api.setShippingAddress(JSON.parse(shippingAddressKey) as CustomerAddressInput);
                     if (cancelled) return;
-                    try {
-                        await api.setShippingAddress(JSON.parse(shippingAddressKey) as CustomerAddressInput);
-                        if (cancelled) return;
-                        const methods = await api.eligibleShippingMethods();
-                        if (cancelled) return;
-                        if (!methods.length) {
-                            throw new Error(
-                                isZh
-                                    ? '当前地址没有可用配送方式'
-                                    : 'No delivery is available for this address',
-                            );
-                        }
-                        const selected =
-                            methods.find(method => method.id === shippingSelectionRef.current) ??
-                            methods.find(method => method.code === preferredShippingCode) ??
-                            methods.find(method => method.code === defaultShippingCode) ??
-                            methods[0];
-                        await api.setShippingMethod(selected.id);
-                        if (cancelled) return;
-                        const latestCart = await api.cart();
-                        if (cancelled) return;
-                        shippingSelectionRef.current = selected.id;
-                        setShippingMethods(methods);
-                        setSelectedShippingId(selected.id);
-                        setPreparedShippingKey(shippingKey);
-                        shippingCallbacksRef.current.onCartChange(latestCart);
-                    } catch (requestError) {
-                        if (!cancelled) {
-                            setPreparedShippingKey('');
-                            setShippingMethods([]);
-                            setShippingError(
-                                requestError instanceof Error
-                                    ? storefrontErrorMessage(requestError, language)
-                                    : isZh
-                                      ? '运费计算失败，请重试'
-                                      : 'Could not calculate shipping. Please retry.',
-                            );
-                        }
-                    } finally {
-                        if (!cancelled) setShippingUpdating(false);
+                    const methods = await api.eligibleShippingMethods();
+                    if (cancelled) return;
+                    if (!methods.length) {
+                        throw new Error(
+                            isZh ? '当前地址没有可用配送方式' : 'No delivery is available for this address',
+                        );
                     }
-                });
-            },
-            defaultAddress ? 0 : 400,
-        );
+                    const selected =
+                        methods.find(method => method.id === shippingSelectionRef.current) ??
+                        methods.find(method => method.code === preferredShippingCode) ??
+                        methods.find(method => method.code === defaultShippingCode) ??
+                        methods[0];
+                    await api.setShippingMethod(selected.id);
+                    if (cancelled) return;
+                    const latestCart = await api.cart();
+                    if (cancelled) return;
+                    shippingSelectionRef.current = selected.id;
+                    setShippingMethods(methods);
+                    setSelectedShippingId(selected.id);
+                    setPreparedShippingKey(shippingKey);
+                    shippingCallbacksRef.current.onCartChange(latestCart);
+                } catch (requestError) {
+                    if (!cancelled) {
+                        setPreparedShippingKey('');
+                        setShippingMethods([]);
+                        setShippingError(
+                            requestError instanceof Error
+                                ? storefrontErrorMessage(requestError, language)
+                                : isZh
+                                  ? '运费计算失败，请重试'
+                                  : 'Could not calculate shipping. Please retry.',
+                        );
+                    }
+                } finally {
+                    if (!cancelled) setShippingUpdating(false);
+                }
+            });
+        }, 0);
         return () => {
             cancelled = true;
             clearTimeout(timer);
@@ -309,8 +273,8 @@ export function CheckoutPage({
         shippingAddressKey,
         shippingKey,
         defaultShippingCode,
-        Boolean(defaultAddress),
         shippingRetry,
+        selectedAddressId,
         isZh,
     ]);
     const [deliveryEmails, setDeliveryEmails] = useState<CustomerDeliveryEmail[]>([]);
@@ -440,6 +404,10 @@ export function CheckoutPage({
             return;
         }
         if (!cart || !order) return;
+        if (requiresShipping && !addressComplete) {
+            if (!customerLoading) manageAddress();
+            return;
+        }
         if (submitting || cartPending || cartUnknown || shippingUpdating) return;
         if (requiresShipping && !shippingReady) {
             setFormError(
@@ -758,197 +726,38 @@ export function CheckoutPage({
                 ) : null}
                 {requiresShipping && (
                     <section className={checkoutPageClassName('checkout-section checkout-address-section')}>
-                        <div className={checkoutPageClassName('checkout-section-header-row')}>
-                            <h2>{isZh ? '收货地址' : 'Shipping address'}</h2>
-                            <button
-                                type="button"
-                                className={checkoutPageClassName('smart-paste-toggle-btn')}
-                                onClick={() => setSmartPasteOpen(!smartPasteOpen)}
-                            >
-                                <ClipboardCheck size={14} />
-                                <span>{isZh ? '一键智能粘贴' : 'Smart Paste'}</span>
-                            </button>
-                        </div>
-
-                        {smartPasteOpen && (
-                            <div className={checkoutPageClassName('smart-paste-card')}>
-                                <textarea
-                                    className={checkoutPageClassName('smart-paste-input')}
-                                    rows={3}
-                                    placeholder={
-                                        isZh
-                                            ? '粘贴例如：张三，13800138000，广东省深圳市南山区科技园 518000'
-                                            : 'Paste text with recipient, phone and address to auto fill'
-                                    }
-                                    value={smartPasteText}
-                                    onChange={e => setSmartPasteText(e.target.value)}
-                                />
-                                <div className={checkoutPageClassName('smart-paste-actions')}>
-                                    <button
-                                        type="button"
-                                        className={checkoutPageClassName('smart-paste-submit-btn')}
-                                        onClick={() => {
-                                            if (!smartPasteText.trim()) return;
-                                            const parsed = smartParseAddressText(smartPasteText);
-                                            setManualAddressDraft({
-                                                fullName: parsed.fullName,
-                                                phoneNumber: parsed.phoneNumber,
-                                                countryCode: manualAddressDraft.countryCode,
-                                                province: parsed.province,
-                                                city: parsed.city,
-                                                streetLine1: parsed.streetLine1,
-                                                postalCode: parsed.postalCode,
-                                            });
-                                            setSmartPasteOpen(false);
-                                            onNotify(
-                                                isZh
-                                                    ? '✨ 已智能识别并填充收货地址'
-                                                    : 'Address parsed and filled',
-                                            );
-                                        }}
-                                    >
-                                        <Sparkles size={14} />
-                                        <span>{isZh ? '智能识别并填充' : 'Parse & Auto-Fill'}</span>
-                                    </button>
-                                </div>
+                        <h2>{isZh ? '收货地址' : 'Shipping address'}</h2>
+                        {customerLoading ? (
+                            <div className="checkout-address-loading" role="status" aria-busy="true">
+                                {isZh ? '正在加载收货地址…' : 'Loading shipping address…'}
                             </div>
-                        )}
-
-                        {customer?.addresses && customer.addresses.length > 1 && (
-                            <div
-                                ref={addressSwitcherRef}
-                                className={checkoutPageClassName('checkout-address-quick-switcher')}
-                                aria-label={isZh ? '快捷选择收货地址' : 'Quick select address'}
-                            >
-                                {customer.addresses.map(addr => (
-                                    <button
-                                        type="button"
-                                        key={addr.id}
-                                        ref={el => {
-                                            if (el) addressChipRefs.current.set(addr.id, el);
-                                            else addressChipRefs.current.delete(addr.id);
-                                        }}
-                                        className={checkoutPageClassName(
-                                            `checkout-address-chip-card${addr.id === (activeAddress?.id ?? '') ? ' is-active' : ''}`,
-                                        )}
-                                        onClick={() => setSelectedAddressId(addr.id)}
-                                    >
-                                        <div className={checkoutPageClassName('chip-card-top')}>
-                                            <strong>{addr.fullName}</strong>
-                                            <span>{addr.phoneNumber}</span>
-                                            {addr.defaultShippingAddress && (
-                                                <em className={checkoutPageClassName('default-tag')}>
-                                                    {isZh ? '默认' : 'Default'}
-                                                </em>
-                                            )}
-                                        </div>
-                                        <small className={checkoutPageClassName('chip-card-address')}>
-                                            {addressText(addr, availableProvinces)}
-                                        </small>
-                                    </button>
-                                ))}
-                            </div>
-                        )}
-
-                        {defaultAddress ? (
-                            <>
-                                <button
-                                    className={checkoutPageClassName('saved-address')}
-                                    type="button"
-                                    onClick={() => navigateTo({ name: 'addresses' })}
-                                >
-                                    <MapPin />
-                                    <span>
-                                        <strong>
-                                            {defaultAddress.fullName} {defaultAddress.phoneNumber}
-                                        </strong>
-                                        <small>{addressText(defaultAddress, availableProvinces)}</small>
-                                    </span>
-                                    <ChevronRight />
-                                </button>
-                                <input type="hidden" name="fullName" value={defaultAddress.fullName ?? ''} />
-                                <input
-                                    type="hidden"
-                                    name="phoneNumber"
-                                    value={defaultAddress.phoneNumber ?? ''}
-                                />
-                                <input type="hidden" name="province" value={defaultAddress.province ?? ''} />
-                                <input type="hidden" name="city" value={defaultAddress.city ?? ''} />
-                                <input type="hidden" name="streetLine1" value={defaultAddress.streetLine1} />
-                                <input type="hidden" name="countryCode" value={defaultAddress.country.code} />
-                                <input
-                                    type="hidden"
-                                    name="postalCode"
-                                    value={defaultAddress.postalCode ?? ''}
-                                />
-                            </>
                         ) : (
-                            <div className={checkoutPageClassName('form-grid')}>
-                                <CountryField
-                                    countries={availableCountries}
-                                    defaultCountryCode={market.countryCode}
-                                    value={manualAddressDraft.countryCode}
-                                    onChange={countryCode =>
-                                        setManualAddressDraft(current => ({
-                                            ...current,
-                                            countryCode,
-                                            province: '',
-                                        }))
-                                    }
-                                    language={language}
-                                />
-                                <Field
-                                    name="fullName"
-                                    label={isZh ? '收货人' : 'Full name'}
-                                    value={manualAddressDraft.fullName}
-                                    onChange={value =>
-                                        setManualAddressDraft(current => ({ ...current, fullName: value }))
-                                    }
-                                />
-                                <Field
-                                    name="phoneNumber"
-                                    label={isZh ? '手机号' : 'Phone'}
-                                    value={manualAddressDraft.phoneNumber}
-                                    onChange={value =>
-                                        setManualAddressDraft(current => ({ ...current, phoneNumber: value }))
-                                    }
-                                />
-                                <ProvinceField
-                                    provinces={availableProvinces}
-                                    countryCode={manualAddressDraft.countryCode}
-                                    value={manualAddressDraft.province}
-                                    onChange={province =>
-                                        setManualAddressDraft(current => ({ ...current, province }))
-                                    }
-                                    language={language}
-                                />
-                                <Field
-                                    name="city"
-                                    label={isZh ? '城市' : 'City'}
-                                    value={manualAddressDraft.city}
-                                    onChange={value =>
-                                        setManualAddressDraft(current => ({ ...current, city: value }))
-                                    }
-                                />
-                                <Field
-                                    name="streetLine1"
-                                    label={isZh ? '详细地址' : 'Street address'}
-                                    value={manualAddressDraft.streetLine1}
-                                    onChange={value =>
-                                        setManualAddressDraft(current => ({ ...current, streetLine1: value }))
-                                    }
-                                    wide
-                                />
-                                <Field
-                                    name="postalCode"
-                                    label={isZh ? '邮政编码' : 'Postal code'}
-                                    value={manualAddressDraft.postalCode}
-                                    onChange={value =>
-                                        setManualAddressDraft(current => ({ ...current, postalCode: value }))
-                                    }
-                                    wide
-                                />
-                            </div>
+                            <button
+                                className={checkoutPageClassName('saved-address')}
+                                type="button"
+                                onClick={manageAddress}
+                                disabled={submitting || cartPending || cartUnknown}
+                            >
+                                {activeAddress ? <MapPin /> : <Plus />}
+                                <span>
+                                    <strong>
+                                        {activeAddress
+                                            ? `${activeAddress.fullName ?? ''} ${activeAddress.phoneNumber ?? ''}`
+                                            : isZh
+                                              ? '添加收货地址'
+                                              : 'Add shipping address'}
+                                    </strong>
+                                    {activeAddress && (
+                                        <small>{addressText(activeAddress, availableProvinces)}</small>
+                                    )}
+                                    {activeAddress && !addressComplete && (
+                                        <small className="form-error">
+                                            {isZh ? '请完善收货地址' : 'Complete the shipping address'}
+                                        </small>
+                                    )}
+                                </span>
+                                <ChevronRight />
+                            </button>
                         )}
                     </section>
                 )}
@@ -998,9 +807,7 @@ export function CheckoutPage({
                                       : shippingReady
                                         ? shippingMethods.find(method => method.id === selectedShippingId)
                                               ?.name
-                                        : isZh
-                                          ? '填写地址后自动计算'
-                                          : 'Calculated after address'}
+                                        : missingAddressLabel}
                                 {(shippingMethods.length > 1 || shippingError) && <ChevronRight />}
                             </small>
                         </button>
@@ -1036,7 +843,10 @@ export function CheckoutPage({
                 <section className={checkoutPageClassName('checkout-section checkout-summary-section')}>
                     <PriceSummary
                         pending={cartPending}
-                        shippingPending={requiresShipping && (!shippingReady || shippingUpdating)}
+                        shippingPending={Boolean(
+                            requiresShipping && addressComplete && (!shippingReady || shippingUpdating),
+                        )}
+                        shippingUnavailable={requiresShipping && !addressComplete ? missingAddressLabel : undefined}
                         order={order}
                         locale={locale}
                         language={language}
@@ -1075,31 +885,39 @@ export function CheckoutPage({
                 </section>
                 <div className={checkoutPageClassName('submit-order-bar')}>
                     <button
-                        type="submit"
+                        type={requiresShipping && !addressComplete ? 'button' : 'submit'}
+                        onClick={requiresShipping && !addressComplete ? manageAddress : undefined}
                         disabled={
+                            customerLoading ||
                             submitting ||
                             cartPending ||
                             cartUnknown ||
                             shippingUpdating ||
-                            Boolean(requiresShipping && !shippingReady)
+                            Boolean(requiresShipping && addressComplete && !shippingReady)
                         }
                     >
                         {(() => {
                             if (cartPending)
                                 return isZh ? '正在确认商品与金额…' : 'Confirming items and total…';
                             if (submitting) return isZh ? '处理中…' : 'Processing…';
+                            if (requiresShipping && customerLoading)
+                                return isZh ? '正在加载地址…' : 'Loading address…';
+                            if (requiresShipping && !addressComplete)
+                                return activeAddress
+                                    ? isZh
+                                        ? '去完善收货地址'
+                                        : 'Complete shipping address'
+                                    : isZh
+                                      ? '去添加收货地址'
+                                      : 'Add shipping address';
                             if (requiresShipping && (shippingUpdating || !shippingReady)) {
                                 return shippingError
                                     ? isZh
                                         ? '请重试配送计算'
                                         : 'Retry the delivery quote'
-                                    : !addressComplete
-                                      ? isZh
-                                          ? '请完善收货地址'
-                                          : 'Complete the delivery address'
-                                      : isZh
-                                        ? '正在计算运费…'
-                                        : 'Calculating shipping…';
+                                    : isZh
+                                      ? '正在计算运费…'
+                                      : 'Calculating shipping…';
                             }
                             const totalFormatted = formatMoney(
                                 order.totalWithTax,
@@ -1397,6 +1215,7 @@ function PriceSummary({
     requiresShipping = true,
     pending = false,
     shippingPending = false,
+    shippingUnavailable,
 }: {
     order: Order;
     locale: string;
@@ -1405,6 +1224,7 @@ function PriceSummary({
     requiresShipping?: boolean;
     pending?: boolean;
     shippingPending?: boolean;
+    shippingUnavailable?: string;
 }) {
     const isZh = language === 'zh';
     const discount = Math.abs(order.discounts.reduce((sum, item) => sum + item.amountWithTax, 0));
@@ -1431,9 +1251,10 @@ function PriceSummary({
                     {requiresShipping ? (isZh ? '运费' : 'Shipping') : isZh ? '邮箱交付' : 'Email delivery'}
                 </dt>
                 <dd>
-                    {pending || shippingPending
-                        ? pendingLabel
-                        : formatMoney(order.shippingWithTax, order.currencyCode, locale)}
+                    {shippingUnavailable ??
+                        (pending || shippingPending
+                            ? pendingLabel
+                            : formatMoney(order.shippingWithTax, order.currencyCode, locale))}
                 </dd>
             </div>
             {flashSaleDiscount > 0 && (
@@ -1462,7 +1283,16 @@ function PriceSummary({
                 <dd>
                     {pending || shippingPending
                         ? pendingLabel
-                        : formatMoney(order.totalWithTax, order.currencyCode, locale)}
+                        : formatMoney(
+                              order.totalWithTax - (shippingUnavailable ? order.shippingWithTax : 0),
+                              order.currencyCode,
+                              locale,
+                          )}
+                    {shippingUnavailable && (
+                        <small className="checkout-total-hint">
+                            {isZh ? '不含运费' : 'Excludes shipping'}
+                        </small>
+                    )}
                 </dd>
             </div>
         </dl>
@@ -1845,93 +1675,6 @@ function Field({
                 onChange={onChange ? event => onChange(event.target.value) : undefined}
                 required
             />
-        </label>
-    );
-}
-function CountryField({
-    countries,
-    defaultCountryCode,
-    value,
-    onChange,
-    language,
-}: {
-    countries: StorefrontConfig['availableCountries'];
-    defaultCountryCode: string;
-    value: string;
-    onChange: (countryCode: string) => void;
-    language: StorefrontLanguage;
-}) {
-    const options = countries.length ? countries : [{ code: defaultCountryCode, name: defaultCountryCode }];
-    const selected = options.some(country => country.code === value)
-        ? value
-        : options.some(country => country.code === defaultCountryCode)
-          ? defaultCountryCode
-          : options[0].code;
-    return (
-        <label className={checkoutPageClassName('field-wide')}>
-            <span>{language === 'zh' ? '国家/地区' : 'Country/region'}</span>
-            <select
-                name="countryCode"
-                value={selected}
-                onChange={event => onChange(event.target.value)}
-                required
-            >
-                {options.map(country => (
-                    <option key={country.code} value={country.code}>
-                        {country.name}
-                    </option>
-                ))}
-            </select>
-        </label>
-    );
-}
-function ProvinceField({
-    provinces,
-    countryCode,
-    value,
-    onChange,
-    language,
-}: {
-    provinces: readonly StorefrontProvince[];
-    countryCode: string;
-    value: string;
-    onChange: (province: string) => void;
-    language: StorefrontLanguage;
-}) {
-    const options = provincesForCountry(provinces, countryCode);
-    const selected = provinceCodeForValue(provinces, countryCode, value);
-    const hasLegacyValue = Boolean(selected && !options.some(province => province.code === selected));
-    const label = language === 'zh' ? '省/州' : 'State/Province';
-    if (!options.length) {
-        return (
-            <label>
-                <span>{label}</span>
-                <input
-                    name="province"
-                    value={value}
-                    onChange={event => onChange(event.target.value)}
-                    required
-                />
-            </label>
-        );
-    }
-    return (
-        <label>
-            <span>{label}</span>
-            <select
-                name="province"
-                value={selected}
-                onChange={event => onChange(event.target.value)}
-                required
-            >
-                <option value="">{language === 'zh' ? '请选择省/州' : 'Select a state/province'}</option>
-                {hasLegacyValue && <option value={selected}>{selected}</option>}
-                {options.map(province => (
-                    <option key={province.code} value={province.code}>
-                        {province.name}
-                    </option>
-                ))}
-            </select>
         </label>
     );
 }

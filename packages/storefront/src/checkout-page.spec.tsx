@@ -218,7 +218,7 @@ describe('CheckoutPage digital delivery', () => {
         expect(markup).toContain('name="firstName"');
         expect(markup).toContain('name="lastName"');
         expect(markup).toContain('收货地址');
-        expect(markup).toContain('填写地址后自动计算');
+        expect(markup).toContain('添加地址后计算');
         expect(markup).toContain('name="deliveryEmail"');
         expect(markup).toContain('name="confirmDeliveryEmail"');
         expect(markup).toContain('<select name="province"');
@@ -435,7 +435,7 @@ describe('CheckoutPage automatic delivery and drawer', () => {
         return match;
     }
     const trigger = () => element<HTMLButtonElement>('.shipping-method-trigger');
-    const submitButton = () => element<HTMLButtonElement>('button[type="submit"]');
+    const submitButton = () => element<HTMLButtonElement>('.submit-order-bar > button');
 
     it('uses the configured standard delivery even when a cheaper option is listed first, without submitting', async () => {
         const { api } = mount();
@@ -561,42 +561,69 @@ describe('CheckoutPage automatic delivery and drawer', () => {
         expect(api.preparePayment).not.toHaveBeenCalled();
     });
 
-    it('automatically quotes a complete manual address after typing finishes', async () => {
+    it('routes an empty address card and CTA to address management without writing or submitting', async () => {
         const { api } = mount({ manual: true });
-        const inputValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
-        for (const [name, value] of Object.entries({
-            fullName: '测试收货人',
-            phoneNumber: '0100000000',
-            city: 'Petaling Jaya',
-            streetLine1: '10 Example Road',
-            postalCode: '47301',
-        })) {
-            await flush(() => {
-                const input = element<HTMLInputElement>(`input[name="${name}"]`);
-                inputValue?.set?.call(input, value);
-                input.dispatchEvent(new Event('input', { bubbles: true }));
-            });
-        }
+        await flush();
+        expect(container.querySelector('input[name="fullName"]')).toBeNull();
+        expect(container.querySelector('.smart-paste-toggle-btn')).toBeNull();
+        expect(container.querySelector('.checkout-address-quick-switcher')).toBeNull();
+        expect(container.textContent).toContain('添加地址后计算');
+        expect(submitButton().disabled).toBe(false);
+        expect(submitButton().type).toBe('button');
+        expect(submitButton().textContent).toBe('去添加收货地址');
+        await flush(() => element<HTMLButtonElement>('.saved-address').click());
+        await flush(() => submitButton().click());
+        expect(navigate).toHaveBeenCalledTimes(2);
+        expect(navigate).toHaveBeenLastCalledWith(expect.objectContaining({
+            to: '/addresses', search: expect.objectContaining({ returnTo: 'purchase', checkoutOrderId: 'order-1' }),
+        }));
         expect(api.setShippingAddress).not.toHaveBeenCalled();
-        await flush(() => {
-            const province = element<HTMLSelectElement>('select[name="province"]');
-            province.value = 'MY-10';
-            province.dispatchEvent(new Event('change', { bubbles: true }));
-        });
-        expect(api.setShippingAddress).toHaveBeenCalledWith(
-            expect.objectContaining({ postalCode: '47301', province: 'MY-10' }),
-        );
-        expect(trigger().textContent).toContain('标准配送');
+        expect(api.preparePayment).not.toHaveBeenCalled();
+    });
+
+    it('opens the incomplete saved address for editing and does not quote it', async () => {
+        const { api, props } = mount({ manual: true });
+        act(() => root.render(createElement(CheckoutPage, {
+            ...props, customer: { ...props.customer, addresses: [{ ...address, phoneNumber: '' }] },
+        })));
+        await flush();
+        expect(submitButton().disabled).toBe(false);
+        expect(submitButton().textContent).toBe('去完善收货地址');
+        await flush(() => submitButton().click());
+        expect(navigate).toHaveBeenLastCalledWith(expect.objectContaining({
+            to: '/addresses', search: expect.objectContaining({ addressId: address.id, editAddress: true }),
+        }));
+        expect(api.setShippingAddress).not.toHaveBeenCalled();
+    });
+
+    it('shows loading before addresses resolve without flashing the add-address action', async () => {
+        const { api, props } = mount({ manual: true });
+        act(() => root.render(createElement(CheckoutPage, { ...props, customerLoading: true })));
+        await flush();
+        expect(container.textContent).toContain('正在加载收货地址');
+        expect(container.textContent).not.toContain('去添加收货地址');
+        expect(container.querySelector('.saved-address')).toBeNull();
+        expect(submitButton().disabled).toBe(true);
+        expect(api.setShippingAddress).not.toHaveBeenCalled();
+    });
+
+    it('quotes the returned selection, including apartment, without changing default or order progress', async () => {
+        const { api, props, order } = mount({ selectedCode: 'economy' });
+        const second = { ...address, id: 'address-2', fullName: '第二收货人', streetLine2: 'Unit 12', defaultShippingAddress: false };
+        order.customFields.customerNote = '到达后电话联系';
+        order.couponCodes = ['SAVED'];
+        act(() => root.render(createElement(CheckoutPage, { ...props, order, selectedAddressId: second.id,
+            customer: { ...props.customer, addresses: [address, second] } })));
+        await flush();
+        expect(api.setShippingAddress).toHaveBeenLastCalledWith(expect.objectContaining({fullName: '第二收货人', streetLine2: 'Unit 12'}));
+        expect(api.setShippingMethod).toHaveBeenLastCalledWith('standard');
+        expect(container.textContent).toContain('到达后电话联系');
+        expect(order.couponCodes).toEqual(['SAVED']);
+        expect(address.defaultShippingAddress).toBe(true);
+        expect(container.querySelectorAll('.saved-address')).toHaveLength(1);
         expect(submitButton().disabled).toBe(false);
     });
 
-    it('does not quote an incomplete manual address', async () => {
-        const { api } = mount({ manual: true });
-        await flush();
-        expect(api.setShippingAddress).not.toHaveBeenCalled();
-        expect(submitButton().disabled).toBe(true);
-        expect(submitButton().textContent).toContain('请完善收货地址');
-    });
 });
 
 describe('CheckoutPage submission authentication and recovery', () => {

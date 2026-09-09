@@ -3,8 +3,10 @@ import { useNavigate } from '@tanstack/react-router';
 import { ArrowLeft, CircleCheck, Mail, MapPin, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { FormEvent, ReactNode, useEffect, useId, useRef, useState } from 'react';
 
+import { smartParseAddressText } from './address-parser';
 import { provinceCodeForValue, provinceDisplayName, provincesForCountry } from './address-region-options';
 import { ShopApi } from './api';
+import { isCompleteShippingAddress, shippingAddressInput } from './checkout-address';
 import { languageCodeFor } from './i18n';
 import { isInputMethodKey } from './input-method';
 import {
@@ -43,6 +45,7 @@ export function AddressesPage({
     language,
     commerceMode: initialCommerceMode,
     onBack,
+    selection,
     onCustomerChange,
     onNotify,
 }: {
@@ -54,16 +57,34 @@ export function AddressesPage({
     language: StorefrontLanguage;
     commerceMode?: StoreCommerceMode | null;
     onBack: () => void;
+    selection?: {
+        addressId?: string;
+        editAddress?: boolean;
+        onUse: (address: CustomerAddress) => void;
+    };
     onCustomerChange: (customer: ActiveCustomer | null) => void;
     onNotify: (message: string) => void;
 }) {
     const navigate = useNavigate();
     const isZh = language === 'zh';
     const vendureLanguage = languageCodeFor(language);
-    const [open, setOpen] = useState(false);
-    const [editingAddress, setEditingAddress] = useState<CustomerAddress | null>(null);
-    const [addressCountryCode, setAddressCountryCode] = useState(market.countryCode);
-    const [addressProvince, setAddressProvince] = useState('');
+    // RouteGate resolves the customer before mounting. Initialize once, so closing the
+    // first-address form never reopens it when the customer/query refreshes.
+    const initialAddress = selection?.editAddress
+        ? (customer?.addresses?.find(address => address.id === selection.addressId) ?? null)
+        : null;
+    const [open, setOpen] = useState(Boolean(selection && (!customer?.addresses?.length || initialAddress)));
+    const [editingAddress, setEditingAddress] = useState<CustomerAddress | null>(initialAddress);
+    const [addressDraft, setAddressDraft] = useState(() =>
+        shippingAddressInput(initialAddress, market.countryCode),
+    );
+    const [selectedAddressId, setSelectedAddressId] = useState(selection?.addressId ?? '');
+    const [smartPasteText, setSmartPasteText] = useState('');
+    const [parseMessage, setParseMessage] = useState('');
+    const addressCountryCode = addressDraft.countryCode;
+    const addressProvince = addressDraft.province;
+    const setDraftField = (field: keyof CustomerAddressInput, value: string) =>
+        setAddressDraft(current => ({ ...current, [field]: value }));
     const [submitting, setSubmitting] = useState(false);
     const [formError, setFormError] = useState('');
     const [emailOpen, setEmailOpen] = useState(false);
@@ -95,13 +116,14 @@ export function AddressesPage({
     });
     const deliveryEmails = deliveryEmailsQuery.data ?? [];
 
-    const effectiveTab: 'physical' | 'email' =
-        commerceMode === 'DIGITAL_ONLY'
-            ? 'email'
-            : commerceMode === 'PHYSICAL_ONLY'
-              ? 'physical'
-              : (selectedTab ??
-                (customer?.addresses?.length ? 'physical' : deliveryEmails.length ? 'email' : 'physical'));
+    const effectiveTab: 'physical' | 'email' = selection
+        ? 'physical'
+        : commerceMode === 'DIGITAL_ONLY'
+          ? 'email'
+          : commerceMode === 'PHYSICAL_ONLY'
+            ? 'physical'
+            : (selectedTab ??
+              (customer?.addresses?.length ? 'physical' : deliveryEmails.length ? 'email' : 'physical'));
 
     if (!customer) {
         return (
@@ -139,14 +161,25 @@ export function AddressesPage({
                 postalCode: formText(data, 'postalCode'),
                 countryCode: formText(data, 'countryCode', market.countryCode),
                 defaultShippingAddress:
-                    customer.addresses?.length === 0 || data.get('defaultShippingAddress') === 'on',
+                    !customer.addresses?.length || data.get('defaultShippingAddress') === 'on',
             };
-            if (editingAddress) await api.updateAddress({ ...input, id: editingAddress.id });
-            else await api.createAddress(input);
-            onCustomerChange(await api.activeCustomer());
+            const savedAddress = editingAddress
+                ? await api.updateAddress({ ...input, id: editingAddress.id })
+                : await api.createAddress(input);
+            // Keep the saved ID if refreshing fails, so retry updates instead of creating a duplicate.
+            setEditingAddress(savedAddress);
+            const updatedCustomer = await api.activeCustomer();
+            if (!updatedCustomer?.addresses?.some(address => address.id === savedAddress.id)) {
+                setFormError(
+                    isZh ? '地址已保存，刷新失败，请重试' : 'Address saved. Refresh failed; please retry.',
+                );
+                return;
+            }
+            onCustomerChange(updatedCustomer);
             setOpen(false);
             setEditingAddress(null);
             onNotify(isZh ? '地址已保存' : 'Address saved');
+            selection?.onUse(updatedCustomer.addresses.find(address => address.id === savedAddress.id)!);
         } catch (requestError) {
             setFormError(
                 requestError instanceof Error
@@ -203,8 +236,9 @@ export function AddressesPage({
     };
     const startEdit = (address: CustomerAddress | null) => {
         setEditingAddress(address);
-        setAddressCountryCode(address?.country.code ?? market.countryCode);
-        setAddressProvince(address?.province ?? '');
+        setAddressDraft(shippingAddressInput(address, market.countryCode));
+        setSmartPasteText('');
+        setParseMessage('');
         setFormError('');
         setOpen(true);
     };
@@ -267,17 +301,44 @@ export function AddressesPage({
         }
     };
 
-    const pageTitle =
-        commerceMode === 'PHYSICAL_ONLY'
-            ? isZh
-                ? '收货地址'
-                : 'Delivery addresses'
-            : isZh
-              ? '收货信息'
-              : 'Delivery contacts';
+    const selectedAddress = customer.addresses?.find(address => address.id === selectedAddressId) ?? null;
+    const parseAddress = () => {
+        const parsed = smartParseAddressText(smartPasteText);
+        const nonEmpty = Object.fromEntries(Object.entries(parsed).filter(([, value]) => value?.trim()));
+        // The parser currently recognizes Chinese regions. Keep the chosen country and
+        // never fill a foreign province into a country's managed region list.
+        delete nonEmpty.countryCode;
+        if (parsed.province) {
+            const code = provinceCodeForValue(availableProvinces, addressCountryCode, parsed.province);
+            const options = provincesForCountry(availableProvinces, addressCountryCode);
+            if (options.some(province => province.code === code)) nonEmpty.province = code;
+            else if (addressCountryCode !== 'CN') delete nonEmpty.province;
+        }
+        if (!Object.keys(nonEmpty).length) {
+            setParseMessage(
+                isZh
+                    ? '未识别到地址内容，请手动填写'
+                    : 'No address details recognized. Please fill in the form.',
+            );
+            return;
+        }
+        setAddressDraft(current => ({ ...current, ...nonEmpty }));
+        setParseMessage(isZh ? '已填入，请核对后保存' : 'Filled in. Please review before saving.');
+    };
+    const pageTitle = selection
+        ? isZh
+            ? '选择收货地址'
+            : 'Choose shipping address'
+        : commerceMode === 'PHYSICAL_ONLY'
+          ? isZh
+              ? '收货地址'
+              : 'Delivery addresses'
+          : isZh
+            ? '收货信息'
+            : 'Delivery contacts';
 
     return (
-        <main className="page subpage addresses-page">
+        <main className={`page subpage addresses-page${selection ? ' is-selecting-address' : ''}`}>
             <SubHeader
                 title={pageTitle}
                 language={language}
@@ -300,7 +361,7 @@ export function AddressesPage({
                     </button>
                 }
             />
-            {commerceMode === 'HYBRID' && (
+            {!selection && commerceMode === 'HYBRID' && (
                 <nav
                     className="address-type-tabs"
                     aria-label={isZh ? '收货信息类型' : 'Delivery contact type'}
@@ -327,13 +388,42 @@ export function AddressesPage({
                 (customer.addresses?.length ? (
                     <div className="address-list">
                         {customer.addresses.map(address => (
-                            <article className="address-card" key={address.id}>
+                            <article
+                                className={`address-card${selection && selectedAddressId === address.id ? ' is-selected' : ''}`}
+                                key={address.id}
+                            >
+                                {selection && (
+                                    <label className="address-selection-control">
+                                        <input
+                                            type="radio"
+                                            name="checkoutAddress"
+                                            value={address.id}
+                                            checked={selectedAddressId === address.id}
+                                            onChange={() => setSelectedAddressId(address.id)}
+                                        />
+                                        <span>
+                                            {address.fullName} ·{' '}
+                                            {selection.addressId === address.id
+                                                ? isZh
+                                                    ? '本次使用'
+                                                    : 'Current address'
+                                                : isZh
+                                                  ? '选择此地址'
+                                                  : 'Select this address'}
+                                        </span>
+                                    </label>
+                                )}
                                 <header>
                                     <strong>{address.fullName}</strong>
                                     <span>{address.phoneNumber}</span>
                                     {address.defaultShippingAddress && <em>{isZh ? '默认' : 'Default'}</em>}
                                 </header>
                                 <p>{addressText(address, availableProvinces)}</p>
+                                {selection && !isCompleteShippingAddress(address) && (
+                                    <small className="form-error">
+                                        {isZh ? '请完善收货地址' : 'Complete the shipping address'}
+                                    </small>
+                                )}
                                 <footer>
                                     <span>{address.country.name}</span>
                                     <div className="address-actions">
@@ -407,6 +497,28 @@ export function AddressesPage({
                         onAction={() => setEmailOpen(true)}
                     />
                 ))}
+            {selection && Boolean(customer.addresses?.length) && (
+                <div className="address-use-bar">
+                    <button
+                        type="button"
+                        className="primary-action wide-action"
+                        disabled={!selectedAddress || submitting}
+                        onClick={() => {
+                            if (!selectedAddress) return;
+                            if (!isCompleteShippingAddress(selectedAddress)) startEdit(selectedAddress);
+                            else selection.onUse(selectedAddress);
+                        }}
+                    >
+                        {selectedAddress && !isCompleteShippingAddress(selectedAddress)
+                            ? isZh
+                                ? '完善并使用此地址'
+                                : 'Complete and use this address'
+                            : isZh
+                              ? '使用此地址'
+                              : 'Use this address'}
+                    </button>
+                </div>
+            )}
             {open && (
                 <Sheet
                     title={
@@ -420,62 +532,102 @@ export function AddressesPage({
                     }
                     language={language}
                     onClose={() => {
+                        if (submitting) return;
                         setOpen(false);
                         setEditingAddress(null);
+                        setFormError('');
                     }}
                 >
                     <form className="address-form" onSubmit={event => void save(event)}>
+                        <div className="address-smart-paste field-wide">
+                            <label>
+                                <span>
+                                    {isZh ? '粘贴地址，自动填写' : 'Paste an address to fill in the form'}
+                                </span>
+                                <textarea
+                                    rows={3}
+                                    value={smartPasteText}
+                                    onChange={event => {
+                                        setSmartPasteText(event.target.value);
+                                        setParseMessage('');
+                                    }}
+                                    placeholder={
+                                        isZh
+                                            ? '粘贴收货人、电话和详细地址'
+                                            : 'Paste recipient, phone and street address'
+                                    }
+                                />
+                            </label>
+                            <p>
+                                {isZh
+                                    ? '目前主要识别中文地址；请核对国家、省/州及其他字段。'
+                                    : 'Best suited to Chinese addresses. Check the country, state and all other fields.'}
+                            </p>
+                            <button
+                                type="button"
+                                onClick={parseAddress}
+                                disabled={!smartPasteText.trim() || submitting}
+                            >
+                                {isZh ? '识别并填写' : 'Recognize and fill'}
+                            </button>
+                            {parseMessage && <small role="status">{parseMessage}</small>}
+                        </div>
                         <CountryField
                             countries={availableCountries}
                             defaultCountryCode={editingAddress?.country.code ?? market.countryCode}
                             value={addressCountryCode}
                             onChange={countryCode => {
-                                setAddressCountryCode(countryCode);
-                                setAddressProvince('');
+                                setAddressDraft(current => ({ ...current, countryCode, province: '' }));
                             }}
                             language={language}
                         />
                         <Field
                             name="fullName"
                             label={isZh ? '收货人' : 'Full name'}
-                            defaultValue={editingAddress?.fullName ?? ''}
+                            value={addressDraft.fullName ?? ''}
+                            onChange={value => setDraftField('fullName', value)}
                             wide
                         />
                         <Field
                             name="phoneNumber"
                             label={isZh ? '手机号' : 'Phone'}
-                            defaultValue={editingAddress?.phoneNumber ?? ''}
+                            value={addressDraft.phoneNumber ?? ''}
+                            onChange={value => setDraftField('phoneNumber', value)}
                             wide
                         />
                         <ProvinceField
                             provinces={availableProvinces}
                             countryCode={addressCountryCode}
                             value={addressProvince}
-                            onChange={setAddressProvince}
+                            onChange={value => setDraftField('province', value)}
                             language={language}
                         />
                         <Field
                             name="city"
                             label={isZh ? '城市' : 'City'}
-                            defaultValue={editingAddress?.city ?? ''}
+                            value={addressDraft.city ?? ''}
+                            onChange={value => setDraftField('city', value)}
                         />
                         <Field
                             name="streetLine1"
                             label={isZh ? '详细地址' : 'Street address'}
-                            defaultValue={editingAddress?.streetLine1 ?? ''}
+                            value={addressDraft.streetLine1 ?? ''}
+                            onChange={value => setDraftField('streetLine1', value)}
                             wide
                         />
                         <Field
                             name="streetLine2"
                             label={isZh ? '楼栋、单元等（选填）' : 'Apartment, suite, etc. (optional)'}
-                            defaultValue={editingAddress?.streetLine2 ?? ''}
+                            value={addressDraft.streetLine2 ?? ''}
+                            onChange={value => setDraftField('streetLine2', value)}
                             required={false}
                             wide
                         />
                         <Field
                             name="postalCode"
                             label={isZh ? '邮政编码' : 'Postal code'}
-                            defaultValue={editingAddress?.postalCode ?? ''}
+                            value={addressDraft.postalCode ?? ''}
+                            onChange={value => setDraftField('postalCode', value)}
                             wide
                         />
                         <label className="address-default-toggle field-wide">
@@ -488,7 +640,17 @@ export function AddressesPage({
                         </label>
                         {formError && <small className="form-error">{formError}</small>}
                         <button className="primary-action wide-action" type="submit" disabled={submitting}>
-                            {submitting ? (isZh ? '保存中' : 'Saving') : isZh ? '保存地址' : 'Save address'}
+                            {submitting
+                                ? isZh
+                                    ? '保存中'
+                                    : 'Saving'
+                                : selection
+                                  ? isZh
+                                      ? '保存并使用'
+                                      : 'Save and use'
+                                  : isZh
+                                    ? '保存地址'
+                                    : 'Save address'}
                         </button>
                     </form>
                 </Sheet>
@@ -604,19 +766,29 @@ function Field({
     name,
     label,
     defaultValue,
+    value,
+    onChange,
     required = true,
     wide = false,
 }: {
     name: string;
     label: string;
-    defaultValue: string;
+    defaultValue?: string;
+    value?: string;
+    onChange?: (value: string) => void;
     required?: boolean;
     wide?: boolean;
 }) {
     return (
         <label className={wide ? 'field-wide' : undefined}>
             <span>{label}</span>
-            <input name={name} defaultValue={defaultValue} required={required} />
+            <input
+                name={name}
+                defaultValue={defaultValue}
+                value={value}
+                onChange={onChange ? event => onChange(event.target.value) : undefined}
+                required={required}
+            />
         </label>
     );
 }
@@ -733,7 +905,7 @@ function Sheet({
         const selector =
             'button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
         const items = () => Array.from(dialog.querySelectorAll<HTMLElement>(selector));
-        const frame = requestAnimationFrame(() => (items()[0] ?? dialog).focus());
+        const frame = requestAnimationFrame(() => (items()[0] ?? dialog).focus({ preventScroll: true }));
         const keydown = (event: KeyboardEvent) => {
             if (isInputMethodKey(event)) return;
             if (event.key === 'Escape') {
@@ -764,7 +936,7 @@ function Sheet({
             cancelAnimationFrame(frame);
             document.removeEventListener('keydown', keydown);
             releaseBodyScrollLock();
-            previousFocus.current?.focus();
+            previousFocus.current?.focus({ preventScroll: true });
         };
     }, []);
     return (

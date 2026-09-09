@@ -44,6 +44,9 @@ export function isCheckoutRoute(name: string): name is CheckoutRouteName {
 export interface RouteState {
     name: RouteName;
     returnTo?: CheckoutRouteName;
+    addressId?: string;
+    checkoutOrderId?: string;
+    editAddress?: boolean;
     id?: string;
     tab?: OrderTab;
     token?: string;
@@ -167,6 +170,9 @@ export function normalizeRouteSearch(search: Record<string, unknown>): Storefron
     const returnTo = stringValue('returnTo');
     return {
         returnTo: returnTo && isCheckoutRoute(returnTo) ? returnTo : undefined,
+        addressId: stringValue('addressId'),
+        checkoutOrderId: stringValue('checkoutOrderId'),
+        editAddress: search.editAddress === true || search.editAddress === 'true' || undefined,
         id: stringValue('id'),
         tab: orderTabs.includes(tab as OrderTab) ? (tab as OrderTab) : undefined,
         token: stringValue('token'),
@@ -213,6 +219,9 @@ export function routeHref(route: RouteState): string {
     const params = new URLSearchParams();
     const search = routeSearch(route);
     if (search.returnTo) params.set('returnTo', search.returnTo);
+    if (search.addressId) params.set('addressId', search.addressId);
+    if (search.checkoutOrderId) params.set('checkoutOrderId', search.checkoutOrderId);
+    if (search.editAddress) params.set('editAddress', 'true');
     if (search.id) params.set('id', search.id);
     if (search.tab) params.set('tab', search.tab);
     if (search.token) params.set('token', search.token);
