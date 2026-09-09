@@ -78,7 +78,7 @@ export function OrderProfitExpensePanel({
     };
 
     return (
-        <section className="rounded-xl border border-emerald-200 bg-white p-5 shadow-2xs">
+        <section className="min-w-0 rounded-xl border border-emerald-200 bg-white p-4 shadow-2xs">
             <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                     <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
@@ -87,7 +87,7 @@ export function OrderProfitExpensePanel({
                         <FeatureHelpButton topic="sales.order-expenses" title="订单经营费用" />
                     </h2>
                     <p className="mt-1 text-[11px] leading-5 text-slate-500">
-                        录入财务实际发生额。没有费用时请明确填 0；留空代表尚未核算，不会生成假净利润。
+                        按实际支出填写；没有费用填 0，尚未核算请留空。
                     </p>
                 </div>
                 {expense && (

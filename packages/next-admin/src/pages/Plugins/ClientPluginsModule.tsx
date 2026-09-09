@@ -259,35 +259,6 @@ export function ClientPluginsModule() {
                 ) : (
                     draft && (
                         <>
-                            <section>
-                                <div className="mb-3">
-                                    <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                                        平台插件
-                                        <FeatureHelpButton topic="plugins.platform" title="平台插件" />
-                                    </h2>
-                                    <p className="mt-1 text-[11px] text-slate-400">
-                                        清单直接来自当前后端发布的插件 manifest
-                                    </p>
-                                </div>
-                                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                                    {catalog.map(definition => (
-                                        <PluginCard
-                                            key={definition.code}
-                                            definition={definition}
-                                            installed={installedCodes.has(definition.code)}
-                                            onToggle={() =>
-                                                setDraft(current =>
-                                                    current
-                                                        ? installedCodes.has(definition.code)
-                                                            ? removePlugin(current, definition.code)
-                                                            : addPlugin(current, definition)
-                                                        : current,
-                                                )
-                                            }
-                                        />
-                                    ))}
-                                </div>
-                            </section>
                             <section className="rounded-xl border border-slate-200 bg-white">
                                 <div className="border-b border-slate-100 p-4">
                                     <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
@@ -347,17 +318,54 @@ export function ClientPluginsModule() {
                                         )}
                                     </div>
                                 ) : (
-                                    <div className="flex min-h-52 flex-col items-center justify-center p-8 text-center">
+                                    <div className="flex flex-col items-center justify-center p-5 text-center">
                                         <Puzzle className="h-9 w-9 text-slate-300" />
                                         <h3 className="mt-3 text-sm font-bold text-slate-800">
                                             还没有装配客户端插件
                                         </h3>
                                         <p className="mt-1 text-xs text-slate-400">
-                                            从上方平台插件中选择需要的入口。
+                                            展开下方“添加插件”，选择需要的入口。
                                         </p>
                                     </div>
                                 )}
                             </section>
+                            <details
+                                open={draft.items.length === 0}
+                                className="rounded-xl border border-slate-200 bg-white p-4"
+                            >
+                                <summary className="cursor-pointer text-sm font-bold">
+                                    添加插件 · {catalog.length} 个可用插件
+                                </summary>
+                                <div className="mt-4">
+                                    <div className="mb-3">
+                                        <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                                            平台插件
+                                            <FeatureHelpButton topic="plugins.platform" title="平台插件" />
+                                        </h2>
+                                        <p className="mt-1 text-[11px] text-slate-400">
+                                            清单直接来自当前后端发布的插件 manifest
+                                        </p>
+                                    </div>
+                                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                                        {catalog.map(definition => (
+                                            <PluginCard
+                                                key={definition.code}
+                                                definition={definition}
+                                                installed={installedCodes.has(definition.code)}
+                                                onToggle={() =>
+                                                    setDraft(current =>
+                                                        current
+                                                            ? installedCodes.has(definition.code)
+                                                                ? removePlugin(current, definition.code)
+                                                                : addPlugin(current, definition)
+                                                            : current,
+                                                    )
+                                                }
+                                            />
+                                        ))}
+                                    </div>
+                                </div>
+                            </details>
                         </>
                     )
                 )}
@@ -382,7 +390,7 @@ function PluginCard({
               ? Headphones
               : Sparkles;
     return (
-        <article className="flex min-h-56 flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-2xs">
+        <article className="flex min-h-44 flex-col rounded-xl border border-slate-200 bg-white p-4 shadow-2xs">
             <div className="flex items-start justify-between">
                 <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-blue-50 text-blue-700">
                     <Icon className="h-5 w-5" />

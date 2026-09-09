@@ -1,5 +1,10 @@
 import { getStatusLabel } from '../../utils/status-labels';
 
+export const getPaymentMethodLabel = (code: string, name?: string | null) => {
+    if (/^controlled-test-payment(?:-\d+)?$/u.test(code)) return '测试支付（模拟付款）';
+    return name?.trim() || code || '未标注支付方式';
+};
+
 export interface SalesAddress {
     fullName?: string | null;
     company?: string | null;

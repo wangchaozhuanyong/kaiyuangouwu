@@ -5,7 +5,7 @@ import { ContentTranslationBackfillService } from './content-translation-backfil
 import { ContentTranslationRetryService } from './content-translation-retry.service.js';
 import { ContentTranslationService } from './content-translation.service.js';
 import { TranslationExecutionService } from './translation-execution.service.js';
-import { ContentTranslationSegment } from './types.js';
+import { ContentTranslationAuditOptions, ContentTranslationSegment } from './types.js';
 
 @Resolver()
 export class ContentTranslationAdminResolver {
@@ -18,8 +18,15 @@ export class ContentTranslationAdminResolver {
 
     @Query()
     @Allow(Permission.SuperAdmin)
-    contentTranslationAudit(@Ctx() ctx: RequestContext, @Args() args: { channelId?: string | null }) {
-        return this.service.audit(ctx, args.channelId === undefined ? ctx.channelId : args.channelId);
+    contentTranslationAudit(
+        @Ctx() ctx: RequestContext,
+        @Args() args: { channelId?: string | null; options?: ContentTranslationAuditOptions | null },
+    ) {
+        return this.service.audit(
+            ctx,
+            args.channelId === undefined ? ctx.channelId : args.channelId,
+            args.options,
+        );
     }
 
     @Query()

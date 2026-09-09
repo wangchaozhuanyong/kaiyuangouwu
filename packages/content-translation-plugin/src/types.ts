@@ -93,3 +93,10 @@ export type ResolvedContentTranslationOptions = Required<
     Omit<ContentTranslationPluginOptions, 'fallbackProviders'>
 > &
     Pick<ContentTranslationPluginOptions, 'fallbackProviders'>;
+export interface ContentTranslationAuditOptions {
+    skip?: number | null;
+    take?: number | null;
+    search?: string | null;
+    status?: string | null;
+    entityType?: string | null;
+}

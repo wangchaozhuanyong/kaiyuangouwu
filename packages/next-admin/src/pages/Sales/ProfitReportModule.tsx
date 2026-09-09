@@ -9,7 +9,6 @@ import {
     FileSpreadsheet,
     PackageSearch,
     RefreshCw,
-    Truck,
 } from 'lucide-react';
 import { useMemo, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -163,19 +162,19 @@ export function ProfitReportModule() {
 
                 <SummaryCards summary={summary} loading={query.loading && !summary} />
 
-                <section className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs leading-5 text-amber-900">
-                    <div className="flex items-start gap-2">
-                        <Truck className="mt-0.5 h-4 w-4 shrink-0" />
-                        <div>
-                            <strong>利润口径：</strong>净实收 = 已结算支付 − 已结算退款；可核算毛利润 = 净实收
-                            − 商品成本；净利润 = 可核算毛利润 − 承运商实际物流成本 −
-                            支付手续费。订单上的买家物流费已包含在支付金额中，这里只单独列出，不会再加一次；退款暂时无法拆分到商品或物流费。
-                            <span className="block font-bold">
-                                商品成本或任一实际费用未核算时，系统不会显示该订单及报表合计的净利润。
-                            </span>
-                        </div>
+                <details className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-900">
+                    <summary className="cursor-pointer font-semibold">
+                        利润计算说明 · 成本或实际费用未核算时不显示净利润
+                    </summary>
+                    <div className="mt-2">
+                        <strong>利润口径：</strong>净实收 = 已结算支付 − 已结算退款；可核算毛利润 = 净实收 −
+                        商品成本；净利润 = 可核算毛利润 − 承运商实际物流成本 −
+                        支付手续费。订单上的买家物流费已包含在支付金额中，这里只单独列出，不会再加一次；退款暂时无法拆分到商品或物流费。
+                        <span className="block font-bold">
+                            商品成本或任一实际费用未核算时，系统不会显示该订单及报表合计的净利润。
+                        </span>
                     </div>
-                </section>
+                </details>
 
                 <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs">
                     <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
@@ -423,11 +422,16 @@ function SummaryCards({ summary, loading }: { summary?: CatalogProfitReportSumma
         ['已结算订单', summary ? `${summary.orderCount} 笔 / ${summary.quantity} 件` : '—', 'text-slate-900'],
     ] as const;
     return (
-        <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
+        <section className="grid grid-cols-2 gap-2 lg:grid-cols-3 xl:grid-cols-5" aria-label="利润指标">
             {cards.map(([label, value, color]) => (
-                <div key={label} className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs">
+                <div
+                    key={label}
+                    className={`min-w-0 rounded-lg border border-slate-200 bg-white p-3 shadow-xs ${value.length > 16 ? 'col-span-2' : ''}`}
+                >
                     <div className="text-[11px] font-bold text-slate-500">{label}</div>
-                    <div className={`mt-2 min-h-7 text-lg font-bold ${color}`}>
+                    <div
+                        className={`mt-1 min-h-6 whitespace-nowrap text-sm font-bold tabular-nums xl:text-base ${color}`}
+                    >
                         {loading ? (
                             <span className="inline-block h-6 w-24 animate-pulse rounded bg-slate-100" />
                         ) : (

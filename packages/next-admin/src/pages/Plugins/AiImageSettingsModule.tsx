@@ -343,7 +343,7 @@ function ConfigPanel({
                             先查看当前状态，需要调整时再从右侧打开设置。
                         </p>
                     </div>
-                    <div className="divide-y divide-slate-100">
+                    <div className="grid gap-px bg-slate-100 xl:grid-cols-2 [&>article]:bg-white">
                         <ConfigSettingRow
                             icon={Power}
                             title="店铺服务开关"
@@ -397,7 +397,7 @@ function ConfigPanel({
                             {value.models.length} 个模型
                         </span>
                     </div>
-                    <div className="divide-y divide-slate-100">
+                    <div className="grid gap-px bg-slate-100 xl:grid-cols-2 [&>article]:bg-white">
                         {value.models.map(model => (
                             <ConfigSettingRow
                                 key={model.id}
@@ -838,7 +838,7 @@ function ConfigSettingRow({
     children: React.ReactNode;
 }) {
     return (
-        <article className="flex flex-col gap-4 px-4 py-4 transition-colors hover:bg-slate-50/70 sm:flex-row sm:items-center sm:px-5">
+        <article className="flex min-w-0 flex-col gap-2 px-4 py-3 transition-colors hover:bg-slate-50/70 sm:flex-row sm:items-center">
             <div className="flex min-w-0 flex-1 items-start gap-3">
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
                     <Icon className="h-4 w-4" />

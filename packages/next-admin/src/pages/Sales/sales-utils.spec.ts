@@ -1,6 +1,26 @@
 import { describe, expect, it } from 'vitest';
 import type { OrderListSummaryInput } from './sales-utils';
-import { buildCompatibleRefundOrderInput, summarizeOrderListItem } from './sales-utils';
+import {
+    buildCompatibleRefundOrderInput,
+    getPaymentMethodLabel,
+    summarizeOrderListItem,
+} from './sales-utils';
+
+describe('payment method labels', () => {
+    it('keeps simulated payments visibly distinct across stores, even with a misleading configured name', () => {
+        expect(getPaymentMethodLabel('controlled-test-payment-2')).toBe('测试支付（模拟付款）');
+        expect(getPaymentMethodLabel('controlled-test-payment-31', '银行卡')).toBe('测试支付（模拟付款）');
+    });
+
+    it('uses configured names for other methods and preserves unknown identifiers', () => {
+        expect(getPaymentMethodLabel('bank-transfer', '银行转账')).toBe('银行转账');
+        expect(getPaymentMethodLabel('controlled-test-payment-provider')).toBe(
+            'controlled-test-payment-provider',
+        );
+        expect(getPaymentMethodLabel('legacy-payment')).toBe('legacy-payment');
+        expect(getPaymentMethodLabel('')).toBe('未标注支付方式');
+    });
+});
 
 const physicalLine = (overrides: Partial<OrderListSummaryInput['lines'][number]> = {}) => ({
     id: 'line-physical',
