@@ -449,7 +449,9 @@ export function CartPage() {
             )}
 
             {isActive && !!lines.length && (
-                <div className={`cart-checkout-bar${isCheckoutBarHidden ? ' is-scrolled-hidden' : ''}`}>
+                <div
+                    className={`cart-checkout-bar page-action-bar${isCheckoutBarHidden ? ' is-scrolled-hidden' : ''}`}
+                >
                     <div>
                         <span>
                             {isZh ? '合计' : 'Total'}{' '}

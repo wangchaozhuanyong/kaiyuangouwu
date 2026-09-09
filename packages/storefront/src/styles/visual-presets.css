@@ -67,8 +67,6 @@ html[data-storefront-preset='modern-oriental']
         .product-card,
         .checkout-card,
         .auth-card,
-        .ai-studio-history,
-        .ai-studio-model-grid,
         .ai-confirmation-dialog
     ) {
     background: var(--paper);
@@ -78,7 +76,7 @@ html[data-storefront-preset='modern-oriental']
 }
 
 html[data-storefront-preset='modern-oriental']
-    :is(.product-card, .checkout-card, .auth-card, .ai-studio-history, .ai-studio-model-grid) {
+    :is(.product-card, .checkout-card, .auth-card) {
     border-radius: var(--radius-md);
 }
 
@@ -188,7 +186,7 @@ html[data-storefront-preset='modern-oriental'] .auth-page .auth-card {
     box-shadow: var(--shadow-md);
 }
 
-html[data-storefront-preset='modern-oriental'] :is(.ai-studio-reference-add, .ai-studio-settlement-summary) {
+html[data-storefront-preset='modern-oriental'] .ai-studio-reference-add {
     background: var(--paper);
     border-color: var(--line);
 }
@@ -240,11 +238,6 @@ html[data-storefront-preset='modern-oriental'] .auth-route-tabs > button[aria-cu
     background: var(--paper);
     color: var(--accent-ink);
     box-shadow: var(--shadow-sm);
-}
-
-html[data-storefront-preset='modern-oriental'] .ai-studio-setting-trigger > strong {
-    background: var(--soft);
-    border-color: var(--line);
 }
 
 html[data-storefront-preset='modern-oriental'] .ai-studio-optimizer-model {

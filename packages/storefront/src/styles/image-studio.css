@@ -1,3 +1,3 @@
-/* Keep studio layout and shared components in a fixed order on every route entry. */
-@import './image-studio-layout.css';
+/* Component defaults first; the responsive workflow owns layout and spacing. */
 @import './image-studio-components.css';
+@import './image-studio-layout.css';

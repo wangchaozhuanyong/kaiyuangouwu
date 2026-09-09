@@ -279,7 +279,6 @@
 
 @media (min-width: 1024px) {
     .page.auth-page {
-        width: min(calc(100% - 64px), 1200px);
         min-height: min(740px, calc(100dvh - 64px));
         margin: 32px auto;
         grid-template-columns: minmax(0, 1.25fr) minmax(390px, 0.75fr);

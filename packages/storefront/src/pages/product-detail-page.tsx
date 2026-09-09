@@ -427,7 +427,7 @@ export function ProductDetailPage() {
                 language={language}
                 onProduct={item => navigateTo({ name: 'product', id: item.id })}
             />
-            <div className="detail-action-bar">
+            <div className="detail-action-bar page-action-bar">
                 <button
                     className={`detail-favorite-action${favorite ? ' is-active' : ''}`}
                     type="button"

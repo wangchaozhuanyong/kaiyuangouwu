@@ -69,7 +69,7 @@ describe('category navigation responsive spacing', () => {
             new RegExp(
                 '\\.category-client-plugin-slot\\s*\\{[^}]*--client-plugin-slot-block-space:\\s*8px;' +
                     '[^}]*padding-block:\\s*var\\(--client-plugin-slot-block-space\\);' +
-                    '[^}]*padding-inline:\\s*var\\(--client-plugin-slot-inline-space\\);',
+                    '[^}]*padding-inline:\\s*var\\(--page-section-inset, var\\(--client-plugin-slot-inline-space\\)\\);',
             ),
         );
         expect(stylesheet).not.toMatch(
