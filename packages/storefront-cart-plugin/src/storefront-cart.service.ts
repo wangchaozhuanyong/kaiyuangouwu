@@ -12,6 +12,7 @@ import {
     OrderLimitError,
     OrderService,
     PaymentMethod,
+    ProductVariant,
     ProductVariantService,
     RequestContext,
     SessionService,
@@ -90,6 +91,36 @@ export function isRegisteredProductionPaymentMethod(
 
 @Injectable()
 export class StorefrontCartService {
+    private readonly stockResolvers: Array<
+        (ctx: RequestContext, variant: ProductVariant) => Promise<number | undefined>
+    > = [];
+
+    /** Fulfillment plugins supply their inventory source without a reverse plugin dependency. */
+    registerStockResolver(
+        resolver: (ctx: RequestContext, variant: ProductVariant) => Promise<number | undefined>,
+    ): void {
+        this.stockResolvers.push(resolver);
+    }
+
+    private async saleableStock(ctx: RequestContext, variant: ProductVariant): Promise<number> {
+        for (const resolver of this.stockResolvers) {
+            const stock = await resolver(ctx, variant);
+            if (stock !== undefined) return Math.max(0, stock);
+        }
+        return Math.max(0, await this.productVariantService.getSaleableStockLevel(ctx, variant));
+    }
+
+    private async validateStock(
+        ctx: RequestContext,
+        lines: StorefrontCartLine[],
+    ): Promise<CartProjectionError | undefined> {
+        for (const line of lines) {
+            if (line.productVariant && line.quantity > (await this.saleableStock(ctx, line.productVariant))) {
+                return new CartProjectionError('INSUFFICIENT_STOCK_ERROR', 'INSUFFICIENT_STOCK_ERROR');
+            }
+        }
+    }
+
     constructor(
         private readonly connection: TransactionalConnection,
         private readonly activeOrderService: ActiveOrderService,
@@ -136,15 +167,16 @@ export class StorefrontCartService {
 
     async setAllLinesSelected(ctx: RequestContext, selected: boolean, expectedRevision: number) {
         const cart = await this.getCart(ctx);
-        const lines = cart.lines.filter(
-            line => !selected || (line.productVariant?.enabled && line.productVariant.product?.enabled),
+        const lines = await Promise.all(
+            cart.lines.map(async line => ({
+                lineId: line.id,
+                selected:
+                    selected &&
+                    Boolean(line.productVariant?.enabled && line.productVariant.product?.enabled) &&
+                    line.quantity <= (await this.saleableStock(ctx, line.productVariant)),
+            })),
         );
-        return this.applyChanges(
-            ctx,
-            { lines: lines.map(line => ({ lineId: line.id, selected })) },
-            expectedRevision,
-            cart,
-        );
+        return this.applyChanges(ctx, { lines }, expectedRevision, cart);
     }
 
     /** Validate the whole batch before writing; one revision and one delta projection per command. */
@@ -213,6 +245,20 @@ export class StorefrontCartService {
             const previous = original.get(String(line.id));
             return !previous || previous.quantity !== line.quantity || previous.selected !== line.selected;
         });
+        // Additions include quantities already present in unselected cart lines. Validate before any write.
+        // Deselecting/removing and reducing an unselected line remain possible after stock runs out.
+        const stockError = await this.validateStock(
+            ctx,
+            changed.filter(line => {
+                const previous = original.get(String(line.id));
+                return (
+                    !previous ||
+                    line.quantity > previous.quantity ||
+                    (line.selected && (!previous.selected || line.quantity !== previous.quantity))
+                );
+            }),
+        );
+        if (stockError) return stockError;
         const owner = await this.getOwner(ctx);
         if (!changed.length && !removed.size) return this.projectCart(ctx, cart, owner);
         const revisionError = await this.claimRevision(ctx, cart, owner, expectedRevision);
@@ -747,6 +793,10 @@ export class StorefrontCartService {
         );
         if (force && unavailableLine) {
             return new CartLineUnavailableError(unavailableLine.productVariantId);
+        }
+        if (force) {
+            const stockError = await this.validateStock(ctx, selectedLines);
+            if (stockError) return stockError;
         }
 
         let order = cart.checkoutOrder;

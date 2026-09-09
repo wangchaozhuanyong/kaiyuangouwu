@@ -1,6 +1,7 @@
 import { LanguageCode } from '@vendure/common/lib/generated-types';
 import { ID } from '@vendure/common/lib/shared-types';
 import {
+    Collection,
     CurrencyCode,
     idsAreEqual,
     ProductVariant,
@@ -8,6 +9,7 @@ import {
     PromotionItemAction,
     PromotionOrderAction,
     RequestContext,
+    RequestContextCacheService,
     TransactionalConnection,
 } from '@vendure/core';
 
@@ -15,6 +17,7 @@ import { CustomerCoupon } from '../entities/customer-coupon.entity';
 import { convertChannelAmount } from '../store-currency-price-selection-strategy';
 
 let connection: TransactionalConnection;
+let requestCache: RequestContextCacheService;
 
 export const customerCouponEntitlement = new PromotionCondition({
     code: 'store_customer_coupon_entitlement',
@@ -197,6 +200,7 @@ export const collectionPercentageDiscount = new PromotionItemAction({
     },
     init(injector) {
         connection = injector.get(TransactionalConnection);
+        requestCache = injector.get(RequestContextCacheService);
     },
     async execute(ctx, orderLine, args) {
         if (!(await variantBelongsToCollections(ctx, orderLine.productVariant.id, args.collectionIds))) {
@@ -298,12 +302,36 @@ async function variantBelongsToCollections(
         return false;
     }
     const variant = await connection.getRepository(ctx, ProductVariant).findOne({
-        where: { id: variantId },
+        where: { id: variantId, channels: { id: ctx.channelId } },
         relations: { collections: true },
     });
-    return Boolean(
-        variant?.collections.some(collection =>
-            collectionIds.some(collectionId => idsAreEqual(collection.id, collectionId)),
-        ),
+    if (!variant?.collections.length) return false;
+
+    // Resolve the current hierarchy once per request, so new or moved descendants
+    // are covered without rewriting campaigns or querying ancestors for every line.
+    const parents = await requestCache.get(
+        ctx,
+        `store-coupon-collection-parents:${ctx.channelId}`,
+        async () => {
+            const collections = await connection.getRepository(ctx, Collection).find({
+                select: { id: true, parentId: true },
+                where: { channels: { id: ctx.channelId }, isRoot: false },
+                loadEagerRelations: false,
+            });
+            return new Map(
+                collections.map(collection => [String(collection.id), String(collection.parentId)]),
+            );
+        },
     );
+    const selected = new Set(collectionIds.map(String));
+    return variant.collections.some(collection => {
+        let id = String(collection.id);
+        const visited = new Set<string>();
+        while (parents.has(id) && !visited.has(id)) {
+            if (selected.has(id)) return true;
+            visited.add(id);
+            id = parents.get(id)!;
+        }
+        return false;
+    });
 }

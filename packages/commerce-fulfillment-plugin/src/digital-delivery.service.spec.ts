@@ -1,17 +1,24 @@
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { DigitalDeliveryTokenService } from './digital-delivery-token.service';
 import { DigitalDeliveryService } from './digital-delivery.service';
 
 const secret = '4ea7f8d3c91b6a205f74e8c1d9a3b6208f51d7c4a2e9630b';
+const directories: string[] = [];
+afterEach(() => {
+    directories.splice(0).forEach(directory => rmSync(directory, { recursive: true, force: true }));
+});
 
 function digitalOrder(paymentState = 'Settled') {
     return {
         id: 'order-1',
-        payments: paymentState ? [{ state: paymentState }] : [],
+        state: 'PaymentSettled',
+        active: false,
+        totalWithTax: 100,
+        payments: paymentState ? [{ state: paymentState, amount: 100, refunds: [] }] : [],
         lines: [
             {
                 id: 'line-1',
@@ -35,6 +42,7 @@ function digitalOrder(paymentState = 'Settled') {
 
 function createService(order: any) {
     const directory = mkdtempSync(path.join(tmpdir(), 'vendure-digital-service-'));
+    directories.push(directory);
     writeFileSync(path.join(directory, 'DIGITAL-001.txt'), 'secure content');
     const repository = { findOne: vi.fn().mockResolvedValue(order) };
     const connection = {
@@ -50,6 +58,39 @@ function createService(order: any) {
 }
 
 describe('DigitalDeliveryService', () => {
+    it.each(['cancelled', 'zero-quantity', 'full-refund', 'pending-refund', 'refunded-line'])(
+        'revokes existing links and stops issuance after %s',
+        async change => {
+            const order = digitalOrder();
+            const { service } = createService(order);
+            const [first] = await service.deliveriesForOrder({} as any, order.id);
+            const token = first.downloadUrl?.split('/').at(-1);
+            if (!token) throw new Error('Expected initial download entitlement');
+            if (change === 'cancelled') order.state = 'Cancelled';
+            if (change === 'zero-quantity') order.lines[0].quantity = 0;
+            if (change.includes('refund'))
+                order.payments[0].refunds = [
+                    {
+                        state: change === 'pending-refund' ? 'Pending' : 'Settled',
+                        total: change === 'refunded-line' ? 50 : 100,
+                        lines: change === 'refunded-line' ? [{ orderLineId: 'line-1', quantity: 1 }] : [],
+                    },
+                ];
+            expect((await service.deliveriesForOrder({} as any, order.id))[0].downloadUrl).toBeUndefined();
+            await expect(service.authorizeDownload(token)).resolves.toBeUndefined();
+        },
+    );
+
+    it('preserves remaining units after a partial cancellation and ignores failed refunds', async () => {
+        const order = digitalOrder();
+        order.lines[0].orderPlacedQuantity = 2;
+        order.payments[0].refunds = [
+            { state: 'Settled', total: 50, lines: [{ orderLineId: 'line-1', quantity: 1 }] },
+            { state: 'Failed', total: 100, lines: [{ orderLineId: 'line-1', quantity: 1 }] },
+        ];
+        const { service } = createService(order);
+        expect((await service.deliveriesForOrder({} as any, order.id))[0].status).toBe('READY');
+    });
     it('returns a signed link only after an authorized or settled payment', async () => {
         const paid = createService(digitalOrder('Settled'));
         const pending = createService(digitalOrder(''));

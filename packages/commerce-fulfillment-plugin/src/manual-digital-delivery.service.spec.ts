@@ -42,6 +42,7 @@ function createHarness(state: ManualDigitalDelivery['state'] = 'DRAFT') {
         find: vi.fn().mockResolvedValue([]),
     };
     const connection = {
+        findByIdsInChannel: vi.fn().mockResolvedValue([]),
         getRepository: vi.fn((_ctx: unknown, entity: unknown) => {
             if (entity === ManualDigitalDelivery) return deliveryRepository;
             if (entity === ManualDigitalDeliveryEvent) return eventRepository;
@@ -69,10 +70,41 @@ function createHarness(state: ManualDigitalDelivery['state'] = 'DRAFT') {
         { fields: [{ key: 'account', label: '账号', value: 'one' }], note: '' },
         { fields: [{ key: 'account', label: '账号', value: 'two' }], note: '' },
     ];
-    return { service, delivery, events, eventBus, orderService, ctx, packages };
+    return { service, delivery, events, eventBus, orderService, ctx, packages, connection };
 }
 
 describe('ManualDigitalDeliveryService invariants', () => {
+    it('rejects foreign or deleted attachments before draft persistence', async () => {
+        const test = createHarness();
+        await expect(
+            test.service.saveDraft(test.ctx, {
+                id: test.delivery.id,
+                packages: [{ note: 'test', attachmentAssetIds: ['foreign'] }],
+            }),
+        ).rejects.toThrow('不属于当前店铺');
+        expect(test.delivery.encryptedPackages).toBeNull();
+        expect(test.connection.findByIdsInChannel).toHaveBeenCalledWith(
+            test.ctx,
+            expect.any(Function),
+            ['foreign'],
+            'channel-1',
+            {},
+        );
+    });
+
+    it('rechecks attachment assignment when preparing an existing delivery for email', async () => {
+        const test = createHarness();
+        test.connection.findByIdsInChannel.mockResolvedValue([
+            { id: 'shared', name: 'test.txt', source: 'test.txt' },
+        ] as any);
+        await test.service.publish(test.ctx, {
+            id: test.delivery.id,
+            packages: test.packages.map(item => ({ ...item, attachmentAssetIds: ['shared'] })),
+        });
+        expect((await test.service.emailPayload(test.ctx, test.delivery.id)).attachments).toHaveLength(1);
+        test.connection.findByIdsInChannel.mockResolvedValue([]);
+        await expect(test.service.emailPayload(test.ctx, test.delivery.id)).rejects.toThrow('不属于当前店铺');
+    });
     it('does not require a delivery email for a physical-only settled order', async () => {
         const test = createHarness();
 

@@ -428,7 +428,7 @@ describe('cart commands against a real database', () => {
         };
         const rejected = await send(input);
         expect(rejected.status).toBe('REJECTED');
-        expect(rejected.errorCode).toBe('CART_PROJECTION_ERROR');
+        expect(rejected.errorCode).toBe('INSUFFICIENT_STOCK_ERROR');
         expect(rejected.cart.revision).toBe(before.revision);
         expect(await read()).toEqual(before);
         expect((await send(input)).status).toBe('REJECTED');

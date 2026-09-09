@@ -175,21 +175,13 @@ describe('production payment readiness', () => {
         ).toBe(false);
         expect(
             isRegisteredProductionPaymentMethod(
-                method(
-                    'controlled-test-payment-2',
-                    'controlled-test-payment-handler',
-                    '测试支付',
-                ),
+                method('controlled-test-payment-2', 'controlled-test-payment-handler', '测试支付'),
                 new Set(['controlled-test-payment-handler']),
             ),
         ).toBe(true);
         expect(
             isRegisteredProductionPaymentMethod(
-                method(
-                    'controlled-test-payment-2',
-                    'controlled-test-payment-handler',
-                    '测试支付',
-                ),
+                method('controlled-test-payment-2', 'controlled-test-payment-handler', '测试支付'),
                 new Set(),
             ),
         ).toBe(false);

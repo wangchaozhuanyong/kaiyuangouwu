@@ -1,5 +1,11 @@
 /* eslint-disable @typescript-eslint/require-await -- Promotion action mocks preserve async APIs. */
 import { ConfigArg, LanguageCode } from '@vendure/common/lib/generated-types';
+import {
+    Collection,
+    ProductVariant,
+    RequestContextCacheService,
+    TransactionalConnection,
+} from '@vendure/core';
 import { describe, expect, it, vi } from 'vitest';
 
 import { CustomerCoupon } from '../entities/customer-coupon.entity';
@@ -206,8 +212,11 @@ describe('store commerce promotion actions', () => {
 
     it('applies collection discounts only to variants inside a selected category', async () => {
         const findOne = vi.fn(async () => ({ collections: [{ id: 'collection-1' }] }));
+        const find = vi.fn(async () => [{ id: 'collection-1', parentId: 'root' }]);
+        const cache = new RequestContextCacheService();
         await collectionPercentageDiscount.init({
-            get: () => ({ getRepository: () => ({ findOne }) }),
+            get: (token: unknown) =>
+                token === TransactionalConnection ? { getRepository: () => ({ findOne, find }) } : cache,
         } as any);
         const context = { channel: { pricesIncludeTax: true } } as any;
         const line = {
@@ -234,6 +243,73 @@ describe('store commerce promotion actions', () => {
                 {} as any,
             ),
         ).resolves.toBe(0);
+    });
+
+    it('covers all descendant levels without discounting unrelated categories or applying twice', async () => {
+        const findOne = vi.fn().mockResolvedValue({ collections: [{ id: 'grandchild' }, { id: 'child' }] });
+        const find = vi.fn().mockResolvedValue([
+            { id: 'parent', parentId: 'root' },
+            { id: 'child', parentId: 'parent' },
+            { id: 'grandchild', parentId: 'child' },
+            { id: 'unrelated', parentId: 'root' },
+        ]);
+        const getRepository = vi.fn(() => ({ findOne, find }));
+        const cache = new RequestContextCacheService();
+        await collectionPercentageDiscount.init({
+            get: (token: unknown) => (token === TransactionalConnection ? { getRepository } : cache),
+        } as any);
+        const context = { channelId: 'channel-1', channel: { pricesIncludeTax: true } } as any;
+        const line = {
+            unitPrice: 1_000,
+            unitPriceWithTax: 2_000,
+            productVariant: { id: 'variant-1' },
+        } as any;
+        const discount = (collectionIds: string[], ctx = context) =>
+            collectionPercentageDiscount.execute(
+                ctx,
+                line,
+                actionArgs({ discount: 15, collectionIds }),
+                {} as any,
+                {} as any,
+            );
+
+        await expect(discount(['parent'])).resolves.toBe(-300);
+        await expect(discount(['child'])).resolves.toBe(-300);
+        await expect(discount(['parent', 'child', 'grandchild'])).resolves.toBe(-300);
+        await expect(discount(['unrelated'])).resolves.toBe(0);
+        await expect(discount([])).resolves.toBe(0);
+        expect(find).toHaveBeenCalledTimes(1);
+        expect(getRepository).toHaveBeenCalledWith(context, ProductVariant);
+        expect(getRepository).toHaveBeenCalledWith(context, Collection);
+        expect(findOne).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: { id: 'variant-1', channels: { id: 'channel-1' } },
+            }),
+        );
+        expect(find).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: { channels: { id: 'channel-1' }, isRoot: false },
+            }),
+        );
+
+        // A newly added descendant is included on the next request without changing coupon IDs.
+        findOne.mockResolvedValue({ collections: [{ id: 'new-child' }] });
+        find.mockResolvedValue([
+            { id: 'parent', parentId: 'root' },
+            { id: 'new-child', parentId: 'parent' },
+        ]);
+        await expect(discount(['parent'], { ...context })).resolves.toBe(-300);
+        expect(find).toHaveBeenCalledTimes(2);
+
+        // A category outside the current channel cannot bridge into a selected ancestor.
+        find.mockResolvedValue([{ id: 'new-child', parentId: 'parent' }]);
+        await expect(discount(['parent'], { ...context, channelId: 'channel-2' })).resolves.toBe(0);
+
+        find.mockResolvedValue([
+            { id: 'new-child', parentId: 'cycle' },
+            { id: 'cycle', parentId: 'new-child' },
+        ]);
+        await expect(discount(['unrelated'], { ...context })).resolves.toBe(0);
     });
 });
 
