@@ -16,6 +16,7 @@ import {
 } from './query-client';
 import { PageSkeleton } from './route-loading';
 import { acquireBodyScrollLock } from './scroll-lock';
+import { storefrontErrorMessage } from './storefront-errors';
 import { routeNavigateOptions } from './storefront-router';
 import {
     ActiveCustomer,
@@ -149,7 +150,7 @@ export function AddressesPage({
         } catch (requestError) {
             setFormError(
                 requestError instanceof Error
-                    ? requestError.message
+                    ? storefrontErrorMessage(requestError, language)
                     : isZh
                       ? '保存失败'
                       : 'Could not save address',
@@ -167,7 +168,7 @@ export function AddressesPage({
         } catch (requestError) {
             onNotify(
                 requestError instanceof Error
-                    ? requestError.message
+                    ? storefrontErrorMessage(requestError, language)
                     : isZh
                       ? '删除失败'
                       : 'Could not delete address',
@@ -193,7 +194,7 @@ export function AddressesPage({
         } catch (requestError) {
             onNotify(
                 requestError instanceof Error
-                    ? requestError.message
+                    ? storefrontErrorMessage(requestError, language)
                     : isZh
                       ? '设置默认地址失败'
                       : 'Could not set the default address',
@@ -225,7 +226,7 @@ export function AddressesPage({
         } catch (requestError) {
             setFormError(
                 requestError instanceof Error
-                    ? requestError.message
+                    ? storefrontErrorMessage(requestError, language)
                     : isZh
                       ? '保存失败'
                       : 'Could not save email',
@@ -243,7 +244,7 @@ export function AddressesPage({
         } catch (requestError) {
             onNotify(
                 requestError instanceof Error
-                    ? requestError.message
+                    ? storefrontErrorMessage(requestError, language)
                     : isZh
                       ? '删除失败'
                       : 'Could not delete email',
@@ -258,7 +259,7 @@ export function AddressesPage({
         } catch (requestError) {
             onNotify(
                 requestError instanceof Error
-                    ? requestError.message
+                    ? storefrontErrorMessage(requestError, language)
                     : isZh
                       ? '设置默认交付邮箱失败'
                       : 'Could not set default email',

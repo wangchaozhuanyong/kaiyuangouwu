@@ -23,6 +23,7 @@ import { orderStatusRefreshInterval } from './order-refresh';
 import { isTestPaymentMethod, paymentAvailability } from './payment-readiness';
 import { PUBLIC_QUERY_GC_TIME, ROUTE_QUERY_STALE_TIME, storefrontQueryKeys } from './query-client';
 import { PageSkeleton } from './route-loading';
+import { storefrontErrorMessage } from './storefront-errors';
 import { routeNavigateOptions } from './storefront-router';
 import { TaxSummaryRows } from './tax-summary';
 import {
@@ -166,7 +167,7 @@ export function PaymentPage({
         methodsQuery.isPaused && methodsQuery.data === undefined
             ? offlineLoadError(language)
             : methodsQuery.error instanceof Error
-              ? methodsQuery.error.message
+              ? storefrontErrorMessage(methodsQuery.error, language)
               : methodsQuery.error
                 ? isZh
                     ? '支付方式加载失败'
@@ -255,7 +256,7 @@ export function PaymentPage({
         } catch (requestError) {
             setPaymentError(
                 requestError instanceof Error
-                    ? requestError.message
+                    ? storefrontErrorMessage(requestError, language)
                     : isZh
                       ? '返利余额抵扣失败，请重试'
                       : 'Could not apply the referral balance',
@@ -286,7 +287,7 @@ export function PaymentPage({
         } catch (requestError) {
             setPaymentError(
                 requestError instanceof Error
-                    ? requestError.message
+                    ? storefrontErrorMessage(requestError, language)
                     : isZh
                       ? '支付提交失败，请重试'
                       : 'Payment failed. Please try again.',
@@ -411,7 +412,7 @@ export function PaymentPage({
                                     ) : (
                                         <span className="mt-2 block text-sm text-red-600">
                                             {usdtQuoteQuery.error instanceof Error
-                                                ? usdtQuoteQuery.error.message
+                                                ? storefrontErrorMessage(usdtQuoteQuery.error, language)
                                                 : isZh
                                                   ? '暂时无法生成 USDT 报价'
                                                   : 'Could not create a USDT quote'}
@@ -575,10 +576,13 @@ export function PaymentPage({
                                                           : isZh
                                                             ? '可用于当前订单'
                                                             : 'Available for this order')
-                                                    : (method.eligibilityMessage ??
-                                                      (isZh
-                                                          ? '当前订单不可用'
-                                                          : 'Unavailable for this order'))}
+                                                    : storefrontErrorMessage(
+                                                          method.eligibilityMessage,
+                                                          language,
+                                                          isZh
+                                                              ? '当前订单不可用'
+                                                              : 'Unavailable for this order',
+                                                      )}
                                             </small>
                                         </span>
                                         <Check aria-hidden="true" />
@@ -601,12 +605,13 @@ export function PaymentPage({
                             />
                         ) : (
                             <InlineError
-                                message={
-                                    methods[0]?.eligibilityMessage ??
-                                    (isZh
+                                message={storefrontErrorMessage(
+                                    methods[0]?.eligibilityMessage,
+                                    language,
+                                    isZh
                                         ? '当前订单暂不满足支付条件，请返回修改订单'
-                                        : 'This order is not currently eligible for payment. Return to edit it.')
-                                }
+                                        : 'This order is not currently eligible for payment. Return to edit it.',
+                                )}
                             />
                         )}
                         {paymentError && methods.length > 0 && <InlineError message={paymentError} />}
@@ -765,7 +770,7 @@ export function OrderConfirmationPage({
         orderQuery.isPaused && orderQuery.data === undefined
             ? offlineLoadError(language)
             : orderQuery.error instanceof Error
-              ? orderQuery.error.message
+              ? storefrontErrorMessage(orderQuery.error, language)
               : '';
 
     if (loading) {

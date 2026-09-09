@@ -1,5 +1,6 @@
 import type { CartController } from '../cart/cart-controller';
 import type { CartCommand, CartCommandResult } from '../cart/cart-intents';
+import { cartLineCanSelect } from '../product-availability';
 import type {
     CustomerAddressInput,
     CustomerDeliveryEmail,
@@ -169,8 +170,16 @@ export class CartCheckoutApi extends BaseDomainApi {
         expectedRevision: number,
     ): Promise<StorefrontCart> {
         if (this.controller) {
+            const cart = this.controller.getSnapshot().cart ?? (await this.controller.read());
             const acknowledged = await this.controller.execute({
-                changes: { lines: lineIds.map(lineId => ({ lineId, selected })) },
+                changes: {
+                    lines: lineIds.map(lineId => ({
+                        lineId,
+                        selected:
+                            selected &&
+                            Boolean(cart.lines.find(line => line.id === lineId && cartLineCanSelect(line))),
+                    })),
+                },
             });
             return acknowledged.cart;
         }
@@ -200,10 +209,15 @@ export class CartCheckoutApi extends BaseDomainApi {
     async setAllLinesSelected(selected: boolean, expectedRevision: number): Promise<StorefrontCart> {
         if (this.controller) {
             const cart = this.controller.getSnapshot().cart ?? (await this.controller.read());
-            const lines = cart.lines.filter(line => !selected || (line.available && line.productVariant));
+            const lines = cart.lines;
             return (
                 await this.controller.execute({
-                    changes: { lines: lines.map(line => ({ lineId: line.id, selected })) },
+                    changes: {
+                        lines: lines.map(line => ({
+                            lineId: line.id,
+                            selected: selected && cartLineCanSelect(line),
+                        })),
+                    },
                 })
             ).cart;
         }

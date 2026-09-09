@@ -327,6 +327,7 @@ export const cartResultFields = `
     __typename
     ... on StorefrontCart { ${cartFields} }
     ... on ErrorResult { errorCode message }
+    ... on CartProjectionError { causeCode }
 `;
 
 export const checkoutResultFields = `
@@ -337,4 +338,5 @@ export const checkoutResultFields = `
         checkout { id cartRevision state completedAt }
     }
     ... on ErrorResult { errorCode message }
+    ... on CartProjectionError { causeCode }
 `;

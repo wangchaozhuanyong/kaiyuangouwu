@@ -28,6 +28,9 @@ describe('homepage module spacing', () => {
         expect(stylesheet).toMatch(/\.quick-grid b\s*\{[^}]*min-height:\s*0;[^}]*margin-top:\s*0;/);
         expect(stylesheet).toMatch(/\.home-dual-showcase\s*\{[^}]*margin:\s*12px;/);
         expect(stylesheet).toMatch(/\.legal-footer\s*\{[^}]*margin:\s*0 12px;/);
+        expect(stylesheet).toMatch(
+            /html\[lang='en'\] \.quick-grid b\s*\{[^}]*min-height:\s*36px;[^}]*-webkit-line-clamp:\s*3;/,
+        );
     });
 
     it('uses the same hierarchy with desktop spacing values', () => {
@@ -37,6 +40,9 @@ describe('homepage module spacing', () => {
                     '[^}]*--homepage-module-gap:\\s*16px;[^}]*--homepage-section-gap:\\s*24px;' +
                     '[^}]*padding-top:\\s*16px;',
             ),
+        );
+        expect(stylesheet).toMatch(
+            /html\[lang='en'\] \.home-intro-grid \.quick-grid b\s*\{[^}]*min-height:\s*30px;[^}]*white-space:\s*normal;[^}]*-webkit-line-clamp:\s*2;/,
         );
     });
 

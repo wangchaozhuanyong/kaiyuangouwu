@@ -10,6 +10,7 @@ import { languageCodeFor } from '../i18n';
 import { offlineLoadError } from '../loading-state';
 import { PUBLIC_QUERY_GC_TIME, ROUTE_QUERY_STALE_TIME, storefrontQueryKeys } from '../query-client';
 import { PageSkeleton } from '../route-loading';
+import { storefrontErrorMessage } from '../storefront-errors';
 import { NotificationsPageContext } from '../storefront-page-contexts';
 import { routeNavigateOptions } from '../storefront-router';
 import { afterSalesNotification, orderNotification } from '../storefront-ui/order-ui';
@@ -68,7 +69,7 @@ export function NotificationsPage() {
                         afterSalesQuery.isPaused
                             ? offlineLoadError(language)
                             : afterSalesQuery.error instanceof Error
-                              ? afterSalesQuery.error.message
+                              ? storefrontErrorMessage(afterSalesQuery.error, language)
                               : ''
                     }
                     action={isZh ? '重试' : 'Retry'}

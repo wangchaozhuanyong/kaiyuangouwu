@@ -12,7 +12,9 @@ import {
 import { useProductsByIdsQuery } from '../route-queries';
 import { contentStringArraySetting } from '../storefront-utils';
 
+import { storefrontErrorMessage } from '../storefront-errors';
 import { type StorefrontQueryContext } from './storefront-query-context';
+
 export function useStorefrontPublicData({
     api,
     market,
@@ -22,8 +24,8 @@ export function useStorefrontPublicData({
 }: StorefrontQueryContext) {
     const text = uiCopy[language];
     const productsQuery = useQuery({
-        queryKey: storefrontQueryKeys.products(storefrontQueryKeys.market(market), vendureLanguageCode, 16),
-        queryFn: ({ signal }) => api.products(16, signal),
+        queryKey: storefrontQueryKeys.products(storefrontQueryKeys.market(market), vendureLanguageCode, 12),
+        queryFn: ({ signal }) => api.products(12, signal),
         enabled: storefrontContextResolved,
         staleTime: PUBLIC_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
@@ -44,8 +46,6 @@ export function useStorefrontPublicData({
         queryFn: ({ signal }) => api.storefrontConfig(signal),
         staleTime: PUBLIC_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
-        refetchOnWindowFocus: 'always',
-        refetchInterval: 60_000,
     });
 
     const contentQuery = useQuery({
@@ -55,7 +55,6 @@ export function useStorefrontPublicData({
         staleTime: PUBLIC_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
         meta: publicQueryMeta(),
-        refetchInterval: 60_000,
     });
 
     const commerceModeQuery = useQuery({
@@ -65,7 +64,6 @@ export function useStorefrontPublicData({
         staleTime: PUBLIC_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
         meta: publicQueryMeta(),
-        refetchInterval: 60_000,
     });
 
     const rawProducts = productsQuery.data ?? [];
@@ -128,7 +126,7 @@ export function useStorefrontPublicData({
     const error = publicPaused
         ? offlineLoadError(language)
         : publicQueryError instanceof Error
-          ? publicQueryError.message
+          ? storefrontErrorMessage(publicQueryError, language)
           : publicQueryError
             ? text.loadError
             : null;
@@ -148,7 +146,7 @@ export function useStorefrontPublicData({
           : contentQuery.data !== undefined
             ? ''
             : contentQuery.error instanceof Error
-              ? contentQuery.error.message
+              ? storefrontErrorMessage(contentQuery.error, language)
               : contentQuery.error
                 ? text.loadError
                 : '';

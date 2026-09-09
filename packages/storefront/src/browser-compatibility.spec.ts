@@ -66,6 +66,19 @@ describe('browser compatibility policy', () => {
         );
     });
 
+    it('uses the tablet canvas before switching to the desktop shell', () => {
+        expect(stylesheet).toMatch(
+            /@media \(min-width:\s*431px\) and \(max-width:\s*1023px\)\s*\{[\s\S]*?:root\s*\{[^}]*--app-width:\s*960px;/u,
+        );
+    });
+
+    it('keeps audited high-frequency touch controls at least 44px tall', () => {
+        expect(stylesheet).toMatch(/\.currency-select\s*\{[^}]*height:\s*44px;/u);
+        expect(stylesheet).toMatch(/\.sort-bar button\s*\{[^}]*height:\s*44px;/u);
+        expect(stylesheet).toMatch(/\.detail-options > div button\s*\{[^}]*min-height:\s*44px;/u);
+        expect(stylesheet).toMatch(/\.cart-line-actions > div button\s*\{[^}]*height:\s*44px;/u);
+    });
+
     it('asks 360 dual-engine browsers to use their WebKit speed mode', () => {
         expect(indexHtml).toContain('<meta name="renderer" content="webkit" />');
         expect(indexHtml).toContain('<meta http-equiv="X-UA-Compatible" content="IE=edge" />');

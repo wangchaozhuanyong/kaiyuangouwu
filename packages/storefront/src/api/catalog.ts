@@ -20,7 +20,7 @@ const STOREFRONT_CATALOG_MAX_TAKE = 48;
 export class CatalogApi extends BaseDomainApi {
     private storefrontCatalogAvailable: boolean | null = null;
 
-    async products(take = 16, signal?: AbortSignal): Promise<Product[]> {
+    async products(take = 12, signal?: AbortSignal): Promise<Product[]> {
         const result = await this.request<{ products: { items: Product[] } }>(
             `
             query StorefrontProducts($options: ProductListOptions) {

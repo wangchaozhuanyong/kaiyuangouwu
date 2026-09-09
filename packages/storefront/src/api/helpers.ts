@@ -31,7 +31,7 @@ export interface StorefrontContentQueryResult {
 
 export interface GraphQlResponse<T> {
     data?: T;
-    errors?: Array<{ message: string }>;
+    errors?: Array<{ message: string; extensions?: { code?: string } }>;
 }
 
 export interface ErrorResult {
@@ -39,6 +39,7 @@ export interface ErrorResult {
     errorCode?: string;
     message?: string;
     authenticationError?: string;
+    causeCode?: string;
 }
 
 export function authTokenStorageKey(marketCode: string): string | null {
@@ -265,6 +266,7 @@ export class ShopApiGraphQlError extends Error {
     constructor(
         readonly messages: string[],
         readonly status: number,
+        readonly errorCode?: string,
     ) {
         super(messages[0] ?? `Shop API request failed (${status})`);
         this.name = 'ShopApiGraphQlError';
@@ -276,20 +278,24 @@ export function parseShopApiResponse<T>(rawBody: string, status: number, ok: boo
     try {
         body = JSON.parse(rawBody) as GraphQlResponse<T>;
     } catch {
-        throw new Error(
-            rawBody.trim()
-                ? `Shop API returned an invalid response (${status})`
-                : `Shop API did not respond (${status})`,
+        throw new ShopApiGraphQlError(
+            [
+                rawBody.trim()
+                    ? `Shop API returned an invalid response (${status})`
+                    : `Shop API did not respond (${status})`,
+            ],
+            status,
         );
     }
     if (body.errors?.length) {
         throw new ShopApiGraphQlError(
             body.errors.map(error => error.message),
             status,
+            body.errors[0].extensions?.code,
         );
     }
     if (!ok || !body.data) {
-        throw new Error(body.errors?.[0]?.message ?? `Shop API request failed (${status})`);
+        throw new ShopApiGraphQlError([`Shop API request failed (${status})`], status);
     }
     return body.data;
 }

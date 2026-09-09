@@ -1,6 +1,11 @@
 import { CircleAlert } from 'lucide-react';
 
-import { interpolateLegalProfileTokens, resolveManagedLegalDocument } from '../legal-content';
+import {
+    interpolateLegalProfileTokens,
+    legalScopeHostname,
+    resolveManagedLegalDocument,
+    resolveManagedLegalIdentity,
+} from '../legal-content';
 import { SubHeader } from '../storefront-ui/page-shell';
 import { StorefrontContentBlock, StorefrontLanguage, StorefrontLegalIdentity } from '../types';
 
@@ -10,6 +15,7 @@ export interface ManagedLegalPageProps {
     storefrontName: string;
     contentBlocks: StorefrontContentBlock[];
     legalIdentity?: StorefrontLegalIdentity;
+    storefrontHostname?: string;
     onBack: () => void;
 }
 
@@ -19,6 +25,7 @@ export function ManagedLegalPage({
     storefrontName,
     contentBlocks,
     legalIdentity,
+    storefrontHostname,
     onBack,
 }: ManagedLegalPageProps) {
     const isZh = language === 'zh';
@@ -30,27 +37,41 @@ export function ManagedLegalPage({
         : isZh
           ? '使用条款'
           : 'Terms of use';
-    const document = resolveManagedLegalDocument(contentBlocks, kind, fallbackTitle);
-    const title = interpolateLegalProfileTokens(document?.title ?? fallbackTitle, legalIdentity, language);
+    const activeHostname = legalScopeHostname(
+        storefrontName,
+        storefrontHostname ?? (typeof window === 'undefined' ? undefined : window.location.hostname),
+    );
+    const scopedLegalIdentity = resolveManagedLegalIdentity(legalIdentity, activeHostname);
+    const document = resolveManagedLegalDocument(
+        contentBlocks,
+        kind,
+        fallbackTitle,
+        activeHostname,
+    );
+    const title = interpolateLegalProfileTokens(
+        document?.title ?? fallbackTitle,
+        scopedLegalIdentity,
+        language,
+    );
     const legalDetails = [
         {
             label: isZh ? '法定经营主体' : 'Legal entity',
-            value: legalIdentity?.legalEntityName,
+            value: scopedLegalIdentity?.legalEntityName,
             isEmail: false,
         },
         {
             label: isZh ? '注册国家/地区' : 'Registration country/region',
-            value: legalIdentity?.legalRegistrationCountry,
+            value: scopedLegalIdentity?.legalRegistrationCountry,
             isEmail: false,
         },
         {
             label: isZh ? '客服邮箱' : 'Support email',
-            value: legalIdentity?.supportEmail,
+            value: scopedLegalIdentity?.supportEmail,
             isEmail: true,
         },
         {
             label: isZh ? '隐私邮箱' : 'Privacy email',
-            value: legalIdentity?.privacyEmail,
+            value: scopedLegalIdentity?.privacyEmail,
             isEmail: true,
         },
     ].filter((detail): detail is { label: string; value: string; isEmail: boolean } =>
@@ -63,7 +84,13 @@ export function ManagedLegalPage({
             <article className="legal-managed-content">
                 {document?.subtitle && (
                     <header className="legal-managed-intro">
-                        <p>{interpolateLegalProfileTokens(document.subtitle, legalIdentity, language)}</p>
+                        <p>
+                            {interpolateLegalProfileTokens(
+                                document.subtitle,
+                                scopedLegalIdentity,
+                                language,
+                            )}
+                        </p>
                     </header>
                 )}
                 {legalDetails.length > 0 ? (
@@ -87,7 +114,7 @@ export function ManagedLegalPage({
                 ) : null}
                 {document ? (
                     <div className="legal-managed-body">
-                        {interpolateLegalProfileTokens(document.body, legalIdentity, language)}
+                        {interpolateLegalProfileTokens(document.body, scopedLegalIdentity, language)}
                     </div>
                 ) : (
                     <div className="legal-managed-empty" role="status">

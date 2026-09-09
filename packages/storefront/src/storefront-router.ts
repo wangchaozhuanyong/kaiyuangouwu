@@ -35,9 +35,15 @@ export type RouteName =
     | 'not-found';
 export type OrderTab = 'all' | 'pending' | 'shipping' | 'receiving' | 'service';
 export type SortMode = ProductSearchSort;
+export type CheckoutRouteName = 'purchase' | 'checkout' | 'payment';
+
+export function isCheckoutRoute(name: string): name is CheckoutRouteName {
+    return name === 'purchase' || name === 'checkout' || name === 'payment';
+}
 
 export interface RouteState {
     name: RouteName;
+    returnTo?: CheckoutRouteName;
     id?: string;
     tab?: OrderTab;
     token?: string;
@@ -158,7 +164,9 @@ export function normalizeRouteSearch(search: Record<string, unknown>): Storefron
     const tab = stringValue('tab');
     const sort = stringValue('sort');
     const fulfillment = stringValue('fulfillment');
+    const returnTo = stringValue('returnTo');
     return {
+        returnTo: returnTo && isCheckoutRoute(returnTo) ? returnTo : undefined,
         id: stringValue('id'),
         tab: orderTabs.includes(tab as OrderTab) ? (tab as OrderTab) : undefined,
         token: stringValue('token'),
@@ -204,6 +212,7 @@ export function routeFromLocation(): RouteState {
 export function routeHref(route: RouteState): string {
     const params = new URLSearchParams();
     const search = routeSearch(route);
+    if (search.returnTo) params.set('returnTo', search.returnTo);
     if (search.id) params.set('id', search.id);
     if (search.tab) params.set('tab', search.tab);
     if (search.token) params.set('token', search.token);

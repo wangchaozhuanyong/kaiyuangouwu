@@ -173,6 +173,25 @@ describe('storefront realtime query targeting', () => {
         ).toBe(false);
     });
 
+    it('refreshes the language-independent commerce mode only for the active store', () => {
+        const changed = event({ topics: ['config'] });
+
+        expect(
+            storefrontRealtimeQueryMatches(
+                { queryKey: storefrontQueryKeys.commerceMode('store-a') },
+                changed,
+                scope,
+            ),
+        ).toBe(true);
+        expect(
+            storefrontRealtimeQueryMatches(
+                { queryKey: storefrontQueryKeys.commerceMode('store-b') },
+                changed,
+                scope,
+            ),
+        ).toBe(false);
+    });
+
     it('targets private order and coupon queries for the active customer', () => {
         const changed = event({ topics: ['orders', 'coupons'] });
 

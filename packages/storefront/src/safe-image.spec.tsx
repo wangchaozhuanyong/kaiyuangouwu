@@ -4,17 +4,45 @@ import { describe, expect, it } from 'vitest';
 import { SafeImage } from './storefront-ui/product-display';
 
 describe('SafeImage', () => {
-    it('renders an automatic placeholder and high-resolution responsive source for uploaded images', () => {
-        const markup = renderToStaticMarkup(
-            <SafeImage src="/assets/preview/product.jpg" alt="Product" imageKind="card" loading="lazy" />,
-        );
+    it.each(['card', 'detail', 'thumbnail'] as const)(
+        'loads %s images at responsive resolution without enlarging a tiny placeholder',
+        imageKind => {
+            const markup = renderToStaticMarkup(
+                <SafeImage
+                    src="/assets/preview/product.jpg"
+                    alt="Product"
+                    imageKind={imageKind}
+                    loading="lazy"
+                />,
+            );
 
-        expect(markup).toContain('safe-image-frame');
+            expect(markup).toContain('safe-image-frame');
+            expect(markup).not.toContain('has-placeholder');
+            expect(markup).not.toContain('background-image');
+            expect(markup).not.toContain('storefront-placeholder');
+            expect(markup).toContain('srcSet=');
+            expect(markup).toContain('q=90');
+            expect(markup).not.toContain('safe-image is-loaded');
+        },
+    );
+
+    it('preserves automatic hero and explicitly requested placeholders', () => {
+        const hero = renderToStaticMarkup(
+            <SafeImage src="/assets/preview/banner.jpg" alt="Banner" imageKind="hero" />,
+        );
+        expect(hero).toContain('storefront-placeholder-wide-64');
+
+        const markup = renderToStaticMarkup(
+            <SafeImage
+                src="/assets/preview/product.jpg"
+                placeholderSrc="/assets/preview/cover.jpg"
+                alt="Product"
+                imageKind="card"
+            />,
+        );
         expect(markup).toContain('has-placeholder');
         expect(markup).toContain('storefront-placeholder-square-48');
         expect(markup).toContain('storefront-card-square-960');
-        expect(markup).toContain('q=90');
-        expect(markup).not.toContain('safe-image is-loaded');
     });
 
     it('keeps a stable frame for external images while they decode', () => {

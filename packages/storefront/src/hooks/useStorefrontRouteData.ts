@@ -11,7 +11,9 @@ import {
 import { RouteState } from '../storefront-router';
 import { ActiveCustomer } from '../types';
 
+import { storefrontErrorMessage } from '../storefront-errors';
 import { type StorefrontQueryContext } from './storefront-query-context';
+
 export function useStorefrontRouteData({
     api,
     market,
@@ -52,7 +54,7 @@ export function useStorefrontRouteData({
         productQuery.isPaused && productQuery.data === undefined
             ? offlineLoadError(language)
             : productQuery.error instanceof Error
-              ? productQuery.error.message
+              ? storefrontErrorMessage(productQuery.error, language)
               : '';
 
     const orderQuery = useQuery({
@@ -82,7 +84,7 @@ export function useStorefrontRouteData({
         orderQuery.isPaused && orderQuery.data === undefined
             ? offlineLoadError(language)
             : orderQuery.error instanceof Error
-              ? orderQuery.error.message
+              ? storefrontErrorMessage(orderQuery.error, language)
               : '';
     return {
         productQuery,

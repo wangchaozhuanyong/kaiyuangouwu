@@ -53,7 +53,7 @@ describe('ProductGallery interactions', () => {
         expect(container.querySelector('.gallery-count')?.textContent).toMatch(new RegExp(`^${index} /`));
     }
 
-    it('selects other images with matching placeholders and keeps selection on unchanged data refetches', () => {
+    it('selects other images without blurry placeholders and keeps selection on unchanged data refetches', () => {
         render(product);
         expectImage(cover.preview, 1);
         selectSecondImage();
@@ -61,9 +61,7 @@ describe('ProductGallery interactions', () => {
         expect(container.querySelector('[aria-current="true"]')?.getAttribute('aria-label')).toBe(
             '查看第2张商品图',
         );
-        expect(container.querySelector<HTMLElement>('.safe-image-frame')?.style.backgroundImage).toContain(
-            detail.preview,
-        );
+        expect(container.querySelector<HTMLElement>('.safe-image-frame')?.style.backgroundImage).toBe('');
 
         render({ ...product, assets: product.assets.map(asset => ({ ...asset })), name: 'Updated name' });
         expectImage(detail.preview, 2);
@@ -95,15 +93,13 @@ describe('ProductGallery interactions', () => {
         expect(container.querySelector('.gallery-dots')).toBeNull();
     });
 
-    it('refreshes the image and placeholder when an asset keeps its ID but changes preview', () => {
+    it('refreshes the image without a blurry placeholder when an asset keeps its ID but changes preview', () => {
         render(product);
         selectSecondImage();
         const updatedCover = { ...cover, preview: '/assets/preview/updated-cover.png' };
         render({ ...product, featuredAsset: updatedCover });
         expectImage(updatedCover.preview, 1);
-        expect(container.querySelector<HTMLElement>('.safe-image-frame')?.style.backgroundImage).toContain(
-            updatedCover.preview,
-        );
+        expect(container.querySelector<HTMLElement>('.safe-image-frame')?.style.backgroundImage).toBe('');
     });
 
     it('handles removing all media and later adding a separately managed cover', () => {

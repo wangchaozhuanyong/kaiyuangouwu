@@ -29,6 +29,8 @@ export function LoginRoutePage() {
     return (
         <AuthRouteBoundary>
             <LazyLoginPage
+                returnTo={runtime.route.returnTo}
+                returnVariantId={runtime.route.id}
                 api={runtime.api}
                 language={runtime.language}
                 logoUrl={runtime.logoUrl}
@@ -48,6 +50,8 @@ export function RegisterRoutePage() {
     return (
         <AuthRouteBoundary>
             <LazyRegisterPage
+                returnTo={runtime.route.returnTo}
+                returnVariantId={runtime.route.id}
                 api={runtime.api}
                 language={runtime.language}
                 logoUrl={runtime.logoUrl}
@@ -66,6 +70,8 @@ export function VerifyAccountRoutePage() {
     return (
         <AuthRouteBoundary>
             <LazyVerifyAccountPage
+                returnTo={runtime.route.returnTo}
+                returnVariantId={runtime.route.id}
                 api={runtime.api}
                 language={runtime.language}
                 logoUrl={runtime.logoUrl}
@@ -83,6 +89,8 @@ export function ForgotPasswordRoutePage() {
     return (
         <AuthRouteBoundary>
             <LazyForgotPasswordPage
+                returnTo={runtime.route.returnTo}
+                returnVariantId={runtime.route.id}
                 api={runtime.api}
                 language={runtime.language}
                 logoUrl={runtime.logoUrl}
@@ -99,6 +107,8 @@ export function ResetPasswordRoutePage() {
     return (
         <AuthRouteBoundary>
             <LazyResetPasswordPage
+                returnTo={runtime.route.returnTo}
+                returnVariantId={runtime.route.id}
                 api={runtime.api}
                 language={runtime.language}
                 logoUrl={runtime.logoUrl}

@@ -331,6 +331,17 @@
     color: #142033;
 }
 
+html[lang='en'] .quick-grid button {
+    min-height: 102px;
+}
+
+html[lang='en'] .quick-grid b {
+    min-height: 36px;
+    font-size: 10.5px;
+    line-height: 12px;
+    -webkit-line-clamp: 3;
+}
+
 /* Coupon Hub Promotion Section (消除框中框，完全对齐 preview.html) */
 .coupon-hub-section {
     margin: 6px 0 14px;
@@ -2506,6 +2517,38 @@
         box-shadow 160ms ease;
 }
 
+html[lang='en'] .primary-category-image {
+    width: 34px;
+    height: 34px;
+}
+
+html[lang='en'] .primary-category-label {
+    height: 48px;
+    padding: 0 2px;
+    border-radius: 6px;
+    display: -webkit-box;
+    font-size: 10.5px;
+    line-height: 12px;
+    text-overflow: clip;
+    white-space: normal;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 4;
+}
+
+html[lang='en'] .primary-category-switcher {
+    height: 106px;
+}
+
+html[lang='en'] .primary-category-strip {
+    height: 105px;
+}
+
+html[lang='en'] .primary-categories button {
+    width: 80px;
+    min-width: 80px;
+    height: 92px;
+}
+
 .primary-categories button.is-active {
     color: var(--accent);
     font-weight: var(--font-weight-bold);
@@ -2718,6 +2761,22 @@
     white-space: nowrap;
 }
 
+html[lang='en'] .all-primary-category-grid button {
+    min-height: 107px;
+}
+
+html[lang='en'] .all-primary-category-grid button > span:last-child {
+    min-height: 60px;
+    padding: 1px 3px;
+    border-radius: 6px;
+    display: -webkit-box;
+    line-height: 15px;
+    text-overflow: clip;
+    white-space: normal;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 4;
+}
+
 .all-primary-category-grid button.is-active {
     color: var(--accent);
     font-weight: var(--font-weight-semibold);
@@ -2821,6 +2880,10 @@
     display: none;
 }
 
+.subcat-expand-toggle {
+    display: none;
+}
+
 .subcat-side-item {
     min-height: 48px;
     padding: 10px 6px;
@@ -2860,8 +2923,8 @@
 }
 
 .subcat-side-all {
-    height: 38px;
-    min-height: 38px;
+    height: 44px;
+    min-height: 44px;
     padding-block: 0;
     flex-direction: row;
     flex-shrink: 0;
@@ -2905,7 +2968,7 @@
     z-index: 6;
     background: #ffffff;
     border-bottom: 1px solid #f1f5f9;
-    height: 38px;
+    height: 44px;
     flex-shrink: 0;
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
 }
@@ -3246,7 +3309,7 @@
     width: 100%;
     height: 100%;
     aspect-ratio: 1 / 1;
-    object-fit: cover;
+    object-fit: contain;
     object-position: center;
     display: block;
     border-radius: 9px;

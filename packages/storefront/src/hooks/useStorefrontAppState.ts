@@ -1,7 +1,9 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { cartLineCanSelect } from '../product-availability';
 
 import { ShopApiError } from '../api';
+import { resumeAuthenticatedCheckout } from '../checkout-authentication';
 import { storefrontQueryKeys } from '../query-client';
 import { invalidateStorefrontRealtimeQueries } from '../realtime-updates';
 import { scopedStorageKey } from '../storefront-storage';
@@ -15,6 +17,7 @@ import {
 } from '../storefront-utils';
 import { ActiveCustomer, CreateAfterSalesRequestInput, Order, StorefrontCart } from '../types';
 
+import { storefrontErrorMessage } from '../storefront-errors';
 import { useStorefrontBootstrap } from './useStorefrontBootstrap';
 import { useStorefrontCartActions } from './useStorefrontCartActions';
 import { useStorefrontCoupons } from './useStorefrontCoupons';
@@ -247,6 +250,7 @@ export function useStorefrontAppState() {
         useStorefrontCartActions({
             api,
             cart,
+            customer,
             cartController,
             isZh,
             text,
@@ -295,7 +299,11 @@ export function useStorefrontAppState() {
                 notify(isZh ? '订单已恢复，可以继续修改' : 'Order restored for editing');
                 navigate({ name: 'cart' });
             } catch (requestError) {
-                setCartError(requestError instanceof Error ? requestError.message : text.loadError);
+                setCartError(
+                    requestError instanceof Error
+                        ? storefrontErrorMessage(requestError, language)
+                        : text.loadError,
+                );
                 navigate({ name: 'cart' });
             } finally {
                 setCartLoading(false);
@@ -381,6 +389,10 @@ export function useStorefrontAppState() {
 
     const beginCheckout = useCallback(async () => {
         if (!cart || cart.selectedQuantity === 0) return;
+        if (!customer) {
+            navigate({ name: 'login', returnTo: 'checkout' });
+            return;
+        }
         setCartLoading(true);
         setCartError(null);
         try {
@@ -399,35 +411,42 @@ export function useStorefrontAppState() {
                         ? '购物车已更新，请确认后重新结算'
                         : 'Your cart was updated. Please review it and try again.',
                 );
-            } else if (
-                requestError instanceof ShopApiError &&
-                (requestError.errorCode === 'CART_PROJECTION_ERROR' ||
-                    requestError.message.includes('synchronized to checkout'))
-            ) {
-                setCartError(
-                    isZh
-                        ? '所选商品库存不足或已售罄，请调整后重新结算'
-                        : 'Selected items are out of stock. Please adjust your cart.',
-                );
             } else {
-                setCartError(requestError instanceof Error ? requestError.message : text.loadError);
+                setCartError(storefrontErrorMessage(requestError, language, text.loadError));
             }
         } finally {
             setCartLoading(false);
         }
-    }, [api, cart, isZh, navigate, refreshCart, text.loadError]);
+    }, [api, cart, customer, isZh, navigate, refreshCart, text.loadError]);
 
     const completeAuthentication = useCallback(async () => {
         cartController.reset();
         clearPrivateQueryCache();
         const [nextCustomer, nextCart] = await Promise.all([api.activeCustomer(), api.cart()]);
+        if (!nextCustomer) {
+            throw new Error(
+                isZh ? '登录状态尚未确认，请重新登录' : 'Sign-in could not be confirmed. Try again.',
+            );
+        }
         setCustomer(nextCustomer);
         setCart(nextCart);
         setCartError(null);
         setCheckoutOrder(nextCart.checkoutOrder);
-        notify(isZh ? '登录成功' : 'Signed in');
-        navigate({ name: 'account' }, true);
-    }, [api, clearPrivateQueryCache, isZh, navigate, notify]);
+        try {
+            const resumed = await resumeAuthenticatedCheckout(api, cartController, nextCart, route);
+            setCart(resumed.cart);
+            setCheckoutOrder(resumed.order);
+            notify(isZh ? '登录成功' : 'Signed in');
+            navigate(resumed.route, true);
+        } catch {
+            const message = isZh
+                ? '已登录，请在购物车确认商品后重新结算'
+                : 'Signed in. Review your cart and try checkout again.';
+            setCartError(message);
+            notify(message);
+            navigate({ name: 'cart' }, true);
+        }
+    }, [api, cartController, clearPrivateQueryCache, isZh, navigate, notify, route]);
 
     const selectedProduct = route.id
         ? ((routeProduct?.id === route.id ? routeProduct : null) ??
@@ -514,7 +533,10 @@ export function useStorefrontAppState() {
                         : `Prices switched to ${currencyCode}`,
                 );
             } catch (requestError) {
-                const message = requestError instanceof Error ? requestError.message : text.loadError;
+                const message =
+                    requestError instanceof Error
+                        ? storefrontErrorMessage(requestError, language)
+                        : text.loadError;
                 setCartError(message);
                 notify(message);
             } finally {
@@ -589,7 +611,7 @@ export function useStorefrontAppState() {
             void api.setLinesSelected(ids, selected, cart?.revision ?? 0).catch(() => undefined);
         },
         toggleAllCartLines: () => {
-            const available = cart?.lines.filter(line => line.available && line.productVariant) ?? [];
+            const available = cart?.lines.filter(cartLineCanSelect) ?? [];
             void api
                 .setAllLinesSelected(
                     available.some(line => !line.selected),
@@ -597,7 +619,9 @@ export function useStorefrontAppState() {
                 )
                 .catch(() => undefined);
         },
-        cartError: cartState.error ?? cartError ?? cartQueryError,
+        cartError: cartState.error
+            ? storefrontErrorMessage(cartState.error, language)
+            : (cartError ?? cartQueryError),
         cartLoadState,
         cartQueryError,
         cartQuery,

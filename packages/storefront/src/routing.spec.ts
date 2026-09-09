@@ -8,6 +8,22 @@ import {
 } from './storefront-router';
 
 describe('storefront routing', () => {
+    it('round-trips checkout login destinations and rejects arbitrary redirect targets', () => {
+        for (const returnTo of ['purchase', 'checkout', 'payment'] as const) {
+            const href = routeHref({ name: 'login', returnTo, id: 'variant-42' });
+            expect(routeFromHash(`#${href}`)).toMatchObject({ name: 'login', returnTo, id: 'variant-42' });
+        }
+        for (const returnTo of [
+            'https://example.com',
+            '//example.com',
+            '/payment',
+            'account',
+            ['checkout'],
+        ]) {
+            expect(routeFromRouterLocation('/login', { returnTo }).returnTo).toBeUndefined();
+        }
+    });
+
     it('restores each category history entry independently of later filter changes', () => {
         const category = { pathname: '/category', href: '/category?collectionId=one' };
         expect(getStorefrontScrollRestorationKey({ ...category, state: { __TSR_key: 'browse-one' } })).toBe(

@@ -1,3 +1,4 @@
+import { storefrontErrorMessage } from '../storefront-errors';
 /* eslint-disable max-len -- compact bilingual UI copy and class lists are intentional. */
 import {
     ArrowDownToLine,
@@ -205,7 +206,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                 );
             }
         } catch (error) {
-            if (epoch === loadEpoch.current) setLoadError(errorMessage(error));
+            if (epoch === loadEpoch.current) setLoadError(storefrontErrorMessage(error, isZh ? 'zh' : 'en'));
         } finally {
             if (epoch === loadEpoch.current) setLoading(false);
         }
@@ -499,7 +500,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                     );
                     return true;
                 } catch (error) {
-                    const message = errorMessage(error);
+                    const message = storefrontErrorMessage(error, isZh ? 'zh' : 'en');
                     setReferenceItems(current =>
                         current.map(currentItem =>
                             currentItem.id === item.id
@@ -607,7 +608,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
             await api.cancelQueuedImageGeneration(id);
             await load();
         } catch (error) {
-            setActionError(errorMessage(error));
+            setActionError(storefrontErrorMessage(error, isZh ? 'zh' : 'en'));
         }
     };
     const deleteJob = async () => {
@@ -620,7 +621,7 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
             if (selectedJobId === id) setSelectedJobId(null);
             await load();
         } catch (error) {
-            setActionError(errorMessage(error));
+            setActionError(storefrontErrorMessage(error, isZh ? 'zh' : 'en'));
         } finally {
             setDeletingJobId(null);
         }
@@ -1500,7 +1501,14 @@ function GenerationCard({
                     </div>
                 ) : job.errorMessage ? (
                     <span className="ai-generation-error-copy">
-                        {job.errorMessage}
+                        {storefrontErrorMessage(
+                            {
+                                errorCode:
+                                    job.outputs.find(output => output.failureCode)?.failureCode ?? undefined,
+                                message: job.errorMessage ?? undefined,
+                            },
+                            isZh ? 'zh' : 'en',
+                        )}
                         {failureSuggestion(job.outputs.find(output => output.failureCode)?.failureCode, isZh)}
                     </span>
                 ) : null}
@@ -1701,7 +1709,13 @@ function GenerationDetail({
                                     <span>{stateLabel(output.state, isZh)}</span>
                                     {output.errorMessage ? (
                                         <small>
-                                            {output.errorMessage}
+                                            {storefrontErrorMessage(
+                                                {
+                                                    errorCode: output.failureCode ?? undefined,
+                                                    message: output.errorMessage ?? undefined,
+                                                },
+                                                isZh ? 'zh' : 'en',
+                                            )}
                                             {failureSuggestion(output.failureCode, isZh)}
                                         </small>
                                     ) : null}
@@ -2116,7 +2130,7 @@ function actionErrorMessage(error: unknown, isZh: boolean): string {
             ? '提交结果暂时无法确认。请保持当前参数后重试，系统会复用同一请求，不会重复创建任务。'
             : 'The result is temporarily unknown. Retry with the same settings to reuse this request.';
     }
-    return errorMessage(error);
+    return storefrontErrorMessage(error, isZh ? 'zh' : 'en');
 }
 function failureSuggestion(failureCode: string | null | undefined, isZh: boolean): string {
     if (!failureCode) return '';
@@ -2130,7 +2144,4 @@ function failureSuggestion(failureCode: string | null | undefined, isZh: boolean
         return isZh ? ' 可降低清晰度或更换画幅后重试。' : ' Try a lower resolution or another aspect ratio.';
     }
     return isZh ? ' 可稍后重新创作。' : ' You can retry this generation later.';
-}
-function errorMessage(error: unknown): string {
-    return error instanceof Error ? error.message : String(error);
 }

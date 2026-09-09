@@ -62,6 +62,45 @@ function formatManualDeliverySla(minutesInput: number, isZh: boolean): string {
     return isZh ? `${minutes}分钟` : `${minutes} minutes`;
 }
 
+export function productVariantOptionLabel(
+    product: Product,
+    variant: ProductVariant,
+    index: number,
+    locale: string,
+    language: StorefrontLanguage,
+): string {
+    const fallback = `${language === 'zh' ? '规格' : 'Option'} ${index + 1}`;
+    const name = variant.name.trim();
+    if (!name) return fallback;
+    const normalizedName = name.toLocaleLowerCase();
+    const sameNameVariants = product.variants.filter(
+        item => item.name.trim().toLocaleLowerCase() === normalizedName,
+    );
+    if (sameNameVariants.length < 2) return name;
+
+    const packaging = product.packaging?.enabled ? product.packaging : null;
+    const packagingLabel =
+        packaging?.unitVariant.id === variant.id
+            ? packaging.unitLabel.trim()
+            : packaging?.packageVariant.id === variant.id
+              ? packaging.packageLabel.trim()
+              : '';
+    if (
+        packagingLabel &&
+        packaging?.unitLabel.trim().toLocaleLowerCase() !== packaging?.packageLabel.trim().toLocaleLowerCase()
+    ) {
+        return `${name} · ${packagingLabel}`;
+    }
+
+    const samePriceVariants = sameNameVariants.filter(
+        item => item.priceWithTax === variant.priceWithTax && item.currencyCode === variant.currencyCode,
+    );
+    if (samePriceVariants.length === 1) {
+        return `${name} · ${formatMoney(variant.priceWithTax, variant.currencyCode, locale)}`;
+    }
+    return `${name} · ${fallback}`;
+}
+
 export function ProductDetailPage() {
     const navigate = useNavigate();
     const navigateTo = (route: RouteState) => void navigate(routeNavigateOptions(route) as never);
@@ -246,14 +285,14 @@ export function ProductDetailPage() {
                     </span>
                 </header>
                 <div>
-                    {product.variants.map(item => (
+                    {product.variants.map((item, index) => (
                         <button
                             type="button"
                             key={item.id}
                             className={item.id === variant?.id ? 'is-active' : undefined}
                             onClick={() => setVariantId(item.id)}
                         >
-                            {item.name}
+                            {productVariantOptionLabel(product, item, index, locale, language)}
                         </button>
                     ))}
                 </div>

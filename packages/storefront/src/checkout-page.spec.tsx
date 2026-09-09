@@ -1,8 +1,10 @@
-import { createElement } from 'react';
+// @vitest-environment jsdom
+import { act, createElement } from 'react';
+import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ShopApi } from './api';
+import { ShopApi, ShopApiError } from './api';
 import { CheckoutPage } from './checkout-page';
 import { checkoutPageStyles } from './tailwind/checkout-page-styles';
 import {
@@ -11,12 +13,15 @@ import {
     Order,
     OrderLine,
     ProductVariant,
+    ShippingMethod,
     StoreCustomerCoupon,
     StorefrontCart,
     StorefrontFlashSale,
 } from './types';
 
-vi.mock('@tanstack/react-router', () => ({ useNavigate: () => vi.fn() }));
+const navigate = vi.hoisted(() => vi.fn());
+vi.mock('@tanstack/react-router', () => ({ useNavigate: () => navigate }));
+(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const market: MarketConfig = {
     code: 'my-malaysia',
@@ -213,7 +218,7 @@ describe('CheckoutPage digital delivery', () => {
         expect(markup).toContain('name="firstName"');
         expect(markup).toContain('name="lastName"');
         expect(markup).toContain('收货地址');
-        expect(markup).toContain('填写地址后计算');
+        expect(markup).toContain('填写地址后自动计算');
         expect(markup).toContain('name="deliveryEmail"');
         expect(markup).toContain('name="confirmDeliveryEmail"');
         expect(markup).toContain('<select name="province"');
@@ -319,5 +324,405 @@ describe('CheckoutPage digital delivery', () => {
         expect(markup).toContain('其他优惠');
         expect(markup).toMatch(/秒杀优惠<\/dt><dd>-[^<]*25<\/dd>/u);
         expect(markup).toMatch(/其他优惠<\/dt><dd>-[^<]*5<\/dd>/u);
+    });
+});
+
+describe('CheckoutPage automatic delivery and drawer', () => {
+    const methods: ShippingMethod[] = [
+        { id: 'economy', code: 'economy', name: '经济配送', description: '较慢', priceWithTax: 100 },
+        {
+            id: 'standard',
+            code: 'store-fixture-store-standard-delivery',
+            name: '标准配送',
+            description: '商家配置',
+            priceWithTax: 500,
+        },
+    ];
+    const address = {
+        id: 'address-1',
+        fullName: '测试收货人',
+        phoneNumber: '0100000000',
+        streetLine1: '10 Example Road',
+        streetLine2: '',
+        city: 'Petaling Jaya',
+        province: 'MY-10',
+        postalCode: '47301',
+        country: { code: 'MY', name: 'Malaysia' },
+        defaultShippingAddress: true,
+        defaultBillingAddress: false,
+    };
+    let container: HTMLDivElement;
+    let root: ReturnType<typeof createRoot>;
+    beforeEach(() => {
+        vi.useFakeTimers();
+        vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+            callback(0);
+            return 1;
+        });
+        vi.stubGlobal('cancelAnimationFrame', vi.fn());
+        container = document.createElement('div');
+        document.body.append(container);
+        root = createRoot(container);
+        navigate.mockClear();
+    });
+    afterEach(() => {
+        act(() => root.unmount());
+        container.remove();
+        vi.useRealTimers();
+        vi.unstubAllGlobals();
+    });
+    async function flush(action = () => undefined as void) {
+        await act(async () => {
+            action();
+            await Promise.resolve();
+        });
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(401);
+        });
+    }
+    function mount(options: { methods?: ShippingMethod[]; selectedCode?: string; manual?: boolean } = {}) {
+        const order = orderFor('PHYSICAL');
+        if (options.selectedCode)
+            order.checkoutShipping = {
+                methodCode: options.selectedCode,
+                methodName: '已有选择',
+                priceWithTax: 100,
+                freeShippingApplied: false,
+            };
+        const customer = {
+            id: 'customer-shipping',
+            firstName: '测试',
+            lastName: '',
+            emailAddress: 'fixture@example.com',
+            phoneNumber: null,
+            addresses: options.manual ? [] : [address],
+            orders: { items: [], totalItems: 0 },
+        } satisfies ActiveCustomer;
+        const api = {
+            setShippingAddress: vi.fn().mockResolvedValue(order),
+            eligibleShippingMethods: vi.fn().mockResolvedValue(options.methods ?? methods),
+            setShippingMethod: vi.fn().mockResolvedValue(order),
+            cart: vi.fn().mockResolvedValue(cartFor(order)),
+            preparePayment: vi.fn().mockResolvedValue({ cart: cartFor(order), order }),
+        };
+        const onCartChange = vi.fn();
+        const props = {
+            mode: 'purchase' as const,
+            api: api as unknown as ShopApi,
+            cart: cartFor(order),
+            order,
+            customer,
+            market,
+            storefrontCode: 'fixture-store',
+            availableCountries: [{ code: 'MY', name: 'Malaysia' }],
+            availableProvinces,
+            locale: market.locale,
+            language: 'zh' as const,
+            onBack: vi.fn(),
+            onSessionChange: vi.fn(),
+            onCartChange,
+            onNotify: vi.fn(),
+            coupons: [],
+            onApplyCoupon: vi.fn(),
+            onRemoveCoupon: vi.fn(),
+        };
+        act(() => root.render(createElement(CheckoutPage, props)));
+        return { api, props, order, onCartChange };
+    }
+    function element<T extends Element = HTMLElement>(selector: string): T {
+        const match = container.querySelector<T>(selector);
+        if (!match) throw new Error(`Missing checkout element: ${selector}`);
+        return match;
+    }
+    const trigger = () => element<HTMLButtonElement>('.shipping-method-trigger');
+    const submitButton = () => element<HTMLButtonElement>('button[type="submit"]');
+
+    it('uses the configured standard delivery even when a cheaper option is listed first, without submitting', async () => {
+        const { api } = mount();
+        expect(submitButton().disabled).toBe(true);
+        await flush();
+        expect(api.setShippingAddress).toHaveBeenCalledTimes(1);
+        expect(api.setShippingMethod).toHaveBeenCalledWith('standard');
+        expect(trigger().textContent).toContain('标准配送');
+        expect(submitButton().disabled).toBe(false);
+        expect(container.textContent).not.toContain('下一步，选择配送');
+        expect(container.querySelector('[role="dialog"]')).toBeNull();
+        expect(api.preparePayment).not.toHaveBeenCalled();
+        expect(navigate).not.toHaveBeenCalled();
+    });
+
+    it('keeps an eligible saved choice, opens a drawer and switches without submitting the checkout form', async () => {
+        const { api } = mount({ selectedCode: 'economy' });
+        await flush();
+        expect(api.setShippingMethod).toHaveBeenCalledWith('economy');
+        await flush(() => trigger().click());
+        expect(container.querySelector('[role="dialog"]')).not.toBeNull();
+        expect(container.querySelector('.checkout-options fieldset')).toBeNull();
+        await flush(() => element<HTMLInputElement>('input[value="standard"]').click());
+        expect(api.setShippingMethod).toHaveBeenLastCalledWith('standard');
+        expect(trigger().textContent).toContain('标准配送');
+        expect(container.querySelector('[role="dialog"]')).toBeNull();
+        expect(api.preparePayment).not.toHaveBeenCalled();
+    });
+
+    it('uses the only eligible delivery without a chooser, then submits in one click', async () => {
+        const { api } = mount({ methods: [methods[1]] });
+        await flush();
+        expect(trigger().disabled).toBe(true);
+        expect(trigger().hasAttribute('aria-haspopup')).toBe(false);
+        await flush(() =>
+            element('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })),
+        );
+        expect(api.preparePayment).toHaveBeenCalledTimes(1);
+        expect(api.setShippingAddress).toHaveBeenCalledTimes(1);
+        expect(navigate).toHaveBeenCalledWith({ to: '/payment', search: {}, replace: true });
+    });
+
+    it('blocks payment on an unavailable quote and retries only delivery', async () => {
+        const { api } = mount({ methods: [] });
+        await flush();
+        expect(container.textContent).toContain('当前地址没有可用配送方式');
+        expect(submitButton().disabled).toBe(true);
+        expect(api.setShippingMethod).not.toHaveBeenCalled();
+        api.eligibleShippingMethods.mockResolvedValue(methods);
+        await flush(() => trigger().click());
+        expect(trigger().textContent).toContain('标准配送');
+        expect(submitButton().disabled).toBe(false);
+        expect(api.preparePayment).not.toHaveBeenCalled();
+    });
+
+    it('serializes rapid address changes and ignores the stale quote', async () => {
+        const { api, props, onCartChange } = mount();
+        let finishOldAddress!: (order: Order) => void;
+        api.setShippingAddress.mockImplementationOnce(
+            () =>
+                new Promise<Order>(resolve => {
+                    finishOldAddress = resolve;
+                }),
+        );
+        await flush();
+        const nextProps = {
+            ...props,
+            customer: { ...props.customer, addresses: [{ ...address, postalCode: '50450' }] },
+        };
+        await flush(() => root.render(createElement(CheckoutPage, nextProps)));
+        expect(api.setShippingAddress).toHaveBeenCalledTimes(1);
+        await flush(() => finishOldAddress(props.order));
+        expect(api.setShippingAddress).toHaveBeenCalledTimes(2);
+        expect(api.setShippingAddress).toHaveBeenLastCalledWith(
+            expect.objectContaining({ postalCode: '50450' }),
+        );
+        expect(api.eligibleShippingMethods).toHaveBeenCalledTimes(1);
+        expect(onCartChange).toHaveBeenCalledTimes(1);
+        expect(submitButton().disabled).toBe(false);
+    });
+
+    it('recalculates item changes but keeps the summary mounted during cart updates', async () => {
+        const { api, props, order } = mount();
+        await flush();
+        const summary = container.querySelector('.price-summary');
+        const changedOrder = {
+            ...order,
+            lines: order.lines.map(orderLine => ({
+                ...orderLine,
+                quantity: 2,
+                linePriceWithTax: orderLine.linePriceWithTax * 2,
+            })),
+        };
+        await flush(() =>
+            root.render(createElement(CheckoutPage, { ...props, order: changedOrder, cartPending: true })),
+        );
+        expect(api.eligibleShippingMethods).toHaveBeenCalledTimes(2);
+        expect(container.querySelector('.price-summary')).toBe(summary);
+        expect(summary?.textContent).toContain('商品金额');
+        expect(summary?.textContent).toContain('合计');
+        expect(submitButton().disabled).toBe(true);
+    });
+
+    it('keeps a failed switch in the drawer and requires a fresh quote before submission', async () => {
+        const { api } = mount();
+        await flush();
+        await flush(() => trigger().click());
+        api.setShippingMethod.mockRejectedValueOnce(
+            new ShopApiError('INELIGIBLE_SHIPPING_METHOD_ERROR', 'Shipping is ineligible'),
+        );
+        await flush(() => element<HTMLInputElement>('input[value="economy"]').click());
+        expect(container.querySelector('[role="dialog"]')?.textContent).toContain(
+            '此配送方式不适用于当前订单，请重新选择。',
+        );
+        expect(submitButton().disabled).toBe(true);
+        const retry = [...container.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(
+            button => button.textContent === '重新计算配送',
+        );
+        await flush(() => retry?.click());
+        expect(container.querySelector('[role="dialog"]')).toBeNull();
+        expect(trigger().textContent).toContain('标准配送');
+        expect(submitButton().disabled).toBe(false);
+        expect(api.preparePayment).not.toHaveBeenCalled();
+    });
+
+    it('automatically quotes a complete manual address after typing finishes', async () => {
+        const { api } = mount({ manual: true });
+        const inputValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+        for (const [name, value] of Object.entries({
+            fullName: '测试收货人',
+            phoneNumber: '0100000000',
+            city: 'Petaling Jaya',
+            streetLine1: '10 Example Road',
+            postalCode: '47301',
+        })) {
+            await flush(() => {
+                const input = element<HTMLInputElement>(`input[name="${name}"]`);
+                inputValue?.set?.call(input, value);
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+            });
+        }
+        expect(api.setShippingAddress).not.toHaveBeenCalled();
+        await flush(() => {
+            const province = element<HTMLSelectElement>('select[name="province"]');
+            province.value = 'MY-10';
+            province.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+        expect(api.setShippingAddress).toHaveBeenCalledWith(
+            expect.objectContaining({ postalCode: '47301', province: 'MY-10' }),
+        );
+        expect(trigger().textContent).toContain('标准配送');
+        expect(submitButton().disabled).toBe(false);
+    });
+
+    it('does not quote an incomplete manual address', async () => {
+        const { api } = mount({ manual: true });
+        await flush();
+        expect(api.setShippingAddress).not.toHaveBeenCalled();
+        expect(submitButton().disabled).toBe(true);
+        expect(submitButton().textContent).toContain('请完善收货地址');
+    });
+});
+
+describe('CheckoutPage submission authentication and recovery', () => {
+    async function interact(action: () => void) {
+        await act(async () => {
+            action();
+            await Promise.resolve();
+        });
+    }
+
+    it.each(['zh', 'en'] as const)(
+        'releases the submit button immediately on an email conflict in %s',
+        async language => {
+            const container = document.createElement('div');
+            document.body.append(container);
+            const root = createRoot(container);
+            const order = orderFor('DIGITAL', 'delivery@example.com');
+            const notify = vi.fn();
+            const setDeliveryEmail = vi
+                .fn()
+                .mockRejectedValue(
+                    new ShopApiError('EMAIL_ADDRESS_CONFLICT_ERROR', 'EMAIL_ADDRESS_CONFLICT_ERROR'),
+                );
+            const refreshCart = vi.fn(() => new Promise<StorefrontCart>(() => undefined));
+            const preparePayment = vi.fn();
+            const customer = {
+                id: 'customer-1',
+                emailAddress: 'account@example.com',
+                addresses: [],
+            } as unknown as ActiveCustomer;
+            try {
+                await interact(() =>
+                    root.render(
+                        createElement(CheckoutPage, {
+                            api: {
+                                setDeliveryEmail,
+                                cart: refreshCart,
+                                preparePayment,
+                                myDeliveryEmails: vi.fn().mockResolvedValue([]),
+                            } as unknown as ShopApi,
+                            cart: cartFor(order),
+                            order,
+                            customer,
+                            market,
+                            availableCountries: [],
+                            locale: market.locale,
+                            language,
+                            onBack: vi.fn(),
+                            onSessionChange: vi.fn(),
+                            onCartChange: vi.fn(),
+                            onNotify: notify,
+                            coupons: [],
+                            onApplyCoupon: vi.fn(),
+                            onRemoveCoupon: vi.fn(),
+                        }),
+                    ),
+                );
+                for (const input of container.querySelectorAll<HTMLInputElement>('input[type="email"]'))
+                    input.value = 'delivery@example.com';
+                await interact(() =>
+                    container
+                        .querySelector('form')
+                        ?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })),
+                );
+                expect(notify).toHaveBeenCalledWith(
+                    language === 'zh'
+                        ? '该邮箱已注册，请登录对应账户后继续结算'
+                        : 'This email is already registered. Sign in to that account to continue checkout.',
+                );
+                expect(container.textContent).not.toContain('EMAIL_ADDRESS_CONFLICT_ERROR');
+                expect(container.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(
+                    false,
+                );
+                expect(refreshCart).not.toHaveBeenCalled();
+                expect(preparePayment).not.toHaveBeenCalled();
+            } finally {
+                act(() => root.unmount());
+                container.remove();
+            }
+        },
+    );
+
+    it('blocks submission if the customer session disappears', async () => {
+        const container = document.createElement('div');
+        const root = createRoot(container);
+        const order = orderFor('PHYSICAL');
+        const setCustomer = vi.fn();
+        const preparePayment = vi.fn();
+        navigate.mockClear();
+        try {
+            await interact(() =>
+                root.render(
+                    createElement(CheckoutPage, {
+                        mode: 'purchase',
+                        api: { setCustomer, preparePayment } as unknown as ShopApi,
+                        cart: cartFor(order),
+                        order,
+                        customer: null,
+                        market,
+                        availableCountries: [],
+                        locale: market.locale,
+                        language: 'zh',
+                        onBack: vi.fn(),
+                        onSessionChange: vi.fn(),
+                        onCartChange: vi.fn(),
+                        onNotify: vi.fn(),
+                        coupons: [],
+                        onApplyCoupon: vi.fn(),
+                        onRemoveCoupon: vi.fn(),
+                    }),
+                ),
+            );
+            await interact(() =>
+                container
+                    .querySelector('form')
+                    ?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })),
+            );
+            expect(navigate).toHaveBeenCalledWith({
+                to: '/login',
+                search: { returnTo: 'purchase' },
+                replace: false,
+            });
+            expect(setCustomer).not.toHaveBeenCalled();
+            expect(preparePayment).not.toHaveBeenCalled();
+        } finally {
+            act(() => root.unmount());
+        }
     });
 });

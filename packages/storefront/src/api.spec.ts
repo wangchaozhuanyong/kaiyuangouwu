@@ -146,7 +146,7 @@ describe('ShopApi storefront mutations', () => {
         expect(request.query).toContain('... on InvalidCredentialsError { authenticationError }');
     });
 
-    it('limits the initial storefront product request to 16 items', async () => {
+    it('limits the initial storefront product request to 12 items', async () => {
         const fetchMock = mockGraphQlResponse({ products: { items: [] } });
 
         await new ShopApi(market).products();
@@ -158,7 +158,7 @@ describe('ShopApi storefront mutations', () => {
         expect(request.query).toContain('query StorefrontProducts($options: ProductListOptions)');
         expect(request.query).toContain('saleableStockLevel');
         expect(request.query).not.toMatch(/\bstockLevel\b/);
-        expect(request.variables).toEqual({ options: { take: 16, sort: { name: 'ASC' } } });
+        expect(request.variables).toEqual({ options: { take: 12, sort: { name: 'ASC' } } });
     });
 
     it('loads packaging conversion details for the product page', async () => {

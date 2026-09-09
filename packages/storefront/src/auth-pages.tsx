@@ -16,7 +16,10 @@ import {
 } from 'lucide-react';
 import { CSSProperties, FormEvent, ReactNode, useEffect, useId, useRef, useState } from 'react';
 
-import { authOriginalImageUrl, authVisualStyle } from '../../storefront-content-plugin/src/shared/auth-visual';
+import {
+    authOriginalImageUrl,
+    authVisualStyle,
+} from '../../storefront-content-plugin/src/shared/auth-visual';
 
 import { ShopApi, ShopApiError } from './api';
 import {
@@ -33,7 +36,8 @@ import {
 } from './referral-attribution';
 import { isReferralClientFeatureEnabled } from './referral-client-feature';
 import { storefrontWebpUrl } from './responsive-image';
-import { routeNavigateOptions } from './storefront-router';
+import { storefrontErrorMessage } from './storefront-errors';
+import { routeNavigateOptions, RouteState } from './storefront-router';
 import { SafeImage } from './storefront-ui/product-display';
 import { StorefrontContentBlock, StorefrontContentTargetType, StorefrontLanguage } from './types';
 
@@ -95,73 +99,20 @@ export function splitCustomerName(
 
 export function loginErrorMessage(error: unknown, language: StorefrontLanguage): string {
     const isZh = language === 'zh';
-    if (error instanceof ShopApiError) {
-        if (
-            error.authenticationError === 'STOREFRONT_INVALID_CREDENTIALS' ||
-            error.authenticationError === 'STOREFRONT_ACCOUNT_NOT_FOUND' ||
-            error.authenticationError === 'STOREFRONT_INVALID_PASSWORD'
-        ) {
-            return isZh ? '电子邮箱或密码错误，请检查后重试' : 'The email address or password is incorrect';
-        }
-        if (error.errorCode === 'NOT_VERIFIED_ERROR') {
-            return isZh
-                ? '该电子邮箱尚未验证，请先查收验证邮件'
-                : 'This email address has not been verified. Check your verification email first';
-        }
-        if (error.errorCode === 'INVALID_CREDENTIALS_ERROR') {
-            return isZh ? '电子邮箱或密码错误，请检查后重试' : 'The email address or password is incorrect';
-        }
-        return isZh ? `登录失败（错误代码：${error.errorCode}）` : error.message;
-    }
-    if (isNetworkError(error)) {
-        return isZh
-            ? '网络连接失败，请检查网络后重试'
-            : 'Network connection failed. Check your connection and try again';
-    }
-    return error instanceof Error
-        ? isZh
-            ? `登录失败：${error.message}`
-            : error.message
-        : isZh
-          ? '登录失败，请稍后重试'
-          : 'Sign-in failed. Please try again later';
+    return storefrontErrorMessage(
+        error,
+        language,
+        isZh ? '登录失败，请稍后重试' : 'Sign-in failed. Please try again later',
+    );
 }
 
 export function registerErrorMessage(error: unknown, language: StorefrontLanguage): string {
     const isZh = language === 'zh';
-    if (error instanceof ShopApiError) {
-        if (error.errorCode === 'EMAIL_ADDRESS_CONFLICT_ERROR') {
-            return isZh
-                ? '该电子邮箱已注册，请直接登录或使用其他邮箱'
-                : 'This email address is already registered. Sign in or use another email';
-        }
-        if (error.errorCode === 'PASSWORD_VALIDATION_ERROR') {
-            return isZh
-                ? '密码不符合安全要求，请重新设置'
-                : 'The password does not meet the security requirements';
-        }
-        if (error.errorCode === 'MISSING_PASSWORD_ERROR') {
-            return isZh ? '请输入密码' : 'Enter a password';
-        }
-        if (error.errorCode === 'NATIVE_AUTH_STRATEGY_ERROR') {
-            return isZh
-                ? '账户注册服务暂时不可用，请稍后重试'
-                : 'Account registration is temporarily unavailable. Please try again later';
-        }
-        return isZh ? `注册失败（错误代码：${error.errorCode}）` : error.message;
-    }
-    if (isNetworkError(error)) {
-        return isZh
-            ? '网络连接失败，请检查网络后重试'
-            : 'Network connection failed. Check your connection and try again';
-    }
-    return error instanceof Error
-        ? isZh
-            ? `注册失败：${error.message}`
-            : error.message
-        : isZh
-          ? '注册失败，请稍后重试'
-          : 'Registration failed. Please try again later';
+    return storefrontErrorMessage(
+        error,
+        language,
+        isZh ? '注册失败，请稍后重试' : 'Registration failed. Please try again later',
+    );
 }
 
 export function verificationRequiresPassword(error: unknown): boolean {
@@ -170,47 +121,16 @@ export function verificationRequiresPassword(error: unknown): boolean {
 
 export function verificationErrorMessage(error: unknown, language: StorefrontLanguage): string {
     const isZh = language === 'zh';
-    if (error instanceof ShopApiError) {
-        if (error.errorCode === 'VERIFICATION_TOKEN_EXPIRED_ERROR') {
-            return isZh
-                ? '验证链接已过期，请重新发送验证邮件'
-                : 'This verification link has expired. Request a new verification email.';
-        }
-        if (error.errorCode === 'VERIFICATION_TOKEN_INVALID_ERROR') {
-            return isZh
-                ? '验证链接无效或已经使用'
-                : 'This verification link is invalid or has already been used.';
-        }
-        if (error.errorCode === 'PASSWORD_VALIDATION_ERROR') {
-            return isZh
-                ? '密码不符合安全要求，请重新设置'
-                : 'The password does not meet the security requirements.';
-        }
-        return isZh ? `验证失败（错误代码：${error.errorCode}）` : error.message;
-    }
-    if (isNetworkError(error)) {
-        return isZh
-            ? '网络连接失败，请检查网络后重试'
-            : 'Network connection failed. Check your connection and try again.';
-    }
-    return error instanceof Error
-        ? isZh
-            ? `验证失败：${error.message}`
-            : error.message
-        : isZh
-          ? '无法完成验证，请稍后重试'
-          : 'Verification failed. Please try again later.';
-}
-
-function isNetworkError(error: unknown): boolean {
-    return (
-        error instanceof TypeError ||
-        (error instanceof Error &&
-            /failed to fetch|network(?:error| request)?|load failed/i.test(error.message))
+    return storefrontErrorMessage(
+        error,
+        language,
+        isZh ? '无法完成验证，请稍后重试' : 'Verification failed. Please try again later.',
     );
 }
 
 interface AuthPageBaseProps {
+    returnTo?: RouteState['returnTo'];
+    returnVariantId?: string;
     api: ShopApi;
     language: StorefrontLanguage;
     storefrontName: string;
@@ -237,6 +157,8 @@ function formString(data: FormData, name: string): string {
 }
 
 export function LoginPage({
+    returnTo,
+    returnVariantId,
     api,
     language,
     storefrontName,
@@ -248,7 +170,14 @@ export function LoginPage({
     onContentTarget,
 }: AuthPageBaseProps & AuthLegalProps & AuthCompletionProps & AuthVisualProps) {
     const navigate = useNavigate();
-    const navigateTo = (route: AuthRoute) => void navigate(routeNavigateOptions(route) as never);
+    const navigateTo = (route: AuthRoute) =>
+        void navigate(
+            routeNavigateOptions({
+                ...route,
+                returnTo,
+                id: returnTo === 'purchase' ? returnVariantId : undefined,
+            }) as never,
+        );
     const isZh = language === 'zh';
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState('');
@@ -330,6 +259,8 @@ export function LoginPage({
 }
 
 export function RegisterPage({
+    returnTo,
+    returnVariantId,
     api,
     language,
     storefrontName,
@@ -340,7 +271,14 @@ export function RegisterPage({
     onContentTarget,
 }: AuthPageBaseProps & AuthLegalProps & AuthVisualProps) {
     const navigate = useNavigate();
-    const navigateTo = (route: AuthRoute) => void navigate(routeNavigateOptions(route) as never);
+    const navigateTo = (route: AuthRoute) =>
+        void navigate(
+            routeNavigateOptions({
+                ...route,
+                returnTo,
+                id: returnTo === 'purchase' ? returnVariantId : undefined,
+            }) as never,
+        );
     const isZh = language === 'zh';
     const [submitting, setSubmitting] = useState(false);
     const [registeredEmail, setRegisteredEmail] = useState('');
@@ -439,7 +377,7 @@ export function RegisterPage({
         } catch (requestError) {
             setError(
                 requestError instanceof Error
-                    ? requestError.message
+                    ? storefrontErrorMessage(requestError, language)
                     : isZh
                       ? '发送失败'
                       : 'Could not resend email',
@@ -642,6 +580,8 @@ export function RegisterPage({
 }
 
 export function VerifyAccountPage({
+    returnTo,
+    returnVariantId,
     api,
     language,
     storefrontName,
@@ -651,7 +591,14 @@ export function VerifyAccountPage({
     onSuccess,
 }: AuthPageBaseProps & AuthCompletionProps & { token?: string }) {
     const navigate = useNavigate();
-    const navigateTo = (route: AuthRoute) => void navigate(routeNavigateOptions(route) as never);
+    const navigateTo = (route: AuthRoute) =>
+        void navigate(
+            routeNavigateOptions({
+                ...route,
+                returnTo,
+                id: returnTo === 'purchase' ? returnVariantId : undefined,
+            }) as never,
+        );
     const isZh = language === 'zh';
     const [error, setError] = useState('');
     const [requiresPassword, setRequiresPassword] = useState(false);
@@ -710,7 +657,7 @@ export function VerifyAccountPage({
         } catch (requestError) {
             setResendError(
                 requestError instanceof Error
-                    ? requestError.message
+                    ? storefrontErrorMessage(requestError, language)
                     : isZh
                       ? '无法重新发送验证邮件'
                       : 'Could not resend the verification email',
@@ -847,6 +794,8 @@ export function VerifyAccountPage({
 }
 
 export function ForgotPasswordPage({
+    returnTo,
+    returnVariantId,
     api,
     language,
     storefrontName,
@@ -855,7 +804,14 @@ export function ForgotPasswordPage({
     onBack,
 }: AuthPageBaseProps & AuthVisualProps) {
     const navigate = useNavigate();
-    const navigateTo = (route: AuthRoute) => void navigate(routeNavigateOptions(route) as never);
+    const navigateTo = (route: AuthRoute) =>
+        void navigate(
+            routeNavigateOptions({
+                ...route,
+                returnTo,
+                id: returnTo === 'purchase' ? returnVariantId : undefined,
+            }) as never,
+        );
     const isZh = language === 'zh';
     const [submitting, setSubmitting] = useState(false);
     const [requested, setRequested] = useState(false);
@@ -871,7 +827,7 @@ export function ForgotPasswordPage({
         } catch (requestError) {
             setError(
                 requestError instanceof Error
-                    ? requestError.message
+                    ? storefrontErrorMessage(requestError, language)
                     : isZh
                       ? '发送重置邮件失败'
                       : 'Could not send the reset email',
@@ -942,6 +898,8 @@ export function ForgotPasswordPage({
 }
 
 export function ResetPasswordPage({
+    returnTo,
+    returnVariantId,
     api,
     language,
     storefrontName,
@@ -951,7 +909,14 @@ export function ResetPasswordPage({
     onSuccess,
 }: AuthPageBaseProps & AuthCompletionProps & { token?: string }) {
     const navigate = useNavigate();
-    const navigateTo = (route: AuthRoute) => void navigate(routeNavigateOptions(route) as never);
+    const navigateTo = (route: AuthRoute) =>
+        void navigate(
+            routeNavigateOptions({
+                ...route,
+                returnTo,
+                id: returnTo === 'purchase' ? returnVariantId : undefined,
+            }) as never,
+        );
     const isZh = language === 'zh';
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState(
@@ -979,7 +944,7 @@ export function ResetPasswordPage({
         } catch (requestError) {
             setError(
                 requestError instanceof Error
-                    ? requestError.message
+                    ? storefrontErrorMessage(requestError, language)
                     : isZh
                       ? '重置密码失败'
                       : 'Password reset failed',

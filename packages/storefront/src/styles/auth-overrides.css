@@ -398,6 +398,35 @@
     }
 }
 
+@media (min-width: 1024px) and (max-width: 1199px) {
+    .page.auth-page {
+        grid-template-columns: minmax(0, 1.1fr) minmax(390px, 0.9fr);
+    }
+
+    .auth-page .auth-hero-message {
+        padding: 28px 28px 34px 72px;
+    }
+
+    .auth-page .auth-hero-copy {
+        margin-top: 76px;
+    }
+
+    .auth-page .auth-hero-message h2 {
+        max-width: none;
+        font-size: clamp(28px, 3.1vw, 34px);
+        -webkit-line-clamp: 3;
+    }
+
+    .auth-page .auth-hero-tags {
+        gap: 6px;
+    }
+
+    .auth-page .auth-hero-tags > span {
+        padding: 6px 9px;
+        font-size: 10px;
+    }
+}
+
 @media (max-width: 1023px) {
     .auth-page {
         background: #f4f8fe;

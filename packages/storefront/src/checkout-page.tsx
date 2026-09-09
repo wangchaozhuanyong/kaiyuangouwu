@@ -20,14 +20,15 @@ import { FormEvent, ReactNode, useEffect, useId, useRef, useState } from 'react'
 
 import { smartParseAddressText } from './address-parser';
 import { provinceCodeForValue, provinceDisplayName, provincesForCountry } from './address-region-options';
-import { ShopApi } from './api';
+import { ShopApi, ShopApiError } from './api';
 import { compactUiCopy } from './i18n';
 import { isInputMethodKey } from './input-method';
 import { formatDisplayMoney } from './money-display';
 import { variantCanIncreaseQuantity } from './product-availability';
 import { acquireBodyScrollLock } from './scroll-lock';
 import { appliedCouponLabel } from './storefront-coupons';
-import { routeNavigateOptions } from './storefront-router';
+import { storefrontErrorMessage } from './storefront-errors';
+import { routeNavigateOptions, RouteState } from './storefront-router';
 import { CouponSheet } from './storefront-ui/cart-ui';
 import { SafeImage } from './storefront-ui/product-display';
 import { checkoutPageStyles, pageClassName } from './tailwind/checkout-page-styles';
@@ -54,7 +55,7 @@ const checkoutPageClassName = (className?: string | false | null) =>
     pageClassName(checkoutPageStyles, className);
 
 const ORDER_NOTE_MAX_LENGTH = 500;
-type CheckoutRoute = { name: 'payment' | 'cart' | 'addresses' | 'coupons' };
+type CheckoutRoute = RouteState & { name: 'payment' | 'cart' | 'addresses' | 'coupons' | 'login' };
 type CheckoutMode = 'checkout' | 'purchase';
 
 export function CheckoutPage({
@@ -64,6 +65,7 @@ export function CheckoutPage({
     order: confirmedOrder,
     customer,
     market,
+    storefrontCode,
     availableCountries,
     availableProvinces = [],
     locale,
@@ -91,6 +93,7 @@ export function CheckoutPage({
     order: Order | null;
     customer: ActiveCustomer | null;
     market: MarketConfig;
+    storefrontCode?: string;
     availableCountries: StorefrontConfig['availableCountries'];
     availableProvinces?: StorefrontProvince[];
     locale: string;
@@ -127,7 +130,14 @@ export function CheckoutPage({
     const [formError, setFormError] = useState<string | null>(null);
     const [shippingMethods, setShippingMethods] = useState<ShippingMethod[]>([]);
     const [selectedShippingId, setSelectedShippingId] = useState('');
-    const [preparedAddressKey, setPreparedAddressKey] = useState('');
+    const [preparedShippingKey, setPreparedShippingKey] = useState('');
+    const [shippingError, setShippingError] = useState<string | null>(null);
+    const [shippingPickerOpen, setShippingPickerOpen] = useState(false);
+    const [shippingRetry, setShippingRetry] = useState(0);
+    const shippingQueueRef = useRef<Promise<void>>(Promise.resolve());
+    const shippingSelectionRef = useRef('');
+    const shippingCallbacksRef = useRef({ onCartChange });
+    shippingCallbacksRef.current = { onCartChange };
     const [customerPrepared, setCustomerPrepared] = useState(Boolean(customer || order?.customer));
     const [shippingUpdating, setShippingUpdating] = useState(false);
     const [couponOpen, setCouponOpen] = useState(false);
@@ -183,6 +193,126 @@ export function CheckoutPage({
     const digitalLines =
         order?.lines.filter(line => line.productVariant.customFields.fulfillmentType === 'digital') ?? [];
     const hasDigitalProducts = digitalLines.length > 0;
+    const shippingAddress: CustomerAddressInput = defaultAddress
+        ? {
+              fullName: defaultAddress.fullName ?? '',
+              phoneNumber: defaultAddress.phoneNumber ?? '',
+              streetLine1: defaultAddress.streetLine1,
+              city: defaultAddress.city ?? '',
+              province: defaultAddress.province ?? '',
+              postalCode: defaultAddress.postalCode ?? '',
+              countryCode: defaultAddress.country.code,
+          }
+        : manualAddressDraft;
+    const addressComplete = Object.entries(shippingAddress).every(
+        ([field, value]) =>
+            (field === 'province' && Boolean(defaultAddress)) || String(value).trim().length > 0,
+    );
+    const shippingAddressKey = JSON.stringify(shippingAddress);
+    // Match the managed method created by StoreCommerceSettingsService for every store.
+    const defaultShippingCode = `store-${(storefrontCode || market.code).toLowerCase()}-standard-delivery`;
+    // Shipping mutations change cart revision and totals too. Only address/item changes need a new quote.
+    const shippingKey = JSON.stringify([
+        confirmedOrder?.id,
+        customer?.id,
+        shippingAddressKey,
+        confirmedOrder?.currencyCode,
+        confirmedOrder?.lines.map(line => [line.productVariant.id, line.quantity, line.linePriceWithTax]),
+        confirmedOrder?.subTotalWithTax,
+        confirmedOrder?.couponCodes,
+    ]);
+    const currentShippingKeyRef = useRef(shippingKey);
+    currentShippingKeyRef.current = shippingKey;
+    const shippingMountedRef = useRef(false);
+    useEffect(() => {
+        shippingMountedRef.current = true;
+        return () => {
+            shippingMountedRef.current = false;
+        };
+    }, []);
+    const existingShippingCodeRef = useRef(confirmedOrder?.checkoutShipping?.methodCode);
+    existingShippingCodeRef.current = confirmedOrder?.checkoutShipping?.methodCode;
+    const shippingReady = preparedShippingKey === shippingKey && Boolean(selectedShippingId);
+
+    useEffect(() => {
+        let cancelled = false;
+        setShippingError(null);
+        setShippingPickerOpen(false);
+        if (!requiresShipping || !customer?.id || !confirmedOrder?.id || !addressComplete) {
+            setShippingMethods([]);
+            setPreparedShippingKey('');
+            setShippingUpdating(false);
+            return;
+        }
+        setShippingUpdating(true);
+        const preferredShippingCode = existingShippingCodeRef.current;
+        // Serialize order writes so a slower response for an old address cannot win.
+        const timer = setTimeout(
+            () => {
+                shippingQueueRef.current = shippingQueueRef.current.then(async () => {
+                    if (cancelled) return;
+                    try {
+                        await api.setShippingAddress(JSON.parse(shippingAddressKey) as CustomerAddressInput);
+                        if (cancelled) return;
+                        const methods = await api.eligibleShippingMethods();
+                        if (cancelled) return;
+                        if (!methods.length) {
+                            throw new Error(
+                                isZh
+                                    ? '当前地址没有可用配送方式'
+                                    : 'No delivery is available for this address',
+                            );
+                        }
+                        const selected =
+                            methods.find(method => method.id === shippingSelectionRef.current) ??
+                            methods.find(method => method.code === preferredShippingCode) ??
+                            methods.find(method => method.code === defaultShippingCode) ??
+                            methods[0];
+                        await api.setShippingMethod(selected.id);
+                        if (cancelled) return;
+                        const latestCart = await api.cart();
+                        if (cancelled) return;
+                        shippingSelectionRef.current = selected.id;
+                        setShippingMethods(methods);
+                        setSelectedShippingId(selected.id);
+                        setPreparedShippingKey(shippingKey);
+                        shippingCallbacksRef.current.onCartChange(latestCart);
+                    } catch (requestError) {
+                        if (!cancelled) {
+                            setPreparedShippingKey('');
+                            setShippingMethods([]);
+                            setShippingError(
+                                requestError instanceof Error
+                                    ? storefrontErrorMessage(requestError, language)
+                                    : isZh
+                                      ? '运费计算失败，请重试'
+                                      : 'Could not calculate shipping. Please retry.',
+                            );
+                        }
+                    } finally {
+                        if (!cancelled) setShippingUpdating(false);
+                    }
+                });
+            },
+            defaultAddress ? 0 : 400,
+        );
+        return () => {
+            cancelled = true;
+            clearTimeout(timer);
+        };
+    }, [
+        api,
+        requiresShipping,
+        customer?.id,
+        confirmedOrder?.id,
+        addressComplete,
+        shippingAddressKey,
+        shippingKey,
+        defaultShippingCode,
+        Boolean(defaultAddress),
+        shippingRetry,
+        isZh,
+    ]);
     const [deliveryEmails, setDeliveryEmails] = useState<CustomerDeliveryEmail[]>([]);
     const [selectedDeliveryEmailId, setSelectedDeliveryEmailId] = useState('');
     const [deliveryEmailPickerOpen, setDeliveryEmailPickerOpen] = useState(false);
@@ -221,7 +351,7 @@ export function CheckoutPage({
         } catch (requestError) {
             setFormError(
                 requestError instanceof Error
-                    ? requestError.message
+                    ? storefrontErrorMessage(requestError, language)
                     : isZh
                       ? '购买数量更新失败'
                       : 'Could not update the purchase quantity',
@@ -250,7 +380,7 @@ export function CheckoutPage({
         } catch (requestError) {
             setNoteError(
                 requestError instanceof Error
-                    ? requestError.message
+                    ? storefrontErrorMessage(requestError, language)
                     : isZh
                       ? '订单备注保存失败'
                       : 'Could not save the order note',
@@ -261,30 +391,64 @@ export function CheckoutPage({
     };
 
     const selectShippingMethod = async (shippingMethodId: string) => {
-        const previousId = selectedShippingId;
-        setSelectedShippingId(shippingMethodId);
-        setShippingUpdating(true);
-        setFormError(null);
-        try {
-            await api.setShippingMethod(shippingMethodId);
-            onCartChange(await api.cart());
-        } catch (requestError) {
-            setSelectedShippingId(previousId);
-            setFormError(
-                requestError instanceof Error
-                    ? requestError.message
-                    : isZh
-                      ? '配送方式更新失败'
-                      : 'Could not update the shipping method',
-            );
-        } finally {
-            setShippingUpdating(false);
+        if (
+            shippingUpdating ||
+            !shippingReady ||
+            !shippingMethods.some(method => method.id === shippingMethodId)
+        )
+            return;
+        if (shippingMethodId === selectedShippingId) {
+            setShippingPickerOpen(false);
+            return;
         }
+        setShippingUpdating(true);
+        setShippingError(null);
+        const requestKey = shippingKey;
+        shippingQueueRef.current = shippingQueueRef.current.then(async () => {
+            try {
+                if (!shippingMountedRef.current || currentShippingKeyRef.current !== requestKey) return;
+                await api.setShippingMethod(shippingMethodId);
+                const latestCart = await api.cart();
+                if (!shippingMountedRef.current || currentShippingKeyRef.current !== requestKey) return;
+                shippingSelectionRef.current = shippingMethodId;
+                setSelectedShippingId(shippingMethodId);
+                shippingCallbacksRef.current.onCartChange(latestCart);
+                setShippingPickerOpen(false);
+            } catch (requestError) {
+                if (!shippingMountedRef.current || currentShippingKeyRef.current !== requestKey) return;
+                setPreparedShippingKey('');
+                setShippingError(
+                    requestError instanceof Error
+                        ? storefrontErrorMessage(requestError, language)
+                        : isZh
+                          ? '配送方式更新失败'
+                          : 'Could not update the shipping method',
+                );
+            } finally {
+                if (shippingMountedRef.current && currentShippingKeyRef.current === requestKey)
+                    setShippingUpdating(false);
+            }
+        });
+        await shippingQueueRef.current;
     };
 
     const submit = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
+        if (!customer) {
+            onNotify(isZh ? '请先登录后继续结算' : 'Sign in to continue checkout');
+            navigateTo({ name: 'login', returnTo: mode });
+            return;
+        }
         if (!cart || !order) return;
+        if (submitting || cartPending || cartUnknown || shippingUpdating) return;
+        if (requiresShipping && !shippingReady) {
+            setFormError(
+                isZh
+                    ? '请完善收货地址并等待运费计算完成'
+                    : 'Complete the address and wait for the delivery quote.',
+            );
+            return;
+        }
         const data = new FormData(event.currentTarget);
         setSubmitting(true);
         setFormError(null);
@@ -340,43 +504,6 @@ export function CheckoutPage({
                 });
                 setCustomerPrepared(true);
             }
-            if (requiresShipping) {
-                const shippingAddress: CustomerAddressInput = {
-                    fullName: getString('fullName'),
-                    phoneNumber: getString('phoneNumber'),
-                    streetLine1: getString('streetLine1'),
-                    city: getString('city'),
-                    province: getString('province'),
-                    postalCode: getString('postalCode'),
-                    countryCode: getString('countryCode', market.countryCode),
-                };
-                const addressKey = JSON.stringify(shippingAddress);
-                if (addressKey !== preparedAddressKey || !shippingMethods.length) {
-                    await api.setShippingAddress(shippingAddress);
-                    const methods = await api.eligibleShippingMethods();
-                    if (!methods.length)
-                        throw new Error(
-                            isZh ? '当前地址没有可用配送方式' : 'No shipping method is available',
-                        );
-                    const shippingId = methods.some(method => method.id === selectedShippingId)
-                        ? selectedShippingId
-                        : methods[0].id;
-                    await api.setShippingMethod(shippingId);
-                    setShippingMethods(methods);
-                    setSelectedShippingId(shippingId);
-                    setPreparedAddressKey(addressKey);
-                    onCartChange(await api.cart());
-                    onNotify(
-                        isZh
-                            ? '地址和运费已更新，请确认配送方式后提交订单'
-                            : 'Address and shipping updated. Confirm the method, then submit.',
-                    );
-                    return;
-                }
-                if (!selectedShippingId)
-                    throw new Error(isZh ? '当前地址没有可用配送方式' : 'No shipping method is available');
-                await api.setShippingMethod(selectedShippingId);
-            }
             const latestCart = await api.cart();
             onCartChange(latestCart);
             const session = await api.preparePayment(latestCart.revision);
@@ -386,14 +513,22 @@ export function CheckoutPage({
             );
             navigateTo({ name: 'payment' }, true);
         } catch (requestError) {
-            const errorMessage =
-                requestError instanceof Error
-                    ? requestError.message
-                    : isZh
-                      ? '提交订单失败'
-                      : 'Could not submit order';
+            const emailConflict =
+                requestError instanceof ShopApiError &&
+                requestError.errorCode === 'EMAIL_ADDRESS_CONFLICT_ERROR';
+            const errorMessage = emailConflict
+                ? isZh
+                    ? '该邮箱已注册，请登录对应账户后继续结算'
+                    : 'This email is already registered. Sign in to that account to continue checkout.'
+                : requestError instanceof Error
+                  ? storefrontErrorMessage(requestError, language)
+                  : isZh
+                    ? '提交订单失败'
+                    : 'Could not submit order';
             setFormError(errorMessage);
             onNotify(errorMessage);
+            // A rejected email does not change the order. Do not hold the button while refreshing it.
+            if (emailConflict) return;
             try {
                 onCartChange(await api.cart());
             } catch {
@@ -765,14 +900,18 @@ export function CheckoutPage({
                                 <Field
                                     name="fullName"
                                     label={isZh ? '收货人' : 'Full name'}
-                                    defaultValue={manualAddressDraft.fullName || undefined}
-                                    key={`name-${manualAddressDraft.fullName}`}
+                                    value={manualAddressDraft.fullName}
+                                    onChange={value =>
+                                        setManualAddressDraft(current => ({ ...current, fullName: value }))
+                                    }
                                 />
                                 <Field
                                     name="phoneNumber"
                                     label={isZh ? '手机号' : 'Phone'}
-                                    defaultValue={manualAddressDraft.phoneNumber || undefined}
-                                    key={`phone-${manualAddressDraft.phoneNumber}`}
+                                    value={manualAddressDraft.phoneNumber}
+                                    onChange={value =>
+                                        setManualAddressDraft(current => ({ ...current, phoneNumber: value }))
+                                    }
                                 />
                                 <ProvinceField
                                     provinces={availableProvinces}
@@ -786,21 +925,27 @@ export function CheckoutPage({
                                 <Field
                                     name="city"
                                     label={isZh ? '城市' : 'City'}
-                                    defaultValue={manualAddressDraft.city || undefined}
-                                    key={`city-${manualAddressDraft.city}`}
+                                    value={manualAddressDraft.city}
+                                    onChange={value =>
+                                        setManualAddressDraft(current => ({ ...current, city: value }))
+                                    }
                                 />
                                 <Field
                                     name="streetLine1"
                                     label={isZh ? '详细地址' : 'Street address'}
-                                    defaultValue={manualAddressDraft.streetLine1 || undefined}
-                                    key={`street-${manualAddressDraft.streetLine1}`}
+                                    value={manualAddressDraft.streetLine1}
+                                    onChange={value =>
+                                        setManualAddressDraft(current => ({ ...current, streetLine1: value }))
+                                    }
                                     wide
                                 />
                                 <Field
                                     name="postalCode"
                                     label={isZh ? '邮政编码' : 'Postal code'}
-                                    defaultValue={manualAddressDraft.postalCode || undefined}
-                                    key={`postal-${manualAddressDraft.postalCode}`}
+                                    value={manualAddressDraft.postalCode}
+                                    onChange={value =>
+                                        setManualAddressDraft(current => ({ ...current, postalCode: value }))
+                                    }
                                     wide
                                 />
                             </div>
@@ -821,53 +966,44 @@ export function CheckoutPage({
                             </small>
                         </div>
                     )}
-                    {requiresShipping && !shippingMethods.length && (
-                        <button type="button" onClick={() => formRef.current?.requestSubmit()}>
+                    {requiresShipping && (
+                        <button
+                            type="button"
+                            className={checkoutPageClassName('shipping-method-trigger')}
+                            aria-haspopup={shippingMethods.length > 1 ? 'dialog' : undefined}
+                            aria-expanded={shippingMethods.length > 1 ? shippingPickerOpen : undefined}
+                            disabled={
+                                shippingUpdating ||
+                                submitting ||
+                                cartPending ||
+                                cartUnknown ||
+                                (!shippingError && (!shippingReady || shippingMethods.length < 2))
+                            }
+                            onClick={() =>
+                                shippingError && !shippingReady
+                                    ? setShippingRetry(value => value + 1)
+                                    : setShippingPickerOpen(true)
+                            }
+                        >
                             <span>{isZh ? '配送方式' : 'Delivery'}</span>
-                            <small>
-                                {isZh ? '填写地址后计算' : 'Calculate after address'}
-                                <ChevronRight />
+                            <small aria-live="polite">
+                                {shippingUpdating
+                                    ? isZh
+                                        ? '正在计算运费…'
+                                        : 'Calculating shipping…'
+                                    : shippingError && !shippingReady
+                                      ? isZh
+                                          ? '计算失败，点击重试'
+                                          : 'Quote failed. Retry'
+                                      : shippingReady
+                                        ? shippingMethods.find(method => method.id === selectedShippingId)
+                                              ?.name
+                                        : isZh
+                                          ? '填写地址后自动计算'
+                                          : 'Calculated after address'}
+                                {(shippingMethods.length > 1 || shippingError) && <ChevronRight />}
                             </small>
                         </button>
-                    )}
-                    {requiresShipping && !!shippingMethods.length && (
-                        <fieldset
-                            className={checkoutPageClassName('shipping-method-list')}
-                            disabled={shippingUpdating || submitting}
-                        >
-                            <legend>{isZh ? '配送方式' : 'Delivery'}</legend>
-                            {shippingMethods.map(method => (
-                                <label key={method.id}>
-                                    <input
-                                        type="radio"
-                                        name="shippingMethod"
-                                        value={method.id}
-                                        checked={selectedShippingId === method.id}
-                                        onChange={() => void selectShippingMethod(method.id)}
-                                    />
-                                    <span>
-                                        <strong>{method.name}</strong>
-                                        {method.description && <small>{method.description}</small>}
-                                        {shippingMethodDetails(
-                                            method,
-                                            order.currencyCode,
-                                            locale,
-                                            language,
-                                        ) && (
-                                            <small className={checkoutPageClassName('shipping-method-meta')}>
-                                                {shippingMethodDetails(
-                                                    method,
-                                                    order.currencyCode,
-                                                    locale,
-                                                    language,
-                                                )}
-                                            </small>
-                                        )}
-                                    </span>
-                                    <b>{formatMoney(method.priceWithTax, order.currencyCode, locale)}</b>
-                                </label>
-                            ))}
-                        </fieldset>
                     )}
                     <button
                         type="button"
@@ -895,9 +1031,12 @@ export function CheckoutPage({
                         </small>
                     </button>
                 </section>
+                {formError && <InlineError message={formError} />}
+                {shippingError && !shippingPickerOpen && <InlineError message={shippingError} />}
                 <section className={checkoutPageClassName('checkout-section checkout-summary-section')}>
                     <PriceSummary
                         pending={cartPending}
+                        shippingPending={requiresShipping && (!shippingReady || shippingUpdating)}
                         order={order}
                         locale={locale}
                         language={language}
@@ -935,13 +1074,32 @@ export function CheckoutPage({
                     </span>
                 </section>
                 <div className={checkoutPageClassName('submit-order-bar')}>
-                    <button type="submit" disabled={submitting || cartPending}>
+                    <button
+                        type="submit"
+                        disabled={
+                            submitting ||
+                            cartPending ||
+                            cartUnknown ||
+                            shippingUpdating ||
+                            Boolean(requiresShipping && !shippingReady)
+                        }
+                    >
                         {(() => {
                             if (cartPending)
                                 return isZh ? '正在确认商品与金额…' : 'Confirming items and total…';
                             if (submitting) return isZh ? '处理中…' : 'Processing…';
-                            if (requiresShipping && !shippingMethods.length) {
-                                return isZh ? '下一步，选择配送' : 'Continue to delivery';
+                            if (requiresShipping && (shippingUpdating || !shippingReady)) {
+                                return shippingError
+                                    ? isZh
+                                        ? '请重试配送计算'
+                                        : 'Retry the delivery quote'
+                                    : !addressComplete
+                                      ? isZh
+                                          ? '请完善收货地址'
+                                          : 'Complete the delivery address'
+                                      : isZh
+                                        ? '正在计算运费…'
+                                        : 'Calculating shipping…';
                             }
                             const totalFormatted = formatMoney(
                                 order.totalWithTax,
@@ -961,6 +1119,70 @@ export function CheckoutPage({
                     </button>
                 </div>
             </form>
+            {shippingPickerOpen && (
+                <Sheet
+                    title={isZh ? '选择配送方式' : 'Choose delivery'}
+                    language={language}
+                    onClose={() => !shippingUpdating && setShippingPickerOpen(false)}
+                    className="shipping-method-sheet"
+                    showHandle
+                >
+                    <div className={checkoutPageClassName('shipping-method-sheet-content')}>
+                        <p>
+                            {isZh
+                                ? '运费和预计送达时间根据当前收货地址计算。'
+                                : 'Delivery costs and estimates are based on your address.'}
+                        </p>
+                        <fieldset
+                            className={checkoutPageClassName('shipping-method-list')}
+                            disabled={shippingUpdating || submitting || cartPending || cartUnknown}
+                        >
+                            <legend className="sr-only">{isZh ? '配送方式' : 'Delivery'}</legend>
+                            {shippingMethods.map(method => (
+                                <label key={method.id}>
+                                    <input
+                                        type="radio"
+                                        name="shippingMethod"
+                                        value={method.id}
+                                        checked={selectedShippingId === method.id}
+                                        onChange={() => void selectShippingMethod(method.id)}
+                                    />
+                                    <span>
+                                        <strong>{method.name}</strong>
+                                        {method.description && <small>{method.description}</small>}
+                                        <small className={checkoutPageClassName('shipping-method-meta')}>
+                                            {shippingMethodDetails(
+                                                method,
+                                                order.currencyCode,
+                                                locale,
+                                                language,
+                                            )}
+                                        </small>
+                                    </span>
+                                    <b>{formatMoney(method.priceWithTax, order.currencyCode, locale)}</b>
+                                </label>
+                            ))}
+                        </fieldset>
+                        {shippingUpdating && (
+                            <p role="status">{isZh ? '正在更新配送方式…' : 'Updating delivery…'}</p>
+                        )}
+                        {shippingError && (
+                            <>
+                                <InlineError message={shippingError} />
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setShippingPickerOpen(false);
+                                        setShippingRetry(value => value + 1);
+                                    }}
+                                >
+                                    {isZh ? '重新计算配送' : 'Retry delivery calculation'}
+                                </button>
+                            </>
+                        )}
+                    </div>
+                </Sheet>
+            )}
             {couponOpen && (
                 <CouponSheet
                     coupons={coupons}
@@ -1174,6 +1396,7 @@ function PriceSummary({
     flashSales,
     requiresShipping = true,
     pending = false,
+    shippingPending = false,
 }: {
     order: Order;
     locale: string;
@@ -1181,6 +1404,7 @@ function PriceSummary({
     flashSales: StorefrontFlashSale[];
     requiresShipping?: boolean;
     pending?: boolean;
+    shippingPending?: boolean;
 }) {
     const isZh = language === 'zh';
     const discount = Math.abs(order.discounts.reduce((sum, item) => sum + item.amountWithTax, 0));
@@ -1191,23 +1415,26 @@ function PriceSummary({
             .reduce((sum, item) => sum + item.amountWithTax, 0),
     );
     const otherDiscount = Math.max(0, discount - flashSaleDiscount);
-    if (pending)
-        return (
-            <p role="status">
-                {isZh ? '正在确认商品、优惠与运费…' : 'Confirming items, discounts and shipping…'}
-            </p>
-        );
+    const pendingLabel = isZh ? '计算中…' : 'Calculating…';
     return (
-        <dl className={checkoutPageClassName('price-summary')}>
+        <dl className={checkoutPageClassName('price-summary')} aria-busy={pending || shippingPending}>
             <div>
                 <dt>{isZh ? '商品金额' : 'Items'}</dt>
-                <dd>{formatMoney(order.subTotalWithTax + discount, order.currencyCode, locale)}</dd>
+                <dd>
+                    {pending
+                        ? pendingLabel
+                        : formatMoney(order.subTotalWithTax + discount, order.currencyCode, locale)}
+                </dd>
             </div>
             <div>
                 <dt>
                     {requiresShipping ? (isZh ? '运费' : 'Shipping') : isZh ? '邮箱交付' : 'Email delivery'}
                 </dt>
-                <dd>{formatMoney(order.shippingWithTax, order.currencyCode, locale)}</dd>
+                <dd>
+                    {pending || shippingPending
+                        ? pendingLabel
+                        : formatMoney(order.shippingWithTax, order.currencyCode, locale)}
+                </dd>
             </div>
             {flashSaleDiscount > 0 && (
                 <div className={checkoutPageClassName('discount')}>
@@ -1232,7 +1459,11 @@ function PriceSummary({
             <TaxSummaryRows order={order} locale={locale} language={language} useDisplayCurrency />
             <div className={checkoutPageClassName('summary-total')}>
                 <dt>{isZh ? '合计' : 'Total'}</dt>
-                <dd>{formatMoney(order.totalWithTax, order.currencyCode, locale)}</dd>
+                <dd>
+                    {pending || shippingPending
+                        ? pendingLabel
+                        : formatMoney(order.totalWithTax, order.currencyCode, locale)}
+                </dd>
             </div>
         </dl>
     );
@@ -1445,7 +1676,7 @@ function Sheet({
             Array.from(dialog.querySelectorAll<HTMLElement>(selector)).filter(
                 element => !element.hidden && element.getAttribute('aria-hidden') !== 'true',
             );
-        const frame = requestAnimationFrame(() => (focusable()[0] ?? dialog).focus());
+        const frame = requestAnimationFrame(() => (focusable()[0] ?? dialog).focus({ preventScroll: true }));
         const keydown = (event: KeyboardEvent) => {
             if (isInputMethodKey(event)) return;
             if (event.key === 'Escape') {
@@ -1476,7 +1707,7 @@ function Sheet({
             cancelAnimationFrame(frame);
             document.removeEventListener('keydown', keydown);
             releaseBodyScrollLock();
-            previousFocus.current?.focus();
+            previousFocus.current?.focus({ preventScroll: true });
         };
     }, []);
     return (
@@ -1590,19 +1821,30 @@ function Field({
     name,
     label,
     defaultValue,
+    value,
+    onChange,
     type = 'text',
     wide = false,
 }: {
     name: string;
     label: string;
     defaultValue?: string;
+    value?: string;
+    onChange?: (value: string) => void;
     type?: string;
     wide?: boolean;
 }) {
     return (
         <label className={checkoutPageClassName(wide ? 'field-wide' : undefined)}>
             <span>{label}</span>
-            <input name={name} type={type} defaultValue={defaultValue} required />
+            <input
+                name={name}
+                type={type}
+                defaultValue={defaultValue}
+                value={value}
+                onChange={onChange ? event => onChange(event.target.value) : undefined}
+                required
+            />
         </label>
     );
 }

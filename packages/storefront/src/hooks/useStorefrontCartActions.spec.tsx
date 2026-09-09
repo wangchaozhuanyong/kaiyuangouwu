@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ShopApi, ShopApiError } from '../api';
 import { CartController } from '../cart/cart-controller';
-import { Order, ProductVariant, StorefrontCart } from '../types';
+import { ActiveCustomer, Order, ProductVariant, StorefrontCart } from '../types';
 
 import { useStorefrontCartActions } from './useStorefrontCartActions';
 
@@ -17,7 +17,7 @@ describe('storefront cart action boundaries', () => {
     let controller: CartController;
     let options: Options;
     let value: ReturnType<typeof useStorefrontCartActions>;
-    const cart = { id: 'cart-a', revision: 7, checkoutOrder: null } as StorefrontCart;
+    const cart = { id: 'cart-a', revision: 7, checkoutOrder: null, lines: [] } as StorefrontCart;
     const acknowledgement = {
         commandId: 'command-a',
         status: 'APPLIED' as const,
@@ -43,6 +43,7 @@ describe('storefront cart action boundaries', () => {
         options = {
             api: api as unknown as ShopApi,
             cart: { ...cart, revision: 1 },
+            customer: { id: 'customer-a' } as ActiveCustomer,
             cartController: controller,
             isZh: true,
             text: { loadError: '加载失败' },
@@ -58,6 +59,23 @@ describe('storefront cart action boundaries', () => {
     afterEach(() => {
         act(() => root.unmount());
         vi.restoreAllMocks();
+    });
+
+    it('sends guests to login with the selected variant without creating a checkout', async () => {
+        options.customer = null;
+        const execute = vi.spyOn(controller, 'execute');
+        render();
+        await value.startDirectPurchase({
+            id: 'selected-variant',
+            customFields: { fulfillmentType: 'physical' },
+        } as ProductVariant);
+        expect(options.navigate).toHaveBeenCalledWith({
+            name: 'login',
+            returnTo: 'purchase',
+            id: 'selected-variant',
+        });
+        expect(execute).not.toHaveBeenCalled();
+        expect(options.setCartLoading).not.toHaveBeenCalled();
     });
 
     it('uses the current controller revision instead of stale rendered cart state', async () => {
@@ -87,10 +105,13 @@ describe('storefront cart action boundaries', () => {
     it('keeps navigation unchanged when buy-now has no confirmed checkout session', async () => {
         vi.spyOn(controller, 'execute').mockResolvedValue({ ...acknowledgement, cart, session: null });
         render();
-        await value.startDirectPurchase({ id: 'variant-a' } as ProductVariant);
+        await value.startDirectPurchase({
+            id: 'variant-a',
+            customFields: { fulfillmentType: 'physical' },
+        } as ProductVariant);
         expect(options.navigate).not.toHaveBeenCalled();
         expect(options.setCheckoutOrder).not.toHaveBeenCalled();
-        expect(options.setCartError).toHaveBeenLastCalledWith('结算会话已变更，请重新确认');
+        expect(options.setCartError).toHaveBeenLastCalledWith('当前没有可结算的订单，请重新选择商品。');
         expect(options.setAddingVariantId).toHaveBeenLastCalledWith(null);
         expect(options.setCartLoading).toHaveBeenLastCalledWith(false);
     });
@@ -102,7 +123,10 @@ describe('storefront cart action boundaries', () => {
             .spyOn(controller, 'execute')
             .mockResolvedValue({ ...acknowledgement, cart, session });
         render();
-        await value.startDirectPurchase({ id: 'variant-a' } as ProductVariant);
+        await value.startDirectPurchase({
+            id: 'variant-a',
+            customFields: { fulfillmentType: 'physical' },
+        } as ProductVariant);
         expect(execute).toHaveBeenCalledWith({ buyNow: { productVariantId: 'variant-a', quantity: 1 } });
         expect(options.setCheckoutOrder).toHaveBeenCalledWith(order);
         expect(options.navigate).toHaveBeenCalledWith({ name: 'purchase' });

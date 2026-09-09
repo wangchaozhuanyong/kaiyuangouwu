@@ -63,7 +63,7 @@
 }
 
 .cart-guest-actions button {
-    min-height: 34px;
+    min-height: 44px;
     padding: 0 11px;
     border: 1px solid var(--accent);
     border-radius: 7px;
@@ -252,13 +252,13 @@
 }
 
 .cart-line-swipe-toggle {
-    width: 30px;
-    height: 30px;
+    width: 44px;
+    height: 44px;
     padding: 0;
     position: absolute;
     z-index: 1;
-    top: -4px;
-    right: -6px;
+    top: -11px;
+    right: -11px;
     border: 0;
     border-radius: 8px;
     background: transparent;
@@ -304,7 +304,7 @@
 
 .cart-line-purchase-row {
     min-width: 0;
-    min-height: 34px;
+    min-height: 44px;
     margin-top: auto;
     padding-top: 8px;
     display: flex;
@@ -319,7 +319,7 @@
     font-size: 15px;
     font-weight: var(--font-weight-bold);
     font-variant-numeric: tabular-nums;
-    line-height: 34px;
+    line-height: 44px;
     white-space: nowrap;
 }
 
@@ -331,7 +331,7 @@
 }
 
 .cart-line-actions > div {
-    height: 34px;
+    height: 46px;
     overflow: hidden;
     border: 1px solid var(--line);
     border-radius: 6px;
@@ -340,8 +340,8 @@
 }
 
 .cart-line-actions > div button {
-    width: 34px;
-    height: 33px;
+    width: 44px;
+    height: 44px;
     padding: 0;
     border: 0;
     background: var(--soft);
@@ -452,4 +452,29 @@
     .cart-checkout-bar {
         bottom: 0;
     }
+}
+
+/* Inventory feedback stays beside the affected item, including unselected lines. */
+.cart-line-copy > .cart-stock-error {
+    color: var(--accent);
+    line-height: 1.5;
+    white-space: normal;
+}
+.cart-stock-error button {
+    display: block;
+    padding: 4px 0;
+    color: inherit;
+    background: transparent;
+    border: 0;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+.cart-stock-notice {
+    margin: 0 0 12px;
+    padding: 12px;
+    color: var(--text);
+    background: var(--soft);
+    border-radius: 10px;
+    font-size: 13px;
+    line-height: 1.5;
 }

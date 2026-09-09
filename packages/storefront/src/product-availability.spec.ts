@@ -39,13 +39,15 @@ describe('product availability', () => {
             }),
         );
         expect(availability.stock).toBe(3);
-        expect(variantCanIncreaseQuantity(
-            variant({
-                autoCardAvailableStock: 3,
-                customFields: { fulfillmentType: 'digital', digitalDeliveryMode: 'auto_card' },
-            }),
-            3,
-        )).toBe(false);
+        expect(
+            variantCanIncreaseQuantity(
+                variant({
+                    autoCardAvailableStock: 3,
+                    customFields: { fulfillmentType: 'digital', digitalDeliveryMode: 'auto_card' },
+                }),
+                3,
+            ),
+        ).toBe(false);
     });
 
     it('marks zero and negative stock as sold out', () => {

@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { ProductCard } from './components/common/product-card';
 import { buildProductRowSmartInfo, ProductRow } from './components/common/product-row';
-import { ProductDetailPage } from './pages/product-detail-page';
+import { ProductDetailPage, productVariantOptionLabel } from './pages/product-detail-page';
 import { SharePosterModal } from './share-poster-modal';
 import { ProductDetailPageContext } from './storefront-page-contexts';
 import { productImage as displayProductImage } from './storefront-ui/product-display';
@@ -58,7 +58,46 @@ const digitalProduct: Product = {
 };
 
 describe('product image navigation layers', () => {
-    it('keeps square mobile artwork but uses a calmer 4:3 desktop media frame', () => {
+    it('disambiguates duplicate option names by price without exposing internal SKUs', () => {
+        const product: Product = {
+            ...digitalProduct,
+            variants: [
+                { ...digitalProduct.variants[0], id: 'variant-1', priceWithTax: 9900 },
+                {
+                    ...digitalProduct.variants[0],
+                    id: 'variant-2',
+                    sku: 'INTERNAL-SECOND',
+                    priceWithTax: 12000,
+                },
+            ],
+        };
+        const labels = product.variants.map((variant, index) =>
+            productVariantOptionLabel(product, variant, index, market.locale, 'zh'),
+        );
+
+        expect(new Set(labels).size).toBe(2);
+        expect(labels[0]).toContain('99');
+        expect(labels[1]).toContain('120');
+        expect(labels.join(' ')).not.toContain('INTERNAL-SECOND');
+    });
+
+    it('falls back to stable option numbers when duplicate names also share a price', () => {
+        const product: Product = {
+            ...digitalProduct,
+            variants: [
+                { ...digitalProduct.variants[0], id: 'variant-1' },
+                { ...digitalProduct.variants[0], id: 'variant-2', sku: 'INTERNAL-SECOND' },
+            ],
+        };
+
+        expect(
+            product.variants.map((variant, index) =>
+                productVariantOptionLabel(product, variant, index, market.locale, 'zh'),
+            ),
+        ).toEqual(['默认规格 · 规格 1', '默认规格 · 规格 2']);
+    });
+
+    it('keeps product artwork square without a padded desktop frame', () => {
         const markup = renderToStaticMarkup(
             <ProductCard
                 product={digitalProduct}
@@ -70,7 +109,8 @@ describe('product image navigation layers', () => {
         );
 
         expect(markup).toContain('aspect-square');
-        expect(markup).toContain('min-[900px]:aspect-[4/3]');
+        expect(markup).not.toContain('min-[900px]:aspect-[4/3]');
+        expect(markup).not.toContain('min-[900px]:p-3');
         expect(markup).toContain('[&amp;_img]:object-contain');
     });
 
@@ -243,7 +283,7 @@ describe('product image navigation layers', () => {
         expect(stylesheet).not.toMatch(/\.product-row\s+span\s*,\s*\.product-row\s+small\s*\{/);
     });
 
-    it('shows sold-out status and keeps card title and subtitle on one line', () => {
+    it('shows sold-out status with a wrapping title and compact description', () => {
         const soldOutProduct: Product = {
             ...digitalProduct,
             name: 'A very long product title that must remain on one line',

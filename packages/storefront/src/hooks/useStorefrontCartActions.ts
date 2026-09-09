@@ -1,14 +1,17 @@
 import { useCallback } from 'react';
+import { quantityStockMessage } from '../product-availability';
 
 import { ShopApi, ShopApiError } from '../api';
 import { CartController } from '../cart/cart-controller';
-import { Order, OrderSummary, ProductVariant, StorefrontCart } from '../types';
+import { ActiveCustomer, Order, OrderSummary, ProductVariant, StorefrontCart } from '../types';
 
+import { storefrontErrorMessage } from '../storefront-errors';
 import { useStorefrontNavigation } from './useStorefrontNavigation';
 
 interface StorefrontCartActionOptions {
     api: ShopApi;
     cart: StorefrontCart | null;
+    customer: ActiveCustomer | null;
     cartController: CartController;
     isZh: boolean;
     text: { loadError: string };
@@ -24,6 +27,7 @@ interface StorefrontCartActionOptions {
 export function useStorefrontCartActions({
     api,
     cart,
+    customer,
     cartController,
     isZh,
     text,
@@ -63,16 +67,10 @@ export function useStorefrontCartActions({
                     setCartError(
                         isZh ? '购物车已更新，请重新操作' : 'Your cart was updated. Please try again.',
                     );
-                } else if (
-                    requestError instanceof ShopApiError &&
-                    (requestError.errorCode === 'CART_PROJECTION_ERROR' ||
-                        requestError.message.includes('synchronized to checkout'))
-                ) {
-                    const message = isZh ? '商品库存不足或已售罄' : 'The item is out of stock';
+                } else {
+                    const message = storefrontErrorMessage(requestError, isZh ? 'zh' : 'en', text.loadError);
                     setCartError(message);
                     notify(message);
-                } else {
-                    setCartError(requestError instanceof Error ? requestError.message : text.loadError);
                 }
                 return null;
             } finally {
@@ -84,6 +82,19 @@ export function useStorefrontCartActions({
 
     const addToCart = useCallback(
         async (variant: ProductVariant) => {
+            const current = cartController.getSnapshot().cart ?? cart;
+            const existing = current?.lines.find(line => line.productVariant?.id === variant.id);
+            const stockError = quantityStockMessage(
+                existing?.productVariant ?? variant,
+                (existing?.quantity ?? 0) + 1,
+                isZh ? 'zh' : 'en',
+            );
+            if (stockError) {
+                const message = `${variant.name}：${stockError}`;
+                setCartError(message);
+                notify(message);
+                return null;
+            }
             setAddingVariantId(variant.id);
             const updated = await mutateCart(revision => api.addItem(variant.id, revision));
             setAddingVariantId(null);
@@ -92,11 +103,29 @@ export function useStorefrontCartActions({
             }
             return updated;
         },
-        [api, isZh, mutateCart, notify],
+        [api, cart, cartController, isZh, mutateCart, notify],
     );
 
     const startDirectPurchase = useCallback(
         async (variant: ProductVariant) => {
+            const existing = (cartController.getSnapshot().cart ?? cart)?.lines.find(
+                line => line.productVariant?.id === variant.id,
+            );
+            const stockError = quantityStockMessage(
+                existing?.productVariant ?? variant,
+                (existing?.quantity ?? 0) + 1,
+                isZh ? 'zh' : 'en',
+            );
+            if (stockError) {
+                const message = `${variant.name}：${stockError}`;
+                setCartError(message);
+                notify(message);
+                return;
+            }
+            if (!customer) {
+                navigate({ name: 'login', returnTo: 'purchase', id: variant.id });
+                return;
+            }
             setAddingVariantId(variant.id);
             setCartLoading(true);
             setCartError(null);
@@ -124,34 +153,21 @@ export function useStorefrontCartActions({
                             ? '购物车已更新，请重新点击立即购买'
                             : 'Your cart was updated. Please try Buy now again.',
                     );
-                } else if (
-                    requestError instanceof ShopApiError &&
-                    (requestError.errorCode === 'CART_PROJECTION_ERROR' ||
-                        requestError.message.includes('synchronized to checkout'))
-                ) {
-                    setCartError(isZh ? '所选商品库存不足或已售罄' : 'The selected item is out of stock');
                 } else {
-                    setCartError(requestError instanceof Error ? requestError.message : text.loadError);
+                    setCartError(storefrontErrorMessage(requestError, isZh ? 'zh' : 'en', text.loadError));
                 }
-                const errorMessage =
-                    requestError instanceof ShopApiError &&
-                    (requestError.errorCode === 'CART_PROJECTION_ERROR' ||
-                        requestError.message.includes('synchronized to checkout'))
-                        ? isZh
-                            ? '所选商品库存不足或已售罄'
-                            : 'The selected item is out of stock'
-                        : requestError instanceof Error
-                          ? requestError.message
-                          : isZh
-                            ? '暂时无法发起购买'
-                            : 'Could not start the purchase';
+                const errorMessage = storefrontErrorMessage(
+                    requestError,
+                    isZh ? 'zh' : 'en',
+                    isZh ? '暂时无法发起购买' : 'Could not start the purchase',
+                );
                 notify(errorMessage);
             } finally {
                 setAddingVariantId(null);
                 setCartLoading(false);
             }
         },
-        [api, cart, isZh, navigate, notify, refreshCart, setCart, text.loadError],
+        [api, cart, customer, isZh, navigate, notify, refreshCart, setCart, text.loadError],
     );
 
     const addOrderToCart = useCallback(
@@ -174,7 +190,11 @@ export function useStorefrontCartActions({
                 notify(isZh ? '订单商品已加入购物车' : 'Order items added to cart');
                 navigate({ name: 'cart' });
             } catch (requestError) {
-                setCartError(requestError instanceof Error ? requestError.message : text.loadError);
+                setCartError(
+                    requestError instanceof Error
+                        ? storefrontErrorMessage(requestError, isZh ? 'zh' : 'en')
+                        : text.loadError,
+                );
                 navigate({ name: 'cart' });
             } finally {
                 setCartLoading(false);

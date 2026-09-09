@@ -163,9 +163,16 @@ export function storefrontRealtimeQueryMatches(
     scope: StorefrontRealtimeScope,
 ): boolean {
     const key = query.queryKey;
+    const topics = new Set(event.topics);
+    if (
+        topics.has('config') &&
+        matchesPrefix(key, ['storefront', scope.marketCode]) &&
+        key[2] === 'commerce-mode'
+    ) {
+        return true;
+    }
     if (!matchesPrefix(key, ['storefront', scope.marketCode, scope.languageCode])) return false;
     const section = key[3];
-    const topics = new Set(event.topics);
 
     if (topics.has('config') && section === 'config') return true;
     if (
