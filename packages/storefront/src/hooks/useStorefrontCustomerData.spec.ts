@@ -76,6 +76,6 @@ describe('customer query boundaries', () => {
         }));
         const result = read();
         expect(result.couponCampaignsLoading).toBe(false);
-        expect(result.couponCampaignsError).toBe('Account unavailable');
+        expect(result.couponCampaignsError).toBe('操作暂时未能完成，请稍后重试。');
     });
 });
