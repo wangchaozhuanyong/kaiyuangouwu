@@ -1775,7 +1775,7 @@ describe('coupon lifecycle closed loop', () => {
             });
             const mutationSpy = vi
                 .spyOn(campaigns, 'lockOwnedCampaign')
-                .mockImplementation(async (...args: any[]) => {
+                .mockImplementation((...args: any[]) => {
                     release();
                     return originalCampaignLock(...args);
                 });
