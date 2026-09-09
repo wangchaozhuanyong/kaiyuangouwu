@@ -64,6 +64,7 @@ interface AddStorefrontCartItemInput {
 
 const NON_PRODUCTION_PAYMENT_PATTERN = /(?:^|[-_\s])(demo|dummy|mock|sandbox|test)(?:$|[-_\s])|测试/iu;
 const INTERNAL_BALANCE_PAYMENT_CODES = new Set(['referral-balance', 'referral-balance-payment']);
+const CONTROLLED_TEST_PAYMENT_HANDLER_CODE = 'controlled-test-payment-handler';
 
 export function isRegisteredProductionPaymentMethod(
     method: Pick<PaymentMethod, 'code' | 'handler' | 'translations'>,
@@ -75,6 +76,9 @@ export function isRegisteredProductionPaymentMethod(
     }
     if (INTERNAL_BALANCE_PAYMENT_CODES.has(method.code) || INTERNAL_BALANCE_PAYMENT_CODES.has(handlerCode)) {
         return false;
+    }
+    if (handlerCode === CONTROLLED_TEST_PAYMENT_HANDLER_CODE) {
+        return true;
     }
     const searchable = [
         method.code,
