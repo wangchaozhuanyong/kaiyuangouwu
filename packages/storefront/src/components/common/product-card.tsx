@@ -37,10 +37,12 @@ export function ProductCard({
     const variant = product.variants[0];
     const availability = productAvailability(variant);
     const stockLabel = productAvailabilityLabel(availability, isZh ? 'zh' : 'en');
+    const description = trimText(product.description, product.description.length);
+    const showDescription = description && description !== trimText(product.name, product.name.length);
 
     return (
         <article
-            className="group relative isolate flex min-w-0 flex-col overflow-hidden rounded-[var(--radius-md)] border border-black/5 bg-[var(--paper)] pb-2.5 shadow-[var(--shadow-sm)] transition-[transform,box-shadow,border-color] duration-200 ease-out hover:-translate-y-0.5 hover:border-black/10 hover:shadow-[var(--shadow-md)]"
+            className="product-grid-card group relative isolate flex min-w-0 flex-col bg-transparent pb-2.5"
             onPointerEnter={() => prefetchProductAsset(product)}
             onPointerDown={() => prefetchProductAsset(product)}
             onFocus={() => prefetchProductAsset(product)}
@@ -75,18 +77,20 @@ export function ProductCard({
                 </button>
             )}
 
-            <div className="aspect-square w-full overflow-hidden bg-slate-50 min-[900px]:aspect-[4/3] min-[900px]:p-3 [&_.image-placeholder]:h-full [&_.image-placeholder]:w-full [&_.image-placeholder]:bg-[var(--product-media-bg)] [&_img]:h-full [&_img]:w-full [&_img]:bg-[var(--product-media-bg)] [&_img]:object-contain">
+            <div className="product-card-media aspect-square w-full overflow-hidden [&_.responsive-picture]:block [&_.responsive-picture]:h-full [&_.responsive-picture]:w-full [&_.image-placeholder]:h-full [&_.image-placeholder]:w-full [&_.image-placeholder]:bg-[var(--product-media-bg)] [&_img]:block [&_img]:h-full [&_img]:w-full [&_img]:object-contain">
                 <ProductImage product={product} />
             </div>
 
-            <strong className="mt-2 min-h-[1.35em] max-w-full overflow-hidden text-ellipsis whitespace-nowrap px-2.5 text-left text-[13px] font-semibold leading-[1.35] text-[var(--text)] min-[900px]:mt-[11px] min-[900px]:text-[15px]">
+            <strong className="mt-2 line-clamp-2 min-h-[2.7em] max-w-full break-words text-left text-[13px] font-semibold leading-[1.35] text-[var(--text)] min-[1024px]:mt-2.5 min-[1024px]:text-[15px]">
                 {product.name}
             </strong>
-            <span className="mt-[3px] block max-w-full overflow-hidden text-ellipsis whitespace-nowrap px-2.5 text-[11.5px] leading-[1.3] text-[var(--muted)] min-[900px]:mt-1.5 min-[900px]:text-[13px]">
-                {trimText(product.description, 26)}
-            </span>
+            {showDescription && (
+                <span className="mt-1 block max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-[11.5px] leading-[1.3] text-[var(--muted)] min-[1024px]:text-[13px]">
+                    {description}
+                </span>
+            )}
 
-            <footer className="mt-auto flex min-h-[42px] items-center justify-between gap-2 px-2.5 pt-2">
+            <footer className="mt-auto flex min-h-[42px] items-center justify-between gap-2 pt-2">
                 <div className="min-w-0 [&_b]:text-[16px] [&_b]:font-extrabold [&_b]:leading-[1.2] [&_b]:tracking-[-0.02em] [&_b]:text-[var(--accent)] [&_b]:[font-family:var(--font-numeric)]">
                     <PriceDisplay
                         value={variant ? variant.priceWithTax : 0}

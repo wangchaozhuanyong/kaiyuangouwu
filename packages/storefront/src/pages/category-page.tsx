@@ -1,6 +1,14 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
-import { ArrowUpDown, ChevronUp, LayoutGrid, Search, SlidersHorizontal, WifiOff } from 'lucide-react';
+import {
+    ArrowUpDown,
+    ChevronDown,
+    ChevronUp,
+    LayoutGrid,
+    Search,
+    SlidersHorizontal,
+    WifiOff,
+} from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 // eslint-disable-next-line import/order -- organize-imports keeps relative type imports after packages.
 import type { RouteState, SortMode } from '../storefront-router';
@@ -93,6 +101,7 @@ export function CategoryPage() {
     const clientPluginBlock = contentBlocks.find(block => block.type === 'CLIENT_PLUGINS');
     const [filterOpen, setFilterOpen] = useState(false);
     const [allCategoriesOpen, setAllCategoriesOpen] = useState(false);
+    const [expandedSubcategoryId, setExpandedSubcategoryId] = useState<string | null>(null);
     const [draftType, setDraftType] = useState<'all' | FulfillmentType>(fulfillmentFilter);
     const [draftStock, setDraftStock] = useState(inStockOnly);
     const [draftMinimumPrice, setDraftMinimumPrice] = useState(minimumPriceInput);
@@ -113,6 +122,7 @@ export function CategoryPage() {
         );
     const children = primary?.children ?? [];
     const hasChildCategories = children.length > 0;
+    const subcategoriesExpanded = expandedSubcategoryId === primary?.id;
     const selectedCollectionId = activeChildId === 'all' ? activeCollectionId : activeChildId;
     const clientPluginCategoryContext = {
         activeCollectionId: selectedCollectionId,
@@ -441,27 +451,56 @@ export function CategoryPage() {
                 {hasChildCategories && (
                     <aside
                         ref={subcatScrollerRef}
-                        className="category-subcat-sidebar"
+                        id="category-subcategories"
+                        className={`category-subcat-sidebar${subcategoriesExpanded ? ' is-expanded' : ''}`}
                         aria-label={isZh ? '二级分类' : 'Subcategories'}
                     >
                         <button
                             type="button"
                             className={`subcat-side-item subcat-side-all ${activeChildId === 'all' || !activeChildId ? 'is-active' : ''}`}
+                            aria-pressed={activeChildId === 'all' || !activeChildId}
                             onClick={() => onChildChange('all')}
                         >
                             <span className="subcat-side-name">{isZh ? '全部' : 'All'}</span>
                             <span className="subcat-side-count">{totalItems}</span>
                         </button>
-                        {children.map(child => (
+                        {children.map((child, index) => (
                             <button
                                 type="button"
                                 key={child.id}
-                                className={`subcat-side-item ${child.id === activeChildId ? 'is-active' : ''}`}
+                                className={`subcat-side-item${child.id === activeChildId ? ' is-active' : ''}${index >= 6 ? ' subcat-overflow-item' : ''}`}
+                                aria-pressed={child.id === activeChildId}
                                 onClick={() => onChildChange(child.id)}
                             >
                                 <span className="subcat-side-name">{child.name}</span>
                             </button>
                         ))}
+                        {children.length > 6 && (
+                            <button
+                                type="button"
+                                className="subcat-expand-toggle"
+                                aria-expanded={subcategoriesExpanded}
+                                aria-controls="category-subcategories"
+                                onClick={() =>
+                                    setExpandedSubcategoryId(
+                                        subcategoriesExpanded ? null : (primary?.id ?? null),
+                                    )
+                                }
+                            >
+                                {subcategoriesExpanded
+                                    ? isZh
+                                        ? '收起分类'
+                                        : 'Show less'
+                                    : isZh
+                                      ? '更多分类'
+                                      : 'More categories'}
+                                {subcategoriesExpanded ? (
+                                    <ChevronUp aria-hidden="true" />
+                                ) : (
+                                    <ChevronDown aria-hidden="true" />
+                                )}
+                            </button>
+                        )}
                     </aside>
                 )}
 

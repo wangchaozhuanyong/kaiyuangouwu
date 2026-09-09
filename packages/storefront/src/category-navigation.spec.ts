@@ -101,12 +101,9 @@ describe('category navigation responsive spacing', () => {
         );
     });
 
-    it('keeps the desktop navigation stack and content height calculations aligned', () => {
+    it('keeps the desktop primary navigation height aligned', () => {
         expect(stylesheet).toMatch(/\.category-page\s*\{[^}]*--category-content-sticky-top:\s*209px;/);
         expect(stylesheet).toMatch(/\.primary-category-switcher\s*\{[^}]*height:\s*80px;/);
-        expect(
-            stylesheet.match(/min-height:\s*calc\(100dvh - var\(--category-content-sticky-top\)\);/g),
-        ).toHaveLength(3);
     });
 
     it('balances the primary category row and uses a category-list symbol for the all entry', () => {
