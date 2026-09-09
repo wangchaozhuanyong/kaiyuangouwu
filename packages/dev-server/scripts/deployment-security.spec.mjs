@@ -79,6 +79,9 @@ void test('every production ingress uses credential-safe access logs, including 
         'upstream_status',
         'msec',
         'http_cf_ray',
+        'server_protocol',
+        'connection',
+        'connection_requests',
     ]) {
         assert.ok(accessFormat.includes(`$${field}`), `missing origin correlation field ${field}`);
     }
