@@ -932,6 +932,14 @@
         justify-content: center;
     }
 
+    .auth-page.auth-page-managed .auth-hero-message-managed {
+        width: auto;
+        max-width: none;
+        inset: auto 32px 32px;
+        padding: 0;
+        gap: 12px;
+    }
+
     .auth-page .auth-hero-kicker {
         max-width: 100%;
         justify-content: flex-start;
