@@ -63,7 +63,7 @@ export interface AccountPageProps {
     onLogout: () => void;
 }
 
-const accountSectionClass = 'account-panel account-section lg:m-0 lg:w-full';
+const accountSectionClass = 'account-panel account-section';
 const compactSectionHeaderClass =
     '[&_.section-header]:mb-1 [&_.section-header]:min-h-0 [&_.section-header]:items-center [&_.section-header-title-row_h2]:m-0 [&_.section-header-title-row_h2]:text-[15px] [&_.section-header-title-row_h2]:font-extrabold [&_.section-header-title-row_h2]:leading-[1.2] [&_.section-header-action-btn]:min-h-0 [&_.section-header-action-btn]:p-0 [&_.section-header-action-btn]:text-[12.5px] [&_.section-header-action-btn]:leading-[1.2] [&_.section-header-action-btn]:text-slate-500 hover:[&_.section-header-action-btn]:text-[var(--accent)] [&_.section-header-action-btn_svg]:size-3.5';
 
@@ -158,7 +158,7 @@ export function AccountPage() {
         : '';
 
     return (
-        <main className="page account-page lg:grid lg:content-start lg:gap-4 lg:px-6 lg:pb-8 lg:pt-[88px]">
+        <main className="page account-page lg:grid lg:content-start lg:gap-4 lg:pb-8 lg:pt-[88px]">
             <section
                 className={`account-hero lg:col-span-full ${accountHeroImageUrl ? 'has-custom-background' : ''}`}
                 style={
@@ -474,7 +474,6 @@ export function AccountPage() {
                 className={`account-services ${accountSectionClass}`}
                 aria-label={isZh ? '常用服务' : 'Services'}
             >
-                <h2 className="account-services-title">{isZh ? '常用服务' : 'Services'}</h2>
                 <div className="account-service-grid grid grid-cols-4 gap-x-1 gap-y-1.5 lg:gap-4 [&>button]:flex [&>button]:min-h-14 [&>button]:min-w-0 [&>button]:flex-col [&>button]:items-center [&>button]:justify-center [&>button]:gap-1 [&>button]:rounded-lg [&>button]:border-0 [&>button]:bg-transparent [&>button]:px-0.5 [&>button]:py-1 hover:[&>button]:bg-[var(--soft)] [&>button>span]:relative [&>button>span]:grid [&>button>span]:size-[34px] [&>button>span]:place-items-center [&>button>span]:rounded-[10px] [&>button>span]:bg-[var(--soft)] [&>button>span]:text-[var(--text)] [&>button>span]:transition-all hover:[&>button>span]:-translate-y-0.5 hover:[&>button>span]:shadow-[0_4px_10px_rgba(0,0,0,0.08)] [&>button>span_svg]:size-5 [&>button:nth-child(1)>span]:bg-rose-50 [&>button:nth-child(1)>span]:text-rose-500 [&>button:nth-child(2)>span]:bg-red-50 [&>button:nth-child(2)>span]:text-red-500 [&>button:nth-child(3)>span]:bg-amber-50 [&>button:nth-child(3)>span]:text-amber-500 [&>button:nth-child(4)>span]:bg-emerald-50 [&>button:nth-child(4)>span]:text-emerald-500 [&>button:nth-child(5)>span]:bg-sky-50 [&>button:nth-child(5)>span]:text-sky-500 [&>button:nth-child(6)>span]:bg-indigo-50 [&>button:nth-child(6)>span]:text-indigo-500 [&>button:nth-child(7)>span]:bg-violet-50 [&>button:nth-child(7)>span]:text-violet-500 [&>button:nth-child(8)>span]:bg-slate-100 [&>button:nth-child(8)>span]:text-slate-600 [&>button>span_em]:absolute [&>button>span_em]:-right-2 [&>button>span_em]:-top-[5px] [&>button>span_em]:grid [&>button>span_em]:h-4 [&>button>span_em]:min-w-5 [&>button>span_em]:place-items-center [&>button>span_em]:rounded-full [&>button>span_em]:border-[1.5px] [&>button>span_em]:border-white [&>button>span_em]:bg-[var(--accent)] [&>button>span_em]:px-1 [&>button>span_em]:text-[9px] [&>button>span_em]:font-semibold [&>button>span_em]:not-italic [&>button>span_em]:leading-[13px] [&>button>span_em]:text-white [&>button>b]:max-w-full [&>button>b]:overflow-hidden [&>button>b]:text-ellipsis [&>button>b]:whitespace-nowrap [&>button>b]:text-xs [&>button>b]:font-medium [&>button>b]:text-[var(--text)]">
                     {!desktop && (
                         <ServiceButton

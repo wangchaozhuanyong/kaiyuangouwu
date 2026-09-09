@@ -170,6 +170,26 @@ describe('category automatic pagination', () => {
         expect(observers.at(-1)?.disconnected).toBe(false);
     });
 
+    it('switches between element and document scrolling when the layout changes', async () => {
+        render();
+        await settle();
+        const results = container.firstElementChild as HTMLElement;
+        const initial = observers.at(-1);
+        expect(initial?.options?.root).toBe(results);
+        act(() => {
+            results.style.overflowY = 'visible';
+            window.dispatchEvent(new Event('resize'));
+        });
+        expect(initial?.disconnected).toBe(true);
+        expect(observers.at(-1)?.options?.root).toBeNull();
+        expect(catalog).toHaveBeenCalledTimes(1);
+        act(() => {
+            results.style.overflowY = 'auto';
+            window.dispatchEvent(new Event('resize'));
+        });
+        expect(observers.at(-1)?.options?.root).toBe(results);
+    });
+
     it('deduplicates overlapping products without changing server offsets', async () => {
         catalog.mockImplementation(args => Promise.resolve(args.skip === 12 ? page(11) : page(args.skip)));
         render();

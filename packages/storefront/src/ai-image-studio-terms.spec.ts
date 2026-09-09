@@ -45,7 +45,7 @@ describe('AI Image Studio responsive generation flow', () => {
         expect(pageSource).toContain('className="ai-studio-controls"');
         expect(pageSource).toContain("'生成参数与结算'");
         expect(stylesheet).toContain('/* AI Image Studio — desktop workbench */');
-        expect(stylesheet).toContain('@media (min-width: 960px)');
+        expect(stylesheet).toContain('@media (min-width: 1024px)');
         expect(stylesheet).toMatch(
             /\.ai-studio-shell \{[^}]*grid-template-columns: minmax\(0, 1fr\) minmax\(340px, 400px\);/,
         );

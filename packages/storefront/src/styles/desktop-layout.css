@@ -2,10 +2,15 @@
     :root {
         --app-width: 1440px;
         --desktop-shell-width: 1256px;
+        --page-inline-gutter: 32px;
+        --page-section-inset: 0px;
     }
 
     .category-page {
         --category-content-sticky-top: 209px;
+        height: auto;
+        max-height: none;
+        overflow: visible;
     }
 
     .storefront-app.is-offline .category-page {
@@ -57,14 +62,28 @@
         padding-left: 0;
     }
 
+    /* One outer frame for every page and viewport-fixed commerce action bar.
+       Section components consume page-section-inset instead of adding desktop gutters. */
+    .page,
+    .subpage,
+    .page-action-bar {
+        width: min(calc(100% - 2 * var(--page-inline-gutter)), var(--desktop-shell-width));
+        min-width: 0;
+        margin-inline: auto;
+    }
+
+    .page-action-bar {
+        right: auto;
+        left: 50%;
+        transform: translateX(-50%);
+    }
+
     .page,
     .subpage {
         --page-bottom-fixed-offset: 0px;
         --page-end-gap: 48px;
-        width: min(calc(100% - 64px), var(--desktop-shell-width));
         min-height: 100dvh;
-        margin-right: auto;
-        margin-left: auto;
+        padding-inline: 0;
         padding-bottom: calc(
             var(--page-bottom-fixed-height) + var(--page-bottom-fixed-offset) + var(--page-end-gap) +
                 var(--safe-bottom)
@@ -79,8 +98,6 @@
     }
 
     .cart-checkout-bar {
-        width: min(calc(100% - 64px), var(--desktop-shell-width));
-        right: auto;
         bottom: 24px;
         border: 1px solid var(--line);
         border-radius: 8px;
@@ -106,9 +123,14 @@
         gap: 16px;
     }
 
+    .category-navigation-shell {
+        position: sticky;
+        top: 0;
+    }
+
     .category-topbar {
         height: 128px;
-        padding: 72px 16px 12px;
+        padding: 72px var(--page-section-inset) 12px;
         grid-template-columns: minmax(0, 1fr);
         gap: 0;
     }
@@ -376,6 +398,7 @@
     .category-layout,
     .category-layout.has-sidebar {
         height: auto;
+        overflow: visible;
         min-height: 0;
         display: grid;
         grid-template-columns: minmax(0, 1fr);
@@ -389,7 +412,7 @@
         height: auto;
         max-height: min(260px, 30dvh);
         min-height: 0;
-        padding: 10px 24px;
+        padding: 10px var(--page-section-inset);
         border-right: 0;
         border-bottom: 1px solid var(--line);
         background: var(--paper);
@@ -456,13 +479,16 @@
     }
 
     .category-results {
-        height: 100%;
+        height: auto;
+        max-height: none;
         min-height: 0;
-        padding: 0 24px 32px;
+        overflow: visible;
+        padding: 0 var(--page-section-inset) 32px;
         background: var(--bg);
     }
 
     .category-results .sort-bar {
+        top: var(--category-content-sticky-top);
         height: 48px;
         margin: 0;
         border-top: 0;
@@ -582,20 +608,6 @@
     .cart-page > .shipping-note,
     .cart-page > .inline-error,
     .cart-page > .cart-guest-notice,
-    .cart-page > .empty-state,
-    .cart-page > .cart-groups,
-    .cart-page > .coupon-row,
-    .cart-page > .invalid-cart-lines,
-    .cart-page > .product-section {
-        width: 100%;
-        max-width: none;
-        margin-right: auto;
-        margin-left: auto;
-    }
-
-    .cart-page > .shipping-note,
-    .cart-page > .inline-error,
-    .cart-page > .cart-guest-notice,
     .cart-page > .cart-groups {
         margin-top: 24px;
     }
@@ -609,10 +621,6 @@
         display: grid;
         gap: 16px;
         padding: 0;
-    }
-
-    .cart-page .cart-group {
-        margin: 0;
     }
 
     .cart-page .product-grid {
@@ -640,10 +648,7 @@
     }
 
     .detail-action-bar {
-        width: min(calc(100% - 64px), var(--desktop-shell-width));
-        right: auto;
         bottom: 24px;
-        left: 50%;
         border: 1px solid var(--line);
         border-radius: 8px;
         box-shadow: 0 16px 45px rgba(31, 43, 38, 0.12);
@@ -833,7 +838,6 @@
     }
 
     .page.auth-page {
-        width: min(calc(100% - 48px), 1180px);
         min-height: min(780px, calc(100dvh - 48px));
         margin: clamp(24px, 4.5vh, 52px) auto;
         padding: 0;

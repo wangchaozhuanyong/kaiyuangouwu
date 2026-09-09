@@ -2923,7 +2923,7 @@
     flex-shrink: 0;
     gap: 8px;
     padding-block: var(--client-plugin-slot-block-space);
-    padding-inline: var(--client-plugin-slot-inline-space);
+    padding-inline: var(--page-section-inset, var(--client-plugin-slot-inline-space));
 }
 
 .category-client-plugin {
@@ -3031,7 +3031,7 @@
 }
 
 .business-services-hero {
-    margin: 12px 12px 4px;
+    margin: 12px var(--page-section-inset, 12px) 4px;
     border: 1px solid rgba(109, 40, 217, 0.08);
     border-radius: 18px;
     padding: 18px;
@@ -3136,7 +3136,7 @@
 
 .business-services-empty {
     min-height: 190px;
-    margin: 12px;
+    margin: 12px var(--page-section-inset, 12px);
     border: 1px dashed #cbd5e1;
     border-radius: 16px;
     padding: 28px 20px;

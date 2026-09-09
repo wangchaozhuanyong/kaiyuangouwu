@@ -1,4 +1,17 @@
-/* AI Image Studio — approved compact mobile workflow */
+/* The page reserves the fixed action bar through the shared page clearance model. */
+.ai-studio-page {
+    --page-bottom-fixed-height: 68px;
+}
+
+.ai-studio-shell {
+    width: 100%;
+    min-width: 0;
+    padding: 20px var(--page-section-inset, 16px) 0;
+    display: grid;
+    gap: 24px;
+}
+
+/* AI Image Studio — compact mobile workflow */
 .category-client-plugin-image-studio {
     background: #f7f8fb;
 }
@@ -17,15 +30,15 @@
 }
 
 .ai-studio-history {
-    padding: 14px;
-    border-radius: 16px;
+    padding: 24px 0 0;
+    border-top: 1px solid var(--line);
 }
 
 .ai-studio-prompt-wrap {
     margin-top: 0;
     border-color: #ddd1ff;
     border-radius: 16px;
-    box-shadow: 0 5px 22px rgb(62 35 109 / 4%);
+    box-shadow: none;
 }
 
 .ai-studio-prompt-wrap textarea {
@@ -51,7 +64,7 @@
     padding: 5px 8px;
     border: 0;
     background: transparent;
-    color: #713aed;
+    color: var(--accent);
     font-size: 12px;
 }
 
@@ -73,19 +86,19 @@
 }
 
 .ai-studio-model-grid {
-    margin-top: 9px;
-    padding: 6px;
-    border: 1px solid var(--line);
-    border-radius: 14px;
+    margin-top: 12px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
     grid-template-columns: 1fr;
-    gap: 6px;
-    background: #fff;
+    gap: 8px;
+    background: transparent;
 }
 
 .ai-studio-model-grid button {
-    min-height: 50px;
-    padding: 9px 10px;
-    border-radius: 12px;
+    min-height: 52px;
+    padding: 12px;
+    border-radius: var(--radius-sm);
     display: grid;
     grid-template-columns: 20px minmax(0, 1fr) auto;
     align-items: center;
@@ -105,11 +118,11 @@
 .ai-studio-radio-mark svg {
     width: 12px;
     height: 12px;
-    color: #713aed;
+    color: var(--accent);
 }
 
 .ai-studio-model-grid button.is-selected .ai-studio-radio-mark {
-    border-color: #713aed;
+    border-color: var(--accent);
 }
 
 .ai-studio-model-description {
@@ -119,24 +132,24 @@
     font-size: 12px;
     line-height: 1.45;
     text-overflow: ellipsis;
-    white-space: nowrap;
+    white-space: normal;
+    overflow-wrap: anywhere;
 }
 
 .ai-studio-model-grid strong {
     margin: 0;
-    color: #713aed;
+    color: var(--accent);
     font-size: 12px;
     white-space: nowrap;
 }
 
 .ai-studio-option-row {
-    margin-top: 10px;
-    overflow: hidden;
-    border: 1px solid var(--line);
-    border-radius: 14px;
+    margin-top: 12px;
+    border: 0;
+    border-radius: 0;
     grid-template-columns: 1fr;
     gap: 0;
-    background: #fff;
+    background: transparent;
 }
 
 .ai-studio-option-row > * {
@@ -148,13 +161,13 @@
 .ai-studio-setting-trigger {
     width: 100%;
     min-height: 44px;
-    padding: 6px 10px 6px 13px !important;
+    padding: 10px 0 !important;
     border: 0;
     display: grid !important;
     grid-template-columns: minmax(0, 1fr) auto 16px;
     align-items: center;
     gap: 9px;
-    background: #fff;
+    background: transparent;
     color: var(--muted);
     text-align: left;
 }
@@ -164,15 +177,15 @@
 }
 
 .ai-studio-setting-trigger strong {
-    min-width: 96px;
-    min-height: 30px;
-    padding: 5px 9px;
-    border: 1px solid #e5e7ee;
-    border-radius: 10px;
+    min-width: 0;
+    min-height: 24px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
     display: inline-flex;
     align-items: center;
     justify-content: flex-end;
-    background: #fafbfc;
+    background: transparent;
     color: var(--text);
     font-size: 12px;
     font-weight: var(--font-weight-medium);
@@ -189,21 +202,22 @@
 }
 
 .ai-studio-settlement-summary {
-    border-color: #ded5f5;
-    border-radius: 16px;
+    border: 0;
+    border-radius: 0;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    background: #f8f5ff;
+    background: transparent;
 }
 
 .ai-studio-settlement-amount {
     min-height: 67px;
-    padding: 12px 14px;
+    padding: 12px 0;
     border-right: 0;
-    text-align: center;
+    text-align: left;
 }
 
 .ai-studio-settlement-amount + .ai-studio-settlement-amount {
-    border-left: 1px solid #e1d9ef;
+    border-left: 0;
+    text-align: right;
 }
 
 .ai-studio-settlement-amount strong {
@@ -217,8 +231,8 @@
 
 .ai-studio-settlement-refund {
     grid-column: 1 / -1;
-    padding: 10px 14px;
-    border-top: 1px solid #e1d9ef;
+    padding: 12px 0;
+    border-top: 1px solid var(--line);
     grid-template-columns: 30px minmax(0, 1fr);
 }
 
@@ -258,14 +272,14 @@
     width: 16px;
     height: 16px;
     margin: 1px 0 0;
-    accent-color: #713aed;
+    accent-color: var(--accent);
 }
 
 .ai-studio-terms-row button {
     padding: 0;
     border: 0;
     background: transparent;
-    color: #6130d7;
+    color: var(--accent);
     font: inherit;
     font-weight: var(--font-weight-semibold);
 }
@@ -275,12 +289,12 @@
 }
 
 .ai-studio-fixed-generate {
-    width: min(520px, 100%);
+    width: min(var(--app-width), 100%);
     min-height: 68px;
     padding: 9px 16px calc(9px + env(safe-area-inset-bottom, 0px));
     position: fixed;
     z-index: 80;
-    right: 0;
+    right: auto;
     bottom: 0;
     left: 50%;
     border-top: 1px solid #e5e7ed;
@@ -295,7 +309,7 @@
     padding: 10px 16px;
     border: 0;
     border-radius: 12px;
-    background: #713aed;
+    background: var(--accent);
     color: #fff;
     font-size: 15px;
 }
@@ -361,7 +375,7 @@
 
 .ai-studio-history-filters button.is-active {
     background: #fff;
-    color: #6130d7;
+    color: var(--accent);
     box-shadow: 0 1px 4px rgb(37 31 52 / 9%);
 }
 
@@ -403,7 +417,7 @@
     display: grid;
     place-items: center;
     background: #f4f5f8;
-    color: #713aed;
+    color: var(--accent);
     cursor: pointer;
 }
 
@@ -473,7 +487,7 @@
 
 .ai-generation-status.is-running,
 .ai-generation-status.is-queued {
-    color: #713aed;
+    color: var(--accent);
 }
 
 .ai-generation-status.is-failed,
@@ -646,7 +660,7 @@
     border: 0;
     border-radius: 7px;
     background: #f7f3ff;
-    color: #6130d7;
+    color: var(--accent);
     font-size: 9px;
 }
 
@@ -664,7 +678,9 @@
 
 .ai-studio-empty {
     margin-top: 9px;
-    padding: 26px 16px;
+    padding: 32px 0;
+    border: 0;
+    border-radius: 0;
 }
 
 .sheet.ai-studio-bottom-sheet {
@@ -748,8 +764,8 @@
 }
 
 .ai-studio-setting-sheet > button.is-selected > i {
-    border-color: #713aed;
-    background: #713aed;
+    border-color: var(--accent);
+    background: var(--accent);
 }
 
 .ai-studio-setting-sheet > button > i svg {
@@ -808,7 +824,7 @@
     margin: 14px 16px 0;
     border: 0;
     border-radius: 11px;
-    background: #713aed;
+    background: var(--accent);
     color: #fff;
     font-size: 14px;
     font-weight: var(--font-weight-semibold);
@@ -834,7 +850,7 @@
 }
 
 .ai-generation-detail-summary strong {
-    color: #6130d7;
+    color: var(--accent);
     font-size: 13px;
 }
 
@@ -869,7 +885,7 @@
     justify-content: center;
     gap: 3px;
     background: #f4efff;
-    color: #6130d7;
+    color: var(--accent);
     font-size: 10px !important;
     font-weight: var(--font-weight-semibold);
     line-height: 1;
@@ -1334,60 +1350,44 @@
 }
 
 /* AI Image Studio — desktop workbench */
-@media (min-width: 960px) {
+@media (min-width: 1024px) {
     .category-client-plugin-image-studio {
         background:
             radial-gradient(circle at 8% 0%, rgb(226 232 255 / 58%), transparent 32%),
             linear-gradient(180deg, #f7f8fb 0%, #f2f4f8 100%);
     }
 
+    .ai-studio-page {
+        --page-bottom-fixed-height: 0px;
+    }
+
     .ai-studio-shell {
-        width: min(1280px, 100%);
-        padding: 28px 28px 72px;
+        padding-block: 28px 0;
         grid-template-columns: minmax(0, 1fr) minmax(340px, 400px);
         align-items: start;
         gap: 24px 26px;
     }
 
-    .ai-studio-composer,
-    .ai-studio-history {
+    .ai-studio-composer {
         grid-column: 1;
     }
 
     .ai-studio-composer {
         grid-row: 1;
-        padding: 26px;
-        border: 1px solid #e0e4ed;
-        border-radius: 22px;
-        background: rgb(255 255 255 / 96%);
-        box-shadow: 0 18px 48px rgb(42 47 62 / 8%);
     }
 
     .ai-studio-controls {
         min-width: 0;
         grid-column: 2;
-        grid-row: 1 / span 2;
+        grid-row: 1;
         display: grid;
         align-self: start;
         gap: 16px;
     }
 
-    .ai-studio-options,
-    .ai-studio-checkout {
-        padding: 20px;
-        border: 1px solid #e0e4ed;
-        border-radius: 18px;
-        background: rgb(255 255 255 / 96%);
-        box-shadow: 0 12px 36px rgb(42 47 62 / 6%);
-    }
-
     .ai-studio-history {
+        grid-column: 1 / -1;
         grid-row: 2;
-        padding: 22px;
-        border-color: #e0e4ed;
-        border-radius: 22px;
-        background: rgb(255 255 255 / 96%);
-        box-shadow: 0 14px 42px rgb(42 47 62 / 7%);
     }
 
     .ai-studio-prompt-wrap {
@@ -1511,11 +1511,6 @@
         background: #faf8ff;
     }
 
-    .ai-studio-settlement-summary {
-        border-color: #ded5f5;
-        border-radius: 15px;
-    }
-
     .ai-studio-settlement-amount {
         min-height: 74px;
     }
@@ -1529,7 +1524,7 @@
     }
 
     .ai-studio-settlement-refund {
-        padding: 12px 14px;
+        padding: 12px 0;
     }
 
     .ai-studio-terms-row {
@@ -1550,7 +1545,7 @@
     .ai-studio-generate-button {
         min-height: 54px;
         border-radius: 14px;
-        box-shadow: 0 12px 28px rgb(86 45 173 / 22%);
+        box-shadow: none;
     }
 
     .ai-studio-history-heading > button {

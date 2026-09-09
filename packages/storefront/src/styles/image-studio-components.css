@@ -1,23 +1,16 @@
-/* Shared studio components follow layout rules, preserving the existing cascade. */
-.ai-studio-shell {
-    width: min(1120px, 100%);
-    min-width: 0;
-    margin: 0 auto;
-    padding: 16px 16px 48px;
-    display: grid;
-    gap: 16px;
-}
+/* Shared component defaults. Responsive layout is loaded after this file. */
+
 
 .ai-studio-composer,
 .ai-studio-options,
 .ai-studio-checkout,
 .ai-studio-history {
     min-width: 0;
-    padding: 20px;
-    border: 1px solid var(--line);
-    border-radius: 16px;
-    background: var(--surface, #fff);
-    box-shadow: var(--shadow-sm);
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
 }
 
 .ai-studio-heading,
@@ -58,7 +51,7 @@
 
 .ai-studio-balance strong {
     margin-top: 2px;
-    color: #6d28d9;
+    color: var(--accent);
     font-size: 18px;
 }
 
@@ -158,8 +151,8 @@
 
 .ai-studio-prompt-tools button,
 .ai-studio-generate-button {
-    border-color: #635bff;
-    background: #635bff;
+    border-color: var(--accent);
+    background: var(--accent);
     color: #fff;
 }
 
@@ -253,7 +246,7 @@
 }
 
 .ai-studio-reference-add:focus-within {
-    border-color: #635bff;
+    border-color: var(--accent);
     outline: 3px solid rgb(124 58 237 / 12%);
     outline-offset: 1px;
 }
@@ -276,7 +269,7 @@
     display: grid;
     place-items: center;
     background: #efe8ff;
-    color: #713aed;
+    color: var(--accent);
 }
 
 .ai-studio-reference-add-copy {
@@ -323,10 +316,10 @@
 }
 
 .ai-studio-resolution-picker button.is-selected {
-    border-color: #635bff;
-    color: #6d28d9;
+    border-color: var(--accent);
+    color: var(--accent);
     background: #f5f3ff;
-    box-shadow: inset 0 0 0 1px #635bff;
+    box-shadow: inset 0 0 0 1px var(--accent);
 }
 
 .ai-studio-resolution-picker button.is-unavailable {
@@ -433,7 +426,7 @@
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    color: #635bff;
+    color: var(--accent);
     font-size: 10px;
     font-weight: var(--font-weight-semibold);
 }
@@ -481,7 +474,7 @@
     align-items: center;
     justify-content: center;
     background: #f0eaff;
-    color: #6130d7;
+    color: var(--accent);
     font-size: 11px;
     font-weight: var(--font-weight-semibold);
     cursor: pointer;
@@ -579,9 +572,9 @@
 }
 
 .ai-studio-model-grid button.is-selected {
-    border-color: #635bff;
+    border-color: var(--accent);
     background: #f5f3ff;
-    box-shadow: inset 0 0 0 1px #635bff;
+    box-shadow: inset 0 0 0 1px var(--accent);
 }
 
 .ai-studio-model-grid code,
@@ -598,7 +591,7 @@
 
 .ai-studio-model-grid strong {
     margin-top: auto;
-    color: #6d28d9;
+    color: var(--accent);
     font-size: 13px;
 }
 
@@ -675,7 +668,7 @@
 }
 
 .ai-studio-settlement-amount strong {
-    color: #6d28d9;
+    color: var(--accent);
     font-size: 25px;
     font-variant-numeric: tabular-nums;
     line-height: 1.2;
@@ -696,7 +689,7 @@
     padding: 8px;
     border-radius: 10px;
     background: #ede9fe;
-    color: #6d28d9;
+    color: var(--accent);
 }
 
 .ai-studio-settlement-refund > div {
@@ -723,7 +716,7 @@
     min-width: 168px;
     min-height: 50px;
     border-radius: 14px;
-    background: #6d28d9;
+    background: var(--accent);
     box-shadow: 0 8px 18px rgb(109 40 217 / 18%);
     font-size: 15px;
     transition:

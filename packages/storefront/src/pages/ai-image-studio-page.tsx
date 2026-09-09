@@ -685,7 +685,12 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                 : 'Choose resolution';
 
     return (
-        <Subpage title={isZh ? 'AI 图片工坊' : 'AI Image Studio'} language={language} onBack={onBack}>
+        <Subpage
+            title={isZh ? 'AI 图片工坊' : 'AI Image Studio'}
+            language={language}
+            onBack={onBack}
+            className="ai-studio-page"
+        >
             {loading ? (
                 <PageSkeleton label={isZh ? '正在加载图片工坊' : 'Loading image studio'} />
             ) : loadError ? (
@@ -723,6 +728,8 @@ export function AiImageStudioPage(props: Readonly<AiImageStudioPageProps>) {
                     <section className="ai-studio-composer">
                         <div className="ai-studio-prompt-wrap">
                             <textarea
+                                id="ai-studio-prompt"
+                                aria-label={isZh ? '图片描述' : 'Image description'}
                                 maxLength={optimized ? 8000 : 2000}
                                 rows={4}
                                 value={prompt}

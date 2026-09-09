@@ -140,15 +140,23 @@ export function useCategoryPagination({
         if (!automaticSupported || !canRequest || !query.hasNextPage || query.isError || !root || !target)
             return;
         let active = true;
-        const observer = new IntersectionObserver(
-            entries => {
-                if (active && entries.some(entry => entry.isIntersecting)) void loadMore();
-            },
-            { root, rootMargin: '0px 0px 300px 0px', threshold: 0 },
-        );
-        observer.observe(target);
+        let observer: IntersectionObserver;
+        const observeScrollContainer = () => {
+            observer?.disconnect();
+            const scrollRoot = getComputedStyle(root).overflowY === 'visible' ? null : root;
+            observer = new IntersectionObserver(
+                entries => {
+                    if (active && entries.some(entry => entry.isIntersecting)) void loadMore();
+                },
+                { root: scrollRoot, rootMargin: '0px 0px 300px 0px', threshold: 0 },
+            );
+            observer.observe(target);
+        };
+        observeScrollContainer();
+        window.addEventListener('resize', observeScrollContainer);
         return () => {
             active = false;
+            window.removeEventListener('resize', observeScrollContainer);
             observer.disconnect();
         };
     }, [

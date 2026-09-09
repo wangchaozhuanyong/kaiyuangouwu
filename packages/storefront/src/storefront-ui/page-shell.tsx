@@ -138,12 +138,14 @@ export function Subpage({
     language,
     onBack,
     surfaceColor,
+    className,
     children,
 }: {
     title: string;
     language: StorefrontLanguage;
     onBack: () => void;
     surfaceColor?: string | null;
+    className?: string;
     children: ReactNode;
 }) {
     const surfaceStyle = surfaceColor?.trim()
@@ -151,7 +153,7 @@ export function Subpage({
         : undefined;
 
     return (
-        <main className="page subpage" style={surfaceStyle}>
+        <main className={`page subpage${className ? ` ${className}` : ''}`} style={surfaceStyle}>
             <SubHeader title={title} language={language} onBack={onBack} />
             {children}
         </main>
