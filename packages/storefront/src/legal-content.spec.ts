@@ -92,12 +92,10 @@ describe('resolveManagedLegalDocument', () => {
     it('fails closed instead of showing another known storefront policy', () => {
         const moyaoPolicy = legalBlock({ code: 'terms', body: 'This policy applies to moyaoai.com.' });
 
-        expect(
-            resolveManagedLegalDocument([moyaoPolicy], 'terms', 'Terms', 'damatong.net'),
-        ).toBeNull();
-        expect(
-            resolveManagedLegalDocument([moyaoPolicy], 'terms', 'Terms', 'www.moyaoai.com'),
-        ).toMatchObject({ body: 'This policy applies to moyaoai.com.' });
+        expect(resolveManagedLegalDocument([moyaoPolicy], 'terms', 'Terms', 'damatong.net')).toBeNull();
+        expect(resolveManagedLegalDocument([moyaoPolicy], 'terms', 'Terms', 'www.moyaoai.com')).toMatchObject(
+            { body: 'This policy applies to moyaoai.com.' },
+        );
     });
 });
 

@@ -44,6 +44,8 @@ import {
     StorefrontLanguage,
 } from '../types';
 
+import { DesktopAccountPage } from './desktop-account-page';
+
 // TODO: Fix internal imports later
 
 export interface AccountPageProps {
@@ -156,6 +158,29 @@ export function AccountPage() {
     const customerName = customer
         ? `${customer.lastName}${customer.firstName}`.trim() || customer.emailAddress
         : '';
+
+    if (desktop)
+        return (
+            <DesktopAccountPage
+                customer={customer}
+                products={products}
+                market={market}
+                locale={locale}
+                language={language}
+                storefrontName={storefrontName}
+                favoriteProductCount={favoriteProductCount}
+                announcementCount={announcementCount}
+                couponCount={couponCount}
+                onContentTarget={onContentTarget}
+                counts={countsQuery.data}
+                countsError={countsQuery.isError}
+                onRetryCounts={() => void countsQuery.refetch()}
+                afterSalesCount={afterSalesQuery.data ? activeAfterSalesCount : undefined}
+                referralEnabled={referralEnabled}
+                referralBalance={referralWallet?.availableBalance}
+                navigate={navigateTo}
+            />
+        );
 
     return (
         <main className="page account-page lg:grid lg:content-start lg:gap-4 lg:pb-8 lg:pt-[88px]">
@@ -425,7 +450,7 @@ export function AccountPage() {
 
             {customer && !desktop && (
                 <section
-                    className={`${accountSectionClass} [&>header]:mb-1 [&>header]:flex [&>header]:min-h-[26px] [&>header]:items-center [&>header]:justify-between [&>header>span]:flex [&>header>span]:items-center [&>header>span]:gap-1.5 [&>header>span]:text-[13.5px] [&>header_strong]:font-bold [&>header_strong]:text-[var(--text)] [&>button]:grid [&>button]:min-h-[52px] [&>button]:w-full [&>button]:grid-cols-[40px_minmax(0,1fr)_14px] [&>button]:items-center [&>button]:gap-2.5 [&>button]:rounded-[10px] [&>button]:border [&>button]:border-[var(--line)] [&>button]:bg-[var(--soft)] [&>button]:px-2.5 [&>button]:py-1.5 [&>button]:text-left hover:[&>button]:border-[var(--accent)] [&>button>img]:size-10 [&>button>.responsive-picture>img]:size-10 [&>button>.image-placeholder]:size-10 [&>button>img]:rounded-md [&>button>.responsive-picture>img]:rounded-md [&>button>.image-placeholder]:rounded-md [&>button>span_strong]:text-[12.5px] [&>button>span_strong]:font-semibold [&>button>span_strong]:text-emerald-500 [&>button>span_small]:mt-0.5 [&>button>span_small]:block [&>button>span_small]:text-[11.5px] [&>button>span_small]:text-[var(--muted)]`}
+                    className={`${accountSectionClass} [&>header]:mb-1 [&>header]:flex [&>header]:min-h-[26px] [&>header]:items-center [&>header]:justify-between [&>header>span]:flex [&>header>span]:items-center [&>header>span]:gap-1.5 [&>header>span]:text-[13.5px] [&>header_strong]:font-bold [&>header_strong]:text-[var(--text)] [&>button]:grid [&>button]:min-h-[52px] [&>button]:w-full [&>button]:grid-cols-[40px_minmax(0,1fr)_14px] [&>button]:items-center [&>button]:gap-2.5 [&>button]:rounded-[10px] [&>button]:border [&>button]:border-[var(--line)] [&>button]:bg-[var(--soft)] [&>button]:px-2.5 [&>button]:py-1.5 [&>button]:text-left hover:[&>button]:border-[var(--accent)] [&>button>img]:size-10 [&>button>.responsive-picture>img]:size-10 [&>button>.image-placeholder]:size-10 [&>button>img]:rounded-md [&>button>.responsive-picture]:rounded-md [&>button>.responsive-picture>img]:rounded-md [&>button>.image-placeholder]:rounded-md [&>button>span_strong]:text-[12.5px] [&>button>span_strong]:font-semibold [&>button>span_strong]:text-emerald-500 [&>button>span_small]:mt-0.5 [&>button>span_small]:block [&>button>span_small]:text-[11.5px] [&>button>span_small]:text-[var(--muted)]`}
                 >
                     <header>
                         <h2>{isZh ? '最新物流' : 'Latest delivery'}</h2>
@@ -531,7 +556,7 @@ export function AccountPage() {
 
             {!!recentVariants.length && (
                 <section
-                    className={`account-recent-purchases ${accountSectionClass} ${compactSectionHeaderClass} pt-0 lg:pt-0 [&>.section-header]:mb-0 [&>.section-header]:min-h-11 lg:[&>.section-header]:min-h-[52px] [&>div>article]:grid [&>div>article]:min-h-[68px] [&>div>article]:grid-cols-[54px_minmax(0,1fr)_auto] [&>div>article]:items-center [&>div>article]:gap-2.5 [&>div>article]:border-t [&>div>article]:border-[var(--line)] [&>div>article]:py-[7px] [&_article>img]:size-[54px] [&_article>.responsive-picture>img]:size-[54px] [&_article>.image-placeholder]:size-[54px] [&_article>img]:rounded-[7px] [&_article>.responsive-picture>img]:rounded-[7px] [&_article>.image-placeholder]:rounded-[7px] [&_article>img]:object-contain [&_article_strong]:block [&_article_strong]:overflow-hidden [&_article_strong]:text-ellipsis [&_article_strong]:whitespace-nowrap [&_article_small]:mt-1 [&_article_small]:block [&_article_small]:text-[var(--muted)] [&_article>button]:min-h-9 [&_article>button]:rounded-md [&_article>button]:border [&_article>button]:border-[var(--accent)] [&_article>button]:bg-white [&_article>button]:px-2.5 [&_article>button]:text-[var(--accent)]`}
+                    className={`account-recent-purchases ${accountSectionClass} ${compactSectionHeaderClass} pt-0 lg:pt-0 [&>.section-header]:mb-0 [&>.section-header]:min-h-11 lg:[&>.section-header]:min-h-[52px] [&>div>article]:grid [&>div>article]:min-h-[68px] [&>div>article]:grid-cols-[54px_minmax(0,1fr)_auto] [&>div>article]:items-center [&>div>article]:gap-2.5 [&>div>article]:border-t [&>div>article]:border-[var(--line)] [&>div>article]:py-[7px] [&_article>img]:size-[54px] [&_article>.responsive-picture>img]:size-[54px] [&_article>.image-placeholder]:size-[54px] [&_article>img]:rounded-[7px] [&_article>.responsive-picture]:rounded-[7px] [&_article>.responsive-picture>img]:rounded-[7px] [&_article>.image-placeholder]:rounded-[7px] [&_article>img]:object-contain [&_article_strong]:block [&_article_strong]:overflow-hidden [&_article_strong]:text-ellipsis [&_article_strong]:whitespace-nowrap [&_article_small]:mt-1 [&_article_small]:block [&_article_small]:text-[var(--muted)] [&_article>button]:min-h-9 [&_article>button]:rounded-md [&_article>button]:border [&_article>button]:border-[var(--accent)] [&_article>button]:bg-white [&_article>button]:px-2.5 [&_article>button]:text-[var(--accent)]`}
                 >
                     <SectionHeader
                         title={isZh ? '最近买过' : 'Recently purchased'}

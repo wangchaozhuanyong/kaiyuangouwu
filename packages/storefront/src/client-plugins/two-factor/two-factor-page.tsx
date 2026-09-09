@@ -17,18 +17,15 @@ import {
     Trash2,
     Upload,
 } from 'lucide-react';
-import type { FormEvent } from 'react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ActiveCustomer, StorefrontLanguage } from '../../types';
-import type { BatchImportErrorCode } from './batch-parser';
-import type { TwoFactorAccount } from './types';
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { EmptyState, Subpage } from '../../storefront-ui/page-shell';
+import { ActiveCustomer, StorefrontLanguage } from '../../types';
 
-import { parseBatchImport } from './batch-parser';
+import { BatchImportErrorCode, parseBatchImport } from './batch-parser';
 import { clearBrowserAccounts, loadBrowserAccounts, saveBrowserAccounts } from './browser-storage';
 import { formatTotpCode, generateTotp, getTotpSecondsRemaining, normalizeBase32Secret } from './totp';
-import { MAX_TWO_FACTOR_ACCOUNTS } from './types';
+import { MAX_TWO_FACTOR_ACCOUNTS, TwoFactorAccount } from './types';
 
 interface TwoFactorPageProps {
     customer: ActiveCustomer | null;
@@ -310,7 +307,7 @@ export function TwoFactorPage({
 
     return (
         <Subpage title={copy.title} language={language} onBack={onBack}>
-            <div className="mx-auto grid w-full max-w-6xl gap-4 px-3 pb-10 pt-3 lg:grid-cols-[minmax(0,1.5fr)_minmax(280px,0.5fr)] lg:px-6">
+            <div className="desktop-two-factor-content mx-auto grid w-full max-w-6xl gap-4 px-3 pb-10 pt-3 lg:grid-cols-[minmax(0,1.5fr)_minmax(280px,0.5fr)] lg:px-6">
                 <section className="rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-cyan-50 p-4 shadow-sm lg:p-5">
                     <div className="flex items-start gap-3">
                         <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-emerald-600 text-white">

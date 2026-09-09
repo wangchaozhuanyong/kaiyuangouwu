@@ -38,6 +38,7 @@ import { normalizedHomepageVisualStyle } from '../../../storefront-content-plugi
 import { HeroScene } from '../../../storefront-content-plugin/src/shared/hero-scene';
 import { ProductCard } from '../components/common/product-card';
 import { claimableCouponCampaigns } from '../coupon-center-state';
+import { useDesktopLayout } from '../desktop-layout';
 import { heroIndexAfterManualMove, isCompletedHeroSwipe } from '../hero-carousel';
 import { heroThemeStyle } from '../hero-theme';
 import { selectCategoryPromotionProducts, selectManagedProducts } from '../home-merchandising';
@@ -469,9 +470,11 @@ export interface HomePageProps {
 
 export function HomePage() {
     const navigate = useNavigate();
+    const desktop = useDesktopLayout();
     const navigateTo = (route: RouteState) => void navigate(routeNavigateOptions(route) as never);
     const {
         products,
+        collections,
         contentBlocks,
         managedContentProducts,
         heroAutoplayIntervalSeconds,
@@ -791,13 +794,21 @@ export function HomePage() {
         icon: ReactNode;
         disabled?: boolean;
         onClick: () => void;
-    }> = (quickBlock?.items ?? []).map((item, index) => ({
-        id: item.id,
-        label: item.label,
-        icon: renderColorfulQuickIcon(item.label, index, item.imageUrl),
-        disabled: item.targetType === 'NONE' || !item.targetValue,
-        onClick: () => onContentTarget(item.targetType, item.targetValue),
-    }));
+    }> = (quickBlock?.items ?? [])
+        // Desktop collections already have a persistent entry in DesktopHeader.
+        .filter(
+            item =>
+                !desktop ||
+                item.targetType !== 'COLLECTION' ||
+                !collections.some(collection => collection.id === item.targetValue),
+        )
+        .map((item, index) => ({
+            id: item.id,
+            label: item.label,
+            icon: renderColorfulQuickIcon(item.label, index, item.imageUrl),
+            disabled: item.targetType === 'NONE' || !item.targetValue,
+            onClick: () => onContentTarget(item.targetType, item.targetValue),
+        }));
     const trustIcons = [ShieldCheck, Zap, Lock, Headphones];
     const trustItems = (trustBlock?.items ?? []).map(item => item.label);
     const trustBarHasLongCopy = trustItems.some(label => Array.from(label.trim()).length > (isZh ? 4 : 10));
@@ -1015,7 +1026,7 @@ export function HomePage() {
                                 <nav
                                     className={`quick-grid quick-grid-${quickLinks.length}${colorfulQuickLinks ? ' is-color-marketplace' : ''}`}
                                     style={{ order: homepageModuleOrder('QUICK_LINKS') }}
-                                    aria-label={isZh ? '快捷分类' : 'Quick categories'}
+                                    aria-label={isZh ? '快捷入口' : 'Quick links'}
                                 >
                                     {quickLinks.map(item => (
                                         <button
@@ -1024,8 +1035,9 @@ export function HomePage() {
                                             onClick={item.onClick}
                                             disabled={item.disabled}
                                         >
-                                            <span>{item.icon}</span>
+                                            {!desktop && <span>{item.icon}</span>}
                                             <b>{item.label}</b>
+                                            {desktop && <ChevronRight aria-hidden="true" />}
                                         </button>
                                     ))}
                                 </nav>

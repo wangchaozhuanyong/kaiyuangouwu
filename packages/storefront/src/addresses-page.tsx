@@ -362,6 +362,15 @@ export function AddressesPage({
                         }
                     >
                         <Plus />
+                        <span className="desktop-control-label">
+                            {effectiveTab === 'email'
+                                ? isZh
+                                    ? '新增邮箱'
+                                    : 'Add email'
+                                : isZh
+                                  ? '新增地址'
+                                  : 'Add address'}
+                        </span>
                     </button>
                 }
             />

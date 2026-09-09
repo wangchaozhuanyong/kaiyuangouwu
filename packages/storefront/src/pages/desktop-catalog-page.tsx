@@ -114,7 +114,7 @@ export function DesktopCatalogPage() {
     return (
         <main className="desktop-catalog-main">
             <h1 className="visually-hidden">{title}</h1>
-            <DesktopCategoryNavigation />
+            <DesktopCategoryNavigation showCollections={false} />
             <div className="desktop-catalog-toolbar">
                 <strong className="desktop-catalog-label">
                     {input.term

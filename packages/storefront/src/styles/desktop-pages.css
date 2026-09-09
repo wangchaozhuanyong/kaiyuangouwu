@@ -1,0 +1,1389 @@
+/* Shared markup stays flow-neutral on phones. Desktop page families own their layout below. */
+.desktop-checkout-main,
+.desktop-checkout-summary {
+    display: contents;
+}
+.desktop-control-label {
+    display: none;
+}
+
+@media (min-width: 1024px) {
+    /* The mobile page entrance animation retains a stacking context after it ends.
+       Desktop dialogs must stack above the shared sticky header. */
+    .desktop-store-layout :is(.page, .subpage) {
+        animation: none;
+    }
+    .desktop-store-layout .subpage-header > span:has(button) {
+        display: flex;
+        width: auto;
+        height: auto;
+        flex: none;
+    }
+    .desktop-store-layout .subpage-header > span > button {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        width: auto;
+        height: 40px;
+        padding: 0 14px;
+        white-space: nowrap;
+        color: var(--accent);
+        border: 1px solid var(--line);
+        background: #fff;
+        border-radius: 2px;
+    }
+
+    /* Page headings, empty states and dialogs have one desktop treatment. */
+    .desktop-store-layout .page.subpage > .subpage-header {
+        display: flex;
+        position: static;
+        width: 100%;
+        height: 76px;
+        min-height: 76px;
+        margin: 0 0 24px;
+        padding: 0;
+        gap: 14px;
+        border: 0;
+        border-bottom: 1px solid var(--line);
+        background: transparent;
+        box-shadow: none;
+        color: var(--text);
+    }
+    .desktop-store-layout .subpage-header :is(h1, strong) {
+        display: block;
+        flex: 1;
+        text-align: left;
+        font-size: 24px;
+        font-weight: 500;
+        opacity: 1;
+    }
+    .desktop-store-layout .subpage-header > button {
+        position: static;
+        display: flex;
+        flex: none;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        width: auto;
+        min-width: 32px;
+        min-height: 36px;
+        height: auto;
+        padding: 6px;
+        background: transparent;
+        border: 0;
+        border-radius: 0;
+        color: var(--muted);
+    }
+    .desktop-store-layout .subpage-header button svg {
+        width: 20px;
+        height: 20px;
+    }
+    .desktop-control-label {
+        display: inline;
+        font-size: 14px;
+    }
+    .desktop-store-layout .page > .empty-state {
+        min-height: 340px;
+        margin: 0;
+        padding: 48px 24px;
+        background: #fff;
+        border: 0;
+        border-radius: 0;
+    }
+    .desktop-store-layout .empty-state > p {
+        max-width: 520px;
+        margin-inline: auto;
+        line-height: 1.7;
+    }
+    .desktop-store-layout .sheet-layer {
+        display: grid;
+        place-items: center;
+        grid-template-columns: minmax(0, 1fr);
+        justify-content: center;
+        inset: 0;
+        width: 100%;
+        max-width: none;
+        transform: none;
+        padding: 28px;
+    }
+    .desktop-store-layout .sheet-layer > .sheet {
+        position: relative;
+        inset: auto;
+        width: min(680px, 100%);
+        max-width: none;
+        max-height: calc(100dvh - 56px);
+        margin: 0;
+        transform: none;
+        border-radius: 8px;
+        overflow: auto;
+    }
+    .desktop-store-layout .sheet-layer .sheet-mask {
+        position: fixed;
+        inset: 0;
+    }
+    .desktop-store-layout .legal-footer {
+        padding: 28px 0;
+    }
+
+    /* Product: a bounded gallery and a single buying panel, followed by product information. */
+    .desktop-store-layout .product-detail-page {
+        --page-bottom-fixed-height: 0px;
+        --page-bottom-fixed-offset: 0px;
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+        padding-bottom: 40px;
+    }
+    .desktop-store-layout .product-detail-page > .subpage-header {
+        margin-bottom: 0;
+    }
+    .desktop-product-purchase {
+        display: grid;
+        grid-template-columns: minmax(360px, 0.9fr) minmax(0, 1.1fr);
+        gap: 44px;
+        align-items: start;
+        background: #fff;
+        padding: 28px;
+    }
+    .desktop-product-purchase .detail-gallery {
+        margin: 0;
+        width: 100%;
+        height: auto;
+        aspect-ratio: 1;
+        min-height: 0;
+        border: 0;
+        background: transparent;
+        overflow: hidden;
+    }
+    .desktop-product-purchase .detail-gallery :is(img, .responsive-picture) {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+    }
+    .desktop-product-buying {
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+    }
+    .desktop-product-buying :is(.detail-summary, .detail-options, .detail-service-bar) {
+        margin: 0;
+        padding: 0;
+        background: transparent;
+        border: 0;
+        border-radius: 0;
+        box-shadow: none;
+    }
+    .desktop-product-buying .detail-summary {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+    }
+    .desktop-product-buying .detail-summary h1 {
+        order: -2;
+        margin: 0;
+        font-size: 26px;
+        line-height: 1.45;
+        font-weight: 600;
+    }
+    .desktop-product-buying .detail-summary > p {
+        order: -1;
+        margin: 0;
+        font-size: 14px;
+        line-height: 1.7;
+        color: var(--muted);
+    }
+    .desktop-product-buying .detail-price-line {
+        padding: 18px;
+        background: var(--soft);
+    }
+    .desktop-product-buying .detail-price {
+        margin: 0;
+        font-size: 28px;
+        color: var(--accent);
+    }
+    .desktop-product-buying .detail-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+    .desktop-product-buying .detail-tags span {
+        border: 0;
+        background: transparent;
+        color: var(--muted);
+        padding: 0;
+        font-size: 12px;
+    }
+    .desktop-product-buying .detail-options header {
+        margin-bottom: 14px;
+    }
+    .desktop-product-buying .detail-options button {
+        min-height: 40px;
+        padding: 10px 18px;
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 2px;
+        font-size: 14px;
+        box-shadow: none;
+    }
+    .desktop-product-buying .detail-options button.is-active {
+        border-color: var(--accent);
+        color: var(--accent);
+        background: color-mix(in srgb, var(--accent) 4%, #fff);
+    }
+    .desktop-product-buying .detail-action-bar {
+        position: static;
+        display: grid;
+        grid-template-columns: 52px 52px minmax(0, 1fr) minmax(0, 1fr);
+        gap: 10px;
+        width: 100%;
+        max-width: none;
+        min-height: 48px;
+        height: auto;
+        margin: 0;
+        padding: 0;
+        transform: none;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
+    }
+    .desktop-product-buying .detail-action-bar > button {
+        height: 48px;
+        min-width: 0;
+        border-radius: 2px;
+        box-shadow: none;
+    }
+    .desktop-product-buying .detail-action-bar > button:nth-child(3) {
+        background: color-mix(in srgb, var(--accent) 7%, #fff);
+        border: 1px solid var(--accent);
+        color: var(--accent);
+    }
+    .desktop-product-buying .detail-action-bar > button:nth-child(4) {
+        background: var(--accent);
+        border: 1px solid var(--accent);
+        color: #fff;
+    }
+    .desktop-product-buying .detail-action-bar > button:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+    }
+    .desktop-product-buying .detail-service-bar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px 18px;
+        padding-top: 20px;
+        border-top: 1px solid var(--line);
+        font-size: 12px;
+    }
+    .desktop-product-buying .detail-service-bar span {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+    }
+    .desktop-store-layout .product-detail-page > .detail-block {
+        padding: 28px;
+        margin: 0;
+        background: #fff;
+        border: 0;
+        border-radius: 0;
+    }
+    .desktop-store-layout .detail-params dl {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0 40px;
+    }
+    .desktop-store-layout .detail-description > :is(img, picture),
+    .desktop-store-layout .detail-rich-text img {
+        max-width: min(100%, 800px);
+        height: auto;
+        margin-inline: auto;
+    }
+    .desktop-store-layout .detail-description > picture {
+        display: block;
+    }
+    .desktop-store-layout .detail-description > picture img {
+        width: 100%;
+        height: auto;
+        object-fit: contain;
+    }
+    .desktop-store-layout .detail-description h2 {
+        font-size: 20px;
+        margin: 0 0 24px;
+    }
+
+    /* Cart: shared table columns and visible mouse actions, with the existing checkout bar. */
+    .desktop-cart-columns,
+    .desktop-cart-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 112px 112px 130px 100px;
+        align-items: center;
+        gap: 20px;
+        padding: 16px 24px;
+    }
+    .desktop-cart-columns {
+        background: var(--soft);
+        color: var(--muted);
+        font-size: 13px;
+    }
+    .desktop-cart-columns > :not(:first-child),
+    .desktop-cart-row > :not(:first-child) {
+        text-align: center;
+    }
+    .desktop-cart-row {
+        min-height: 142px;
+        background: #fff;
+        border-top: 1px solid var(--line);
+        font-size: 14px;
+    }
+    .desktop-cart-product {
+        display: flex;
+        align-items: center;
+        min-width: 0;
+        gap: 20px;
+    }
+    .desktop-cart-product .round-check {
+        flex: none;
+    }
+    .desktop-cart-product-link {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 18px;
+        color: var(--text);
+        text-decoration: none;
+    }
+    .desktop-cart-product-link > :is(img, picture, .responsive-picture, .image-placeholder) {
+        flex: none;
+        width: 88px;
+        height: 88px;
+        border-radius: var(--radius-sm);
+        overflow: hidden;
+    }
+    .desktop-cart-product-link img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+    }
+    .desktop-cart-product-link strong {
+        overflow-wrap: anywhere;
+        font-weight: 500;
+    }
+    .desktop-cart-quantity {
+        display: grid;
+        grid-template-columns: 30px 34px 30px;
+        justify-content: center;
+        align-items: center;
+    }
+    .desktop-cart-quantity > button {
+        display: grid;
+        place-items: center;
+        height: 32px;
+        padding: 0;
+        border: 1px solid var(--line);
+        background: var(--soft);
+        color: var(--text);
+    }
+    .desktop-cart-quantity button:disabled {
+        color: #ccc;
+    }
+    .desktop-cart-quantity svg {
+        width: 14px;
+        height: 14px;
+    }
+    .desktop-cart-quantity > span {
+        height: 32px;
+        line-height: 30px;
+        border-block: 1px solid var(--line);
+    }
+    .desktop-cart-quantity .cart-stock-error {
+        grid-column: 1 / -1;
+        margin-top: 8px;
+        color: var(--accent);
+        line-height: 1.5;
+    }
+    .desktop-cart-amount {
+        color: var(--accent);
+        font-weight: 600;
+    }
+    .desktop-cart-actions {
+        position: relative;
+        display: grid;
+        justify-items: center;
+        gap: 8px;
+    }
+    .desktop-cart-actions button,
+    .desktop-cart-actions summary {
+        border: 0;
+        background: none;
+        padding: 0;
+        color: var(--muted);
+        font-size: 12px;
+        cursor: pointer;
+    }
+    .desktop-cart-actions button:hover {
+        color: var(--accent);
+    }
+    .desktop-cart-actions details[open] {
+        position: absolute;
+        top: 40px;
+        right: 0;
+        z-index: 3;
+        background: #fff;
+        padding: 12px 16px;
+        border: 1px solid var(--line);
+        box-shadow: 0 4px 16px #0001;
+    }
+    .desktop-cart-actions details[open] button {
+        display: block;
+        padding-top: 12px;
+    }
+    .desktop-store-layout .cart-page :is(.cart-group, .coupon-row) {
+        border-radius: 0;
+        box-shadow: none;
+    }
+    .desktop-store-layout .cart-checkout-bar {
+        border-radius: 0;
+        box-shadow: 0 0 20px #0001;
+    }
+    .desktop-store-layout .cart-checkout-bar > button {
+        border-radius: 2px;
+        box-shadow: none;
+    }
+
+    /* Checkout: one form, two desktop columns. Business values and submission remain shared. */
+    .desktop-store-layout .checkout-page {
+        --page-bottom-fixed-height: 0px;
+        --page-bottom-fixed-offset: 0px;
+        padding-bottom: 48px;
+    }
+    .desktop-store-layout .checkout-form {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 340px;
+        gap: 24px;
+        align-items: start;
+        margin: 0;
+        padding: 0;
+    }
+    .desktop-checkout-main {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        gap: 20px;
+    }
+    .desktop-checkout-summary {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        gap: 0;
+        padding: 24px;
+        background: #fff;
+        position: sticky;
+        top: calc(var(--desktop-header-height) + 24px);
+    }
+    .desktop-store-layout .checkout-page .checkout-section {
+        margin: 0;
+        border: 0;
+        border-radius: 0;
+        box-shadow: none;
+        background: #fff;
+        padding: 24px;
+    }
+    .desktop-store-layout .checkout-page .checkout-section h2 {
+        font-size: 18px;
+        font-weight: 500;
+        margin: 0 0 20px;
+    }
+    .desktop-store-layout .checkout-page .desktop-checkout-summary .checkout-section {
+        padding: 0;
+    }
+    .desktop-store-layout .checkout-page .checkout-assurance {
+        padding: 20px 0;
+        margin: 20px 0 0;
+        border: 0;
+        border-top: 1px solid var(--line);
+        background: #fff;
+        border-radius: 0;
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        gap: 8px;
+        font-size: 11px;
+    }
+    .desktop-store-layout .checkout-page .submit-order-bar {
+        position: static;
+        min-height: 0;
+        width: 100%;
+        max-width: none;
+        margin: 0;
+        padding: 0;
+        border: 0;
+        border-radius: 0;
+        transform: none;
+        background: transparent;
+        box-shadow: none;
+    }
+    .desktop-store-layout .checkout-page .submit-order-bar > button {
+        height: auto;
+        min-height: 48px;
+        padding: 12px;
+        border-radius: 2px;
+        box-shadow: none;
+        font-size: 14px;
+        line-height: 1.6;
+    }
+    .desktop-store-layout .checkout-page .form-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 18px;
+    }
+    .desktop-store-layout .checkout-page .field-wide {
+        grid-column: 1 / -1;
+    }
+    .desktop-store-layout .checkout-page :is(input:not([type='checkbox']):not([type='radio']), select) {
+        min-height: 42px;
+        border-radius: 2px;
+    }
+    .desktop-store-layout .checkout-address-quick-switcher {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        overflow: visible;
+        width: 100%;
+        margin-bottom: 20px;
+        gap: 12px;
+    }
+    .desktop-store-layout .checkout-address-chip {
+        width: auto;
+        min-width: 0;
+        max-width: none;
+        border-radius: 2px;
+    }
+    .desktop-store-layout .checkout-items article {
+        grid-template-columns: 76px minmax(0, 1fr) auto;
+        min-height: 104px;
+        gap: 16px;
+        padding: 14px 0;
+    }
+    .desktop-store-layout
+        .checkout-items
+        article
+        > :is(img, picture, .responsive-picture, .image-placeholder),
+    .desktop-store-layout .checkout-items article > picture img {
+        width: 76px !important;
+        height: 76px !important;
+        border-radius: var(--radius-sm);
+        overflow: hidden;
+    }
+    .desktop-store-layout .checkout-options {
+        padding-block: 8px !important;
+    }
+    .desktop-store-layout .checkout-options > button {
+        min-height: 52px;
+    }
+    .desktop-store-layout .payment-layout {
+        gap: 24px;
+        margin: 0;
+        grid-template-columns: minmax(0, 1fr) 340px;
+    }
+    .desktop-store-layout :is(.payment-method-section, .payment-summary, .payment-test-notice) {
+        padding: 24px;
+        border: 0;
+        background: #fff;
+        border-radius: 0;
+        box-shadow: none;
+    }
+    .desktop-store-layout .payment-summary {
+        top: calc(var(--desktop-header-height) + 24px);
+    }
+    .desktop-store-layout .payment-method-list {
+        display: grid;
+        gap: 12px;
+    }
+    .desktop-store-layout .payment-method-list label {
+        padding: 18px;
+        border-radius: 2px;
+    }
+    .desktop-store-layout .payment-summary .primary-action {
+        border-radius: 2px;
+        min-height: 48px;
+        box-shadow: none;
+    }
+    .desktop-store-layout .order-confirmation-page {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 340px;
+        gap: 24px;
+        align-content: start;
+        padding-top: 32px;
+    }
+    .desktop-store-layout
+        :is(.order-confirmation-hero, .order-confirmation-summary, .order-confirmation-actions) {
+        width: 100%;
+        max-width: none;
+        margin: 0;
+        text-align: left;
+    }
+    .desktop-store-layout .order-confirmation-icon {
+        margin: 0 0 12px;
+    }
+    .desktop-store-layout .order-confirmation-hero {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        justify-content: center;
+        padding: 36px;
+        min-height: 280px;
+        background: #fff;
+        border-radius: 0;
+    }
+    .desktop-store-layout .order-confirmation-summary {
+        margin: 0;
+        padding: 28px;
+        background: #fff;
+        border: 0;
+        border-radius: 0;
+    }
+    .desktop-store-layout .order-confirmation-actions {
+        grid-column: 1 / -1;
+        display: flex;
+        justify-content: center;
+        gap: 16px;
+        margin: 0;
+    }
+    .desktop-store-layout .order-confirmation-actions button {
+        min-width: 180px;
+        max-width: 300px;
+        border-radius: 2px;
+    }
+    .desktop-store-layout .order-confirmation-page .digital-delivery-panel {
+        grid-column: 1 / -1;
+    }
+
+    /* Account collections, addresses and security settings use the same account rail. */
+    .desktop-account-layout .subpage > .subpage-header {
+        height: 50px;
+        min-height: 50px;
+        margin-bottom: 24px;
+    }
+    .desktop-account-layout .subpage-header > button:first-child {
+        display: none;
+    }
+    .desktop-account-layout .subpage-header > button:last-child:not(:first-child) {
+        color: var(--accent);
+    }
+    .desktop-account-layout :is(.favorites-page, .history-page) .product-section {
+        margin: 0;
+        padding: 0;
+    }
+    .desktop-account-layout :is(.favorites-page, .history-page) .product-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+    .desktop-store-layout .address-list {
+        padding: 0;
+        gap: 20px;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .desktop-store-layout .address-card {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+        min-height: 200px;
+        margin: 0;
+        padding: 24px;
+        border: 1px solid var(--line);
+        border-radius: 0;
+        box-shadow: none;
+    }
+    .desktop-store-layout .address-card > div {
+        flex: 1;
+    }
+    .desktop-store-layout .address-card p {
+        line-height: 1.7;
+    }
+    .desktop-store-layout .address-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 16px;
+        padding-top: 16px;
+        border-top: 1px solid var(--line);
+    }
+    .desktop-store-layout .address-actions button {
+        border: 0;
+        background: none;
+        font-size: 13px;
+        color: var(--accent);
+    }
+    .desktop-store-layout .address-type-tabs {
+        position: static;
+        display: flex;
+        justify-content: flex-start;
+        gap: 32px;
+        height: auto;
+        margin: 0 0 24px;
+        padding: 0;
+        border-bottom: 1px solid var(--line);
+        background: none;
+    }
+    .desktop-store-layout .address-type-tabs button {
+        flex: none;
+        border-radius: 0;
+        padding: 12px 0;
+        background: transparent;
+        border-bottom: 2px solid transparent;
+    }
+    .desktop-store-layout .address-type-tabs button.is-active {
+        color: var(--accent);
+        background: none;
+        border-bottom-color: var(--accent);
+    }
+    .desktop-store-layout .address-form {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        padding: 24px;
+    }
+    .desktop-store-layout .address-form :is(.field-wide, .form-error, .wide-action) {
+        grid-column: 1 / -1;
+    }
+    .desktop-store-layout .address-form .field-wide:has(input:is([name='fullName'], [name='phoneNumber'])) {
+        grid-column: auto;
+    }
+    .desktop-store-layout .security-page-body {
+        display: grid;
+        grid-template-columns: minmax(0, 1.3fr) minmax(260px, 0.7fr);
+        align-items: start;
+        gap: 24px;
+        padding: 0;
+    }
+    .desktop-store-layout .security-user-card {
+        grid-column: 1 / -1;
+        display: flex;
+        align-items: center;
+        padding: 28px;
+        min-height: 128px;
+        margin: 0;
+        background: #fff;
+        border: 0;
+        border-radius: 0;
+        box-shadow: none;
+    }
+    .desktop-store-layout .security-group {
+        margin: 0;
+        padding: 24px;
+        background: #fff;
+        border: 0;
+        border-radius: 0;
+    }
+    .desktop-store-layout .security-card-list {
+        border: 0;
+        box-shadow: none;
+    }
+    .desktop-store-layout .security-action-group {
+        grid-column: 1 / -1;
+        margin: 0;
+        padding: 0;
+    }
+    .desktop-store-layout .security-logout-button {
+        width: 180px;
+        margin: 0;
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 2px;
+        color: var(--muted);
+    }
+    .desktop-store-layout .coupon-center-tabs {
+        position: static;
+        display: flex;
+        justify-content: flex-start;
+        gap: 32px;
+        margin: 0 0 24px;
+        padding: 0;
+        background: none;
+        border-bottom: 1px solid var(--line);
+        border-radius: 0;
+    }
+    .desktop-store-layout .coupon-center-tabs button {
+        width: auto;
+        flex: none;
+        padding: 12px 0;
+        min-height: 48px;
+        border-radius: 0;
+        border-bottom: 2px solid transparent;
+        background: transparent;
+    }
+    .desktop-store-layout .coupon-center-tabs .is-active {
+        border-bottom-color: var(--accent);
+        color: var(--accent);
+    }
+    .desktop-store-layout .coupon-center-panel {
+        margin: 0;
+        padding: 0;
+    }
+    .desktop-store-layout .coupon-center-ticket-list {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 20px;
+        padding: 0;
+    }
+    .desktop-store-layout .coupon-center-ticket-item {
+        min-width: 0;
+        margin: 0;
+        border-radius: 0;
+    }
+    .desktop-store-layout .coupon-activity-action {
+        color: var(--accent);
+        border-color: var(--accent);
+        border-radius: 2px;
+    }
+    .desktop-store-layout .coupon-activity-action.is-claimed {
+        color: var(--muted);
+        border-color: var(--line);
+        background: #fff;
+        opacity: 1;
+    }
+    .desktop-store-layout .coupon-activity-card.is-claimed {
+        opacity: 1;
+    }
+    .desktop-store-layout .coupon-center-cart-link-standalone {
+        margin-inline: 0;
+    }
+    .desktop-store-layout .coupon-activity-card {
+        border: 1px solid var(--line);
+        border-radius: 0;
+        box-shadow: none;
+        background: #fff;
+    }
+    .desktop-store-layout .coupon-center-panel > .coupon-center-ticket-list {
+        margin: 0;
+    }
+    .desktop-store-layout .coupon-activity-value {
+        margin: 12px 0 0;
+        justify-content: flex-start;
+    }
+    .desktop-store-layout .coupon-activity-value strong {
+        font-size: 38px;
+    }
+    .desktop-store-layout .coupon-activity-hero > p {
+        margin: 10px 0 0;
+        color: var(--muted);
+    }
+    .desktop-store-layout .coupon-activity-tag {
+        border-color: var(--line);
+        border-radius: 2px;
+    }
+    .desktop-store-layout .coupon-activity-card .coupon-center-instructions {
+        margin: 0;
+        padding-block: 16px;
+    }
+    .desktop-store-layout .coupon-activity-hero {
+        min-height: 0;
+        background: var(--accent-soft);
+        color: var(--accent);
+        padding: 24px;
+        border-radius: 0;
+        margin: 0;
+    }
+    .desktop-store-layout .coupon-center-instructions {
+        margin-top: 24px;
+        padding: 24px;
+        background: #fff;
+        border-radius: 0;
+    }
+    .desktop-store-layout :is(.notification-list, .my-review-list, .review-candidate-list) {
+        margin: 0;
+        padding: 0;
+        background: #fff;
+    }
+    .desktop-store-layout .notification-list > button {
+        padding: 24px;
+        min-height: 116px;
+        grid-template-columns: 44px minmax(0, 1fr) 24px;
+        border-radius: 0;
+        border: 0;
+        border-bottom: 1px solid var(--line);
+    }
+    .desktop-store-layout .review-center-section {
+        margin: 0 0 24px;
+        padding: 24px;
+        border-radius: 0;
+        background: #fff;
+    }
+    .desktop-store-layout .review-candidate-list {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 20px;
+    }
+    .desktop-store-layout .review-composer {
+        max-width: none;
+        margin: 0;
+        padding: 28px;
+        border-radius: 0;
+        background: #fff;
+    }
+    .desktop-store-layout .review-composer textarea {
+        min-height: 160px;
+    }
+
+    /* Order detail and logistics show a main record and a compact information column. */
+    .desktop-store-layout .order-detail-page {
+        --page-bottom-fixed-height: 0px;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 300px;
+        gap: 20px;
+        align-content: start;
+    }
+    .desktop-store-layout
+        .order-detail-page
+        > :is(.subpage-header, .order-status, .order-detail-actions, .digital-delivery-panel) {
+        grid-column: 1 / -1;
+    }
+    .desktop-store-layout .order-detail-page > .subpage-header {
+        margin: 0;
+    }
+    .desktop-store-layout .order-status {
+        padding: 24px;
+        margin: 0;
+        border-radius: 0;
+        background: #fff;
+        color: var(--text);
+    }
+    .desktop-store-layout .order-detail-products {
+        grid-column: 1;
+        margin: 0;
+        padding: 24px;
+        border: 0;
+        border-radius: 0;
+        background: #fff;
+    }
+    .desktop-store-layout .order-detail-products article {
+        grid-template-columns: 76px minmax(0, 1fr) auto;
+        gap: 16px;
+    }
+    .desktop-store-layout
+        .order-detail-products
+        article
+        > :is(img, picture, .responsive-picture, .image-placeholder) {
+        width: 76px;
+        height: 76px;
+    }
+    .desktop-store-layout .order-detail-products article img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+    }
+    .desktop-store-layout .order-detail-summary {
+        grid-column: 2;
+        grid-row: 3;
+        margin: 0;
+        padding: 24px;
+        background: #fff;
+        border: 0;
+        border-radius: 0;
+    }
+    .desktop-store-layout :is(.order-information, .order-logistics) {
+        grid-column: 1;
+        margin: 0;
+        padding: 24px;
+        border: 0;
+        border-radius: 0;
+        background: #fff;
+    }
+    .desktop-store-layout .order-detail-actions {
+        position: static;
+        display: flex;
+        justify-content: flex-end;
+        width: 100%;
+        max-width: none;
+        margin: 0;
+        padding: 20px;
+        transform: none;
+        border: 0;
+        border-radius: 0;
+        background: #fff;
+    }
+    .desktop-store-layout .order-detail-actions button {
+        flex: none;
+        min-width: 140px;
+        border-radius: 2px;
+    }
+    .desktop-store-layout .logistics-modular-hub {
+        padding: 0;
+        margin: 0 0 24px;
+        background: #fff;
+        border-radius: 0;
+    }
+    .desktop-store-layout .logistics-stats-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 0;
+        padding: 24px;
+    }
+    .desktop-store-layout .logistics-stat-card {
+        border: 0;
+        border-right: 1px solid var(--line);
+        background: transparent;
+        border-radius: 0;
+        box-shadow: none;
+    }
+    .desktop-store-layout .logistics-list {
+        margin: 0;
+        padding: 0;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 24px;
+    }
+    .desktop-store-layout .logistics-card > header {
+        display: grid;
+        grid-template-columns: 36px minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 18px;
+    }
+    .desktop-store-layout .logistics-card > header strong {
+        display: block;
+    }
+    .desktop-store-layout .logistics-card > header small {
+        display: block;
+        margin-top: 5px;
+        color: var(--muted);
+        font-size: 12px;
+    }
+    .desktop-store-layout .logistics-card > header time {
+        color: var(--muted);
+        font-size: 12px;
+    }
+    .desktop-store-layout .logistics-card {
+        padding: 24px;
+        margin: 0;
+        border-radius: 0;
+        box-shadow: none;
+        background: #fff;
+    }
+    .desktop-store-layout .after-sales-list {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 24px;
+    }
+    .desktop-store-layout .after-sales-card {
+        border-radius: 0;
+        background: #fff;
+        box-shadow: none;
+    }
+
+    /* Authentication is a desktop form composition, with existing configured brand artwork. */
+    .desktop-store-layout:has(.auth-page) {
+        --desktop-header-height: 121px;
+    }
+    .desktop-store-layout:has(.auth-page) .desktop-store-nav {
+        display: none;
+    }
+    .desktop-store-layout .page.auth-page {
+        width: min(calc(100% - 64px), 1060px);
+        min-height: 600px;
+        margin: 32px auto;
+        padding: 0;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 460px;
+        border: 0;
+        border-radius: 0;
+        background: #fff;
+        box-shadow: none;
+        overflow: hidden;
+    }
+    .desktop-store-layout .auth-page .auth-hero {
+        min-width: 0;
+        min-height: 600px;
+        padding: 36px;
+        border-radius: 0;
+    }
+    .desktop-store-layout .auth-page .auth-hero-header {
+        position: static;
+        padding: 0;
+    }
+    .desktop-store-layout .auth-page .auth-hero-message {
+        padding: 48px 0 0;
+        max-width: 440px;
+    }
+    .desktop-store-layout .auth-page .auth-hero h2 {
+        font-size: 32px;
+        line-height: 1.45;
+    }
+    .desktop-store-layout .auth-page .login-content {
+        min-width: 0;
+        display: flex;
+        align-items: center;
+        padding: 40px;
+        background: #fff;
+    }
+    .desktop-store-layout .auth-form-column {
+        width: 100%;
+        max-width: 380px;
+        margin: auto;
+    }
+    .desktop-store-layout .auth-card-content {
+        padding: 0;
+        border: 0;
+        background: none;
+        border-radius: 0;
+        box-shadow: none;
+    }
+    .desktop-store-layout .auth-form-heading {
+        display: block;
+    }
+    .desktop-store-layout .auth-form-heading p {
+        width: 100%;
+        max-width: none;
+        margin: 12px 0 0;
+        text-align: left;
+    }
+    .desktop-store-layout .auth-form-heading h1 {
+        font-size: 26px;
+        font-weight: 500;
+    }
+    .desktop-store-layout .auth-input-shell {
+        min-height: 46px;
+        border-radius: 2px;
+        background: #fff;
+    }
+    .desktop-store-layout .auth-page .primary-action {
+        min-height: 46px;
+        border-radius: 2px;
+        box-shadow: none;
+    }
+    .desktop-store-layout .auth-page-default {
+        display: block;
+        max-width: 620px;
+        min-height: 0;
+    }
+    .desktop-store-layout .auth-page-default .auth-hero {
+        min-height: 0;
+        padding: 24px 36px;
+        background: var(--soft);
+    }
+    .desktop-store-layout .auth-page-default .auth-hero-message {
+        padding: 0;
+    }
+    .desktop-store-layout .auth-page-default .login-content {
+        padding: 36px;
+    }
+
+    /* Without configured artwork, use a focused form instead of an empty art panel. */
+    .desktop-store-layout .page.auth-page:not(.auth-page-managed) {
+        display: block;
+        width: min(calc(100% - 64px), 520px);
+        min-height: 0;
+        margin-block: 48px;
+    }
+    .desktop-store-layout .auth-page:not(.auth-page-managed) .auth-hero {
+        min-height: 0;
+        padding: 20px 28px 0;
+        background: none;
+    }
+    .desktop-store-layout .auth-page:not(.auth-page-managed) .auth-hero-message {
+        display: none;
+    }
+    .desktop-store-layout .auth-page:not(.auth-page-managed) .auth-back-button {
+        background: none;
+        box-shadow: none;
+        color: var(--muted);
+    }
+    .desktop-store-layout .auth-page:not(.auth-page-managed) .login-content {
+        padding: 24px 48px 48px;
+    }
+
+    /* Reading and service pages use comfortable content measures, not stretched phone cards. */
+    .desktop-store-layout .legal-managed-content {
+        max-width: none;
+        margin: 0 auto;
+        padding: 36px 48px;
+        border: 0;
+        border-radius: 0;
+        background: #fff;
+    }
+    .desktop-store-layout .legal-managed-content > * {
+        max-width: 880px;
+        margin-inline: auto;
+    }
+    .desktop-store-layout .legal-managed-body {
+        font-size: 15px;
+        line-height: 1.9;
+    }
+    .desktop-store-layout .legal-identity-card {
+        padding: 20px;
+        border: 0;
+        border-radius: 0;
+        background: var(--soft);
+    }
+    .desktop-store-layout .desktop-announcements-content {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
+        gap: 24px;
+        padding: 0 0 40px;
+        align-items: start;
+    }
+    .desktop-store-layout .desktop-announcements-content > section {
+        margin: 0;
+        padding: 0;
+    }
+    .desktop-store-layout .desktop-announcements-content > section > button {
+        border-radius: 0;
+        box-shadow: none;
+        padding: 28px;
+        border: 0;
+    }
+    .desktop-store-layout .desktop-announcements-content > section > div {
+        margin: 0;
+        border-radius: 0;
+    }
+    .desktop-store-layout .desktop-announcements-content > section > header {
+        padding: 0;
+    }
+    .desktop-store-layout .desktop-announcements-content > section:only-child {
+        grid-column: 1 / -1;
+    }
+    .desktop-store-layout .support-center-content {
+        display: grid;
+        grid-template-columns: 320px minmax(0, 1fr);
+        gap: 24px;
+        padding: 0;
+        align-items: start;
+    }
+    .desktop-store-layout .support-page-intro {
+        grid-column: 1 / -1;
+        margin: 0;
+        font-size: 15px;
+    }
+    .desktop-store-layout .support-hours-card {
+        margin: 0;
+        min-height: 230px;
+        padding: 28px;
+        border: 0;
+        border-radius: 0;
+        background: #fff;
+        box-shadow: none;
+    }
+    .desktop-store-layout .support-channel-list {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        margin: 0;
+        gap: 20px;
+    }
+    .desktop-store-layout .support-channel-row {
+        min-height: 112px;
+        border: 0;
+        border-radius: 0;
+        padding: 24px;
+        background: #fff;
+        box-shadow: none;
+    }
+    .desktop-store-layout .support-channel-empty {
+        padding: 36px;
+        margin: 0;
+        background: #fff;
+    }
+    .desktop-store-layout .desktop-referral-content {
+        max-width: none;
+        padding: 0;
+        gap: 24px;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    }
+    .desktop-store-layout .referral-overview > div {
+        border: 0;
+        border-radius: 0;
+        box-shadow: none;
+    }
+    .desktop-store-layout .referral-invite {
+        border: 0;
+        border-radius: 0;
+        box-shadow: none;
+        padding: 28px;
+    }
+    .desktop-store-layout .desktop-referral-content > section {
+        border-radius: 0;
+        box-shadow: none;
+    }
+    .desktop-store-layout .desktop-two-factor-content {
+        align-items: start;
+        max-width: none;
+        padding: 0;
+        gap: 24px;
+        grid-template-columns: minmax(0, 1fr) 340px;
+    }
+    .desktop-store-layout .desktop-two-factor-content > :is(section, aside) {
+        border: 0;
+        border-radius: 0;
+        padding: 28px;
+        background: #fff;
+        box-shadow: none;
+    }
+    .desktop-store-layout .desktop-two-factor-content textarea {
+        min-height: 200px;
+    }
+    .desktop-store-layout
+        :is(.business-services-page, .recommendations-page, .flash-sale-page)
+        .content-section {
+        margin-inline: 0;
+        padding-inline: 0;
+    }
+
+    @media (max-width: 1199px) {
+        .desktop-product-purchase {
+            grid-template-columns: minmax(300px, 0.9fr) minmax(0, 1.1fr);
+            gap: 28px;
+            padding: 24px;
+        }
+        .desktop-product-buying .detail-summary h1 {
+            font-size: 23px;
+        }
+        .desktop-cart-columns,
+        .desktop-cart-row {
+            grid-template-columns: minmax(0, 1fr) 90px 100px 100px 80px;
+            gap: 12px;
+            padding-inline: 20px;
+        }
+        .desktop-cart-product {
+            gap: 12px;
+        }
+        .desktop-cart-product-link {
+            gap: 12px;
+        }
+        .desktop-store-layout .checkout-form,
+        .desktop-store-layout .payment-layout {
+            grid-template-columns: minmax(0, 1fr) 300px;
+            gap: 20px;
+        }
+        .desktop-checkout-summary {
+            padding: 20px;
+        }
+        .desktop-store-layout
+            .address-form
+            .field-wide:has(input:is([name='fullName'], [name='phoneNumber'])) {
+            grid-column: auto;
+        }
+        .desktop-store-layout .security-page-body {
+            grid-template-columns: 1fr;
+        }
+        .desktop-store-layout .order-detail-page {
+            grid-template-columns: minmax(0, 1fr) 260px;
+        }
+        .desktop-store-layout .page.auth-page {
+            grid-template-columns: minmax(0, 1fr) 440px;
+        }
+        .desktop-store-layout .page.auth-page-default {
+            display: block;
+        }
+        .desktop-store-layout .support-center-content {
+            grid-template-columns: 280px minmax(0, 1fr);
+        }
+        .desktop-store-layout .support-channel-list {
+            grid-template-columns: 1fr;
+        }
+        .desktop-store-layout .desktop-two-factor-content {
+            align-items: start;
+            grid-template-columns: minmax(0, 1fr) 300px;
+        }
+        .desktop-store-layout .coupon-center-ticket-list {
+            grid-template-columns: 1fr;
+        }
+    }
+}

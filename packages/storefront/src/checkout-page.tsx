@@ -644,307 +644,324 @@ export function CheckoutPage({
                 className={checkoutPageClassName('checkout-form')}
                 onSubmit={event => void submit(event)}
             >
-                {directPurchase && renderCheckoutItems()}
-                {hasDigitalProducts && (
-                    <section
-                        className={checkoutPageClassName(
-                            'checkout-section checkout-digital-delivery-section',
-                        )}
-                    >
-                        <header className={checkoutPageClassName('digital-delivery-heading')}>
-                            <div>
-                                <h2>{isZh ? '接收方式' : 'Delivery contact'}</h2>
-                                <p>
-                                    {isZh
-                                        ? '付款成功后，订单与数字内容领取入口将发送至此邮箱。'
-                                        : 'Order updates and digital delivery instructions will be sent here after payment.'}
-                                </p>
+                <div className="desktop-checkout-main">
+                    {directPurchase && renderCheckoutItems()}
+                    {hasDigitalProducts && (
+                        <section
+                            className={checkoutPageClassName(
+                                'checkout-section checkout-digital-delivery-section',
+                            )}
+                        >
+                            <header className={checkoutPageClassName('digital-delivery-heading')}>
+                                <div>
+                                    <h2>{isZh ? '接收方式' : 'Delivery contact'}</h2>
+                                    <p>
+                                        {isZh
+                                            ? '付款成功后，订单与数字内容领取入口将发送至此邮箱。'
+                                            : 'Order updates and digital delivery instructions will be sent here after payment.'}
+                                    </p>
+                                </div>
+                                <span>{isZh ? '邮箱交付' : 'Email delivery'}</span>
+                            </header>
+                            {deliveryEmails.length > 0 && (
+                                <DeliveryEmailPicker
+                                    deliveryEmails={deliveryEmails}
+                                    selectedId={selectedDeliveryEmailId}
+                                    open={deliveryEmailPickerOpen}
+                                    language={language}
+                                    onOpenChange={setDeliveryEmailPickerOpen}
+                                    onSelect={setSelectedDeliveryEmailId}
+                                />
+                            )}
+                            {!selectedDeliveryEmailId && (
+                                <>
+                                    <label className={checkoutPageClassName('digital-delivery-email-field')}>
+                                        <span>{isZh ? '交付邮箱' : 'Delivery email'}</span>
+                                        <input
+                                            name="deliveryEmail"
+                                            type="email"
+                                            inputMode="email"
+                                            autoComplete="email"
+                                            defaultValue={
+                                                order.customFields.deliveryEmail ??
+                                                customer?.emailAddress ??
+                                                order.customer?.emailAddress ??
+                                                ''
+                                            }
+                                            required
+                                        />
+                                    </label>
+                                    <label className={checkoutPageClassName('digital-delivery-email-field')}>
+                                        <span>{isZh ? '再次输入交付邮箱' : 'Confirm delivery email'}</span>
+                                        <input
+                                            name="confirmDeliveryEmail"
+                                            type="email"
+                                            inputMode="email"
+                                            autoComplete="email"
+                                            required
+                                        />
+                                    </label>
+                                    {customer && (
+                                        <div
+                                            className={checkoutPageClassName(
+                                                'checkout-delivery-email-options',
+                                            )}
+                                        >
+                                            <label>
+                                                <input
+                                                    name="saveDeliveryEmail"
+                                                    type="checkbox"
+                                                    defaultChecked
+                                                />{' '}
+                                                {isZh ? '保存为交付邮箱' : 'Save to delivery emails'}
+                                            </label>
+                                            <label>
+                                                <input name="defaultDeliveryEmail" type="checkbox" />{' '}
+                                                {isZh ? '设为默认邮箱' : 'Set as default'}
+                                            </label>
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </section>
+                    )}
+                    {!customer && !isDigitalOnly ? (
+                        <section
+                            className={checkoutPageClassName('checkout-section checkout-contact-section')}
+                        >
+                            <h2>{isZh ? '联系信息' : 'Contact'}</h2>
+                            <div className={checkoutPageClassName('form-grid')}>
+                                <Field name="firstName" label={isZh ? '名字' : 'First name'} />
+                                <Field name="lastName" label={isZh ? '姓氏' : 'Last name'} />
+                                <Field
+                                    name="emailAddress"
+                                    label={isZh ? '电子邮箱' : 'Email'}
+                                    type="email"
+                                    wide
+                                />
                             </div>
-                            <span>{isZh ? '邮箱交付' : 'Email delivery'}</span>
-                        </header>
-                        {deliveryEmails.length > 0 && (
-                            <DeliveryEmailPicker
-                                deliveryEmails={deliveryEmails}
-                                selectedId={selectedDeliveryEmailId}
-                                open={deliveryEmailPickerOpen}
-                                language={language}
-                                onOpenChange={setDeliveryEmailPickerOpen}
-                                onSelect={setSelectedDeliveryEmailId}
-                            />
-                        )}
-                        {!selectedDeliveryEmailId && (
-                            <>
-                                <label className={checkoutPageClassName('digital-delivery-email-field')}>
-                                    <span>{isZh ? '交付邮箱' : 'Delivery email'}</span>
-                                    <input
-                                        name="deliveryEmail"
-                                        type="email"
-                                        inputMode="email"
-                                        autoComplete="email"
-                                        defaultValue={
-                                            order.customFields.deliveryEmail ??
-                                            customer?.emailAddress ??
-                                            order.customer?.emailAddress ??
-                                            ''
-                                        }
-                                        required
-                                    />
-                                </label>
-                                <label className={checkoutPageClassName('digital-delivery-email-field')}>
-                                    <span>{isZh ? '再次输入交付邮箱' : 'Confirm delivery email'}</span>
-                                    <input
-                                        name="confirmDeliveryEmail"
-                                        type="email"
-                                        inputMode="email"
-                                        autoComplete="email"
-                                        required
-                                    />
-                                </label>
-                                {customer && (
-                                    <div className={checkoutPageClassName('checkout-delivery-email-options')}>
-                                        <label>
-                                            <input name="saveDeliveryEmail" type="checkbox" defaultChecked />{' '}
-                                            {isZh ? '保存为交付邮箱' : 'Save to delivery emails'}
-                                        </label>
-                                        <label>
-                                            <input name="defaultDeliveryEmail" type="checkbox" />{' '}
-                                            {isZh ? '设为默认邮箱' : 'Set as default'}
-                                        </label>
-                                    </div>
-                                )}
-                            </>
-                        )}
-                    </section>
-                )}
-                {!customer && !isDigitalOnly ? (
-                    <section className={checkoutPageClassName('checkout-section checkout-contact-section')}>
-                        <h2>{isZh ? '联系信息' : 'Contact'}</h2>
-                        <div className={checkoutPageClassName('form-grid')}>
-                            <Field name="firstName" label={isZh ? '名字' : 'First name'} />
-                            <Field name="lastName" label={isZh ? '姓氏' : 'Last name'} />
-                            <Field
-                                name="emailAddress"
-                                label={isZh ? '电子邮箱' : 'Email'}
-                                type="email"
-                                wide
-                            />
-                        </div>
-                    </section>
-                ) : null}
-                {requiresShipping && (
-                    <section className={checkoutPageClassName('checkout-section checkout-address-section')}>
-                        <h2>{isZh ? '收货地址' : 'Shipping address'}</h2>
-                        {customerLoading ? (
-                            <div className="checkout-address-loading" role="status" aria-busy="true">
-                                {isZh ? '正在加载收货地址…' : 'Loading shipping address…'}
-                            </div>
-                        ) : (
-                            <button
-                                className={checkoutPageClassName('saved-address')}
-                                type="button"
-                                onClick={manageAddress}
-                                disabled={submitting || cartPending || cartUnknown}
+                        </section>
+                    ) : null}
+                    {requiresShipping && (
+                        <section
+                            className={checkoutPageClassName('checkout-section checkout-address-section')}
+                        >
+                            <h2>{isZh ? '收货地址' : 'Shipping address'}</h2>
+                            {customerLoading ? (
+                                <div className="checkout-address-loading" role="status" aria-busy="true">
+                                    {isZh ? '正在加载收货地址…' : 'Loading shipping address…'}
+                                </div>
+                            ) : (
+                                <button
+                                    className={checkoutPageClassName('saved-address')}
+                                    type="button"
+                                    onClick={manageAddress}
+                                    disabled={submitting || cartPending || cartUnknown}
+                                >
+                                    {activeAddress ? <MapPin /> : <Plus />}
+                                    <span>
+                                        <strong>
+                                            {activeAddress
+                                                ? `${activeAddress.fullName ?? ''} ${activeAddress.phoneNumber ?? ''}`
+                                                : isZh
+                                                  ? '添加收货地址'
+                                                  : 'Add shipping address'}
+                                        </strong>
+                                        {activeAddress && (
+                                            <small>{addressText(activeAddress, availableProvinces)}</small>
+                                        )}
+                                        {activeAddress && !addressComplete && (
+                                            <small className="form-error">
+                                                {isZh ? '请完善收货地址' : 'Complete the shipping address'}
+                                            </small>
+                                        )}
+                                    </span>
+                                    <ChevronRight />
+                                </button>
+                            )}
+                        </section>
+                    )}
+                    {!directPurchase && renderCheckoutItems()}
+                    <section className={checkoutPageClassName('checkout-section checkout-options')}>
+                        {isDigitalOnly && (
+                            <div
+                                className={checkoutPageClassName('digital-delivery-method')}
+                                aria-label={isZh ? '交付方式' : 'Delivery method'}
                             >
-                                {activeAddress ? <MapPin /> : <Plus />}
-                                <span>
-                                    <strong>
-                                        {activeAddress
-                                            ? `${activeAddress.fullName ?? ''} ${activeAddress.phoneNumber ?? ''}`
-                                            : isZh
-                                              ? '添加收货地址'
-                                              : 'Add shipping address'}
-                                    </strong>
-                                    {activeAddress && (
-                                        <small>{addressText(activeAddress, availableProvinces)}</small>
-                                    )}
-                                    {activeAddress && !addressComplete && (
-                                        <small className="form-error">
-                                            {isZh ? '请完善收货地址' : 'Complete the shipping address'}
-                                        </small>
-                                    )}
-                                </span>
-                                <ChevronRight />
+                                <span>{isZh ? '交付方式' : 'Delivery method'}</span>
+                                <small>
+                                    <strong>{isZh ? '邮箱自动交付' : 'Automatic email delivery'}</strong>
+                                    <em>{isZh ? '免费' : 'Free'}</em>
+                                </small>
+                            </div>
+                        )}
+                        {requiresShipping && (
+                            <button
+                                type="button"
+                                className={checkoutPageClassName('shipping-method-trigger')}
+                                aria-haspopup={shippingMethods.length > 1 ? 'dialog' : undefined}
+                                aria-expanded={shippingMethods.length > 1 ? shippingPickerOpen : undefined}
+                                disabled={
+                                    shippingUpdating ||
+                                    submitting ||
+                                    cartPending ||
+                                    cartUnknown ||
+                                    (!shippingError && (!shippingReady || shippingMethods.length < 2))
+                                }
+                                onClick={() =>
+                                    shippingError && !shippingReady
+                                        ? setShippingRetry(value => value + 1)
+                                        : setShippingPickerOpen(true)
+                                }
+                            >
+                                <span>{isZh ? '配送方式' : 'Delivery'}</span>
+                                <small aria-live="polite">
+                                    {shippingUpdating
+                                        ? isZh
+                                            ? '正在计算运费…'
+                                            : 'Calculating shipping…'
+                                        : shippingError && !shippingReady
+                                          ? isZh
+                                              ? '计算失败，点击重试'
+                                              : 'Quote failed. Retry'
+                                          : shippingReady
+                                            ? shippingMethods.find(method => method.id === selectedShippingId)
+                                                  ?.name
+                                            : missingAddressLabel}
+                                    {(shippingMethods.length > 1 || shippingError) && <ChevronRight />}
+                                </small>
                             </button>
                         )}
-                    </section>
-                )}
-                {!directPurchase && renderCheckoutItems()}
-                <section className={checkoutPageClassName('checkout-section checkout-options')}>
-                    {isDigitalOnly && (
-                        <div
-                            className={checkoutPageClassName('digital-delivery-method')}
-                            aria-label={isZh ? '交付方式' : 'Delivery method'}
-                        >
-                            <span>{isZh ? '交付方式' : 'Delivery method'}</span>
-                            <small>
-                                <strong>{isZh ? '邮箱自动交付' : 'Automatic email delivery'}</strong>
-                                <em>{isZh ? '免费' : 'Free'}</em>
-                            </small>
-                        </div>
-                    )}
-                    {requiresShipping && (
                         <button
                             type="button"
-                            className={checkoutPageClassName('shipping-method-trigger')}
-                            aria-haspopup={shippingMethods.length > 1 ? 'dialog' : undefined}
-                            aria-expanded={shippingMethods.length > 1 ? shippingPickerOpen : undefined}
+                            onClick={() => {
+                                setNoteDraft(order.customFields.customerNote ?? '');
+                                setNoteError(null);
+                                setNoteOpen(true);
+                            }}
+                        >
+                            <span>{isZh ? '订单备注' : 'Order note'}</span>
+                            <small>
+                                {order.customFields.customerNote
+                                    ? trimText(order.customFields.customerNote, 20)
+                                    : isZh
+                                      ? '添加备注'
+                                      : 'Add a note'}
+                                <ChevronRight />
+                            </small>
+                        </button>
+                        <button type="button" onClick={() => setCouponOpen(true)}>
+                            <span>{isZh ? '优惠券' : 'Coupon'}</span>
+                            <small title={selectedCouponLabel ?? undefined}>
+                                {selectedCouponLabel ??
+                                    (isZh ? '选择已领取优惠券' : 'Choose a claimed coupon')}
+                                <ChevronRight />
+                            </small>
+                        </button>
+                    </section>
+                </div>
+                <aside className="desktop-checkout-summary">
+                    {formError && <InlineError message={formError} />}
+                    {shippingError && !shippingPickerOpen && <InlineError message={shippingError} />}
+                    <section className={checkoutPageClassName('checkout-section checkout-summary-section')}>
+                        <PriceSummary
+                            pending={cartPending}
+                            shippingPending={Boolean(
+                                requiresShipping && addressComplete && (!shippingReady || shippingUpdating),
+                            )}
+                            shippingUnavailable={
+                                requiresShipping && !addressComplete ? missingAddressLabel : undefined
+                            }
+                            order={order}
+                            locale={locale}
+                            language={language}
+                            flashSales={flashSales}
+                            requiresShipping={requiresShipping}
+                        />
+                    </section>
+                    <section
+                        className={checkoutPageClassName('checkout-assurance checkout-protection-section')}
+                        aria-label={isZh ? '购物保障' : 'Purchase protection'}
+                    >
+                        <span>
+                            <CircleCheck />
+                            {physicalLines.length
+                                ? isZh
+                                    ? '下单信息'
+                                    : 'Order details'
+                                : isZh
+                                  ? '安全购买'
+                                  : 'Secure purchase'}
+                        </span>
+                        <span>
+                            <Truck />
+                            {physicalLines.length
+                                ? isZh
+                                    ? '配送可追踪'
+                                    : 'Tracked delivery'
+                                : isZh
+                                  ? '邮箱交付'
+                                  : 'Email delivery'}
+                        </span>
+                        <span>
+                            <RotateCcw />
+                            {compactCopy.orders.returns}
+                        </span>
+                    </section>
+                    <div className={checkoutPageClassName('submit-order-bar')}>
+                        <button
+                            type={requiresShipping && !addressComplete ? 'button' : 'submit'}
+                            onClick={requiresShipping && !addressComplete ? manageAddress : undefined}
                             disabled={
-                                shippingUpdating ||
+                                customerLoading ||
                                 submitting ||
                                 cartPending ||
                                 cartUnknown ||
-                                (!shippingError && (!shippingReady || shippingMethods.length < 2))
-                            }
-                            onClick={() =>
-                                shippingError && !shippingReady
-                                    ? setShippingRetry(value => value + 1)
-                                    : setShippingPickerOpen(true)
+                                shippingUpdating ||
+                                Boolean(requiresShipping && addressComplete && !shippingReady)
                             }
                         >
-                            <span>{isZh ? '配送方式' : 'Delivery'}</span>
-                            <small aria-live="polite">
-                                {shippingUpdating
-                                    ? isZh
-                                        ? '正在计算运费…'
-                                        : 'Calculating shipping…'
-                                    : shippingError && !shippingReady
-                                      ? isZh
-                                          ? '计算失败，点击重试'
-                                          : 'Quote failed. Retry'
-                                      : shippingReady
-                                        ? shippingMethods.find(method => method.id === selectedShippingId)
-                                              ?.name
-                                        : missingAddressLabel}
-                                {(shippingMethods.length > 1 || shippingError) && <ChevronRight />}
-                            </small>
-                        </button>
-                    )}
-                    <button
-                        type="button"
-                        onClick={() => {
-                            setNoteDraft(order.customFields.customerNote ?? '');
-                            setNoteError(null);
-                            setNoteOpen(true);
-                        }}
-                    >
-                        <span>{isZh ? '订单备注' : 'Order note'}</span>
-                        <small>
-                            {order.customFields.customerNote
-                                ? trimText(order.customFields.customerNote, 20)
-                                : isZh
-                                  ? '添加备注'
-                                  : 'Add a note'}
-                            <ChevronRight />
-                        </small>
-                    </button>
-                    <button type="button" onClick={() => setCouponOpen(true)}>
-                        <span>{isZh ? '优惠券' : 'Coupon'}</span>
-                        <small title={selectedCouponLabel ?? undefined}>
-                            {selectedCouponLabel ?? (isZh ? '选择已领取优惠券' : 'Choose a claimed coupon')}
-                            <ChevronRight />
-                        </small>
-                    </button>
-                </section>
-                {formError && <InlineError message={formError} />}
-                {shippingError && !shippingPickerOpen && <InlineError message={shippingError} />}
-                <section className={checkoutPageClassName('checkout-section checkout-summary-section')}>
-                    <PriceSummary
-                        pending={cartPending}
-                        shippingPending={Boolean(
-                            requiresShipping && addressComplete && (!shippingReady || shippingUpdating),
-                        )}
-                        shippingUnavailable={
-                            requiresShipping && !addressComplete ? missingAddressLabel : undefined
-                        }
-                        order={order}
-                        locale={locale}
-                        language={language}
-                        flashSales={flashSales}
-                        requiresShipping={requiresShipping}
-                    />
-                </section>
-                <section
-                    className={checkoutPageClassName('checkout-assurance checkout-protection-section')}
-                    aria-label={isZh ? '购物保障' : 'Purchase protection'}
-                >
-                    <span>
-                        <CircleCheck />
-                        {physicalLines.length
-                            ? isZh
-                                ? '下单信息'
-                                : 'Order details'
-                            : isZh
-                              ? '安全购买'
-                              : 'Secure purchase'}
-                    </span>
-                    <span>
-                        <Truck />
-                        {physicalLines.length
-                            ? isZh
-                                ? '配送可追踪'
-                                : 'Tracked delivery'
-                            : isZh
-                              ? '邮箱交付'
-                              : 'Email delivery'}
-                    </span>
-                    <span>
-                        <RotateCcw />
-                        {compactCopy.orders.returns}
-                    </span>
-                </section>
-                <div className={checkoutPageClassName('submit-order-bar')}>
-                    <button
-                        type={requiresShipping && !addressComplete ? 'button' : 'submit'}
-                        onClick={requiresShipping && !addressComplete ? manageAddress : undefined}
-                        disabled={
-                            customerLoading ||
-                            submitting ||
-                            cartPending ||
-                            cartUnknown ||
-                            shippingUpdating ||
-                            Boolean(requiresShipping && addressComplete && !shippingReady)
-                        }
-                    >
-                        {(() => {
-                            if (cartPending)
-                                return isZh ? '正在确认商品与金额…' : 'Confirming items and total…';
-                            if (submitting) return isZh ? '处理中…' : 'Processing…';
-                            if (requiresShipping && customerLoading)
-                                return isZh ? '正在加载地址…' : 'Loading address…';
-                            if (requiresShipping && !addressComplete)
-                                return activeAddress
-                                    ? isZh
-                                        ? '去完善收货地址'
-                                        : 'Complete shipping address'
-                                    : isZh
-                                      ? '去添加收货地址'
-                                      : 'Add shipping address';
-                            if (requiresShipping && (shippingUpdating || !shippingReady)) {
-                                return shippingError
-                                    ? isZh
-                                        ? '请重试配送计算'
-                                        : 'Retry the delivery quote'
-                                    : isZh
-                                      ? '正在计算运费…'
-                                      : 'Calculating shipping…';
-                            }
-                            const totalFormatted = formatMoney(
-                                order.totalWithTax,
-                                order.currencyCode,
-                                locale,
-                            );
-                            const itemLabel = `${order.totalQuantity} ${order.totalQuantity === 1 ? 'item' : 'items'}`;
-                            if (directPurchase) {
+                            {(() => {
+                                if (cartPending)
+                                    return isZh ? '正在确认商品与金额…' : 'Confirming items and total…';
+                                if (submitting) return isZh ? '处理中…' : 'Processing…';
+                                if (requiresShipping && customerLoading)
+                                    return isZh ? '正在加载地址…' : 'Loading address…';
+                                if (requiresShipping && !addressComplete)
+                                    return activeAddress
+                                        ? isZh
+                                            ? '去完善收货地址'
+                                            : 'Complete shipping address'
+                                        : isZh
+                                          ? '去添加收货地址'
+                                          : 'Add shipping address';
+                                if (requiresShipping && (shippingUpdating || !shippingReady)) {
+                                    return shippingError
+                                        ? isZh
+                                            ? '请重试配送计算'
+                                            : 'Retry the delivery quote'
+                                        : isZh
+                                          ? '正在计算运费…'
+                                          : 'Calculating shipping…';
+                                }
+                                const totalFormatted = formatMoney(
+                                    order.totalWithTax,
+                                    order.currencyCode,
+                                    locale,
+                                );
+                                const itemLabel = `${order.totalQuantity} ${order.totalQuantity === 1 ? 'item' : 'items'}`;
+                                if (directPurchase) {
+                                    return isZh
+                                        ? `确认并支付（${order.totalQuantity}件）需支付 ${totalFormatted}`
+                                        : `Confirm and pay (${itemLabel}) · ${totalFormatted}`;
+                                }
                                 return isZh
-                                    ? `确认并支付（${order.totalQuantity}件）需支付 ${totalFormatted}`
-                                    : `Confirm and pay (${itemLabel}) · ${totalFormatted}`;
-                            }
-                            return isZh
-                                ? `提交订单（${order.totalQuantity}件）需支付 ${totalFormatted}`
-                                : `Place order (${itemLabel}) · ${totalFormatted}`;
-                        })()}
-                    </button>
-                </div>
+                                    ? `提交订单（${order.totalQuantity}件）需支付 ${totalFormatted}`
+                                    : `Place order (${itemLabel}) · ${totalFormatted}`;
+                            })()}
+                        </button>
+                    </div>
+                </aside>
             </form>
             {shippingPickerOpen && (
                 <Sheet

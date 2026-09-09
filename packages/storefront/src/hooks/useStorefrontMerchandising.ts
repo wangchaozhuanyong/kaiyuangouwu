@@ -60,10 +60,7 @@ export function useStorefrontMerchandising({
     // 48-product ceiling on every home visit. Larger managed sections still
     // scale up to the existing API limit.
     const bestSellerCandidateCount = Math.min(48, Math.max(16, bestSellerDisplayCount));
-    const recommendationCandidateCount = Math.min(
-        48,
-        Math.max(16, recommendationDisplayCount * 2),
-    );
+    const recommendationCandidateCount = Math.min(48, Math.max(16, recommendationDisplayCount * 2));
 
     const bestSellerCatalogQuery = useQuery({
         queryKey: storefrontQueryKeys.catalog(storefrontQueryKeys.market(market), vendureLanguageCode, {

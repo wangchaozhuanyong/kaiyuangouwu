@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { readStorefrontStylesheet } from './test-stylesheet';
 
-const stylesheet = readStorefrontStylesheet();
+const stylesheet = readStorefrontStylesheet(['./styles/desktop-commerce.css']);
 const homePageSource = readFileSync(new URL('./pages/home-page.tsx', import.meta.url), 'utf8');
 
 describe('homepage module spacing', () => {
@@ -43,7 +43,7 @@ describe('homepage module spacing', () => {
             ),
         );
         expect(stylesheet).toMatch(
-            /html\[lang='en'\] \.home-intro-grid \.quick-grid b\s*\{[^}]*min-height:\s*30px;[^}]*white-space:\s*normal;[^}]*-webkit-line-clamp:\s*2;/,
+            /\.desktop-store-layout \.home-intro-grid \.quick-grid b\s*\{[^}]*white-space:\s*normal;[^}]*overflow-wrap:\s*anywhere;/,
         );
     });
 

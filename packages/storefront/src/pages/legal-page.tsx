@@ -42,12 +42,7 @@ export function ManagedLegalPage({
         storefrontHostname ?? (typeof window === 'undefined' ? undefined : window.location.hostname),
     );
     const scopedLegalIdentity = resolveManagedLegalIdentity(legalIdentity, activeHostname);
-    const document = resolveManagedLegalDocument(
-        contentBlocks,
-        kind,
-        fallbackTitle,
-        activeHostname,
-    );
+    const document = resolveManagedLegalDocument(contentBlocks, kind, fallbackTitle, activeHostname);
     const title = interpolateLegalProfileTokens(
         document?.title ?? fallbackTitle,
         scopedLegalIdentity,
@@ -85,11 +80,7 @@ export function ManagedLegalPage({
                 {document?.subtitle && (
                     <header className="legal-managed-intro">
                         <p>
-                            {interpolateLegalProfileTokens(
-                                document.subtitle,
-                                scopedLegalIdentity,
-                                language,
-                            )}
+                            {interpolateLegalProfileTokens(document.subtitle, scopedLegalIdentity, language)}
                         </p>
                     </header>
                 )}
