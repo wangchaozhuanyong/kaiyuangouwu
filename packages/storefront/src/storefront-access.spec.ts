@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import type { RouteName } from './storefront-router';
 
 import { isPublicStorefrontRoute } from './storefront-access';
 
@@ -12,7 +11,7 @@ describe('storefront account boundary', () => {
         'flash-sale',
         'recommendations',
         'announcements',
-    ] as RouteName[])('requires an authenticated account before rendering %s', route =>
+    ] as const)('requires an authenticated account before rendering %s', route =>
         expect(isPublicStorefrontRoute(route)).toBe(false),
     );
     it.each([
@@ -23,7 +22,7 @@ describe('storefront account boundary', () => {
         'forgot-password',
         'legal',
         'support',
-    ] as RouteName[])('keeps account and policy routes available: %s', route =>
+    ] as const)('keeps account and policy routes available: %s', route =>
         expect(isPublicStorefrontRoute(route)).toBe(true),
     );
 });
