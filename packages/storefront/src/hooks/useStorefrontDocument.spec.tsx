@@ -162,10 +162,10 @@ describe('runtime channel branding', () => {
             window.history.replaceState({}, '', '/product?id=6');
             act(() => root.render(<Fixture logo={null} route={{ name: 'product', id: '6' }} />));
             expect(document.querySelector('meta[name="robots"]')?.getAttribute('content')).toBe(
-                'index, follow, max-image-preview:large',
+                'noindex, nofollow, noarchive',
             );
             expect(document.querySelector('link[rel="canonical"]')?.getAttribute('href')).toBe(
-                new URL('/product?id=6', window.location.origin).href,
+                new URL('/product', window.location.origin).href,
             );
         } finally {
             act(() => root.unmount());

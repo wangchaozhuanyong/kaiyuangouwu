@@ -87,7 +87,11 @@ function referencesAnotherStorefront(
 }
 
 function normalizeHostname(value: string | undefined): string {
-    return (value ?? '').trim().toLowerCase().replace(/^www\./u, '').replace(/\.$/u, '');
+    return (value ?? '')
+        .trim()
+        .toLowerCase()
+        .replace(/^www\./u, '')
+        .replace(/\.$/u, '');
 }
 
 function blockCodeMatches(code: string, kind: LegalDocumentKind): boolean {

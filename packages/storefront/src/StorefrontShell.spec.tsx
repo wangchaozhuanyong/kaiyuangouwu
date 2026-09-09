@@ -5,6 +5,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { StorefrontShell } from './StorefrontShell';
 
+const viewport = vi.hoisted(() => ({ desktop: false }));
+vi.mock('./desktop-layout', async importOriginal => ({
+    ...(await importOriginal<typeof import('./desktop-layout')>()),
+    useDesktopViewport: () => viewport.desktop,
+}));
+vi.mock('./components/common/desktop-header', () => ({
+    DesktopHeader: () => <div>DESKTOP_CATALOG_HEADER</div>,
+}));
+vi.mock('./components/common/desktop-account-navigation', () => ({
+    DesktopAccountNavigation: () => <div>DESKTOP_ACCOUNT_NAVIGATION</div>,
+    isDesktopAccountRoute: () => true,
+}));
 vi.mock('@tanstack/react-router', () => ({
     Outlet: () => <div>PRIVATE_CATALOG_CONTENT</div>,
     lazyRouteComponent: () => () => <div>SIGN_IN_FORM</div>,
@@ -22,6 +34,7 @@ describe('catalog rendering boundary', () => {
     let element: HTMLDivElement;
     let root: ReturnType<typeof createRoot>;
     beforeEach(() => {
+        viewport.desktop = false;
         element = document.createElement('div');
         root = createRoot(element);
     });
@@ -51,6 +64,16 @@ describe('catalog rendering boundary', () => {
         expect(element.textContent).toContain('SIGN_IN_FORM');
         expect(element.textContent).not.toContain('PRIVATE_CATALOG_CONTENT');
         expect(element.textContent).not.toContain('CATALOG_NAVIGATION');
+    });
+    it('keeps desktop catalog navigation behind the same account boundary', () => {
+        viewport.desktop = true;
+        render({ displayedRoute: { name: 'product', id: '1' } });
+        expect(element.textContent).toContain('SIGN_IN_FORM');
+        expect(element.textContent).not.toContain('DESKTOP_CATALOG_HEADER');
+        expect(element.textContent).not.toContain('DESKTOP_ACCOUNT_NAVIGATION');
+        expect(element.querySelector('[data-route]')?.getAttribute('data-route')).toBe('login');
+        render({ customer: { id: 'customer-a' } });
+        expect(element.textContent).toContain('DESKTOP_CATALOG_HEADER');
     });
     it('removes an authenticated catalog immediately after logout', () => {
         render({ customer: { id: 'customer-a' } });

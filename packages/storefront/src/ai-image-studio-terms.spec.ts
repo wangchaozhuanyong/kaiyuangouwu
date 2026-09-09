@@ -44,11 +44,12 @@ describe('AI Image Studio responsive generation flow', () => {
     it('provides a dedicated desktop workbench without changing the compact mobile flow', () => {
         expect(pageSource).toContain('className="ai-studio-controls"');
         expect(pageSource).toContain("'生成参数与结算'");
-        expect(stylesheet).toContain('/* AI Image Studio — desktop workbench */');
-        expect(stylesheet).toContain('@media (min-width: 1024px)');
-        expect(stylesheet).toMatch(
-            /\.ai-studio-shell \{[^}]*grid-template-columns: minmax\(0, 1fr\) minmax\(340px, 400px\);/,
+        const desktopStylesheet = readFileSync(
+            new URL('./styles/image-studio-desktop.css', import.meta.url),
+            'utf8',
         );
+        expect(desktopStylesheet).toContain('@media (min-width: 1024px)');
+        expect(stylesheet).toMatch(/\.ai-studio-sidebar-scroll \{[^}]*overflow-y: auto;/);
         expect(stylesheet).toMatch(
             /\.ai-studio-fixed-generate \{[^}]*position: static;[^}]*transform: none;/,
         );

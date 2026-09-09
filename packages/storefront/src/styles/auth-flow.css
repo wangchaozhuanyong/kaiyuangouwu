@@ -375,12 +375,8 @@
 .empty-state {
     min-height: 430px;
     padding: 108px 24px 30px;
-    background: white;
-    text-align: center;
-}
-
-.subpage > .empty-state {
     background: transparent;
+    text-align: center;
 }
 
 .empty-state.is-compact {

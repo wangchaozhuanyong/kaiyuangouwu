@@ -56,7 +56,7 @@ function Fixture() {
         let cancelled = false;
         setData(null);
         const locale = language === 'zh' ? 'zh_Hans' : 'en';
-        void fetch(`${apiOrigin}/shop-api?languageCode=${locale}`, {
+        void fetch(`/shop-api?languageCode=${locale}`, {
             method: 'POST',
             headers: { 'content-type': 'application/json', 'vendure-token': token, 'language-code': locale },
             body: JSON.stringify({ query }),

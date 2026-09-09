@@ -18,6 +18,7 @@ const publicQueries = new Set([
     'referralProgram',
 ]);
 const publicMutations = new Set([
+    'recordStorefrontPageView',
     'login',
     'authenticate',
     'logout',

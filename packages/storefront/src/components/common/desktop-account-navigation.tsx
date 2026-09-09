@@ -7,8 +7,11 @@ export const desktopAccountSections = [
     { path: '/account', label: ['账户概览', 'Overview'], routes: ['account'] },
     { path: '/orders', label: ['我的订单', 'Orders'], routes: ['orders', 'order-detail', 'logistics'] },
     { path: '/favorites', label: ['我的收藏', 'Favorites'], routes: ['favorites'] },
+    { path: '/history', label: ['浏览记录', 'Recently viewed'], routes: ['history'] },
     { path: '/coupons', label: ['优惠券', 'Coupons'], routes: ['coupons'] },
     { path: '/addresses', label: ['地址管理', 'Addresses'], routes: ['addresses'] },
+    { path: '/reviews', label: ['评价中心', 'Reviews'], routes: ['reviews'] },
+    { path: '/notifications', label: ['消息通知', 'Notifications'], routes: ['notifications'] },
     { path: '/account-security', label: ['账户设置', 'Settings'], routes: ['account-security'] },
 ] as const;
 
@@ -21,9 +24,10 @@ export function DesktopAccountNavigation() {
     if (!isDesktopAccountRoute(route.name)) return null;
     return (
         <nav
-            className="desktop-account-navigation desktop-local-navigation"
+            className="desktop-account-navigation"
             aria-label={language === 'zh' ? '账户导航' : 'Account navigation'}
         >
+            <strong>{language === 'zh' ? '个人中心' : 'My account'}</strong>
             {desktopAccountSections.map(section => (
                 <Link
                     key={section.path}

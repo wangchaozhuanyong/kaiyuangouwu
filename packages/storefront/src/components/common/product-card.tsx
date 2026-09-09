@@ -77,7 +77,7 @@ export function ProductCard({
                 </button>
             )}
 
-            <div className="product-card-media aspect-square w-full overflow-hidden [&_.responsive-picture]:block [&_.responsive-picture]:h-full [&_.responsive-picture]:w-full [&_.image-placeholder]:h-full [&_.image-placeholder]:w-full [&_.image-placeholder]:bg-[var(--product-media-bg)] [&_img]:block [&_img]:h-full [&_img]:w-full [&_img]:object-contain">
+            <div className="product-card-media aspect-square w-full overflow-hidden rounded-[var(--radius-md)] [&_.responsive-picture]:block [&_.responsive-picture]:h-full [&_.responsive-picture]:w-full [&_.image-placeholder]:h-full [&_.image-placeholder]:w-full [&_.image-placeholder]:bg-[var(--product-media-bg)] [&_img]:block [&_img]:h-full [&_img]:w-full [&_img]:object-contain">
                 <ProductImage product={product} />
             </div>
 

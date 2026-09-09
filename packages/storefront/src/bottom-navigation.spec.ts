@@ -98,7 +98,7 @@ describe('bottom navigation configuration', () => {
         expect(shouldShowBottomNavigation('orders', block)).toBe(false);
     });
 
-    it('keeps tablet navigation at the bottom and moves it into the desktop header at 1024px', () => {
+    it('keeps mobile navigation separate from the dedicated desktop header', () => {
         const source = readFileSync(
             new URL('./components/common/bottom-navigation.tsx', import.meta.url),
             'utf8',
@@ -113,10 +113,10 @@ describe('bottom navigation configuration', () => {
         expect(source).toContain('storefront-bottom-nav');
         expect(source).not.toContain('-translate-x-1/2');
 
-        const stylesheet = readFileSync(new URL('./styles/desktop-layout.css', import.meta.url), 'utf8');
-        expect(stylesheet).toMatch(
-            /\.storefront-bottom-nav > a > span:last-child\s*\{[^}]*white-space:\s*normal !important;[^}]*overflow-wrap:\s*anywhere;/,
-        );
+        const shell = readFileSync(new URL('./StorefrontShell.tsx', import.meta.url), 'utf8');
+        expect(shell).toContain('{!desktop && customer && shouldShowBottomNavigation(');
+        expect(shell).toContain('{desktop && customer && (');
+        expect(shell).toContain('<DesktopHeader');
     });
 
     it('mounts navigation outside storefront-app to prevent mobile Safari clipping traps', () => {

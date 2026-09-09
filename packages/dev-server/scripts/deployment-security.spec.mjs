@@ -7,6 +7,45 @@ import { fileURLToPath } from 'node:url';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 
+void test('candidate Nginx validation isolates every temp path and rejects live metadata changes', () => {
+    const script = path.join(repositoryRoot, 'deploy/validate-nginx-candidate.py');
+    const python = `
+import importlib.util, pathlib, subprocess, sys
+from unittest.mock import patch
+spec=importlib.util.spec_from_file_location('candidate',sys.argv[1])
+m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+source=pathlib.Path(sys.argv[2]).read_text()
+def validate_command(command, **kwargs):
+    config=pathlib.Path(command[-1]);root=config.parent
+    rendered=config.read_text()
+    assert command[:3]==['nginx','-t','-p']
+    assert command[3]==str(root)+'/' and command[4]=='-c'
+    assert 'user www-data;' in rendered
+    for kind in m.TEMP_KINDS:
+        assert kind+'_temp_path '+str(root/kind)+';' in rendered
+    assert '/var/log/nginx/' not in rendered and 'syslog:server=' not in rendered
+    assert 'include /etc/nginx/proxy_params;' in rendered
+    return subprocess.CompletedProcess(command, 0)
+with patch.object(m,'live_metadata',return_value={'directory':(33,0,448,1)}), patch.object(m.subprocess,'run',side_effect=validate_command):
+    assert m.validate_candidate(source)['productionTempDirectoriesUnchanged']
+with patch.object(m,'live_metadata',side_effect=[{'owner':33},{'owner':65534}]), patch.object(m.subprocess,'run',side_effect=validate_command):
+    try:m.validate_candidate(source)
+    except RuntimeError:pass
+    else:raise AssertionError('Changed production permissions must fail validation')
+for unsafe in ['client_body_temp_path /var/lib/nginx/body;', 'include /etc/nginx/conf.d/*.conf;']:
+    try:m.candidate_config(unsafe,pathlib.Path('/tmp/isolated'))
+    except ValueError:pass
+    else:raise AssertionError('Unisolated input must fail before running nginx')
+print('candidate isolation passed')
+`;
+    const result = spawnSync(
+        'python3',
+        ['-B', '-c', python, script, path.join(repositoryRoot, 'deploy/nginx/damatong.conf')],
+        { encoding: 'utf8' },
+    );
+    assert.equal(result.status, 0, result.stderr);
+});
+
 void test('Nginx error logs are sanitized in memory before persistence', async () => {
     const config = await readFile(path.join(repositoryRoot, 'deploy/nginx/damatong.conf'), 'utf8');
     const directives = [...config.matchAll(/^\s*error_log (.+);$/gmu)].map(match => match[1]);

@@ -1,29 +1,12 @@
 import { Link } from '@tanstack/react-router';
-import { Bell, BriefcaseBusiness, House, LayoutGrid, Search, ShoppingCart, UserRound } from 'lucide-react';
+import { Search, ShoppingCart } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
-import { RouteState } from '../../storefront-router';
 import { BrandLogo } from '../../storefront-ui/content-ui';
 import { useStorefront } from '../../StorefrontContext';
-import { StorefrontContentBlock, StorefrontLanguage } from '../../types';
+import { StorefrontContentBlock } from '../../types';
 
 import { resolveBottomNavigationItems } from './bottom-navigation';
-import { isDesktopAccountRoute } from './desktop-account-navigation';
-
-interface DesktopHeaderContext {
-    route: RouteState;
-    language: StorefrontLanguage;
-    storefrontName: string;
-    logoUrl: string | null;
-    logoOnLightUrl: string | null;
-    availableCurrencyCodes: string[];
-    currencySelectorEnabled: boolean;
-    displayCurrencyCode: string;
-    cartLoading: boolean;
-    navigate: (route: RouteState) => void;
-    toggleLanguage: () => void;
-    switchCurrency: (currencyCode: string) => void;
-}
 
 export function DesktopHeader({
     navigationBlock,
@@ -32,16 +15,52 @@ export function DesktopHeader({
     navigationBlock?: StorefrontContentBlock;
     cartQuantity: number;
 }) {
-    const context: DesktopHeaderContext = useStorefront();
+    const context = useStorefront();
     const isZh = context.language === 'zh';
     const [query, setQuery] = useState(context.route.term ?? '');
     useEffect(() => setQuery(context.route.term ?? ''), [context.route.term]);
-    const items = resolveBottomNavigationItems(navigationBlock, context.language).filter(
-        item => item.target !== '/search',
+    const items = resolveBottomNavigationItems(navigationBlock, context.language);
+    const storeItems = items.filter(item => ['home', 'category', 'services'].includes(item.routeName));
+    const utilityItems = items.filter(
+        item => !['home', 'category', 'services', 'search', 'cart'].includes(item.routeName),
     );
+    const cartItem = items.find(item => item.routeName === 'cart');
     return (
         <header className="desktop-header">
-            <div className="desktop-header-inner">
+            <div className="desktop-utility-bar">
+                <div className="desktop-commerce-frame desktop-utility-inner">
+                    <span>{context.storefrontName}</span>
+                    <nav aria-label={isZh ? '账户与帮助' : 'Account and help'}>
+                        <Link to="/orders">{isZh ? '我的订单' : 'My orders'}</Link>
+                        {utilityItems.map(item => (
+                            <Link key={item.key} to={item.target}>
+                                {item.label}
+                            </Link>
+                        ))}
+                        <Link to="/support">{isZh ? '联系客服' : 'Customer service'}</Link>
+                        {context.currencySelectorEnabled && context.availableCurrencyCodes.length > 1 && (
+                            <select
+                                aria-label={isZh ? '选择显示币种' : 'Choose display currency'}
+                                value={context.displayCurrencyCode}
+                                disabled={context.cartLoading}
+                                onChange={event => void context.switchCurrency(event.target.value)}
+                            >
+                                {context.availableCurrencyCodes.map(code => (
+                                    <option key={code}>{code}</option>
+                                ))}
+                            </select>
+                        )}
+                        <button
+                            type="button"
+                            onClick={context.toggleLanguage}
+                            aria-label={isZh ? '切换为英文' : 'Switch to Chinese'}
+                        >
+                            {isZh ? 'English' : '中文'}
+                        </button>
+                    </nav>
+                </div>
+            </div>
+            <div className="desktop-commerce-frame desktop-header-main">
                 <Link className="desktop-brand" to="/" aria-label={context.storefrontName}>
                     <BrandLogo
                         url={context.logoUrl || context.logoOnLightUrl}
@@ -62,92 +81,69 @@ export function DesktopHeader({
                     <Search aria-hidden="true" />
                     <input
                         aria-label={isZh ? '搜索商品' : 'Search products'}
-                        placeholder={isZh ? '搜索商品' : 'Search products'}
+                        placeholder={isZh ? '搜索商品、品牌或分类' : 'Search products, brands or categories'}
                         name="term"
                         type="search"
                         value={query}
                         onChange={event => setQuery(event.target.value)}
                     />
-                    <button
-                        type="submit"
-                        className="desktop-search-submit"
-                        aria-label={isZh ? '提交搜索' : 'Submit search'}
-                    >
-                        {isZh ? '搜索' : 'Search'}
-                    </button>
+                    <button type="submit">{isZh ? '搜索' : 'Search'}</button>
                 </form>
-                <nav className="desktop-header-nav" aria-label={isZh ? '主导航' : 'Main navigation'}>
-                    {items.map(item => {
-                        const Icon =
-                            item.routeName === 'home'
-                                ? House
-                                : item.routeName === 'category'
-                                  ? LayoutGrid
-                                  : item.routeName === 'cart'
-                                    ? ShoppingCart
-                                    : item.routeName === 'account'
-                                      ? UserRound
-                                      : BriefcaseBusiness;
-                        return (
-                            <Link
-                                key={item.key}
-                                to={item.target}
-                                className="desktop-header-link"
-                                data-active={
-                                    item.routeName === 'account'
-                                        ? isDesktopAccountRoute(context.route.name)
-                                        : item.routeName === 'category'
-                                          ? ['category', 'search', 'product'].includes(context.route.name)
-                                          : item.routeName === 'services'
-                                            ? ['services', 'image-studio', 'two-factor'].includes(
-                                                  context.route.name,
-                                              )
-                                            : context.route.name === item.routeName
-                                }
-                                activeOptions={{ exact: item.target === '/' }}
-                            >
-                                <span className="desktop-header-icon">
-                                    {item.iconUrl ? (
-                                        <img src={item.iconUrl} alt="" />
-                                    ) : (
-                                        <Icon aria-hidden="true" />
-                                    )}
-                                </span>
-                                <span>{item.label}</span>
-                                {item.routeName === 'cart' && cartQuantity > 0 ? (
-                                    <b className="desktop-cart-count">
-                                        {cartQuantity > 99 ? '99+' : cartQuantity}
-                                    </b>
-                                ) : null}
-                            </Link>
-                        );
-                    })}
-                </nav>
-                <div className="desktop-header-settings">
-                    {context.currencySelectorEnabled && context.availableCurrencyCodes.length > 1 ? (
-                        <select
-                            aria-label={isZh ? '选择显示币种' : 'Choose display currency'}
-                            value={context.displayCurrencyCode}
-                            disabled={context.cartLoading}
-                            onChange={event => context.switchCurrency(event.target.value)}
-                        >
-                            {context.availableCurrencyCodes.map(code => (
-                                <option key={code}>{code}</option>
-                            ))}
-                        </select>
-                    ) : null}
-                    <button
-                        type="button"
-                        onClick={context.toggleLanguage}
-                        aria-label={isZh ? '切换为英文' : 'Switch to Chinese'}
-                    >
-                        {isZh ? '中' : 'EN'}
-                    </button>
-                    <Link to="/notifications" aria-label={isZh ? '通知' : 'Notifications'}>
-                        <Bell aria-hidden="true" />
+                {cartItem && (
+                    <Link className="desktop-cart-link" to={cartItem.target}>
+                        <ShoppingCart aria-hidden="true" />
+                        <span>{cartItem.label}</span>
+                        <b>{cartQuantity > 99 ? '99+' : cartQuantity}</b>
                     </Link>
-                </div>
+                )}
             </div>
+            <nav
+                className="desktop-commerce-frame desktop-store-nav"
+                aria-label={isZh ? '商城导航' : 'Store navigation'}
+            >
+                {storeItems.map(item => (
+                    <Link
+                        key={item.key}
+                        to={item.target}
+                        aria-current={
+                            (
+                                item.routeName === 'category'
+                                    ? ['category', 'search', 'product'].includes(context.route.name)
+                                    : item.routeName === 'services'
+                                      ? ['services', 'image-studio', 'two-factor'].includes(
+                                            context.route.name,
+                                        )
+                                      : context.route.name === item.routeName
+                            )
+                                ? 'page'
+                                : undefined
+                        }
+                    >
+                        {item.label}
+                    </Link>
+                ))}
+                {context.collections.length > 0 && (
+                    <span className="desktop-nav-divider" aria-hidden="true" />
+                )}
+                {context.collections.map(collection => (
+                    <button
+                        key={collection.id}
+                        type="button"
+                        aria-pressed={
+                            context.route.name === 'category' && context.route.collectionId === collection.id
+                        }
+                        onClick={() =>
+                            context.navigate({
+                                name: 'category',
+                                collectionId: collection.id,
+                                childId: 'all',
+                            })
+                        }
+                    >
+                        {collection.name}
+                    </button>
+                ))}
+            </nav>
         </header>
     );
 }

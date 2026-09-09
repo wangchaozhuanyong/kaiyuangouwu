@@ -1308,6 +1308,10 @@ html[lang='en'] .quick-grid b {
     object-fit: contain;
 }
 
+.managed-content-card.is-product-media .managed-content-media {
+    border-radius: var(--radius-md);
+}
+
 .managed-content-placeholder svg {
     width: 26px;
     height: 26px;
@@ -1661,6 +1665,7 @@ html[lang='en'] .quick-grid b {
     height: 100%;
     position: relative;
     overflow: hidden;
+    border-radius: var(--radius-md);
     background: #f5f7fa;
     display: block;
 }

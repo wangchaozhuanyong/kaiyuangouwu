@@ -83,6 +83,7 @@ verification_result:
 - Storefront 静态目录：`/var/www/kaiyuangouwu-current/packages/storefront/dist`
 - Dashboard 静态目录：`/var/www/kaiyuangouwu-current/packages/next-admin/dist`（由 Vendure API 的 `DashboardPlugin` 提供）
 - Nginx 配置基线：`deploy/nginx/damatong.conf`（保留兼容文件名，已覆盖双店域名）
+- 在源站验证尚未安装的候选片段，使用 `sudo -n python3 -B deploy/validate-nginx-candidate.py deploy/nginx/damatong.conf`。脚本显式保留 `www-data` 身份、隔离全部 5 个临时目录和日志，并检查线上目录元数据未变。禁止以 root 对遗漏 `user` 或临时目录隔离的自制配置运行 `nginx -t/-T`：语法检查也会调整临时目录所有者，导致线上大请求返回 500。正式安装后的配置仍按发布脚本执行默认 `nginx -t` 与 reload。
 - TLS 协议只在 `deploy/nginx/damatong.conf` 的 `http` 作用域声明一次，固定为 `ssl_protocols TLSv1.2 TLSv1.3;`；生产机 `/etc/nginx/nginx.conf` 不得保留发行版默认的重复 `ssl_protocols` 声明。
 - 数据库：同一 EC2 上的 MySQL 8.0，使用 `single-host` 生产模式；每日逻辑备份与恢复演练脚本位于 `deploy/systemd/`。
 - 异地备份：`yunqiao-vendure-prod-backup-079740175286-apne1/mysql`，实例角色只能访问该前缀；存储桶已启用版本控制、SSE-S3 默认加密、阻止全部公网访问与 Bucket owner enforced。本地备份保留 14 天；S3 当前不自动删除，设置生命周期前必须单独确认保留期限。

@@ -168,7 +168,7 @@ export function useStorefrontAppState() {
         channel: market.code,
         location: displayedRouterLocation.pathname + displayedRouterLocation.searchStr,
         customerId: customer?.id ?? null,
-        enabled: storefrontContextResolved && catalogAccessGranted && !isNavigationPending,
+        enabled: storefrontContextResolved && !isNavigationPending,
     });
 
     const { bestSellerProducts, recommendationProducts, recommendationsBlock } = useStorefrontMerchandising({
