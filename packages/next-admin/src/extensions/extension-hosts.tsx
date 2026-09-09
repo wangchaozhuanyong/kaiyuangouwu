@@ -1,4 +1,4 @@
-import { Component, useMemo, type ReactNode } from 'react';
+import { Component, useId, useMemo, useState, type ReactNode } from 'react';
 
 import { useAdminPermissions } from '../hooks/use-admin-permissions';
 
@@ -39,9 +39,11 @@ function useExtensionContext(pageId: string, entity?: Record<string, unknown> | 
 export function NextAdminPageBlocks({
     pageId,
     entity,
+    fallback = null,
 }: {
     pageId: string;
     entity?: Record<string, unknown> | null;
+    fallback?: ReactNode;
 }) {
     const { hasAnyPermission } = useAdminPermissions();
     const context = useExtensionContext(pageId, entity);
@@ -50,7 +52,7 @@ export function NextAdminPageBlocks({
             hasAnyPermission(block.permissions ?? []) && (!block.shouldRender || block.shouldRender(context)),
     );
 
-    if (blocks.length === 0) return null;
+    if (blocks.length === 0) return fallback;
     return (
         <div className="space-y-4" data-extension-location={`${pageId}:blocks`}>
             {blocks.map(block => {
@@ -68,10 +70,14 @@ export function NextAdminPageBlocks({
 export function NextAdminActions({
     pageId,
     entity,
+    collapseOnMobile = false,
 }: {
     pageId: string;
     entity?: Record<string, unknown> | null;
+    collapseOnMobile?: boolean;
 }) {
+    const [expanded, setExpanded] = useState(false);
+    const actionsId = useId();
     const { hasAnyPermission } = useAdminPermissions();
     const context = useExtensionContext(pageId, entity);
     const actions = getNextAdminActions(pageId).filter(action => hasAnyPermission(action.permissions ?? []));
@@ -79,14 +85,34 @@ export function NextAdminActions({
     if (actions.length === 0) return null;
     return (
         <div className="contents" data-extension-location={`${pageId}:actions`}>
-            {actions.map(action => {
-                const Action = action.component;
-                return (
-                    <ExtensionBoundary key={action.id} extensionId={action.id}>
-                        <Action context={context} />
-                    </ExtensionBoundary>
-                );
-            })}
+            {collapseOnMobile && (
+                <button
+                    type="button"
+                    aria-expanded={expanded}
+                    aria-controls={actionsId}
+                    onClick={() => setExpanded(value => !value)}
+                    className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700 sm:hidden"
+                >
+                    {expanded ? '收起操作' : '更多操作'}
+                </button>
+            )}
+            <div
+                id={actionsId}
+                className={
+                    collapseOnMobile
+                        ? `${expanded ? 'flex' : 'hidden'} order-last w-full flex-wrap gap-2 sm:contents`
+                        : 'contents'
+                }
+            >
+                {actions.map(action => {
+                    const Action = action.component;
+                    return (
+                        <ExtensionBoundary key={action.id} extensionId={action.id}>
+                            <Action context={context} />
+                        </ExtensionBoundary>
+                    );
+                })}
+            </div>
         </div>
     );
 }

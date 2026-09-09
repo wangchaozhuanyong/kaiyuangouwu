@@ -1,10 +1,122 @@
-import { describe, expect, it, vi } from 'vitest';
+import { DataSource, EntitySchema } from 'typeorm';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import {
     contentTranslationInternals,
     ContentTranslationService,
     isUsableEnglishTranslation,
 } from './content-translation.service.js';
+
+describe('translation audit database pagination', () => {
+    // A disposable SQL database verifies actual filter grouping and LIKE escaping.
+    const schema = new EntitySchema({
+        name: 'AuditState',
+        columns: {
+            id: { type: Number, primary: true, generated: true },
+            channelId: { type: String, nullable: true },
+            entityType: { type: String },
+            entityId: { type: String },
+            fieldPath: { type: String },
+            status: { type: String },
+            error: { type: String, nullable: true },
+            updatedAt: { type: Date },
+        },
+    });
+    const database = new DataSource({ type: 'sqljs', entities: [schema], synchronize: true });
+    let service: ContentTranslationService;
+    beforeAll(async () => {
+        await database.initialize();
+        const repository = database.getRepository(schema);
+        await repository.insert([
+            ...Array.from({ length: 1105 }, (_, i) => ({
+                channelId: 'channel-a',
+                entityType: 'Product',
+                entityId: i === 0 ? 'old-target' : `item-${i}`,
+                fieldPath: 'name',
+                status: i === 0 ? 'FAILED' : 'AUTO_TRANSLATED',
+                error: i === 0 ? 'literal 100!%_\\done' : null,
+                updatedAt: new Date('2026-01-01'),
+            })),
+            {
+                channelId: 'channel-b',
+                entityType: 'Product',
+                entityId: 'old-target',
+                fieldPath: 'name',
+                status: 'FAILED',
+                error: null,
+                updatedAt: new Date('2026-02-01'),
+            },
+            {
+                channelId: null,
+                entityType: 'Collection',
+                entityId: 'global-record',
+                fieldPath: 'name',
+                status: 'REVIEWED',
+                error: null,
+                updatedAt: new Date('2026-01-01'),
+            },
+        ]);
+        service = new ContentTranslationService({ getRepository: () => repository } as any, {
+            provider: { name: 'test', isConfigured: () => true, translate: vi.fn() },
+            glossary: {},
+            sourceLanguageCode: 'zh_Hans',
+            targetLanguageCode: 'en',
+        });
+    });
+    afterAll(async () => {
+        if (database.isInitialized) await database.destroy();
+    });
+
+    it('preserves the legacy limit while reporting complete counts', async () => {
+        const result = await service.audit({} as any, 'channel-a');
+        expect(result.total).toBe(1106);
+        expect(result.filteredTotal).toBe(1106);
+        expect(result.states).toHaveLength(1000);
+        expect(result.counts).toContainEqual({ status: 'AUTO_TRANSLATED', count: 1104 });
+        expect(result.states.some(state => state.channelId === 'channel-b')).toBe(false);
+    });
+
+    it('can reach records beyond 1000 with stable ordering for equal timestamps', async () => {
+        const first = await service.audit({} as any, 'channel-a', { skip: 1000, take: 100 });
+        const last = await service.audit({} as any, 'channel-a', { skip: 1100, take: 100 });
+        expect(first.states).toHaveLength(100);
+        expect(last.states).toHaveLength(6);
+        expect(last.states.at(-1)?.entityId).toBe('old-target');
+        expect(new Set([...first.states, ...last.states].map(state => state.id)).size).toBe(106);
+    });
+
+    it('searches older records on the server and keeps channel and global conditions grouped', async () => {
+        const result = await service.audit({} as any, 'channel-a', {
+            search: 'OLD-TARGET',
+            status: 'FAILED',
+            entityType: 'Product',
+        });
+        expect(result.filteredTotal).toBe(1);
+        expect(result.states).toHaveLength(1);
+        expect(result.states[0].channelId).toBe('channel-a');
+        expect(result.total).toBe(1106);
+        expect(result.counts).toContainEqual({ status: 'REVIEWED', count: 1 });
+    });
+
+    it('treats percent, underscore, escape marker and backslash as literal search text', async () => {
+        const result = await service.audit({} as any, 'channel-a', { search: '100!%_\\done' });
+        expect(result.filteredTotal).toBe(1);
+        expect(result.states[0].entityId).toBe('old-target');
+        expect((await service.audit({} as any, 'channel-a', { search: 'not-found' })).filteredTotal).toBe(0);
+    });
+
+    it('supports global-only scope, empty pages and bounded page sizes', async () => {
+        expect((await service.audit({} as any, null, {})).states.map(state => state.entityId)).toEqual([
+            'global-record',
+        ]);
+        const emptyPage = await service.audit({} as any, 'channel-a', { skip: 2000, take: 20 });
+        expect(emptyPage.states).toEqual([]);
+        expect(emptyPage.filteredTotal).toBe(1106);
+        expect((await service.audit({} as any, 'channel-a', { skip: -20, take: 9999 })).states).toHaveLength(
+            100,
+        );
+    });
+});
 
 describe('content translation hashing', () => {
     it('is deterministic and detects source changes', () => {
@@ -235,32 +347,6 @@ describe('ContentTranslationService localized fields', () => {
         ).rejects.toThrow('必须填写不含中文的英文内容');
     });
 
-    it('counts the complete audit set while limiting returned detail rows', async () => {
-        const allStatuses = Array.from({ length: 1_001 }, (_, index) => ({
-            status: index === 1_000 ? 'MANUAL_LOCKED' : 'AUTO_TRANSLATED',
-        }));
-        const repository = {
-            find: vi.fn((options: any) =>
-                Promise.resolve(options.take ? allStatuses.slice(0, options.take) : allStatuses),
-            ),
-        };
-        const service = new ContentTranslationService({ getRepository: vi.fn(() => repository) } as any, {
-            provider: { name: 'test', isConfigured: () => true, translate: vi.fn() },
-            glossary: {},
-            sourceLanguageCode: 'zh_Hans',
-            targetLanguageCode: 'en',
-        });
-
-        await expect(service.audit({} as any)).resolves.toMatchObject({
-            total: 1_001,
-            states: { length: 1_000 },
-            counts: expect.arrayContaining([
-                { status: 'AUTO_TRANSLATED', count: 1_000 },
-                { status: 'MANUAL_LOCKED', count: 1 },
-            ]),
-        });
-    });
-
     it('counts stale translations in the active channel', async () => {
         const repository = {
             count: vi.fn().mockResolvedValue(3),
@@ -284,24 +370,5 @@ describe('ContentTranslationService localized fields', () => {
                 { channelId: expect.anything(), status: expect.anything() },
             ],
         });
-    });
-
-    it('audits the active channel together with global translation records', async () => {
-        const repository = { find: vi.fn().mockResolvedValue([]) };
-        const service = new ContentTranslationService({ getRepository: vi.fn(() => repository) } as any, {
-            provider: { name: 'test', isConfigured: () => true, translate: vi.fn() },
-            glossary: {},
-            sourceLanguageCode: 'zh_Hans',
-            targetLanguageCode: 'en',
-        });
-
-        await service.audit({} as any, 'channel-1');
-
-        expect(repository.find).toHaveBeenCalledTimes(2);
-        expect(repository.find).toHaveBeenCalledWith(
-            expect.objectContaining({
-                where: [{ channelId: 'channel-1' }, { channelId: expect.anything() }],
-            }),
-        );
     });
 });

@@ -363,9 +363,7 @@ export function CatalogOperationsBlock({ context }: { context: NextAdminPageBloc
                     <FeatureHelpButton topic="catalog.inventory" title="当前仓库批次与效期" />
                 </h3>
                 {!visibleLots.length ? (
-                    <p className="mt-3 rounded-lg border border-dashed p-6 text-center text-xs text-slate-500">
-                        当前仓库还没有库存批次
-                    </p>
+                    <p className="mt-3 text-xs text-slate-500">当前仓库还没有库存批次</p>
                 ) : (
                     <div className="mt-3 overflow-x-auto rounded-lg border border-slate-200">
                         <table className="min-w-[850px] w-full text-left text-xs">
@@ -493,7 +491,7 @@ export function ProductPackagingBlock({ context }: { context: NextAdminPageBlock
     if (query.error || !data)
         return <PanelState tone="error" label="包装配置加载失败" action={() => void query.refetch()} />;
     if (variants.length < 2) {
-        return <PanelState label="至少需要两个 SKU，才能配置整箱与散件自动拆包。" />;
+        return <p className="text-xs text-slate-500">至少需要两个 SKU，才能配置整箱与散件自动拆包。</p>;
     }
     const save = async () => {
         try {

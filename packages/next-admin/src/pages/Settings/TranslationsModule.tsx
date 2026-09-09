@@ -11,9 +11,10 @@ import {
     WandSparkles,
     X,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
+import { SearchInput } from '../../components/SearchInput';
 import {
     BACKFILL_CONTENT_TRANSLATIONS_MUTATION,
     CONTENT_TRANSLATION_AUDIT_QUERY,
@@ -23,9 +24,11 @@ import {
     type ContentTranslationStateRecord,
 } from '../../graphql/plugins.graphql';
 import { useAccessibleDialog } from '../../hooks/use-accessible-dialog';
+import { usePageSize } from '../../hooks/use-page-size';
 import { getChannelDisplayName } from '../../utils/channel-display';
 import { getTranslationStatusLabel } from '../../utils/status-labels';
 import { toUserFacingError } from '../../utils/user-facing-error';
+import { LookupPager } from '../Catalog/LookupPager';
 import { formatDateTime } from '../Sales/sales-utils';
 
 const entityOptions = [
@@ -60,29 +63,36 @@ export function TranslationsModule() {
     const [search, setSearch] = useState('');
     const [status, setStatus] = useState('ALL');
     const [entityType, setEntityType] = useState('ALL');
+    const [page, setPage] = useState(0);
+    const [pageSize, setPageSize] = usePageSize(setPage);
     const [backfillOpen, setBackfillOpen] = useState(false);
     const [testOpen, setTestOpen] = useState(false);
     const [notice, setNotice] = useState('');
     const [actionError, setActionError] = useState('');
     const query = useQuery<ContentTranslationAuditResult>(CONTENT_TRANSLATION_AUDIT_QUERY, {
+        variables: {
+            options: {
+                skip: page * pageSize,
+                take: pageSize,
+                search: search.trim() || undefined,
+                status: status === 'ALL' ? undefined : status,
+                entityType: entityType === 'ALL' ? undefined : entityType,
+            },
+        },
         fetchPolicy: 'cache-and-network',
+        notifyOnNetworkStatusChange: true,
     });
-    const audit = query.data?.contentTranslationAudit;
-    const states = useMemo(
-        () =>
-            (audit?.states ?? []).filter(item => {
-                if (status !== 'ALL' && item.status !== status) return false;
-                if (entityType !== 'ALL' && item.entityType !== entityType) return false;
-                if (search.trim()) {
-                    const haystack =
-                        `${item.entityType} ${item.entityId} ${item.fieldPath} ${item.status} ${item.error ?? ''}`.toLowerCase();
-                    if (!haystack.includes(search.trim().toLowerCase())) return false;
-                }
-                return true;
-            }),
-        [audit?.states, entityType, search, status],
-    );
+    // Keep the search/filter controls mounted while a different page is loading.
+    const result = query.data ?? query.previousData;
+    const audit = result?.contentTranslationAudit;
+    const states = audit?.states ?? [];
     const statusOptions = ['ALL', ...new Set((audit?.counts ?? []).map(item => item.status))];
+    const lastPage = Math.max(0, Math.ceil((audit?.filteredTotal ?? 0) / pageSize) - 1);
+    if (!query.loading && !query.error && query.data && page > lastPage) setPage(lastPage);
+    const recordsRef = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        if (recordsRef.current) recordsRef.current.scrollTop = 0;
+    }, [page, pageSize, search, status, entityType]);
 
     return (
         <div className="flex h-full flex-col bg-slate-50">
@@ -139,7 +149,7 @@ export function TranslationsModule() {
                         {actionError}
                     </Message>
                 )}
-                {query.loading && !query.data ? (
+                {query.loading && !audit ? (
                     <LoadingState />
                 ) : query.error ? (
                     <ErrorState
@@ -149,7 +159,7 @@ export function TranslationsModule() {
                 ) : (
                     audit && (
                         <>
-                            <section className="grid overflow-hidden rounded-xl border border-slate-200 bg-white sm:grid-cols-2 xl:grid-cols-4">
+                            <section className="grid grid-cols-2 overflow-hidden rounded-xl border border-slate-200 bg-white xl:grid-cols-4">
                                 <Metric
                                     label="翻译服务"
                                     value={audit.configured ? '已配置' : '未配置'}
@@ -163,13 +173,9 @@ export function TranslationsModule() {
                                 />
                                 <Metric
                                     label="待人工复核"
-                                    value={`${query.data?.contentTranslationStaleCount ?? 0} 项`}
+                                    value={`${result?.contentTranslationStaleCount ?? 0} 项`}
                                     detail="人工英文不会被自动覆盖"
-                                    tone={
-                                        (query.data?.contentTranslationStaleCount ?? 0) > 0
-                                            ? 'amber'
-                                            : 'green'
-                                    }
+                                    tone={(result?.contentTranslationStaleCount ?? 0) > 0 ? 'amber' : 'green'}
                                 />
                                 <Metric
                                     label="当前店铺"
@@ -179,9 +185,8 @@ export function TranslationsModule() {
                                             : '—'
                                     }
                                     detail={
-                                        (query.data?.activeChannel.availableLanguageCodes ?? []).join(
-                                            ' / ',
-                                        ) || '未返回语言'
+                                        (result?.activeChannel.availableLanguageCodes ?? []).join(' / ') ||
+                                        '未返回语言'
                                     }
                                 />
                             </section>
@@ -193,7 +198,7 @@ export function TranslationsModule() {
                                 </section>
                             )}
                             <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-                                <div className="flex flex-col gap-3 border-b border-slate-100 p-4 xl:flex-row xl:items-center xl:justify-between">
+                                <div className="space-y-3 border-b border-slate-100 p-4">
                                     <div>
                                         <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                                             字段翻译审计
@@ -205,21 +210,31 @@ export function TranslationsModule() {
                                         <p className="mt-1 text-[11px] text-slate-400">
                                             每个客户可见字段都会保留一条审计记录；正常的自动翻译也会显示
                                         </p>
+                                        <p className="mt-1 text-xs text-slate-500" role="status">
+                                            当前店铺及全局内容共 {audit.total} 条，筛选匹配{' '}
+                                            {audit.filteredTotal} 条；搜索与分页覆盖全部历史记录。
+                                        </p>
                                     </div>
-                                    <div className="flex flex-wrap gap-2">
-                                        <div className="relative">
+                                    <div className="grid min-w-0 gap-2 sm:grid-cols-3">
+                                        <div className="relative min-w-0">
                                             <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
-                                            <input
+                                            <SearchInput
                                                 value={search}
-                                                onChange={event => setSearch(event.target.value)}
+                                                onValueChange={value => {
+                                                    setSearch(value);
+                                                    setPage(0);
+                                                }}
                                                 aria-label="搜索翻译审计记录"
                                                 placeholder="搜索实体、ID 或字段"
-                                                className={`${inputClass} w-60 pl-8`}
+                                                className={`${inputClass} pl-8`}
                                             />
                                         </div>
                                         <select
                                             value={entityType}
-                                            onChange={event => setEntityType(event.target.value)}
+                                            onChange={event => {
+                                                setEntityType(event.target.value);
+                                                setPage(0);
+                                            }}
                                             aria-label="筛选内容类型"
                                             className={inputClass}
                                         >
@@ -232,7 +247,10 @@ export function TranslationsModule() {
                                         </select>
                                         <select
                                             value={status}
-                                            onChange={event => setStatus(event.target.value)}
+                                            onChange={event => {
+                                                setStatus(event.target.value);
+                                                setPage(0);
+                                            }}
                                             aria-label="筛选翻译状态"
                                             className={inputClass}
                                         >
@@ -246,9 +264,15 @@ export function TranslationsModule() {
                                         </select>
                                     </div>
                                 </div>
-                                <div className="overflow-x-auto">
+                                <div
+                                    className="max-h-[min(60vh,36rem)] overflow-auto"
+                                    tabIndex={0}
+                                    role="region"
+                                    aria-label="翻译审计记录"
+                                    ref={recordsRef}
+                                >
                                     <table className="w-full min-w-[1660px] border-collapse text-left text-xs">
-                                        <thead>
+                                        <thead className="sticky top-0 z-30 bg-slate-50">
                                             <tr className="border-b border-slate-200 bg-slate-50 text-[10px] text-slate-500">
                                                 <th
                                                     scope="col"
@@ -292,10 +316,20 @@ export function TranslationsModule() {
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-100">
-                                            {states.map(item => (
-                                                <AuditRow key={item.id} item={item} />
-                                            ))}
-                                            {!states.length && (
+                                            {!query.loading &&
+                                                states.map(item => <AuditRow key={item.id} item={item} />)}
+                                            {query.loading && (
+                                                <tr>
+                                                    <td
+                                                        colSpan={11}
+                                                        className="px-4 py-8 text-center text-slate-500"
+                                                        role="status"
+                                                    >
+                                                        正在读取翻译记录…
+                                                    </td>
+                                                </tr>
+                                            )}
+                                            {!query.loading && !states.length && (
                                                 <tr>
                                                     <td
                                                         colSpan={11}
@@ -308,8 +342,15 @@ export function TranslationsModule() {
                                         </tbody>
                                     </table>
                                 </div>
-                                <div className="border-t border-slate-100 px-4 py-3 text-[10px] text-slate-400">
-                                    显示 {states.length} / {audit.states.length} 项
+                                <div className="border-t border-slate-100 px-4 py-3">
+                                    <LookupPager
+                                        page={page}
+                                        pageSize={pageSize}
+                                        totalItems={audit.filteredTotal}
+                                        onPageChange={setPage}
+                                        onPageSizeChange={setPageSize}
+                                        loading={query.loading}
+                                    />
                                 </div>
                             </section>
                         </>

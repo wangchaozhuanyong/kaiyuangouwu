@@ -691,12 +691,12 @@ export function CategoriesModule() {
         const isExpanded = !isTopLevel || visibleExpandedCollectionIds.has(node.id);
 
         return (
-            <div key={node.id} className="space-y-2">
+            <div key={node.id} className="space-y-1">
                 <div
-                    className={`flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white ${isTopLevel ? 'p-4 shadow-2xs' : 'p-3.5'}`}
+                    className={`flex min-h-12 items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 ${isTopLevel ? 'shadow-2xs' : ''}`}
                     style={{ marginLeft: Math.min(depth, 3) * 20 }}
                 >
-                    <div className="flex min-w-0 items-center gap-3">
+                    <div className="flex min-w-0 items-center gap-2">
                         {isTopLevel && hasChildren ? (
                             <button
                                 type="button"
@@ -722,15 +722,19 @@ export function CategoriesModule() {
                         </div>
                         <div className="min-w-0">
                             <div className="flex items-center gap-2">
-                                <span className="truncate text-sm font-bold text-slate-900">{node.name}</span>
+                                <span
+                                    className="truncate text-sm font-bold text-slate-900"
+                                    title={`/${node.slug}`}
+                                >
+                                    {node.name}
+                                </span>
                                 {node.isPrivate && (
                                     <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-500">
                                         内部分类
                                     </span>
                                 )}
                             </div>
-                            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-slate-400">
-                                <span className="truncate font-mono">/{node.slug}</span>
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-slate-400">
                                 {isTopLevel && hasChildren && <span>{node.children.length} 个子分类</span>}
                             </div>
                         </div>
@@ -759,7 +763,7 @@ export function CategoriesModule() {
                     </div>
                 </div>
                 {hasChildren && isExpanded && (
-                    <div id={`collection-children-${node.id}`} className="space-y-2">
+                    <div id={`collection-children-${node.id}`} className="space-y-1">
                         {node.children.map(child => renderCollection(child, depth + 1))}
                     </div>
                 )}

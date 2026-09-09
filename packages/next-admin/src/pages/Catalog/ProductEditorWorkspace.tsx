@@ -1,4 +1,5 @@
 import { Layers, Sliders, Tag } from 'lucide-react';
+import { NextAdminPageBlocks } from '../../extensions/extension-hosts';
 
 import { ProductBasicTab } from './ProductBasicTab';
 import { useProductEditor } from './ProductEditorContext';
@@ -109,15 +110,23 @@ export function ProductEditorWorkspace() {
                     <ProductBasicTab />
                 </div>
             )}
-            {activeTab === 'VARIANTS' && (
-                <div
-                    id="product-variants-panel"
-                    role="tabpanel"
-                    className="order-3 min-w-0 lg:col-start-2 lg:row-start-2"
-                >
-                    <ProductVariantsTab />
-                </div>
-            )}
+            <div
+                id="product-variants-panel"
+                role="tabpanel"
+                hidden={activeTab !== 'VARIANTS'}
+                className="order-3 min-w-0 lg:col-start-2 lg:row-start-2"
+            >
+                {activeTab === 'VARIANTS' && <ProductVariantsTab />}
+                {/* Keep extension drafts mounted when switching editing steps. */}
+                {!isCreateMode && productData?.product && (
+                    <div className="mt-4">
+                        <NextAdminPageBlocks
+                            pageId="product-detail"
+                            entity={productData.product as unknown as Record<string, unknown>}
+                        />
+                    </div>
+                )}
+            </div>
             {activeTab === 'FACETS_COLLECTIONS' && (
                 <div
                     id="product-facets-panel"

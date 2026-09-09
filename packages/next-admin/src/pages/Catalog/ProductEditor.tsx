@@ -1,5 +1,4 @@
 import { AlertCircle, ArrowLeft, CheckCircle2, Save } from 'lucide-react';
-import { NextAdminPageBlocks } from '../../extensions/extension-hosts';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { ProductAssetPickerModal } from './ProductAssetPickerModal';
 import { ProductEditorProvider } from './ProductEditorContext';
@@ -91,13 +90,6 @@ export function ProductEditor() {
                             >
                                 <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" /> {notification}
                             </div>
-                        )}
-
-                        {!isCreateMode && productData?.product && (
-                            <NextAdminPageBlocks
-                                pageId="product-detail"
-                                entity={productData.product as unknown as Record<string, unknown>}
-                            />
                         )}
 
                         {/* 错误提示 */}

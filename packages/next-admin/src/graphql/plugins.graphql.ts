@@ -215,7 +215,7 @@ export const REFUND_IMAGE_OUTPUT_MUTATION = gql`
 `;
 
 export const CONTENT_TRANSLATION_AUDIT_QUERY = gql`
-    query NextAdminContentTranslationAudit {
+    query NextAdminContentTranslationAudit($options: ContentTranslationAuditOptions) {
         activeChannel {
             id
             code
@@ -223,10 +223,11 @@ export const CONTENT_TRANSLATION_AUDIT_QUERY = gql`
             availableLanguageCodes
         }
         contentTranslationStaleCount
-        contentTranslationAudit {
+        contentTranslationAudit(options: $options) {
             configured
             provider
             total
+            filteredTotal
             counts {
                 status
                 count
@@ -434,6 +435,7 @@ export interface ContentTranslationAuditResult {
         configured: boolean;
         provider: string;
         total: number;
+        filteredTotal: number;
         counts: Array<{ status: string; count: number }>;
         states: ContentTranslationStateRecord[];
     };

@@ -852,108 +852,10 @@ export function PostersPanel({
     const isProgramBusy = updateProgramState.loading || updatePosterState.loading;
 
     return (
-        <div className="space-y-6">
-            {/* 系统预置海报模板 */}
-            <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-2xs">
-                <div className="border-b border-slate-100 pb-4">
-                    <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                        系统预置海报模板
-                        <FeatureHelpButton topic="marketing.poster-templates" title="系统预置海报模板" />
-                    </h2>
-                    <p className="mt-1 text-[11px] text-slate-500">
-                        全屏移动端海报模板（1080×1920）。您可以通过“在客户端分享面板显示”开关自由选择哪些在买家端展示；开启的模板会自动与自定义模板一同在前台展示。
-                    </p>
-                </div>
-                <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                    {program.systemPosterTemplateConfigs.map(sys => {
-                        const isEnabled = (program.posterTemplates ?? []).includes(sys.id);
-                        const isDefault = program.defaultPosterTemplate === sys.id;
-                        return (
-                            <article
-                                key={sys.id}
-                                className="flex flex-col justify-between overflow-hidden rounded-xl border border-slate-200"
-                            >
-                                <div>
-                                    <div
-                                        className="aspect-[16/9] p-4 text-white flex flex-col justify-between"
-                                        style={{
-                                            color: sys.foregroundColor,
-                                            background: sys.posterBackgroundAsset
-                                                ? `url(${sys.posterBackgroundAsset.preview}) center/cover`
-                                                : sys.design?.background || '#f5f9fe',
-                                        }}
-                                    >
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-[10px] font-bold uppercase tracking-wider opacity-90">
-                                                预置海报
-                                            </span>
-                                            {isDefault && (
-                                                <span className="rounded bg-white/90 px-1.5 py-0.5 text-[10px] font-bold text-slate-900">
-                                                    当前默认
-                                                </span>
-                                            )}
-                                        </div>
-                                        <div>
-                                            <div className="text-sm font-bold drop-shadow-sm">{sys.name}</div>
-                                            <div className="text-[11px] opacity-80">{sys.titleEn}</div>
-                                        </div>
-                                    </div>
-                                    <div className="p-3 space-y-1.5">
-                                        <div className="flex items-center justify-between">
-                                            <h3 className="text-xs font-bold text-slate-900">{sys.name}</h3>
-                                            <span
-                                                className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
-                                                    isEnabled
-                                                        ? 'bg-emerald-50 text-emerald-700'
-                                                        : 'bg-slate-100 text-slate-400'
-                                                }`}
-                                            >
-                                                {isEnabled ? '已启用显示' : '已隐藏'}
-                                            </span>
-                                        </div>
-                                        <p className="text-[11px] text-slate-500 leading-relaxed">
-                                            {sys.siteIntroZh}
-                                        </p>
-                                    </div>
-                                </div>
-                                <div className="p-3 pt-0 space-y-2">
-                                    <label className="flex cursor-pointer items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5 text-xs">
-                                        <span className="text-[11px] font-medium text-slate-700">
-                                            在客户端分享面板显示
-                                        </span>
-                                        <input
-                                            type="checkbox"
-                                            checked={isEnabled}
-                                            disabled={!canUpdate || isProgramBusy}
-                                            onChange={e =>
-                                                void toggleSystemTemplate(sys.id, e.target.checked)
-                                            }
-                                            className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                                        />
-                                    </label>
-                                    <button
-                                        type="button"
-                                        disabled={!canUpdate || isProgramBusy || !isEnabled || isDefault}
-                                        onClick={() => void makeDefaultTemplate(sys.id)}
-                                        className="w-full rounded-lg border border-slate-200 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-                                    >
-                                        {isDefault ? '当前为默认海报' : '设为默认海报'}
-                                    </button>
-                                    <button
-                                        type="button"
-                                        className="w-full rounded-lg border border-slate-200 py-1.5 text-xs text-slate-700"
-                                        onClick={() => onEdit({ ...sys, id: '', enabled: false })}
-                                        disabled={!canCreate || isProgramBusy}
-                                    >
-                                        基于此款创建本店模板
-                                    </button>
-                                </div>
-                            </article>
-                        );
-                    })}
-                </div>
-            </section>
-
+        <div className="space-y-4">
+            <div className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-xs">
+                当前默认海报：<strong>{posterLabel(program.defaultPosterTemplate, program)}</strong>
+            </div>
             {/* 自定义海报模板 */}
             <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-2xs">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-4">
@@ -1094,12 +996,125 @@ export function PostersPanel({
                         );
                     })}
                     {!program.posterTemplateConfigs.length && (
-                        <div className="col-span-full py-12 text-center text-xs text-slate-400">
+                        <div className="col-span-full py-5 text-center text-xs text-slate-400">
                             暂无店铺自定义海报模板。点击右上角“新建模板”可上传您自己设计的专属海报图。
                         </div>
                     )}
                 </div>
             </section>
+            {/* 系统预置海报模板 */}
+            <details
+                open={program.posterTemplateConfigs.length === 0}
+                className="rounded-xl border border-slate-200 bg-white p-4 shadow-2xs"
+            >
+                <summary className="cursor-pointer text-sm font-bold">
+                    选择系统模板 · {program.systemPosterTemplateConfigs.length} 款
+                </summary>
+                <div className="mt-4">
+                    <div className="border-b border-slate-100 pb-4">
+                        <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                            系统预置海报模板
+                            <FeatureHelpButton topic="marketing.poster-templates" title="系统预置海报模板" />
+                        </h2>
+                        <p className="mt-1 text-[11px] text-slate-500">
+                            全屏移动端海报模板（1080×1920）。您可以通过“在客户端分享面板显示”开关自由选择哪些在买家端展示；开启的模板会自动与自定义模板一同在前台展示。
+                        </p>
+                    </div>
+                    <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                        {program.systemPosterTemplateConfigs.map(sys => {
+                            const isEnabled = (program.posterTemplates ?? []).includes(sys.id);
+                            const isDefault = program.defaultPosterTemplate === sys.id;
+                            return (
+                                <article
+                                    key={sys.id}
+                                    className="flex flex-col justify-between overflow-hidden rounded-xl border border-slate-200"
+                                >
+                                    <div>
+                                        <div
+                                            className="aspect-[16/9] p-4 text-white flex flex-col justify-between"
+                                            style={{
+                                                color: sys.foregroundColor,
+                                                background: sys.posterBackgroundAsset
+                                                    ? `url(${sys.posterBackgroundAsset.preview}) center/cover`
+                                                    : sys.design?.background || '#f5f9fe',
+                                            }}
+                                        >
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-[10px] font-bold uppercase tracking-wider opacity-90">
+                                                    预置海报
+                                                </span>
+                                                {isDefault && (
+                                                    <span className="rounded bg-white/90 px-1.5 py-0.5 text-[10px] font-bold text-slate-900">
+                                                        当前默认
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div>
+                                                <div className="text-sm font-bold drop-shadow-sm">
+                                                    {sys.name}
+                                                </div>
+                                                <div className="text-[11px] opacity-80">{sys.titleEn}</div>
+                                            </div>
+                                        </div>
+                                        <div className="p-3 space-y-1.5">
+                                            <div className="flex items-center justify-between">
+                                                <h3 className="text-xs font-bold text-slate-900">
+                                                    {sys.name}
+                                                </h3>
+                                                <span
+                                                    className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
+                                                        isEnabled
+                                                            ? 'bg-emerald-50 text-emerald-700'
+                                                            : 'bg-slate-100 text-slate-400'
+                                                    }`}
+                                                >
+                                                    {isEnabled ? '已启用显示' : '已隐藏'}
+                                                </span>
+                                            </div>
+                                            <p className="text-[11px] text-slate-500 leading-relaxed">
+                                                {sys.siteIntroZh}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="p-3 pt-0 space-y-2">
+                                        <label className="flex cursor-pointer items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5 text-xs">
+                                            <span className="text-[11px] font-medium text-slate-700">
+                                                在客户端分享面板显示
+                                            </span>
+                                            <input
+                                                type="checkbox"
+                                                checked={isEnabled}
+                                                disabled={!canUpdate || isProgramBusy}
+                                                onChange={e =>
+                                                    void toggleSystemTemplate(sys.id, e.target.checked)
+                                                }
+                                                className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                            />
+                                        </label>
+                                        <button
+                                            type="button"
+                                            disabled={!canUpdate || isProgramBusy || !isEnabled || isDefault}
+                                            onClick={() => void makeDefaultTemplate(sys.id)}
+                                            className="w-full rounded-lg border border-slate-200 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                                        >
+                                            {isDefault ? '当前为默认海报' : '设为默认海报'}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="w-full rounded-lg border border-slate-200 py-1.5 text-xs text-slate-700"
+                                            onClick={() => onEdit({ ...sys, id: '', enabled: false })}
+                                            disabled={!canCreate || isProgramBusy}
+                                        >
+                                            基于此款创建本店模板
+                                        </button>
+                                    </div>
+                                </article>
+                            );
+                        })}
+                    </div>
+                </div>
+            </details>
+
             {deleting && (
                 <Modal
                     title="删除海报模板"

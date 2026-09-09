@@ -51,8 +51,17 @@ export const adminApiExtensions = gql`
         configured: Boolean!
         provider: String!
         total: Int!
+        filteredTotal: Int!
         counts: [ContentTranslationStatusCount!]!
         states: [ContentTranslationStateRecord!]!
+    }
+
+    input ContentTranslationAuditOptions {
+        skip: Int
+        take: Int
+        search: String
+        status: String
+        entityType: String
     }
 
     type ContentTranslationBackfillResult {
@@ -69,7 +78,10 @@ export const adminApiExtensions = gql`
     }
 
     extend type Query {
-        contentTranslationAudit(channelId: ID): ContentTranslationAudit!
+        contentTranslationAudit(
+            channelId: ID
+            options: ContentTranslationAuditOptions
+        ): ContentTranslationAudit!
         contentTranslationStaleCount: Int!
     }
 

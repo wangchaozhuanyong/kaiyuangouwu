@@ -39,6 +39,7 @@ interface RefundDraft {
 }
 
 export function UsdtPaymentManagementModule() {
+    const [recordView, setRecordView] = useState<'payments' | 'refunds' | 'intents'>('payments');
     const [channelId, setChannelId] = useState('ALL');
     const [from, setFrom] = useState('');
     const [to, setTo] = useState('');
@@ -146,38 +147,50 @@ export function UsdtPaymentManagementModule() {
                     <SettingsContentSkeleton label="正在读取平台支付数据" sections={4} />
                 ) : (
                     <>
-                        <section className={sectionClass}>
-                            <Heading
-                                title="网店 USDT 收款地址审核"
-                                detail="仅待审地址可以通过或驳回；通过后只影响该网店新生成的付款意向。"
-                            />
-                            <div className="mt-4 grid gap-3 lg:grid-cols-2">
-                                {wallets.map(wallet => (
-                                    <WalletReview
-                                        key={wallet.channelId}
-                                        wallet={wallet}
-                                        reason={rejectionReasons[wallet.channelId] ?? ''}
-                                        onReason={reason =>
-                                            setRejectionReasons(current => ({
-                                                ...current,
-                                                [wallet.channelId]: reason,
-                                            }))
-                                        }
-                                        onApprove={() => setAction({ kind: 'approve', wallet })}
-                                        onReject={() => {
-                                            const reason = rejectionReasons[wallet.channelId]?.trim() ?? '';
-                                            if (!reason) {
-                                                setError('驳回时必须填写原因');
-                                                return;
+                        <details
+                            open={wallets.some(wallet => wallet.reviewStatus === 'PENDING')}
+                            className={sectionClass}
+                        >
+                            <summary className="cursor-pointer text-sm font-bold">
+                                收款地址审核 ·{' '}
+                                {wallets.filter(wallet => wallet.reviewStatus === 'PENDING').length} 个待审核
+                            </summary>
+                            <div className="mt-3">
+                                <Heading
+                                    title="网店 USDT 收款地址审核"
+                                    detail="仅待审地址可以通过或驳回；通过后只影响该网店新生成的付款意向。"
+                                />
+                                <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                                    {wallets.map(wallet => (
+                                        <WalletReview
+                                            key={wallet.channelId}
+                                            wallet={wallet}
+                                            reason={rejectionReasons[wallet.channelId] ?? ''}
+                                            onReason={reason =>
+                                                setRejectionReasons(current => ({
+                                                    ...current,
+                                                    [wallet.channelId]: reason,
+                                                }))
                                             }
-                                            setError('');
-                                            setAction({ kind: 'reject', wallet, reason });
-                                        }}
-                                    />
-                                ))}
-                                {!wallets.length && <p className="text-xs text-slate-500">暂无网店钱包</p>}
+                                            onApprove={() => setAction({ kind: 'approve', wallet })}
+                                            onReject={() => {
+                                                const reason =
+                                                    rejectionReasons[wallet.channelId]?.trim() ?? '';
+                                                if (!reason) {
+                                                    setError('驳回时必须填写原因');
+                                                    return;
+                                                }
+                                                setError('');
+                                                setAction({ kind: 'reject', wallet, reason });
+                                            }}
+                                        />
+                                    ))}
+                                    {!wallets.length && (
+                                        <p className="text-xs text-slate-500">暂无网店钱包</p>
+                                    )}
+                                </div>
                             </div>
-                        </section>
+                        </details>
                         <section className={sectionClass}>
                             <Heading
                                 title="支付与退款报表"
@@ -258,7 +271,63 @@ export function UsdtPaymentManagementModule() {
                                 ))}
                             </div>
                         </section>
-                        <section className={sectionClass}>
+                        <div
+                            role="tablist"
+                            aria-label="收款记录"
+                            onKeyDown={event => {
+                                if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+                                const tabs = Array.from(
+                                    event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]'),
+                                );
+                                const current = tabs.indexOf(event.target as HTMLButtonElement);
+                                if (current < 0) return;
+                                event.preventDefault();
+                                const next =
+                                    event.key === 'Home'
+                                        ? 0
+                                        : event.key === 'End'
+                                          ? tabs.length - 1
+                                          : (current + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) %
+                                            tabs.length;
+                                tabs[next]?.focus();
+                                tabs[next]?.click();
+                            }}
+                            className="flex gap-1 overflow-x-auto rounded-lg border border-slate-200 bg-white p-1"
+                        >
+                            {(
+                                [
+                                    ['payments', '支付流水'],
+                                    ['refunds', '人工退款审计'],
+                                    ['intents', '链上收款意向'],
+                                ] as const
+                            ).map(([view, label]) => (
+                                <button
+                                    key={view}
+                                    id={`finance-${view}-tab`}
+                                    type="button"
+                                    role="tab"
+                                    aria-selected={recordView === view}
+                                    tabIndex={recordView === view ? 0 : -1}
+                                    aria-controls={`finance-${view}-panel`}
+                                    onClick={() => setRecordView(view)}
+                                    className={`shrink-0 rounded-md px-3 py-2 text-xs font-semibold ${recordView === view ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+                                >
+                                    {label}
+                                    {view === 'intents' &&
+                                        query.data?.storeUsdtPaymentStats.some(
+                                            item => item.manualReviewCount > 0,
+                                        ) &&
+                                        ' · 有待复核'}
+                                </button>
+                            ))}
+                        </div>
+                        <section
+                            hidden={recordView !== 'payments'}
+                            id="finance-payments-panel"
+                            role="tabpanel"
+                            aria-labelledby="finance-payments-tab"
+                            className={sectionClass}
+                        >
                             <Heading
                                 title="全部支付方式明细"
                                 detail="USDT 已结算支付可补录链上人工退款证据。"
@@ -352,7 +421,13 @@ export function UsdtPaymentManagementModule() {
                                 onChange={setPaymentPage}
                             />
                         </section>
-                        <section className={sectionClass}>
+                        <section
+                            hidden={recordView !== 'refunds'}
+                            id="finance-refunds-panel"
+                            role="tabpanel"
+                            aria-labelledby="finance-refunds-tab"
+                            className={sectionClass}
+                        >
                             <Heading
                                 title="USDT 人工退款审计"
                                 detail="包含法币退款金额、实际 USDT、收款地址、交易号、区块和操作人。"
@@ -396,7 +471,13 @@ export function UsdtPaymentManagementModule() {
                                 onChange={setRefundPage}
                             />
                         </section>
-                        <section className={sectionClass}>
+                        <section
+                            hidden={recordView !== 'intents'}
+                            id="finance-intents-panel"
+                            role="tabpanel"
+                            aria-labelledby="finance-intents-tab"
+                            className={sectionClass}
+                        >
                             <Heading
                                 title="USDT 链上收款意向"
                                 detail="最新报价、到账、人工复核和过期状态。"
@@ -749,7 +830,7 @@ function State({
         </div>
     );
 }
-const sectionClass = 'rounded-xl border border-slate-200 bg-white p-5';
+const sectionClass = 'min-w-0 rounded-xl border border-slate-200 bg-white p-4';
 const labelClass = 'text-xs font-bold text-slate-600';
 const inputClass = 'mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal';
 const primaryButton =

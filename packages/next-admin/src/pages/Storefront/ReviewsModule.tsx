@@ -190,23 +190,23 @@ export function ReviewsModule() {
 
             <div className="flex-1 overflow-y-auto p-5 sm:p-8">
                 <div className="w-full max-w-none space-y-4">
-                    <div className="grid gap-3 sm:grid-cols-2">
-                        <div className="rounded-xl bg-slate-900 p-4 text-white">
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-2">
+                        <div className="min-w-0 rounded-lg bg-slate-900 px-3 py-2.5 text-white">
                             <div className="text-[11px] text-slate-300">当前筛选</div>
-                            <div className="mt-2 font-mono text-2xl font-semibold tabular-nums">
+                            <div className="mt-1 font-mono text-lg font-semibold tabular-nums">
                                 {totalItems}
                             </div>
-                            <div className="mt-1 text-[11px] text-slate-400">条评价</div>
+                            <div className="mt-0.5 text-[11px] text-slate-400">条评价</div>
                         </div>
-                        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                        <div className="min-w-0 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5">
                             <div className="flex items-center gap-1.5 text-[11px] font-semibold text-amber-700">
                                 <Star className="h-3.5 w-3.5 fill-amber-400" />
                                 当前筛选平均分
                             </div>
-                            <div className="mt-2 font-mono text-2xl font-semibold tabular-nums text-amber-900">
+                            <div className="mt-1 font-mono text-lg font-semibold tabular-nums text-amber-900">
                                 {averageRating.toFixed(1)}
                             </div>
-                            <div className="mt-1 text-[11px] text-amber-700">满分 5.0</div>
+                            <div className="mt-0.5 text-[11px] text-amber-700">满分 5.0</div>
                         </div>
                     </div>
                     {notification && (

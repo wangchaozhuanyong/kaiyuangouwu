@@ -339,7 +339,7 @@ export function CatalogModule() {
                 </div>
 
                 <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end sm:gap-3 [&>button]:shrink-0">
-                    <NextAdminActions pageId="product-list" />
+                    <NextAdminActions pageId="product-list" collapseOnMobile />
                     <button
                         type="button"
                         onClick={() => refetch()}
@@ -347,7 +347,7 @@ export function CatalogModule() {
                         className="flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 px-3.5 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer"
                     >
                         <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-blue-600' : ''}`} />
-                        <span>刷新数据</span>
+                        <span>刷新</span>
                     </button>
 
                     <button

@@ -299,7 +299,7 @@ export function DashboardModule() {
                 <div className="mx-auto mb-4 w-full max-w-7xl">
                     <NextAdminDashboardAlerts />
                 </div>
-                <div className="mx-auto grid w-full max-w-7xl grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-12">
+                <div className="mx-auto grid w-full max-w-7xl grid-cols-1 items-start gap-3 sm:grid-cols-2 xl:grid-cols-12">
                     {visibleWidgets.map(widgetId => {
                         const spanClass =
                             widgetId === 'METRICS' || widgetId === 'SEARCH_INDEX'
@@ -527,7 +527,7 @@ export function DashboardModule() {
                                                 ))}
                                             </div>
                                         ) : (recentOrders.data?.orders.items.length ?? 0) === 0 ? (
-                                            <div className="flex min-h-56 flex-col items-center justify-center px-5 text-center">
+                                            <div className="flex min-h-36 flex-col items-center justify-center px-5 py-5 text-center">
                                                 <ShoppingBag className="h-8 w-8 text-slate-300" />
                                                 <p className="mt-3 text-sm font-bold text-slate-700">
                                                     暂无已下单订单
@@ -641,7 +641,7 @@ export function DashboardModule() {
 
                                 {widgetId === 'QUICK_ACTIONS' && (
                                     <section
-                                        className="h-full rounded-xl border border-slate-200 bg-white p-5"
+                                        className="rounded-xl border border-slate-200 bg-white p-4"
                                         aria-labelledby="quick-actions-title"
                                     >
                                         <h2
@@ -654,7 +654,7 @@ export function DashboardModule() {
                                         <p className="mt-1 text-[11px] text-slate-500">
                                             常用经营入口集中在这里
                                         </p>
-                                        <div className="mt-4 space-y-2">
+                                        <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
                                             <QuickAction
                                                 icon={Plus}
                                                 label="发布新商品"
@@ -933,7 +933,7 @@ function TodoCard({
         <button
             type="button"
             onClick={onClick}
-            className="group flex h-full min-h-28 w-full items-center gap-3 rounded-xl border border-slate-200 bg-white px-5 py-4 text-left shadow-xs transition-colors hover:border-blue-200 hover:bg-blue-50/50"
+            className="group flex min-h-20 w-full items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-left shadow-xs transition-colors hover:border-blue-200 hover:bg-blue-50/50"
         >
             <span className="rounded-lg bg-slate-100 p-2 text-slate-600 group-hover:bg-blue-100 group-hover:text-blue-700">
                 <Icon className="h-5 w-5" />
@@ -966,7 +966,7 @@ function QuickAction({
         <button
             type="button"
             onClick={onClick}
-            className="group flex w-full items-center gap-3 rounded-lg border border-slate-100 p-3 text-left hover:border-blue-200 hover:bg-blue-50/50"
+            className="group flex w-full items-center gap-3 rounded-lg border border-slate-100 px-3 py-2 text-left hover:border-blue-200 hover:bg-blue-50/50"
         >
             <span className="rounded-md bg-slate-100 p-2 text-slate-600 group-hover:bg-blue-100 group-hover:text-blue-700">
                 <Icon className="h-4 w-4" />
