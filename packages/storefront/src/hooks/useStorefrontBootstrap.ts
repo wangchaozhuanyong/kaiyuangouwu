@@ -1,4 +1,4 @@
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { ShopApi } from '../api';
@@ -100,7 +100,21 @@ export function useStorefrontBootstrap() {
         }
     }, []);
 
-    const queryContext = { api, market, language, vendureLanguageCode, storefrontContextResolved };
+    const accountQuery = useQuery({
+        queryKey: storefrontQueryKeys.customer(storefrontQueryKeys.market(market), vendureLanguageCode),
+        queryFn: ({ signal }) => api.activeCustomer(signal),
+        enabled: storefrontContextResolved,
+        staleTime: 0,
+    });
+    const catalogAccessGranted = Boolean(accountQuery.data);
+    const queryContext = {
+        api,
+        market,
+        language,
+        vendureLanguageCode,
+        storefrontContextResolved,
+        catalogAccessGranted,
+    };
     const visualConfig = useStorefrontVisualPreset(
         api,
         market,
@@ -278,6 +292,7 @@ export function useStorefrontBootstrap() {
         cartState,
         api,
         queryContext,
+        catalogAccessGranted,
         legalIdentity,
         refetchStorefront,
         toggleLanguage,

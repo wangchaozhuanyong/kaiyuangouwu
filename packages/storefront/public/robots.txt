@@ -1,6 +1,4 @@
 User-agent: *
-Allow: /
-Disallow: /promo/enter
-Disallow: /promo/access
-Disallow: /promo/account-entry
+Disallow: /
+Allow: /promo$
 Sitemap: https://moyaoai.com/sitemap.xml

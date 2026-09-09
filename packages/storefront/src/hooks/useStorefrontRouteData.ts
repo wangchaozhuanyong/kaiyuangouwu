@@ -20,6 +20,7 @@ export function useStorefrontRouteData({
     language,
     vendureLanguageCode,
     storefrontContextResolved,
+    catalogAccessGranted,
     customer,
     customerLoadState,
     route,
@@ -40,13 +41,13 @@ export function useStorefrontRouteData({
             if (!product) throw new Error(isZh ? '商品不存在或已下架' : 'Product not found');
             return product;
         },
-        enabled: storefrontContextResolved && route.name === 'product' && !!route.id,
+        enabled: storefrontContextResolved && catalogAccessGranted && route.name === 'product' && !!route.id,
         staleTime: PUBLIC_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
         meta: publicQueryMeta(),
     });
 
-    const routeProduct = productQuery.data ?? null;
+    const routeProduct = catalogAccessGranted ? (productQuery.data ?? null) : null;
 
     const routeProductLoading = productQuery.isLoading;
 

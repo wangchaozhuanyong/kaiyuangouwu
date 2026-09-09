@@ -6,6 +6,7 @@ import { resumeAuthenticatedCheckout } from '../checkout-authentication';
 import { cartLineCanSelect } from '../product-availability';
 import { storefrontQueryKeys } from '../query-client';
 import { invalidateStorefrontRealtimeQueries } from '../realtime-updates';
+import { isPublicStorefrontRoute } from '../storefront-access';
 import { storefrontErrorMessage } from '../storefront-errors';
 import { scopedStorageKey } from '../storefront-storage';
 import {
@@ -61,6 +62,7 @@ export function useStorefrontAppState() {
         cartState,
         api,
         queryContext,
+        catalogAccessGranted,
         legalIdentity,
         refetchStorefront,
         toggleLanguage,
@@ -141,7 +143,7 @@ export function useStorefrontAppState() {
     }, [cartState.confirmed, queryClient, market.code, market.currencyCode, vendureLanguageCode]);
 
     useEffect(() => {
-        if (!storefrontContextResolved) return;
+        if (!storefrontContextResolved || !catalogAccessGranted) return;
         const controller = new AbortController();
         void api.watchRealtime(event => {
             void invalidateStorefrontRealtimeQueries(queryClient, event, {
@@ -151,14 +153,22 @@ export function useStorefrontAppState() {
             });
         }, controller.signal);
         return () => controller.abort();
-    }, [api, customer?.id, market, queryClient, storefrontContextResolved, vendureLanguageCode]);
+    }, [
+        api,
+        catalogAccessGranted,
+        customer?.id,
+        market,
+        queryClient,
+        storefrontContextResolved,
+        vendureLanguageCode,
+    ]);
 
     useStorefrontTraffic({
         api,
         channel: market.code,
         location: displayedRouterLocation.pathname + displayedRouterLocation.searchStr,
         customerId: customer?.id ?? null,
-        enabled: storefrontContextResolved && !isNavigationPending,
+        enabled: storefrontContextResolved && catalogAccessGranted && !isNavigationPending,
     });
 
     const { bestSellerProducts, recommendationProducts, recommendationsBlock } = useStorefrontMerchandising({
@@ -196,7 +206,7 @@ export function useStorefrontAppState() {
                 query.queryKey[0] === 'storefront' &&
                 typeof query.queryKey[1] === 'string' &&
                 query.queryKey[1].startsWith(`${market.code}:`) &&
-                query.queryKey[3] === 'private',
+                query.queryKey[3] !== 'config',
         });
     }, [market.code, queryClient]);
     const invalidateCustomerRouteQueries = useCallback(async () => {
@@ -437,7 +447,7 @@ export function useStorefrontAppState() {
             setCart(resumed.cart);
             setCheckoutOrder(resumed.order);
             notify(isZh ? '登录成功' : 'Signed in');
-            navigate(resumed.route, true);
+            navigate(!isPublicStorefrontRoute(route.name) && !route.returnTo ? route : resumed.route, true);
         } catch {
             const message = isZh
                 ? '已登录，请在购物车确认商品后重新结算'
@@ -457,7 +467,14 @@ export function useStorefrontAppState() {
     const legalContent = contentBlocks.find(block => block.type === 'LEGAL');
     const supportContent = contentBlocks.find(block => block.type === 'SUPPORT');
 
-    useStorefrontMetadata({ isZh, route, selectedProduct, storefrontDescription, storefrontName, logoUrl });
+    useStorefrontMetadata({
+        isZh,
+        route: catalogAccessGranted ? route : { name: 'login' },
+        selectedProduct: catalogAccessGranted ? selectedProduct : null,
+        storefrontDescription: catalogAccessGranted ? storefrontDescription : '',
+        storefrontName,
+        logoUrl,
+    });
 
     useEffect(() => {
         if (route.name !== 'product' || !selectedProduct || !storefrontCode) return;
@@ -693,6 +710,10 @@ export function useStorefrontAppState() {
 
     return {
         storefrontContextValue,
+        customer,
+        customerLoadState,
+        customerLoadError,
+        retryAccount: () => customerQuery.refetch(),
         online,
         isZh,
         displayedRoute,

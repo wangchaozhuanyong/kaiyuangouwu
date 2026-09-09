@@ -21,12 +21,13 @@ export function useStorefrontPublicData({
     language,
     vendureLanguageCode,
     storefrontContextResolved,
+    catalogAccessGranted,
 }: StorefrontQueryContext) {
     const text = uiCopy[language];
     const productsQuery = useQuery({
         queryKey: storefrontQueryKeys.products(storefrontQueryKeys.market(market), vendureLanguageCode, 12),
         queryFn: ({ signal }) => api.products(12, signal),
-        enabled: storefrontContextResolved,
+        enabled: storefrontContextResolved && catalogAccessGranted,
         staleTime: PUBLIC_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
         meta: publicQueryMeta(),
@@ -35,7 +36,7 @@ export function useStorefrontPublicData({
     const collectionsQuery = useQuery({
         queryKey: storefrontQueryKeys.collections(storefrontQueryKeys.market(market), vendureLanguageCode),
         queryFn: ({ signal }) => api.collections(signal),
-        enabled: storefrontContextResolved,
+        enabled: storefrontContextResolved && catalogAccessGranted,
         staleTime: PUBLIC_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
         meta: publicQueryMeta(),
@@ -49,8 +50,12 @@ export function useStorefrontPublicData({
     });
 
     const contentQuery = useQuery({
-        queryKey: storefrontQueryKeys.content(storefrontQueryKeys.market(market), vendureLanguageCode),
-        queryFn: ({ signal }) => api.storefrontContent(signal),
+        queryKey: [
+            ...storefrontQueryKeys.content(storefrontQueryKeys.market(market), vendureLanguageCode),
+            catalogAccessGranted ? 'authenticated' : 'account',
+        ],
+        queryFn: ({ signal }) =>
+            catalogAccessGranted ? api.storefrontContent(signal) : api.storefrontAccountContent(signal),
         enabled: storefrontContextResolved,
         staleTime: PUBLIC_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
@@ -60,17 +65,17 @@ export function useStorefrontPublicData({
     const commerceModeQuery = useQuery({
         queryKey: storefrontQueryKeys.commerceMode(storefrontQueryKeys.market(market)),
         queryFn: ({ signal }) => api.activeStoreCommerceMode(signal),
-        enabled: storefrontContextResolved,
+        enabled: storefrontContextResolved && catalogAccessGranted,
         staleTime: PUBLIC_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
         meta: publicQueryMeta(),
     });
 
-    const rawProducts = productsQuery.data ?? [];
+    const rawProducts = catalogAccessGranted ? (productsQuery.data ?? []) : [];
 
     const products = rawProducts;
 
-    const collections = collectionsQuery.data ?? [];
+    const collections = catalogAccessGranted ? (collectionsQuery.data ?? []) : [];
 
     const contentBlocks = contentQuery.data?.blocks ?? [];
 
@@ -88,7 +93,7 @@ export function useStorefrontPublicData({
 
     const managedContentProductsQuery = useProductsByIdsQuery({
         api,
-        productIds: managedContentProductIds,
+        productIds: catalogAccessGranted ? managedContentProductIds : [],
         market,
         language,
     });

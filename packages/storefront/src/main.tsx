@@ -3,7 +3,11 @@ import { RouterProvider } from '@tanstack/react-router';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
-import { restorePublicQueryCache, storefrontQueryClient, watchPublicQueryCache } from './query-client';
+import {
+    LEGACY_PUBLIC_QUERY_CACHE_KEYS,
+    PUBLIC_QUERY_CACHE_KEY,
+    storefrontQueryClient,
+} from './query-client';
 import { router } from './router';
 import { StorefrontErrorBoundary } from './StorefrontErrorBoundary';
 import './styles.css';
@@ -17,8 +21,11 @@ if (!rootElement) {
 }
 
 try {
-    restorePublicQueryCache(storefrontQueryClient);
-    watchPublicQueryCache(storefrontQueryClient);
+    // Catalog responses are private. Do not restore or persist the old guest
+    // catalog cache, including responses saved before the access-policy change.
+    for (const key of [PUBLIC_QUERY_CACHE_KEY, ...LEGACY_PUBLIC_QUERY_CACHE_KEYS]) {
+        sessionStorage.removeItem(key);
+    }
 } catch {
     // sessionStorage can be disabled without preventing the storefront from starting.
 }

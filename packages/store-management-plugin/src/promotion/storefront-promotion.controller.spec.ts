@@ -19,6 +19,41 @@ function responseMock() {
 }
 
 describe('StorefrontPromotionController', () => {
+    it.each([undefined, { id: 'anonymous-session' }])(
+        'rejects entry cookies and anonymous sessions even when the legacy entry gate is disabled',
+        async session => {
+            const access = {
+                enabled: false,
+                resolveRequest: vi.fn().mockResolvedValue({ channelId: 'store-a' }),
+                hasValidEntryCookie: vi.fn().mockReturnValue(true),
+            };
+            const controller = new StorefrontPromotionController(
+                access as never,
+                {} as never,
+                { getSessionFromToken: vi.fn().mockResolvedValue(session) } as never,
+                { authOptions: { tokenMethod: ['cookie', 'bearer'], apiKeyHeaderKey: 'x-api-key' } } as never,
+            );
+            const req = { session: { token: 'fixture-token' }, get: vi.fn() };
+            const response = responseMock();
+            await controller.access(req as never, response as never);
+            expect(response.status).toHaveBeenCalledWith(401);
+            expect(response.setHeader).toHaveBeenCalledWith('Cache-Control', 'private, no-store');
+        },
+    );
+    it('accepts a server-validated authenticated session for protected static media', async () => {
+        const controller = new StorefrontPromotionController(
+            { resolveRequest: vi.fn().mockResolvedValue({ channelId: 'store-a' }) } as never,
+            {} as never,
+            { getSessionFromToken: vi.fn().mockResolvedValue({ user: { id: 'customer-a' } }) } as never,
+            { authOptions: { tokenMethod: ['cookie', 'bearer'], apiKeyHeaderKey: 'x-api-key' } } as never,
+        );
+        const response = responseMock();
+        await controller.access(
+            { session: { token: 'fixture-token' }, get: vi.fn() } as never,
+            response as never,
+        );
+        expect(response.status).toHaveBeenCalledWith(204);
+    });
     it('allows only the trusted visual renderer and Cloudflare Insights scripts', async () => {
         const request = { ctx: {}, host: 'shop.example.com' };
         const accessService = {
@@ -31,6 +66,7 @@ describe('StorefrontPromotionController', () => {
         const controller = new StorefrontPromotionController(
             accessService as never,
             promotionService as never,
+            {} as never,
             {} as never,
         );
         const response = responseMock();
@@ -62,6 +98,7 @@ describe('StorefrontPromotionController', () => {
             accessService as never,
             {} as never,
             {} as never,
+            {} as never,
         );
         const response = responseMock();
 
@@ -86,6 +123,7 @@ describe('StorefrontPromotionController', () => {
         };
         const controller = new StorefrontPromotionController(
             accessService as never,
+            {} as never,
             {} as never,
             {} as never,
         );
@@ -115,6 +153,7 @@ describe('StorefrontPromotionController', () => {
             accessService as never,
             {} as never,
             {} as never,
+            {} as never,
         );
         const response = responseMock();
 
@@ -138,6 +177,7 @@ describe('StorefrontPromotionController', () => {
             accessService as never,
             {} as never,
             {} as never,
+            {} as never,
         );
         const privacyResponse = responseMock();
         const supportResponse = responseMock();
@@ -158,6 +198,7 @@ describe('StorefrontPromotionController', () => {
         };
         const controller = new StorefrontPromotionController(
             accessService as never,
+            {} as never,
             {} as never,
             {} as never,
         );
@@ -184,62 +225,25 @@ describe('StorefrontPromotionController', () => {
         );
     });
 
-    it('publishes crawl rules and a sitemap for the direct storefront and optional promotion page', async () => {
-        const request = { ctx: {}, host: 'shop.example.com' };
+    it('publishes only the public promotion URL without reading catalog data', async () => {
         const accessService = {
-            resolveRequest: vi.fn(() => Promise.resolve(request)),
-        };
-        const products = Array.from({ length: 220 }, (_, index) => ({ id: index + 1 }));
-        const productService = {
-            findAll: vi.fn((_ctx, options: { skip: number; take: number }) =>
-                Promise.resolve({
-                    totalItems: products.length,
-                    items: products.slice(options.skip, options.skip + options.take),
-                }),
-            ),
+            resolveRequest: vi.fn().mockResolvedValue({ ctx: {}, host: 'shop.example.com' }),
         };
         const controller = new StorefrontPromotionController(
             accessService as never,
             {} as never,
-            productService as never,
+            {} as never,
+            {} as never,
         );
         const robotsResponse = responseMock();
         const sitemapResponse = responseMock();
-
         await controller.robots({} as Request, robotsResponse as unknown as Response);
         await controller.sitemap({} as Request, sitemapResponse as unknown as Response);
-
-        expect(robotsResponse.send).toHaveBeenCalledWith(expect.stringContaining('Allow: /\n'));
-        expect(robotsResponse.send).toHaveBeenCalledWith(expect.stringContaining('Disallow: /promo/enter'));
-        expect(robotsResponse.send).toHaveBeenCalledWith(
-            expect.stringContaining('Sitemap: https://shop.example.com/sitemap.xml'),
-        );
-        expect(sitemapResponse.type).toHaveBeenCalledWith('application/xml');
-        expect(sitemapResponse.send).toHaveBeenCalledWith(
-            expect.stringContaining('<loc>https://shop.example.com/</loc>'),
-        );
-        expect(sitemapResponse.send).toHaveBeenCalledWith(
-            expect.stringContaining('<loc>https://shop.example.com/promo</loc>'),
-        );
-        expect(sitemapResponse.send).toHaveBeenCalledWith(
-            expect.stringContaining('<loc>https://shop.example.com/product?id=11</loc>'),
-        );
-        expect(sitemapResponse.send).toHaveBeenCalledWith(
-            expect.stringContaining('<loc>https://shop.example.com/product?id=220</loc>'),
-        );
-        expect(sitemapResponse.send).toHaveBeenCalledWith(
-            expect.stringContaining('<loc>https://shop.example.com/legal?id=privacy</loc>'),
-        );
-        expect(productService.findAll).toHaveBeenCalledTimes(3);
-        expect(productService.findAll).toHaveBeenNthCalledWith(1, request.ctx, {
-            skip: 0,
-            take: 100,
-            filter: { enabled: { eq: true } },
-        });
-        expect(productService.findAll).toHaveBeenNthCalledWith(
-            3,
-            request.ctx,
-            expect.objectContaining({ skip: 200, take: 100 }),
-        );
+        expect(robotsResponse.send).toHaveBeenCalledWith(expect.stringContaining('Disallow: /\n'));
+        expect(robotsResponse.send).toHaveBeenCalledWith(expect.stringContaining('Allow: /promo$\n'));
+        const xml = sitemapResponse.send.mock.calls[0][0] as string;
+        expect(xml).toContain('<loc>https://shop.example.com/promo</loc>');
+        expect(xml.match(/<loc>/g)).toHaveLength(1);
+        expect(xml).not.toMatch(/product|category|flash-sale|recommendations/);
     });
 });

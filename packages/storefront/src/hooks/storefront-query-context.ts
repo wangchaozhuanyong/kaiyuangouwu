@@ -7,4 +7,5 @@ export interface StorefrontQueryContext {
     language: StorefrontLanguage;
     vendureLanguageCode: VendureLanguageCode;
     storefrontContextResolved: boolean;
+    catalogAccessGranted: boolean;
 }

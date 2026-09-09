@@ -153,7 +153,7 @@ describe('runtime channel branding', () => {
             );
             const safeUrl = new URL('/reset-password', window.location.origin).href;
             expect(document.querySelector('meta[name="robots"]')?.getAttribute('content')).toBe(
-                'noindex, nofollow',
+                'noindex, nofollow, noarchive',
             );
             expect(document.querySelector('meta[property="og:url"]')?.getAttribute('content')).toBe(safeUrl);
             expect(document.querySelector('link[rel="canonical"]')?.getAttribute('href')).toBe(safeUrl);

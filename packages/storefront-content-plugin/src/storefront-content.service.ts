@@ -12,7 +12,7 @@ import {
     TranslatorService,
     UserInputError,
 } from '@vendure/core';
-import { LockNotSupportedOnGivenDriverError, Not } from 'typeorm';
+import { In, LockNotSupportedOnGivenDriverError, Not } from 'typeorm';
 
 import {
     authVisualCodeByType,
@@ -88,10 +88,15 @@ export class StorefrontContentService {
         return block ? this.translateBlock(block, ctx, false) : undefined;
     }
 
-    async findPublished(ctx: RequestContext): Promise<StorefrontContentBlock[]> {
+    async findPublished(ctx: RequestContext, accountOnly = false): Promise<StorefrontContentBlock[]> {
         const now = new Date();
         const blocks = await this.connection.getRepository(ctx, StorefrontContentBlock).find({
-            where: { channelId: ctx.channelId, enabled: true, code: Not(STOREFRONT_VISUAL_PRESET_CODE) },
+            where: {
+                channelId: ctx.channelId,
+                enabled: true,
+                code: Not(STOREFRONT_VISUAL_PRESET_CODE),
+                ...(accountOnly ? { type: In(['LEGAL', 'SUPPORT']) } : {}),
+            },
             relations: {
                 imageAsset: true,
                 items: { imageAsset: true, translations: true },
@@ -100,6 +105,7 @@ export class StorefrontContentService {
             order: { position: 'ASC', createdAt: 'ASC', items: { position: 'ASC', createdAt: 'ASC' } },
         });
         return blocks
+            .filter(block => !accountOnly || block.type === 'LEGAL' || block.type === 'SUPPORT')
             .filter(block => contentPublicationStatus(block, now.getTime(), ctx.languageCode) === 'PUBLISHED')
             .map(block => this.translateBlock(block, ctx, true));
     }

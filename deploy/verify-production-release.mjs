@@ -235,6 +235,35 @@ function shopApiRequest(cookie) {
     };
 }
 
+async function verifyAnonymousCatalogDenied(fetchImpl, shopApiUrl, timeoutMs, cookie) {
+    const response = await fetchWithTimeout(
+        fetchImpl,
+        shopApiUrl,
+        {
+            method: 'POST',
+            redirect: 'manual',
+            headers: {
+                'content-type': 'application/json',
+                ...(cookie ? { cookie } : {}),
+            },
+            body: JSON.stringify({
+                query: 'query PrivateCatalogProbe { products(options: { take: 1 }) { totalItems items { id name } } }',
+            }),
+        },
+        timeoutMs,
+    );
+    if (![200, 401, 403].includes(response.status)) {
+        throw new Error(`Private catalog probe: unexpected HTTP ${response.status}`);
+    }
+    const body = await readJson(response, 'Private catalog probe');
+    if (
+        body?.data?.products != null ||
+        !body?.errors?.some(error => error?.extensions?.code === 'FORBIDDEN')
+    ) {
+        throw new Error('Private catalog probe: anonymous product access was not denied');
+    }
+}
+
 export async function verifyProductionRelease({
     storefrontUrl,
     dashboardUrl,
@@ -285,6 +314,8 @@ export async function verifyProductionRelease({
         throw new Error('Public Shop API: GraphQL probe did not return Query');
     }
     checks.push('public Shop API');
+    await verifyAnonymousCatalogDenied(fetchImpl, shopApiUrl, timeoutMs);
+    checks.push('anonymous catalog denial');
     if (expectedChannelCode) {
         if (publicShopBody?.data?.activeChannel?.code !== expectedChannelCode) {
             throw new Error(
@@ -332,8 +363,27 @@ export async function verifyProductionRelease({
     if (enterResponse.headers.get('location') !== '/') {
         throw new Error('Promotion entry submission: expected redirect location /');
     }
-    extractEntryCookie(enterResponse.headers);
+    const entryCookie = extractEntryCookie(enterResponse.headers);
     checks.push('optional promotion entry');
+    await verifyAnonymousCatalogDenied(fetchImpl, shopApiUrl, timeoutMs, entryCookie);
+    checks.push('promotion cookie cannot unlock catalog');
+
+    const sitemapResponse = await fetchWithTimeout(
+        fetchImpl,
+        new URL('/sitemap.xml', storefront),
+        {
+            redirect: 'manual',
+            headers: { 'cache-control': 'no-cache' },
+        },
+        timeoutMs,
+    );
+    expectStatus(sitemapResponse, 200, 'Public sitemap');
+    const sitemap = await sitemapResponse.text();
+    const locations = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map(match => match[1]);
+    if (locations.length !== 1 || locations[0] !== new URL('/promo', storefront).href) {
+        throw new Error('Public sitemap: expected only the promotion page');
+    }
+    checks.push('catalog links absent from sitemap');
 
     const assetResponse = await fetchWithTimeout(fetchImpl, assetUrl, { redirect: 'manual' }, timeoutMs);
     expectStatus(assetResponse, 200, 'Storefront build asset');

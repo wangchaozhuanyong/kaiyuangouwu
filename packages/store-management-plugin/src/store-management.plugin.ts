@@ -115,6 +115,7 @@ import {
     StorefrontBrandingAdminResolver,
     StorefrontBrandingShopResolver,
 } from './storefront-branding.resolver';
+import { StorefrontCatalogAccessInterceptor } from './storefront-catalog-access.interceptor';
 import { StorefrontRegionShopResolver } from './storefront-region.resolver';
 import {
     SystemAnnouncementAdminResolver,
@@ -221,6 +222,10 @@ import {
         {
             provide: APP_INTERCEPTOR,
             useClass: StorefrontActivationInterceptor,
+        },
+        {
+            provide: APP_INTERCEPTOR,
+            useClass: StorefrontCatalogAccessInterceptor,
         },
     ],
     exports: [ReferralWalletSpendService],
