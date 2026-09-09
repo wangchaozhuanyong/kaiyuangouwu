@@ -34,7 +34,7 @@ describe('translation audit database pagination', () => {
                 entityId: i === 0 ? 'old-target' : `item-${i}`,
                 fieldPath: 'name',
                 status: i === 0 ? 'FAILED' : 'AUTO_TRANSLATED',
-                error: i === 0 ? 'literal 100%_\\done' : null,
+                error: i === 0 ? 'literal 100!%_\\done' : null,
                 updatedAt: new Date('2026-01-01'),
             })),
             {
@@ -98,8 +98,8 @@ describe('translation audit database pagination', () => {
         expect(result.counts).toContainEqual({ status: 'REVIEWED', count: 1 });
     });
 
-    it('treats percent, underscore and backslash as literal search text', async () => {
-        const result = await service.audit({} as any, 'channel-a', { search: '100%_\\done' });
+    it('treats percent, underscore, escape marker and backslash as literal search text', async () => {
+        const result = await service.audit({} as any, 'channel-a', { search: '100!%_\\done' });
         expect(result.filteredTotal).toBe(1);
         expect(result.states[0].entityId).toBe('old-target');
         expect((await service.audit({} as any, 'channel-a', { search: 'not-found' })).filteredTotal).toBe(0);

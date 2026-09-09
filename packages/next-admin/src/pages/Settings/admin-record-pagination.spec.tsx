@@ -10,7 +10,8 @@ import { SystemOpsModule } from './SystemOpsModule';
 import { TranslationsModule } from './TranslationsModule';
 
 const query = vi.hoisted(() => ({
-    data: {} as Record<string, unknown>,
+    data: {} as Record<string, unknown> | undefined,
+    previousData: undefined as Record<string, unknown> | undefined,
     loading: false,
     refetch: vi.fn(),
     requests: [] as Array<Record<string, any>>,
@@ -18,7 +19,7 @@ const query = vi.hoisted(() => ({
 vi.mock('@apollo/client/react', () => ({
     useQuery: (_document: unknown, options: { variables?: { options?: Record<string, any> } }) => {
         query.requests.push(options.variables ?? {});
-        const audit = query.data.contentTranslationAudit as
+        const audit = query.data?.contentTranslationAudit as
             { states: Array<Record<string, any>> } | undefined;
         if (!audit) return query;
         const paging = options.variables?.options ?? {};
@@ -62,6 +63,8 @@ const translationStates = Array.from({ length: 101 }, (_, i) => ({
 beforeEach(() => {
     (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     query.requests = [];
+    query.loading = false;
+    query.previousData = undefined;
 });
 afterEach(async () => {
     await act(async () => cleanups.splice(0).forEach(cleanup => cleanup()));
@@ -118,6 +121,32 @@ function auditData(states = translationStates) {
 }
 
 describe('admin record pagination', () => {
+    it('keeps filter focus and the requested page while an uncached page is loading', async () => {
+        query.data = auditData();
+        const { container, update } = await render(<TranslationsModule />);
+        await click(container, '下一页');
+        const input = container.querySelector<HTMLInputElement>('input[aria-label="搜索翻译审计记录"]')!;
+        input.focus();
+        query.previousData = {
+            ...auditData(),
+            contentTranslationAudit: { ...auditData().contentTranslationAudit, filteredTotal: 101 },
+        };
+        query.data = undefined;
+        query.loading = true;
+        await update();
+        expect(document.activeElement).toBe(input);
+        expect(container.textContent).toContain('正在读取翻译记录');
+        expect(query.requests.at(-1)?.options.skip).toBe(20);
+        expect(container.querySelector<HTMLButtonElement>('button[aria-label="下一页"]')?.disabled).toBe(
+            true,
+        );
+        query.loading = false;
+        query.data = auditData();
+        await update();
+        expect(container.querySelector('tbody tr')?.textContent).toContain('item-21');
+        expect(document.activeElement).toBe(input);
+    });
+
     it('requests paginated translations, resets page size and filters, and reports matching totals', async () => {
         query.data = auditData();
         const { container } = await render(<TranslationsModule />);

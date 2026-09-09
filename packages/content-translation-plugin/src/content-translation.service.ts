@@ -494,11 +494,11 @@ export class ContentTranslationService {
         const search = options?.search?.trim().toLowerCase();
         if (search) {
             // Match the previous literal substring search; SQL wildcards are not user patterns.
-            const pattern = `%${search.replace(/[\\%_]/g, '\\$&')}%`;
+            const pattern = `%${search.replace(/[!%_]/g, '!$&')}%`;
             records.andWhere(
                 new Brackets(query => {
                     for (const field of ['entityType', 'entityId', 'fieldPath', 'status', 'error']) {
-                        query.orWhere(`LOWER(state.${field}) LIKE :search ESCAPE '\\'`, { search: pattern });
+                        query.orWhere(`LOWER(state.${field}) LIKE :search ESCAPE '!'`, { search: pattern });
                     }
                 }),
             );
