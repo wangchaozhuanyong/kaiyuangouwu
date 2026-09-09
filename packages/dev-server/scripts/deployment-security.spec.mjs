@@ -7,6 +7,59 @@ import { fileURLToPath } from 'node:url';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 
+void test('Nginx error logs are sanitized in memory before persistence', async () => {
+    const config = await readFile(path.join(repositoryRoot, 'deploy/nginx/damatong.conf'), 'utf8');
+    const directives = [...config.matchAll(/^\s*error_log (.+);$/gmu)].map(match => match[1]);
+    assert.equal(directives.length, 1);
+    assert.equal(directives[0], 'syslog:server=unix:/run/vendure-nginx-log/error.sock,tag=vendure_nginx_error warn');
+    const script = path.join(repositoryRoot, 'deploy/systemd/vendure-nginx-error-log.py');
+    const packets = [
+        '<187>nginx: connect() failed (111: Connection refused) while connecting to upstream, client: 127.0.0.1, request: "GET /digital-delivery/synthetic-credential?token=synthetic-query HTTP/1.1", upstream: "http://127.0.0.1/digital-delivery/synthetic-credential", referrer: "https://example.com/?token=synthetic-referrer"',
+        '<188>nginx: open() "/images/synthetic-credential" failed (2: No such file)',
+        '<187>nginx: unknown synthetic-credential\nAuthorization: synthetic-header',
+    ];
+    const result = spawnSync('python3', ['-B', '-c', 'import json,runpy,sys; m=runpy.run_path(sys.argv[1]); print(json.dumps([m["safe_record"](s.encode()) for s in json.load(sys.stdin)]))', script], { input: JSON.stringify(packets), encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stderr);
+    assert.doesNotMatch(result.stdout, /synthetic|digital-delivery|Authorization|upstream:/u);
+    const records = JSON.parse(result.stdout);
+    assert.equal(records[0].category, 'upstream_connect_failed');
+    assert.equal(records[0].errno, 111);
+    assert.equal(records[1].category, 'file_open_failed');
+    assert.equal(records[2].category, 'nginx_error');
+    const deployment = await readFile(path.join(repositoryRoot, 'deploy/deploy-production-from-s3.sh'), 'utf8');
+    assert.ok(deployment.indexOf('systemctl is-active --quiet vendure-nginx-error-log.service') < deployment.indexOf('sudo -n nginx -t\n'));
+});
+
+void test('every production ingress uses credential-safe access logs, including redirects', async () => {
+    const config = await readFile(path.join(repositoryRoot, 'deploy/nginx/damatong.conf'), 'utf8');
+    const accessFormat = config.match(/log_format vendure_access escape=json(?<body>[\s\S]*?);/u)?.groups
+        ?.body;
+    const realtimeFormat = config.match(/log_format vendure_realtime escape=json(?<body>[\s\S]*?);/u)?.groups
+        ?.body;
+
+    assert.ok(accessFormat);
+    assert.ok(realtimeFormat);
+    for (const format of [accessFormat, realtimeFormat]) {
+        assert.doesNotMatch(
+            format,
+            /\$(?:request|request_uri|args|query_string|http_referer|http_authorization|http_cookie|uri)\b/u,
+        );
+    }
+    assert.match(accessFormat, /\$vendure_log_path/u);
+    assert.match(config, /map \$uri \$vendure_log_path/u);
+    assert.ok(config.includes('~*^/digital-delivery(?:/|$) /digital-delivery/[redacted];'));
+    assert.ok(config.includes('~*^/image-generation/private(?:/|$) /image-generation/private/[redacted];'));
+
+    const servers = config.split(/^server \{/mu).slice(1);
+    assert.equal(servers.length, 6);
+    for (const server of servers) {
+        assert.match(server, /^    access_log \S+ vendure_access;$/mu);
+    }
+    for (const directive of config.matchAll(/^\s*access_log (.+);$/gmu)) {
+        assert.match(directive[1], / vendure_(?:access|realtime)$/u);
+    }
+});
+
 void test('production Nginx routes protected downloads and hardens both APIs', async () => {
     const config = await readFile(path.join(repositoryRoot, 'deploy/nginx/damatong.conf'), 'utf8');
 

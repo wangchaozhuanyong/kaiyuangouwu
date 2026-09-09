@@ -1,0 +1,26 @@
+[Unit]
+Description=Credential-safe Vendure Nginx error logging
+Before=nginx.service
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+RuntimeDirectory=vendure-nginx-log
+RuntimeDirectoryMode=0750
+ExecStart=/usr/bin/python3 -B /usr/local/lib/vendure-nginx-error-log.py
+Restart=always
+RestartSec=1
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=vendure-nginx-safe-error
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+RestrictAddressFamilies=AF_UNIX
+MemoryMax=64M
+UMask=0117
+
+[Install]
+WantedBy=multi-user.target

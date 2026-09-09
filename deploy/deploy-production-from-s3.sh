@@ -727,6 +727,18 @@ fi
 node "${memory_guard}" --stage post-switch --report
 pm2 save 9>&-
 
+# Bring up the in-memory error sanitizer before any ingress can use its socket.
+sudo -n install -o root -g root -m 0644 "${repository}/deploy/systemd/vendure-nginx-error-log.py" /usr/local/lib/vendure-nginx-error-log.py
+sudo -n install -o root -g root -m 0644 "${repository}/deploy/systemd/vendure-nginx-error-log.service" /etc/systemd/system/vendure-nginx-error-log.service
+sudo -n systemctl daemon-reload
+sudo -n systemctl enable --now vendure-nginx-error-log.service
+sudo -n systemctl restart vendure-nginx-error-log.service
+for attempt in $(seq 1 20); do
+    if sudo -n test -S /run/vendure-nginx-log/error.sock; then break; fi
+    sleep 0.1
+done
+sudo -n systemctl is-active --quiet vendure-nginx-error-log.service
+sudo -n test -S /run/vendure-nginx-log/error.sock
 sudo -n cp -p "${nginx_target}" "${nginx_backup}"
 sudo -n install -o root -g root -m 0644 "${repository}/deploy/nginx/damatong.conf" "${nginx_target}"
 nginx_changed=1
