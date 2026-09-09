@@ -1,3 +1,4 @@
+import { Link } from '@tanstack/react-router';
 import {
     Check,
     ChevronLeft,
@@ -13,7 +14,9 @@ import {
 } from 'lucide-react';
 import { PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from 'react';
 
+import { useDesktopLayout } from '../desktop-layout';
 import { variantCanIncreaseQuantity } from '../product-availability';
+import { routeHref } from '../storefront-router';
 import { MarketConfig, StoreCustomerCoupon, StorefrontCart, StorefrontLanguage } from '../types';
 
 import { Sheet } from './page-shell';
@@ -60,6 +63,8 @@ export function CartGroup({
     onShare: (productId: string, productName: string) => Promise<void>;
     onActionOpenChange: (lineId: string | null) => void;
 }) {
+    const desktop = useDesktopLayout();
+    const CartLine = desktop ? DesktopCartLine : SwipeableCartLine;
     const allSelected = lines.every(line => line.selected);
     const partiallySelected = !allSelected && lines.some(line => line.selected);
     return (
@@ -81,8 +86,18 @@ export function CartGroup({
                 </button>
                 <span>{hint}</span>
             </header>
+            {desktop && (
+                <div className="desktop-cart-columns" aria-hidden="true">
+                    {(language === 'zh'
+                        ? ['商品信息', '单价', '数量', '商品金额', '操作']
+                        : ['Product', 'Unit price', 'Quantity', 'Amount', 'Actions']
+                    ).map(label => (
+                        <span key={label}>{label}</span>
+                    ))}
+                </div>
+            )}
             {lines.map(line => (
-                <SwipeableCartLine
+                <CartLine
                     key={line.id}
                     line={line}
                     market={market}
@@ -106,6 +121,119 @@ export function CartGroup({
                 />
             ))}
         </section>
+    );
+}
+
+function DesktopCartLine({
+    line,
+    market,
+    locale,
+    language,
+    loading,
+    selectionDisabled = loading,
+    favorite,
+    pinned,
+    onSelect,
+    onQuantity,
+    onRemove,
+    onFavorite,
+    onPin,
+    onShare,
+}: Parameters<typeof SwipeableCartLine>[0]) {
+    const isZh = language === 'zh';
+    const variant = line.productVariant;
+    const productId = variant?.product.id;
+    const name = variant?.name ?? (isZh ? '商品已失效' : 'Unavailable item');
+    const currency = variant?.currencyCode ?? market.currencyCode;
+    return (
+        <article className="desktop-cart-row">
+            <div className="desktop-cart-product">
+                <label className="round-check">
+                    <input
+                        type="checkbox"
+                        checked={line.selected}
+                        disabled={!line.available || selectionDisabled}
+                        aria-label={isZh ? `选择 ${name}` : `Select ${name}`}
+                        onChange={event => onSelect(line.id, event.target.checked)}
+                    />
+                    <span>
+                        <Check />
+                    </span>
+                </label>
+                {variant ? (
+                    <Link
+                        to={routeHref({ name: 'product', id: variant.product.id })}
+                        className="desktop-cart-product-link"
+                    >
+                        <ProductVariantImage variant={variant} alt={name} />
+                        <strong>{name}</strong>
+                    </Link>
+                ) : (
+                    <strong>{name}</strong>
+                )}
+            </div>
+            <span>{formatMoney(variant?.priceWithTax ?? 0, currency, locale)}</span>
+            <div className="desktop-cart-quantity">
+                <button
+                    type="button"
+                    aria-label={isZh ? `减少 ${name} 数量` : `Decrease ${name} quantity`}
+                    disabled={loading}
+                    onClick={() =>
+                        line.quantity === 1 ? onRemove(line.id) : onQuantity(line.id, line.quantity - 1)
+                    }
+                >
+                    <Minus />
+                </button>
+                <span>{line.quantity}</span>
+                <button
+                    type="button"
+                    aria-label={isZh ? `增加 ${name} 数量` : `Increase ${name} quantity`}
+                    disabled={
+                        loading ||
+                        !line.available ||
+                        !variant ||
+                        !variantCanIncreaseQuantity(variant, line.quantity)
+                    }
+                    onClick={() => onQuantity(line.id, line.quantity + 1)}
+                >
+                    <Plus />
+                </button>
+            </div>
+            <strong className="desktop-cart-amount">
+                {formatMoney((variant?.priceWithTax ?? 0) * line.quantity, currency, locale)}
+            </strong>
+            <div className="desktop-cart-actions">
+                <button
+                    type="button"
+                    disabled={loading || !productId}
+                    aria-pressed={favorite}
+                    onClick={() => productId && onFavorite(productId, name)}
+                >
+                    {isZh ? (favorite ? '取消收藏' : '移入收藏') : favorite ? 'Unsave' : 'Save'}
+                </button>
+                <button type="button" disabled={loading} onClick={() => onRemove(line.id)}>
+                    {isZh ? '删除' : 'Remove'}
+                </button>
+                <details>
+                    <summary>{isZh ? '更多' : 'More'}</summary>
+                    <button
+                        type="button"
+                        disabled={loading}
+                        aria-pressed={pinned}
+                        onClick={() => onPin(line.id, name)}
+                    >
+                        {isZh ? (pinned ? '取消置顶' : '置顶') : pinned ? 'Unpin' : 'Pin'}
+                    </button>
+                    <button
+                        type="button"
+                        disabled={loading || !productId}
+                        onClick={() => productId && void onShare(productId, name)}
+                    >
+                        {isZh ? '分享' : 'Share'}
+                    </button>
+                </details>
+            </div>
+        </article>
     );
 }
 

@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
+import { DesktopLayoutContext } from './desktop-layout';
 import {
     buildHomeNoticeItems,
     CurrencySelectionSheet,
@@ -236,11 +237,13 @@ const baseProps: HomePageProps = {
     onRetry: vi.fn(),
 };
 
-function renderHome(overrides: Partial<HomePageProps> = {}) {
+function renderHome(overrides: Partial<HomePageProps> = {}, desktop = false) {
     return renderToStaticMarkup(
-        <HomePageContext.Provider value={{ ...baseProps, ...overrides }}>
-            <HomePage />
-        </HomePageContext.Provider>,
+        <DesktopLayoutContext.Provider value={desktop}>
+            <HomePageContext.Provider value={{ ...baseProps, ...overrides }}>
+                <HomePage />
+            </HomePageContext.Provider>
+        </DesktopLayoutContext.Provider>,
     );
 }
 
@@ -662,6 +665,53 @@ describe('HomePage desktop intro layout', () => {
         imageUrl: null,
         items: [],
     };
+
+    it('consolidates only desktop shortcuts already available in the header, retaining custom destinations', () => {
+        const overrides: Partial<HomePageProps> = {
+            collections: [
+                {
+                    id: 'root-collection',
+                    name: '主分类',
+                    slug: 'root-collection',
+                    description: '',
+                    position: 0,
+                    parentId: 'root',
+                    featuredAsset: null,
+                },
+            ],
+            contentBlocks: [
+                {
+                    ...quickLinksBlock,
+                    items: [
+                        { label: '主分类快捷入口', targetType: 'COLLECTION', targetValue: 'root-collection' },
+                        {
+                            label: '子分类快捷入口',
+                            targetType: 'COLLECTION',
+                            targetValue: 'child-collection',
+                        },
+                        { label: '自定义服务入口', targetType: 'PAGE', targetValue: 'services' },
+                    ].map((item, position) => ({
+                        ...item,
+                        targetType: item.targetType as 'COLLECTION' | 'PAGE',
+                        id: `shortcut-${position}`,
+                        enabled: true,
+                        position,
+                        imageUrl: null,
+                        description: '',
+                    })),
+                },
+            ],
+        };
+
+        const desktopMarkup = renderHome(overrides, true);
+        expect(desktopMarkup).not.toContain('<b>主分类快捷入口</b>');
+        expect(desktopMarkup).toContain('<b>子分类快捷入口</b>');
+        expect(desktopMarkup).toContain('<b>自定义服务入口</b>');
+        const mobileMarkup = renderHome(overrides);
+        expect(mobileMarkup).toContain('<b>主分类快捷入口</b>');
+        expect(mobileMarkup).toContain('<b>子分类快捷入口</b>');
+        expect(mobileMarkup).toContain('<b>自定义服务入口</b>');
+    });
 
     it('keeps adjacent hero, trust and shortcuts as independent full-width floors', () => {
         const markup = renderHome({

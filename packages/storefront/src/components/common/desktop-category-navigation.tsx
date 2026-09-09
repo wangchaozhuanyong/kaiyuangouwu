@@ -13,7 +13,7 @@ interface DesktopCategoryNavigationContext {
     navigate: (route: RouteState) => void;
 }
 
-export function DesktopCategoryNavigation() {
+export function DesktopCategoryNavigation({ showCollections = true }: { showCollections?: boolean }) {
     const runtime: DesktopCategoryNavigationContext = useStorefront();
     const { route, language, collections, navigate } = runtime;
     const isZh = language === 'zh';
@@ -33,38 +33,42 @@ export function DesktopCategoryNavigation() {
             className="desktop-category-navigation"
             aria-label={isZh ? '商品分类' : 'Product categories'}
         >
-            <nav
-                className="desktop-local-navigation"
-                aria-label={isZh ? '选择商品分类' : 'Choose a category'}
-            >
-                <button
-                    type="button"
-                    className={isCatalogPage && !input.collectionId && !input.term ? 'is-active' : undefined}
-                    aria-pressed={isCatalogPage && !input.collectionId && !input.term}
-                    onClick={clearFilters}
+            {showCollections && (
+                <nav
+                    className="desktop-local-navigation"
+                    aria-label={isZh ? '选择商品分类' : 'Choose a category'}
                 >
-                    <span>{isZh ? '全部商品' : 'All products'}</span>
-                </button>
-                {collections.map(collection => (
-                    <div key={collection.id}>
-                        <button
-                            type="button"
-                            className={activeCollection?.id === collection.id ? 'is-active' : undefined}
-                            aria-pressed={activeCollection?.id === collection.id}
-                            onClick={() =>
-                                update({
-                                    name: 'category',
-                                    collectionId: collection.id,
-                                    childId: 'all',
-                                    term: undefined,
-                                })
-                            }
-                        >
-                            <span>{collection.name}</span>
-                        </button>
-                    </div>
-                ))}
-            </nav>
+                    <button
+                        type="button"
+                        className={
+                            isCatalogPage && !input.collectionId && !input.term ? 'is-active' : undefined
+                        }
+                        aria-pressed={isCatalogPage && !input.collectionId && !input.term}
+                        onClick={clearFilters}
+                    >
+                        <span>{isZh ? '全部商品' : 'All products'}</span>
+                    </button>
+                    {collections.map(collection => (
+                        <div key={collection.id}>
+                            <button
+                                type="button"
+                                className={activeCollection?.id === collection.id ? 'is-active' : undefined}
+                                aria-pressed={activeCollection?.id === collection.id}
+                                onClick={() =>
+                                    update({
+                                        name: 'category',
+                                        collectionId: collection.id,
+                                        childId: 'all',
+                                        term: undefined,
+                                    })
+                                }
+                            >
+                                <span>{collection.name}</span>
+                            </button>
+                        </div>
+                    ))}
+                </nav>
+            )}
             {activeCollection?.children?.length ? (
                 <nav
                     className="desktop-subcategories"

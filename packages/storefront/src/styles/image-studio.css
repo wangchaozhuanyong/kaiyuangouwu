@@ -1,3 +1,4 @@
 /* Component defaults first; the responsive workflow owns layout and spacing. */
 @import './image-studio-components.css';
 @import './image-studio-layout.css';
+@import './image-studio-desktop.css';

@@ -1,6 +1,7 @@
 import { lazyRouteComponent } from '@tanstack/react-router';
 import { ShoppingBag } from 'lucide-react';
 
+import { useDesktopLayout } from '../desktop-layout';
 import { PageSkeleton } from '../route-loading';
 import {
     CategoryPageContext,
@@ -14,6 +15,10 @@ import { CollectionSummary, FulfillmentType, Product, ProductVariant } from '../
 import { registerRoutePreload, useRouteRuntime as useRuntime } from './shared';
 
 const HomePage = lazyRouteComponent(() => import('../pages/home-page'), 'HomePage');
+const DesktopCatalogPage = lazyRouteComponent(
+    () => import('../pages/desktop-catalog-page'),
+    'DesktopCatalogPage',
+);
 const CategoryPage = lazyRouteComponent(() => import('../pages/category-page'), 'CategoryPage');
 const ProductDetailPage = lazyRouteComponent(
     () => import('../pages/product-detail-page'),
@@ -77,6 +82,8 @@ export function HomeRoutePage() {
 
 export function CategoryRoutePage() {
     const runtime = useRuntime();
+    const desktop = useDesktopLayout();
+    if (desktop) return <DesktopCatalogPage />;
     return (
         <CategoryPageContext.Provider
             value={{
@@ -194,6 +201,8 @@ export function ProductRoutePage() {
 
 export function SearchRoutePage() {
     const runtime = useRuntime();
+    const desktop = useDesktopLayout();
+    if (desktop) return <DesktopCatalogPage />;
     return (
         <SearchPageContext.Provider
             value={{

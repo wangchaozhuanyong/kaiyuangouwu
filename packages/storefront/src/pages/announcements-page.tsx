@@ -119,7 +119,7 @@ export function AnnouncementsPage() {
                     onAction={onRetry}
                 />
             ) : featured ? (
-                <div className="pb-5">
+                <div className="desktop-announcements-content pb-5">
                     <section className="px-4 pt-4" aria-labelledby="featured-announcement-title">
                         <button
                             className="w-full rounded-[14px] border border-orange-300 bg-[#fffaf3] px-4 py-4 text-left shadow-[0_4px_12px_rgba(15,23,42,0.06)] transition-colors hover:bg-orange-50 focus-visible:outline-orange-300"

@@ -178,7 +178,7 @@ export function ReferralPage() {
                     onAction={() => void overviewQuery.refetch()}
                 />
             ) : (
-                <div className="mx-auto grid w-full min-w-0 max-w-5xl overflow-hidden gap-4 px-3 pb-10 pt-3 lg:grid-cols-[1.15fr_0.85fr] lg:px-6">
+                <div className="desktop-referral-content mx-auto grid w-full min-w-0 max-w-5xl overflow-hidden gap-4 px-3 pb-10 pt-3 lg:grid-cols-[1.15fr_0.85fr] lg:px-6">
                     <section className="referral-invite">
                         <h1 className="referral-invite-title">
                             {isZh ? '邀请好友，获得奖励' : 'Invite friends, earn rewards'}
@@ -227,7 +227,7 @@ export function ReferralPage() {
                         </div>
                     </section>
 
-                    <section className="grid grid-cols-2 gap-3">
+                    <section className="referral-overview grid grid-cols-2 gap-3">
                         <SummaryCard
                             icon={<WalletCards />}
                             label={isZh ? '可用奖励' : 'Available'}

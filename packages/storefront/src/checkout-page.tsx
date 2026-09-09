@@ -534,432 +534,467 @@ export function CheckoutPage({
                 className={checkoutPageClassName('checkout-form')}
                 onSubmit={event => void submit(event)}
             >
-                {directPurchase && renderCheckoutItems()}
-                {hasDigitalProducts && (
-                    <section
-                        className={checkoutPageClassName(
-                            'checkout-section checkout-digital-delivery-section',
-                        )}
-                    >
-                        <header className={checkoutPageClassName('digital-delivery-heading')}>
-                            <div>
-                                <h2>{isZh ? '接收方式' : 'Delivery contact'}</h2>
-                                <p>
-                                    {isZh
-                                        ? '付款成功后，订单与数字内容领取入口将发送至此邮箱。'
-                                        : 'Order updates and digital delivery instructions will be sent here after payment.'}
-                                </p>
-                            </div>
-                            <span>{isZh ? '邮箱交付' : 'Email delivery'}</span>
-                        </header>
-                        {deliveryEmails.length > 0 && (
-                            <DeliveryEmailPicker
-                                deliveryEmails={deliveryEmails}
-                                selectedId={selectedDeliveryEmailId}
-                                open={deliveryEmailPickerOpen}
-                                language={language}
-                                onOpenChange={setDeliveryEmailPickerOpen}
-                                onSelect={setSelectedDeliveryEmailId}
-                            />
-                        )}
-                        {!selectedDeliveryEmailId && (
-                            <>
-                                <label className={checkoutPageClassName('digital-delivery-email-field')}>
-                                    <span>{isZh ? '交付邮箱' : 'Delivery email'}</span>
-                                    <input
-                                        name="deliveryEmail"
-                                        type="email"
-                                        inputMode="email"
-                                        autoComplete="email"
-                                        defaultValue={
-                                            order.customFields.deliveryEmail ??
-                                            customer?.emailAddress ??
-                                            order.customer?.emailAddress ??
-                                            ''
-                                        }
-                                        required
-                                    />
-                                </label>
-                                <label className={checkoutPageClassName('digital-delivery-email-field')}>
-                                    <span>{isZh ? '再次输入交付邮箱' : 'Confirm delivery email'}</span>
-                                    <input
-                                        name="confirmDeliveryEmail"
-                                        type="email"
-                                        inputMode="email"
-                                        autoComplete="email"
-                                        required
-                                    />
-                                </label>
-                                {customer && (
-                                    <div className={checkoutPageClassName('checkout-delivery-email-options')}>
-                                        <label>
-                                            <input name="saveDeliveryEmail" type="checkbox" defaultChecked />{' '}
-                                            {isZh ? '保存为交付邮箱' : 'Save to delivery emails'}
-                                        </label>
-                                        <label>
-                                            <input name="defaultDeliveryEmail" type="checkbox" />{' '}
-                                            {isZh ? '设为默认邮箱' : 'Set as default'}
-                                        </label>
-                                    </div>
-                                )}
-                            </>
-                        )}
-                    </section>
-                )}
-                {!customer && !isDigitalOnly ? (
-                    <section className={checkoutPageClassName('checkout-section checkout-contact-section')}>
-                        <h2>{isZh ? '联系信息' : 'Contact'}</h2>
-                        <div className={checkoutPageClassName('form-grid')}>
-                            <Field name="firstName" label={isZh ? '名字' : 'First name'} />
-                            <Field name="lastName" label={isZh ? '姓氏' : 'Last name'} />
-                            <Field
-                                name="emailAddress"
-                                label={isZh ? '电子邮箱' : 'Email'}
-                                type="email"
-                                wide
-                            />
-                        </div>
-                    </section>
-                ) : null}
-                {requiresShipping && (
-                    <section className={checkoutPageClassName('checkout-section checkout-address-section')}>
-                        <div className={checkoutPageClassName('checkout-section-header-row')}>
-                            <h2>{isZh ? '收货地址' : 'Shipping address'}</h2>
-                            <button
-                                type="button"
-                                className={checkoutPageClassName('smart-paste-toggle-btn')}
-                                onClick={() => setSmartPasteOpen(!smartPasteOpen)}
-                            >
-                                <ClipboardCheck size={14} />
-                                <span>{isZh ? '一键智能粘贴' : 'Smart Paste'}</span>
-                            </button>
-                        </div>
-
-                        {smartPasteOpen && (
-                            <div className={checkoutPageClassName('smart-paste-card')}>
-                                <textarea
-                                    className={checkoutPageClassName('smart-paste-input')}
-                                    rows={3}
-                                    placeholder={
-                                        isZh
-                                            ? '粘贴例如：张三，13800138000，广东省深圳市南山区科技园 518000'
-                                            : 'Paste text with recipient, phone and address to auto fill'
-                                    }
-                                    value={smartPasteText}
-                                    onChange={e => setSmartPasteText(e.target.value)}
-                                />
-                                <div className={checkoutPageClassName('smart-paste-actions')}>
-                                    <button
-                                        type="button"
-                                        className={checkoutPageClassName('smart-paste-submit-btn')}
-                                        onClick={() => {
-                                            if (!smartPasteText.trim()) return;
-                                            const parsed = smartParseAddressText(smartPasteText);
-                                            setManualAddressDraft({
-                                                fullName: parsed.fullName,
-                                                phoneNumber: parsed.phoneNumber,
-                                                countryCode: manualAddressDraft.countryCode,
-                                                province: parsed.province,
-                                                city: parsed.city,
-                                                streetLine1: parsed.streetLine1,
-                                                postalCode: parsed.postalCode,
-                                            });
-                                            setSmartPasteOpen(false);
-                                            onNotify(
-                                                isZh
-                                                    ? '✨ 已智能识别并填充收货地址'
-                                                    : 'Address parsed and filled',
-                                            );
-                                        }}
-                                    >
-                                        <Sparkles size={14} />
-                                        <span>{isZh ? '智能识别并填充' : 'Parse & Auto-Fill'}</span>
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-
-                        {customer?.addresses && customer.addresses.length > 1 && (
-                            <div
-                                ref={addressSwitcherRef}
-                                className={checkoutPageClassName('checkout-address-quick-switcher')}
-                                aria-label={isZh ? '快捷选择收货地址' : 'Quick select address'}
-                            >
-                                {customer.addresses.map(addr => (
-                                    <button
-                                        type="button"
-                                        key={addr.id}
-                                        ref={el => {
-                                            if (el) addressChipRefs.current.set(addr.id, el);
-                                            else addressChipRefs.current.delete(addr.id);
-                                        }}
-                                        className={checkoutPageClassName(
-                                            `checkout-address-chip-card${addr.id === (activeAddress?.id ?? '') ? ' is-active' : ''}`,
-                                        )}
-                                        onClick={() => setSelectedAddressId(addr.id)}
-                                    >
-                                        <div className={checkoutPageClassName('chip-card-top')}>
-                                            <strong>{addr.fullName}</strong>
-                                            <span>{addr.phoneNumber}</span>
-                                            {addr.defaultShippingAddress && (
-                                                <em className={checkoutPageClassName('default-tag')}>
-                                                    {isZh ? '默认' : 'Default'}
-                                                </em>
-                                            )}
-                                        </div>
-                                        <small className={checkoutPageClassName('chip-card-address')}>
-                                            {addressText(addr, availableProvinces)}
-                                        </small>
-                                    </button>
-                                ))}
-                            </div>
-                        )}
-
-                        {defaultAddress ? (
-                            <>
-                                <button
-                                    className={checkoutPageClassName('saved-address')}
-                                    type="button"
-                                    onClick={() => navigateTo({ name: 'addresses' })}
-                                >
-                                    <MapPin />
-                                    <span>
-                                        <strong>
-                                            {defaultAddress.fullName} {defaultAddress.phoneNumber}
-                                        </strong>
-                                        <small>{addressText(defaultAddress, availableProvinces)}</small>
-                                    </span>
-                                    <ChevronRight />
-                                </button>
-                                <input type="hidden" name="fullName" value={defaultAddress.fullName ?? ''} />
-                                <input
-                                    type="hidden"
-                                    name="phoneNumber"
-                                    value={defaultAddress.phoneNumber ?? ''}
-                                />
-                                <input type="hidden" name="province" value={defaultAddress.province ?? ''} />
-                                <input type="hidden" name="city" value={defaultAddress.city ?? ''} />
-                                <input type="hidden" name="streetLine1" value={defaultAddress.streetLine1} />
-                                <input type="hidden" name="countryCode" value={defaultAddress.country.code} />
-                                <input
-                                    type="hidden"
-                                    name="postalCode"
-                                    value={defaultAddress.postalCode ?? ''}
-                                />
-                            </>
-                        ) : (
-                            <div className={checkoutPageClassName('form-grid')}>
-                                <CountryField
-                                    countries={availableCountries}
-                                    defaultCountryCode={market.countryCode}
-                                    value={manualAddressDraft.countryCode}
-                                    onChange={countryCode =>
-                                        setManualAddressDraft(current => ({
-                                            ...current,
-                                            countryCode,
-                                            province: '',
-                                        }))
-                                    }
-                                    language={language}
-                                />
-                                <Field
-                                    name="fullName"
-                                    label={isZh ? '收货人' : 'Full name'}
-                                    defaultValue={manualAddressDraft.fullName || undefined}
-                                    key={`name-${manualAddressDraft.fullName}`}
-                                />
-                                <Field
-                                    name="phoneNumber"
-                                    label={isZh ? '手机号' : 'Phone'}
-                                    defaultValue={manualAddressDraft.phoneNumber || undefined}
-                                    key={`phone-${manualAddressDraft.phoneNumber}`}
-                                />
-                                <ProvinceField
-                                    provinces={availableProvinces}
-                                    countryCode={manualAddressDraft.countryCode}
-                                    value={manualAddressDraft.province}
-                                    onChange={province =>
-                                        setManualAddressDraft(current => ({ ...current, province }))
-                                    }
-                                    language={language}
-                                />
-                                <Field
-                                    name="city"
-                                    label={isZh ? '城市' : 'City'}
-                                    defaultValue={manualAddressDraft.city || undefined}
-                                    key={`city-${manualAddressDraft.city}`}
-                                />
-                                <Field
-                                    name="streetLine1"
-                                    label={isZh ? '详细地址' : 'Street address'}
-                                    defaultValue={manualAddressDraft.streetLine1 || undefined}
-                                    key={`street-${manualAddressDraft.streetLine1}`}
-                                    wide
-                                />
-                                <Field
-                                    name="postalCode"
-                                    label={isZh ? '邮政编码' : 'Postal code'}
-                                    defaultValue={manualAddressDraft.postalCode || undefined}
-                                    key={`postal-${manualAddressDraft.postalCode}`}
-                                    wide
-                                />
-                            </div>
-                        )}
-                    </section>
-                )}
-                {!directPurchase && renderCheckoutItems()}
-                <section className={checkoutPageClassName('checkout-section checkout-options')}>
-                    {isDigitalOnly && (
-                        <div
-                            className={checkoutPageClassName('digital-delivery-method')}
-                            aria-label={isZh ? '交付方式' : 'Delivery method'}
+                <div className="desktop-checkout-main">
+                    {directPurchase && renderCheckoutItems()}
+                    {hasDigitalProducts && (
+                        <section
+                            className={checkoutPageClassName(
+                                'checkout-section checkout-digital-delivery-section',
+                            )}
                         >
-                            <span>{isZh ? '交付方式' : 'Delivery method'}</span>
-                            <small>
-                                <strong>{isZh ? '邮箱自动交付' : 'Automatic email delivery'}</strong>
-                                <em>{isZh ? '免费' : 'Free'}</em>
-                            </small>
-                        </div>
+                            <header className={checkoutPageClassName('digital-delivery-heading')}>
+                                <div>
+                                    <h2>{isZh ? '接收方式' : 'Delivery contact'}</h2>
+                                    <p>
+                                        {isZh
+                                            ? '付款成功后，订单与数字内容领取入口将发送至此邮箱。'
+                                            : 'Order updates and digital delivery instructions will be sent here after payment.'}
+                                    </p>
+                                </div>
+                                <span>{isZh ? '邮箱交付' : 'Email delivery'}</span>
+                            </header>
+                            {deliveryEmails.length > 0 && (
+                                <DeliveryEmailPicker
+                                    deliveryEmails={deliveryEmails}
+                                    selectedId={selectedDeliveryEmailId}
+                                    open={deliveryEmailPickerOpen}
+                                    language={language}
+                                    onOpenChange={setDeliveryEmailPickerOpen}
+                                    onSelect={setSelectedDeliveryEmailId}
+                                />
+                            )}
+                            {!selectedDeliveryEmailId && (
+                                <>
+                                    <label className={checkoutPageClassName('digital-delivery-email-field')}>
+                                        <span>{isZh ? '交付邮箱' : 'Delivery email'}</span>
+                                        <input
+                                            name="deliveryEmail"
+                                            type="email"
+                                            inputMode="email"
+                                            autoComplete="email"
+                                            defaultValue={
+                                                order.customFields.deliveryEmail ??
+                                                customer?.emailAddress ??
+                                                order.customer?.emailAddress ??
+                                                ''
+                                            }
+                                            required
+                                        />
+                                    </label>
+                                    <label className={checkoutPageClassName('digital-delivery-email-field')}>
+                                        <span>{isZh ? '再次输入交付邮箱' : 'Confirm delivery email'}</span>
+                                        <input
+                                            name="confirmDeliveryEmail"
+                                            type="email"
+                                            inputMode="email"
+                                            autoComplete="email"
+                                            required
+                                        />
+                                    </label>
+                                    {customer && (
+                                        <div
+                                            className={checkoutPageClassName(
+                                                'checkout-delivery-email-options',
+                                            )}
+                                        >
+                                            <label>
+                                                <input
+                                                    name="saveDeliveryEmail"
+                                                    type="checkbox"
+                                                    defaultChecked
+                                                />{' '}
+                                                {isZh ? '保存为交付邮箱' : 'Save to delivery emails'}
+                                            </label>
+                                            <label>
+                                                <input name="defaultDeliveryEmail" type="checkbox" />{' '}
+                                                {isZh ? '设为默认邮箱' : 'Set as default'}
+                                            </label>
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </section>
                     )}
-                    {requiresShipping && !shippingMethods.length && (
-                        <button type="button" onClick={() => formRef.current?.requestSubmit()}>
-                            <span>{isZh ? '配送方式' : 'Delivery'}</span>
+                    {!customer && !isDigitalOnly ? (
+                        <section
+                            className={checkoutPageClassName('checkout-section checkout-contact-section')}
+                        >
+                            <h2>{isZh ? '联系信息' : 'Contact'}</h2>
+                            <div className={checkoutPageClassName('form-grid')}>
+                                <Field name="firstName" label={isZh ? '名字' : 'First name'} />
+                                <Field name="lastName" label={isZh ? '姓氏' : 'Last name'} />
+                                <Field
+                                    name="emailAddress"
+                                    label={isZh ? '电子邮箱' : 'Email'}
+                                    type="email"
+                                    wide
+                                />
+                            </div>
+                        </section>
+                    ) : null}
+                    {requiresShipping && (
+                        <section
+                            className={checkoutPageClassName('checkout-section checkout-address-section')}
+                        >
+                            <div className={checkoutPageClassName('checkout-section-header-row')}>
+                                <h2>{isZh ? '收货地址' : 'Shipping address'}</h2>
+                                <button
+                                    type="button"
+                                    className={checkoutPageClassName('smart-paste-toggle-btn')}
+                                    onClick={() => setSmartPasteOpen(!smartPasteOpen)}
+                                >
+                                    <ClipboardCheck size={14} />
+                                    <span>{isZh ? '一键智能粘贴' : 'Smart Paste'}</span>
+                                </button>
+                            </div>
+
+                            {smartPasteOpen && (
+                                <div className={checkoutPageClassName('smart-paste-card')}>
+                                    <textarea
+                                        className={checkoutPageClassName('smart-paste-input')}
+                                        rows={3}
+                                        placeholder={
+                                            isZh
+                                                ? '粘贴例如：张三，13800138000，广东省深圳市南山区科技园 518000'
+                                                : 'Paste text with recipient, phone and address to auto fill'
+                                        }
+                                        value={smartPasteText}
+                                        onChange={e => setSmartPasteText(e.target.value)}
+                                    />
+                                    <div className={checkoutPageClassName('smart-paste-actions')}>
+                                        <button
+                                            type="button"
+                                            className={checkoutPageClassName('smart-paste-submit-btn')}
+                                            onClick={() => {
+                                                if (!smartPasteText.trim()) return;
+                                                const parsed = smartParseAddressText(smartPasteText);
+                                                setManualAddressDraft({
+                                                    fullName: parsed.fullName,
+                                                    phoneNumber: parsed.phoneNumber,
+                                                    countryCode: manualAddressDraft.countryCode,
+                                                    province: parsed.province,
+                                                    city: parsed.city,
+                                                    streetLine1: parsed.streetLine1,
+                                                    postalCode: parsed.postalCode,
+                                                });
+                                                setSmartPasteOpen(false);
+                                                onNotify(
+                                                    isZh
+                                                        ? '✨ 已智能识别并填充收货地址'
+                                                        : 'Address parsed and filled',
+                                                );
+                                            }}
+                                        >
+                                            <Sparkles size={14} />
+                                            <span>{isZh ? '智能识别并填充' : 'Parse & Auto-Fill'}</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {customer?.addresses && customer.addresses.length > 1 && (
+                                <div
+                                    ref={addressSwitcherRef}
+                                    className={checkoutPageClassName('checkout-address-quick-switcher')}
+                                    aria-label={isZh ? '快捷选择收货地址' : 'Quick select address'}
+                                >
+                                    {customer.addresses.map(addr => (
+                                        <button
+                                            type="button"
+                                            key={addr.id}
+                                            ref={el => {
+                                                if (el) addressChipRefs.current.set(addr.id, el);
+                                                else addressChipRefs.current.delete(addr.id);
+                                            }}
+                                            className={checkoutPageClassName(
+                                                `checkout-address-chip-card${addr.id === (activeAddress?.id ?? '') ? ' is-active' : ''}`,
+                                            )}
+                                            onClick={() => setSelectedAddressId(addr.id)}
+                                        >
+                                            <div className={checkoutPageClassName('chip-card-top')}>
+                                                <strong>{addr.fullName}</strong>
+                                                <span>{addr.phoneNumber}</span>
+                                                {addr.defaultShippingAddress && (
+                                                    <em className={checkoutPageClassName('default-tag')}>
+                                                        {isZh ? '默认' : 'Default'}
+                                                    </em>
+                                                )}
+                                            </div>
+                                            <small className={checkoutPageClassName('chip-card-address')}>
+                                                {addressText(addr, availableProvinces)}
+                                            </small>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+
+                            {defaultAddress ? (
+                                <>
+                                    <button
+                                        className={checkoutPageClassName('saved-address')}
+                                        type="button"
+                                        onClick={() => navigateTo({ name: 'addresses' })}
+                                    >
+                                        <MapPin />
+                                        <span>
+                                            <strong>
+                                                {defaultAddress.fullName} {defaultAddress.phoneNumber}
+                                            </strong>
+                                            <small>{addressText(defaultAddress, availableProvinces)}</small>
+                                        </span>
+                                        <ChevronRight />
+                                    </button>
+                                    <input
+                                        type="hidden"
+                                        name="fullName"
+                                        value={defaultAddress.fullName ?? ''}
+                                    />
+                                    <input
+                                        type="hidden"
+                                        name="phoneNumber"
+                                        value={defaultAddress.phoneNumber ?? ''}
+                                    />
+                                    <input
+                                        type="hidden"
+                                        name="province"
+                                        value={defaultAddress.province ?? ''}
+                                    />
+                                    <input type="hidden" name="city" value={defaultAddress.city ?? ''} />
+                                    <input
+                                        type="hidden"
+                                        name="streetLine1"
+                                        value={defaultAddress.streetLine1}
+                                    />
+                                    <input
+                                        type="hidden"
+                                        name="countryCode"
+                                        value={defaultAddress.country.code}
+                                    />
+                                    <input
+                                        type="hidden"
+                                        name="postalCode"
+                                        value={defaultAddress.postalCode ?? ''}
+                                    />
+                                </>
+                            ) : (
+                                <div className={checkoutPageClassName('form-grid')}>
+                                    <CountryField
+                                        countries={availableCountries}
+                                        defaultCountryCode={market.countryCode}
+                                        value={manualAddressDraft.countryCode}
+                                        onChange={countryCode =>
+                                            setManualAddressDraft(current => ({
+                                                ...current,
+                                                countryCode,
+                                                province: '',
+                                            }))
+                                        }
+                                        language={language}
+                                    />
+                                    <Field
+                                        name="fullName"
+                                        label={isZh ? '收货人' : 'Full name'}
+                                        defaultValue={manualAddressDraft.fullName || undefined}
+                                        key={`name-${manualAddressDraft.fullName}`}
+                                    />
+                                    <Field
+                                        name="phoneNumber"
+                                        label={isZh ? '手机号' : 'Phone'}
+                                        defaultValue={manualAddressDraft.phoneNumber || undefined}
+                                        key={`phone-${manualAddressDraft.phoneNumber}`}
+                                    />
+                                    <ProvinceField
+                                        provinces={availableProvinces}
+                                        countryCode={manualAddressDraft.countryCode}
+                                        value={manualAddressDraft.province}
+                                        onChange={province =>
+                                            setManualAddressDraft(current => ({ ...current, province }))
+                                        }
+                                        language={language}
+                                    />
+                                    <Field
+                                        name="city"
+                                        label={isZh ? '城市' : 'City'}
+                                        defaultValue={manualAddressDraft.city || undefined}
+                                        key={`city-${manualAddressDraft.city}`}
+                                    />
+                                    <Field
+                                        name="streetLine1"
+                                        label={isZh ? '详细地址' : 'Street address'}
+                                        defaultValue={manualAddressDraft.streetLine1 || undefined}
+                                        key={`street-${manualAddressDraft.streetLine1}`}
+                                        wide
+                                    />
+                                    <Field
+                                        name="postalCode"
+                                        label={isZh ? '邮政编码' : 'Postal code'}
+                                        defaultValue={manualAddressDraft.postalCode || undefined}
+                                        key={`postal-${manualAddressDraft.postalCode}`}
+                                        wide
+                                    />
+                                </div>
+                            )}
+                        </section>
+                    )}
+                    {!directPurchase && renderCheckoutItems()}
+                    <section className={checkoutPageClassName('checkout-section checkout-options')}>
+                        {isDigitalOnly && (
+                            <div
+                                className={checkoutPageClassName('digital-delivery-method')}
+                                aria-label={isZh ? '交付方式' : 'Delivery method'}
+                            >
+                                <span>{isZh ? '交付方式' : 'Delivery method'}</span>
+                                <small>
+                                    <strong>{isZh ? '邮箱自动交付' : 'Automatic email delivery'}</strong>
+                                    <em>{isZh ? '免费' : 'Free'}</em>
+                                </small>
+                            </div>
+                        )}
+                        {requiresShipping && !shippingMethods.length && (
+                            <button type="button" onClick={() => formRef.current?.requestSubmit()}>
+                                <span>{isZh ? '配送方式' : 'Delivery'}</span>
+                                <small>
+                                    {isZh ? '填写地址后计算' : 'Calculate after address'}
+                                    <ChevronRight />
+                                </small>
+                            </button>
+                        )}
+                        {requiresShipping && !!shippingMethods.length && (
+                            <fieldset
+                                className={checkoutPageClassName('shipping-method-list')}
+                                disabled={shippingUpdating || submitting}
+                            >
+                                <legend>{isZh ? '配送方式' : 'Delivery'}</legend>
+                                {shippingMethods.map(method => (
+                                    <label key={method.id}>
+                                        <input
+                                            type="radio"
+                                            name="shippingMethod"
+                                            value={method.id}
+                                            checked={selectedShippingId === method.id}
+                                            onChange={() => void selectShippingMethod(method.id)}
+                                        />
+                                        <span>
+                                            <strong>{method.name}</strong>
+                                            {method.description && <small>{method.description}</small>}
+                                            {shippingMethodDetails(
+                                                method,
+                                                order.currencyCode,
+                                                locale,
+                                                language,
+                                            ) && (
+                                                <small
+                                                    className={checkoutPageClassName('shipping-method-meta')}
+                                                >
+                                                    {shippingMethodDetails(
+                                                        method,
+                                                        order.currencyCode,
+                                                        locale,
+                                                        language,
+                                                    )}
+                                                </small>
+                                            )}
+                                        </span>
+                                        <b>{formatMoney(method.priceWithTax, order.currencyCode, locale)}</b>
+                                    </label>
+                                ))}
+                            </fieldset>
+                        )}
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setNoteDraft(order.customFields.customerNote ?? '');
+                                setNoteError(null);
+                                setNoteOpen(true);
+                            }}
+                        >
+                            <span>{isZh ? '订单备注' : 'Order note'}</span>
                             <small>
-                                {isZh ? '填写地址后计算' : 'Calculate after address'}
+                                {order.customFields.customerNote
+                                    ? trimText(order.customFields.customerNote, 20)
+                                    : isZh
+                                      ? '添加备注'
+                                      : 'Add a note'}
                                 <ChevronRight />
                             </small>
                         </button>
-                    )}
-                    {requiresShipping && !!shippingMethods.length && (
-                        <fieldset
-                            className={checkoutPageClassName('shipping-method-list')}
-                            disabled={shippingUpdating || submitting}
-                        >
-                            <legend>{isZh ? '配送方式' : 'Delivery'}</legend>
-                            {shippingMethods.map(method => (
-                                <label key={method.id}>
-                                    <input
-                                        type="radio"
-                                        name="shippingMethod"
-                                        value={method.id}
-                                        checked={selectedShippingId === method.id}
-                                        onChange={() => void selectShippingMethod(method.id)}
-                                    />
-                                    <span>
-                                        <strong>{method.name}</strong>
-                                        {method.description && <small>{method.description}</small>}
-                                        {shippingMethodDetails(
-                                            method,
-                                            order.currencyCode,
-                                            locale,
-                                            language,
-                                        ) && (
-                                            <small className={checkoutPageClassName('shipping-method-meta')}>
-                                                {shippingMethodDetails(
-                                                    method,
-                                                    order.currencyCode,
-                                                    locale,
-                                                    language,
-                                                )}
-                                            </small>
-                                        )}
-                                    </span>
-                                    <b>{formatMoney(method.priceWithTax, order.currencyCode, locale)}</b>
-                                </label>
-                            ))}
-                        </fieldset>
-                    )}
-                    <button
-                        type="button"
-                        onClick={() => {
-                            setNoteDraft(order.customFields.customerNote ?? '');
-                            setNoteError(null);
-                            setNoteOpen(true);
-                        }}
-                    >
-                        <span>{isZh ? '订单备注' : 'Order note'}</span>
-                        <small>
-                            {order.customFields.customerNote
-                                ? trimText(order.customFields.customerNote, 20)
-                                : isZh
-                                  ? '添加备注'
-                                  : 'Add a note'}
-                            <ChevronRight />
-                        </small>
-                    </button>
-                    <button type="button" onClick={() => setCouponOpen(true)}>
-                        <span>{isZh ? '优惠券' : 'Coupon'}</span>
-                        <small title={selectedCouponLabel ?? undefined}>
-                            {selectedCouponLabel ?? (isZh ? '选择已领取优惠券' : 'Choose a claimed coupon')}
-                            <ChevronRight />
-                        </small>
-                    </button>
-                </section>
-                <section className={checkoutPageClassName('checkout-section checkout-summary-section')}>
-                    <PriceSummary
-                        pending={cartPending}
-                        order={order}
-                        locale={locale}
-                        language={language}
-                        flashSales={flashSales}
-                        requiresShipping={requiresShipping}
-                    />
-                </section>
-                <section
-                    className={checkoutPageClassName('checkout-assurance checkout-protection-section')}
-                    aria-label={isZh ? '购物保障' : 'Purchase protection'}
-                >
-                    <span>
-                        <CircleCheck />
-                        {physicalLines.length
-                            ? isZh
-                                ? '下单信息'
-                                : 'Order details'
-                            : isZh
-                              ? '安全购买'
-                              : 'Secure purchase'}
-                    </span>
-                    <span>
-                        <Truck />
-                        {physicalLines.length
-                            ? isZh
-                                ? '配送可追踪'
-                                : 'Tracked delivery'
-                            : isZh
-                              ? '邮箱交付'
-                              : 'Email delivery'}
-                    </span>
-                    <span>
-                        <RotateCcw />
-                        {compactCopy.orders.returns}
-                    </span>
-                </section>
-                <div className={checkoutPageClassName('submit-order-bar')}>
-                    <button type="submit" disabled={submitting || cartPending}>
-                        {(() => {
-                            if (cartPending)
-                                return isZh ? '正在确认商品与金额…' : 'Confirming items and total…';
-                            if (submitting) return isZh ? '处理中…' : 'Processing…';
-                            if (requiresShipping && !shippingMethods.length) {
-                                return isZh ? '下一步，选择配送' : 'Continue to delivery';
-                            }
-                            const totalFormatted = formatMoney(
-                                order.totalWithTax,
-                                order.currencyCode,
-                                locale,
-                            );
-                            const itemLabel = `${order.totalQuantity} ${order.totalQuantity === 1 ? 'item' : 'items'}`;
-                            if (directPurchase) {
-                                return isZh
-                                    ? `确认并支付（${order.totalQuantity}件）需支付 ${totalFormatted}`
-                                    : `Confirm and pay (${itemLabel}) · ${totalFormatted}`;
-                            }
-                            return isZh
-                                ? `提交订单（${order.totalQuantity}件）需支付 ${totalFormatted}`
-                                : `Place order (${itemLabel}) · ${totalFormatted}`;
-                        })()}
-                    </button>
+                        <button type="button" onClick={() => setCouponOpen(true)}>
+                            <span>{isZh ? '优惠券' : 'Coupon'}</span>
+                            <small title={selectedCouponLabel ?? undefined}>
+                                {selectedCouponLabel ??
+                                    (isZh ? '选择已领取优惠券' : 'Choose a claimed coupon')}
+                                <ChevronRight />
+                            </small>
+                        </button>
+                    </section>
                 </div>
+                <aside className="desktop-checkout-summary">
+                    <section className={checkoutPageClassName('checkout-section checkout-summary-section')}>
+                        <PriceSummary
+                            pending={cartPending}
+                            order={order}
+                            locale={locale}
+                            language={language}
+                            flashSales={flashSales}
+                            requiresShipping={requiresShipping}
+                        />
+                    </section>
+                    <section
+                        className={checkoutPageClassName('checkout-assurance checkout-protection-section')}
+                        aria-label={isZh ? '购物保障' : 'Purchase protection'}
+                    >
+                        <span>
+                            <CircleCheck />
+                            {physicalLines.length
+                                ? isZh
+                                    ? '下单信息'
+                                    : 'Order details'
+                                : isZh
+                                  ? '安全购买'
+                                  : 'Secure purchase'}
+                        </span>
+                        <span>
+                            <Truck />
+                            {physicalLines.length
+                                ? isZh
+                                    ? '配送可追踪'
+                                    : 'Tracked delivery'
+                                : isZh
+                                  ? '邮箱交付'
+                                  : 'Email delivery'}
+                        </span>
+                        <span>
+                            <RotateCcw />
+                            {compactCopy.orders.returns}
+                        </span>
+                    </section>
+                    <div className={checkoutPageClassName('submit-order-bar')}>
+                        <button type="submit" disabled={submitting || cartPending}>
+                            {(() => {
+                                if (cartPending)
+                                    return isZh ? '正在确认商品与金额…' : 'Confirming items and total…';
+                                if (submitting) return isZh ? '处理中…' : 'Processing…';
+                                if (requiresShipping && !shippingMethods.length) {
+                                    return isZh ? '下一步，选择配送' : 'Continue to delivery';
+                                }
+                                const totalFormatted = formatMoney(
+                                    order.totalWithTax,
+                                    order.currencyCode,
+                                    locale,
+                                );
+                                const itemLabel = `${order.totalQuantity} ${order.totalQuantity === 1 ? 'item' : 'items'}`;
+                                if (directPurchase) {
+                                    return isZh
+                                        ? `确认并支付（${order.totalQuantity}件）需支付 ${totalFormatted}`
+                                        : `Confirm and pay (${itemLabel}) · ${totalFormatted}`;
+                                }
+                                return isZh
+                                    ? `提交订单（${order.totalQuantity}件）需支付 ${totalFormatted}`
+                                    : `Place order (${itemLabel}) · ${totalFormatted}`;
+                            })()}
+                        </button>
+                    </div>
+                </aside>
             </form>
             {couponOpen && (
                 <CouponSheet
