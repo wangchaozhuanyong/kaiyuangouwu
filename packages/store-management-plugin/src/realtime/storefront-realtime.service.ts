@@ -46,7 +46,6 @@ export interface StorefrontRealtimeClient {
     channelId: string;
     userId?: string;
     activeOrderId?: string;
-    admin?: boolean;
     send(payload: StorefrontRealtimePayload): void;
 }
 
@@ -252,7 +251,6 @@ export class StorefrontRealtimeService implements OnApplicationBootstrap, OnAppl
             if (!change.allChannels && !channelIds.has(client.channelId)) continue;
             if (
                 privateEvent &&
-                !client.admin &&
                 !(client.userId && userIds.has(client.userId)) &&
                 !(client.activeOrderId && orderIds.has(client.activeOrderId))
             ) {

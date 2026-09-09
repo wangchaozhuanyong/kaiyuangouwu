@@ -1,4 +1,4 @@
-import { Controller, Get, Query, Req, Res } from '@nestjs/common';
+import { Controller, Get, Req, Res } from '@nestjs/common';
 import { SessionService } from '@vendure/core';
 import type { Request, Response } from 'express';
 
@@ -18,11 +18,7 @@ export class StorefrontRealtimeController {
     ) {}
 
     @Get('events')
-    async events(
-        @Req() req: Request,
-        @Res() res: Response,
-        @Query('client') clientType?: string,
-    ): Promise<void> {
+    async events(@Req() req: Request, @Res() res: Response): Promise<void> {
         const token = sessionToken(req);
         const session = token ? await this.sessionService.getSessionFromToken(token) : undefined;
         const storefrontRequest = await this.storefrontAccess.resolveRequest(req);
@@ -31,7 +27,6 @@ export class StorefrontRealtimeController {
             return;
         }
         const channelId = String(storefrontRequest.channelId);
-        const admin = clientType === 'admin' && hasAdminChannelAccess(session, channelId);
 
         let closed = false;
         let backpressured = false;
@@ -106,7 +101,6 @@ export class StorefrontRealtimeController {
             channelId,
             userId: session?.user?.id == null ? undefined : String(session.user.id),
             activeOrderId: session?.activeOrderId == null ? undefined : String(session.activeOrderId),
-            admin,
             send: payload => {
                 if (closed) return;
                 if (backpressured) {
@@ -163,11 +157,4 @@ function sessionToken(req: Request): string | undefined {
     if (typeof cookieToken === 'string' && cookieToken) return cookieToken;
     const authorization = req.get('Authorization')?.trim();
     return authorization?.match(/^Bearer\s+(.+)$/iu)?.[1];
-}
-
-function hasAdminChannelAccess(
-    session: Awaited<ReturnType<SessionService['getSessionFromToken']>>,
-    channelId: string,
-): boolean {
-    return Boolean(session?.user?.channelPermissions.some(channel => String(channel.id) === channelId));
 }
