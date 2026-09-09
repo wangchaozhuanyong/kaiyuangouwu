@@ -325,12 +325,12 @@ async function variantBelongsToCollections(
     );
     const selected = new Set(collectionIds.map(String));
     return variant.collections.some(collection => {
-        let id = String(collection.id);
+        let id: string | undefined = String(collection.id);
         const visited = new Set<string>();
-        while (parents.has(id) && !visited.has(id)) {
+        while (id && parents.has(id) && !visited.has(id)) {
             if (selected.has(id)) return true;
             visited.add(id);
-            id = parents.get(id)!;
+            id = parents.get(id);
         }
         return false;
     });

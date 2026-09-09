@@ -269,7 +269,7 @@ describe('store commerce promotion actions', () => {
                 ctx,
                 line,
                 actionArgs({ discount: 15, collectionIds }),
-                {} as any,
+                {},
                 {} as any,
             );
 
