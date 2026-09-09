@@ -93,7 +93,7 @@ export function CouponEditor({
                 draft.kind === 'ORDER_FIXED' ? majorInputToMoney(draft.discountValue, currencyCode) : null;
             if (minimumSpend == null || (draft.kind === 'ORDER_FIXED' && discountAmount == null))
                 throw new Error('金额格式不正确');
-            const optionalInt = (value: string) => (value.trim() ? Number.parseInt(value, 10) : null);
+            const optionalInt = (value: string) => (value.trim() ? Number(value) : null);
             await create({
                 variables: {
                     input: {
@@ -104,10 +104,6 @@ export function CouponEditor({
                         discountRate: draft.kind === 'ORDER_FIXED' ? null : Number(draft.discountValue),
                         collectionIds: draft.kind === 'COLLECTION_PERCENTAGE' ? draft.collectionIds : [],
                         productIds: draft.kind === 'PRODUCT_PERCENTAGE' ? draft.productIds : [],
-                        startsAt: dateInput(draft.startsAt),
-                        endsAt: dateInput(draft.endsAt),
-                        usageLimit: optionalInt(draft.issueLimit),
-                        perCustomerUsageLimit: 1,
                         claimStartsAt: dateInput(draft.claimStartsAt),
                         claimEndsAt: dateInput(draft.claimEndsAt),
                         validityDays: optionalInt(draft.validityDays),
@@ -195,13 +191,13 @@ export function CouponEditor({
                     label="领取开始"
                     type="datetime-local"
                     value={draft.claimStartsAt}
-                    onChange={value => setDraft({ ...draft, claimStartsAt: value, startsAt: value })}
+                    onChange={value => setDraft({ ...draft, claimStartsAt: value })}
                 />
                 <DateInput
                     label="领取结束"
                     type="datetime-local"
                     value={draft.claimEndsAt}
-                    onChange={value => setDraft({ ...draft, claimEndsAt: value, endsAt: value })}
+                    onChange={value => setDraft({ ...draft, claimEndsAt: value })}
                 />
                 <FormInput
                     label="发放总量 *"

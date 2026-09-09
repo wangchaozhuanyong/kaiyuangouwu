@@ -115,6 +115,12 @@ describe('coupon category selection', () => {
                     }),
                 },
             });
+            const submitted = mocks.create.mock.calls[0][0].variables.input;
+            expect(submitted.validityDays).toBe(7);
+            expect(submitted.claimEndsAt).toBeTruthy();
+            expect(submitted).not.toHaveProperty('endsAt');
+            expect(submitted).not.toHaveProperty('perCustomerUsageLimit');
+            expect(submitted).not.toHaveProperty('usageLimit');
             expect(onSaved).toHaveBeenCalledOnce();
             expect(onError).not.toHaveBeenCalled();
         } finally {

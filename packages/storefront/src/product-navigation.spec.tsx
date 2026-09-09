@@ -66,6 +66,10 @@ describe('product image navigation layers', () => {
                     value={{
                         product: {
                             ...digitalProduct,
+                            variants: digitalProduct.variants.map(variant => ({
+                                ...variant,
+                                storeCouponCollectionIds: ['parent', 'child', 'grandchild'],
+                            })),
                             collections: [
                                 {
                                     id: 'grandchild',

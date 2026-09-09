@@ -30,6 +30,7 @@ export const couponLedgerEvents = [
     'EXPIRED',
     'REVOKED',
     'REFUND_SETTLED',
+    'CORRECTED',
 ] as const satisfies ReadonlyArray<'ALL' | StoreCouponLedgerRecord['eventType']>;
 export type CouponLedgerEventFilter = (typeof couponLedgerEvents)[number];
 

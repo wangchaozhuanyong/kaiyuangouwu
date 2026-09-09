@@ -1,20 +1,18 @@
 import { LanguageCode } from '@vendure/common/lib/generated-types';
-import { ID } from '@vendure/common/lib/shared-types';
 import {
-    Collection,
     CurrencyCode,
     idsAreEqual,
-    ProductVariant,
     PromotionCondition,
     PromotionItemAction,
     PromotionOrderAction,
-    RequestContext,
     RequestContextCacheService,
     TransactionalConnection,
 } from '@vendure/core';
 
 import { CustomerCoupon } from '../entities/customer-coupon.entity';
 import { convertChannelAmount } from '../store-currency-price-selection-strategy';
+
+import { couponCollectionsForVariant } from './store-coupon-collections';
 
 let connection: TransactionalConnection;
 let requestCache: RequestContextCacheService;
@@ -203,7 +201,14 @@ export const collectionPercentageDiscount = new PromotionItemAction({
         requestCache = injector.get(RequestContextCacheService);
     },
     async execute(ctx, orderLine, args) {
-        if (!(await variantBelongsToCollections(ctx, orderLine.productVariant.id, args.collectionIds))) {
+        const categoryIds = await couponCollectionsForVariant(
+            ctx,
+            orderLine.productVariant.id,
+            connection,
+            requestCache,
+        );
+        const selected = new Set(args.collectionIds.map(String));
+        if (!categoryIds.some(id => selected.has(id))) {
             return 0;
         }
         const unitPrice = ctx.channel.pricesIncludeTax ? orderLine.unitPriceWithTax : orderLine.unitPrice;
@@ -291,47 +296,4 @@ export function parseFlashSaleVariantRules(value: string): FlashSaleVariantRule[
     } catch {
         return [];
     }
-}
-
-async function variantBelongsToCollections(
-    ctx: RequestContext,
-    variantId: ID,
-    collectionIds: ID[],
-): Promise<boolean> {
-    if (!collectionIds.length) {
-        return false;
-    }
-    const variant = await connection.getRepository(ctx, ProductVariant).findOne({
-        where: { id: variantId, channels: { id: ctx.channelId } },
-        relations: { collections: true },
-    });
-    if (!variant?.collections.length) return false;
-
-    // Resolve the current hierarchy once per request, so new or moved descendants
-    // are covered without rewriting campaigns or querying ancestors for every line.
-    const parents = await requestCache.get(
-        ctx,
-        `store-coupon-collection-parents:${ctx.channelId}`,
-        async () => {
-            const collections = await connection.getRepository(ctx, Collection).find({
-                select: { id: true, parentId: true },
-                where: { channels: { id: ctx.channelId }, isRoot: false },
-                loadEagerRelations: false,
-            });
-            return new Map(
-                collections.map(collection => [String(collection.id), String(collection.parentId)]),
-            );
-        },
-    );
-    const selected = new Set(collectionIds.map(String));
-    return variant.collections.some(collection => {
-        let id: string | undefined = String(collection.id);
-        const visited = new Set<string>();
-        while (id && parents.has(id) && !visited.has(id)) {
-            if (selected.has(id)) return true;
-            visited.add(id);
-            id = parents.get(id);
-        }
-        return false;
-    });
 }

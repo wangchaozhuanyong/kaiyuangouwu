@@ -26,6 +26,8 @@ export interface CollectionSummary {
 
 export interface ProductVariant {
     id: string;
+    /** Missing on old cached/API responses: do not infer a variant scope from its product. */
+    storeCouponCollectionIds?: string[];
     name: string;
     sku: string;
     priceWithTax: number;
@@ -815,6 +817,8 @@ export interface StoreCustomerCoupon {
     currencyCode?: string;
     discountAmount: number | null;
     discountRate: number | null;
+    collectionIds?: string[];
+    productVariantIds?: string[];
     claimedAt: string;
     validFrom: string;
     validUntil: string | null;

@@ -145,6 +145,8 @@ export const customerCouponFields = `
     currencyCode
     discountAmount
     discountRate
+    collectionIds
+    productVariantIds
     claimedAt
     validFrom
     validUntil

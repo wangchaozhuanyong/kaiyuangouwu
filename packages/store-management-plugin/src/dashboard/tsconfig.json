@@ -1,0 +1,8 @@
+{
+    "extends": "../../../dashboard/tsconfig.json",
+    "include": [
+        "./store-promotion-campaign-page.tsx",
+        "./store-promotion-campaign-route.ts",
+        "../../../dashboard/src/vite-env.d.ts"
+    ]
+}

@@ -100,11 +100,7 @@ export function ProductDetailPage() {
             ? bestProductCouponPrice({
                   campaigns: couponCampaigns,
                   customerCoupons,
-                  collectionIds: product.collections.flatMap(collection => [
-                      collection.id,
-                      ...(collection.breadcrumbs?.slice(1).map(ancestor => ancestor.id) ??
-                          (collection.parentId ? [collection.parentId] : [])),
-                  ]),
+                  collectionIds: variant.storeCouponCollectionIds ?? [],
                   productVariantId: variant.id,
                   priceWithTax: displayedPrice,
                   currencyCode: displayedCurrencyCode,

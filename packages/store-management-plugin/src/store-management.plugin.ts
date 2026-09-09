@@ -61,9 +61,11 @@ import {
     flashSalePriceAction,
 } from './promotion/store-commerce-promotion-actions';
 import { StoreCouponLifecycleService } from './promotion/store-coupon-lifecycle.service';
+import { StoreCouponRepairService } from './promotion/store-coupon-repair.service';
 import { reconcileStoreCouponsTask } from './promotion/store-coupon-tasks';
 import {
     StoreCouponOrderResolver,
+    StoreCouponVariantResolver,
     StorePromotionCampaignAdminResolver,
     StorePromotionCampaignShopResolver,
 } from './promotion/store-promotion-campaign.resolver';
@@ -197,6 +199,7 @@ import {
         StorefrontPromotionService,
         StorePromotionCampaignService,
         StoreCouponLifecycleService,
+        StoreCouponRepairService,
         ReferralService,
         StorefrontTrafficService,
         ReferralWalletSpendService,
@@ -293,6 +296,7 @@ import {
             CustomerAvatarShopResolver,
             StoreCurrencySettingsShopResolver,
             StorePromotionCampaignShopResolver,
+            StoreCouponVariantResolver,
             SystemAnnouncementShopResolver,
             ReferralShopResolver,
             StorefrontTrafficShopResolver,
