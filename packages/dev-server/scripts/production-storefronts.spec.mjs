@@ -72,3 +72,50 @@ void test('release verification iterates every configured store without store-sp
         await rm(directory, { recursive: true });
     }
 });
+
+void test('public realtime readiness honors the shared request budget for every store', async t => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'production-storefronts-'));
+    t.after(() => rm(directory, { recursive: true }));
+    const configPath = path.join(directory, 'storefronts.json');
+    await writeFile(configPath, JSON.stringify(threeStores));
+
+    for (const timeoutMs of [undefined, 4_000]) {
+        const calls = [];
+        const result = await verifyConfiguredProductionStorefronts({
+            mode: 'realtime',
+            configPath,
+            timeoutMs,
+            realtimeVerifier: async options => {
+                calls.push(options);
+                return { readyMs: 2_400 };
+            },
+        });
+        assert.deepEqual(
+            calls.map(call => new URL(call.url).origin),
+            threeStores.storefronts.map(s => s.origin),
+        );
+        assert.ok(calls.every(call => call.readyTimeoutMs === (timeoutMs ?? 10_000)));
+        assert.ok(calls.every(call => call.closeTimeoutMs === 2_000 && call.heartbeatTimeoutMs === 18_000));
+        assert.equal(result.results.length, threeStores.storefronts.length);
+    }
+});
+
+void test('public realtime failures still fail the production check', async t => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'production-storefronts-'));
+    t.after(() => rm(directory, { recursive: true }));
+    const configPath = path.join(directory, 'storefronts.json');
+    await writeFile(configPath, JSON.stringify(threeStores));
+    for (const message of ['Timed out waiting for ready', 'HTTP 502', 'Missing heartbeat']) {
+        const failure = new Error(message);
+        await assert.rejects(
+            verifyConfiguredProductionStorefronts({
+                mode: 'realtime',
+                configPath,
+                realtimeVerifier: async () => {
+                    throw failure;
+                },
+            }),
+            error => error === failure,
+        );
+    }
+});
