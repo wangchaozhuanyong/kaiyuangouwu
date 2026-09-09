@@ -183,15 +183,18 @@ export function CatalogOperationsBlock({ context }: { context: NextAdminPageBloc
     );
 
     return (
-        <section className="space-y-5 rounded-xl border border-slate-200 bg-white p-5">
+        <section
+            id="sku-cost-inventory"
+            className="scroll-mt-24 space-y-5 rounded-xl border border-blue-200 bg-white p-5"
+        >
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                 <div>
                     <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                        <Boxes className="h-4 w-4 text-blue-600" /> 采购、成本、库存与批次
-                        <FeatureHelpButton topic="catalog.inventory" title="采购、成本、库存与批次" />
+                        <Boxes className="h-4 w-4 text-blue-600" /> SKU 成本与库存
+                        <FeatureHelpButton topic="catalog.inventory" title="SKU 成本与库存" />
                     </h2>
                     <p className="mt-1 text-xs text-slate-500">
-                        恢复旧后台的 SKU 经营字段；成本保留三位小数，价格按当前店铺币种保存。
+                        常用字段直接显示：填采购成本和当前库存；供货商、批次和保质期按需要填写。
                     </p>
                 </div>
                 <div className="flex flex-wrap items-end gap-2">
@@ -218,150 +221,180 @@ export function CatalogOperationsBlock({ context }: { context: NextAdminPageBloc
                         <Save className="h-4 w-4" />
                         {saveState.loading
                             ? '保存中…'
-                            : `保存修改${dirtyIds.length ? ` (${dirtyIds.length})` : ''}`}
+                            : `保存成本与库存${dirtyIds.length ? ` (${dirtyIds.length})` : ''}`}
                     </button>
                 </div>
             </div>
             {notice && <InlineNotice tone="success" message={notice} />}
             {error && <InlineNotice tone="error" message={error} />}
-            <div className="space-y-3">
-                {workspace.variants.map(variant => {
-                    const draft = drafts[variant.id];
-                    if (!draft) return null;
-                    const margin = calculateDraftMargin(draft.sellingPrice, draft.purchaseCost);
-                    return (
-                        <details
-                            key={variant.id}
-                            className="rounded-xl border border-slate-200"
-                            open={dirtyIds.includes(variant.id)}
-                        >
-                            <summary className="cursor-pointer list-none px-4 py-3">
-                                <div className="flex flex-wrap items-center justify-between gap-2">
-                                    <span>
-                                        <strong className="text-sm text-slate-900">{variant.name}</strong>
-                                        <small className="ml-2 font-mono text-slate-500">{variant.sku}</small>
-                                    </span>
-                                    <span className="text-xs text-slate-500">
-                                        销售价 {formatMoney(variant.sellingPrice, variant.currencyCode)} ·
-                                        毛利 {margin == null ? '—' : `${(margin * 100).toFixed(1)}%`}
-                                    </span>
+            {workspace.variants.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-5 text-xs text-slate-500">
+                    请先在上方添加销售规格并保存商品，保存成功后即可在这里填写采购成本。
+                </div>
+            ) : (
+                <div className="space-y-3">
+                    {workspace.variants.map(variant => {
+                        const draft = drafts[variant.id];
+                        if (!draft) return null;
+                        const margin = calculateDraftMargin(draft.sellingPrice, draft.purchaseCost);
+                        return (
+                            <article
+                                key={variant.id}
+                                className="overflow-hidden rounded-xl border border-slate-200"
+                            >
+                                <div className="bg-slate-50/70 px-4 py-3">
+                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                        <span>
+                                            <strong className="text-sm text-slate-900">{variant.name}</strong>
+                                            <small className="ml-2 font-mono text-slate-500">
+                                                {variant.sku}
+                                            </small>
+                                        </span>
+                                        <span className="text-xs text-slate-500">
+                                            销售价 {formatMoney(variant.sellingPrice, variant.currencyCode)} ·
+                                            毛利 {margin == null ? '—' : `${(margin * 100).toFixed(1)}%`}
+                                        </span>
+                                    </div>
                                 </div>
-                            </summary>
-                            <div className="grid gap-3 border-t border-slate-100 p-4 sm:grid-cols-2 xl:grid-cols-4">
-                                <TextField
-                                    label="SKU"
-                                    value={draft.sku}
-                                    onChange={sku => updateDraft(variant.id, { sku })}
-                                />
-                                <TextField
-                                    label="条码"
-                                    value={draft.barcode}
-                                    onChange={barcode => updateDraft(variant.id, { barcode })}
-                                />
-                                <TextField
-                                    label="规格"
-                                    value={draft.specification}
-                                    onChange={specification => updateDraft(variant.id, { specification })}
-                                />
-                                <label className="text-xs font-bold text-slate-600">
-                                    供货商
-                                    <select
-                                        value={draft.supplierId}
-                                        onChange={event =>
-                                            updateDraft(variant.id, { supplierId: event.target.value })
-                                        }
-                                        className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal"
-                                    >
-                                        <option value="">不关联</option>
-                                        {suppliers.map(supplier => (
-                                            <option key={supplier.id} value={supplier.id}>
-                                                {supplier.name} {supplier.enabled ? '' : '（已停用）'}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </label>
-                                <TextField
-                                    label="销售单位"
-                                    value={draft.saleUnit}
-                                    onChange={saleUnit => updateDraft(variant.id, { saleUnit })}
-                                />
-                                <TextField
-                                    label="采购单位"
-                                    value={draft.purchaseUnit}
-                                    onChange={purchaseUnit => updateDraft(variant.id, { purchaseUnit })}
-                                />
-                                <TextField
-                                    label="包装换算"
-                                    type="number"
-                                    value={draft.packageQuantity}
-                                    onChange={packageQuantity => updateDraft(variant.id, { packageQuantity })}
-                                />
-                                <TextField
-                                    label="保质期（天）"
-                                    type="number"
-                                    value={draft.shelfLifeDays}
-                                    onChange={shelfLifeDays => updateDraft(variant.id, { shelfLifeDays })}
-                                />
-                                <TextField
-                                    label={`销售价 (${workspace.currencyCode})`}
-                                    type="number"
-                                    value={draft.sellingPrice}
-                                    onChange={sellingPrice => updateDraft(variant.id, { sellingPrice })}
-                                />
-                                <TextField
-                                    label={`采购成本 (${workspace.currencyCode})`}
-                                    type="number"
-                                    value={draft.purchaseCost}
-                                    onChange={purchaseCost => updateDraft(variant.id, { purchaseCost })}
-                                />
-                                <TextField
-                                    label="当前仓库库存"
-                                    type="number"
-                                    value={draft.stockOnHand}
-                                    onChange={stockOnHand => updateDraft(variant.id, { stockOnHand })}
-                                />
-                                <TextField
-                                    label="库存下限"
-                                    type="number"
-                                    value={draft.minimumStock}
-                                    onChange={minimumStock => updateDraft(variant.id, { minimumStock })}
-                                />
-                                <TextField
-                                    label="库存上限"
-                                    type="number"
-                                    value={draft.maximumStock}
-                                    onChange={maximumStock => updateDraft(variant.id, { maximumStock })}
-                                />
-                                <label className="flex items-center gap-2 self-end rounded-lg border border-slate-200 px-3 py-2.5 text-xs font-bold text-slate-700">
-                                    <input
-                                        type="checkbox"
-                                        checked={draft.enabled}
-                                        onChange={event =>
-                                            updateDraft(variant.id, { enabled: event.target.checked })
-                                        }
+                                <div className="grid gap-3 border-t border-slate-100 p-4 sm:grid-cols-2 xl:grid-cols-3">
+                                    <TextField
+                                        label={`采购成本 (${workspace.currencyCode})`}
+                                        type="number"
+                                        value={draft.purchaseCost}
+                                        onChange={purchaseCost => updateDraft(variant.id, { purchaseCost })}
                                     />
-                                    SKU 启用
-                                </label>
-                                <div className="flex items-end sm:col-span-2 xl:col-span-2">
-                                    <button
-                                        type="button"
-                                        onClick={() => setLotDraft(emptyLot(variant.id, stockLocationId))}
-                                        className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700"
-                                    >
-                                        <Plus className="h-4 w-4" /> 新增库存批次
-                                    </button>
+                                    <TextField
+                                        label="当前仓库库存"
+                                        type="number"
+                                        value={draft.stockOnHand}
+                                        onChange={stockOnHand => updateDraft(variant.id, { stockOnHand })}
+                                    />
+                                    <label className="text-xs font-bold text-slate-600">
+                                        供货商
+                                        <select
+                                            value={draft.supplierId}
+                                            onChange={event =>
+                                                updateDraft(variant.id, { supplierId: event.target.value })
+                                            }
+                                            className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal"
+                                        >
+                                            <option value="">不关联</option>
+                                            {suppliers.map(supplier => (
+                                                <option key={supplier.id} value={supplier.id}>
+                                                    {supplier.name} {supplier.enabled ? '' : '（已停用）'}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </label>
                                 </div>
-                            </div>
-                        </details>
-                    );
-                })}
-            </div>
+                                <details className="border-t border-slate-100">
+                                    <summary className="cursor-pointer list-none px-4 py-3 text-xs font-bold text-slate-600 hover:bg-slate-50">
+                                        更多经营资料（条码、单位、库存预警、批次等）
+                                    </summary>
+                                    <div className="grid gap-3 border-t border-slate-100 p-4 sm:grid-cols-2 xl:grid-cols-4">
+                                        <TextField
+                                            label="SKU 内部编码"
+                                            value={draft.sku}
+                                            onChange={sku => updateDraft(variant.id, { sku })}
+                                        />
+                                        <TextField
+                                            label="商品条码"
+                                            value={draft.barcode}
+                                            onChange={barcode => updateDraft(variant.id, { barcode })}
+                                        />
+                                        <TextField
+                                            label="规格说明"
+                                            value={draft.specification}
+                                            onChange={specification =>
+                                                updateDraft(variant.id, { specification })
+                                            }
+                                        />
+                                        <TextField
+                                            label="销售单位"
+                                            value={draft.saleUnit}
+                                            onChange={saleUnit => updateDraft(variant.id, { saleUnit })}
+                                        />
+                                        <TextField
+                                            label="采购单位"
+                                            value={draft.purchaseUnit}
+                                            onChange={purchaseUnit =>
+                                                updateDraft(variant.id, { purchaseUnit })
+                                            }
+                                        />
+                                        <TextField
+                                            label="包装换算"
+                                            type="number"
+                                            value={draft.packageQuantity}
+                                            onChange={packageQuantity =>
+                                                updateDraft(variant.id, { packageQuantity })
+                                            }
+                                        />
+                                        <TextField
+                                            label="保质期（天）"
+                                            type="number"
+                                            value={draft.shelfLifeDays}
+                                            onChange={shelfLifeDays =>
+                                                updateDraft(variant.id, { shelfLifeDays })
+                                            }
+                                        />
+                                        <TextField
+                                            label="库存下限"
+                                            type="number"
+                                            value={draft.minimumStock}
+                                            onChange={minimumStock =>
+                                                updateDraft(variant.id, { minimumStock })
+                                            }
+                                        />
+                                        <TextField
+                                            label="库存上限"
+                                            type="number"
+                                            value={draft.maximumStock}
+                                            onChange={maximumStock =>
+                                                updateDraft(variant.id, { maximumStock })
+                                            }
+                                        />
+                                        <label className="flex items-center gap-2 self-end rounded-lg border border-slate-200 px-3 py-2.5 text-xs font-bold text-slate-700">
+                                            <input
+                                                type="checkbox"
+                                                checked={draft.enabled}
+                                                onChange={event =>
+                                                    updateDraft(variant.id, { enabled: event.target.checked })
+                                                }
+                                            />
+                                            允许销售该 SKU
+                                        </label>
+                                        <div className="flex items-end sm:col-span-2 xl:col-span-2">
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    setLotDraft(emptyLot(variant.id, stockLocationId))
+                                                }
+                                                className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700"
+                                            >
+                                                <Plus className="h-4 w-4" /> 新增库存批次
+                                            </button>
+                                        </div>
+                                    </div>
+                                </details>
+                            </article>
+                        );
+                    })}
+                </div>
+            )}
 
-            <div className="border-t border-slate-200 pt-5">
-                <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                    <CalendarClock className="h-4 w-4 text-amber-600" /> 当前仓库批次与效期
-                    <FeatureHelpButton topic="catalog.inventory" title="当前仓库批次与效期" />
-                </h3>
+            <details className="border-t border-slate-200 pt-4">
+                <summary className="cursor-pointer list-none">
+                    <div className="flex items-center justify-between gap-3">
+                        <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                            <CalendarClock className="h-4 w-4 text-amber-600" /> 库存批次与效期（可选）
+                            <FeatureHelpButton topic="catalog.inventory" title="库存批次与效期" />
+                        </h3>
+                        <span className="text-xs text-slate-500">已记录 {visibleLots.length} 个批次</span>
+                    </div>
+                    <p className="mt-1 text-xs text-slate-500">
+                        只有需要追踪生产日期或到期日期时才需要设置。
+                    </p>
+                </summary>
                 {!visibleLots.length ? (
                     <p className="mt-3 text-xs text-slate-500">当前仓库还没有库存批次</p>
                 ) : (
@@ -433,7 +466,7 @@ export function CatalogOperationsBlock({ context }: { context: NextAdminPageBloc
                         </table>
                     </div>
                 )}
-            </div>
+            </details>
 
             {lotDraft && (
                 <LotEditor
@@ -491,7 +524,7 @@ export function ProductPackagingBlock({ context }: { context: NextAdminPageBlock
     if (query.error || !data)
         return <PanelState tone="error" label="包装配置加载失败" action={() => void query.refetch()} />;
     if (variants.length < 2) {
-        return <p className="text-xs text-slate-500">至少需要两个 SKU，才能配置整箱与散件自动拆包。</p>;
+        return null;
     }
     const save = async () => {
         try {
@@ -686,6 +719,7 @@ export function ProductVariantPricesBlock({ context }: { context: NextAdminPageB
         return (
             <PanelState tone="error" label="多币种 SKU 价格加载失败" action={() => void query.refetch()} />
         );
+    if (data.product.variants.length === 0) return null;
     const change = (variantId: string, currencyCode: string, value: string) => {
         setDrafts(current => ({
             ...current,
@@ -720,11 +754,11 @@ export function ProductVariantPricesBlock({ context }: { context: NextAdminPageB
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                     <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                        <CircleDollarSign className="h-4 w-4 text-emerald-600" /> SKU 多币种价格
-                        <FeatureHelpButton topic="catalog.variant-channels" title="SKU 多币种价格" />
+                        <CircleDollarSign className="h-4 w-4 text-emerald-600" /> 其他币种价格（可选）
+                        <FeatureHelpButton topic="catalog.variant-channels" title="其他币种价格" />
                     </h2>
                     <p className="mt-1 text-xs text-slate-500">
-                        价格保存在当前 Channel「{data.activeChannel.code}」，不会覆盖其他店铺。
+                        只有当前店铺同时收取多种币种时才需要设置；不会覆盖其他店铺。
                     </p>
                 </div>
                 <button
@@ -858,6 +892,7 @@ export function ProductVariantCustomFieldsBlock({ context }: { context: NextAdmi
     if (query.error || !query.data?.product) {
         return <PanelState tone="error" label="SKU 扩展字段加载失败" action={() => void query.refetch()} />;
     }
+    if (variants.length === 0) return null;
     const selectVariant = (id: string) => {
         const variant = variants.find(item => item.id === id);
         if (!variant) return;
@@ -914,11 +949,11 @@ export function ProductVariantCustomFieldsBlock({ context }: { context: NextAdmi
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                        SKU 动态扩展字段
-                        <FeatureHelpButton topic="catalog.sku-custom-fields" title="SKU 动态扩展字段" />
+                        其他 SKU 资料（可选）
+                        <FeatureHelpButton topic="catalog.sku-custom-fields" title="其他 SKU 资料" />
                     </h2>
                     <p className="mt-1 text-xs text-slate-500">
-                        字段由后端 ProductVariant 配置生成，并按 SKU 独立保存。
+                        包含商品条码、单位、规格等经营资料，按 SKU 分别保存。
                     </p>
                 </div>
                 <div className="flex gap-2">

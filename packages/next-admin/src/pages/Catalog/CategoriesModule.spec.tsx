@@ -350,6 +350,15 @@ describe('option group usage', () => {
             initialEntry: '/catalog/categories?tab=options',
         });
 
+        expect(requests).toHaveBeenCalledWith(
+            'GetCatalogTaxonomy',
+            expect.objectContaining({
+                optionGroupOptions: expect.objectContaining({
+                    filter: { code: { notContains: 'import-sku-' } },
+                }),
+            }),
+        );
+
         expect(container.textContent).toContain('查看 2 个关联商品');
         expect(
             container.querySelector<HTMLButtonElement>('[aria-label="删除规格模板：容量"]')?.disabled,

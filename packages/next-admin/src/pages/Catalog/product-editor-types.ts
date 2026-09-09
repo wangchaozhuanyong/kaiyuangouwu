@@ -61,7 +61,7 @@ export interface OptionGroupItem {
     id: string;
     name: string;
     code: string;
-    productCount: number;
+    productCount?: number;
     options: Array<{ id: string; name: string; code: string }>;
 }
 
@@ -104,7 +104,7 @@ export interface ProductDetailRecord {
         description: string;
         customFields?: Record<string, unknown> | null;
     }>;
-    optionGroups: Array<{ id: string }>;
+    optionGroups: OptionGroupItem[];
     facetValues: Array<{ id: string }>;
     collections: CollectionItem[];
     channels: Array<{ id: string; code: string }>;

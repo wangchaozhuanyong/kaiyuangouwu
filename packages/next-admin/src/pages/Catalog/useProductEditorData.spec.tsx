@@ -2,6 +2,7 @@ import { parse, type DocumentNode } from 'graphql';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { GET_ASSETS, GET_COLLECTIONS, GET_FACETS, GET_OPTION_GROUPS } from '../../graphql/catalog.graphql';
+import { SYSTEM_IMPORT_OPTION_GROUP_CODE_PREFIX } from './catalog-option-groups';
 import { useProductEditorData } from './useProductEditorData';
 
 const queries = vi.hoisted(() => vi.fn());
@@ -46,6 +47,9 @@ describe('product editor pagination across the extracted data hook', () => {
             expect(optionsFor(GET_FACETS)).toMatchObject({ skip: 2 * sizes[0], take: sizes[0] });
             expect(optionsFor(GET_ASSETS)).toMatchObject({ skip: sizes[1], take: sizes[1] });
             expect(optionsFor(GET_OPTION_GROUPS)).toMatchObject({ skip: 3 * sizes[2], take: sizes[2] });
+            expect(optionsFor(GET_OPTION_GROUPS)).toMatchObject({
+                filter: { code: { notContains: SYSTEM_IMPORT_OPTION_GROUP_CODE_PREFIX } },
+            });
             expect(optionsFor(GET_COLLECTIONS)).toMatchObject({ skip: 0, take: 100, topLevelOnly: true });
         },
     );
