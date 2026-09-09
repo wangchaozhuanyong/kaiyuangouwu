@@ -43,7 +43,10 @@ export function useStorefrontPublicData({
     });
 
     const configQuery = useQuery({
-        queryKey: storefrontQueryKeys.config(storefrontQueryKeys.market(market), vendureLanguageCode),
+        queryKey: [
+            ...storefrontQueryKeys.config(storefrontQueryKeys.market(market), vendureLanguageCode),
+            catalogAccessGranted ? 'authenticated' : 'account',
+        ],
         queryFn: ({ signal }) => api.storefrontConfig(signal),
         staleTime: PUBLIC_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,

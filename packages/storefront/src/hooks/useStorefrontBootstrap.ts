@@ -195,10 +195,13 @@ export function useStorefrontBootstrap() {
         ) {
             const nextLanguage = readStoredLanguage(nextMarket);
             if (nextLanguage === language) {
-                const nextConfigKey = storefrontQueryKeys.config(
-                    storefrontQueryKeys.market(nextMarket),
-                    vendureLanguageCode,
-                );
+                const nextConfigKey = [
+                    ...storefrontQueryKeys.config(
+                        storefrontQueryKeys.market(nextMarket),
+                        vendureLanguageCode,
+                    ),
+                    catalogAccessGranted ? 'authenticated' : 'account',
+                ];
                 const nextConfigState = queryClient.getQueryState(nextConfigKey);
                 // Copy the response age as well as its data, and preserve a newer destination value.
                 if (!nextConfigState?.data || nextConfigState.dataUpdatedAt < configQuery.dataUpdatedAt) {
@@ -237,7 +240,15 @@ export function useStorefrontBootstrap() {
         setLogoOnDarkUrl(config.logoOnDarkUrl ?? null);
         setStorefrontDescription(config.description?.trim() ?? '');
         setStorefrontTagline(config.tagline?.trim() ?? '');
-    }, [configQuery.data, configQuery.dataUpdatedAt, language, market, queryClient, vendureLanguageCode]);
+    }, [
+        catalogAccessGranted,
+        configQuery.data,
+        configQuery.dataUpdatedAt,
+        language,
+        market,
+        queryClient,
+        vendureLanguageCode,
+    ]);
 
     useStorefrontBrandColors(configQuery.data, visualConfig.presetId);
 
