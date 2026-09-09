@@ -17,18 +17,15 @@ import {
     Trash2,
     Upload,
 } from 'lucide-react';
-import type { FormEvent } from 'react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ActiveCustomer, StorefrontLanguage } from '../../types';
-import type { BatchImportErrorCode } from './batch-parser';
-import type { TwoFactorAccount } from './types';
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { EmptyState, Subpage } from '../../storefront-ui/page-shell';
+import { ActiveCustomer, StorefrontLanguage } from '../../types';
 
-import { parseBatchImport } from './batch-parser';
+import { BatchImportErrorCode, parseBatchImport } from './batch-parser';
 import { clearBrowserAccounts, loadBrowserAccounts, saveBrowserAccounts } from './browser-storage';
 import { formatTotpCode, generateTotp, getTotpSecondsRemaining, normalizeBase32Secret } from './totp';
-import { MAX_TWO_FACTOR_ACCOUNTS } from './types';
+import { MAX_TWO_FACTOR_ACCOUNTS, TwoFactorAccount } from './types';
 
 interface TwoFactorPageProps {
     customer: ActiveCustomer | null;
