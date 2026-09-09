@@ -433,6 +433,55 @@ describe('cart commands against a real database', () => {
         expect(await read()).toEqual(before);
         expect((await send(input)).status).toBe('REJECTED');
     });
+    it('rejects adding or reselecting a stored unselected item after stock falls to zero, including receipt replay', async () => {
+        const variantId = variantIds[3];
+        const setStock = (stockOnHand: number) =>
+            adminClient.query(
+                gql`
+                    mutation ($input: [UpdateProductVariantInput!]!) {
+                        updateProductVariants(input: $input) {
+                            id
+                        }
+                    }
+                `,
+                { input: [{ id: variantId, trackInventory: 'TRUE', stockOnHand }] },
+            );
+        const change = async (changes: object) => {
+            const current = await read();
+            return send({ commandId: randomUUID(), cartId, expectedRevision: current.revision, changes });
+        };
+        await setStock(5);
+        expect((await change({ add: [{ productVariantId: variantId, quantity: 2 }] })).status).toBe(
+            'APPLIED',
+        );
+        const lineId = (await read()).lines.find((line: any) => line.productVariant.id === variantId).id;
+        expect((await change({ lines: [{ lineId, selected: false }] })).status).toBe('APPLIED');
+        await setStock(0);
+        const before = await read();
+        const input = {
+            commandId: randomUUID(),
+            cartId,
+            expectedRevision: before.revision,
+            changes: { add: [{ productVariantId: variantId, quantity: 1 }] },
+        };
+        const rejection = await send(input);
+        expect(rejection).toMatchObject({
+            status: 'REJECTED',
+            errorCode: 'INSUFFICIENT_STOCK_ERROR',
+            cart: before,
+        });
+        expect(await send(input)).toMatchObject({
+            status: 'REJECTED',
+            errorCode: 'INSUFFICIENT_STOCK_ERROR',
+            cart: before,
+        });
+        expect(await change({ lines: [{ lineId, selected: true }] })).toMatchObject({
+            status: 'REJECTED',
+            errorCode: 'INSUFFICIENT_STOCK_ERROR',
+            cart: before,
+        });
+        expect(await change({ remove: [lineId] })).toMatchObject({ status: 'APPLIED' });
+    });
     it('blocks checkout of disabled products while allowing their removal', async () => {
         const before = await read();
         await adminClient.query(

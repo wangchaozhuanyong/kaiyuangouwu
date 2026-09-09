@@ -76,7 +76,7 @@ describe('StorefrontCartService selection projection', () => {
             {} as any,
             {} as any,
             orderService as any,
-            {} as any,
+            { getSaleableStockLevel: vi.fn().mockResolvedValue(100) } as any,
             {} as any,
             {} as any,
         );
@@ -300,7 +300,7 @@ describe('StorefrontCartService login merge', () => {
             {} as any,
             customerService as any,
             orderService as any,
-            {} as any,
+            { getSaleableStockLevel: vi.fn().mockResolvedValue(100) } as any,
             {} as any,
             {} as any,
         );
@@ -316,5 +316,110 @@ describe('StorefrontCartService login merge', () => {
             lastActivityAt: expect.any(Date),
         });
         expect(projectCartSpy).not.toHaveBeenCalled();
+    });
+});
+
+describe('cart inventory before persistence', () => {
+    function setup(stock = 0, selected = false, quantity = 2) {
+        const variant = { id: 'variant-1', enabled: true, product: { enabled: true }, customFields: {} };
+        const cart = new StorefrontCart({
+            id: 'cart-1',
+            revision: 1,
+            state: 'OPEN',
+            lines: [
+                new StorefrontCartLine({
+                    id: 'line-1',
+                    productVariantId: variant.id,
+                    productVariant: variant,
+                    quantity,
+                    selected,
+                }),
+            ],
+        });
+        const repository = { update: vi.fn(), save: vi.fn(), delete: vi.fn() };
+        const variants = {
+            findOne: vi.fn().mockResolvedValue(variant),
+            getSaleableStockLevel: vi.fn().mockResolvedValue(stock),
+        };
+        const service = new StorefrontCartService(
+            { getRepository: () => repository } as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            variants as any,
+            {} as any,
+            { orderOptions: { orderLineItemsLimit: 100, orderItemsLimit: 1000 } } as any,
+        );
+        vi.spyOn(service, 'getCart').mockResolvedValue(cart);
+        vi.spyOn(service as any, 'getOwner').mockResolvedValue({
+            ownerType: 'CUSTOMER',
+            ownerId: 'customer',
+        });
+        vi.spyOn(service as any, 'claimRevision').mockResolvedValue(undefined);
+        vi.spyOn(service as any, 'projectCart').mockImplementation((_ctx: unknown, next: StorefrontCart) =>
+            Promise.resolve(next),
+        );
+        const apply = (changes: any) => service.applyChanges({} as any, changes, 1, cart);
+        return { service, cart, apply, repository, variants };
+    }
+    it('rejects adding to an unselected sold-out line before writing', async () => {
+        const { apply, repository } = setup();
+        expect(await apply({ add: [{ productVariantId: 'variant-1', quantity: 1 }] })).toMatchObject({
+            causeCode: 'INSUFFICIENT_STOCK_ERROR',
+        });
+        expect(repository.update).not.toHaveBeenCalled();
+        expect(repository.save).not.toHaveBeenCalled();
+    });
+    it('counts existing unselected quantities and repeated additions in the same batch', async () => {
+        const { apply } = setup(3);
+        expect(
+            await apply({
+                add: [
+                    { productVariantId: 'variant-1', quantity: 1 },
+                    { productVariantId: 'variant-1', quantity: 1 },
+                ],
+            }),
+        ).toMatchObject({ causeCode: 'INSUFFICIENT_STOCK_ERROR' });
+    });
+    it('rejects selecting quantities that exceed stock', async () => {
+        const { apply } = setup(1);
+        expect(await apply({ lines: [{ lineId: 'line-1', selected: true }] })).toMatchObject({
+            causeCode: 'INSUFFICIENT_STOCK_ERROR',
+        });
+    });
+    it('allows deselecting, reducing an unselected quantity and removing depleted items', async () => {
+        const first = setup(0, true);
+        expect(await first.apply({ lines: [{ lineId: 'line-1', selected: false }] })).toMatchObject({
+            revision: 2,
+        });
+        const second = setup();
+        expect(await second.apply({ lines: [{ lineId: 'line-1', quantity: 1 }] })).toMatchObject({
+            revision: 2,
+        });
+        const third = setup(0, true);
+        expect(await third.apply({ remove: ['line-1'] })).toMatchObject({ lines: [] });
+    });
+    it('select-all skips insufficient stock and deselect-all never depends on inventory', async () => {
+        const { service, variants } = setup(1);
+        expect(await service.setAllLinesSelected({} as any, true, 1)).toMatchObject({
+            lines: [{ selected: false }],
+        });
+        variants.getSaleableStockLevel.mockClear();
+        expect(await service.setAllLinesSelected({} as any, false, 1)).toMatchObject({
+            lines: [{ selected: false }],
+        });
+        expect(variants.getSaleableStockLevel).not.toHaveBeenCalled();
+    });
+    it('respects untracked inventory and the fulfillment stock source', async () => {
+        const unlimited = setup(Number.MAX_SAFE_INTEGER);
+        expect(await unlimited.apply({ lines: [{ lineId: 'line-1', selected: true }] })).toMatchObject({
+            revision: 2,
+        });
+        const digital = setup(Number.MAX_SAFE_INTEGER);
+        digital.service.registerStockResolver(() => Promise.resolve(0));
+        expect(await digital.apply({ add: [{ productVariantId: 'variant-1', quantity: 1 }] })).toMatchObject({
+            causeCode: 'INSUFFICIENT_STOCK_ERROR',
+        });
+        expect(digital.variants.getSaleableStockLevel).not.toHaveBeenCalled();
     });
 });

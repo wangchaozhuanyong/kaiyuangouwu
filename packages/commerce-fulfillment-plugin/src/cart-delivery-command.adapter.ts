@@ -2,7 +2,6 @@ import { Injectable, OnModuleInit } from '@nestjs/common';
 import { CartCommandService, StorefrontCartService } from '@vendure/storefront-cart-plugin';
 
 import { AutoCardService } from './auto-card.service';
-
 import {
     CustomerDeliveryEmailService,
     SetActiveOrderDeliveryEmailInput,
