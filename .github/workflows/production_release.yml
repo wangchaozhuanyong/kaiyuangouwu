@@ -233,29 +233,17 @@ jobs:
                     (.affectedChecks | index("all-store-basics") != null)
                   ' artifacts/release-plan.json >/dev/null
 
-            - name: Verify both storefronts and the canonical Dashboard
+            - name: Verify every configured storefront and the canonical Dashboard
               run: |
-                  node deploy/verify-production-release.mjs \
-                    --storefront-url https://moyaoai.com \
-                    --dashboard-url https://console.moyaoai.com/dashboard/ \
-                    --expected-channel-code __default_channel__ \
-                    --release-id "$TARGET_SHA"
-                  node deploy/verify-production-release.mjs \
-                    --storefront-url https://damatong.net \
-                    --dashboard-url https://console.moyaoai.com/dashboard/ \
-                    --expected-channel-code 美宜佳 \
+                  node deploy/verify-production-storefronts.mjs \
+                    --mode release \
                     --release-id "$TARGET_SHA"
 
             - name: Verify affected realtime delivery
               if: contains(needs.build.outputs.affected_checks, 'storefront-realtime')
               run: |
-                  node deploy/verify-storefront-realtime.mjs \
-                    --mode public-smoke \
-                    --url https://moyaoai.com/storefront-realtime/events \
-                    --release-id "$TARGET_SHA"
-                  node deploy/verify-storefront-realtime.mjs \
-                    --mode public-smoke \
-                    --url https://damatong.net/storefront-realtime/events \
+                  node deploy/verify-production-storefronts.mjs \
+                    --mode realtime \
                     --release-id "$TARGET_SHA"
 
             - name: Record acceptance evidence
@@ -264,7 +252,6 @@ jobs:
                     echo '## Production acceptance'
                     echo
                     echo "- Exact running SHA: \`$TARGET_SHA\` (verified by postflight)"
-                    echo '- Stores: `moyaoai.com` and `damatong.net`'
-                    echo '- Dashboard: `console.moyaoai.com/dashboard/`'
+                    echo '- Stores and Channel mappings: `deploy/production-storefronts.json`'
                     echo "- Automatic affected checks: \`$AFFECTED_CHECKS\`"
                   } >> "$GITHUB_STEP_SUMMARY"

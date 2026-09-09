@@ -739,28 +739,12 @@ pointer_changed=1
 
 curl --fail --silent --show-error --max-time 10 http://127.0.0.1:3002/health >/dev/null
 curl --fail --silent --show-error --max-time 10 http://127.0.0.1:3002/image-generation/health >/dev/null
-curl --fail --silent --show-error --max-time 15 https://damatong.net/health >/dev/null
-node "${repository}/deploy/verify-dashboard-assets.mjs" \
-    --dashboard-url https://console.moyaoai.com/dashboard/ \
-    --release-id "${target_sha}"
-node "${repository}/deploy/verify-production-release.mjs" \
-    --storefront-url https://moyaoai.com \
-    --dashboard-url https://console.moyaoai.com/dashboard/ \
-    --expected-channel-code __default_channel__ \
-    --release-id "${target_sha}"
-node "${repository}/deploy/verify-production-release.mjs" \
-    --storefront-url https://damatong.net \
-    --dashboard-url https://console.moyaoai.com/dashboard/ \
-    --expected-channel-code 美宜佳 \
+node "${repository}/deploy/verify-production-storefronts.mjs" \
+    --mode release \
     --release-id "${target_sha}"
 if jq -e 'index("storefront-realtime") != null' <<< "${release_affected_checks}" >/dev/null; then
-    node "${repository}/deploy/verify-storefront-realtime.mjs" \
-        --mode public-smoke \
-        --url https://moyaoai.com/storefront-realtime/events \
-        --release-id "${target_sha}"
-    node "${repository}/deploy/verify-storefront-realtime.mjs" \
-        --mode public-smoke \
-        --url https://damatong.net/storefront-realtime/events \
+    node "${repository}/deploy/verify-production-storefronts.mjs" \
+        --mode realtime \
         --release-id "${target_sha}"
 fi
 printf 'PRODUCTION_AFFECTED_ACCEPTANCE_OK checks=%s\n' "${release_affected_checks}"

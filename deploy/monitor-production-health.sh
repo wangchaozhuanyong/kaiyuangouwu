@@ -195,17 +195,19 @@ while IFS=$'\t' read -r model provider outcome count; do
         "${model}" "${provider}" "${outcome}" "${count}"
 done <<<"${missing_cost_rows}"
 
-curl --fail --silent --show-error --max-time 15 https://damatong.net/health >/dev/null
-node "${repository}/deploy/verify-storefront-realtime.mjs" \
-    --mode public-smoke \
-    --url 'https://damatong.net/storefront-realtime/events?client=storefront' \
-    --ready-timeout-ms 2000 \
-    --heartbeat-timeout-ms 18000 \
+node "${repository}/deploy/verify-production-storefronts.mjs" \
+    --mode health \
+    --release-id "${target_sha}"
+node "${repository}/deploy/verify-production-storefronts.mjs" \
+    --mode realtime \
     --release-id "${target_sha}"
 if [[ "${audit_storefront_realtime_capacity}" == true ]]; then
+    readonly capacity_storefront_origin="$(
+        node "${repository}/deploy/production-storefronts.mjs" --field first-origin
+    )"
     node "${repository}/deploy/verify-storefront-realtime.mjs" \
         --mode origin-full \
-        --url 'https://damatong.net/storefront-realtime/events?client=storefront' \
+        --url "${capacity_storefront_origin}/storefront-realtime/events?client=storefront" \
         --connect-address 127.0.0.1 \
         --connection-limit 12 \
         --safe-concurrency 8 \
@@ -218,8 +220,11 @@ if [[ "${audit_storefront_realtime_capacity}" == true ]]; then
         --serial-cycles 3 \
         --release-id "${target_sha}"
 fi
+readonly production_dashboard_url="$(
+    node "${repository}/deploy/production-storefronts.mjs" --field dashboard-url
+)"
 node "${repository}/deploy/verify-dashboard-assets.mjs" \
-    --dashboard-url https://console.moyaoai.com/dashboard/
+    --dashboard-url "${production_dashboard_url}"
 
 pm2 jlist | CANDIDATE="${candidate}" node -e "
 let input = '';

@@ -134,7 +134,7 @@ bun run --cwd packages/dev-server build:production-runtime -- --require-platform
 
 最后一条命令只能在与 EC2 匹配的 `linux/x64` 干净构建机上执行。产物目录会包含平台、完整 Git SHA、`bun.lock` SHA-256、运行包清单、`RUNTIME-AUDIT.json` 和文件校验清单，并拒绝 `esbuild`、`less`、`tar`、`typescript`、`vite`、`webpack` 或达到指定审计阈值的包进入运行目录。使用 `--allow-dirty` 生成的产物只允许本地演练，不得部署。
 
-正式入口统一为 GitHub Actions 的 `Production Release`。它在同一个 `production-release` 并发组内按“现场预检 → 不可变制品构建 → 部署”串行运行：当前发布不会被取消，等待区只保留最新候选，旧候选不会形成数小时积压。现场预检在昂贵构建前验证当前运行目录/版本、两个生产店铺域名和已审核 Channel 均可访问，并确认待执行迁移只来自审核清单；预检失败时停止，不消耗后续构建和部署时间。常规发布手动输入 `origin/main` 当前完整的 40 位小写 SHA；若包含已审核的店铺媒体，同时在唯一的可选 `media_keys` 和 `channel_codes` 输入中填写逗号分隔的 manifest key 与明确 Channel 范围，两者必须同时出现。媒体 key 与 Channel 范围会连同目标 SHA、制品名与制品 SHA-256 写入单独校验的 `release-plan.json`，下游只能使用同一运行生成的发布计划。当 `main` 只变更 `packages/image-generation-plugin/skill/image-prompt-pro/**` 或对应的已编译 bundle 时，工作流也会使用该 push 的完整 SHA 自动运行。若同一批 push 混入任何其他路径，自动任务会停止，必须按常规发布流程人工审核。正式制品只接受经过审核的双父 `main` 合并提交：第一父必须已被 PR 头提交包含，最终 `main` 源码树必须与 PR 头源码树完全相同，且该 PR 头必须存在成功的 `Build & Test` 运行。在这些证据都精确匹配后，制品阶段不再重复全仓单测、开发工作流测试和变更 lint，只使用 Node `24.19.0`、Bun `1.3.14` 和 `ubuntu-24.04` x64 执行冻结安装、全仓审计、Skill 回归、生产构建、发布专属结构检查、运行产物 High+ 门禁和自验证。任一 CI 证据、分支包含关系、源码树、SHA、源码清洁性、平台或发布门禁不匹配时都不会上传制品。依赖审计将同一份绑定 `bun.lock` 的 JSON 证据用于全仓与运行时门禁，按实际 severity 阻断 High+；仅对 Bun 明确返回的网络超时、连接关闭或底层传输错误最多尝试三次，退避为 15 秒和 60 秒；漏洞、其他命令错误、无效输出或重试耗尽仍立即失败关闭。
+正式入口统一为 GitHub Actions 的 `Production Release`。它在同一个 `production-release` 并发组内按“现场预检 → 不可变制品构建 → 部署”串行运行：当前发布不会被取消，等待区只保留最新候选，旧候选不会形成数小时积压。现场预检在昂贵构建前读取 `deploy/production-storefronts.json`，逐一验证配置清单内的生产店铺域名和已审核 Channel 均可访问，并确认待执行迁移只来自审核清单；预检失败时停止，不消耗后续构建和部署时间。常规发布手动输入 `origin/main` 当前完整的 40 位小写 SHA；若包含已审核的店铺媒体，同时在唯一的可选 `media_keys` 和 `channel_codes` 输入中填写逗号分隔的 manifest key 与明确 Channel 范围，两者必须同时出现。媒体 key 与 Channel 范围会连同目标 SHA、制品名与制品 SHA-256 写入单独校验的 `release-plan.json`，下游只能使用同一运行生成的发布计划。当 `main` 只变更 `packages/image-generation-plugin/skill/image-prompt-pro/**` 或对应的已编译 bundle 时，工作流也会使用该 push 的完整 SHA 自动运行。若同一批 push 混入任何其他路径，自动任务会停止，必须按常规发布流程人工审核。正式制品只接受经过审核的双父 `main` 合并提交：第一父必须已被 PR 头提交包含，最终 `main` 源码树必须与 PR 头源码树完全相同，且该 PR 头必须存在成功的 `Build & Test` 运行。在这些证据都精确匹配后，制品阶段不再重复全仓单测、开发工作流测试和变更 lint，只使用 Node `24.19.0`、Bun `1.3.14` 和 `ubuntu-24.04` x64 执行冻结安装、全仓审计、Skill 回归、生产构建、发布专属结构检查、运行产物 High+ 门禁和自验证。任一 CI 证据、分支包含关系、源码树、SHA、源码清洁性、平台或发布门禁不匹配时都不会上传制品。依赖审计将同一份绑定 `bun.lock` 的 JSON 证据用于全仓与运行时门禁，按实际 severity 阻断 High+；仅对 Bun 明确返回的网络超时、连接关闭或底层传输错误最多尝试三次，退避为 15 秒和 60 秒；漏洞、其他命令错误、无效输出或重试耗尽仍立即失败关闭。
 
 登录视觉或 MOYAO AI 品牌变更必须在同一制品调度分别勾选 `auth_visuals` 或 `moyao_brand`，并填写已审核 `channel_codes`。品牌发布只接受 `channel_codes=__default_channel__`。这些字段也写入并校验 `release-plan.json`；缺少审核、Channel 不正确，或在没有对应变更时携带发布范围，都必须在备份和运行时切换前失败关闭。
 
@@ -553,8 +553,8 @@ node deploy/verify-storefront-realtime.mjs \
 - `Monitor Production Health` 输出一行不含凭据的 `AI_IMAGE_METRICS` JSON；使用其中的 24 小时成功/失败/UNKNOWN、缺失成本、失败桶和健康 Key 数定位 AI 告警；监控还会按模型、供应商、请求档位和实际像素输出脱敏的 `AI_IMAGE_RESOLUTION_MISMATCH`，并按模型、供应商和结果输出 `AI_IMAGE_MISSING_COST`，不会打印提示词、客户信息、Key、原始错误或上游响应；
 - `127.0.0.1:3002` 正常监听，公网不直接暴露 3002；
 - `/storefront-realtime/events` 不缓冲 SSE，连接断开后前端能自动重连；
-- 公网 `https://moyaoai.com/admin-api` 和 `https://damatong.net/admin-api` 均被 Nginx 拒绝；
-- 分别验收 `moyaoai.com` 返回 MOYAO AI 主 Channel、`damatong.net` 返回美宜佳 Channel，商品、价格、订单和店铺品牌不得串店；
+- `deploy/production-storefronts.json` 是生产店铺域名与预期 Channel 的唯一验收清单；新增店铺只扩充该清单和后台配置，不增加单店验收代码；
+- 清单内每个店铺的公网 `/admin-api` 均被 Nginx 拒绝，并逐一返回清单声明的 Channel；商品、价格、订单和店铺品牌不得串店；
 - 管理后台能读取各店铺设置，前台按对应 Channel/店铺域名展示；
 - 实际支付、邮件、短信和物流在未配置真实供应商前不得宣称已具备正式交易能力。
 

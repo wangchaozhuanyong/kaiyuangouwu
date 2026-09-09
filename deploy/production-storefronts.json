@@ -1,0 +1,13 @@
+{
+    "dashboardUrl": "https://console.moyaoai.com/dashboard/",
+    "storefronts": [
+        {
+            "origin": "https://moyaoai.com",
+            "expectedChannelCode": "__default_channel__"
+        },
+        {
+            "origin": "https://damatong.net",
+            "expectedChannelCode": "美宜佳"
+        }
+    ]
+}

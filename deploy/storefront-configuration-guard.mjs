@@ -223,16 +223,16 @@ export function configurationSummary(snapshot) {
 
 export function assertExpectedProductionScope(snapshot, expectedChannelCodes = []) {
     const stores = Array.isArray(snapshot?.stores) ? snapshot.stores : [];
-    const domains = new Set(stores.map(store => store.profile?.primaryDomain));
-    for (const domain of ['moyaoai.com', 'damatong.net']) {
-        assert.ok(domains.has(domain), `Production preflight cannot access required storefront ${domain}`);
-    }
+    assert.ok(stores.length > 0, 'Production preflight cannot access any storefronts');
+    const domains = stores.map(store => store.profile?.primaryDomain);
+    assert.ok(domains.every(Boolean), 'Production preflight requires a primary domain for every storefront');
+    assert.equal(new Set(domains).size, stores.length, 'Production storefront domains must be unique');
     const channelCodes = new Set(stores.map(store => store.channelCode));
     for (const code of expectedChannelCodes) {
         assert.ok(channelCodes.has(code), `Production preflight cannot access required Channel ${code}`);
     }
     return {
-        requiredDomains: ['moyaoai.com', 'damatong.net'],
+        requiredDomains: [...domains].sort(),
         verifiedChannelCount: channelCodes.size,
     };
 }
