@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+
 import { readStorefrontStylesheet } from './test-stylesheet';
 
 const stylesheet = readStorefrontStylesheet();

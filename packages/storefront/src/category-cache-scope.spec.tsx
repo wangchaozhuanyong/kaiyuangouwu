@@ -82,7 +82,7 @@ it('uses the server catalog total in the filter confirmation action', async () =
             button => button.textContent?.trim() === 'Filter',
         );
         expect(filterButton).toBeDefined();
-        act(() => filterButton?.dispatchEvent(new MouseEvent('click', { bubbles: true })));
+        void act(() => filterButton?.dispatchEvent(new MouseEvent('click', { bubbles: true })));
 
         expect(document.body.textContent).toContain('View 1 product');
         expect(document.body.textContent).not.toContain('View 0 products');

@@ -11,14 +11,31 @@ void test('Nginx error logs are sanitized in memory before persistence', async (
     const config = await readFile(path.join(repositoryRoot, 'deploy/nginx/damatong.conf'), 'utf8');
     const directives = [...config.matchAll(/^\s*error_log (.+);$/gmu)].map(match => match[1]);
     assert.equal(directives.length, 1);
-    assert.equal(directives[0], 'syslog:server=unix:/run/vendure-nginx-log/error.sock,tag=vendure_nginx_error warn');
+    assert.equal(
+        directives[0],
+        'syslog:server=unix:/run/vendure-nginx-log/error.sock,tag=vendure_nginx_error warn',
+    );
     const script = path.join(repositoryRoot, 'deploy/systemd/vendure-nginx-error-log.py');
     const packets = [
-        '<187>nginx: connect() failed (111: Connection refused) while connecting to upstream, client: 127.0.0.1, request: "GET /digital-delivery/synthetic-credential?token=synthetic-query HTTP/1.1", upstream: "http://127.0.0.1/digital-delivery/synthetic-credential", referrer: "https://example.com/?token=synthetic-referrer"',
+        [
+            '<187>nginx: connect() failed (111: Connection refused) while connecting to upstream,',
+            'client: 127.0.0.1,',
+            'request: "GET /digital-delivery/synthetic-credential?token=synthetic-query HTTP/1.1",',
+            'upstream: "http://127.0.0.1/digital-delivery/synthetic-credential",',
+            'referrer: "https://example.com/?token=synthetic-referrer"',
+        ].join(' '),
         '<188>nginx: open() "/images/synthetic-credential" failed (2: No such file)',
         '<187>nginx: unknown synthetic-credential\nAuthorization: synthetic-header',
     ];
-    const result = spawnSync('python3', ['-B', '-c', 'import json,runpy,sys; m=runpy.run_path(sys.argv[1]); print(json.dumps([m["safe_record"](s.encode()) for s in json.load(sys.stdin)]))', script], { input: JSON.stringify(packets), encoding: 'utf8' });
+    const python = [
+        'import json,runpy,sys',
+        'm=runpy.run_path(sys.argv[1])',
+        'print(json.dumps([m["safe_record"](s.encode()) for s in json.load(sys.stdin)]))',
+    ].join('; ');
+    const result = spawnSync('python3', ['-B', '-c', python, script], {
+        input: JSON.stringify(packets),
+        encoding: 'utf8',
+    });
     assert.equal(result.status, 0, result.stderr);
     assert.doesNotMatch(result.stdout, /synthetic|digital-delivery|Authorization|upstream:/u);
     const records = JSON.parse(result.stdout);
@@ -26,8 +43,14 @@ void test('Nginx error logs are sanitized in memory before persistence', async (
     assert.equal(records[0].errno, 111);
     assert.equal(records[1].category, 'file_open_failed');
     assert.equal(records[2].category, 'nginx_error');
-    const deployment = await readFile(path.join(repositoryRoot, 'deploy/deploy-production-from-s3.sh'), 'utf8');
-    assert.ok(deployment.indexOf('systemctl is-active --quiet vendure-nginx-error-log.service') < deployment.indexOf('sudo -n nginx -t\n'));
+    const deployment = await readFile(
+        path.join(repositoryRoot, 'deploy/deploy-production-from-s3.sh'),
+        'utf8',
+    );
+    assert.ok(
+        deployment.indexOf('systemctl is-active --quiet vendure-nginx-error-log.service') <
+            deployment.indexOf('sudo -n nginx -t\n'),
+    );
 });
 
 void test('every production ingress uses credential-safe access logs, including redirects', async () => {
