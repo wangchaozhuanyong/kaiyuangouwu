@@ -1,11 +1,11 @@
 import { useCallback } from 'react';
-import { quantityStockMessage } from '../product-availability';
 
 import { ShopApi, ShopApiError } from '../api';
 import { CartController } from '../cart/cart-controller';
+import { quantityStockMessage } from '../product-availability';
+import { storefrontErrorMessage } from '../storefront-errors';
 import { ActiveCustomer, Order, OrderSummary, ProductVariant, StorefrontCart } from '../types';
 
-import { storefrontErrorMessage } from '../storefront-errors';
 import { useStorefrontNavigation } from './useStorefrontNavigation';
 
 interface StorefrontCartActionOptions {

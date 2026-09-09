@@ -17,7 +17,18 @@ describe('storefront cart action boundaries', () => {
     let controller: CartController;
     let options: Options;
     let value: ReturnType<typeof useStorefrontCartActions>;
-    const cart = { id: 'cart-a', revision: 7, checkoutOrder: null, lines: [] } as StorefrontCart;
+    const cart: StorefrontCart = {
+        id: 'cart-a',
+        revision: 7,
+        checkoutOrder: null,
+        lines: [],
+        state: 'OPEN',
+        projectedRevision: 7,
+        totalQuantity: 0,
+        selectedLineCount: 0,
+        selectedQuantity: 0,
+        selectionState: 'NONE',
+    };
     const acknowledgement = {
         commandId: 'command-a',
         status: 'APPLIED' as const,
@@ -60,6 +71,37 @@ describe('storefront cart action boundaries', () => {
         act(() => root.unmount());
         vi.restoreAllMocks();
     });
+
+    it.each([true, false])(
+        'blocks sold-out additions and existing unselected quantities in the active language: zh=%s',
+        async isZh => {
+            options.isZh = isZh;
+            const productVariant = {
+                id: 'variant-a',
+                name: 'Test product',
+                saleableStockLevel: 2,
+                customFields: { fulfillmentType: 'physical' },
+            } as ProductVariant;
+            vi.mocked(controller.getSnapshot).mockReturnValue({
+                ...controller.getSnapshot(),
+                cart: {
+                    ...cart,
+                    lines: [{ id: 'line-a', quantity: 2, selected: false, available: true, productVariant }],
+                },
+            });
+            render();
+            expect(await value.addToCart(productVariant)).toBeNull();
+            expect(options.notify).toHaveBeenLastCalledWith(
+                expect.stringContaining(isZh ? '最多可购买 2 件' : 'Up to 2 available'),
+            );
+            expect(options.setCart).not.toHaveBeenCalled();
+            vi.mocked(controller.getSnapshot).mockReturnValue({ ...controller.getSnapshot(), cart });
+            await value.addToCart({ ...productVariant, saleableStockLevel: 0 });
+            expect(options.notify).toHaveBeenLastCalledWith(
+                expect.stringContaining(isZh ? '已售罄' : 'Sold out'),
+            );
+        },
+    );
 
     it('sends guests to login with the selected variant without creating a checkout', async () => {
         options.customer = null;

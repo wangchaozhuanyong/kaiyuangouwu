@@ -1,8 +1,8 @@
 import { useNavigate } from '@tanstack/react-router';
 import { Check, ChevronRight, Minus, Package, ShoppingBag, TicketPercent } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { cartLineCanSelect, cartSelectionState } from '../product-availability';
 
+import { cartLineCanSelect, cartSelectionState } from '../product-availability';
 import { appliedCouponLabel } from '../storefront-coupons';
 import { CartPageContext } from '../storefront-page-contexts';
 import { routeHref, routeNavigateOptions, type RouteState } from '../storefront-router';

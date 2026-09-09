@@ -1,4 +1,3 @@
-import { storefrontErrorMessage } from '../storefront-errors';
 /* eslint-disable max-len -- compact bilingual UI copy and class lists are intentional. */
 import {
     ArrowDownToLine,
@@ -28,6 +27,7 @@ import { ShopApi, ShopApiTimeoutError } from '../api';
 import { isInputMethodKey } from '../input-method';
 import { formatDisplayMoney } from '../money-display';
 import { PageSkeleton } from '../route-loading';
+import { storefrontErrorMessage } from '../storefront-errors';
 import { EmptyState, Sheet, Subpage } from '../storefront-ui/page-shell';
 import { SafeImage } from '../storefront-ui/product-display';
 import {

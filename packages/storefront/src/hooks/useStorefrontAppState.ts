@@ -1,11 +1,12 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { cartLineCanSelect } from '../product-availability';
 
 import { ShopApiError } from '../api';
 import { resumeAuthenticatedCheckout } from '../checkout-authentication';
+import { cartLineCanSelect } from '../product-availability';
 import { storefrontQueryKeys } from '../query-client';
 import { invalidateStorefrontRealtimeQueries } from '../realtime-updates';
+import { storefrontErrorMessage } from '../storefront-errors';
 import { scopedStorageKey } from '../storefront-storage';
 import {
     FAVORITE_PRODUCT_LIMIT,
@@ -17,7 +18,6 @@ import {
 } from '../storefront-utils';
 import { ActiveCustomer, CreateAfterSalesRequestInput, Order, StorefrontCart } from '../types';
 
-import { storefrontErrorMessage } from '../storefront-errors';
 import { useStorefrontBootstrap } from './useStorefrontBootstrap';
 import { useStorefrontCartActions } from './useStorefrontCartActions';
 import { useStorefrontCoupons } from './useStorefrontCoupons';

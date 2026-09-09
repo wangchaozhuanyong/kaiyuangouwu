@@ -68,3 +68,26 @@ describe('product availability', () => {
         expect(productAvailability(undefined)).toEqual({ stock: 0, soldOut: true, unlimited: false });
     });
 });
+
+describe('cart selection stock rules', () => {
+    it('excludes depleted and over-quantity lines but keeps unlimited inventory selectable', async () => {
+        const { cartLineCanSelect, cartSelectionState, quantityStockMessage } =
+            await import('./product-availability');
+        const line = (stock: number | null, quantity: number, selected = false) => ({
+            id: String(stock),
+            quantity,
+            selected,
+            available: true,
+            productVariant: variant({ saleableStockLevel: stock }),
+        });
+        expect(cartLineCanSelect(line(0, 1))).toBe(false);
+        expect(cartLineCanSelect(line(2, 3))).toBe(false);
+        expect(cartLineCanSelect(line(null, 99))).toBe(true);
+        expect(cartSelectionState([line(0, 1), line(2, 1, true)])).toBe('ALL');
+        expect(cartSelectionState([line(0, 1, true), line(2, 1, true)])).toBe('PARTIAL');
+        expect(quantityStockMessage(variant({ saleableStockLevel: 2 }), 3, 'zh')).toContain(
+            '最多可购买 2 件',
+        );
+        expect(quantityStockMessage(variant({ saleableStockLevel: 0 }), 1, 'en')).toContain('Sold out');
+    });
+});

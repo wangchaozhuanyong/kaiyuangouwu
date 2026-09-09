@@ -1,6 +1,5 @@
 import type { CartController } from '../cart/cart-controller';
 import type { CartCommand, CartCommandResult } from '../cart/cart-intents';
-import { cartLineCanSelect } from '../product-availability';
 import type {
     CustomerAddressInput,
     CustomerDeliveryEmail,
@@ -15,6 +14,8 @@ import type {
     StorefrontUsdtCheckoutQuote,
 } from '../types';
 import type { ErrorResult } from './helpers';
+
+import { cartLineCanSelect } from '../product-availability';
 
 import { BaseDomainApi } from './base-domain-api';
 import {

@@ -5,10 +5,10 @@ import { markCouponCampaignClaimed } from '../coupon-center-state';
 import { claimAndVerifyCoupon } from '../coupon-claim-verification';
 import { uiCopy } from '../i18n';
 import { storefrontQueryKeys } from '../query-client';
+import { storefrontErrorMessage } from '../storefront-errors';
 import { RouteName, RouteState } from '../storefront-router';
 import { ActiveCustomer, StoreCustomerCoupon, StorefrontCart, StorefrontCouponCampaign } from '../types';
 
-import { storefrontErrorMessage } from '../storefront-errors';
 import { StorefrontQueryContext } from './storefront-query-context';
 import { useStorefrontNavigation } from './useStorefrontNavigation';
 

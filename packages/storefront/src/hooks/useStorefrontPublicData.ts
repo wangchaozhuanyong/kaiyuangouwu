@@ -10,9 +10,9 @@ import {
     storefrontQueryKeys,
 } from '../query-client';
 import { useProductsByIdsQuery } from '../route-queries';
+import { storefrontErrorMessage } from '../storefront-errors';
 import { contentStringArraySetting } from '../storefront-utils';
 
-import { storefrontErrorMessage } from '../storefront-errors';
 import { type StorefrontQueryContext } from './storefront-query-context';
 
 export function useStorefrontPublicData({

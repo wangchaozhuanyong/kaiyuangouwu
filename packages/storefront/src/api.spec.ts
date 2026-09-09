@@ -1627,3 +1627,64 @@ describe('ShopApi storefront mutations', () => {
         expect(request.query).toContain('receiving: orders');
     });
 });
+
+describe('stock-aware cart selection commands', () => {
+    it('selects only eligible quantities and still allows every line to be deselected', async () => {
+        const { CartController } = await import('./cart/cart-controller');
+        const controller = new CartController();
+        const cart = {
+            id: 'cart-a',
+            revision: 1,
+            lines: [
+                {
+                    id: 'sold-out',
+                    selected: true,
+                    available: true,
+                    quantity: 1,
+                    productVariant: { customFields: {}, saleableStockLevel: 0 },
+                },
+                {
+                    id: 'too-many',
+                    selected: false,
+                    available: true,
+                    quantity: 3,
+                    productVariant: { customFields: {}, saleableStockLevel: 2 },
+                },
+                {
+                    id: 'available',
+                    selected: false,
+                    available: true,
+                    quantity: 1,
+                    productVariant: { customFields: {}, saleableStockLevel: 2 },
+                },
+            ],
+        } as any;
+        vi.spyOn(controller, 'getSnapshot').mockReturnValue({ ...controller.getSnapshot(), cart });
+        const execute = vi.spyOn(controller, 'execute').mockResolvedValue({ cart } as any);
+        const api = new ShopApi(market);
+        api.enableCartCommands(controller);
+        await api.setAllLinesSelected(true, 1);
+        expect(execute).toHaveBeenLastCalledWith({
+            changes: {
+                lines: [
+                    { lineId: 'sold-out', selected: false },
+                    { lineId: 'too-many', selected: false },
+                    { lineId: 'available', selected: true },
+                ],
+            },
+        });
+        await api.setAllLinesSelected(false, 1);
+        expect(execute).toHaveBeenLastCalledWith({
+            changes: { lines: cart.lines.map((line: any) => ({ lineId: line.id, selected: false })) },
+        });
+        await api.setLinesSelected(['too-many', 'available'], true, 1);
+        expect(execute).toHaveBeenLastCalledWith({
+            changes: {
+                lines: [
+                    { lineId: 'too-many', selected: false },
+                    { lineId: 'available', selected: true },
+                ],
+            },
+        });
+    });
+});

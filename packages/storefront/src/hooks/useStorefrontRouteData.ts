@@ -8,10 +8,10 @@ import {
     publicQueryMeta,
     storefrontQueryKeys,
 } from '../query-client';
+import { storefrontErrorMessage } from '../storefront-errors';
 import { RouteState } from '../storefront-router';
 import { ActiveCustomer } from '../types';
 
-import { storefrontErrorMessage } from '../storefront-errors';
 import { type StorefrontQueryContext } from './storefront-query-context';
 
 export function useStorefrontRouteData({

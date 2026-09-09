@@ -240,6 +240,7 @@ export const storefrontErrorCopy = {
 
 type ErrorCode = keyof typeof storefrontErrorCopy;
 const aliases: Record<string, ErrorCode> = {
+    RATE_LIMIT_ERROR: 'RATE_LIMITED',
     BAD_USER_INPUT: 'USER_INPUT_ERROR',
     INTERNAL_SERVER_ERROR: 'SERVICE_UNAVAILABLE',
     ORDER_MISSING: 'NO_ACTIVE_ORDER_ERROR',
