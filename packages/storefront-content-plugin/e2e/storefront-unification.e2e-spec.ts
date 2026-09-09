@@ -552,6 +552,10 @@ describe('unified storefront Admin API to Shop API', () => {
                                 const formBox = await page.locator('.login-content').boundingBox();
                                 if (!heroBox || !copyBox || !formBox)
                                     throw new Error('Missing rendered hero, copy or form');
+                                expect(copyBox.x).toBeGreaterThanOrEqual(heroBox.x);
+                                expect(copyBox.x + copyBox.width).toBeLessThanOrEqual(
+                                    heroBox.x + heroBox.width + 1,
+                                );
                                 expect(copyBox.y).toBeGreaterThanOrEqual(heroBox.y);
                                 expect(copyBox.y + copyBox.height).toBeLessThanOrEqual(
                                     heroBox.y + heroBox.height + 1,
