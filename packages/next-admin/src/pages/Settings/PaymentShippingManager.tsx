@@ -400,7 +400,18 @@ export function PaymentShippingManager({
                 )}
             </div>
             {section === 'payment' && (
-                <UsdtPaymentSetupPanel key={data.activeChannel.id} onChanged={onChanged} onError={onError} />
+                <details className="rounded-xl border border-slate-200 bg-white p-4">
+                    <summary className="cursor-pointer text-sm font-bold">
+                        USDT 收款配置 · 展开查看状态、汇率与收款地址
+                    </summary>
+                    <div className="mt-4">
+                        <UsdtPaymentSetupPanel
+                            key={data.activeChannel.id}
+                            onChanged={onChanged}
+                            onError={onError}
+                        />
+                    </div>
+                </details>
             )}
             {editor && (
                 <MethodEditorDialog

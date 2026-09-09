@@ -12,6 +12,7 @@ import {
 import { STORE_COMMERCE_MODE_QUERY, type StoreCommerceModeData } from '../../graphql/commerce.graphql';
 import { fulfillmentTypeForMode } from '../../utils/commerce-mode';
 import { toUserFacingError } from '../../utils/user-facing-error';
+import { SYSTEM_IMPORT_OPTION_GROUP_CODE_PREFIX } from './catalog-option-groups';
 import {
     type AssetItem,
     type CatalogChannel,
@@ -263,7 +264,10 @@ export function useProductEditorData({
                 skip: optionGroupPage * optionGroupPageSize,
                 take: optionGroupPageSize,
                 sort: { name: 'ASC', id: 'ASC' },
-                filter: deferredOptionGroupSearch ? { name: { contains: deferredOptionGroupSearch } } : {},
+                filter: {
+                    code: { notContains: SYSTEM_IMPORT_OPTION_GROUP_CODE_PREFIX },
+                    ...(deferredOptionGroupSearch ? { name: { contains: deferredOptionGroupSearch } } : {}),
+                },
             },
         },
         fetchPolicy: 'cache-first',

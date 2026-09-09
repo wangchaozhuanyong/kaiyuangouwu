@@ -1,5 +1,5 @@
 import { Plus, Trash2 } from 'lucide-react';
-import { createElement, useMemo, useState } from 'react';
+import { createElement, useMemo, useState, type ReactNode } from 'react';
 import { FeatureHelpButton } from '../components/FeatureHelp';
 import type { FeatureHelpTopic } from '../components/feature-help-content';
 import type { CustomFieldDefinition, CustomFieldValueMap, StructFieldDefinition } from './custom-field-types';
@@ -24,6 +24,9 @@ interface DynamicCustomFieldsFormProps {
     title?: string;
     helpTopic?: FeatureHelpTopic;
     languageCodes?: readonly string[];
+    description?: string;
+    footer?: ReactNode;
+    columns?: 1 | 2;
 }
 
 export function DynamicCustomFieldsForm({
@@ -36,6 +39,9 @@ export function DynamicCustomFieldsForm({
     title = '扩展字段',
     helpTopic,
     languageCodes,
+    description = '字段由后端配置动态生成，新增扩展字段无需重写本页。',
+    footer,
+    columns = 2,
 }: DynamicCustomFieldsFormProps) {
     const { hasAnyPermission } = useAdminPermissions();
     const [showErrors, setShowErrors] = useState(false);
@@ -56,11 +62,11 @@ export function DynamicCustomFieldsForm({
                     {title}
                     {helpTopic && <FeatureHelpButton topic={helpTopic} title={title} />}
                 </h2>
-                <p className="mt-1 text-xs leading-5 text-slate-500">
-                    字段由后端配置动态生成，新增扩展字段无需重写本页。
-                </p>
+                <p className="mt-1 text-xs leading-5 text-slate-500">{description}</p>
             </div>
-            <div className="grid gap-4 md:grid-cols-2">
+            <div
+                className={columns === 1 ? 'grid gap-3 [&>label]:col-span-full' : 'grid gap-4 md:grid-cols-2'}
+            >
                 {visibleFields.map(field => (
                     <CustomFieldControl
                         key={field.name}
@@ -77,6 +83,7 @@ export function DynamicCustomFieldsForm({
                     />
                 ))}
             </div>
+            {footer && <div className="mt-3 flex justify-end">{footer}</div>}
         </section>
     );
 }

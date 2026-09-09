@@ -1,5 +1,6 @@
 import { Package, UserRound } from 'lucide-react';
 
+import { checkoutAddress } from '../checkout-address';
 import {
     LazyAccountSecurityPage,
     LazyAddressesPage,
@@ -129,10 +130,34 @@ export function OrderDetailRoutePage() {
 
 export function AddressesRoutePage() {
     const runtime = useRuntime();
+    const returnTo =
+        runtime.route.returnTo === 'purchase' || runtime.route.returnTo === 'checkout'
+            ? runtime.route.returnTo
+            : undefined;
+    const checkoutOrderId = runtime.route.checkoutOrderId;
+    const selectionMode = Boolean(returnTo && checkoutOrderId);
+    const addressId = checkoutAddress(runtime.customer, runtime.route.addressId)?.id;
+    const back = () =>
+        selectionMode && returnTo
+            ? runtime.navigate({ name: returnTo, checkoutOrderId, addressId: runtime.route.addressId }, true)
+            : runtime.goBack();
     return (
         <RouteGate name="addresses">
-            <AuthPageBoundary language={runtime.language} onBack={runtime.goBack}>
+            <AuthPageBoundary language={runtime.language} onBack={back}>
                 <LazyAddressesPage
+                    selection={
+                        selectionMode && returnTo
+                            ? {
+                                  addressId,
+                                  editAddress: runtime.route.editAddress,
+                                  onUse: address =>
+                                      runtime.navigate(
+                                          { name: returnTo, checkoutOrderId, addressId: address.id },
+                                          true,
+                                      ),
+                              }
+                            : undefined
+                    }
                     api={runtime.api}
                     customer={runtime.customer}
                     market={runtime.market}
@@ -140,7 +165,7 @@ export function AddressesRoutePage() {
                     availableProvinces={runtime.availableProvinces}
                     language={runtime.language}
                     commerceMode={runtime.commerceMode}
-                    onBack={runtime.goBack}
+                    onBack={back}
                     onCustomerChange={(customer: ActiveCustomer | null) => runtime.setCustomer(customer)}
                     onNotify={runtime.notify}
                 />

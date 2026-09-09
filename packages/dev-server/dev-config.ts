@@ -78,6 +78,7 @@ import {
 import { catalogAdminApiMiddleware } from './catalog-admin-api-middleware';
 import { contentTranslationOptions } from './content-translation-config';
 import { emailLanguageVariables, localizedEmailSubjects, localizedEmailText } from './email-localization';
+import { createManualDeliveryEmailGuard } from './manual-delivery-email-guard';
 import { devServerMigrations } from './migrations';
 import {
     buildOrderConfirmationUrl,
@@ -411,6 +412,7 @@ function emailPluginOptions(): EmailPluginOptions | EmailPluginDevModeOptions {
     const commonOptions = {
         handlers: localizedEmailHandlers,
         templateLoader: new FileBasedTemplateLoader(path.join(serverRoot, 'email-templates')),
+        beforeSend: createManualDeliveryEmailGuard(assetUploadDir),
         globalTemplateVars: (ctx: RequestContext, injector: Injector) =>
             emailTemplateVars(ctx, injector, fromAddress),
     };

@@ -54,7 +54,8 @@ export async function verifyConfiguredProductionStorefronts({
         }
         const result = await realtimeVerifier({
             url: new URL('/storefront-realtime/events?client=storefront', store.origin).href,
-            readyTimeoutMs: 2_000,
+            // Public readiness includes DNS, TLS and the CDN hop, just like the other probes.
+            readyTimeoutMs: timeoutMs,
             closeTimeoutMs: 2_000,
             heartbeatTimeoutMs: 18_000,
             releaseId,

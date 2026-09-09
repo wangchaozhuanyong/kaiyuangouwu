@@ -125,14 +125,26 @@ describe('category navigation responsive spacing', () => {
     it('aligns the mobile all-category row with the sort toolbar', () => {
         expect(stylesheet).toMatch(/\.category-subcat-sidebar\s*\{[^}]*padding:\s*0 0 12px;/);
         expect(stylesheet).toMatch(
-            /\.subcat-side-all\s*\{[^}]*height:\s*38px;[^}]*min-height:\s*38px;[^}]*padding-block:\s*0;[^}]*flex-shrink:\s*0;/,
+            /\.subcat-side-all\s*\{[^}]*height:\s*44px;[^}]*min-height:\s*44px;[^}]*padding-block:\s*0;[^}]*flex-shrink:\s*0;/,
         );
-        expect(stylesheet).toMatch(/\.category-results \.sort-bar\s*\{[^}]*height:\s*38px;/);
+        expect(stylesheet).toMatch(/\.category-results \.sort-bar\s*\{[^}]*height:\s*44px;/);
     });
 
     it('keeps the search bar full width on narrow mobile screens', () => {
         expect(stylesheet).toMatch(
             /@media \(max-width:\s*370px\)[\s\S]*?\.category-topbar\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);[^}]*gap:\s*0;/,
+        );
+    });
+
+    it('allows long English category labels to wrap without changing Chinese labels', () => {
+        expect(stylesheet).toMatch(
+            /html\[lang='en'\] \.primary-category-label\s*\{[^}]*height:\s*48px;[^}]*white-space:\s*normal;[^}]*-webkit-line-clamp:\s*4;/,
+        );
+        expect(stylesheet).toMatch(
+            /html\[lang='en'\] \.all-primary-category-grid button > span:last-child\s*\{[^}]*min-height:\s*60px;[^}]*white-space:\s*normal;[^}]*-webkit-line-clamp:\s*4;/,
+        );
+        expect(stylesheet).toMatch(
+            /html\[lang='en'\] \.primary-categories button\s*\{[^}]*width:\s*80px;[^}]*min-width:\s*80px;[^}]*height:\s*92px;/,
         );
     });
 });

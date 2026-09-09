@@ -5,6 +5,7 @@ import { ShopApi } from '../api';
 import { offlineLoadError } from '../loading-state';
 import { PageSkeleton } from '../route-loading';
 import { useProductsByIdsQuery } from '../route-queries';
+import { storefrontErrorMessage } from '../storefront-errors';
 import { FavoriteProductsPageContext } from '../storefront-page-contexts';
 import { routeNavigateOptions, type RouteState } from '../storefront-router';
 import { EmptyState, SubHeader } from '../storefront-ui/page-shell';
@@ -38,7 +39,7 @@ export function FavoriteProductsPage() {
         !favoriteProducts.length && favoritesQuery.isPaused
             ? offlineLoadError(language)
             : !favoriteProducts.length && favoritesQuery.error instanceof Error
-              ? favoritesQuery.error.message
+              ? storefrontErrorMessage(favoritesQuery.error, language)
               : '';
     const availableProducts = favoriteProducts.filter(product => productIds.includes(product.id));
 

@@ -29,7 +29,6 @@ export function useStorefrontVisualPreset(
         queryFn: ({ signal }) => api.storefrontVisualPreset(signal),
         enabled,
         staleTime: 0,
-        refetchInterval: 60_000,
         // Do not persist a style selection under an unverified store context.
     });
     // Theme loading stays independent of route rendering, so slow requests never unmount a form.

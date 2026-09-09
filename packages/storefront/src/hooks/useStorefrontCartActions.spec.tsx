@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ShopApi, ShopApiError } from '../api';
 import { CartController } from '../cart/cart-controller';
-import { Order, ProductVariant, StorefrontCart } from '../types';
+import { ActiveCustomer, Order, ProductVariant, StorefrontCart } from '../types';
 
 import { useStorefrontCartActions } from './useStorefrontCartActions';
 
@@ -17,7 +17,18 @@ describe('storefront cart action boundaries', () => {
     let controller: CartController;
     let options: Options;
     let value: ReturnType<typeof useStorefrontCartActions>;
-    const cart = { id: 'cart-a', revision: 7, checkoutOrder: null } as StorefrontCart;
+    const cart: StorefrontCart = {
+        id: 'cart-a',
+        revision: 7,
+        checkoutOrder: null,
+        lines: [],
+        state: 'OPEN',
+        projectedRevision: 7,
+        totalQuantity: 0,
+        selectedLineCount: 0,
+        selectedQuantity: 0,
+        selectionState: 'NONE',
+    };
     const acknowledgement = {
         commandId: 'command-a',
         status: 'APPLIED' as const,
@@ -43,6 +54,7 @@ describe('storefront cart action boundaries', () => {
         options = {
             api: api as unknown as ShopApi,
             cart: { ...cart, revision: 1 },
+            customer: { id: 'customer-a' } as ActiveCustomer,
             cartController: controller,
             isZh: true,
             text: { loadError: '加载失败' },
@@ -58,6 +70,54 @@ describe('storefront cart action boundaries', () => {
     afterEach(() => {
         act(() => root.unmount());
         vi.restoreAllMocks();
+    });
+
+    it.each([true, false])(
+        'blocks sold-out additions and existing unselected quantities in the active language: zh=%s',
+        async isZh => {
+            options.isZh = isZh;
+            const productVariant = {
+                id: 'variant-a',
+                name: 'Test product',
+                saleableStockLevel: 2,
+                customFields: { fulfillmentType: 'physical' },
+            } as ProductVariant;
+            vi.mocked(controller.getSnapshot).mockReturnValue({
+                ...controller.getSnapshot(),
+                cart: {
+                    ...cart,
+                    lines: [{ id: 'line-a', quantity: 2, selected: false, available: true, productVariant }],
+                },
+            });
+            render();
+            expect(await value.addToCart(productVariant)).toBeNull();
+            expect(options.notify).toHaveBeenLastCalledWith(
+                expect.stringContaining(isZh ? '最多可购买 2 件' : 'Up to 2 available'),
+            );
+            expect(options.setCart).not.toHaveBeenCalled();
+            vi.mocked(controller.getSnapshot).mockReturnValue({ ...controller.getSnapshot(), cart });
+            await value.addToCart({ ...productVariant, saleableStockLevel: 0 });
+            expect(options.notify).toHaveBeenLastCalledWith(
+                expect.stringContaining(isZh ? '已售罄' : 'Sold out'),
+            );
+        },
+    );
+
+    it('sends guests to login with the selected variant without creating a checkout', async () => {
+        options.customer = null;
+        const execute = vi.spyOn(controller, 'execute');
+        render();
+        await value.startDirectPurchase({
+            id: 'selected-variant',
+            customFields: { fulfillmentType: 'physical' },
+        } as ProductVariant);
+        expect(options.navigate).toHaveBeenCalledWith({
+            name: 'login',
+            returnTo: 'purchase',
+            id: 'selected-variant',
+        });
+        expect(execute).not.toHaveBeenCalled();
+        expect(options.setCartLoading).not.toHaveBeenCalled();
     });
 
     it('uses the current controller revision instead of stale rendered cart state', async () => {
@@ -87,10 +147,13 @@ describe('storefront cart action boundaries', () => {
     it('keeps navigation unchanged when buy-now has no confirmed checkout session', async () => {
         vi.spyOn(controller, 'execute').mockResolvedValue({ ...acknowledgement, cart, session: null });
         render();
-        await value.startDirectPurchase({ id: 'variant-a' } as ProductVariant);
+        await value.startDirectPurchase({
+            id: 'variant-a',
+            customFields: { fulfillmentType: 'physical' },
+        } as ProductVariant);
         expect(options.navigate).not.toHaveBeenCalled();
         expect(options.setCheckoutOrder).not.toHaveBeenCalled();
-        expect(options.setCartError).toHaveBeenLastCalledWith('结算会话已变更，请重新确认');
+        expect(options.setCartError).toHaveBeenLastCalledWith('当前没有可结算的订单，请重新选择商品。');
         expect(options.setAddingVariantId).toHaveBeenLastCalledWith(null);
         expect(options.setCartLoading).toHaveBeenLastCalledWith(false);
     });
@@ -102,7 +165,10 @@ describe('storefront cart action boundaries', () => {
             .spyOn(controller, 'execute')
             .mockResolvedValue({ ...acknowledgement, cart, session });
         render();
-        await value.startDirectPurchase({ id: 'variant-a' } as ProductVariant);
+        await value.startDirectPurchase({
+            id: 'variant-a',
+            customFields: { fulfillmentType: 'physical' },
+        } as ProductVariant);
         expect(execute).toHaveBeenCalledWith({ buyNow: { productVariantId: 'variant-a', quantity: 1 } });
         expect(options.setCheckoutOrder).toHaveBeenCalledWith(order);
         expect(options.navigate).toHaveBeenCalledWith({ name: 'purchase' });

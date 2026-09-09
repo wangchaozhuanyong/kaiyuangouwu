@@ -1,6 +1,6 @@
 import type { RequestContext, TransactionalConnection } from '@vendure/core';
 import { UserInputError } from '@vendure/core';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { lstat, mkdir, mkdtemp, readdir, rm, symlink, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { Readable } from 'node:stream';
@@ -18,6 +18,57 @@ afterEach(() => {
 });
 
 describe('ImagePrivateStorageService reference lifecycle', () => {
+    it('advances past live files across bounded sweeps and preserves recent files and symlinks', async () => {
+        const root = await mkdtemp(path.join(tmpdir(), 'private-image-sweep-'));
+        const old = new Date(Date.now() - 2 * 60 * 60_000);
+        const folder = path.join(root, 'reference');
+        await mkdir(folder);
+        for (let index = 0; index < 401; index++) {
+            const file = path.join(folder, `${index}.png`);
+            await writeFile(file, 'synthetic image fixture');
+            await utimes(file, old, old);
+        }
+        const names = await readdir(folder);
+        const known = new Set(names.slice(0, 400).map(name => `reference/${name}`));
+        const orphan = path.join(folder, names[400]);
+        await writeFile(path.join(root, 'recent.png'), 'recent');
+        await symlink(folder, path.join(root, 'linked-directory'));
+        const query: any = {
+            where: () => query,
+            andWhere: () => query,
+            take: () => query,
+            getMany: () => Promise.resolve([]),
+        };
+        const find = vi.fn((options: any) =>
+            Promise.resolve(
+                (options.where.storageKey?.value ?? [])
+                    .filter((key: string) => known.has(key))
+                    .map((storageKey: string) => ({ storageKey })),
+            ),
+        );
+        const repository = { createQueryBuilder: () => query, find, remove: vi.fn() };
+        const service = new ImagePrivateStorageService(
+            { rawConnection: { getRepository: () => repository } } as any,
+            { production: false, storageRoot: root },
+        );
+        try {
+            let removed = 0;
+            for (let index = 0; index < 4; index++) removed += await service.purgeExpired();
+            expect(removed).toBe(1);
+            await expect(lstat(orphan)).rejects.toMatchObject({ code: 'ENOENT' });
+            expect((await readdir(folder)).length).toBe(400);
+            expect((await lstat(path.join(root, 'recent.png'))).isFile()).toBe(true);
+            expect((await lstat(path.join(root, 'linked-directory'))).isSymbolicLink()).toBe(true);
+            const batches = find.mock.calls
+                .map(([options]) => options.where.storageKey?.value)
+                .filter(Boolean);
+            expect(batches.every(batch => batch.length <= 200)).toBe(true);
+            expect(new Set(batches.flat()).size).toBe(401);
+        } finally {
+            await service.onModuleDestroy();
+            await rm(root, { recursive: true, force: true });
+        }
+    });
     it('re-encodes uploads without EXIF metadata before private storage', async () => {
         const storageRoot = await mkdtemp(path.join(tmpdir(), 'image-reference-metadata-'));
         const source = await sharp({

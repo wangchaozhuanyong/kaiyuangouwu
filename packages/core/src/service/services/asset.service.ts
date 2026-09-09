@@ -35,6 +35,7 @@ import { Translated } from '../../common/types/locale-types';
 import { getAssetType, idsAreEqual } from '../../common/utils';
 import { ConfigService } from '../../config/config.service';
 import { Logger } from '../../config/logger/vendure-logger';
+import { TransactionSubscriber } from '../../connection/transaction-subscriber';
 import { TransactionalConnection } from '../../connection/transactional-connection';
 import { AssetTranslation } from '../../entity/asset/asset-translation.entity';
 import { Asset } from '../../entity/asset/asset.entity';
@@ -175,6 +176,7 @@ export class AssetService {
         private customFieldRelationService: CustomFieldRelationService,
         private readonly translatableSaver: TranslatableSaver,
         private readonly translator: TranslatorService,
+        private readonly transactionSubscriber?: TransactionSubscriber,
     ) {
         this.permittedMimeTypes = this.configService.assetOptions.permittedFileTypes
             .map(val => (/\.[\w]+/.test(val) ? mime.lookup(val) || undefined : val))
@@ -698,76 +700,108 @@ export class AssetService {
         const sourceFileName = await this.getSourceFileName(ctx, filename);
         const previewFileName = await this.getPreviewFileName(ctx, sourceFileName);
 
-        // If the stream was fully consumed during the peek (a small file), `head` holds the
-        // whole content and the stream cannot be replayed; write the buffer directly.
-        // Otherwise the peeked bytes were unshifted back, so write the full stream.
-        const sourceFileIdentifier = complete
-            ? await assetStorageStrategy.writeFileFromBuffer(sourceFileName, head)
-            : await assetStorageStrategy.writeFileFromStream(sourceFileName, stream);
-        const sourceFile = await assetStorageStrategy.readFileToBuffer(sourceFileIdentifier);
-        let preview: Buffer;
-        try {
-            preview = await assetPreviewStrategy.generatePreviewImage(ctx, mimetype, sourceFile);
-        } catch (e: any) {
-            const message: string = typeof e.message === 'string' ? e.message : e.message.toString();
-            Logger.error(`Could not create Asset preview image: ${message}`, undefined, e.stack);
-            throw e;
+        const writtenFiles: string[] = [];
+        let rolledBack = false;
+        const cleanup = async () => {
+            for (const identifier of writtenFiles.splice(0)) {
+                try {
+                    await assetStorageStrategy.deleteFile(identifier);
+                } catch {
+                    Logger.error('Could not remove failed asset upload file', 'AssetService');
+                }
+            }
+        };
+        const runner = this.connection.getRepository(ctx, Asset).manager?.queryRunner;
+        if (runner?.isTransactionActive && this.transactionSubscriber) {
+            void this.transactionSubscriber.awaitRollback(runner).then(
+                async () => {
+                    rolledBack = true;
+                    await cleanup();
+                },
+                () => undefined,
+            );
         }
-        const previewFileIdentifier = await assetStorageStrategy.writeFileFromBuffer(
-            previewFileName,
-            preview,
-        );
-        const type = getAssetType(mimetype);
-        const { width, height } = await this.getDimensions(type === AssetType.IMAGE ? sourceFile : preview);
+        try {
+            // If the stream was fully consumed during the peek (a small file), `head` holds the
+            // whole content and the stream cannot be replayed; write the buffer directly.
+            // Otherwise the peeked bytes were unshifted back, so write the full stream.
+            const sourceFileIdentifier = complete
+                ? await assetStorageStrategy.writeFileFromBuffer(sourceFileName, head)
+                : await assetStorageStrategy.writeFileFromStream(sourceFileName, stream);
+            writtenFiles.push(sourceFileIdentifier);
+            const sourceFile = await assetStorageStrategy.readFileToBuffer(sourceFileIdentifier);
+            let preview: Buffer;
+            try {
+                preview = await assetPreviewStrategy.generatePreviewImage(ctx, mimetype, sourceFile);
+            } catch (e: any) {
+                const message: string = typeof e.message === 'string' ? e.message : e.message.toString();
+                Logger.error(`Could not create Asset preview image: ${message}`, undefined, e.stack);
+                throw e;
+            }
+            const previewFileIdentifier = await assetStorageStrategy.writeFileFromBuffer(
+                previewFileName,
+                preview,
+            );
+            writtenFiles.push(previewFileIdentifier);
+            const type = getAssetType(mimetype);
+            const { width, height } = await this.getDimensions(
+                type === AssetType.IMAGE ? sourceFile : preview,
+            );
 
-        // Save asset first
-        const asset = new Asset({
-            type,
-            width,
-            height,
-            fileSize: sourceFile.byteLength,
-            mimeType: mimetype,
-            source: sourceFileIdentifier,
-            preview: previewFileIdentifier,
-            focalPoint: null,
-            customFields,
-        });
-        await this.channelService.assignToCurrentChannel(asset, ctx);
-        const savedAsset = await this.connection.getRepository(ctx, Asset).save(asset);
+            // Save asset first
+            const asset = new Asset({
+                type,
+                width,
+                height,
+                fileSize: sourceFile.byteLength,
+                mimeType: mimetype,
+                source: sourceFileIdentifier,
+                preview: previewFileIdentifier,
+                focalPoint: null,
+                customFields,
+            });
+            await this.channelService.assignToCurrentChannel(asset, ctx);
+            const savedAsset = await this.connection.getRepository(ctx, Asset).save(asset);
 
-        // Create and save translations with the base relationship set
-        // Use the original filename for the default translation name
-        const defaultName = filename;
-        let assetTranslations: AssetTranslation[];
-        if (translations && translations.length > 0) {
-            assetTranslations = translations.map(
-                t =>
+            // Create and save translations with the base relationship set
+            // Use the original filename for the default translation name
+            const defaultName = filename;
+            let assetTranslations: AssetTranslation[];
+            if (translations && translations.length > 0) {
+                assetTranslations = translations.map(
+                    t =>
+                        new AssetTranslation({
+                            languageCode: t.languageCode,
+                            name: t.name ?? defaultName,
+                            customFields: t.customFields,
+                            base: savedAsset,
+                        }),
+                );
+            } else {
+                // Create default translation using context language
+                assetTranslations = [
                     new AssetTranslation({
-                        languageCode: t.languageCode,
-                        name: t.name ?? defaultName,
-                        customFields: t.customFields,
+                        languageCode: ctx.languageCode,
+                        name: defaultName,
                         base: savedAsset,
                     }),
-            );
-        } else {
-            // Create default translation using context language
-            assetTranslations = [
-                new AssetTranslation({
-                    languageCode: ctx.languageCode,
-                    name: defaultName,
-                    base: savedAsset,
-                }),
-            ];
+                ];
+            }
+
+            // Save translations
+            const savedTranslations = await this.connection
+                .getRepository(ctx, AssetTranslation)
+                .save(assetTranslations);
+
+            // Return the asset with translations eagerly loaded
+            savedAsset.translations = savedTranslations;
+            return savedAsset;
+        } catch (error) {
+            await cleanup();
+            throw error;
+        } finally {
+            if (rolledBack) await cleanup();
         }
-
-        // Save translations
-        const savedTranslations = await this.connection
-            .getRepository(ctx, AssetTranslation)
-            .save(assetTranslations);
-
-        // Return the asset with translations eagerly loaded
-        savedAsset.translations = savedTranslations;
-        return savedAsset;
     }
 
     private async getSourceFileName(ctx: RequestContext, fileName: string): Promise<string> {

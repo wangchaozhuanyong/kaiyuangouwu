@@ -32,14 +32,14 @@ describe('StorefrontRealtimeService', () => {
         expect(storeB).not.toHaveBeenCalled();
     });
 
-    it('keeps customer events private while allowing an authorized admin listener', () => {
+    it('keeps customer events private for every storefront listener', () => {
         const realtime = service();
         const target = vi.fn();
         const other = vi.fn();
         const admin = vi.fn();
         realtime.addClient({ channelId: 'store-a', userId: 'user-1', send: target });
         realtime.addClient({ channelId: 'store-a', userId: 'user-2', send: other });
-        realtime.addClient({ channelId: 'store-a', userId: 'admin-1', admin: true, send: admin });
+        realtime.addClient({ channelId: 'store-a', userId: 'admin-1', send: admin });
 
         realtime.publish({
             topics: ['orders'],
@@ -51,7 +51,7 @@ describe('StorefrontRealtimeService', () => {
 
         expect(target).toHaveBeenCalledOnce();
         expect(other).not.toHaveBeenCalled();
-        expect(admin).toHaveBeenCalledOnce();
+        expect(admin).not.toHaveBeenCalled();
         expect(target.mock.calls[0][0]).not.toHaveProperty('userIds');
     });
 

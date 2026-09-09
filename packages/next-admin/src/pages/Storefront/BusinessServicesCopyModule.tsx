@@ -196,7 +196,7 @@ export function BusinessServicesCopyModule() {
                 ) : query.error || !draft ? (
                     <State tone="error" label="页面文案加载失败" action={() => void query.refetch()} />
                 ) : (
-                    <div className="grid gap-5 lg:grid-cols-[1fr_0.8fr]">
+                    <div className="grid items-start gap-4 lg:grid-cols-[1fr_0.8fr]">
                         <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-5">
                             <div className="flex items-center justify-between gap-3">
                                 <div>
@@ -257,7 +257,7 @@ export function BusinessServicesCopyModule() {
                                             <textarea
                                                 value={translation.body}
                                                 maxLength={zh ? 100 : 180}
-                                                rows={4}
+                                                rows={2}
                                                 disabled={!canEdit}
                                                 onChange={event =>
                                                     change(language, 'body', event.target.value)

@@ -24,7 +24,14 @@ import {
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { canAddManualPayment } from './order-operation-availability';
-import { formatDateTime, formatMoney, getPaymentStateLabel, getRefundStateLabel } from './sales-utils';
+import {
+    formatDateTime,
+    formatMoney,
+    getOrderStateLabel,
+    getPaymentMethodLabel,
+    getPaymentStateLabel,
+    getRefundStateLabel,
+} from './sales-utils';
 
 type ProtectedAction =
     | { kind: 'manual'; method: string; transactionId: string }
@@ -156,8 +163,8 @@ export function OrderOperationsBlock({ context }: { context: NextAdminPageBlockC
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <Heading
                         icon={<CreditCard className="h-4 w-4 text-blue-600" />}
-                        title="支付操作与退款结算"
-                        detail="手工支付、支付状态转换与退款结算均要求当前管理员密码，并以后端返回实体作为成功依据。"
+                        title="支付与退款"
+                        detail="在此查看付款、处理退款；资金操作需验证管理员密码。"
                     />
                     {canUpdate && canReadPaymentMethods && canAddManualPayment(order.state, outstanding) && (
                         <button type="button" onClick={() => setManualOpen(true)} className={primaryButton}>
@@ -171,6 +178,11 @@ export function OrderOperationsBlock({ context }: { context: NextAdminPageBlockC
                         <PaymentCard
                             key={payment.id}
                             payment={payment}
+                            methodName={
+                                paymentMethodsQuery.data?.paymentMethods.items.find(
+                                    method => method.code === payment.method,
+                                )?.name
+                            }
                             currencyCode={order.currencyCode}
                             canOperate={canUpdate}
                             onAction={setAction}
@@ -248,7 +260,7 @@ export function OrderOperationsBlock({ context }: { context: NextAdminPageBlockC
                                     {sellerOrder.channels
                                         .map(channel => channel.seller?.name ?? channel.code)
                                         .join('、')}{' '}
-                                    · {sellerOrder.state}
+                                    · {getOrderStateLabel(sellerOrder.state)}
                                 </p>
                                 <Link
                                     to={`/sales/orders/${sellerOrder.id}`}
@@ -300,12 +312,14 @@ export function OrderOperationsBlock({ context }: { context: NextAdminPageBlockC
 
 function PaymentCard({
     payment,
+    methodName,
     currencyCode,
     canOperate,
     onAction,
     onSettleRefund,
 }: {
     payment: OrderOperationPayment;
+    methodName?: string;
     currencyCode: string;
     canOperate: boolean;
     onAction: (action: ProtectedAction) => void;
@@ -313,24 +327,43 @@ function PaymentCard({
 }) {
     const otherStates = payment.nextStates.filter(state => !['Settled', 'Error'].includes(state));
     return (
-        <article className="rounded-xl border border-slate-200 p-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <span>
-                    <strong className="text-sm">{payment.method}</strong>
+        <article className="grid min-w-0 gap-3 rounded-lg border border-slate-200 p-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+            <div className="flex min-w-0 flex-wrap items-start justify-between gap-2">
+                <div className="min-w-0">
+                    <strong className="break-words text-sm">
+                        {getPaymentMethodLabel(payment.method, methodName)}
+                    </strong>
                     <small className="ml-2 rounded bg-slate-100 px-2 py-0.5 text-[10px]">
                         {getPaymentStateLabel(payment.state)}
                     </small>
-                    <span className="mt-1 block font-mono text-[10px] text-slate-500">
-                        {payment.transactionId ?? '无交易号'} · {formatDateTime(payment.createdAt)}
+                    <span className="mt-1 block text-[11px] text-slate-500">
+                        付款时间：{formatDateTime(payment.createdAt)}
                     </span>
+                    <details className="mt-1 text-[11px] text-slate-500">
+                        <summary className="w-fit cursor-pointer rounded focus-visible:outline-2 focus-visible:outline-blue-500">
+                            交易详情
+                        </summary>
+                        <dl className="mt-2 space-y-1 break-all">
+                            <div>
+                                <dt className="inline">支付方式编号：</dt>
+                                <dd className="inline font-mono">{payment.method}</dd>
+                            </div>
+                            <div>
+                                <dt className="inline">交易流水号：</dt>
+                                <dd className="inline font-mono">{payment.transactionId || '无交易号'}</dd>
+                            </div>
+                        </dl>
+                    </details>
                     {payment.errorMessage && (
                         <span className="mt-1 block text-xs text-rose-600">{payment.errorMessage}</span>
                     )}
-                </span>
-                <b>{formatMoney(payment.amount, currencyCode)}</b>
+                </div>
+                <b className="shrink-0 whitespace-nowrap text-sm tabular-nums">
+                    {formatMoney(payment.amount, currencyCode)}
+                </b>
             </div>
             {payment.refunds.length > 0 && (
-                <div className="mt-3 space-y-2 border-t pt-3">
+                <div className="order-last space-y-2 border-t border-slate-200 pt-3 sm:col-span-2">
                     {payment.refunds.map(refund => (
                         <div
                             key={refund.id}
@@ -357,7 +390,7 @@ function PaymentCard({
                 </div>
             )}
             {canOperate && payment.nextStates.length > 0 && (
-                <div className="mt-3 flex flex-wrap justify-end gap-2 border-t pt-3">
+                <div className="flex flex-wrap items-start justify-end gap-2 sm:self-start">
                     {payment.nextStates.includes('Settled') && (
                         <button
                             type="button"
@@ -588,7 +621,7 @@ function State({
         </div>
     );
 }
-const sectionClass = 'rounded-xl border border-slate-200 bg-white p-5 shadow-2xs';
+const sectionClass = 'min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-2xs';
 const labelClass = 'block text-xs font-bold text-slate-700';
 const inputClass = 'mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm font-normal';
 const primaryButton =

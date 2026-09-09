@@ -24,7 +24,7 @@ import {
     Trash2,
     X,
 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { getServerHealthUrl, sensitiveActionContext } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
@@ -61,6 +61,7 @@ import { useUrlTab } from '../../hooks/use-url-tab';
 import { copyAdminText } from '../../utils/admin-clipboard';
 import { getRoleCodeLabel, getRoleLabel, getStatusLabel } from '../../utils/status-labels';
 import { toUserFacingError } from '../../utils/user-facing-error';
+import { LookupPager } from '../Catalog/LookupPager';
 import { formatDateTime } from '../Sales/sales-utils';
 import { SettingsContentSkeleton } from './settings-ui';
 import { TelegramNotificationsPanel } from './TelegramNotificationsPanel';
@@ -429,6 +430,8 @@ function JobsPanel({
     const [search, setSearch] = useState('');
     const [queue, setQueue] = useState('ALL');
     const [stateFilter, setStateFilter] = useState('ALL');
+    const [page, setPage] = useState(0);
+    const [pageSize, setPageSize] = usePageSize(setPage);
     const [cancel, cancelState] = useMutation(CANCEL_JOB_MUTATION);
     const states = [...new Set(jobs.map(job => job.state))];
     const filtered = useMemo(
@@ -444,6 +447,14 @@ function JobsPanel({
             ),
         [jobs, queue, search, stateFilter],
     );
+    const lastPage = Math.max(0, Math.ceil(filtered.length / pageSize) - 1);
+    const currentPage = Math.min(page, lastPage);
+    const visibleJobs = filtered.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
+    if (page > lastPage) setPage(lastPage);
+    const recordsRef = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        if (recordsRef.current) recordsRef.current.scrollTop = 0;
+    }, [currentPage, pageSize, search, queue, stateFilter]);
     const cancelJob = async (job: SystemJobRecord) => {
         if (
             job.isSettled ||
@@ -464,7 +475,7 @@ function JobsPanel({
     };
     return (
         <div className="space-y-4">
-            <section className="grid overflow-hidden rounded-xl border border-slate-200 bg-white sm:grid-cols-3 xl:grid-cols-5">
+            <section className="grid grid-cols-2 overflow-hidden rounded-xl border border-slate-200 bg-white sm:grid-cols-3 xl:grid-cols-5">
                 <Metric
                     label="队列数"
                     value={String(queues.length)}
@@ -496,7 +507,7 @@ function JobsPanel({
                 />
             </section>
             <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-                <div className="flex flex-col gap-3 border-b border-slate-100 p-4 xl:flex-row xl:items-center xl:justify-between">
+                <div className="space-y-3 border-b border-slate-100 p-4">
                     <div>
                         <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
                             任务执行记录
@@ -506,20 +517,27 @@ function JobsPanel({
                             Vendure 不提供通用“重试任意任务”接口，因此这里只允许取消未完成任务
                         </p>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                        <div className="relative">
+                    <div className="grid min-w-0 gap-2 sm:grid-cols-3">
+                        <div className="relative min-w-0">
                             <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
                             <input
                                 value={search}
-                                onChange={event => setSearch(event.target.value)}
+                                onChange={event => {
+                                    setSearch(event.target.value);
+                                    setPage(0);
+                                }}
                                 aria-label="搜索后台任务"
                                 placeholder="搜索任务 ID、队列或错误"
-                                className={`${inputClass} w-60 pl-8`}
+                                className={`${inputClass} pl-8`}
                             />
                         </div>
                         <select
                             value={queue}
-                            onChange={event => setQueue(event.target.value)}
+                            onChange={event => {
+                                setQueue(event.target.value);
+                                setPage(0);
+                            }}
+                            aria-label="筛选任务队列"
                             className={inputClass}
                         >
                             <option value="ALL">全部队列</option>
@@ -531,7 +549,11 @@ function JobsPanel({
                         </select>
                         <select
                             value={stateFilter}
-                            onChange={event => setStateFilter(event.target.value)}
+                            onChange={event => {
+                                setStateFilter(event.target.value);
+                                setPage(0);
+                            }}
+                            aria-label="筛选任务状态"
                             className={inputClass}
                         >
                             <option value="ALL">全部状态</option>
@@ -543,9 +565,15 @@ function JobsPanel({
                         </select>
                     </div>
                 </div>
-                <div className="overflow-x-auto">
+                <div
+                    className="max-h-[min(60vh,36rem)] overflow-auto"
+                    tabIndex={0}
+                    role="region"
+                    aria-label="任务执行记录"
+                    ref={recordsRef}
+                >
                     <table className="w-full min-w-[1680px] border-collapse text-left text-xs">
-                        <thead>
+                        <thead className="sticky top-0 z-30 bg-slate-50">
                             <tr className={theadClass}>
                                 <th
                                     scope="col"
@@ -586,7 +614,7 @@ function JobsPanel({
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                            {filtered.map(job => (
+                            {visibleJobs.map(job => (
                                 <tr key={job.id} className="group h-[52px] hover:bg-slate-50">
                                     <td className="sticky left-0 z-10 h-[52px] max-w-56 bg-white px-3 py-0 group-hover:bg-slate-50">
                                         <span
@@ -645,6 +673,15 @@ function JobsPanel({
                             {!filtered.length && <EmptyRow colSpan={10} text="当前条件下没有任务记录" />}
                         </tbody>
                     </table>
+                </div>
+                <div className="border-t border-slate-100 px-4 py-3">
+                    <LookupPager
+                        page={currentPage}
+                        pageSize={pageSize}
+                        totalItems={filtered.length}
+                        onPageChange={setPage}
+                        onPageSizeChange={setPageSize}
+                    />
                 </div>
             </section>
         </div>

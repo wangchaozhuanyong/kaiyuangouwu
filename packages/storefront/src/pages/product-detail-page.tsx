@@ -101,7 +101,7 @@ export function ProductDetailPage() {
             ? bestProductCouponPrice({
                   campaigns: couponCampaigns,
                   customerCoupons,
-                  collectionIds: product.collections.map(collection => collection.id),
+                  collectionIds: variant.storeCouponCollectionIds ?? [],
                   productVariantId: variant.id,
                   priceWithTax: displayedPrice,
                   currencyCode: displayedCurrencyCode,

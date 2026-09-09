@@ -225,9 +225,7 @@ export class ManualDigitalDeliveryService {
             throw new Error(delivery.lastError);
         }
         const assetIds = [...new Set(packages.flatMap(item => item.attachmentAssetIds))];
-        const assets = assetIds.length
-            ? await this.connection.getRepository(ctx, Asset).find({ where: { id: In(assetIds) } })
-            : [];
+        const assets = await this.attachmentAssets(ctx, assetIds);
         return {
             deliveryId: String(delivery.id),
             recipientEmail: delivery.recipientEmail,
@@ -244,10 +242,23 @@ export class ManualDigitalDeliveryService {
         };
     }
 
+    async queuedEmailPayload(ctx: RequestContext, id: ID) {
+        const delivery = await this.ownedDelivery(ctx, id);
+        if (
+            !['SENDING', 'EMAIL_FAILED'].includes(delivery.state) ||
+            delivery.order.state === 'Cancelled' ||
+            delivery.orderLine.quantity === 0
+        ) {
+            throw new UserInputError('人工交付任务已关闭或当前状态不能发送邮件');
+        }
+        return this.emailPayload(ctx, id);
+    }
+
     async recordEmailResult(ctx: RequestContext, id: ID, success: boolean, error?: Error): Promise<void> {
         const delivery = await this.ownedDelivery(ctx, id);
         const wasManualReview = delivery.state === 'MANUAL_REVIEW';
-        if (success && delivery.state === 'SENT') {
+        // Old queued attempts must not reopen a cancelled or already completed task.
+        if (delivery.state === 'CANCELLED' || delivery.state === 'SENT') {
             return;
         }
         delivery.attemptCount += 1;
@@ -400,15 +411,18 @@ export class ManualDigitalDeliveryService {
             };
         });
         const assetIds = [...new Set(packages.flatMap(item => item.attachmentAssetIds))];
-        if (assetIds.length) {
-            const count = await this.connection
-                .getRepository(ctx, Asset)
-                .count({ where: { id: In(assetIds) } });
-            if (count !== assetIds.length) {
-                throw new UserInputError('部分附件不存在或已删除');
-            }
-        }
+        await this.attachmentAssets(ctx, assetIds);
         return packages;
+    }
+
+    private async attachmentAssets(ctx: RequestContext, assetIds: string[]): Promise<Asset[]> {
+        if (!assetIds.length) return [];
+        // Explicit channel assignment permits sharing; existence alone does not grant access.
+        const assets = await this.connection.findByIdsInChannel(ctx, Asset, assetIds, ctx.channelId, {});
+        if (assets.length !== assetIds.length) {
+            throw new UserInputError('部分附件不存在、已删除或不属于当前店铺');
+        }
+        return assets;
     }
 
     private readPackages(delivery: ManualDigitalDelivery): StoredManualDeliveryPackage[] {

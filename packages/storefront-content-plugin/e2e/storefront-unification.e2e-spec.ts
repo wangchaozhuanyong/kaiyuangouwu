@@ -529,13 +529,24 @@ describe('unified storefront Admin API to Shop API', () => {
                                     .toBe(true);
                                 await browserExpect(imageLocator).toHaveCSS('object-fit', 'cover');
                                 await browserExpect(imageLocator).toHaveCSS('filter', 'none');
-                                expect(
-                                    await page.locator('.auth-hero').evaluate(hero =>
-                                        ['::before', '::after'].every(
-                                            pseudo => getComputedStyle(hero, pseudo).display === 'none',
-                                        ),
-                                    ),
-                                ).toBe(true);
+                                await browserExpect(page.locator('.auth-hero-copy')).toHaveCSS(
+                                    'background-color',
+                                    'rgba(0, 0, 0, 0)',
+                                );
+                                await browserExpect(page.locator('.auth-hero-copy')).toHaveCSS(
+                                    'box-shadow',
+                                    'none',
+                                );
+                                const overlay = await page.locator('.auth-hero').evaluate(hero => ({
+                                    background: getComputedStyle(hero, '::after').backgroundImage,
+                                    pointerEvents: getComputedStyle(hero, '::after').pointerEvents,
+                                    color: getComputedStyle(hero)
+                                        .getPropertyValue('--auth-hero-overlay-color')
+                                        .trim(),
+                                }));
+                                expect(overlay.background).toContain('linear-gradient');
+                                expect(overlay.pointerEvents).toBe('none');
+                                expect(overlay.color.toLowerCase()).toBe(index === 0 ? '#203346' : '#f6f2ea');
                                 const heroBox = await page.locator('.auth-hero').boundingBox();
                                 const copyBox = await page.locator('.auth-hero-copy').boundingBox();
                                 const formBox = await page.locator('.login-content').boundingBox();

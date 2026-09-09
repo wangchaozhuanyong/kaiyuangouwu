@@ -1,6 +1,7 @@
+import { Navigate } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
 
-import { cartResolvedRoutes, customerResolvedRoutes, RouteName } from '../storefront-router';
+import { cartResolvedRoutes, customerResolvedRoutes, isCheckoutRoute, RouteName } from '../storefront-router';
 import { AsyncRouteStatePage } from '../storefront-ui/page-shell';
 import { useStorefront, type StorefrontContextValue } from '../StorefrontContext';
 
@@ -33,6 +34,9 @@ export function RouteGate({ name, children }: { name: RouteName; children: React
                 onRetry={() => void runtime.customerQuery.refetch()}
             />
         );
+    }
+    if (isCheckoutRoute(name) && !runtime.customer) {
+        return <Navigate to="/login" search={{ returnTo: name }} replace />;
     }
     if (cartResolvedRoutes.includes(name) && runtime.cartLoadState !== 'ready') {
         return (

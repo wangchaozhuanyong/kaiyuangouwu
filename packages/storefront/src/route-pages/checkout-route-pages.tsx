@@ -20,7 +20,13 @@ function CheckoutRoutePage({ mode }: { mode?: 'purchase' }) {
                     cart={runtime.cart}
                     order={runtime.currentCheckoutOrder}
                     customer={runtime.customer}
+                    selectedAddressId={
+                        runtime.route.checkoutOrderId === runtime.currentCheckoutOrder?.id
+                            ? runtime.route.addressId
+                            : undefined
+                    }
                     market={runtime.market}
+                    storefrontCode={runtime.storefrontCode}
                     availableCountries={runtime.availableCountries}
                     availableProvinces={runtime.availableProvinces}
                     locale={runtime.locale}

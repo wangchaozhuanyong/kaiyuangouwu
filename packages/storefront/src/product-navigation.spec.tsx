@@ -58,6 +58,83 @@ const digitalProduct: Product = {
 };
 
 describe('product image navigation layers', () => {
+    it.each(['parent', 'child', 'grandchild', 'unrelated'])(
+        'shows a category coupon price only for a product in the selected %s category tree',
+        collectionId => {
+            const markup = renderToStaticMarkup(
+                <ProductDetailPageContext.Provider
+                    value={{
+                        product: {
+                            ...digitalProduct,
+                            variants: digitalProduct.variants.map(variant => ({
+                                ...variant,
+                                storeCouponCollectionIds: ['parent', 'child', 'grandchild'],
+                            })),
+                            collections: [
+                                {
+                                    id: 'grandchild',
+                                    name: '下级分类',
+                                    slug: 'grandchild',
+                                    parentId: 'child',
+                                    breadcrumbs: [
+                                        { id: 'root' },
+                                        { id: 'parent' },
+                                        { id: 'child' },
+                                        { id: 'grandchild' },
+                                    ],
+                                },
+                            ],
+                        },
+                        market,
+                        locale: market.locale,
+                        language: 'zh',
+                        products: [],
+                        flashSaleItems: [],
+                        couponCampaigns: [
+                            {
+                                id: 'category-coupon',
+                                name: '分类八折',
+                                kind: 'COLLECTION_PERCENTAGE',
+                                startsAt: null,
+                                endsAt: null,
+                                claimStartsAt: null,
+                                claimEndsAt: null,
+                                validityDays: null,
+                                minimumSpend: 0,
+                                currencyCode: 'MYR',
+                                discountAmount: null,
+                                discountRate: 8,
+                                collectionIds: [collectionId],
+                                productVariantIds: [],
+                                remainingIssueCount: null,
+                                claimed: false,
+                                claimable: true,
+                            },
+                        ],
+                        customerCoupons: [],
+                        storefrontName: 'Store',
+                        cartQuantity: 0,
+                        api: {} as import('./api').ShopApi,
+                        logoUrl: null,
+                        favorite: false,
+                        onAdd: vi.fn(),
+                        onBuyNow: vi.fn(),
+                        onFavorite: vi.fn(),
+                        onNotify: vi.fn(),
+                        addingVariantId: null,
+                    }}
+                >
+                    <ProductDetailPage />
+                </ProductDetailPageContext.Provider>,
+            );
+            if (collectionId === 'unrelated') {
+                expect(markup).not.toContain('查看优惠券，券后价');
+            } else {
+                expect(markup).toMatch(/aria-label="查看优惠券，券后价 MYR\s79\.2"/u);
+            }
+        },
+    );
+
     it('keeps product artwork square without a padded desktop frame', () => {
         const markup = renderToStaticMarkup(
             <ProductCard

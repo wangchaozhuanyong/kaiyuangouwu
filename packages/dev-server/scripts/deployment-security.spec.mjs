@@ -7,6 +7,137 @@ import { fileURLToPath } from 'node:url';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 
+void test('candidate Nginx validation isolates every temp path and rejects live metadata changes', () => {
+    const script = path.join(repositoryRoot, 'deploy/validate-nginx-candidate.py');
+    const python = `
+import importlib.util, pathlib, subprocess, sys
+from unittest.mock import patch
+spec=importlib.util.spec_from_file_location('candidate',sys.argv[1])
+m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+source=pathlib.Path(sys.argv[2]).read_text()
+def validate_command(command, **kwargs):
+    config=pathlib.Path(command[-1]);root=config.parent
+    rendered=config.read_text()
+    assert command[:3]==['nginx','-t','-p']
+    assert command[3]==str(root)+'/' and command[4]=='-c'
+    assert 'user www-data;' in rendered
+    for kind in m.TEMP_KINDS:
+        assert kind+'_temp_path '+str(root/kind)+';' in rendered
+    assert '/var/log/nginx/' not in rendered and 'syslog:server=' not in rendered
+    assert 'include /etc/nginx/proxy_params;' in rendered
+    return subprocess.CompletedProcess(command, 0)
+with patch.object(m,'live_metadata',return_value={'directory':(33,0,448,1)}), patch.object(m.subprocess,'run',side_effect=validate_command):
+    assert m.validate_candidate(source)['productionTempDirectoriesUnchanged']
+with patch.object(m,'live_metadata',side_effect=[{'owner':33},{'owner':65534}]), patch.object(m.subprocess,'run',side_effect=validate_command):
+    try:m.validate_candidate(source)
+    except RuntimeError:pass
+    else:raise AssertionError('Changed production permissions must fail validation')
+for unsafe in ['client_body_temp_path /var/lib/nginx/body;', 'include /etc/nginx/conf.d/*.conf;']:
+    try:m.candidate_config(unsafe,pathlib.Path('/tmp/isolated'))
+    except ValueError:pass
+    else:raise AssertionError('Unisolated input must fail before running nginx')
+print('candidate isolation passed')
+`;
+    const result = spawnSync(
+        'python3',
+        ['-B', '-c', python, script, path.join(repositoryRoot, 'deploy/nginx/damatong.conf')],
+        { encoding: 'utf8' },
+    );
+    assert.equal(result.status, 0, result.stderr);
+});
+
+void test('Nginx error logs are sanitized in memory before persistence', async () => {
+    const config = await readFile(path.join(repositoryRoot, 'deploy/nginx/damatong.conf'), 'utf8');
+    const directives = [...config.matchAll(/^\s*error_log (.+);$/gmu)].map(match => match[1]);
+    assert.equal(directives.length, 1);
+    assert.equal(
+        directives[0],
+        'syslog:server=unix:/run/vendure-nginx-log/error.sock,tag=vendure_nginx_error warn',
+    );
+    const script = path.join(repositoryRoot, 'deploy/systemd/vendure-nginx-error-log.py');
+    const packets = [
+        [
+            '<187>nginx: connect() failed (111: Connection refused) while connecting to upstream,',
+            'client: 127.0.0.1,',
+            'request: "GET /digital-delivery/synthetic-credential?token=synthetic-query HTTP/1.1",',
+            'upstream: "http://127.0.0.1/digital-delivery/synthetic-credential",',
+            'referrer: "https://example.com/?token=synthetic-referrer"',
+        ].join(' '),
+        '<188>nginx: open() "/images/synthetic-credential" failed (2: No such file)',
+        '<187>nginx: unknown synthetic-credential\nAuthorization: synthetic-header',
+    ];
+    const python = [
+        'import json,runpy,sys',
+        'm=runpy.run_path(sys.argv[1])',
+        'print(json.dumps([m["safe_record"](s.encode()) for s in json.load(sys.stdin)]))',
+    ].join('; ');
+    const result = spawnSync('python3', ['-B', '-c', python, script], {
+        input: JSON.stringify(packets),
+        encoding: 'utf8',
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.doesNotMatch(result.stdout, /synthetic|digital-delivery|Authorization|upstream:/u);
+    const records = JSON.parse(result.stdout);
+    assert.equal(records[0].category, 'upstream_connect_failed');
+    assert.equal(records[0].errno, 111);
+    assert.equal(records[1].category, 'file_open_failed');
+    assert.equal(records[2].category, 'nginx_error');
+    const deployment = await readFile(
+        path.join(repositoryRoot, 'deploy/deploy-production-from-s3.sh'),
+        'utf8',
+    );
+    assert.ok(deployment.includes('[[ "${nginx_worker_user}" == "www-data" ]]'));
+    assert.ok(
+        deployment.indexOf('systemctl is-active --quiet vendure-nginx-error-log.service') <
+            deployment.indexOf('sudo -n nginx -t\n'),
+    );
+});
+
+void test('every production ingress uses credential-safe access logs, including redirects', async () => {
+    const config = await readFile(path.join(repositoryRoot, 'deploy/nginx/damatong.conf'), 'utf8');
+    const accessFormat = config.match(/log_format vendure_access escape=json(?<body>[\s\S]*?);/u)?.groups
+        ?.body;
+    const realtimeFormat = config.match(/log_format vendure_realtime escape=json(?<body>[\s\S]*?);/u)?.groups
+        ?.body;
+
+    assert.ok(accessFormat);
+    assert.ok(realtimeFormat);
+    for (const format of [accessFormat, realtimeFormat]) {
+        assert.doesNotMatch(
+            format,
+            /\$(?:request|request_uri|args|query_string|http_referer|http_authorization|http_cookie|uri)\b/u,
+        );
+    }
+    assert.match(accessFormat, /\$vendure_log_path/u);
+    // Diagnose a public timeout using the response's CF-Ray and origin timings,
+    // without recovering query strings, request bodies or credentials in logs.
+    for (const field of [
+        'upstream_connect_time',
+        'upstream_header_time',
+        'upstream_response_time',
+        'upstream_status',
+        'msec',
+        'http_cf_ray',
+        'server_protocol',
+        'connection',
+        'connection_requests',
+    ]) {
+        assert.ok(accessFormat.includes(`$${field}`), `missing origin correlation field ${field}`);
+    }
+    assert.match(config, /map \$uri \$vendure_log_path/u);
+    assert.ok(config.includes('~*^/digital-delivery(?:/|$) /digital-delivery/[redacted];'));
+    assert.ok(config.includes('~*^/image-generation/private(?:/|$) /image-generation/private/[redacted];'));
+
+    const servers = config.split(/^server \{/mu).slice(1);
+    assert.equal(servers.length, 6);
+    for (const server of servers) {
+        assert.match(server, /^    access_log \S+ vendure_access;$/mu);
+    }
+    for (const directive of config.matchAll(/^\s*access_log (.+);$/gmu)) {
+        assert.match(directive[1], / vendure_(?:access|realtime)$/u);
+    }
+});
+
 void test('production Nginx routes protected downloads and hardens both APIs', async () => {
     const config = await readFile(path.join(repositoryRoot, 'deploy/nginx/damatong.conf'), 'utf8');
 
@@ -105,6 +236,21 @@ void test('production console proxies the dashboard health check to Vendure', as
     assert.ok(healthLocation?.groups?.body);
     assert.match(healthLocation.groups.body, /proxy_pass http:\/\/vendure_backend;/u);
     assert.match(healthLocation.groups.body, /include proxy_params;/u);
+});
+
+void test('production console serves immutable dashboard assets from the active release', async () => {
+    const config = await readFile(path.join(repositoryRoot, 'deploy/nginx/damatong.conf'), 'utf8');
+    const consoleServer = config.slice(config.indexOf('server_name console.moyaoai.com;'));
+    const assetLocation = consoleServer.match(
+        /location \^~ \/dashboard\/assets\/ \{(?<body>[\s\S]*?)\n    \}/u,
+    );
+
+    assert.ok(assetLocation?.groups?.body);
+    assert.match(
+        assetLocation.groups.body,
+        /alias \/var\/www\/kaiyuangouwu-current\/packages\/next-admin\/dist\/assets\//u,
+    );
+    assert.doesNotMatch(assetLocation.groups.body, /proxy_pass/u);
 });
 
 void test('legacy browser fallback files remain exact static routes beside the direct storefront', async () => {

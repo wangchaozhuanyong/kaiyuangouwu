@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { ChangeEvent, ReactNode, useEffect, useRef, useState } from 'react';
 
+import { storefrontErrorMessage } from './storefront-errors';
 import { routeNavigateOptions } from './storefront-router';
 import { ActiveCustomer, StoreCommerceMode, StorefrontLanguage } from './types';
 
@@ -90,7 +91,7 @@ export function AccountSecurityPage({
         } catch (error) {
             setAvatarError(
                 error instanceof Error
-                    ? error.message
+                    ? storefrontErrorMessage(error, language)
                     : isZh
                       ? '头像上传失败，请重试'
                       : 'Profile photo upload failed. Try again.',

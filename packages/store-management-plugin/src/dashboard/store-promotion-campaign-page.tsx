@@ -114,10 +114,6 @@ interface CouponDraft {
     discountRate: string;
     collectionIds: string[];
     productIds: string[];
-    startsAt: string;
-    endsAt: string;
-    usageLimit: string;
-    perCustomerUsageLimit: string;
     claimStartsAt: string;
     claimEndsAt: string;
     validityDays: string;
@@ -165,6 +161,7 @@ const couponLedgerEventLabels = {
     EXPIRED: '过期',
     REVOKED: '撤销',
     REFUND_SETTLED: '退款完成',
+    CORRECTED: '规则修复',
 } as const;
 
 function CampaignMetric({
@@ -1906,36 +1903,6 @@ function CouponEditor({
                                     />
                                 </FormField>
                             ) : null}
-                            <FormField label="优惠可用开始时间">
-                                <Input
-                                    type="datetime-local"
-                                    value={draft.startsAt}
-                                    onChange={event => update('startsAt', event.target.value)}
-                                />
-                            </FormField>
-                            <FormField label="优惠可用结束时间">
-                                <Input
-                                    type="datetime-local"
-                                    value={draft.endsAt}
-                                    onChange={event => update('endsAt', event.target.value)}
-                                />
-                            </FormField>
-                            <FormField label="总使用次数" hint="留空表示不限制。">
-                                <Input
-                                    type="number"
-                                    min={1}
-                                    value={draft.usageLimit}
-                                    onChange={event => update('usageLimit', event.target.value)}
-                                />
-                            </FormField>
-                            <FormField label="每位客户可用次数" hint="留空表示不限制。">
-                                <Input
-                                    type="number"
-                                    min={1}
-                                    value={draft.perCustomerUsageLimit}
-                                    onChange={event => update('perCustomerUsageLimit', event.target.value)}
-                                />
-                            </FormField>
                             <FormField label="领取开始时间">
                                 <Input
                                     type="datetime-local"
@@ -1950,7 +1917,10 @@ function CouponEditor({
                                     onChange={event => update('claimEndsAt', event.target.value)}
                                 />
                             </FormField>
-                            <FormField label="领取后有效天数" hint="留空则有效至活动结束。">
+                            <FormField
+                                label="领取后有效天数"
+                                hint="从领取成功开始计时，领取截止不影响已领取券的有效期。"
+                            >
                                 <Input
                                     type="number"
                                     min={1}
@@ -2264,13 +2234,9 @@ function newCouponDraft(): CouponDraft {
         discountRate: '8.5',
         collectionIds: [],
         productIds: [],
-        startsAt: range.startsAt,
-        endsAt: range.endsAt,
-        usageLimit: '1',
-        perCustomerUsageLimit: '1',
         claimStartsAt: range.startsAt,
         claimEndsAt: range.endsAt,
-        validityDays: '1',
+        validityDays: '7',
         issueLimit: '1',
         stackPolicy: 'EXCLUSIVE',
         returnOnCancellation: true,
@@ -2294,9 +2260,6 @@ function couponDraftError(draft: CouponDraft): string | null {
     if (draft.kind === 'PRODUCT_PERCENTAGE' && !draft.productIds.length) {
         return '请选择至少一个适用商品';
     }
-    if (draft.startsAt && draft.endsAt && Date.parse(draft.startsAt) >= Date.parse(draft.endsAt)) {
-        return '结束时间必须晚于开始时间';
-    }
     if (
         draft.claimStartsAt &&
         draft.claimEndsAt &&
@@ -2304,7 +2267,8 @@ function couponDraftError(draft: CouponDraft): string | null {
     ) {
         return '领取结束时间必须晚于领取开始时间';
     }
-    if (draft.validityDays && Number(draft.validityDays) < 1) return '领取后有效天数必须大于 0';
+    if (!Number.isInteger(Number(draft.validityDays)) || Number(draft.validityDays) < 1)
+        return '领取后有效天数必须为正整数';
     if (draft.issueLimit && Number(draft.issueLimit) < 1) return '发放总量必须大于 0';
     return null;
 }
@@ -2372,10 +2336,6 @@ function couponInput(draft: CouponDraft) {
         discountRate: draft.kind === 'ORDER_FIXED' ? null : Number(draft.discountRate),
         collectionIds: draft.kind === 'COLLECTION_PERCENTAGE' ? draft.collectionIds : [],
         productIds: draft.kind === 'PRODUCT_PERCENTAGE' ? draft.productIds : [],
-        startsAt: dateInput(draft.startsAt),
-        endsAt: dateInput(draft.endsAt),
-        usageLimit: integerInput(draft.usageLimit),
-        perCustomerUsageLimit: integerInput(draft.perCustomerUsageLimit),
         claimStartsAt: dateInput(draft.claimStartsAt),
         claimEndsAt: dateInput(draft.claimEndsAt),
         validityDays: integerInput(draft.validityDays),

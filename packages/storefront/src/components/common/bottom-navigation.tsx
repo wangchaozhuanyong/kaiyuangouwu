@@ -144,6 +144,14 @@ export function shouldShowBottomNavigation(
     );
 }
 
+export function mobileBottomNavigationLabel(
+    item: BottomNavigationItem,
+    language: StorefrontLanguage,
+): string {
+    if (language === 'en' && item.routeName === 'services' && item.label.length > 8) return 'Services';
+    return item.label;
+}
+
 function groupedActiveRoute(route: RouteName): RouteName {
     if (route === 'product' || route === 'search') return 'category';
     if (route === 'purchase' || route === 'checkout' || route === 'payment') return 'cart';
@@ -171,7 +179,7 @@ export function BottomNavigation({
 
     return (
         <nav
-            className="storefront-bottom-nav fixed bottom-0 left-1/2 z-40 grid h-[calc(var(--bottom-navigation-height)+env(safe-area-inset-bottom,0px))] w-full max-w-[430px] border-t border-black/5 bg-white/95 px-2 pb-[calc(8px+env(safe-area-inset-bottom,0px))] pt-1.5 shadow-[0_-2px_14px_rgba(15,23,42,0.04)] backdrop-blur-md lg:top-0 lg:bottom-auto lg:h-[72px] lg:max-w-[420px] lg:border-t-0 lg:bg-transparent lg:shadow-none lg:backdrop-blur-none"
+            className="storefront-bottom-nav fixed bottom-0 left-1/2 z-40 grid h-[calc(var(--bottom-navigation-height)+env(safe-area-inset-bottom,0px))] w-full max-w-[430px] border-t border-black/5 bg-white/95 px-2 pb-[calc(8px+env(safe-area-inset-bottom,0px))] pt-1.5 shadow-[0_-2px_14px_rgba(15,23,42,0.04)] backdrop-blur-md lg:top-0 lg:bottom-auto lg:h-[72px] lg:max-w-[560px] lg:border-t-0 lg:bg-transparent lg:shadow-none lg:backdrop-blur-none"
             style={{ gridTemplateColumns: 'repeat(' + items.length + ', minmax(0, 1fr))' }}
             aria-label={isZh ? '主导航' : 'Main navigation'}
         >
@@ -186,10 +194,11 @@ export function BottomNavigation({
                     <a
                         key={item.key}
                         className={cn(
-                            'flex w-[56px] min-w-[56px] flex-col items-center justify-center justify-self-center rounded-xl border-0 bg-transparent p-0.5 text-slate-500 transition-transform active:scale-95 lg:gap-[3px] lg:hover:bg-slate-100 lg:hover:text-slate-900',
+                            'flex w-[56px] min-w-[56px] flex-col items-center justify-center justify-self-center rounded-xl border-0 bg-transparent p-0.5 text-slate-500 transition-transform active:scale-95 lg:w-[96px] lg:min-w-[96px] lg:gap-[3px] lg:hover:bg-slate-100 lg:hover:text-slate-900',
                             isActive && 'font-bold text-slate-900 lg:hover:bg-transparent',
                         )}
                         aria-current={isActive ? 'page' : undefined}
+                        aria-label={item.label}
                         href={item.target}
                         onClick={event => {
                             if (
@@ -235,7 +244,16 @@ export function BottomNavigation({
                             )}
                         </span>
                         <span
-                            className="max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-[11px] leading-tight lg:text-[13px]"
+                            className="max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-[11px] leading-tight lg:hidden"
+                            style={{
+                                color: isActive ? item.activeColor : '#64748B',
+                                fontWeight: isActive ? 700 : 500,
+                            }}
+                        >
+                            {mobileBottomNavigationLabel(item, language)}
+                        </span>
+                        <span
+                            className="hidden max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-[13px] leading-tight lg:block"
                             style={{
                                 color: isActive ? item.activeColor : '#64748B',
                                 fontWeight: isActive ? 700 : 500,

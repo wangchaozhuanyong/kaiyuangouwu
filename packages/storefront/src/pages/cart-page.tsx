@@ -2,6 +2,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { Check, ChevronRight, Minus, Package, ShoppingBag, TicketPercent } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { cartLineCanSelect, cartSelectionState } from '../product-availability';
 import { appliedCouponLabel } from '../storefront-coupons';
 import { CartPageContext } from '../storefront-page-contexts';
 import { routeHref, routeNavigateOptions, type RouteState } from '../storefront-router';
@@ -84,6 +85,11 @@ export function CartPage() {
     } = CartPageContext.useValue();
     const isZh = language === 'zh';
     const lines = cart?.lines ?? [];
+    const selectionState = cartSelectionState(lines);
+    const selectableQuantity = lines
+        .filter(cartLineCanSelect)
+        .reduce((total, line) => total + line.quantity, 0);
+    const selectedStockInvalid = lines.some(line => line.selected && !cartLineCanSelect(line));
     const [invalidOpen, setInvalidOpen] = useState(false);
     const [couponOpen, setCouponOpen] = useState(false);
     const [openActionLineId, setOpenActionLineId] = useState<string | null>(null);
@@ -202,30 +208,35 @@ export function CartPage() {
                 <h1 className="topbar-title">{isZh ? '我的购物车' : 'My Cart'}</h1>
                 {!!lines.length && (
                     <button
-                        className={`select-all ${(cart?.selectionState ?? 'NONE').toLowerCase()}`}
+                        className={`select-all ${selectionState.toLowerCase()}`}
                         type="button"
                         onClick={onToggleAll}
-                        disabled={editingBlocked || (loading && !selectionPending) || locked}
+                        disabled={
+                            editingBlocked ||
+                            (loading && !selectionPending) ||
+                            locked ||
+                            (!selectableQuantity && !cart?.selectedQuantity)
+                        }
                     >
                         <span>
-                            {cart?.selectionState === 'ALL' ? (
+                            {selectionState === 'ALL' ? (
                                 <Check />
-                            ) : cart?.selectionState === 'PARTIAL' ? (
+                            ) : selectionState === 'PARTIAL' ? (
                                 <Minus />
                             ) : null}
                         </span>
                         <b>
-                            {cart?.selectionState === 'ALL'
+                            {selectionState === 'ALL'
                                 ? isZh
-                                    ? `已全选 ${cart.selectedQuantity}件`
-                                    : `All ${cart.selectedQuantity}`
-                                : cart?.selectionState === 'PARTIAL'
+                                    ? `已全选 ${cart?.selectedQuantity}件`
+                                    : `All ${cart?.selectedQuantity}`
+                                : selectionState === 'PARTIAL'
                                   ? isZh
-                                      ? `已选 ${cart.selectedQuantity}/${cart.totalQuantity}件`
-                                      : `${cart.selectedQuantity}/${cart.totalQuantity} selected`
+                                      ? `已选 ${cart?.selectedQuantity}/${selectableQuantity}件`
+                                      : `${cart?.selectedQuantity}/${selectableQuantity} selected`
                                   : isZh
-                                    ? `全选 ${cart?.totalQuantity ?? 0}件`
-                                    : `Select all ${cart?.totalQuantity ?? 0}`}
+                                    ? `全选 ${selectableQuantity}件`
+                                    : `Select all ${selectableQuantity}`}
                         </b>
                     </button>
                 )}
@@ -237,6 +248,13 @@ export function CartPage() {
                 </button>
             )}
             {error && <InlineError message={error} action={isZh ? '刷新' : 'Refresh'} onAction={onRetry} />}
+            {!locked && activeLines.some(line => !cartLineCanSelect(line)) && (
+                <p className="cart-stock-notice" role="status">
+                    {isZh
+                        ? '库存不足的商品无法勾选，请调整数量或移除后继续。全选仅选择库存充足的商品。'
+                        : 'Items without enough stock cannot be selected. Reduce their quantity or remove them. Select all includes only items with enough stock.'}
+                </p>
+            )}
             {locked && (
                 <div className="cart-pending-actions">
                     <InlineError
@@ -478,7 +496,7 @@ export function CartPage() {
                     <button
                         type="button"
                         onClick={onCheckout}
-                        disabled={loading || locked || !cart?.selectedQuantity}
+                        disabled={loading || locked || !cart?.selectedQuantity || selectedStockInvalid}
                     >
                         {locked
                             ? isZh

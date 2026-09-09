@@ -350,6 +350,8 @@
         font-weight: 500;
         line-height: 1.5;
         text-align: left;
+        white-space: normal;
+        overflow-wrap: anywhere;
     }
     .desktop-store-layout .homepage-modules .home-intro-grid .home-trust-bar {
         display: flex;

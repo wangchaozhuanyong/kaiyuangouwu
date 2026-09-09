@@ -297,6 +297,23 @@
         scroll-padding-inline: 32px;
     }
 
+    html[lang='en'] .primary-categories button {
+        width: 140px;
+        min-width: 140px;
+        height: 68px;
+    }
+
+    html[lang='en'] .primary-category-image {
+        width: 36px;
+        height: 36px;
+    }
+
+    html[lang='en'] .primary-category-label {
+        height: 24px;
+        line-height: 12px;
+        -webkit-line-clamp: 2;
+    }
+
     .primary-categories-all {
         min-width: 62px;
     }
@@ -708,6 +725,14 @@
         justify-content: center;
     }
 
+    .auth-page.auth-page-managed .auth-hero-message-managed {
+        width: auto;
+        max-width: none;
+        inset: auto 32px 32px;
+        padding: 0;
+        gap: 12px;
+    }
+
     .auth-page .auth-hero-kicker {
         max-width: 100%;
         justify-content: flex-start;
@@ -761,10 +786,13 @@
     }
 
     .auth-page .auth-hero-tags {
+        width: 100%;
         margin-top: 20px;
         display: flex;
+        flex-wrap: wrap;
         justify-content: flex-start;
         gap: 0;
+        overflow: visible;
     }
 
     .auth-page .auth-hero-tags > span {
@@ -840,6 +868,27 @@
         width: min(100%, var(--app-width));
         max-height: min(70dvh, 420px);
         border-radius: 16px 16px 0 0;
+    }
+}
+
+@media (min-width: 1024px) and (max-width: 1199px) {
+    .auth-page .auth-hero-message h2 {
+        max-width: none;
+        font-size: clamp(28px, 3.1vw, 34px);
+        -webkit-line-clamp: 3;
+    }
+
+    .auth-page .auth-hero-tags {
+        width: 100%;
+        flex-wrap: wrap;
+        row-gap: 6px;
+        overflow: visible;
+    }
+
+    .auth-page .auth-hero-tags > span {
+        padding-right: 6px;
+        padding-left: 6px;
+        font-size: 10.5px;
     }
 }
 

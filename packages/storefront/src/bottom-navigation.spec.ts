@@ -3,6 +3,7 @@ import { Node, Project, SyntaxKind } from 'ts-morph';
 import { describe, expect, it } from 'vitest';
 
 import {
+    mobileBottomNavigationLabel,
     resolveBottomNavigationItems,
     shouldShowBottomNavigation,
 } from './components/common/bottom-navigation';
@@ -77,6 +78,17 @@ describe('bottom navigation configuration', () => {
         expect(items[0]).toMatchObject({ target: '/', iconUrl: '/assets/home.webp' });
     });
 
+    it('keeps the managed service label on desktop but uses a readable narrow-screen label', () => {
+        const item = resolveBottomNavigationItems(
+            navigationBlock([navigationItem('1', 'Business Services', '/services')]),
+            'en',
+        )[0];
+
+        expect(item.label).toBe('Business Services');
+        expect(mobileBottomNavigationLabel(item, 'en')).toBe('Services');
+        expect(mobileBottomNavigationLabel(item, 'zh')).toBe('Business Services');
+    });
+
     it('shows the navigation on configured destination pages while retaining root-page visibility', () => {
         const block = navigationBlock([navigationItem('1', '收藏', '/favorites')]);
 
@@ -86,7 +98,7 @@ describe('bottom navigation configuration', () => {
         expect(shouldShowBottomNavigation('orders', block)).toBe(false);
     });
 
-    it('keeps tablet navigation at the bottom and moves it into the desktop header at 1024px', () => {
+    it('keeps mobile navigation separate from the dedicated desktop header', () => {
         const source = readFileSync(
             new URL('./components/common/bottom-navigation.tsx', import.meta.url),
             'utf8',
@@ -94,10 +106,17 @@ describe('bottom navigation configuration', () => {
 
         expect(source).toContain('h-[calc(var(--bottom-navigation-height)+env(safe-area-inset-bottom,0px))]');
         expect(source).toContain('lg:top-0 lg:bottom-auto');
+        expect(source).toContain('lg:max-w-[560px]');
+        expect(source).toContain('lg:w-[96px] lg:min-w-[96px]');
         expect(source).toContain('lg:shadow-none lg:backdrop-blur-none');
         expect(source).not.toContain('sm:top-0');
         expect(source).toContain('storefront-bottom-nav');
         expect(source).not.toContain('-translate-x-1/2');
+
+        const shell = readFileSync(new URL('./StorefrontShell.tsx', import.meta.url), 'utf8');
+        expect(shell).toContain('{!desktop && shouldShowBottomNavigation(');
+        expect(shell).toContain('{desktop && (');
+        expect(shell).toContain('<DesktopHeader');
     });
 
     it('mounts navigation outside storefront-app to prevent mobile Safari clipping traps', () => {

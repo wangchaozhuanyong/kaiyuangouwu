@@ -52,7 +52,7 @@ describe('ApiKey resolver', () => {
         expect(result.apiKey).toBeDefined();
         expect(result.apiKey?.id).toBe(createdApiKeyId);
         expect(result.apiKey?.name).toBe('Test API Key');
-        expect(result.apiKey?.translations.find(t => t.languageCode === LanguageCode.en)).toBeDefined();
+        expect(result.apiKey?.translations.find(t => t.languageCode === 'en')).toBeDefined();
     });
 
     it('apiKeys', async ({ expect }) => {
@@ -74,7 +74,7 @@ describe('ApiKey resolver', () => {
         });
         expect(result.updateApiKey.id).toBe(createdApiKeyId);
         expect(result.updateApiKey.name).toBe('Updated API Key');
-        expect(result.updateApiKey.translations.find(t => t.languageCode === LanguageCode.de)?.name).toBe(
+        expect(result.updateApiKey.translations.find(t => t.languageCode === 'de')?.name).toBe(
             'Neuer Eintrag',
         );
     });
@@ -97,6 +97,51 @@ describe('ApiKey resolver', () => {
         const result = await adminClient.query(ROTATE_API_KEY, { id: apiKey.createApiKey.entityId });
         expect(result.rotateApiKey.apiKey).toBeDefined();
         expect(apiKey.createApiKey.apiKey).not.toBe(result.rotateApiKey.apiKey);
+    });
+
+    // F-01: holding UpdateApiKey must not grant the permissions of a stronger key.
+    it('rejects a restricted key rotating a stronger key while preserving authorized rotations', async ({
+        expect,
+    }) => {
+        const { createRole } = await adminClient.query(CREATE_ROLE, {
+            input: {
+                code: 'api-key-rotation-only',
+                description: 'API key rotation regression fixture',
+                permissions: [Permission.UpdateApiKey],
+            },
+        });
+        const createKey = (roleIds: string[], name: string) =>
+            adminClient.query(CREATE_API_KEY, {
+                input: { roleIds, translations: [{ languageCode: LanguageCode.en, name }] },
+            });
+        const restricted = (await createKey([createRole.id], 'Rotation caller')).createApiKey;
+        const stronger = (await createKey(['1'], 'Higher permission target')).createApiKey;
+        const permitted = (await createKey([createRole.id], 'Equal permission target')).createApiKey;
+        const request = async (key: string, query: string, variables: Record<string, unknown> = {}) => {
+            const response = await fetch(adminApiUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    [String(config.authOptions.apiKeyHeaderKey)]: key,
+                },
+                body: JSON.stringify({ query, variables }),
+            });
+            return response.json();
+        };
+        const mutation = 'mutation($id: ID!) { rotateApiKey(id: $id) { apiKey } }';
+        const denied = await request(restricted.apiKey, mutation, { id: stronger.entityId });
+        expect(denied.data?.rotateApiKey).toBeFalsy();
+        expect(denied.errors?.[0]?.message).toBe('Active user does not have sufficient permissions');
+
+        // The rejected attempt must not invalidate the legitimate user's existing credential.
+        const originalKey = await request(stronger.apiKey, '{ administrator(id: 1) { id } }');
+        expect(originalKey.errors).toBeUndefined();
+        expect(originalKey.data?.administrator?.id).toBeDefined();
+
+        const allowed = await request(restricted.apiKey, mutation, { id: permitted.entityId });
+        expect(allowed.errors).toBeUndefined();
+        expect(allowed.data?.rotateApiKey?.apiKey).toBeTruthy();
+        expect(allowed.data.rotateApiKey.apiKey).not.toBe(permitted.apiKey);
     });
 
     it('API-Key usage life cycle: Read, Rotate, Delete', async ({ expect }) => {

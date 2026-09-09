@@ -163,7 +163,7 @@ describe('StoreCouponLifecycleService', () => {
         const now = Date.now();
         const startsAt = new Date(now + 24 * 60 * 60_000);
         const endsAt = new Date(now + 10 * 24 * 60 * 60_000);
-        const harness = createIssueHarness({ startsAt, endsAt });
+        const harness = createIssueHarness({ startsAt, endsAt, validityDays: null });
 
         const coupon = await harness.service.claim(ctx, 'promotion-1');
 
@@ -175,7 +175,7 @@ describe('StoreCouponLifecycleService', () => {
                 validFrom: startsAt,
                 minimumSpend: 10_000,
                 discountAmount: 2_000,
-                usable: true,
+                usable: false,
             }),
         );
         expect(harness.savedCoupon.validUntil?.getTime()).toBeLessThanOrEqual(endsAt.getTime());
@@ -183,6 +183,32 @@ describe('StoreCouponLifecycleService', () => {
             expect.objectContaining({ eventType: 'CLAIMED', customerCouponId: 'coupon-1' }),
             { reload: false },
         );
+    });
+
+    it('starts seven complete days at claim time, including claims just before issuance ends', async () => {
+        const end = new Date(Date.now() + 3_600_000);
+        const harness = createIssueHarness({ endsAt: end, validityDays: 7 });
+        const coupon = await harness.service.claim(ctx, 'promotion-1');
+        expect(coupon.validFrom).toEqual(coupon.claimedAt);
+        expect(Number(coupon.validUntil) - coupon.claimedAt.getTime()).toBe(7 * 86_400_000);
+        expect(coupon.validUntil?.getTime()).toBeGreaterThan(end.getTime());
+    });
+
+    it('keeps an owned coupon usable until the exact expiry boundary', async () => {
+        const harness = createIssueHarness({ validityDays: 7 });
+        const coupon = await harness.service.claim(ctx, 'promotion-1');
+        const expires = Number(coupon.validUntil);
+        vi.useFakeTimers({ toFake: ['Date'] });
+        try {
+            vi.setSystemTime(expires - 1);
+            expect((harness.service as any).toCustomerCouponView(ctx, harness.savedCoupon).usable).toBe(true);
+            vi.setSystemTime(expires);
+            expect((harness.service as any).toCustomerCouponView(ctx, harness.savedCoupon).usable).toBe(
+                false,
+            );
+        } finally {
+            vi.useRealTimers();
+        }
     });
 
     it('enforces the campaign issue limit inside the claim transaction', async () => {
@@ -418,6 +444,48 @@ describe('StoreCouponLifecycleService', () => {
         expect(harness.ledgerEvents).toEqual(expect.arrayContaining(['REFUND_SETTLED', 'RETURNED']));
     });
 
+    it('does not return a coupon already redeemed by a different order', async () => {
+        const harness = createRefundHarness({ settledRefundTotal: 10_000, orderTotal: 10_000 });
+        harness.coupon.usedOrderId = 'order-b';
+        harness.allocation.status = 'REFUNDED';
+        await (harness.service as any).handleSettledRefund(ctx, 'order-1', 'refund-1');
+        expect(harness.coupon).toMatchObject({ status: 'USED', usedOrderId: 'order-b', returnCount: 0 });
+        expect(harness.ledgerEvents).not.toContain('RETURNED');
+    });
+
+    it('returns only once and never renews validity across repeated refund events', async () => {
+        const harness = createRefundHarness({ settledRefundTotal: 10_000, orderTotal: 10_000 });
+        const validUntil = harness.coupon.validUntil;
+        await (harness.service as any).handleSettledRefund(ctx, 'order-1', 'refund-1');
+        await (harness.service as any).handleSettledRefund(ctx, 'order-1', 'refund-1');
+        expect(harness.coupon).toMatchObject({
+            status: 'RETURNED',
+            usedOrderId: null,
+            returnCount: 1,
+            validUntil,
+        });
+        expect(harness.ledgerEvents.filter(event => event === 'RETURNED')).toHaveLength(1);
+    });
+
+    it('uses the paid allocation total for partial refunds after an order is cancelled', async () => {
+        const harness = createRefundHarness({ settledRefundTotal: 2_500, orderTotal: 0 });
+        harness.allocation.orderTotalWithTax = 10_000;
+        await (harness.service as any).handleSettledRefund(ctx, 'order-1', 'refund-1');
+        expect(harness.coupon.status).toBe('USED');
+        expect(harness.allocation.refundedAmount).toBe(500);
+    });
+
+    it('does not return an expired coupon or one with full-refund returns disabled', async () => {
+        const expired = createRefundHarness({ settledRefundTotal: 10_000, orderTotal: 10_000 });
+        expired.coupon.validUntil = new Date(Date.now() - 1000);
+        await (expired.service as any).handleSettledRefund(ctx, 'order-1', 'refund-1');
+        expect(expired.coupon).toMatchObject({ status: 'EXPIRED', returnCount: 0 });
+        const disabled = createRefundHarness({ settledRefundTotal: 10_000, orderTotal: 10_000 });
+        disabled.coupon.campaignConfig.returnOnFullRefund = false;
+        await (disabled.service as any).handleSettledRefund(ctx, 'order-1', 'refund-1');
+        expect(disabled.coupon.status).toBe('USED');
+    });
+
     it('keeps a coupon used after a partial refund and records the prorated discount', async () => {
         const harness = createRefundHarness({ settledRefundTotal: 2_500, orderTotal: 10_000 });
 
@@ -432,12 +500,14 @@ describe('StoreCouponLifecycleService', () => {
 
 function createIssueHarness({
     startsAt = null,
+    validityDays = 3,
     endsAt = new Date(Date.now() + 10 * 24 * 60 * 60_000),
     issuedCount = 0,
     customerClaimedCount = 0,
     issueLimit = 100,
 }: {
     startsAt?: Date | null;
+    validityDays?: number | null;
     endsAt?: Date | null;
     issuedCount?: number;
     customerClaimedCount?: number;
@@ -456,10 +526,11 @@ function createIssueHarness({
     };
     const config = {
         id: 'config-1',
+        channelId: 'channel-1',
         promotionId: promotion.id,
         claimStartsAt: null,
         claimEndsAt: null,
-        validityDays: 3,
+        validityDays,
         issueLimit,
         perCustomerClaimLimit: 1,
         stackPolicy: 'EXCLUSIVE',
@@ -530,6 +601,7 @@ function createRefundHarness({
         promotionId: 'promotion-1',
         customerId: 'customer-1',
         status: 'USED',
+        usedOrderId: 'order-1',
         returnCount: 0,
         validUntil: new Date(Date.now() + 24 * 60 * 60_000),
         campaignConfig: { returnOnFullRefund: true },
@@ -555,6 +627,12 @@ function createRefundHarness({
             CustomerCoupon,
             {
                 findOne: vi.fn(async () => coupon),
+                update: vi.fn(async (criteria: any, changes: any) => {
+                    if (coupon.status !== criteria.status || coupon.usedOrderId !== criteria.usedOrderId)
+                        return { affected: 0 };
+                    Object.assign(coupon, changes);
+                    return { affected: 1 };
+                }),
                 save: vi.fn(async (value: unknown) => value),
             },
         ],

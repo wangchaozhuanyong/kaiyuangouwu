@@ -60,6 +60,9 @@ module.exports = {
             cwd: runtimeDirectory,
             script: 'packages/dev-server/dist/index.js',
             interpreter: process.execPath,
+            // Collect the JS heap before reaching the 768 MiB RSS restart guard.
+            // Leave room for young-generation memory, image buffers and native allocations.
+            node_args: ['--max-old-space-size=384', '--max-semi-space-size=16'],
             env: sharedEnvironment,
             ...sharedProcessOptions,
         },

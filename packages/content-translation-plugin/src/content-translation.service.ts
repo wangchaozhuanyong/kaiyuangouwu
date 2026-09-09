@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { containsHanContent, isUsableEnglishTranslation } from '@vendure/common/lib/translation-validation';
 import { RequestContext, TransactionalConnection, UserInputError } from '@vendure/core';
 import { createHash } from 'node:crypto';
-import { In, IsNull } from 'typeorm';
+import { Brackets, In, IsNull } from 'typeorm';
 
 import { CONTENT_TRANSLATION_OPTIONS } from './constants.js';
 import { ContentTranslationState } from './entities/content-translation-state.entity.js';
@@ -13,6 +13,7 @@ import {
     TranslationResultCacheService,
 } from './translation-result-cache.service.js';
 import {
+    ContentTranslationAuditOptions,
     ContentTranslationProvider,
     ContentTranslationRequest,
     ContentTranslationResult,
@@ -472,34 +473,59 @@ export class ContentTranslationService {
         });
     }
 
-    async audit(ctx: RequestContext, channelId?: string | number | null) {
+    async audit(
+        ctx: RequestContext,
+        channelId?: string | number | null,
+        options?: ContentTranslationAuditOptions | null,
+    ) {
         const repository = this.connection.getRepository(ctx, ContentTranslationState);
-        const where =
-            channelId === undefined
-                ? undefined
-                : channelId === null
-                  ? { channelId: IsNull() }
-                  : [{ channelId: String(channelId) }, { channelId: IsNull() }];
-        const [states, allStatuses] = await Promise.all([
-            repository.find({
-                ...(where ? { where } : {}),
-                order: { updatedAt: 'DESC' },
-                take: 1_000,
-            }),
-            repository.find({
-                ...(where ? { where } : {}),
-                select: { status: true },
-            }),
-        ]);
-        const counts = new Map<ContentTranslationState['status'], number>();
-        for (const state of allStatuses) {
-            counts.set(state.status, (counts.get(state.status) ?? 0) + 1);
+        const scope = repository.createQueryBuilder('state');
+        if (channelId === null) {
+            scope.where('state.channelId IS NULL');
+        } else if (channelId !== undefined) {
+            scope.where('(state.channelId = :channelId OR state.channelId IS NULL)', {
+                channelId: String(channelId),
+            });
         }
+        const records = scope.clone();
+        if (options?.status) records.andWhere('state.status = :status', { status: options.status });
+        if (options?.entityType)
+            records.andWhere('state.entityType = :entityType', { entityType: options.entityType });
+        const search = options?.search?.trim().toLowerCase();
+        if (search) {
+            // Match the previous literal substring search; SQL wildcards are not user patterns.
+            const pattern = `%${search.replace(/[!%_]/g, '!$&')}%`;
+            records.andWhere(
+                new Brackets(query => {
+                    for (const field of ['entityType', 'entityId', 'fieldPath', 'status', 'error']) {
+                        query.orWhere(`LOWER(state.${field}) LIKE :search ESCAPE '!'`, { search: pattern });
+                    }
+                }),
+            );
+        }
+        const skip = Math.max(0, Math.trunc(options?.skip ?? 0));
+        // Calls without options retain the legacy response size for existing admin extensions.
+        const take = options == null ? 1_000 : Math.min(100, Math.max(1, Math.trunc(options.take ?? 20)));
+        const [[states, filteredTotal], statusCounts] = await Promise.all([
+            records
+                .orderBy('state.updatedAt', 'DESC')
+                .addOrderBy('state.id', 'DESC')
+                .skip(skip)
+                .take(take)
+                .getManyAndCount(),
+            scope
+                .select('state.status', 'status')
+                .addSelect('COUNT(*)', 'count')
+                .groupBy('state.status')
+                .getRawMany<{ status: ContentTranslationState['status']; count: string | number }>(),
+        ]);
+        const counts = statusCounts.map(row => ({ status: row.status, count: Number(row.count) }));
         return {
             configured: this.isConfigured(),
             provider: this.providerName(),
-            total: allStatuses.length,
-            counts: [...counts.entries()].map(([status, count]) => ({ status, count })),
+            total: counts.reduce((sum, row) => sum + row.count, 0),
+            filteredTotal,
+            counts,
             states,
         };
     }
