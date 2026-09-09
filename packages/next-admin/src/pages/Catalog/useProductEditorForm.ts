@@ -17,6 +17,7 @@ import { useUnsavedChangesWarning } from '../../hooks/use-unsaved-changes-warnin
 import { useUrlTab } from '../../hooks/use-url-tab';
 import { stockPolicyForDeliveryMode } from '../../utils/commerce-mode';
 import { toUserFacingError } from '../../utils/user-facing-error';
+import { findUnusedSystemOptionGroupIds, isSystemImportOptionGroup } from './catalog-option-groups';
 import { productEditorDraft } from './product-editor-draft';
 import type { ProductEditorFormErrors } from './product-editor-types';
 import {
@@ -185,6 +186,7 @@ export function useProductEditorForm() {
                     p.assets.map(asset => [asset.id, { ...asset, type: 'IMAGE' } satisfies AssetItem]),
                 ),
             );
+            setKnownOptionGroups(Object.fromEntries(p.optionGroups.map(group => [group.id, group])));
         } else if (isCreateMode) {
             setProductName('');
             setSlug('');
@@ -353,7 +355,19 @@ export function useProductEditorForm() {
         }
     };
 
+    const removeUnusedSystemOptionGroups = () => {
+        const unusedSystemGroupIds = findUnusedSystemOptionGroupIds(
+            productData?.product?.optionGroups ?? [],
+            variants,
+        );
+        if (unusedSystemGroupIds.length > 0) {
+            const unusedIds = new Set(unusedSystemGroupIds);
+            setSelectedOptionGroupIds(ids => ids.filter(id => !unusedIds.has(id)));
+        }
+    };
+
     const handleAddVariant = () => {
+        removeUnusedSystemOptionGroups();
         setVariants(prev => [
             ...prev,
             {
@@ -372,6 +386,7 @@ export function useProductEditorForm() {
     };
 
     const handleGenerateVariantMatrix = () => {
+        removeUnusedSystemOptionGroups();
         const availableGroups = new Map(
             [...Object.values(knownOptionGroups), ...(optionGroupsData?.productOptionGroups.items ?? [])].map(
                 group => [group.id, group],
@@ -379,7 +394,9 @@ export function useProductEditorForm() {
         );
         const selectedGroups = selectedOptionGroupIds
             .map(id => availableGroups.get(id))
-            .filter((group): group is OptionGroupItem => Boolean(group));
+            .filter(
+                (group): group is OptionGroupItem => group !== undefined && !isSystemImportOptionGroup(group),
+            );
         if (selectedGroups.length === 0) {
             showError('请先选择至少一个规格模板');
             return;

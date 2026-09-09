@@ -68,6 +68,7 @@ import {
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { CategoryImageField, type CategoryImageAsset } from './CategoryImageField';
 import { OptionGroupProductsDialog } from './OptionGroupProductsDialog';
+import { SYSTEM_IMPORT_OPTION_GROUP_CODE_PREFIX } from './catalog-option-groups';
 
 type ActiveTab = 'CATEGORIES' | 'OPTION_TEMPLATES' | 'FACETS';
 const CATEGORY_TABS = { categories: 'CATEGORIES', options: 'OPTION_TEMPLATES', facets: 'FACETS' } as const;
@@ -205,7 +206,12 @@ export function CategoriesModule() {
                 take: 100,
                 sort: { position: 'ASC', id: 'ASC' },
             },
-            optionGroupOptions: { skip: 0, take: 100, sort: { updatedAt: 'DESC', id: 'DESC' } },
+            optionGroupOptions: {
+                skip: 0,
+                take: 100,
+                sort: { updatedAt: 'DESC', id: 'DESC' },
+                filter: { code: { notContains: SYSTEM_IMPORT_OPTION_GROUP_CODE_PREFIX } },
+            },
             facetOptions: { skip: 0, take: 100, sort: { updatedAt: 'DESC', id: 'DESC' } },
         },
         fetchPolicy: 'cache-and-network',
@@ -238,6 +244,7 @@ export function CategoriesModule() {
                     skip: optionGroupCount,
                     take: 100,
                     sort: { updatedAt: 'DESC', id: 'DESC' },
+                    filter: { code: { notContains: SYSTEM_IMPORT_OPTION_GROUP_CODE_PREFIX } },
                 },
                 facetOptions: { skip: facetCount, take: 100, sort: { updatedAt: 'DESC', id: 'DESC' } },
             },
@@ -918,7 +925,7 @@ export function CategoriesModule() {
                                     个
                                 </div>
                                 <div className="mt-0.5 text-[11px] text-slate-400">
-                                    点击“查看关联商品”可确认具体哪些商品正在使用该模板
+                                    这里只显示人工创建、可重复使用的模板；导入商品的系统规格由系统维护。
                                 </div>
                             </div>
                             <div className="relative w-full sm:max-w-xs">
