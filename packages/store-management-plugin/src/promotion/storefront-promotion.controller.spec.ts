@@ -31,6 +31,7 @@ describe('StorefrontPromotionController', () => {
         const controller = new StorefrontPromotionController(
             accessService as never,
             promotionService as never,
+            {} as never,
         );
         const response = responseMock();
 
@@ -57,7 +58,11 @@ describe('StorefrontPromotionController', () => {
             validateAccountEntryProof: vi.fn(() => false),
             createEntryCookie: vi.fn(() => 'entry=cookie'),
         };
-        const controller = new StorefrontPromotionController(accessService as never, {} as never);
+        const controller = new StorefrontPromotionController(
+            accessService as never,
+            {} as never,
+            {} as never,
+        );
         const response = responseMock();
 
         await controller.accountEntry(
@@ -79,7 +84,11 @@ describe('StorefrontPromotionController', () => {
             validateEntryTicket: vi.fn(() => true),
             createEntryCookie: vi.fn(() => 'entry=cookie'),
         };
-        const controller = new StorefrontPromotionController(accessService as never, {} as never);
+        const controller = new StorefrontPromotionController(
+            accessService as never,
+            {} as never,
+            {} as never,
+        );
         const productResponse = responseMock();
         const unsafeResponse = responseMock();
 
@@ -102,7 +111,11 @@ describe('StorefrontPromotionController', () => {
             validateEntryTicket: vi.fn(() => false),
             createEntryCookie: vi.fn(() => 'entry=cookie'),
         };
-        const controller = new StorefrontPromotionController(accessService as never, {} as never);
+        const controller = new StorefrontPromotionController(
+            accessService as never,
+            {} as never,
+            {} as never,
+        );
         const response = responseMock();
 
         await controller.enter({} as Request, response as unknown as Response, 'expired-ticket');
@@ -121,7 +134,11 @@ describe('StorefrontPromotionController', () => {
             validateEntryTicket: vi.fn(() => true),
             createEntryCookie: vi.fn(() => 'entry=cookie'),
         };
-        const controller = new StorefrontPromotionController(accessService as never, {} as never);
+        const controller = new StorefrontPromotionController(
+            accessService as never,
+            {} as never,
+            {} as never,
+        );
         const privacyResponse = responseMock();
         const supportResponse = responseMock();
 
@@ -139,7 +156,11 @@ describe('StorefrontPromotionController', () => {
             validateAccountEntryProof: vi.fn(() => true),
             createEntryCookie: vi.fn(() => 'entry=cookie'),
         };
-        const controller = new StorefrontPromotionController(accessService as never, {} as never);
+        const controller = new StorefrontPromotionController(
+            accessService as never,
+            {} as never,
+            {} as never,
+        );
         const response = responseMock();
 
         await controller.accountEntry(
@@ -164,11 +185,24 @@ describe('StorefrontPromotionController', () => {
     });
 
     it('publishes crawl rules and a sitemap for the direct storefront and optional promotion page', async () => {
-        const request = { host: 'shop.example.com' };
+        const request = { ctx: {}, host: 'shop.example.com' };
         const accessService = {
             resolveRequest: vi.fn(() => Promise.resolve(request)),
         };
-        const controller = new StorefrontPromotionController(accessService as never, {} as never);
+        const products = Array.from({ length: 220 }, (_, index) => ({ id: index + 1 }));
+        const productService = {
+            findAll: vi.fn((_ctx, options: { skip: number; take: number }) =>
+                Promise.resolve({
+                    totalItems: products.length,
+                    items: products.slice(options.skip, options.skip + options.take),
+                }),
+            ),
+        };
+        const controller = new StorefrontPromotionController(
+            accessService as never,
+            {} as never,
+            productService as never,
+        );
         const robotsResponse = responseMock();
         const sitemapResponse = responseMock();
 
@@ -186,6 +220,26 @@ describe('StorefrontPromotionController', () => {
         );
         expect(sitemapResponse.send).toHaveBeenCalledWith(
             expect.stringContaining('<loc>https://shop.example.com/promo</loc>'),
+        );
+        expect(sitemapResponse.send).toHaveBeenCalledWith(
+            expect.stringContaining('<loc>https://shop.example.com/product?id=11</loc>'),
+        );
+        expect(sitemapResponse.send).toHaveBeenCalledWith(
+            expect.stringContaining('<loc>https://shop.example.com/product?id=220</loc>'),
+        );
+        expect(sitemapResponse.send).toHaveBeenCalledWith(
+            expect.stringContaining('<loc>https://shop.example.com/legal?id=privacy</loc>'),
+        );
+        expect(productService.findAll).toHaveBeenCalledTimes(3);
+        expect(productService.findAll).toHaveBeenNthCalledWith(1, request.ctx, {
+            skip: 0,
+            take: 100,
+            filter: { enabled: { eq: true } },
+        });
+        expect(productService.findAll).toHaveBeenNthCalledWith(
+            3,
+            request.ctx,
+            expect.objectContaining({ skip: 200, take: 100 }),
         );
     });
 });
