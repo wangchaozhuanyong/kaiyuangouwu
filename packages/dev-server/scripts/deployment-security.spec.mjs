@@ -70,6 +70,18 @@ void test('every production ingress uses credential-safe access logs, including 
         );
     }
     assert.match(accessFormat, /\$vendure_log_path/u);
+    // Diagnose a public timeout using the response's CF-Ray and origin timings,
+    // without recovering query strings, request bodies or credentials in logs.
+    for (const field of [
+        'upstream_connect_time',
+        'upstream_header_time',
+        'upstream_response_time',
+        'upstream_status',
+        'msec',
+        'http_cf_ray',
+    ]) {
+        assert.ok(accessFormat.includes(`$${field}`), `missing origin correlation field ${field}`);
+    }
     assert.match(config, /map \$uri \$vendure_log_path/u);
     assert.ok(config.includes('~*^/digital-delivery(?:/|$) /digital-delivery/[redacted];'));
     assert.ok(config.includes('~*^/image-generation/private(?:/|$) /image-generation/private/[redacted];'));
