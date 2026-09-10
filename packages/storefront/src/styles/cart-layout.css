@@ -95,6 +95,33 @@
     overflow: hidden;
 }
 
+.cart-page > .coupon-row,
+.cart-page > .invalid-cart-lines {
+    width: calc(100% - 20px);
+    margin: 10px 10px 0;
+    padding: 0 14px;
+    background: var(--paper);
+    border-radius: var(--radius-md);
+    border: 1px solid rgba(0, 0, 0, 0.05);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+}
+
+.cart-page > .coupon-row:hover:not(:disabled) {
+    background: var(--paper);
+}
+
+.cart-page > .coupon-row:focus-visible,
+.cart-page > .invalid-cart-lines > button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.cart-page > .invalid-cart-lines > button {
+    background: var(--paper);
+    padding: 0 14px;
+}
+
 .cart-group > header {
     min-height: 46px;
     padding: 0 14px;
@@ -357,7 +384,7 @@
 }
 
 .cart-page > .product-section {
-    margin-top: 16px;
+    margin-top: 24px;
 }
 
 .cart-checkout-bar {

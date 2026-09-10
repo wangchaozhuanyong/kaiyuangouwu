@@ -667,11 +667,11 @@ function LogisticsCard({
 
     return (
         <article className={orderPageClassName(`logistics-card is-${status}`)}>
-            <header>
+            <header className={orderPageClassName('logistics-card-header')}>
                 <span className={orderPageClassName('logistics-status-icon')}>
                     {logisticsStatusIcon(status)}
                 </span>
-                <span>
+                <span className={orderPageClassName('logistics-status-text')}>
                     <strong>{logisticsStatusLabel(status, language)}</strong>
                     <small>{logisticsStatusHint(status, language)}</small>
                 </span>

@@ -555,6 +555,15 @@
         grid-template-columns: repeat(4, minmax(0, 1fr));
     }
 
+    .cart-page > .coupon-row,
+    .cart-page > .invalid-cart-lines {
+        margin-top: 14px;
+    }
+
+    .cart-page > .product-section {
+        margin-top: 32px;
+    }
+
     .cart-group,
     .coupon-row,
     .invalid-cart-lines {

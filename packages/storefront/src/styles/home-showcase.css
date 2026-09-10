@@ -1595,15 +1595,18 @@ html[lang='en'] .quick-grid b {
     width: 100%;
     aspect-ratio: 2 / 1;
     overflow: hidden;
-    border: 1px solid #dbe3ec;
+    border: 1px solid rgba(15, 23, 42, 0.1);
     border-radius: 16px;
-    background: #dbe3ec;
+    background: #060a14;
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
     grid-template-rows: repeat(2, minmax(0, 1fr));
     grid-auto-flow: row dense;
     gap: 2px;
     box-shadow: 0 18px 42px -30px rgba(15, 23, 42, 0.38);
+    isolation: isolate;
+    -webkit-mask-image: -webkit-radial-gradient(white, black);
+    mask-image: radial-gradient(white, black);
 }
 
 .featured-collection-mosaic[data-product-count='1'] {
@@ -1628,6 +1631,16 @@ html[lang='en'] .quick-grid b {
 .featured-collection-mosaic[data-product-count='5'] .featured-collection-product:first-child {
     grid-column: 1 / span 2;
     grid-row: 1 / span 2;
+    border-top-left-radius: 15px;
+    border-bottom-left-radius: 15px;
+}
+
+.featured-collection-mosaic[data-product-count='5'] .featured-collection-product:nth-child(3) {
+    border-top-right-radius: 15px;
+}
+
+.featured-collection-mosaic[data-product-count='5'] .featured-collection-product:last-child {
+    border-bottom-right-radius: 15px;
 }
 
 .featured-collection-mosaic[data-product-count='4'] {
@@ -1642,7 +1655,7 @@ html[lang='en'] .quick-grid b {
     padding: 0;
     border: 0;
     border-radius: 0;
-    background: #ffffff;
+    background: #060a14;
     color: #0f172a;
     overflow: hidden;
     text-align: left;
@@ -1653,7 +1666,7 @@ html[lang='en'] .quick-grid b {
 }
 
 .featured-collection-product:hover {
-    background: #e8edf3;
+    background: #0c1424;
 }
 
 .featured-collection-product:active {
@@ -1665,9 +1678,9 @@ html[lang='en'] .quick-grid b {
     height: 100%;
     position: relative;
     overflow: hidden;
-    border-radius: var(--radius-md);
-    background: #f5f7fa;
+    background: transparent;
     display: block;
+    border-radius: inherit;
 }
 
 .featured-collection-product-media img,
@@ -2032,6 +2045,28 @@ html[lang='en'] .quick-grid b {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 12px 10px;
+}
+
+.product-card {
+    position: relative;
+    isolation: isolate;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow: hidden;
+    border-radius: var(--radius-md, 12px);
+    border: 1px solid var(--line, rgba(0, 0, 0, 0.06));
+    background: var(--paper, #ffffff);
+    box-shadow: var(--shadow-sm, 0 1px 3px rgba(15, 23, 42, 0.05));
+    transition: transform 200ms ease-out, box-shadow 200ms ease-out, border-color 200ms ease-out;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .product-card:hover {
+        transform: translateY(-2px);
+        border-color: var(--line-hover, rgba(0, 0, 0, 0.12));
+        box-shadow: var(--shadow-md, 0 4px 14px -2px rgba(15, 23, 42, 0.08));
+    }
 }
 
 .flash-sale-countdown {

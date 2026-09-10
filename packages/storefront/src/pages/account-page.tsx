@@ -28,7 +28,11 @@ import { ShopApi } from '../api';
 import { useDesktopLayout } from '../desktop-layout';
 import { compactUiCopy, languageCodeFor } from '../i18n';
 import { PUBLIC_QUERY_GC_TIME, ROUTE_QUERY_STALE_TIME, storefrontQueryKeys } from '../query-client';
-import { isReferralClientFeatureEnabled } from '../referral-client-feature';
+import {
+    isReferralClientFeatureEnabled,
+    readCachedReferralProgram,
+    writeCachedReferralProgram,
+} from '../referral-client-feature';
 import { ACCOUNT_RECOMMENDATION_CREST_IMAGE } from '../storefront-images';
 import { AccountPageContext } from '../storefront-page-contexts';
 import { routeNavigateOptions } from '../storefront-router';
@@ -108,7 +112,14 @@ export function AccountPage() {
             storefrontQueryKeys.market(market),
             languageCodeFor(language),
         ),
-        queryFn: ({ signal }) => api.referralProgram(signal),
+        queryFn: async ({ signal }) => {
+            const program = await api.referralProgram(signal);
+            if (program) {
+                writeCachedReferralProgram(market.code, program);
+            }
+            return program;
+        },
+        initialData: () => readCachedReferralProgram(market.code),
         staleTime: ROUTE_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
     });

@@ -79,4 +79,28 @@ describe('legacy light utility dark-theme compatibility', () => {
             'Light utility classes must be added to the dark compatibility layer or given a matching explicit dark:* override.',
         ).toEqual([]);
     });
+
+    it('maps descendant combinator surface utilities to admin surface in dark mode', () => {
+        expect(themeStylesheet).toContain(".dark :where([class*='[&>']:where([class*=':bg-white']) > *)");
+        expect(themeStylesheet).toContain('.dark .\\[\\&\\>article\\]\\:bg-white > article');
+    });
+
+    it('ensures no source file relies on unmapped descendant background utilities', () => {
+        const arbitraryBgPattern = /\[&[^\]]+\]:bg-[^\s"'`]+/g;
+        const unmappedArbitrary: string[] = [];
+
+        for (const path of listSourceFiles(sourceRoot)) {
+            const relativePath = path.slice(sourceRoot.length + 1);
+            const content = readFileSync(path, 'utf8');
+            const matches = content.match(arbitraryBgPattern);
+            if (matches) {
+                unmappedArbitrary.push(`${relativePath}: ${matches.join(', ')}`);
+            }
+        }
+
+        expect(
+            unmappedArbitrary,
+            'Components must declare their own surface backgrounds directly (e.g. bg-white) instead of relying on fragile descendant combinators.',
+        ).toEqual([]);
+    });
 });

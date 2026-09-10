@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
+import type { TwoFactorAccount } from './types';
+import type { ActiveCustomer } from '../../types';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ActiveCustomer } from '../../types';
-import type { TwoFactorAccount } from './types';
 
 import { TwoFactorPage } from './two-factor-page';
 
@@ -186,5 +186,51 @@ describe('TwoFactorPage', () => {
         expect(moreMenu?.textContent).toContain('显示密钥');
         expect(moreMenu?.textContent).toContain('编辑');
         expect(moreMenu?.textContent).toContain('删除');
+    });
+
+    it('keeps batch import and add account buttons aligned on the right without wrapping', async () => {
+        await act(async () => {
+            root.render(
+                <TwoFactorPage
+                    customer={customer}
+                    language="zh"
+                    onBack={vi.fn()}
+                    onSignIn={vi.fn()}
+                    onNotify={vi.fn()}
+                />,
+            );
+            await Promise.resolve();
+        });
+
+        const headerTitle = [...container.querySelectorAll('h2')].find(h2 =>
+            h2.textContent?.includes('2FA 账号列表'),
+        );
+        expect(headerTitle).toBeDefined();
+
+        const headerRow = headerTitle?.closest('div')?.parentElement;
+        expect(headerRow).not.toBeNull();
+        expect(headerRow?.className).toContain('flex');
+        expect(headerRow?.className).toContain('items-center');
+        expect(headerRow?.className).toContain('justify-between');
+        expect(headerRow?.className).not.toContain('flex-wrap');
+
+        const buttonGroup = headerRow?.lastElementChild as HTMLElement;
+        expect(buttonGroup?.className).toContain('flex');
+        expect(buttonGroup?.className).toContain('shrink-0');
+        expect(buttonGroup?.className).toContain('items-center');
+        expect(buttonGroup?.className).not.toContain('flex-wrap');
+
+        const batchBtn = [...buttonGroup.querySelectorAll('button')].find(btn =>
+            btn.textContent?.includes('批量导入'),
+        );
+        const addBtn = [...buttonGroup.querySelectorAll('button')].find(btn =>
+            btn.textContent?.includes('添加账号'),
+        );
+        expect(batchBtn).toBeDefined();
+        expect(addBtn).toBeDefined();
+        expect(batchBtn?.className).toContain('shrink-0');
+        expect(batchBtn?.className).toContain('whitespace-nowrap');
+        expect(addBtn?.className).toContain('shrink-0');
+        expect(addBtn?.className).toContain('whitespace-nowrap');
     });
 });

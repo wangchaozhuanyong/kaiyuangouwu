@@ -60,13 +60,16 @@ html[data-storefront-preset='modern-oriental']
 
 html[data-storefront-preset='modern-oriental']
     :is(
-        .topbar,
-        .subpage-header,
+        .topbar:not(.product-detail-header),
+        .subpage-header:not(.product-detail-header),
         .storefront-bottom-nav,
         .sheet,
         .product-card,
+        .logistics-card,
         .checkout-card,
         .auth-card,
+        .ai-studio-history,
+        .ai-studio-model-grid,
         .ai-confirmation-dialog
     ) {
     background: var(--paper);
@@ -75,8 +78,30 @@ html[data-storefront-preset='modern-oriental']
     color: var(--text);
 }
 
+html[data-storefront-preset='modern-oriental'] .product-detail-header:not(.is-scrolled),
+html[data-storefront-preset='modern-oriental'] .product-detail-page > .subpage-header:not(.is-scrolled) {
+    background: transparent;
+    border-color: transparent;
+    border-bottom-color: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    color: white;
+}
+
+html[data-storefront-preset='modern-oriental'] .product-detail-header.is-scrolled,
+html[data-storefront-preset='modern-oriental'] .product-detail-page > .subpage-header.is-scrolled {
+    background: rgba(255, 253, 248, 0.96);
+    border-color: var(--line);
+    border-bottom-color: var(--line);
+    box-shadow: var(--shadow-sm);
+    color: var(--text);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+}
+
 html[data-storefront-preset='modern-oriental']
-    :is(.product-card, .checkout-card, .auth-card) {
+    :is(.product-card, .logistics-card, .checkout-card, .auth-card, .ai-studio-history, .ai-studio-model-grid) {
     border-radius: var(--radius-md);
 }
 
@@ -186,7 +211,7 @@ html[data-storefront-preset='modern-oriental'] .auth-page .auth-card {
     box-shadow: var(--shadow-md);
 }
 
-html[data-storefront-preset='modern-oriental'] .ai-studio-reference-add {
+html[data-storefront-preset='modern-oriental'] :is(.ai-studio-reference-add, .ai-studio-settlement-summary) {
     background: var(--paper);
     border-color: var(--line);
 }
@@ -213,7 +238,15 @@ html[data-storefront-preset='modern-oriental'] .checkout-page :is(input, select,
 }
 
 html[data-storefront-preset='modern-oriental']
-    :is(.checkout-section, .checkout-summary, .checkout-assurance, .submit-order-bar) {
+    :is(
+        .cart-group,
+        .cart-page > .coupon-row,
+        .cart-page > .invalid-cart-lines,
+        .checkout-section,
+        .checkout-summary,
+        .checkout-assurance,
+        .submit-order-bar
+    ) {
     background: var(--paper);
     border-color: var(--line);
 }
@@ -238,6 +271,11 @@ html[data-storefront-preset='modern-oriental'] .auth-route-tabs > button[aria-cu
     background: var(--paper);
     color: var(--accent-ink);
     box-shadow: var(--shadow-sm);
+}
+
+html[data-storefront-preset='modern-oriental'] .ai-studio-setting-trigger > strong {
+    background: var(--soft);
+    border-color: var(--line);
 }
 
 html[data-storefront-preset='modern-oriental'] .ai-studio-optimizer-model {

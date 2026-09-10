@@ -1,5 +1,62 @@
 /* Logistics Modular Hub & Status Dashboard */
 
+.logistics-card {
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--paper, #ffffff);
+    box-shadow: 0 4px 16px rgba(42, 55, 49, 0.06);
+}
+
+.logistics-card-header,
+.logistics-card > header {
+    min-height: 64px;
+    padding: 12px 14px;
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+}
+
+.logistics-card-header > span:nth-child(2),
+.logistics-card > header > span:nth-child(2),
+.logistics-status-text {
+    min-width: 0;
+}
+
+.logistics-card-header strong,
+.logistics-card > header strong,
+.logistics-status-text strong {
+    display: block;
+    font-size: 14.5px;
+    font-weight: 600;
+    color: var(--text);
+    line-height: 1.25;
+}
+
+.logistics-card-header small,
+.logistics-card > header small,
+.logistics-status-text small {
+    display: block;
+    margin-top: 3px;
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.3;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.logistics-card-header time,
+.logistics-card > header time {
+    align-self: start;
+    padding-top: 3px;
+    font-size: 11.5px;
+    color: var(--muted);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
 /* Service Guarantee Strip */
 
 .address-list {

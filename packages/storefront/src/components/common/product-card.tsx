@@ -37,18 +37,22 @@ export function ProductCard({
     const variant = product.variants[0];
     const availability = productAvailability(variant);
     const stockLabel = productAvailabilityLabel(availability, isZh ? 'zh' : 'en');
-    const description = trimText(product.description, product.description.length);
-    const showDescription = description && description !== trimText(product.name, product.name.length);
+    const rawDescription = product.description?.trim();
+    const showDescription = Boolean(
+        rawDescription &&
+        rawDescription !== product.name.trim() &&
+        !rawDescription.startsWith(product.name.trim()),
+    );
 
     return (
         <article
-            className="product-grid-card group relative isolate flex min-w-0 flex-col bg-transparent pb-2.5"
+            className="product-card group relative isolate flex min-w-0 flex-col overflow-hidden pb-2.5"
             onPointerEnter={() => prefetchProductAsset(product)}
             onPointerDown={() => prefetchProductAsset(product)}
             onFocus={() => prefetchProductAsset(product)}
         >
             <button
-                className="product-card-detail-link absolute inset-0 z-10 cursor-pointer rounded-[var(--radius-md)] border-0 bg-transparent p-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+                className="product-card-detail-link absolute inset-0 z-10 cursor-pointer rounded-[inherit] border-0 bg-transparent p-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
                 type="button"
                 onClick={onOpen}
                 aria-label={`${isZh ? '查看' : 'View'} ${product.name}`}
@@ -77,20 +81,20 @@ export function ProductCard({
                 </button>
             )}
 
-            <div className="product-card-media aspect-square w-full overflow-hidden rounded-[var(--radius-md)] [&_.responsive-picture]:block [&_.responsive-picture]:h-full [&_.responsive-picture]:w-full [&_.image-placeholder]:h-full [&_.image-placeholder]:w-full [&_.image-placeholder]:bg-[var(--product-media-bg)] [&_img]:block [&_img]:h-full [&_img]:w-full [&_img]:object-contain">
+            <div className="product-card-media aspect-square w-full overflow-hidden rounded-t-[inherit] [&_.responsive-picture]:block [&_.responsive-picture]:h-full [&_.responsive-picture]:w-full [&_.image-placeholder]:h-full [&_.image-placeholder]:w-full [&_.image-placeholder]:bg-[var(--product-media-bg)] [&_img]:block [&_img]:h-full [&_img]:w-full [&_img]:object-contain">
                 <ProductImage product={product} />
             </div>
 
-            <strong className="mt-2 line-clamp-2 min-h-[2.7em] max-w-full break-words text-left text-[13px] font-semibold leading-[1.35] text-[var(--text)] min-[1024px]:mt-2.5 min-[1024px]:text-[15px]">
+            <strong className="mt-1.5 line-clamp-2 max-w-full overflow-hidden text-ellipsis px-2.5 text-left text-[13px] font-semibold leading-[1.35] text-[var(--text)] min-[1024px]:mt-2.5 min-[1024px]:text-[15px]">
                 {product.name}
             </strong>
             {showDescription && (
-                <span className="mt-1 block max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-[11.5px] leading-[1.3] text-[var(--muted)] min-[1024px]:text-[13px]">
-                    {description}
+                <span className="mt-[2px] block max-w-full overflow-hidden text-ellipsis whitespace-nowrap px-2.5 text-[11.5px] leading-[1.3] text-[var(--muted)] min-[1024px]:text-[13px]">
+                    {trimText(product.description, 26)}
                 </span>
             )}
 
-            <footer className="mt-auto flex min-h-[42px] items-center justify-between gap-2 pt-2">
+            <footer className="mt-auto flex min-h-[34px] items-center justify-between gap-2 px-2.5 pt-1">
                 <div className="min-w-0 [&_b]:text-[16px] [&_b]:font-extrabold [&_b]:leading-[1.2] [&_b]:tracking-[-0.02em] [&_b]:text-[var(--accent)] [&_b]:[font-family:var(--font-numeric)]">
                     <PriceDisplay
                         value={variant ? variant.priceWithTax : 0}

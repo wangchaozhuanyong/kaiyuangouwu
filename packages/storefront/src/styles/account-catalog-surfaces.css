@@ -492,16 +492,19 @@
 .category-page .primary-category-strip {
     padding-inline: 16px;
     background: var(--paper);
+    gap: 4px;
 }
 .category-page .primary-categories {
+    flex: 0 1 auto;
+    min-width: 0;
     padding-inline: 0;
     scroll-padding-inline: 0;
     justify-content: flex-start;
 }
 .category-page .primary-categories-all {
-    width: 64px;
-    min-width: 64px;
-    flex: 0 0 64px;
+    width: 72px;
+    min-width: 72px;
+    flex: 0 0 72px;
     padding-inline: 0;
     background: var(--paper);
     box-shadow: none;
