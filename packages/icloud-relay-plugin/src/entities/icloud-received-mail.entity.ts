@@ -26,6 +26,7 @@ export class IcloudReceivedMail extends VendureEntity {
     primaryAccount: IcloudPrimaryAccount;
 
     @EntityId({ nullable: true })
+    // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
     virtualEmailId: ID | null;
 
     @ManyToOne(() => IcloudVirtualEmail, virtual => virtual.receivedMails, {
@@ -50,8 +51,8 @@ export class IcloudReceivedMail extends VendureEntity {
     @Column({ type: 'varchar', length: 255, default: '' })
     fromName: string;
 
-    @Column({ type: 'text', default: '[]' })
-    toAddressesJson: string;
+    @Column({ type: 'text', nullable: true })
+    toAddressesJson: string | null;
 
     @Column({ type: 'varchar', length: 500, default: '(No Subject)' })
     subject: string;
