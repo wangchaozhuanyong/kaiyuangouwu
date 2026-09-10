@@ -413,7 +413,7 @@ export class IcloudAdminService {
         }
 
         query.orderBy('mail.receivedAt', 'DESC').take(options.limit || 50);
-        return query.getMany();
+        return await query.getMany();
     }
 
     async reassignMail(ctx: RequestContext, mailId: ID, virtualEmailId: ID): Promise<IcloudReceivedMail> {
