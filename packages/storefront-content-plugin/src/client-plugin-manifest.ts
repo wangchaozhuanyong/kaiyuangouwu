@@ -59,6 +59,15 @@ export const storefrontClientPluginCatalog: readonly StorefrontClientPluginDefin
         version: '1.0.0',
         defaultPlacement: 'BUSINESS_SERVICES_MAIN',
     },
+    {
+        code: 'icloud-mail-query-entry',
+        name: '邮件验证码查询',
+        englishName: 'Mail query tool',
+        description: '在商业服务页或分类页提供买家邮件与验证码快捷查询入口。',
+        englishDescription: 'Adds buyer mail and verification code lookup shortcut.',
+        version: '1.0.0',
+        defaultPlacement: 'BUSINESS_SERVICES_MAIN',
+    },
 ] as const;
 
 export const storefrontClientPluginCodes = storefrontClientPluginCatalog.map(plugin => plugin.code);

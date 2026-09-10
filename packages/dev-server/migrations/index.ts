@@ -106,6 +106,7 @@ import { ReleaseUsdtHistoricalAmountKeys1788706800000 } from './1788706800000-re
 import { AddTranslationOutbox1788739200000 } from './1788739200000-add-translation-outbox';
 import { SeedCheckoutProvinces1788742800000 } from './1788742800000-seed-checkout-provinces';
 import { AlignCheckoutProvinceCountries1788746400000 } from './1788746400000-align-checkout-province-countries';
+import { AddIcloudRelayTables1788750000000 } from './1788750000000-add-icloud-relay-tables';
 
 export const devServerMigrations = [
     CommerceFulfillment1786514145999,
@@ -216,4 +217,5 @@ export const devServerMigrations = [
     AddTranslationOutbox1788739200000,
     SeedCheckoutProvinces1788742800000,
     AlignCheckoutProvinceCountries1788746400000,
+    AddIcloudRelayTables1788750000000,
 ];
