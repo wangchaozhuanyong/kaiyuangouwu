@@ -39,6 +39,7 @@ test('production migration preflight permits only the reviewed migration set', (
         'ReleaseUsdtHistoricalAmountKeys1788706800000',
         'SeedCheckoutProvinces1788742800000',
         'AlignCheckoutProvinceCountries1788746400000',
+        'AddIcloudRelayTables1788750000000',
     ]);
     assert.throws(
         () =>
