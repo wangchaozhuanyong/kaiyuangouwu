@@ -174,8 +174,8 @@ export function IcloudRelayPage() {
             } else {
                 notificationService.error(data?.syncIcloudAccount?.error || '同步失败');
             }
-            refetchPrimary();
-            refetchVirtual();
+            void refetchPrimary();
+            void refetchVirtual();
         } catch (e: any) {
             notificationService.error(e.message);
         }
@@ -186,7 +186,7 @@ export function IcloudRelayPage() {
         try {
             await resetMasterCode({ variables: { id } });
             notificationService.success('主查询码已重置');
-            refetchPrimary();
+            void refetchPrimary();
         } catch (e: any) {
             notificationService.error(e.message);
         }
@@ -197,8 +197,8 @@ export function IcloudRelayPage() {
         try {
             await deletePrimaryAccount({ variables: { id } });
             notificationService.success('主邮箱删除成功');
-            refetchPrimary();
-            refetchVirtual();
+            void refetchPrimary();
+            void refetchVirtual();
         } catch (e: any) {
             notificationService.error(e.message);
         }
@@ -237,7 +237,7 @@ export function IcloudRelayPage() {
                 setIsAddPrimaryModalOpen(false);
                 setNewPrimary({ email: '', appPassword: '', note: '', codeResetIntervalDays: 30 });
             }
-            refetchPrimary();
+            void refetchPrimary();
         } catch (e: any) {
             notificationService.error(e.message);
         }
@@ -251,7 +251,7 @@ export function IcloudRelayPage() {
         try {
             await resetVirtualCode({ variables: { id } });
             notificationService.success('买家查询码已重置');
-            refetchVirtual();
+            void refetchVirtual();
         } catch (e: any) {
             notificationService.error(e.message);
         }
@@ -262,8 +262,8 @@ export function IcloudRelayPage() {
         try {
             await deleteVirtualEmail({ variables: { id } });
             notificationService.success('虚拟邮箱删除成功');
-            refetchVirtual();
-            refetchPrimary();
+            void refetchVirtual();
+            void refetchPrimary();
         } catch (e: any) {
             notificationService.error(e.message);
         }
@@ -307,8 +307,8 @@ export function IcloudRelayPage() {
                     codeResetIntervalDays: 30,
                 });
             }
-            refetchVirtual();
-            refetchPrimary();
+            void refetchVirtual();
+            void refetchPrimary();
         } catch (e: any) {
             notificationService.error(e.message);
         }
@@ -334,8 +334,8 @@ export function IcloudRelayPage() {
             );
             setIsBatchVirtualModalOpen(false);
             setBatchVirtualData({ primaryAccountId: '', emailsText: '' });
-            refetchVirtual();
-            refetchPrimary();
+            void refetchVirtual();
+            void refetchPrimary();
         } catch (e: any) {
             notificationService.error(e.message);
         }
@@ -435,9 +435,9 @@ export function IcloudRelayPage() {
                                                         {account.masterQueryCode}
                                                     </span>
                                                     <button
-                                                        onClick={() =>
-                                                            copyToClipboard(account.masterQueryCode)
-                                                        }
+                                                        onClick={() => {
+                                                            void copyToClipboard(account.masterQueryCode);
+                                                        }}
                                                         className="text-gray-400 hover:text-blue-600 p-1"
                                                         title="点击复制"
                                                     >
@@ -475,21 +475,27 @@ export function IcloudRelayPage() {
                                                 <div className="flex justify-end gap-1">
                                                     <button
                                                         title="测试 IMAP 连通性"
-                                                        onClick={() => handleTestConnection(account.id)}
+                                                        onClick={() => {
+                                                            void handleTestConnection(account.id);
+                                                        }}
                                                         className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"
                                                     >
                                                         <Plug className="w-4 h-4" />
                                                     </button>
                                                     <button
                                                         title="立即同步邮件"
-                                                        onClick={() => handleSyncAccount(account.id)}
+                                                        onClick={() => {
+                                                            void handleSyncAccount(account.id);
+                                                        }}
                                                         className="p-1.5 text-green-600 hover:bg-green-50 rounded"
                                                     >
                                                         <RefreshCw className="w-4 h-4" />
                                                     </button>
                                                     <button
                                                         title="重置主查询码"
-                                                        onClick={() => handleResetMasterCode(account.id)}
+                                                        onClick={() => {
+                                                            void handleResetMasterCode(account.id);
+                                                        }}
                                                         className="p-1.5 text-amber-600 hover:bg-amber-50 rounded"
                                                     >
                                                         <RotateCcw className="w-4 h-4" />
@@ -510,7 +516,9 @@ export function IcloudRelayPage() {
                                                     </button>
                                                     <button
                                                         title="删除"
-                                                        onClick={() => handleDeletePrimary(account.id)}
+                                                        onClick={() => {
+                                                            void handleDeletePrimary(account.id);
+                                                        }}
                                                         className="p-1.5 text-red-600 hover:bg-red-50 rounded"
                                                     >
                                                         <Trash2 className="w-4 h-4" />
@@ -627,7 +635,12 @@ export function IcloudRelayPage() {
                                     >
                                         取消
                                     </Button>
-                                    <Button variant="primary" onClick={handleSavePrimary}>
+                                    <Button
+                                        variant="primary"
+                                        onClick={() => {
+                                            void handleSavePrimary();
+                                        }}
+                                    >
                                         保存
                                     </Button>
                                 </div>
@@ -727,9 +740,9 @@ export function IcloudRelayPage() {
                                                         {virtual.buyerQueryCode}
                                                     </span>
                                                     <button
-                                                        onClick={() =>
-                                                            copyToClipboard(virtual.buyerQueryCode)
-                                                        }
+                                                        onClick={() => {
+                                                            void copyToClipboard(virtual.buyerQueryCode);
+                                                        }}
                                                         className="text-gray-400 hover:text-blue-600 p-1"
                                                         title="点击复制买家查询码"
                                                     >
@@ -766,7 +779,9 @@ export function IcloudRelayPage() {
                                                     </button>
                                                     <button
                                                         title="重置买家查询码"
-                                                        onClick={() => handleResetVirtualCode(virtual.id)}
+                                                        onClick={() => {
+                                                            void handleResetVirtualCode(virtual.id);
+                                                        }}
                                                         className="p-1.5 text-amber-600 hover:bg-amber-50 rounded"
                                                     >
                                                         <RotateCcw className="w-4 h-4" />
@@ -787,7 +802,9 @@ export function IcloudRelayPage() {
                                                     </button>
                                                     <button
                                                         title="删除"
-                                                        onClick={() => handleDeleteVirtual(virtual.id)}
+                                                        onClick={() => {
+                                                            void handleDeleteVirtual(virtual.id);
+                                                        }}
                                                         className="p-1.5 text-red-600 hover:bg-red-50 rounded"
                                                     >
                                                         <Trash2 className="w-4 h-4" />
@@ -908,7 +925,12 @@ export function IcloudRelayPage() {
                                     >
                                         取消
                                     </Button>
-                                    <Button variant="primary" onClick={handleSaveVirtual}>
+                                    <Button
+                                        variant="primary"
+                                        onClick={() => {
+                                            void handleSaveVirtual();
+                                        }}
+                                    >
                                         保存
                                     </Button>
                                 </div>
@@ -970,7 +992,12 @@ export function IcloudRelayPage() {
                                     >
                                         取消
                                     </Button>
-                                    <Button variant="primary" onClick={handleBatchSaveVirtual}>
+                                    <Button
+                                        variant="primary"
+                                        onClick={() => {
+                                            void handleBatchSaveVirtual();
+                                        }}
+                                    >
                                         开始批量导入
                                     </Button>
                                 </div>
@@ -1014,9 +1041,9 @@ export function IcloudRelayPage() {
                                                     <div className="inline-flex items-center gap-2 bg-blue-100 text-blue-800 px-3 py-1 rounded-md font-bold text-sm mb-2">
                                                         🔑 提取验证码: {mail.extractedCode}
                                                         <button
-                                                            onClick={() =>
-                                                                copyToClipboard(mail.extractedCode)
-                                                            }
+                                                            onClick={() => {
+                                                                void copyToClipboard(mail.extractedCode);
+                                                            }}
                                                             className="text-xs bg-blue-600 text-white px-1.5 py-0.5 rounded ml-1"
                                                         >
                                                             复制
