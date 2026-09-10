@@ -9,6 +9,8 @@ export class AddIcloudRelayTables1788750000000 implements MigrationInterface {
         const dateType: TableColumnOptions['type'] =
             databaseType === 'postgres' ? 'timestamp without time zone' : 'datetime';
         const now = isMysql ? 'CURRENT_TIMESTAMP(6)' : isSqlite ? "datetime('now')" : 'CURRENT_TIMESTAMP';
+        const booleanType = isMysql ? 'tinyint' : isSqlite ? 'integer' : 'boolean';
+        const booleanFalse = isMysql || isSqlite ? 0 : false;
 
         const timestampColumn = (name: 'createdAt' | 'updatedAt'): TableColumnOptions => ({
             name,
@@ -140,14 +142,14 @@ export class AddIcloudRelayTables1788750000000 implements MigrationInterface {
                         { name: 'imapUid', type: 'int', default: '0' },
                         { name: 'fromAddress', type: 'varchar', length: '255' },
                         { name: 'fromName', type: 'varchar', length: '255', default: "''" },
-                        { name: 'toAddressesJson', type: 'text', default: "'[]'" },
+                        { name: 'toAddressesJson', type: 'text', isNullable: true },
                         { name: 'subject', type: 'varchar', length: '500', default: "'(No Subject)'" },
                         { name: 'bodyHtml', type: 'text', isNullable: true },
                         { name: 'bodyText', type: 'text', isNullable: true },
                         { name: 'extractedCode', type: 'varchar', length: '64', isNullable: true },
                         { name: 'receivedAt', type: dateType },
-                        { name: 'isRead', type: isSqlite ? 'integer' : 'boolean', default: '0' },
-                        { name: 'isDeleted', type: isSqlite ? 'integer' : 'boolean', default: '0' },
+                        { name: 'isRead', type: booleanType, default: booleanFalse },
+                        { name: 'isDeleted', type: booleanType, default: booleanFalse },
                     ],
                     indices: [
                         {
