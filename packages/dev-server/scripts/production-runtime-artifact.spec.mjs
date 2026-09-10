@@ -39,6 +39,11 @@ void test('runtime artifact includes the telemetry plugin required by dev-server
     assert.ok(REQUIRED_RUNTIME_FILES.includes('packages/telemetry-plugin/dist/index.js'));
 });
 
+void test('runtime artifact includes icloud relay plugin build output', () => {
+    assert.deepEqual(RUNTIME_PACKAGE_ASSETS['icloud-relay-plugin'], ['dist']);
+    assert.ok(REQUIRED_RUNTIME_FILES.includes('packages/icloud-relay-plugin/dist/index.js'));
+});
+
 void test('runtime artifact serves the standalone next-admin application', () => {
     assert.deepEqual(RUNTIME_PACKAGE_ASSETS['next-admin'], ['dist']);
     assert.deepEqual(RUNTIME_PACKAGE_ASSETS['next-admin-plugin'], ['dist']);
