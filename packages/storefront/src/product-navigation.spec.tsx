@@ -401,4 +401,42 @@ describe('product image navigation layers', () => {
             /\.topbar\.product-detail-header\.is-scrolled[\s\S]*?background:\s*rgba\(255,\s*255,\s*255,\s*0\.96\);/,
         );
     });
+
+    it('ensures modern oriental preset preserves transparent product detail header when unscrolled and tints on scroll', () => {
+        const stylesheet = readStorefrontStylesheet(['./styles/visual-presets.css']);
+
+        expect(stylesheet).toMatch(
+            /html\[data-storefront-preset='modern-oriental'\]\s+\.product-detail-header:not\(\.is-scrolled\)[\s\S]*?background:\s*transparent;/,
+        );
+        expect(stylesheet).toMatch(
+            /html\[data-storefront-preset='modern-oriental'\]\s+\.product-detail-header:not\(\.is-scrolled\)[\s\S]*?border-color:\s*transparent;/,
+        );
+        expect(stylesheet).toMatch(
+            /html\[data-storefront-preset='modern-oriental'\]\s+\.product-detail-header:not\(\.is-scrolled\)[\s\S]*?box-shadow:\s*none;/,
+        );
+        expect(stylesheet).toMatch(
+            /html\[data-storefront-preset='modern-oriental'\]\s+\.product-detail-header\.is-scrolled[\s\S]*?background:\s*rgba\(255,\s*253,\s*248,\s*0\.96\);/,
+        );
+        expect(stylesheet).toMatch(
+            /html\[data-storefront-preset='modern-oriental'\]\s+:is\(\s*\.topbar:not\(\.product-detail-header\)/,
+        );
+    });
+
+    it('ensures product-card provides a unified card frame with background, border-radius and shadow', () => {
+        const markup = renderToStaticMarkup(
+            <ProductCard
+                product={digitalProduct}
+                market={market}
+                locale={market.locale}
+                language="zh"
+                onOpen={vi.fn()}
+            />,
+        );
+        expect(markup).toContain('product-card');
+
+        const stylesheet = readStorefrontStylesheet();
+        expect(stylesheet).toMatch(/\.product-card\s*\{[^}]*background:\s*var\(--paper/);
+        expect(stylesheet).toMatch(/\.product-card\s*\{[^}]*border-radius:\s*var\(--radius-md/);
+        expect(stylesheet).toMatch(/\.product-card\s*\{[^}]*box-shadow:\s*var\(--shadow-sm/);
+    });
 });
