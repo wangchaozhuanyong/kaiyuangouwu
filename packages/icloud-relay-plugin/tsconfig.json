@@ -1,0 +1,11 @@
+{
+    "extends": "../../tsconfig.json",
+    "compilerOptions": {
+        "lib": ["dom", "es2020", "esnext.asynciterable"],
+        "baseUrl": ".",
+        "types": ["node", "vitest/globals"],
+        "noEmit": true,
+        "jsx": "react-jsx"
+    },
+    "include": ["src/**/*.ts", "src/**/*.tsx"]
+}
