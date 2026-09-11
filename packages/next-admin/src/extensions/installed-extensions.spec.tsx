@@ -93,6 +93,13 @@ describe('installed next-admin extensions', () => {
             '/plugins/two-factor-codes',
             '/plugins/icloud-relay',
         ]);
+        expect(getNextAdminExtensionNavItems('plugins')).toContainEqual(
+            expect.objectContaining({
+                path: '/plugins/icloud-relay',
+                title: '邮件验证码查询',
+                permissions: ['SuperAdmin'],
+            }),
+        );
     });
 
     it('routes the legacy store currency entry to the USDT payment setup tab', () => {
