@@ -888,7 +888,7 @@ export function PostersPanel({
                         新建模板
                     </button>
                 </div>
-                <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                <div className="mt-4 grid gap-3.5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
                     {program.posterTemplateConfigs.map(template => {
                         const isDefault = program.defaultPosterTemplate === template.id;
                         return (
@@ -906,25 +906,27 @@ export function PostersPanel({
                                         }}
                                     >
                                         <div
-                                            className="flex h-full items-end p-4"
+                                            className="flex h-full items-end p-3"
                                             style={{
                                                 backgroundColor: `rgba(15,23,42,${template.overlayOpacity / 100})`,
                                             }}
                                         >
                                             <div style={{ color: template.foregroundColor }}>
-                                                <div className="text-xs font-bold">{template.titleZh}</div>
-                                                <div className="mt-1 text-lg font-bold">
+                                                <div className="text-[11px] font-bold">
+                                                    {template.titleZh}
+                                                </div>
+                                                <div className="mt-0.5 text-sm font-bold">
                                                     {template.headlineZh}
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
-                                    <div className="p-3">
+                                    <div className="p-3 space-y-1">
                                         <div className="flex items-center justify-between">
-                                            <h3 className="text-xs font-bold text-slate-900">
+                                            <h3 className="text-xs font-bold text-slate-900 truncate">
                                                 {template.name}
                                             </h3>
-                                            <div className="flex items-center gap-1">
+                                            <div className="flex shrink-0 items-center gap-1">
                                                 <span
                                                     className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
                                                         template.enabled
@@ -941,14 +943,14 @@ export function PostersPanel({
                                                 )}
                                             </div>
                                         </div>
-                                        <p className="mt-0.5 text-[10px] text-slate-400">
+                                        <p className="text-[10px] text-slate-400">
                                             移动端 1080×1920 · 排序 {template.position}
                                         </p>
                                     </div>
                                 </div>
-                                <div className="p-3 pt-0 space-y-2">
-                                    <label className="flex cursor-pointer items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5 text-xs">
-                                        <span className="text-[11px] font-medium text-slate-700">
+                                <div className="p-3 pt-0 space-y-1.5">
+                                    <label className="flex cursor-pointer items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-2 py-1.5 text-xs">
+                                        <span className="text-[10px] font-medium text-slate-700">
                                             在客户端分享面板显示
                                         </span>
                                         <input
@@ -958,15 +960,15 @@ export function PostersPanel({
                                             onChange={e =>
                                                 void toggleCustomTemplate(template, e.target.checked)
                                             }
-                                            className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                            className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                                         />
                                     </label>
-                                    <div className="grid grid-cols-3 gap-1.5">
+                                    <div className="grid grid-cols-3 gap-1">
                                         <button
                                             type="button"
                                             onClick={() => onEdit(template)}
                                             disabled={!canUpdate || isProgramBusy}
-                                            className="flex items-center justify-center gap-1 rounded-lg border border-slate-200 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                                            className="flex items-center justify-center gap-0.5 rounded-lg border border-slate-200 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
                                         >
                                             <Edit3 className="h-3 w-3" />
                                             编辑
@@ -977,7 +979,7 @@ export function PostersPanel({
                                                 !canUpdate || isProgramBusy || !template.enabled || isDefault
                                             }
                                             onClick={() => void makeDefaultTemplate(template.id)}
-                                            className="rounded-lg border border-slate-200 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                                            className="rounded-lg border border-slate-200 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
                                         >
                                             设为默认
                                         </button>
@@ -985,7 +987,7 @@ export function PostersPanel({
                                             type="button"
                                             onClick={() => setDeleting(template)}
                                             disabled={!canDelete || state.loading}
-                                            className="flex items-center justify-center gap-1 rounded-lg border border-rose-200 py-1.5 text-xs font-medium text-rose-600 hover:bg-rose-50"
+                                            className="flex items-center justify-center gap-0.5 rounded-lg border border-rose-200 py-1 text-[11px] font-medium text-rose-600 hover:bg-rose-50"
                                         >
                                             <Trash2 className="h-3 w-3" />
                                             删除
@@ -1020,7 +1022,7 @@ export function PostersPanel({
                             全屏移动端海报模板（1080×1920）。您可以通过“在客户端分享面板显示”开关自由选择哪些在买家端展示；开启的模板会自动与自定义模板一同在前台展示。
                         </p>
                     </div>
-                    <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                    <div className="mt-4 grid gap-3.5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
                         {program.systemPosterTemplateConfigs.map(sys => {
                             const isEnabled = (program.posterTemplates ?? []).includes(sys.id);
                             const isDefault = program.defaultPosterTemplate === sys.id;
@@ -1031,7 +1033,7 @@ export function PostersPanel({
                                 >
                                     <div>
                                         <div
-                                            className="aspect-[16/9] p-4 text-white flex flex-col justify-between"
+                                            className="aspect-[16/9] p-3 text-white flex flex-col justify-between"
                                             style={{
                                                 color: sys.foregroundColor,
                                                 background: sys.posterBackgroundAsset
@@ -1056,13 +1058,13 @@ export function PostersPanel({
                                                 <div className="text-[11px] opacity-80">{sys.titleEn}</div>
                                             </div>
                                         </div>
-                                        <div className="p-3 space-y-1.5">
+                                        <div className="p-3 space-y-1">
                                             <div className="flex items-center justify-between">
-                                                <h3 className="text-xs font-bold text-slate-900">
+                                                <h3 className="text-xs font-bold text-slate-900 truncate">
                                                     {sys.name}
                                                 </h3>
                                                 <span
-                                                    className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
+                                                    className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold ${
                                                         isEnabled
                                                             ? 'bg-emerald-50 text-emerald-700'
                                                             : 'bg-slate-100 text-slate-400'
@@ -1071,14 +1073,14 @@ export function PostersPanel({
                                                     {isEnabled ? '已启用显示' : '已隐藏'}
                                                 </span>
                                             </div>
-                                            <p className="text-[11px] text-slate-500 leading-relaxed">
+                                            <p className="line-clamp-2 text-[11px] text-slate-500 leading-relaxed min-h-[32px]">
                                                 {sys.siteIntroZh}
                                             </p>
                                         </div>
                                     </div>
-                                    <div className="p-3 pt-0 space-y-2">
-                                        <label className="flex cursor-pointer items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5 text-xs">
-                                            <span className="text-[11px] font-medium text-slate-700">
+                                    <div className="p-3 pt-0 space-y-1.5">
+                                        <label className="flex cursor-pointer items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-2 py-1.5 text-xs">
+                                            <span className="text-[10px] font-medium text-slate-700">
                                                 在客户端分享面板显示
                                             </span>
                                             <input
@@ -1088,20 +1090,20 @@ export function PostersPanel({
                                                 onChange={e =>
                                                     void toggleSystemTemplate(sys.id, e.target.checked)
                                                 }
-                                                className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                                className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                                             />
                                         </label>
                                         <button
                                             type="button"
                                             disabled={!canUpdate || isProgramBusy || !isEnabled || isDefault}
                                             onClick={() => void makeDefaultTemplate(sys.id)}
-                                            className="w-full rounded-lg border border-slate-200 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                                            className="w-full rounded-lg border border-slate-200 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
                                         >
                                             {isDefault ? '当前为默认海报' : '设为默认海报'}
                                         </button>
                                         <button
                                             type="button"
-                                            className="w-full rounded-lg border border-slate-200 py-1.5 text-xs text-slate-700"
+                                            className="w-full rounded-lg border border-slate-200 py-1 text-[11px] text-slate-700 hover:bg-slate-50"
                                             onClick={() => onEdit({ ...sys, id: '', enabled: false })}
                                             disabled={!canCreate || isProgramBusy}
                                         >
