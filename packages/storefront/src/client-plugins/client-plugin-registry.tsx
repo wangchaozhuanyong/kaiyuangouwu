@@ -1,4 +1,4 @@
-import { Headphones, KeyRound, TicketPercent, WandSparkles } from 'lucide-react';
+import { Headphones, KeyRound, Mail, TicketPercent, WandSparkles } from 'lucide-react';
 import { type ComponentType } from 'react';
 
 import { type RouteState } from '../storefront-router';
@@ -121,12 +121,39 @@ function TwoFactorEntryPlugin({ language, onNavigate }: Readonly<ClientPluginCom
     );
 }
 
+function MailQueryEntryPlugin({ language }: Readonly<ClientPluginComponentProps>) {
+    const isZh = language === 'zh';
+    return (
+        <button
+            type="button"
+            className="category-client-plugin category-client-plugin-mail-query bg-[linear-gradient(135deg,#eff6ff,#fff_55%,#f0fdf4)]"
+            onClick={() => {
+                window.location.href = '/mail-query';
+            }}
+        >
+            <span className="category-client-plugin-icon" aria-hidden="true">
+                <Mail />
+            </span>
+            <span className="category-client-plugin-copy">
+                <strong>{isZh ? '邮件验证码查询' : 'Mail verification codes'}</strong>
+                <span>
+                    {isZh
+                        ? '输入买家查询码，快速查看专属接收的验证码与邮件'
+                        : 'Enter your query code to view verification codes and emails'}
+                </span>
+            </span>
+            <span className="category-client-plugin-action">{isZh ? '立即查询' : 'Query'}</span>
+        </button>
+    );
+}
+
 const clientPluginRenderers: Readonly<Record<string, ComponentType<ClientPluginComponentProps> | undefined>> =
     {
         'category-coupon-entry': CouponEntryPlugin,
         'category-support-entry': SupportEntryPlugin,
         'ai-image-studio-entry': AiImageStudioEntryPlugin,
         'two-factor-code-tool': TwoFactorEntryPlugin,
+        'icloud-mail-query-entry': MailQueryEntryPlugin,
     };
 
 function itemPlacement(item: StorefrontContentItem): ClientPluginPlacement | null {

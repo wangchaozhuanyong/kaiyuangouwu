@@ -188,4 +188,24 @@ describe('category client plugin registry', () => {
             ).map(plugin => plugin.code),
         ).toEqual(['two-factor-code-tool']);
     });
+
+    it('renders the registered iCloud mail query client plugin', () => {
+        const markup = renderToStaticMarkup(
+            <ClientPluginSlot
+                block={pluginBlock([pluginItem('icloud-mail-query-entry', 'BUSINESS_SERVICES_MAIN', 0)])}
+                placement="BUSINESS_SERVICES_MAIN"
+                language="zh"
+                onNavigate={() => undefined}
+            />,
+        );
+
+        expect(markup).toContain('邮件验证码查询');
+        expect(markup).toContain('立即查询');
+        expect(
+            resolveClientPlugins(
+                pluginBlock([pluginItem('icloud-mail-query-entry', 'BUSINESS_SERVICES_MAIN', 0)]),
+                'BUSINESS_SERVICES_MAIN',
+            ).map(plugin => plugin.code),
+        ).toEqual(['icloud-mail-query-entry']);
+    });
 });
