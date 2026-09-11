@@ -32,6 +32,7 @@ import {
     ArrowUp,
     Headphones,
     KeyRound,
+    Mail,
     PackagePlus,
     Puzzle,
     RefreshCw,
@@ -348,7 +349,9 @@ function PluginCatalogCard({
               ? WandSparkles
               : definition.code === 'two-factor-code-tool'
                 ? KeyRound
-                : Headphones;
+                : definition.code === 'icloud-mail-query-entry'
+                  ? Mail
+                  : Headphones;
     return (
         <article className="flex min-h-44 flex-col rounded-lg border bg-background p-5">
             <div className="mb-4 flex items-start justify-between gap-3">

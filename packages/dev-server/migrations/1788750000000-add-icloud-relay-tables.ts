@@ -1,4 +1,4 @@
-import { MigrationInterface, QueryRunner, Table, TableColumnOptions } from 'typeorm';
+import { MigrationInterface, QueryRunner, Table, TableColumn, TableColumnOptions } from 'typeorm';
 
 export class AddIcloudRelayTables1788750000000 implements MigrationInterface {
     public async up(queryRunner: QueryRunner): Promise<void> {
@@ -38,7 +38,7 @@ export class AddIcloudRelayTables1788750000000 implements MigrationInterface {
                         { name: 'email', type: 'varchar', length: '255', isUnique: true },
                         { name: 'encryptedAppPassword', type: 'text' },
                         { name: 'imapHost', type: 'varchar', length: '255', default: "'imap.mail.me.com'" },
-                        { name: 'imapPort', type: 'int', default: '993' },
+                        { name: 'imapPort', type: 'int', default: 993 },
                         { name: 'note', type: 'text', isNullable: true },
                         { name: 'status', type: 'varchar', length: '32', default: "'ACTIVE'" },
                         {
@@ -49,11 +49,11 @@ export class AddIcloudRelayTables1788750000000 implements MigrationInterface {
                             isNullable: true,
                         },
                         { name: 'codeExpiresAt', type: dateType, isNullable: true },
-                        { name: 'codeResetIntervalDays', type: 'int', default: '30' },
+                        { name: 'codeResetIntervalDays', type: 'int', default: 30 },
                         { name: 'lastQueriedAt', type: dateType, isNullable: true },
                         { name: 'lastQueriedIp', type: 'varchar', length: '64', isNullable: true },
                         { name: 'lastSyncedAt', type: dateType, isNullable: true },
-                        { name: 'lastSyncedUid', type: 'int', default: '0' },
+                        { name: 'lastSyncedUid', type: 'int', default: 0 },
                         { name: 'lastSyncError', type: 'text', isNullable: true },
                     ],
                     indices: [
@@ -88,9 +88,11 @@ export class AddIcloudRelayTables1788750000000 implements MigrationInterface {
                         { name: 'status', type: 'varchar', length: '32', default: "'ACTIVE'" },
                         { name: 'buyerQueryCode', type: 'varchar', length: '64', isUnique: true },
                         { name: 'codeExpiresAt', type: dateType, isNullable: true },
-                        { name: 'codeResetIntervalDays', type: 'int', default: '30' },
+                        { name: 'codeResetIntervalDays', type: 'int', default: 30 },
                         { name: 'lastQueriedAt', type: dateType, isNullable: true },
                         { name: 'lastQueriedIp', type: 'varchar', length: '64', isNullable: true },
+                        { name: 'mailCount', type: 'int', default: 0 },
+                        { name: 'lastMailReceivedAt', type: dateType, isNullable: true },
                     ],
                     indices: [
                         {
@@ -119,6 +121,30 @@ export class AddIcloudRelayTables1788750000000 implements MigrationInterface {
                 }),
                 true,
             );
+        } else {
+            // Table was created in partial previous run - ensure missing columns are added safely
+            if (typeof queryRunner.hasColumn === 'function') {
+                if (!(await queryRunner.hasColumn('icloud_virtual_email', 'mailCount'))) {
+                    await queryRunner.addColumn(
+                        'icloud_virtual_email',
+                        new TableColumn({
+                            name: 'mailCount',
+                            type: 'int',
+                            default: 0,
+                        }),
+                    );
+                }
+                if (!(await queryRunner.hasColumn('icloud_virtual_email', 'lastMailReceivedAt'))) {
+                    await queryRunner.addColumn(
+                        'icloud_virtual_email',
+                        new TableColumn({
+                            name: 'lastMailReceivedAt',
+                            type: dateType,
+                            isNullable: true,
+                        }),
+                    );
+                }
+            }
         }
 
         // 3. icloud_received_mail
@@ -139,7 +165,7 @@ export class AddIcloudRelayTables1788750000000 implements MigrationInterface {
                         { name: 'primaryAccountId', type: idType },
                         { name: 'virtualEmailId', type: idType, isNullable: true },
                         { name: 'messageId', type: 'varchar', length: '255' },
-                        { name: 'imapUid', type: 'int', default: '0' },
+                        { name: 'imapUid', type: 'int', default: 0 },
                         { name: 'fromAddress', type: 'varchar', length: '255' },
                         { name: 'fromName', type: 'varchar', length: '255', default: "''" },
                         { name: 'toAddressesJson', type: 'text', isNullable: true },
@@ -149,7 +175,7 @@ export class AddIcloudRelayTables1788750000000 implements MigrationInterface {
                         { name: 'extractedCode', type: 'varchar', length: '64', isNullable: true },
                         { name: 'receivedAt', type: dateType },
                         { name: 'isRead', type: booleanType, default: booleanFalse },
-                        { name: 'isDeleted', type: booleanType, default: booleanFalse },
+                        { name: 'isStarred', type: booleanType, default: booleanFalse },
                     ],
                     indices: [
                         {
