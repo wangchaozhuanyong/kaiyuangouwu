@@ -1,6 +1,6 @@
+import type { StorefrontContentBlock, StorefrontContentItem } from './types';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import type { StorefrontContentBlock, StorefrontContentItem } from './types';
 
 import {
     CategoryClientPluginSlot,
