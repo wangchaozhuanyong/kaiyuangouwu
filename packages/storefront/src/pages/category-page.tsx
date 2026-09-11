@@ -9,7 +9,7 @@ import {
     SlidersHorizontal,
     WifiOff,
 } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 // eslint-disable-next-line import/order -- organize-imports keeps relative type imports after packages.
 import type { RouteState, SortMode } from '../storefront-router';
 
@@ -116,17 +116,29 @@ export function CategoryPage() {
     const subcatScrollerRef = useRef<HTMLDivElement>(null);
     const primaryCollections = collections;
     const primary = primaryCollections.find(item => item.id === activeCollectionId) ?? primaryCollections[0];
-    const primaryCollectionImage = (collection: CollectionSummary) =>
-        collectionImage(collection) ??
-        productImage(
-            products.find(product =>
+    const collectionImageMap = useMemo(() => {
+        const map = new Map<string, string>();
+        for (const collection of primaryCollections) {
+            const direct = collectionImage(collection);
+            if (direct) {
+                map.set(collection.id, direct);
+                continue;
+            }
+            const matchedProduct = products.find(product =>
                 product.collections.some(
                     productCollection =>
                         productCollection.id === collection.id ||
                         productCollection.parentId === collection.id,
                 ),
-            ),
-        );
+            );
+            const fallback = productImage(matchedProduct);
+            if (fallback) {
+                map.set(collection.id, fallback);
+            }
+        }
+        return map;
+    }, [primaryCollections, products]);
+    const primaryCollectionImage = (collection: CollectionSummary) => collectionImageMap.get(collection.id);
     const children = primary?.children ?? [];
     const hasChildCategories = children.length > 0;
     const subcategoriesExpanded = expandedSubcategoryId === primary?.id;
@@ -192,7 +204,9 @@ export function CategoryPage() {
     const categoryProducts = collections.length ? pagination.products : fallbackProducts;
     const visibleProducts = categoryProducts;
     const totalItems = collections.length ? pagination.totalItems : fallbackProducts.length;
-    const categoryLoading = collections.length ? catalogQuery.isLoading : loading;
+    const categoryLoading = collections.length
+        ? catalogQuery.isLoading && !catalogQuery.isPlaceholderData && !categoryProducts.length
+        : loading;
     const categoryError = collections.length
         ? catalogQuery.isPaused && catalogQuery.data === undefined
             ? offlineLoadError(language)
@@ -324,9 +338,11 @@ export function CategoryPage() {
                                                 const item = event.currentTarget;
                                                 const scroller = item.parentElement;
                                                 if (!scroller) return;
-                                                scroller.scrollTo({
-                                                    left: centeredHorizontalScrollLeft(scroller, item),
-                                                    behavior: 'smooth',
+                                                requestAnimationFrame(() => {
+                                                    scroller.scrollTo({
+                                                        left: centeredHorizontalScrollLeft(scroller, item),
+                                                        behavior: 'smooth',
+                                                    });
                                                 });
                                             }}
                                         >
