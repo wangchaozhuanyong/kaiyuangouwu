@@ -11,6 +11,7 @@ const REVIEWED_MIGRATIONS = [
     'SeedCheckoutProvinces1788742800000',
     'AlignCheckoutProvinceCountries1788746400000',
     'AddIcloudRelayTables1788750000000',
+    'AlignIcloudRelaySchema1788751000000',
 ];
 const TABLE = 'storefront_usdt_payment_intent';
 
