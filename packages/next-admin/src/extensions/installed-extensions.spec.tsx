@@ -26,11 +26,12 @@ describe('installed next-admin extensions', () => {
         expect(hasAnyAdminPermission([], route.permissions!)).toBe(false);
         expect(hasAnyAdminPermission(['SuperAdmin'], route.permissions!)).toBe(true);
     });
-    it('registers all eight local plugins through the shared extension API', () => {
+    it('registers all nine local plugins through the shared extension API', () => {
         expect(getNextAdminExtensions().map(extension => extension.id)).toEqual([
             'image-generation-plugin',
             'content-translation-plugin',
             'two-factor-dashboard-plugin',
+            'icloud-relay-dashboard-plugin',
             'catalog-management-plugin',
             'storefront-content-plugin',
             'operations-dashboard-plugin',
@@ -58,7 +59,7 @@ describe('installed next-admin extensions', () => {
 
     it('provides unique routes plus the plugin navigation entries', () => {
         const routes = getNextAdminExtensionRoutes();
-        expect(routes).toHaveLength(26);
+        expect(routes).toHaveLength(27);
         expect(new Set(routes.map(route => route.id)).size).toBe(routes.length);
         expect(new Set(routes.map(route => route.path)).size).toBe(routes.length);
         expect(routes).toContainEqual(
@@ -73,6 +74,11 @@ describe('installed next-admin extensions', () => {
                     id: 'two-factor-codes',
                     path: '/plugins/two-factor-codes',
                 }),
+                expect.objectContaining({
+                    id: 'icloud-relay',
+                    path: '/plugins/icloud-relay',
+                    permissions: ['SuperAdmin'],
+                }),
             ]),
         );
         expect(getNextAdminExtensionLegacyRoutes()).toContainEqual(
@@ -85,6 +91,7 @@ describe('installed next-admin extensions', () => {
             '/plugins/ai-access',
             '/plugins/translations',
             '/plugins/two-factor-codes',
+            '/plugins/icloud-relay',
         ]);
     });
 

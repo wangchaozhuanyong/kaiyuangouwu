@@ -258,13 +258,22 @@ export function ClientPluginsModule() {
                     />
                 ) : (
                     draft && (
-                        <>
-                            <section className="rounded-xl border border-slate-200 bg-white">
+                        <div className="grid gap-6 lg:grid-cols-12 items-start">
+                            {/* Left column: Installed Plugins */}
+                            <section className="rounded-xl border border-slate-200 bg-white lg:col-span-7 xl:col-span-7">
                                 <div className="border-b border-slate-100 p-4">
-                                    <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                                        已添加到客户端
-                                        <FeatureHelpButton topic="plugins.installed" title="已添加到客户端" />
-                                    </h2>
+                                    <div className="flex items-center justify-between">
+                                        <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                                            已添加到客户端
+                                            <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700">
+                                                {draft.items.length} 个
+                                            </span>
+                                            <FeatureHelpButton
+                                                topic="plugins.installed"
+                                                title="已添加到客户端"
+                                            />
+                                        </h2>
+                                    </div>
                                     <p className="mt-1 text-[11px] text-slate-400">
                                         同一位置的插件依照下方顺序展示；选择“指定分类”时必须勾选至少一项
                                     </p>
@@ -318,55 +327,54 @@ export function ClientPluginsModule() {
                                         )}
                                     </div>
                                 ) : (
-                                    <div className="flex flex-col items-center justify-center p-5 text-center">
-                                        <Puzzle className="h-9 w-9 text-slate-300" />
+                                    <div className="flex flex-col items-center justify-center p-8 text-center">
+                                        <Puzzle className="h-10 w-10 text-slate-300" />
                                         <h3 className="mt-3 text-sm font-bold text-slate-800">
                                             还没有装配客户端插件
                                         </h3>
                                         <p className="mt-1 text-xs text-slate-400">
-                                            展开下方“添加插件”，选择需要的入口。
+                                            在右侧“可用官方插件库”中选择需要的插件，点击【添加到客户端】即可启用。
                                         </p>
                                     </div>
                                 )}
                             </section>
-                            <details
-                                open={draft.items.length === 0}
-                                className="rounded-xl border border-slate-200 bg-white p-4"
-                            >
-                                <summary className="cursor-pointer text-sm font-bold">
-                                    添加插件 · {catalog.length} 个可用插件
-                                </summary>
-                                <div className="mt-4">
-                                    <div className="mb-3">
+
+                            {/* Right column: Available Plugin Catalog */}
+                            <section className="rounded-xl border border-slate-200 bg-white lg:col-span-5 xl:col-span-5">
+                                <div className="border-b border-slate-100 p-4">
+                                    <div className="flex items-center justify-between">
                                         <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                                            平台插件
+                                            可用官方插件库
+                                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
+                                                {catalog.length} 个可用
+                                            </span>
                                             <FeatureHelpButton topic="plugins.platform" title="平台插件" />
                                         </h2>
-                                        <p className="mt-1 text-[11px] text-slate-400">
-                                            清单直接来自当前后端发布的插件 manifest
-                                        </p>
                                     </div>
-                                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                                        {catalog.map(definition => (
-                                            <PluginCard
-                                                key={definition.code}
-                                                definition={definition}
-                                                installed={installedCodes.has(definition.code)}
-                                                onToggle={() =>
-                                                    setDraft(current =>
-                                                        current
-                                                            ? installedCodes.has(definition.code)
-                                                                ? removePlugin(current, definition.code)
-                                                                : addPlugin(current, definition)
-                                                            : current,
-                                                    )
-                                                }
-                                            />
-                                        ))}
-                                    </div>
+                                    <p className="mt-1 text-[11px] text-slate-400">
+                                        平台已发布的开箱即用插件，可按需添加到当前店铺
+                                    </p>
                                 </div>
-                            </details>
-                        </>
+                                <div className="grid gap-3 p-4 sm:grid-cols-1 xl:grid-cols-2">
+                                    {catalog.map(definition => (
+                                        <PluginCard
+                                            key={definition.code}
+                                            definition={definition}
+                                            installed={installedCodes.has(definition.code)}
+                                            onToggle={() =>
+                                                setDraft(current =>
+                                                    current
+                                                        ? installedCodes.has(definition.code)
+                                                            ? removePlugin(current, definition.code)
+                                                            : addPlugin(current, definition)
+                                                        : current,
+                                                )
+                                            }
+                                        />
+                                    ))}
+                                </div>
+                            </section>
+                        </div>
                     )
                 )}
             </main>
@@ -390,36 +398,40 @@ function PluginCard({
               ? Headphones
               : Sparkles;
     return (
-        <article className="flex min-h-44 flex-col rounded-xl border border-slate-200 bg-white p-4 shadow-2xs">
-            <div className="flex items-start justify-between">
-                <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-blue-50 text-blue-700">
-                    <Icon className="h-5 w-5" />
+        <article className="flex flex-col justify-between rounded-xl border border-slate-200 bg-white p-3.5 shadow-2xs hover:border-slate-300 transition-colors">
+            <div>
+                <div className="flex items-start justify-between">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-50 text-blue-700">
+                        <Icon className="h-4 w-4" />
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                        <span className="font-mono text-[10px] text-slate-400">v{definition.version}</span>
+                        <span
+                            className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${installed ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}
+                        >
+                            {installed ? '已装配' : '可添加'}
+                        </span>
+                    </div>
                 </div>
-                <div className="flex items-center gap-2">
-                    <span className="font-mono text-[10px] text-slate-400">v{definition.version}</span>
-                    <span
-                        className={`rounded px-2 py-1 text-[10px] font-bold ${installed ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-500'}`}
-                    >
-                        {installed ? '已添加' : '可添加'}
-                    </span>
-                </div>
+                <h3 className="mt-2.5 text-xs font-bold text-slate-900">{definition.name}</h3>
+                <div className="font-mono text-[9px] text-slate-400">{definition.code}</div>
+                <p className="mt-1.5 text-[11px] leading-4 text-slate-500 line-clamp-2">
+                    {definition.description}
+                </p>
             </div>
-            <h3 className="mt-4 text-sm font-bold text-slate-900">{definition.name}</h3>
-            <div className="mt-1 font-mono text-[10px] text-slate-400">{definition.code}</div>
-            <p className="mt-3 flex-1 text-xs leading-5 text-slate-500">{definition.description}</p>
             <button
                 type="button"
                 onClick={onToggle}
-                className={`mt-5 flex w-full items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-bold ${installed ? 'border-rose-200 text-rose-600 hover:bg-rose-50' : 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100'}`}
+                className={`mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-bold transition-colors ${installed ? 'border-rose-200 text-rose-600 hover:bg-rose-50' : 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100'}`}
             >
                 {installed ? (
                     <>
-                        <Trash2 className="h-3.5 w-3.5" />
+                        <Trash2 className="h-3 w-3" />
                         从客户端移除
                     </>
                 ) : (
                     <>
-                        <Plus className="h-3.5 w-3.5" />
+                        <Plus className="h-3 w-3" />
                         添加到客户端
                     </>
                 )}

@@ -1,5 +1,5 @@
 /* oxlint-disable react/only-export-components -- this module intentionally registers lazy extension components as import side effects */
-import { KeyRound, Puzzle, Share2, Sparkles, Terminal, Truck, WalletCards } from 'lucide-react';
+import { KeyRound, Mail, Puzzle, Share2, Sparkles, Terminal, Truck, WalletCards } from 'lucide-react';
 import { lazy, type ComponentType } from 'react';
 import { Navigate } from 'react-router-dom';
 
@@ -40,6 +40,9 @@ const ClientPluginsModule = lazy(() =>
 );
 const TwoFactorCodesModule = lazy(() =>
     routeModuleLoaders.twoFactorCodes().then(module => ({ default: module.TwoFactorCodesModule })),
+);
+const IcloudRelayModule = lazy(() =>
+    routeModuleLoaders.icloudRelay().then(module => ({ default: module.IcloudRelayModule })),
 );
 const CardPoolModule = lazy(() =>
     routeModuleLoaders.cardPool().then(module => ({ default: module.CardPoolModule })),
@@ -168,6 +171,26 @@ defineNextAdminExtension({
                 order: 50,
             },
             preload: routeModuleLoaders.twoFactorCodes,
+        },
+    ],
+});
+
+defineNextAdminExtension({
+    id: 'icloud-relay-dashboard-plugin',
+    routes: [
+        {
+            id: 'icloud-relay',
+            path: '/plugins/icloud-relay',
+            title: '邮件验证码查询',
+            component: IcloudRelayModule,
+            permissions: ['SuperAdmin'],
+            navItem: {
+                label: '邮件验证码查询',
+                sectionId: 'plugins',
+                icon: Mail,
+                order: 60,
+            },
+            preload: routeModuleLoaders.icloudRelay,
         },
     ],
 });
