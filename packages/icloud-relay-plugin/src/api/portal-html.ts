@@ -29,6 +29,59 @@ export const PORTAL_HTML = `<!DOCTYPE html>
             --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
             --shadow-md: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
         }
+        html[data-storefront-preset='modern-oriental'] {
+            --primary: #b33928;
+            --primary-hover: #9c2e1f;
+            --primary-light: #fcf4f2;
+            --primary-border: #f3d4ce;
+            --bg: #f5f2eb;
+            --card-bg: #fffdf8;
+            --text: #2c2523;
+            --text-secondary: #706763;
+            --text-muted: #9b918c;
+            --border: #e5dec9;
+            --border-hover: #d2c8af;
+        }
+        html[data-storefront-preset='modern-oriental'] .top-nav {
+            background: #fffdf8;
+            border-bottom-color: var(--border);
+        }
+        html[data-storefront-preset='modern-oriental'] .nav-back-link {
+            background: #ebe6dc;
+            color: var(--text-secondary);
+        }
+        html[data-storefront-preset='modern-oriental'] .nav-back-link:hover {
+            background: var(--primary-light);
+            color: var(--primary);
+        }
+        html[data-storefront-preset='modern-oriental'] .code-input {
+            background: #faf7f2;
+            border-color: var(--border);
+        }
+        html[data-storefront-preset='modern-oriental'] .code-input:focus {
+            background: #fffdf8;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3.5px rgba(179, 57, 40, 0.12);
+        }
+        html[data-storefront-preset='modern-oriental'] .clear-btn {
+            background: #e5dec9;
+            color: var(--text-secondary);
+        }
+        html[data-storefront-preset='modern-oriental'] .clear-btn:hover {
+            background: #d2c8af;
+            color: var(--text);
+        }
+        html[data-storefront-preset='modern-oriental'] .query-btn {
+            background: linear-gradient(135deg, #b33928 0%, #9c2e1f 100%);
+            box-shadow: 0 4px 12px rgba(179, 57, 40, 0.25);
+        }
+        html[data-storefront-preset='modern-oriental'] .query-btn:hover {
+            box-shadow: 0 6px 16px rgba(179, 57, 40, 0.35);
+        }
+        html[data-storefront-preset='modern-oriental'] .empty-autorefresh-btn {
+            background: #fffdf8;
+            border-color: var(--border);
+        }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
@@ -134,24 +187,7 @@ export const PORTAL_HTML = `<!DOCTYPE html>
             font-size: 14px;
             color: var(--text-secondary);
             max-width: 480px;
-            margin: 0 auto 16px;
-        }
-        .feature-chips {
-            display: flex;
-            flex-wrap: wrap;
-            justify-content: center;
-            gap: 8px;
-        }
-        .chip {
-            font-size: 12px;
-            color: var(--text-secondary);
-            background: #ffffff;
-            border: 1px solid var(--border);
-            padding: 4px 10px;
-            border-radius: var(--radius-sm);
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
+            margin: 0 auto;
         }
 
         /* ====== Query Card ====== */
@@ -295,21 +331,77 @@ export const PORTAL_HTML = `<!DOCTYPE html>
             box-shadow: none;
         }
 
-        /* ====== Messages & Toasts ====== */
+        /* ====== Messages & Feedback Boxes ====== */
         .toast-msg {
-            margin-top: 12px;
-            padding: 10px 14px;
-            border-radius: var(--radius-sm);
+            margin-top: 14px;
+            padding: 14px 16px;
+            border-radius: var(--radius);
             font-size: 13px;
             display: none;
-            align-items: center;
+            flex-direction: column;
             gap: 8px;
             animation: fadeIn 0.2s ease;
         }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
-        .toast-msg.error { background: var(--error-light); color: var(--error); border: 1px solid #fecaca; display: flex; }
-        .toast-msg.success { background: var(--success-light); color: var(--success); border: 1px solid #bbf7d0; display: flex; }
-        .toast-msg.info { background: var(--primary-light); color: var(--primary); border: 1px solid var(--primary-border); display: flex; }
+        .toast-msg.error { background: #fef2f2; color: #991b1b; border: 1.5px solid #fecaca; display: flex; }
+        .toast-msg.warning { background: #fffbeb; color: #92400e; border: 1.5px solid #fde68a; display: flex; }
+        .toast-msg.success { background: #f0fdf4; color: #166534; border: 1.5px solid #bbf7d0; display: flex; }
+        .toast-msg.info { background: #eff6ff; color: #1e40af; border: 1.5px solid #bfdbfe; display: flex; }
+        .msg-header { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; }
+        .msg-body { font-size: 13px; line-height: 1.6; }
+        .msg-body code {
+            background: rgba(0, 0, 0, 0.06);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .toast-msg.error .msg-body { color: #7f1d1d; }
+        .toast-msg.warning .msg-body { color: #854d0e; }
+        .toast-msg.success .msg-body { color: #14532d; }
+        .toast-msg.info .msg-body { color: #1e3a8a; }
+        .msg-actions { display: flex; align-items: center; gap: 10px; margin-top: 4px; flex-wrap: wrap; }
+        .msg-action-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.15s ease;
+            border: 1px solid transparent;
+        }
+        .msg-action-btn.btn-secondary { background: #ffffff; color: #475569; border-color: #cbd5e1; }
+        .msg-action-btn.btn-secondary:hover { background: #f1f5f9; color: #0f172a; }
+        .msg-action-btn.btn-link { color: var(--primary); background: transparent; padding: 5px 6px; }
+        .msg-action-btn.btn-link:hover { text-decoration: underline; }
+
+        @keyframes shakeInput {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-6px); }
+            40%, 80% { transform: translateX(6px); }
+        }
+        .input-wrapper.has-error { animation: shakeInput 0.35s ease; }
+        .input-wrapper.has-error .code-input {
+            border-color: var(--error) !important;
+            background: #fff5f5;
+            box-shadow: 0 0 0 3.5px rgba(220, 38, 38, 0.12) !important;
+        }
+
+        .btn-spinner {
+            display: inline-block;
+            width: 15px;
+            height: 15px;
+            border: 2px solid #ffffff;
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
 
         /* ====== Recent Queries Section ====== */
         .recent-section {
@@ -684,7 +776,25 @@ export const PORTAL_HTML = `<!DOCTYPE html>
         }
         .empty-icon { font-size: 40px; margin-bottom: 12px; }
         .empty-title { font-size: 16px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
-        .empty-desc { font-size: 13px; color: var(--text-secondary); max-width: 320px; margin: 0 auto 16px; }
+        .empty-desc { font-size: 13px; color: var(--text-secondary); max-width: 340px; margin: 0 auto 16px; line-height: 1.6; }
+        .empty-autorefresh-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            background: #ffffff;
+            border: 1px solid var(--border);
+            color: var(--text);
+            border-radius: var(--radius-sm);
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .empty-autorefresh-btn:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
 
         /* ====== FAQ Section ====== */
         .faq-section {
@@ -750,7 +860,7 @@ export const PORTAL_HTML = `<!DOCTYPE html>
     <!-- Top Nav -->
     <header class="top-nav">
         <div class="top-nav-inner">
-            <a href="/services" class="nav-back-link">
+            <a href="/services" class="nav-back-link" id="navBackLink">
                 <span>←</span> 返回商城服务
             </a>
             <div class="nav-status">
@@ -765,13 +875,7 @@ export const PORTAL_HTML = `<!DOCTYPE html>
         <section class="hero-section">
             <div class="hero-badge">⚡ MOYAO AI · 邮件中继服务</div>
             <h1 class="hero-title">邮件验证码实时查询中心</h1>
-            <p class="hero-subtitle">输入买家专属查询码，实时收取 iCloud 邮箱验证码与通知邮件</p>
-            <div class="feature-chips">
-                <div class="chip">⚡ 秒级自动同步</div>
-                <div class="chip">🔒 端到端隐私隔离</div>
-                <div class="chip">📋 验证码一键复制</div>
-                <div class="chip">⏱️ 倒计时自动刷新</div>
-            </div>
+            <p class="hero-subtitle">输入专属查询码，实时查收验证码</p>
         </section>
 
         <!-- Query Form Card -->
@@ -780,19 +884,19 @@ export const PORTAL_HTML = `<!DOCTYPE html>
                 <span>🔑 专属查询码</span>
                 <span class="card-label-hint">例: BUY-XXXX-XXXX 或 主查询码</span>
             </div>
-            <div class="input-wrapper">
+            <div class="input-wrapper" id="inputWrapper">
                 <span class="input-icon">🔍</span>
                 <input type="text" id="codeInput" class="code-input"
                        placeholder="输入查询码或点击右侧粘贴"
-                       maxlength="20" autocomplete="off" spellcheck="false">
+                       maxlength="25" autocomplete="off" spellcheck="false">
                 <div class="input-actions">
-                    <button type="button" class="clear-btn" id="clearBtn" title="清空" onclick="clearInput()">✕</button>
-                    <button type="button" class="paste-btn" id="pasteBtn" title="从剪贴板粘贴" onclick="pasteFromClipboard()">
+                    <button type="button" class="clear-btn" id="clearBtn" title="清空">✕</button>
+                    <button type="button" class="paste-btn" id="pasteBtn" title="从剪贴板粘贴">
                         <span>📋</span> 粘贴
                     </button>
                 </div>
             </div>
-            <button type="button" class="query-btn" id="queryBtn" onclick="doQuery()">
+            <button type="button" class="query-btn" id="queryBtn">
                 <span id="btnText">查 询 邮 件</span>
             </button>
             <div class="toast-msg" id="msgBox"></div>
@@ -804,7 +908,7 @@ export const PORTAL_HTML = `<!DOCTYPE html>
                 <div class="section-title">
                     <span>🕒</span> 最近查询记录
                 </div>
-                <button type="button" class="clear-all-link" onclick="clearAllHistory()">清空记录</button>
+                <button type="button" class="clear-all-link" id="clearAllHistoryBtn">清空记录</button>
             </div>
             <div class="recent-list" id="recentList"></div>
         </section>
@@ -812,13 +916,13 @@ export const PORTAL_HTML = `<!DOCTYPE html>
         <!-- Query Results Section -->
         <section class="result-section" id="resultSection">
             <div class="result-nav-bar">
-                <button type="button" class="back-query-btn" onclick="goBack()">
+                <button type="button" class="back-query-btn" id="backQueryBtn">
                     <span>←</span> 重新查询
                 </button>
                 <div class="auto-refresh-box">
                     <span>自动刷新</span>
                     <label class="switch-toggle">
-                        <input type="checkbox" id="autoRefreshToggle" onchange="toggleAutoRefresh(this)">
+                        <input type="checkbox" id="autoRefreshToggle">
                         <span class="slider"></span>
                     </label>
                     <span id="countdownText" style="font-size: 11px; color: var(--primary); min-width: 24px;"></span>
@@ -834,7 +938,7 @@ export const PORTAL_HTML = `<!DOCTYPE html>
                             <span class="code-type-pill pill-buyer" id="summaryTypePill">买家专属</span>
                         </div>
                     </div>
-                    <button type="button" class="refresh-now-btn" id="refreshNowBtn" onclick="refreshCurrentQuery()">
+                    <button type="button" class="refresh-now-btn" id="refreshNowBtn">
                         <span>🔄</span> 立即刷新
                     </button>
                 </div>
@@ -852,7 +956,7 @@ export const PORTAL_HTML = `<!DOCTYPE html>
 
             <!-- Filter bar for master queries -->
             <div class="filter-wrapper" id="filterWrapper">
-                <select id="filterSelect" class="filter-select" onchange="filterMails()">
+                <select id="filterSelect" class="filter-select">
                     <option value="">全部虚拟邮箱</option>
                 </select>
             </div>

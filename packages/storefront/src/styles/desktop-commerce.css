@@ -138,7 +138,7 @@
         height: 44px;
         min-width: 0;
         border: 1px solid var(--accent);
-        background: #fff;
+        background: var(--paper, #fff);
     }
     .desktop-search > svg {
         width: 18px;
@@ -265,7 +265,7 @@
         cursor: pointer;
     }
     .desktop-store-layout .business-services-empty {
-        background: #fff;
+        background: var(--paper, #fff);
         border: 0;
         border-radius: 0;
     }
@@ -454,7 +454,7 @@
         top: calc(var(--desktop-header-height) + 28px);
         display: flex;
         flex-direction: column;
-        background: #fff;
+        background: var(--paper, #fff);
         padding: 22px 0;
     }
     .desktop-account-navigation > strong {
@@ -527,7 +527,7 @@
         align-items: center;
         padding: 28px 32px;
         gap: 28px;
-        background: #fff;
+        background: var(--paper, #fff);
     }
     .desktop-member-identity {
         display: flex;
@@ -541,7 +541,7 @@
         place-items: center;
         width: 64px;
         height: 64px;
-        background: #f4f1ee;
+        background: var(--soft, #f4f1ee);
         border-radius: 50%;
         color: #9b8b7e;
         flex: none;
@@ -599,7 +599,7 @@
         font-size: 13px;
     }
     .desktop-account-orders {
-        background: #fff;
+        background: var(--paper, #fff);
         padding: 24px 28px;
     }
     .desktop-order-statuses {
@@ -662,7 +662,7 @@
         height: 38px;
         padding: 0 18px;
         border: 1px solid var(--accent);
-        background: #fff;
+        background: var(--paper, #fff);
         color: var(--accent);
         font-size: 13px;
     }
@@ -727,7 +727,7 @@
         gap: 20px;
     }
     .desktop-account-detail-grid > section {
-        background: #fff;
+        background: var(--paper, #fff);
         padding: 24px 28px;
     }
     .desktop-delivery-summary {
@@ -791,7 +791,7 @@
     }
     .desktop-category-navigation {
         padding: 6px 24px;
-        background: #fff;
+        background: var(--paper, #fff);
     }
     .desktop-local-navigation,
     .desktop-subcategories {
@@ -877,7 +877,7 @@
         flex-wrap: wrap;
         align-items: end;
         gap: 20px;
-        background: #fff;
+        background: var(--paper, #fff);
         padding: 20px 24px;
         margin-bottom: 24px;
     }
@@ -892,7 +892,7 @@
         width: 170px;
         padding: 6px 10px;
         border: 1px solid #ddd;
-        background: #fff;
+        background: var(--paper, #fff);
         border-radius: 0;
         color: var(--text);
     }
@@ -973,7 +973,7 @@
     }
     .desktop-catalog-results > .empty-state {
         min-height: 340px;
-        background: #fff;
+        background: var(--paper, #fff);
     }
     .desktop-catalog-extras {
         margin-top: 32px;
@@ -1038,7 +1038,7 @@
         background: transparent;
     }
     .desktop-store-layout .orders-page .empty-state {
-        background: #fff;
+        background: var(--paper, #fff);
     }
     .desktop-order-tab-count {
         margin-left: 8px;
