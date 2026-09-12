@@ -10,8 +10,34 @@
         <meta name="description" content="浏览店铺商品与服务，管理账户与订单。" />
         <meta name="robots" content="index, follow, max-image-preview:large" />
         <meta name="application-name" content="店铺" />
-        <link rel="icon" href="/storefront/neutral-store.png" type="image/png" />
-        <link rel="apple-touch-icon" href="/storefront/neutral-store.png" />
+        <link rel="icon" href="/favicon.png" type="image/png" />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+        <script>
+            (function () {
+                try {
+                    var cached = sessionStorage.getItem('__storefront_logo_url__');
+                    if (cached) {
+                        var icon = document.querySelector('link[rel="icon"]');
+                        if (icon) icon.href = cached;
+                        var apple = document.querySelector('link[rel="apple-touch-icon"]');
+                        if (apple) apple.href = cached;
+                    }
+                } catch (e) {}
+            })();
+        </script>
+        <style>
+            html,
+            body {
+                margin: 0;
+                background-color: #f1f5f9;
+            }
+            @media (min-width: 1024px) {
+                html,
+                body {
+                    background-color: #f5f5f5;
+                }
+            }
+        </style>
         <meta property="og:type" content="website" />
         <meta property="og:site_name" content="店铺" />
         <meta property="og:title" content="在线商城" />

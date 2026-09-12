@@ -499,6 +499,36 @@ export function trimText(value: string | undefined, length: number): string {
     return clean.length > length ? `${clean.slice(0, length)}…` : clean;
 }
 
+export function sanitizeProductSubtitle(
+    description: string | null | undefined,
+    productName: string,
+    maxLength = 26,
+): string | null {
+    if (!description) return null;
+    const clean = description
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    if (!clean) return null;
+
+    // Filter out useless/dirty values (e.g. single digit "1", pure numbers, punctuation)
+    if (clean.length < 3 || /^[\d\s.,\-:;/]+$/u.test(clean)) {
+        return null;
+    }
+
+    const cleanName = productName
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    // Prevent duplicate title or descriptions that just prefix the title
+    if (clean === cleanName || clean.toLowerCase().startsWith(cleanName.toLowerCase())) {
+        return null;
+    }
+
+    return clean.length > maxLength ? `${clean.slice(0, maxLength)}…` : clean;
+}
+
 export function contentNumberSetting(value: unknown, fallback: number): number {
     return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 }

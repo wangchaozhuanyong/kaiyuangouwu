@@ -5,6 +5,7 @@ import {
     prefetchProductAsset,
     PriceDisplay,
     ProductImage,
+    sanitizeProductSubtitle,
     trimText,
 } from '../../storefront-ui/product-display';
 import { MarketConfig, Product, StorefrontLanguage } from '../../types';
@@ -105,8 +106,7 @@ export function ProductRow({
     const variant = product.variants[0];
     const availability = productAvailability(variant);
     const smartInfo = buildProductRowSmartInfo(product, language);
-    const description = trimText(product.description, product.description.length);
-    const showDescription = description && description !== trimText(product.name, product.name.length);
+    const subtitle = sanitizeProductSubtitle(product.description, product.name, 48);
     return (
         <article
             className={`product-row${layout === 'catalog' ? ' product-catalog-card' : ''}`}
@@ -126,13 +126,15 @@ export function ProductRow({
             <div className="product-row-content">
                 <div className="product-row-top">
                     <strong className="product-row-name">{product.name}</strong>
-                    {showDescription && <span className="product-row-desc">{description}</span>}
-                    <span className="product-row-badge product-row-smart-line">{smartInfo.primary}</span>
-                    {smartInfo.secondary ? (
-                        <span className="product-row-smart-line product-row-warranty">
-                            {smartInfo.secondary}
-                        </span>
-                    ) : null}
+                    {subtitle ? <span className="product-row-desc">{subtitle}</span> : null}
+                    <div className="product-row-meta">
+                        <span className="product-row-badge product-row-smart-line">{smartInfo.primary}</span>
+                        {smartInfo.secondary ? (
+                            <span className="product-row-smart-line product-row-warranty">
+                                {smartInfo.secondary}
+                            </span>
+                        ) : null}
+                    </div>
                 </div>
                 <div className="product-row-bottom">
                     <p className="product-row-price">
