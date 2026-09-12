@@ -1016,3 +1016,37 @@ void test('poster guard ships before data and verifies both APIs before promotin
     assert.match(workflow, /VENDURE_REVIEWED_REFERRAL_POSTERS=\{quote\('REFERRAL_POSTERS'\)\}/u);
     assert.match(script, /REFERRAL_POSTER_BACKUP_FILE=/u);
 });
+
+void test('backup reuse requires the current manifest format and keeps old archives intact', async () => {
+    const script = await readFile(path.join(repositoryRoot, 'deploy/deploy-production-from-s3.sh'), 'utf8');
+    const loader = script.match(/load_verified_backup\(\) \{[\s\S]*?\n\}/u)?.[0];
+    assert.ok(loader);
+    const stub = `sudo() {
+        case "$*" in
+          *"-p Result --value") printf 'success\\n' ;;
+          *"-p InvocationID --value") printf 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\\n' ;;
+          *journalctl*) printf 'Created verified MySQL backup: /var/backups/vendure-mysql/vendure-20260912T000000Z.sql.gz offsite=yes\\n' ;;
+          *format-version) printf '3\\n' ;;
+          *jq*) printf '%s\\n' "$FIXTURE_MANIFEST_VERSION" ;;
+          *"stat --format="*) date +%s ;;
+          *"test -s"*|*"backup-check"*) return 0 ;;
+          *) return 91 ;;
+        esac
+    }`;
+    for (const version of ['2', '3', 'invalid']) {
+        const result = spawnSync(
+            'bash',
+            ['-c', `${stub}\n${loader}\nif load_verified_backup; then echo reuse; else echo create; fi`],
+            { encoding: 'utf8', env: { ...process.env, FIXTURE_MANIFEST_VERSION: version } },
+        );
+        assert.equal(result.status, 0, result.stderr);
+        assert.equal(result.stdout.trim(), version === '3' ? 'reuse' : 'create');
+    }
+    const versionResult = spawnSync(
+        'python3',
+        [path.join(repositoryRoot, 'deploy/systemd/vendure-mysql-backup-manifest.py'), 'format-version'],
+        { encoding: 'utf8' },
+    );
+    assert.equal(versionResult.status, 0, versionResult.stderr);
+    assert.equal(versionResult.stdout.trim(), '3');
+});
