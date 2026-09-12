@@ -122,11 +122,13 @@ export class ChannelService {
         ctx: RequestContext,
         includeDefaultChannel = true,
     ): Promise<T> {
+        // Internal initialization can use RequestContext.empty(), which has no selected Channel.
+        const currentChannelId = ctx.channelId ?? (await this.getDefaultChannel(ctx)).id;
         const channelIds = includeDefaultChannel
-            ? unique([ctx.channelId, (await this.getDefaultChannel(ctx)).id])
-            : [ctx.channelId];
+            ? unique([currentChannelId, (await this.getDefaultChannel(ctx)).id])
+            : [currentChannelId];
         entity.channels = channelIds.map(id => ({ id })) as any;
-        await this.eventBus.publish(new ChangeChannelEvent(ctx, entity, [ctx.channelId], 'assigned'));
+        await this.eventBus.publish(new ChangeChannelEvent(ctx, entity, [currentChannelId], 'assigned'));
         return entity;
     }
 
