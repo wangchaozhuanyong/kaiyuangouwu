@@ -19,15 +19,13 @@ import {
 } from 'lucide-react';
 import type { FormEvent } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ActiveCustomer, StorefrontLanguage } from '../../types';
-import type { BatchImportErrorCode } from './batch-parser';
-import type { TwoFactorAccount } from './types';
 
 import { EmptyState, Subpage } from '../../storefront-ui/page-shell';
+import { ActiveCustomer, StorefrontLanguage } from '../../types';
 
-import { MAX_BATCH_CHARACTERS, parseBatchImport } from './batch-parser';
+import { BatchImportErrorCode, MAX_BATCH_CHARACTERS, parseBatchImport } from './batch-parser';
 import { formatTotpCode, generateTotp, getTotpSecondsRemaining, normalizeBase32Secret } from './totp';
-import { MAX_TWO_FACTOR_ACCOUNTS } from './types';
+import { MAX_TWO_FACTOR_ACCOUNTS, TwoFactorAccount } from './types';
 import { useBrowserVault } from './use-browser-vault';
 import { VaultControls } from './vault-controls';
 

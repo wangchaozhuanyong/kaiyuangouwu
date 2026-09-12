@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import type { ActiveCustomer, StorefrontLanguage } from '../src/types';
 
 import { TwoFactorPage } from '../src/client-plugins/two-factor/two-factor-page';
+import { ActiveCustomer, StorefrontLanguage } from '../src/types';
+
 import './styles.css';
 
 const allowedParents = new Set<string>(

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { TwoFactorAccount } from './types';
 
 import { browserVaultStorage, VAULT_PREFIX, VaultSession } from './browser-storage';
+import { TwoFactorAccount } from './types';
 
 export const VAULT_IDLE_MS = 5 * 60_000;
 

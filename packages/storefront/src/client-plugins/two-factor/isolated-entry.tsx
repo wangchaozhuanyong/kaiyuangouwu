@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import type { ActiveCustomer, StorefrontLanguage } from '../../types';
+
+import { ActiveCustomer, StorefrontLanguage } from '../../types';
 
 import { browserVaultStorage } from './browser-storage';
 import { TwoFactorPage } from './two-factor-page';

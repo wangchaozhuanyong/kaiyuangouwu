@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import type { useBrowserVault } from './use-browser-vault';
 
 import { MAX_VAULT_BYTES } from './browser-storage';
+import { useBrowserVault } from './use-browser-vault';
 
 export function VaultControls({
     vault,

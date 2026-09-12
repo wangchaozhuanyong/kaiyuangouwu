@@ -2,10 +2,11 @@
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ActiveCustomer } from '../../types';
-import type { TwoFactorAccount } from './types';
+
+import { ActiveCustomer } from '../../types';
 
 import { TwoFactorPage } from './two-factor-page';
+import { TwoFactorAccount } from './types';
 
 const storageState = vi.hoisted(() => ({
     available: false,
