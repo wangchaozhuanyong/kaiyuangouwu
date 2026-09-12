@@ -87,7 +87,34 @@ test('a same-tree fork or superseded PR head cannot supply trusted release evide
     assert.equal(hasTrustedPullRequest(run, 'owner/repo', api('fork/repo', run.head_sha)), false);
     assert.equal(hasTrustedPullRequest(run, 'owner/repo', api('owner/repo', 'b'.repeat(40))), false);
     assert.equal(
-        hasTrustedPullRequest({ ...run, pull_requests: [] }, 'owner/repo', api('owner/repo', run.head_sha)),
+        hasTrustedPullRequest({ ...run, pull_requests: [] }, 'owner/repo', () => []),
+        false,
+    );
+});
+
+test('merged PRs with empty Actions associations resolve through the exact commit without trusting forks', () => {
+    const run = { event: 'pull_request', head_sha: 'a'.repeat(40), pull_requests: [] };
+    const calls = [];
+    const api = endpoint => {
+        calls.push(endpoint);
+        if (endpoint === `repos/owner/repo/commits/${run.head_sha}/pulls?per_page=100`)
+            return [{ number: 1 }, { number: 2 }, { number: 3 }];
+        if (endpoint.endsWith('/pulls/1'))
+            return { head: { sha: run.head_sha, repo: { full_name: 'fork/repo' } } };
+        if (endpoint.endsWith('/pulls/2'))
+            return { head: { sha: 'b'.repeat(40), repo: { full_name: 'owner/repo' } } };
+        if (endpoint.endsWith('/pulls/3'))
+            return { head: { sha: run.head_sha, repo: { full_name: 'owner/repo' } } };
+        assert.fail(endpoint);
+    };
+    assert.equal(hasTrustedPullRequest(run, 'owner/repo', api), true);
+    assert.equal(calls.length, 4);
+    assert.equal(
+        hasTrustedPullRequest(run, 'owner/repo', endpoint =>
+            endpoint.includes('/commits/')
+                ? [{ number: 1 }]
+                : { head: { sha: run.head_sha, repo: { full_name: 'fork/repo' } } },
+        ),
         false,
     );
 });

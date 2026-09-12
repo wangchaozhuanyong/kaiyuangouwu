@@ -29,12 +29,15 @@ export function isTrustedRun(run, repository) {
 
 export function hasTrustedPullRequest(run, repository, api) {
     if (run.event !== 'pull_request') return true;
-    return Boolean(
-        run.pull_requests?.some(pr => {
-            const current = api(`repos/${repository}/pulls/${pr.number}`);
-            return current.head.repo?.full_name === repository && current.head.sha === run.head_sha;
-        }),
-    );
+    // Actions can omit pull_requests after a merge. Resolve the immutable commit association,
+    // then apply the same repository and exact-head checks used for attached PR references.
+    const references = run.pull_requests?.length
+        ? run.pull_requests
+        : api(`repos/${repository}/commits/${run.head_sha}/pulls?per_page=100`);
+    return references.some(pr => {
+        const current = api(`repos/${repository}/pulls/${pr.number}`);
+        return current.head.repo?.full_name === repository && current.head.sha === run.head_sha;
+    });
 }
 
 const gh = endpoint =>
