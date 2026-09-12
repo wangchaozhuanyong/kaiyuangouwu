@@ -178,10 +178,11 @@ m.capture(sys.argv[2])
           committedWrites=20 + len(during_export))
 
     # Corrupt only the SQL payload; preserve the independently recorded source manifest.
-    for case in ("schema-only", "wrong-value", "wrong-generated-expression", "wrong-auto-increment", "missing-manifest"):
+    for case in ("schema-only", "wrong-value", "wrong-generated-expression", "wrong-auto-increment",
+                 "wrong-collation", "wrong-enum-literal", "missing-manifest"):
         mutate = r"""
 from pathlib import Path
-import gzip,shutil,sys
+import gzip,re,shutil,sys
 p=Path(sys.argv[1]);out=Path(sys.argv[2]);case=sys.argv[3]
 s=gzip.decompress(p.read_bytes())
 if case=='schema-only': s=b'\n'.join(x for x in s.split(b'\n') if not x.startswith(b'INSERT INTO '))
@@ -198,6 +199,13 @@ if case=='wrong-generated-expression':
 if case=='wrong-auto-increment':
     old=b"AUTO_INCREMENT=8001"; assert s.count(old)==2
     s=s.replace(old,b"AUTO_INCREMENT=3")
+if case=='wrong-collation':
+    s,count=re.subn(rb"(`label` varchar\(100\)(?: CHARACTER SET utf8mb4)? COLLATE )utf8mb4_unicode_ci",
+                    rb"\1utf8mb4_bin",s)
+    assert count==1
+if case=='wrong-enum-literal':
+    old=b"enum('a','CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci')"; assert s.count(old)==1
+    s=s.replace(old,b"enum('a','COLLATE utf8mb4_unicode_ci')")
 out.write_bytes(gzip.compress(s))
 if case!='missing-manifest': shutil.copy2(str(p)+'.manifest.json',str(out)+'.manifest.json')
 """

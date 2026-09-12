@@ -147,7 +147,7 @@ def table_columns(session, table):
     return columns
 
 
-def snapshot_manifest(session, target=None):
+def snapshot_manifest(session, target=None, version=3):
     """Count independently, stream every row, and hash the canonical column values."""
     tables = session.execute(
         "SELECT TABLE_NAME, ENGINE FROM information_schema.tables "
@@ -160,7 +160,8 @@ def snapshot_manifest(session, target=None):
             raise RuntimeError("Non-transactional backup table is not supported: " + table)
         quoted = identifier(table)
         columns = table_columns(session, table)
-        definition = stable_schema(b"\n".join(session.execute("SHOW CREATE TABLE " + quoted)))
+        definition = stable_schema(b"\n".join(session.execute("SHOW CREATE TABLE " + quoted)),
+                                   normalize_charsets=version >= 3)
         count = int(session.execute("SELECT COUNT(*) FROM " + quoted)[0])
         expressions = [
             "HEX(" + (identifier(c["name"]) if c["binary"] else
@@ -212,7 +213,7 @@ def snapshot_manifest(session, target=None):
                                "WHERE TABLE_SCHEMA = DATABASE() AND AUTO_INCREMENT IS NOT NULL"):
         table, counter = row.decode().split("\t")
         counters[table] = int(counter)
-    return {"version": 2, "tables": result, "autoIncrement": counters}
+    return {"version": version, "tables": result, "autoIncrement": counters}
 
 
 def read_snapshot(session):
@@ -233,9 +234,22 @@ def schema_dump(database, after_data=False):
     ], env=environment())
 
 
-def stable_schema(schema):
+def stable_schema(schema, normalize_charsets=False):
     # INSERT can advance this counter during a valid online backup without changing table definitions.
-    return re.sub(rb"(?m)(^\) ENGINE=[^\n]*?) AUTO_INCREMENT=\d+(?= |;)", rb"\1", schema)
+    schema = re.sub(rb"(?m)(^\) ENGINE=[^\n]*?) AUTO_INCREMENT=\d+(?= |;)", rb"\1", schema)
+    if normalize_charsets:
+        # MySQL may add an explicit CHARACTER SET after dump/restore. The following COLLATE
+        # already determines that same charset. Match only a column's type declaration;
+        # never rewrite defaults, enum values, comments, table options or generated expressions.
+        quoted_value = rb"'(?:\\.|''|[^'\\])*'"
+        choices = quoted_value + rb"(?:," + quoted_value + rb")*"
+        text_type = rb"(?:(?:var)?char\(\d+\)|(?:tiny|medium|long)?text|(?:enum|set)\(" + choices + rb"\))"
+        schema = re.sub(
+            rb"(?m)^([ \t]+`(?:``|[^`])+` " + text_type + rb") CHARACTER SET ([a-zA-Z0-9_]+)"
+            rb" COLLATE (\2_[a-zA-Z0-9_]+)(?=[ ,\n]|$)",
+            rb"\1 COLLATE \3", schema,
+        )
+    return schema
 
 
 def capture(output):
@@ -277,14 +291,24 @@ def verify(database, expected_path):
     expected = json.loads(Path(expected_path).read_text())
     if expected.get("version") == 1:
         actual = legacy_manifest(database, root=True)
-    elif expected.get("version") == 2:
+    elif expected.get("version") in (2, 3):
         with Session(database, root=True) as session:
             read_snapshot(session)
-            actual = snapshot_manifest(session)
+            # Preserve the original comparison for previously issued v2 manifests.
+            actual = snapshot_manifest(session, version=expected["version"])
     else:
         raise RuntimeError("Unsupported backup manifest version")
     if expected != actual:
-        raise RuntimeError("Restore row counts or content digests do not match the backup snapshot")
+        differences = []
+        for table in sorted(set(expected["tables"]) | set(actual["tables"])):
+            before, after = expected["tables"].get(table, {}), actual["tables"].get(table, {})
+            fields = [field for field in sorted(set(before) | set(after)) if before.get(field) != after.get(field)]
+            if fields:
+                differences.append({"table": table, "fields": fields})
+        counters_changed = expected.get("autoIncrement") != actual.get("autoIncrement")
+        raise RuntimeError("Restore manifest mismatch: " + json.dumps({
+            "tables": differences, "autoIncrementChanged": counters_changed,
+        }))
     print(json.dumps({"verifiedTables": len(actual["tables"]),
                       "verifiedRows": sum(t["rows"] for t in actual["tables"].values())}))
 
