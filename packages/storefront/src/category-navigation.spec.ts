@@ -124,7 +124,7 @@ describe('category navigation responsive spacing', () => {
             /\.category-page \.primary-category-strip\s*\{[^}]*gap:\s*4px;/,
         );
         expect(stylesheet).toMatch(
-            /\.category-page \.primary-categories-all\s*\{[^}]*width:\s*72px;[^}]*min-width:\s*72px;[^}]*flex:\s*0 0 72px;/,
+            /\.category-page \.primary-categories-all\s*\{[^}]*width:\s*56px;[^}]*min-width:\s*56px;[^}]*flex:\s*0 0 56px;/,
         );
     });
 

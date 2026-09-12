@@ -490,21 +490,25 @@
     outline-offset: 3px;
 }
 .category-page .primary-category-strip {
-    padding-inline: 16px;
+    padding-inline: 12px;
     background: var(--paper);
     gap: 4px;
 }
 .category-page .primary-categories {
-    flex: 0 1 auto;
+    flex: 1 1 auto;
     min-width: 0;
     padding-inline: 0;
     scroll-padding-inline: 0;
     justify-content: flex-start;
 }
+.category-page .primary-categories button {
+    width: 68px;
+    min-width: 68px;
+}
 .category-page .primary-categories-all {
-    width: 72px;
-    min-width: 72px;
-    flex: 0 0 72px;
+    width: 56px;
+    min-width: 56px;
+    flex: 0 0 56px;
     padding-inline: 0;
     background: var(--paper);
     box-shadow: none;
