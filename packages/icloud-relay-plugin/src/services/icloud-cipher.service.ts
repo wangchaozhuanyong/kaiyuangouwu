@@ -1,8 +1,8 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import * as crypto from 'crypto';
+import type { IcloudRelayPluginOptions } from '../types';
 
 import { ICLOUD_RELAY_PLUGIN_OPTIONS } from '../constants';
-import { IcloudRelayPluginOptions } from '../types';
 
 @Injectable()
 export class IcloudCipherService {
