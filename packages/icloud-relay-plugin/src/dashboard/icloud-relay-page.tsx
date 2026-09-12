@@ -622,7 +622,7 @@ export function IcloudRelayPage() {
                                                             email: e.target.value,
                                                         })
                                                     }
-                                                    placeholder="your-apple-id@icloud.com"
+                                                    placeholder="例如：your-apple-id@icloud.com"
                                                 />
                                             </div>
 
@@ -639,7 +639,7 @@ export function IcloudRelayPage() {
                                                             appPassword: e.target.value,
                                                         })
                                                     }
-                                                    placeholder="abcd-efgh-ijkl-mnop"
+                                                    placeholder="格式：abcd-efgh-ijkl-mnop"
                                                 />
                                                 <p className="text-xs text-gray-400 mt-1">
                                                     前往 appleid.apple.com 生成专用密码，密码将使用 AES-256
@@ -941,7 +941,7 @@ export function IcloudRelayPage() {
                                                             aliasEmail: e.target.value,
                                                         })
                                                     }
-                                                    placeholder="xxxx@privaterelay.appleid.com"
+                                                    placeholder="例如：xxxx@privaterelay.appleid.com"
                                                 />
                                             </div>
                                         </>

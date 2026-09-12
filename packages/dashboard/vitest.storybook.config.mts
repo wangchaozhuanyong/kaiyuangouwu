@@ -77,8 +77,6 @@ const browserOptimizeDependencies = [
     'react-day-picker/locale/uz',
     'react-day-picker/locale/zh-CN',
     'react-day-picker/locale/zh-TW',
-    'strip-literal',
-    'strip-literal > js-tokens',
     'tailwind-merge',
     'zod/v3',
 ];
@@ -123,6 +121,9 @@ export default defineConfig({
     optimizeDeps: {
         force: true,
         include: browserOptimizeDependencies,
+        // This suite runs current Playwright Chromium/Chrome. Vitest 4's js-tokens
+        // dependency uses string export names; production build targets stay unchanged.
+        esbuildOptions: { target: 'esnext' },
     },
     test: {
         name: 'storybook',

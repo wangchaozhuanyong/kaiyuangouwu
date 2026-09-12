@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { OrderEventsService } from '../service/order-events.service';
+
+import { OrderEventsService } from '../service/order-events.service';
 
 import { OrderEventsController } from './order-events.controller';
 
