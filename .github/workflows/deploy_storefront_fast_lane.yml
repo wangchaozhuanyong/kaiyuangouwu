@@ -56,10 +56,12 @@ jobs:
             - name: Package Storefront Artifact
               id: pack
               run: |
-                  ARCHIVE_NAME="storefront-fast-${GITHUB_SHA}-${GITHUB_RUN_ID}.tar.gz"
+                  TARGET_SHA="${{ inputs.target_sha || github.sha }}"
+                  ARCHIVE_NAME="storefront-fast-${TARGET_SHA}-${GITHUB_RUN_ID}.tar.gz"
                   tar -czf "$ARCHIVE_NAME" -C packages/storefront/dist .
                   sha256sum "$ARCHIVE_NAME" > "${ARCHIVE_NAME}.sha256"
                   echo "archive_name=$ARCHIVE_NAME" >> "$GITHUB_OUTPUT"
+                  echo "target_sha=$TARGET_SHA" >> "$GITHUB_OUTPUT"
 
             - name: Configure AWS Credentials
               uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c
@@ -72,12 +74,14 @@ jobs:
             - name: Upload Storefront to S3
               env:
                   ARCHIVE_NAME: ${{ steps.pack.outputs.archive_name }}
+                  TARGET_SHA: ${{ steps.pack.outputs.target_sha }}
               run: |
-                  aws s3 cp "$ARCHIVE_NAME" "s3://${ARTIFACT_BUCKET}/fast-lane/$ARCHIVE_NAME" --only-show-errors
+                  aws s3 cp "$ARCHIVE_NAME" "s3://${ARTIFACT_BUCKET}/deployments/${TARGET_SHA}/$ARCHIVE_NAME" --only-show-errors
 
             - name: Deploy Storefront to Production Nginx via SSM
               env:
                   ARCHIVE_NAME: ${{ steps.pack.outputs.archive_name }}
+                  TARGET_SHA: ${{ steps.pack.outputs.target_sha }}
               run: |
                   COMMAND_ID="$(aws ssm send-command \
                     --instance-ids "$INSTANCE_ID" \
@@ -85,10 +89,11 @@ jobs:
                     --parameters "commands=[
                       \"set -Eeuo pipefail\",
                       \"TEMP_DIR=\$(mktemp -d /tmp/storefront-fast-XXXXXX)\",
-                      \"aws s3 cp s3://${ARTIFACT_BUCKET}/fast-lane/${ARCHIVE_NAME} \${TEMP_DIR}/${ARCHIVE_NAME} --only-show-errors\",
+                      \"aws s3 cp s3://${ARTIFACT_BUCKET}/deployments/${TARGET_SHA}/${ARCHIVE_NAME} \${TEMP_DIR}/${ARCHIVE_NAME} --only-show-errors\",
                       \"TARGET_DIST=\$(readlink -f /var/www/kaiyuangouwu-current/packages/storefront/dist)\",
                       \"mkdir -p \${TARGET_DIST}\",
                       \"tar -xzf \${TEMP_DIR}/${ARCHIVE_NAME} -C \${TARGET_DIST}\",
+                      \"chmod -R a+rX \${TARGET_DIST}\",
                       \"rm -rf \${TEMP_DIR}\",
                       \"echo STOREFRONT_FAST_LANE_DEPLOYED_OK\"
                     ]" \
