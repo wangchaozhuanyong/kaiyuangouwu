@@ -380,3 +380,25 @@ test('the evidence writer rejects a skipped required job and never calls reused 
     assert.deepEqual(checkRequirements(reused, inputInventory), []);
     assert.doesNotThrow(() => validateExecutedChecks(reused, inputInventory, {}));
 });
+
+test('historical input mismatches are rejected locally without per-run PR or artifact API lookups', async () => {
+    const fixture = coverageFixture({
+        targetProof: false,
+        changes: { 'packages/core/src/service.ts': 'business-v2' },
+        mutateRun: run => {
+            run.event = 'pull_request';
+            run.pull_requests = [{ number: 1 }];
+        },
+    });
+    fixture.reader.tree = () => 'source-tree';
+    const api = fixture.api;
+    const calls = [];
+    fixture.api = endpoint => {
+        calls.push(endpoint);
+        return api(endpoint);
+    };
+    const result = await findInputCoverage(fixture);
+    assert.equal(result.reused.length, 0);
+    assert.equal(calls.length, 2);
+    assert.ok(calls.every(endpoint => !endpoint.includes('/pulls/') && !endpoint.includes('/artifacts')));
+});

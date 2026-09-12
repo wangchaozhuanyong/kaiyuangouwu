@@ -124,9 +124,19 @@ export function jobRecipe(workflow, id) {
 export function createInputReader(root = process.cwd()) {
     const trees = new Map();
     const texts = new Map();
+    const treeIds = new Map();
     const git = args =>
-        execFileSync('git', args, { cwd: root, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 });
+        execFileSync('git', args, {
+            cwd: root,
+            encoding: 'utf8',
+            maxBuffer: 16 * 1024 * 1024,
+            stdio: ['ignore', 'pipe', 'pipe'],
+        });
     return {
+        tree(ref) {
+            if (!treeIds.has(ref)) treeIds.set(ref, git(['rev-parse', `${ref}^{tree}`]).trim());
+            return treeIds.get(ref);
+        },
         entries(ref) {
             if (!trees.has(ref))
                 trees.set(

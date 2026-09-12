@@ -146,18 +146,28 @@ export async function findInputCoverage({
                 'The current run has no successful applicable CI gate',
             );
         } else if (!isTrustedRun(run, repository)) continue;
-        if (!hasTrustedPullRequest(run, repository, api)) continue;
-        const sourceTree = api(`repos/${repository}/git/commits/${run.head_sha}`).tree.sha;
+        let sourceTree;
+        let sourceRef = run.head_sha;
+        try {
+            sourceTree = reader.tree
+                ? reader.tree(run.head_sha)
+                : api(`repos/${repository}/git/commits/${run.head_sha}`).tree.sha;
+        } catch {
+            // A removed PR branch can still have its checked tree reachable through a squash merge.
+            sourceTree = api(`repos/${repository}/git/commits/${run.head_sha}`).tree.sha;
+            sourceRef = sourceTree;
+        }
         const matching = [];
         for (const check of missing.values()) {
             try {
-                if (checkFingerprint(run.head_sha, check, inventory, reader) === fingerprints.get(check.id))
+                if (checkFingerprint(sourceRef, check, inventory, reader) === fingerprints.get(check.id))
                     matching.push(check);
             } catch {
                 // A missing historical object or recipe supplies no evidence. Never widen the check scope.
             }
         }
         if (!matching.length && sourceTree !== targetTree) continue;
+        if (!hasTrustedPullRequest(run, repository, api)) continue;
         const artifacts = api(`repos/${repository}/actions/runs/${run.id}/artifacts?per_page=100`).artifacts;
         const artifact = artifacts
             .filter(item => !item.expired && item.name.startsWith(`ci-evidence-${run.id}-`))
