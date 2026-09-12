@@ -14,6 +14,14 @@ INSERT INTO no_key VALUES ('same',12.3456),('same',12.3456),('',0),(NULL,NULL);
 CREATE TABLE empty_table (id INT);
 CREATE TABLE latin_table (id INT PRIMARY KEY, label VARCHAR(100) CHARACTER SET latin1);
 INSERT INTO latin_table VALUES (1,CONVERT(UNHEX('E9') USING latin1));
+-- mysqldump can make an inherited column charset explicit when restoring a non-default collation.
+CREATE TABLE unicode_table (
+    id INT PRIMARY KEY,
+    label VARCHAR(100) COLLATE utf8mb4_unicode_ci,
+    choices ENUM('a','CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'),
+    note TEXT COMMENT 'CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'
+) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+INSERT INTO unicode_table VALUES (1,'中文','a','preserve collation and literal text');
 CREATE TABLE trigger_audit (id INT PRIMARY KEY AUTO_INCREMENT, qty INT);
 CREATE TRIGGER orders_ai AFTER INSERT ON orders FOR EACH ROW INSERT INTO trigger_audit(qty) VALUES (NEW.qty);
 CREATE VIEW stock_view AS SELECT id,stock FROM inventory;
