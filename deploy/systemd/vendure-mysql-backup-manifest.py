@@ -17,6 +17,8 @@ import sys
 import tempfile
 
 
+MANIFEST_VERSION = 3
+
 def client(root=False):
     return (["--protocol=socket", "--user=root"] if root else [
         "--host=" + os.environ["DB_HOST"], "--port=" + os.environ["DB_PORT"],
@@ -147,7 +149,7 @@ def table_columns(session, table):
     return columns
 
 
-def snapshot_manifest(session, target=None, version=3):
+def snapshot_manifest(session, target=None, version=MANIFEST_VERSION):
     """Count independently, stream every row, and hash the canonical column values."""
     tables = session.execute(
         "SELECT TABLE_NAME, ENGINE FROM information_schema.tables "
@@ -316,9 +318,11 @@ def verify(database, expected_path):
 if __name__ == "__main__":
     # The caller additionally uses GNU timeout to terminate the entire process group.
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(124))
-    if sys.argv[1] == "capture":
+    if sys.argv[1] == "format-version":
+        print(MANIFEST_VERSION)
+    elif sys.argv[1] == "capture":
         capture(sys.argv[2])
     elif sys.argv[1] == "verify":
         verify(sys.argv[2], sys.argv[3])
     else:
-        raise SystemExit("Expected capture or verify")
+        raise SystemExit("Expected format-version, capture or verify")

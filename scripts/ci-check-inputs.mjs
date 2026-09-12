@@ -159,7 +159,7 @@ export function createInputReader(root = process.cwd()) {
     };
 }
 
-export function checkFingerprint(ref, check, inventory, reader) {
+export function checkFingerprint(ref, check, inventory, reader, fullFrontend = false) {
     let names = check.packages;
     if (check.kind === 'dashboard') names = ['dashboard', 'core'];
     if (check.flags?.includes('translation')) names = [...names, 'storefront-content-plugin', 'dev-server'];
@@ -197,7 +197,12 @@ export function checkFingerprint(ref, check, inventory, reader) {
         })
         .map(({ path, metadata }) => `${metadata}\t${path}`);
     const workflow = reader.text(ref, '.github/workflows/build_and_test.yml');
-    const jobs = check.kind === 'frontend' ? ['frontend', 'build', 'unit-tests'] : requiredJobs(check, false);
+    const jobs =
+        check.kind === 'frontend'
+            ? fullFrontend
+                ? ['build', 'unit-tests']
+                : ['frontend']
+            : requiredJobs(check, false);
     const recipes = jobs.map(id => jobRecipe(workflow, id));
     const globals = [...workflow.matchAll(/^(?:env|defaults):\n(?:[ \t].*\n|\n)*/gmu)].map(match =>
         match[0].trimEnd(),

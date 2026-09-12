@@ -121,13 +121,22 @@ export async function findInputCoverage({
     );
     const reused = [];
     let anchor;
-    let runs = api(`repos/${repository}/actions/runs?status=success&per_page=100`).workflow_runs;
+    let runs = api(`repos/${repository}/actions/runs?status=completed&per_page=100`).workflow_runs;
     if (includeRunId) runs = [api(`repos/${repository}/actions/runs/${includeRunId}`), ...runs];
     const seen = new Set();
     for (const run of runs) {
         if (seen.has(run.id)) continue;
         seen.add(run.id);
         const current = String(run.id) === String(currentRunId);
+        const failedRelease =
+            run.status === 'completed' &&
+            ['failure', 'cancelled'].includes(run.conclusion) &&
+            run.head_repository?.full_name === repository &&
+            run.event === 'workflow_dispatch' &&
+            [
+                '.github/workflows/production_release.yml',
+                '.github/workflows/deploy_storefront_fast_lane.yml',
+            ].includes(run.path);
         if (current) {
             assert.equal(run.head_repository?.full_name, repository);
             assert.ok(['workflow_dispatch', 'pull_request'].includes(run.event));
@@ -145,7 +154,7 @@ export async function findInputCoverage({
                 gates.length && gates.every(job => job.conclusion === 'success'),
                 'The current run has no successful applicable CI gate',
             );
-        } else if (!isTrustedRun(run, repository)) continue;
+        } else if (!isTrustedRun(run, repository) && !failedRelease) continue;
         let sourceTree;
         let sourceRef = run.head_sha;
         try {
@@ -158,10 +167,18 @@ export async function findInputCoverage({
             sourceRef = sourceTree;
         }
         const matching = [];
+        const fullFrontendMatches = new Map();
         for (const check of missing.values()) {
             try {
                 if (checkFingerprint(sourceRef, check, inventory, reader) === fingerprints.get(check.id))
                     matching.push(check);
+                if (check.kind === 'frontend') {
+                    const fullInput = checkFingerprint(targetSha, check, inventory, reader, true);
+                    if (checkFingerprint(sourceRef, check, inventory, reader, true) === fullInput) {
+                        fullFrontendMatches.set(check.id, fullInput);
+                        if (!matching.includes(check)) matching.push(check);
+                    }
+                }
             } catch {
                 // A missing historical object or recipe supplies no evidence. Never widen the check scope.
             }
@@ -181,16 +198,39 @@ export async function findInputCoverage({
             String(proof.runId) !== String(run.id)
         )
             continue;
+        if (failedRelease) {
+            if (proof.version !== 2) continue;
+            const gates = api(`repos/${repository}/actions/runs/${run.id}/jobs?per_page=100`).jobs.filter(
+                job => /(^|\/ )all-passed$/u.test(job.name),
+            );
+            if (!gates.length || gates.some(job => job.conclusion !== 'success')) continue;
+        }
         if (sourceTree === targetTree && !anchor) anchor = { runId: run.id, artifactId: artifact.id };
         for (const check of matching) {
             if (!checkCovered(proof, check, inventory)) continue;
+            // A full source run executes the root build/test jobs, not the related-frontend job.
+            const inputHash =
+                check.kind === 'frontend' && proof.full === true
+                    ? fullFrontendMatches.get(check.id)
+                    : fingerprints.get(check.id);
+            if (
+                !inputHash ||
+                checkFingerprint(
+                    sourceRef,
+                    check,
+                    inventory,
+                    reader,
+                    check.kind === 'frontend' && proof.full === true,
+                ) !== inputHash
+            )
+                continue;
             missing.delete(check.id);
             reused.push({
                 check: check.id,
                 runId: run.id,
                 artifactId: artifact.id,
                 sourceSha: run.head_sha,
-                inputSha256: fingerprints.get(check.id),
+                inputSha256: inputHash,
             });
         }
         if (!missing.size && anchor) break;

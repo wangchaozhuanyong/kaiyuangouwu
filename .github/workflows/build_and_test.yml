@@ -659,6 +659,9 @@ jobs:
               with:
                   ref: ${{ inputs.target_sha || github.event.pull_request.head.sha || github.sha }}
             - uses: ./.github/actions/setup
+            - name: Build backend type declarations required by the admin
+              if: matrix.component == 'next-admin'
+              run: bun run build:core-common
             - name: Check and build the affected frontend
               env:
                   NODE_ENV: production

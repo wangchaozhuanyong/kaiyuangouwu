@@ -602,6 +602,11 @@ load_verified_backup() {
     sudo -n test -s "${backup_file}" || return 1
     sudo -n test -s "${backup_file}.sha256" || return 1
     sudo -n test -s "${backup_file}.manifest.json" || return 1
+    # A changed proof format requires one new snapshot; legacy backups remain available for recovery.
+    local expected_manifest_version actual_manifest_version
+    expected_manifest_version="$(sudo -n /usr/local/sbin/vendure-mysql-backup-manifest.py format-version)" || return 1
+    actual_manifest_version="$(sudo -n jq -er '.version' "${backup_file}.manifest.json")" || return 1
+    [[ "${expected_manifest_version}" =~ ^[0-9]+$ && "${actual_manifest_version}" == "${expected_manifest_version}" ]] || return 1
     sudo -n /bin/bash -c 'cd "$1" && sha256sum --check --status "$2"' \
         backup-check "$(dirname "${backup_file}")" "$(basename "${backup_file}.sha256")" || return 1
     backup_epoch="$(sudo -n stat --format='%Y' "${backup_file}")"

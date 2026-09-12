@@ -242,7 +242,7 @@ function coverageFixture({ targetProof = true, changes, mutateRun, mutateProof, 
     };
     if (mutateProof) Object.values(proofs).forEach(mutateProof);
     const api = endpoint => {
-        if (endpoint.endsWith('/actions/runs?status=success&per_page=100')) return { workflow_runs: runs };
+        if (endpoint.endsWith('/actions/runs?status=completed&per_page=100')) return { workflow_runs: runs };
         if (endpoint.includes('/git/commits/'))
             return { tree: { sha: endpoint.endsWith(targetSha) ? 'target-tree' : 'source-tree' } };
         const artifacts = /\/actions\/runs\/(\d+)\/artifacts/u.exec(endpoint);
@@ -423,4 +423,54 @@ test('deployment control test changes do not invalidate dev-server business chec
         checkFingerprint(sourceSha, controls, inputInventory, reader),
         checkFingerprint(targetSha, controls, inputInventory, reader),
     );
+});
+
+test('a full frontend proof matches the build and unit jobs it actually executed', async () => {
+    const fixture = coverageFixture({
+        targetProof: false,
+        changes: {
+            '.github/workflows/build_and_test.yml': workflow.replace(
+                'name: Check and build the affected frontend',
+                'name: Updated related frontend route',
+            ),
+        },
+    });
+    fixture.plan = classifyChanges([...fixture.plan.files, 'packages/storefront/src/a.ts'], inputInventory);
+    const result = await findInputCoverage(fixture);
+    assert.ok(result.reused.some(check => check.check === 'frontend:storefront'));
+    const narrow = coverageFixture({
+        targetProof: false,
+        changes: {
+            '.github/workflows/build_and_test.yml': workflow.replace(
+                'name: Check and build the affected frontend',
+                'name: Updated related frontend route',
+            ),
+        },
+        mutateProof: proof => {
+            proof.full = false;
+            proof.files.push('packages/storefront/src/a.ts');
+        },
+    });
+    narrow.plan = fixture.plan;
+    assert.ok((await findInputCoverage(narrow)).missing.some(check => check.id === 'frontend:storefront'));
+});
+test('a later deployment failure preserves v2 successful CI-stage evidence, never a failed CI gate', async () => {
+    for (const conclusion of ['success', 'failure', 'skipped']) {
+        const fixture = coverageFixture({
+            mutateRun: run => {
+                run.conclusion = 'failure';
+                run.path = '.github/workflows/production_release.yml';
+            },
+            mutateProof: proof => {
+                proof.version = 2;
+            },
+        });
+        const api = fixture.api;
+        fixture.api = endpoint =>
+            endpoint.includes('/jobs?')
+                ? { jobs: [{ name: 'validate missing checks once / all-passed', conclusion }] }
+                : api(endpoint);
+        const result = await findInputCoverage(fixture);
+        assert.equal(result.missing.length === 0, conclusion === 'success');
+    }
 });
