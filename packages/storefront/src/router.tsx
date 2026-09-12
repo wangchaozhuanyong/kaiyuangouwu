@@ -1,3 +1,4 @@
+// Release alignment: perf-unified-architecture-20260911
 import { createBrowserHistory, createRouter } from '@tanstack/react-router';
 import { useContext } from 'react';
 
