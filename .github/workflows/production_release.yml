@@ -210,7 +210,7 @@ jobs:
     frontend:
         name: deploy affected static apps
         needs: [preflight, route, ready]
-        if: needs.route.outputs.lane == 'frontend'
+        if: always() && !cancelled() && needs.preflight.result == 'success' && needs.route.result == 'success' && needs.ready.result == 'success' && needs.route.outputs.lane == 'frontend'
         uses: ./.github/workflows/deploy_frontends.yml
         with:
             base_sha: ${{ needs.preflight.outputs.deployed_sha }}
@@ -225,7 +225,7 @@ jobs:
     build:
         name: build immutable runtime
         needs: [preflight, route, ready]
-        if: needs.route.outputs.lane == 'runtime'
+        if: always() && !cancelled() && needs.preflight.result == 'success' && needs.route.result == 'success' && needs.ready.result == 'success' && needs.route.outputs.lane == 'runtime'
         uses: ./.github/workflows/build_production_runtime.yml
         with:
             ci_run_id: ${{ needs.route.outputs.ci_run_id || github.run_id }}
@@ -247,6 +247,7 @@ jobs:
     deploy:
         name: deploy the verified runtime
         needs: build
+        if: always() && !cancelled() && needs.build.result == 'success'
         uses: ./.github/workflows/deploy_production_runtime.yml
         with:
             target_sha: ${{ inputs.target_sha || github.sha }}
@@ -258,6 +259,7 @@ jobs:
     postflight:
         name: verify exact running revision and store configuration
         needs: deploy
+        if: always() && !cancelled() && needs.deploy.result == 'success'
         uses: ./.github/workflows/production_operations.yml
         with:
             operation: postflight-release
@@ -269,6 +271,7 @@ jobs:
 
     acceptance:
         name: verify all stores and affected public functions
+        if: always() && !cancelled() && needs.build.result == 'success' && needs.deploy.result == 'success' && needs.postflight.result == 'success'
         needs:
             - build
             - deploy
@@ -334,9 +337,44 @@ jobs:
                     echo "- Automatic affected checks: \`$AFFECTED_CHECKS\`"
                   } >> "$GITHUB_STEP_SUMMARY"
 
+    complete:
+        name: require completed deployment and acceptance
+        needs: [route, ready, frontend, build, deploy, postflight, acceptance]
+        if: always() && !cancelled()
+        runs-on: ubuntu-24.04
+        timeout-minutes: 5
+        permissions: {}
+        steps:
+            - name: Reject a green release with missing deployment stages
+              env:
+                  RELEASE_LANE: ${{ needs.route.outputs.lane }}
+                  ROUTE_RESULT: ${{ needs.route.result }}
+                  READY_RESULT: ${{ needs.ready.result }}
+                  FRONTEND_RESULT: ${{ needs.frontend.result }}
+                  BUILD_RESULT: ${{ needs.build.result }}
+                  DEPLOY_RESULT: ${{ needs.deploy.result }}
+                  POSTFLIGHT_RESULT: ${{ needs.postflight.result }}
+                  ACCEPTANCE_RESULT: ${{ needs.acceptance.result }}
+              run: |
+                  set -Eeuo pipefail
+                  [[ "$ROUTE_RESULT" == success && "$READY_RESULT" == success ]] || {
+                    echo 'Release routing or checks did not complete' >&2; exit 1;
+                  }
+                  case "$RELEASE_LANE" in
+                    runtime)
+                      [[ "$BUILD_RESULT" == success && "$DEPLOY_RESULT" == success && "$POSTFLIGHT_RESULT" == success && "$ACCEPTANCE_RESULT" == success ]] || {
+                        echo 'Runtime deployment or acceptance did not complete' >&2; exit 1;
+                      }
+                      ;;
+                    frontend) [[ "$FRONTEND_RESULT" == success ]] || { echo 'Frontend deployment did not complete' >&2; exit 1; } ;;
+                    none) ;; # Preflight proved that all affected versions are already active.
+                    *) echo 'Missing valid release route' >&2; exit 1 ;;
+                  esac
+                  echo "Verified completed release route: $RELEASE_LANE"
+
     recovery:
         name: explain release failure and bounded recovery
-        needs: [lock, preflight, route, checks, ready, frontend, build, deploy, postflight, acceptance]
+        needs: [lock, preflight, route, checks, ready, frontend, build, deploy, postflight, acceptance, complete]
         if: always() && contains(needs.*.result, 'failure')
         runs-on: ubuntu-24.04
         permissions:
