@@ -39,7 +39,7 @@ export const router = createRouter({
     parseSearch: parseStorefrontSearch,
     stringifySearch: stringifyStorefrontSearch,
     defaultPreload: 'intent',
-    defaultPendingMs: 600,
+    defaultPendingMs: 200,
     defaultPendingMinMs: 0,
     defaultPendingComponent: StorefrontPendingPage,
     scrollRestoration: true,

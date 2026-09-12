@@ -18,6 +18,15 @@ import {
 } from '../storefront-utils';
 import { ActiveCustomer, CreateAfterSalesRequestInput, Order, StorefrontCart } from '../types';
 
+export type ToastPayload =
+    | string
+    | {
+          message: string;
+          type?: 'success' | 'error' | 'warning' | 'info';
+          title?: string;
+          action?: { label: string; onClick: () => void };
+      };
+
 import { useStorefrontBootstrap } from './useStorefrontBootstrap';
 import { useStorefrontCartActions } from './useStorefrontCartActions';
 import { useStorefrontCoupons } from './useStorefrontCoupons';
@@ -86,7 +95,7 @@ export function useStorefrontAppState() {
     const [cartLoading, setCartLoading] = useState(false);
     const [cartError, setCartError] = useState<string | null>(null);
     const [addingVariantId, setAddingVariantId] = useState<string | null>(null);
-    const [toast, setToast] = useState<string | null>(null);
+    const [toast, setToast] = useState<ToastPayload | null>(null);
     const [online, setOnline] = useState(navigator.onLine);
 
     const toastTimer = useRef<number | null>(null);
@@ -226,10 +235,11 @@ export function useStorefrontAppState() {
         route,
     });
 
-    const notify = useCallback((message: string) => {
-        setToast(message);
+    const notify = useCallback((payload: ToastPayload) => {
+        setToast(payload);
         if (toastTimer.current) window.clearTimeout(toastTimer.current);
-        toastTimer.current = window.setTimeout(() => setToast(null), 2400);
+        const duration = typeof payload === 'object' && payload.type === 'error' ? 3600 : 2400;
+        toastTimer.current = window.setTimeout(() => setToast(null), duration);
     }, []);
 
     useEffect(() => {

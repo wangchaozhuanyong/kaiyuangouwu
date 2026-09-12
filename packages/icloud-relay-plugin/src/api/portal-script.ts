@@ -4,6 +4,14 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
 (function() {
     'use strict';
 
+    // Synchronize visual preset for seamless theme adaptation
+    try {
+        const visualPreset = localStorage.getItem('storefront-visual-preset');
+        if (visualPreset) {
+            document.documentElement.setAttribute('data-storefront-preset', visualPreset);
+        }
+    } catch (e) {}
+
     const API_ENDPOINT = '/shop-api';
     const STORAGE_KEY = 'icloud_relay_recent_queries';
     let currentQueryCode = '';
