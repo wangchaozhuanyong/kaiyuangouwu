@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -33,8 +34,19 @@ const untrackedFiles = execFileSync('git', ['ls-files', '--others', '--exclude-s
     encoding: 'utf8',
 }).split('\0');
 
+const plannedFiles = process.env.CI_PLAN ? JSON.parse(process.env.CI_PLAN).lintFiles : undefined;
+if (plannedFiles !== undefined) {
+    assert.ok(Array.isArray(plannedFiles), 'CI lintFiles must be an array');
+    for (const file of plannedFiles)
+        assert.ok(
+            typeof file === 'string' && file && !path.isAbsolute(file) && !file.split('/').includes('..'),
+            'Invalid CI lint path',
+        );
+}
+const selectedFiles = plannedFiles === undefined ? undefined : new Set(plannedFiles);
 const sourceFiles = [...new Set([...changedFiles, ...untrackedFiles])]
     .filter(Boolean)
+    .filter(file => !selectedFiles || selectedFiles.has(file))
     .filter(file => supportedExtensions.has(path.extname(file)))
     .sort();
 

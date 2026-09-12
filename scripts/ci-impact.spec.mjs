@@ -8,6 +8,7 @@ const inventory = [
     { directory: 'next-admin', name: 'next-admin' },
     { directory: 'core', name: '@vendure/core', scripts: { e2e: 'test' } },
     { directory: 'common', name: '@vendure/common' },
+    { directory: 'dev-server', name: 'dev-server', dependencies: { '@vendure/core': '3' } },
     { directory: 'catalog-management-plugin', name: 'catalog', dependencies: { '@vendure/core': '3' } },
     { directory: 'other-plugin', name: 'other', dependencies: { catalog: '1' } },
     { directory: 'icloud-relay-plugin', name: 'icloud', dependencies: { '@vendure/core': '3' } },
@@ -46,16 +47,45 @@ test('a cumulative diff containing a migration cannot enter the frontend lane', 
     assert.equal(plan.migration, true);
     assert.equal(plan.e2e, true);
 });
-test('auth/payment core, lockfiles and unknown inputs retain broader checks', () => {
+test('core and lockfile changes use their dependency scope without enabling full CI', () => {
+    const core = classifyChanges(['packages/core/src/service/services/payment.service.ts'], inventory);
+    assert.equal(core.full, false);
+    assert.equal(core.lane, 'runtime');
+    assert.ok(core.packages.includes('catalog-management-plugin'));
+    assert.deepEqual(core.frontends, []);
+    assert.deepEqual(core.databases, ['mysql']);
+    const lock = classifyChanges(['bun.lock'], inventory);
+    assert.equal(lock.full, false);
+    assert.equal(lock.dependencies, true);
+    assert.deepEqual(lock.frontends, ['next-admin', 'storefront']);
+    assert.throws(() => classifyChanges(['new-build-input.js'], inventory), /scope is unmapped/u);
+});
+test('CI routing and backup scripts stay in control checks with no backend or database jobs', () => {
     for (const file of [
-        'packages/core/src/service/services/payment.service.ts',
-        'bun.lock',
-        'new-build-input.js',
+        '.github/workflows/build_and_test.yml',
+        'scripts/ci-impact.mjs',
+        'scripts/release-evidence.mjs',
+        'deploy/systemd/vendure-mysql-backup-manifest.py',
+        'packages/dev-server/scripts/production-operations.mjs',
     ]) {
         const plan = classifyChanges([file], inventory);
-        assert.equal(plan.full, true, file);
-        assert.equal(plan.lane, 'runtime', file);
+        assert.equal(plan.full, false, file);
+        assert.equal(plan.controls, true, file);
+        assert.deepEqual(plan.packages, [], file);
+        assert.deepEqual(plan.frontends, [], file);
+        assert.deepEqual(plan.databases, [], file);
+        assert.equal(plan.codegen, false, file);
     }
+});
+test('the four-database matrix requires full; a driver change adds only its own database', () => {
+    const file = 'packages/core/src/connection/postgres-driver.ts';
+    assert.deepEqual(classifyChanges([file], inventory).databases, ['mysql', 'postgres']);
+    assert.deepEqual(classifyChanges([file], inventory, { full: true }).databases, [
+        'mysql',
+        'sqljs',
+        'postgres',
+        'mariadb',
+    ]);
 });
 test('documentation and deleted/renamed executable inputs are not confused', () => {
     assert.equal(classifyChanges(['README.md', 'docs/help.mdx'], inventory).lane, 'none');
@@ -76,4 +106,12 @@ test('dependent packages with e2e tests are included even when the edited packag
     const plan = classifyChanges(['packages/catalog-management-plugin/src/service.ts'], graph);
     assert.equal(plan.full, false);
     assert.equal(plan.e2e, true);
+});
+
+test('shared frontend inputs require whole affected app tests without enabling repository full', () => {
+    const plan = classifyChanges(['bun.lock', 'packages/storefront/src/index.css'], inventory);
+    assert.equal(plan.full, false);
+    assert.equal(plan.frontendFull, true);
+    assert.equal(classifyChanges(['packages/storefront/vite.config.ts'], inventory).frontendFull, true);
+    assert.equal(classifyChanges(['packages/storefront/src/index.css'], inventory).frontendFull, false);
 });

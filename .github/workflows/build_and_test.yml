@@ -43,7 +43,7 @@ jobs:
     quality-gates:
         name: repository quality gates
         needs: detect-changes
-        if: needs.detect-changes.outputs.lane != 'none' || inputs.full
+        if: needs.detect-changes.outputs.has_quality == 'true' || inputs.full
         runs-on: ubuntu-latest
         timeout-minutes: 15
         permissions:
@@ -58,6 +58,7 @@ jobs:
               if: needs.detect-changes.outputs.migration == 'true'
               run: bun run check:migration-registry
             - name: Check architecture budgets
+              if: needs.detect-changes.outputs.architecture == 'true'
               run: bun run check:architecture-debt
             - name: Check managed publishing policy
               if: needs.detect-changes.outputs.publishing == 'true'
@@ -75,10 +76,11 @@ jobs:
                       packages/dev-server/scripts/production-release-retention.spec.mjs
                   node --test scripts/ci-impact.spec.mjs scripts/release-evidence.spec.mjs deploy/frontend-release.spec.mjs deploy/release-recovery.spec.mjs
             - name: Build lint prerequisites
-              if: needs.detect-changes.outputs.has_packages == 'true'
+              if: needs.detect-changes.outputs.has_lint_packages == 'true'
               run: bun run build:core-common
             - name: Lint changed source without new warnings
               env:
+                  CI_PLAN: ${{ needs.detect-changes.outputs.plan }}
                   BASE_SHA: ${{ inputs.base_sha || github.event.pull_request.base.sha }}
               run: |
                   base="$BASE_SHA"
@@ -92,16 +94,22 @@ jobs:
         timeout-minutes: 5
         permissions:
             contents: read
+            actions: read
         outputs:
             plan: ${{ steps.check.outputs.plan }}
             has_packages: ${{ steps.check.outputs.has_packages }}
             has_frontends: ${{ steps.check.outputs.has_frontends }}
+            has_quality: ${{ steps.check.outputs.has_quality }}
+            has_lint_packages: ${{ steps.check.outputs.has_lint_packages }}
             frontends: ${{ steps.check.outputs.frontends }}
             packages: ${{ steps.check.outputs.packages }}
             full: ${{ steps.check.outputs.full }}
             dependencies: ${{ steps.check.outputs.dependencies }}
             codegen: ${{ steps.check.outputs.codegen }}
-            e2e: ${{ steps.check.outputs.e2e }}
+            e2e_mysql: ${{ steps.check.outputs.e2e_mysql }}
+            e2e_sqljs: ${{ steps.check.outputs.e2e_sqljs }}
+            e2e_postgres: ${{ steps.check.outputs.e2e_postgres }}
+            e2e_mariadb: ${{ steps.check.outputs.e2e_mariadb }}
             dashboard: ${{ steps.check.outputs.dashboard }}
             icloud: ${{ steps.check.outputs.icloud }}
             translation: ${{ steps.check.outputs.translation }}
@@ -109,6 +117,7 @@ jobs:
             controls: ${{ steps.check.outputs.controls }}
             migration: ${{ steps.check.outputs.migration }}
             publishing: ${{ steps.check.outputs.publishing }}
+            architecture: ${{ steps.check.outputs.architecture }}
             lane: ${{ steps.check.outputs.lane }}
         steps:
             - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
@@ -120,11 +129,10 @@ jobs:
               env:
                   BASE_SHA: ${{ inputs.base_sha || github.event.pull_request.base.sha || 'HEAD^' }}
                   FULL: ${{ inputs.full || false }}
+                  GH_TOKEN: ${{ github.token }}
               run: |
                   base="$(git merge-base "$BASE_SHA" HEAD)"
-                  args=(--base "$base" --target HEAD)
-                  if [[ "$FULL" == true ]]; then args+=(--full); fi
-                  node scripts/ci-impact.mjs "${args[@]}"
+                  node scripts/release-evidence.mjs plan "$base" HEAD "$FULL"
     dependency-audit:
         name: dependency audit
         needs: detect-changes
@@ -446,7 +454,7 @@ jobs:
     e2e-sqljs:
         name: e2e (sqljs)
         needs: [detect-changes, build]
-        if: needs.detect-changes.outputs.e2e == 'true'
+        if: needs.detect-changes.outputs.e2e_sqljs == 'true'
         runs-on: ubuntu-latest
         timeout-minutes: 30
         permissions:
@@ -486,7 +494,7 @@ jobs:
     e2e-mariadb:
         name: e2e (mariadb)
         needs: [detect-changes, build]
-        if: needs.detect-changes.outputs.e2e == 'true'
+        if: needs.detect-changes.outputs.e2e_mariadb == 'true'
         runs-on: ubuntu-latest
         timeout-minutes: 45
         permissions:
@@ -536,7 +544,7 @@ jobs:
     e2e-mysql:
         name: e2e (mysql)
         needs: [detect-changes, build]
-        if: needs.detect-changes.outputs.e2e == 'true'
+        if: needs.detect-changes.outputs.e2e_mysql == 'true'
         runs-on: ubuntu-latest
         timeout-minutes: 45
         permissions:
@@ -584,7 +592,7 @@ jobs:
     e2e-postgres:
         name: e2e (postgres)
         needs: [detect-changes, build]
-        if: needs.detect-changes.outputs.e2e == 'true'
+        if: needs.detect-changes.outputs.e2e_postgres == 'true'
         runs-on: ubuntu-latest
         timeout-minutes: 30
         permissions:
@@ -653,7 +661,9 @@ jobs:
             - name: Check and build the affected frontend
               env:
                   NODE_ENV: production
-              run: node scripts/ci-run.mjs frontend "$COMPONENT"
+              run: |
+                  CI_PLAN="$(node -p 'const plan = JSON.parse(process.env.CI_PLAN); JSON.stringify({...plan, full: plan.full || plan.frontendFull})')" \
+                    node scripts/ci-run.mjs frontend "$COMPONENT"
             - name: Package reusable frontend
               env:
                   NODE_ENV: production
@@ -696,6 +706,7 @@ jobs:
                   ref: ${{ inputs.target_sha || github.event.pull_request.head.sha || github.sha }}
             - name: Record exact checked source and scope
               env:
+                  CI_JOB_RESULTS: ${{ toJSON(needs) }}
                   CI_PLAN: ${{ needs.detect-changes.outputs.plan }}
               run: node scripts/release-evidence.mjs write
             - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
