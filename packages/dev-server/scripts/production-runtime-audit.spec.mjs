@@ -83,9 +83,9 @@ void test('bun audit retries an explicit timeout and returns the next valid repo
     let calls = 0;
 
     const report = await runBunAudit('/repository', {
-        maxAttempts: 3,
+        maxAttempts: 2,
         onRetry: event => retryEvents.push(event),
-        retryDelaysMs: [15, 60],
+        retryDelaysMs: [15],
         runCommand: () => results[calls++],
         wait: async delayMs => waits.push(delayMs),
     });
@@ -125,9 +125,9 @@ void test('bun audit fails closed after bounded transport retries are exhausted'
 
     await assert.rejects(
         runBunAudit('/repository', {
-            maxAttempts: 3,
+            maxAttempts: 2,
             onRetry: () => undefined,
-            retryDelaysMs: [0, 0],
+            retryDelaysMs: [0],
             runCommand: () => {
                 calls += 1;
                 return {
@@ -139,9 +139,9 @@ void test('bun audit fails closed after bounded transport retries are exhausted'
             },
             wait: async () => undefined,
         }),
-        /Could not parse bun audit JSON after 3 of 3 attempts/u,
+        /Could not parse bun audit JSON after 2 of 2 attempts/u,
     );
-    assert.equal(calls, 3);
+    assert.equal(calls, 2);
 });
 
 void test('bun audit does not retry unrelated malformed output', async () => {
@@ -149,16 +149,16 @@ void test('bun audit does not retry unrelated malformed output', async () => {
 
     await assert.rejects(
         runBunAudit('/repository', {
-            maxAttempts: 3,
+            maxAttempts: 2,
             onRetry: () => undefined,
-            retryDelaysMs: [0, 0],
+            retryDelaysMs: [0],
             runCommand: () => {
                 calls += 1;
                 return { error: undefined, status: 1, stderr: 'unexpected response', stdout: '' };
             },
             wait: async () => undefined,
         }),
-        /Could not parse bun audit JSON after 1 of 3 attempts/u,
+        /Could not parse bun audit JSON after 1 of 2 attempts/u,
     );
     assert.equal(calls, 1);
 });
@@ -194,9 +194,9 @@ void test('bun audit does not retry a non-transient HTTP error response', async 
 
     await assert.rejects(
         runBunAudit('/repository', {
-            maxAttempts: 3,
+            maxAttempts: 2,
             onRetry: () => undefined,
-            retryDelaysMs: [0, 0],
+            retryDelaysMs: [0],
             runCommand: () => {
                 calls += 1;
                 return {
@@ -228,9 +228,9 @@ void test('bun audit gate fails immediately when valid JSON reports a policy vio
     await assert.rejects(
         runBunAudit('/repository', {
             auditLevel: 'high',
-            maxAttempts: 3,
+            maxAttempts: 2,
             onRetry: () => undefined,
-            retryDelaysMs: [0, 0],
+            retryDelaysMs: [0],
             runCommand: () => {
                 calls += 1;
                 return { error: undefined, status: 1, stderr: '', stdout: JSON.stringify(highAudit) };
@@ -357,7 +357,10 @@ void test('repository and production workflows use the fail-closed retrying audi
     assert.match(repositoryWorkflow, /e2e: \$\{\{ steps\.check\.outputs\.e2e \}\}/u);
     assert.match(repositoryWorkflow, /dependency-audit:/u);
     assert.match(repositoryWorkflow, /needs\.detect-changes\.outputs\.dependencies == 'true'/u);
-    assert.match(repositoryWorkflow, /github\.event_name == 'pull_request'[\s\S]+fromJSON\('\["22\.x"\]'\)/u);
+    assert.match(
+        repositoryWorkflow,
+        /inputs\.full && fromJSON\('\["20\.x", "22\.x", "24\.x"\]'\) \|\| fromJSON\('\["22\.x"\]'\)/u,
+    );
     assert.equal(
         [...repositoryWorkflow.matchAll(/if: needs\.detect-changes\.outputs\.e2e == 'true'/gu)].length,
         4,

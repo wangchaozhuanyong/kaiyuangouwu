@@ -75,7 +75,7 @@ export async function activateStorefront({ candidate, pointer, verify }) {
 
 // CDN analytics may add markup; every built entry/chunk reference must still be current.
 export function assertServedStorefrontAssets(expectedHtml, servedHtml) {
-    const assets = [...expectedHtml.matchAll(/(?:src|href)=["'](\/assets\/[^"']+)["']/g)].map(
+    const assets = [...expectedHtml.matchAll(/(?:src|href)=["']((?:\/dashboard)?\/assets\/[^"']+)["']/g)].map(
         match => match[1],
     );
     assert.ok(

@@ -5,8 +5,19 @@
 const assert = require('node:assert/strict');
 const { execFileSync, spawnSync } = require('node:child_process');
 const { createHash } = require('node:crypto');
-const { closeSync, constants, fstatSync, openSync, readdirSync, statSync } = require('node:fs');
+const {
+    closeSync,
+    constants,
+    existsSync,
+    fstatSync,
+    openSync,
+    readdirSync,
+    readFileSync,
+    realpathSync,
+    statSync,
+} = require('node:fs');
 const path = require('node:path');
+
 const retention = require('./systemd/vendure-production-release-retention.cjs');
 
 const DEPLOY_LOCK = '/run/lock/vendure-production-deploy.lock';
@@ -305,6 +316,25 @@ function storefrontInspectionFailure(result) {
     return safeFailure || 'Read-only storefront configuration inspection failed';
 }
 
+function frontendRevisionEvidence(plan, pointerDirectory = '/var/www') {
+    const frontendVersions = ['storefront', 'next-admin'].map(component => {
+        const pointer = path.join(pointerDirectory, `kaiyuangouwu-${component}-current`);
+        let revision = 'unknown';
+        try {
+            const marker = ['frontend-release.json', 'storefront-release.json']
+                .map(name => path.join(pointer, name))
+                .find(file => existsSync(file));
+            if (marker) revision = JSON.parse(readFileSync(marker, 'utf8')).sourceSha;
+            else if (realpathSync(pointer) === path.join(plan.currentRuntime, 'packages', component, 'dist'))
+                revision = plan.markerSha;
+        } catch {
+            /* Missing legacy pointers require a bootstrap full release. */
+        }
+        return `${component}=${/^[a-f0-9]{40}$/.test(revision) ? revision : 'unknown'}`;
+    });
+    return `PRODUCTION_FRONTEND_REVISIONS ${frontendVersions.join(' ')}\n`;
+}
+
 function runLocked(environment = process.env) {
     const request = validateRequest(environment);
     if (request.operation === 'postflight-release') {
@@ -330,6 +360,7 @@ function runLocked(environment = process.env) {
             'Post-deploy storefront evidence is incomplete',
         );
         process.stdout.write(`PRODUCTION_POSTFLIGHT_REVISION runtime=${plan.markerSha}\n`);
+        process.stdout.write(frontendRevisionEvidence(plan));
         process.stdout.write(storefront.stdout);
         process.stdout.write('PRODUCTION_OPERATIONS_COMPLETE operation=postflight-release\n');
         return;
@@ -371,6 +402,7 @@ function runLocked(environment = process.env) {
         process.stdout.write(
             `PRODUCTION_PREFLIGHT_REVISIONS source=${request.sourceSha} runtime=${plan.markerSha}\n`,
         );
+        process.stdout.write(frontendRevisionEvidence(plan));
         process.stdout.write(storefront.stdout);
         process.stdout.write(migrations.stdout);
         process.stdout.write('PRODUCTION_OPERATIONS_COMPLETE operation=preflight-release\n');
@@ -502,6 +534,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+    frontendRevisionEvidence,
     assertStorefrontInspectionRevision,
     encodeBeforeReport,
     inspectProductionReleases,

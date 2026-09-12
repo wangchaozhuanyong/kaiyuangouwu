@@ -1,6 +1,8 @@
 # Vendure 生产发布手册
 
-最后核对：2026-09-07
+生产事实最后核对：2026-09-07
+
+发布规则修订：2026-09-13（以下新流程须合并并完成首次运行时发布后生效，本文修改不代表已经上线）
 
 本文件只记录稳定的部署入口和无密钥操作流程，不保存密码、令牌、数据库连接值或私钥内容。
 
@@ -20,9 +22,9 @@
 
 1. 其他分支中的生产修改必须先基于最新 `origin/main` 整理，只把本次经过审核的差异合并进 `main`。合并前必须检查完整 diff 和变更文件清单；禁止把旧工作区、历史发布目录、WIP 快照或长期未同步的分支整体覆盖进 `main`。
 2. 生产只允许部署 `origin/main` 当前完整的 40 位提交 SHA，或指向 `main` 中该提交的不可变正式版本标签。禁止从功能分支、脏工作树、历史副本、可移动标签或人工挑选的 `dist` 目录部署。
-3. `main` 只允许普通快进更新，禁止强推；正式版本标签一经用于生产不得移动、覆盖或复用。验证后如果 `origin/main` 前移，必须停止并用新提交重新测试、构建和记录。
+3. `main` 只允许普通快进更新，禁止强推；正式版本标签一经用于生产不得移动、覆盖或复用。验证后如果 `origin/main` 前移，必须停止旧候选并锁定新的 SHA；重新判断累计差异，只补齐新版本需要的检查和制品，不无条件重跑全仓。
 4. 已合并的远程功能分支或热修复分支，只能在生产部署、线上验收和发布记录全部完成后删除。仍在维护的长期分支必须明确用途和负责人；生产回滚依据是已验证的不可变制品，不是保留旧功能分支。
-5. 每次部署记录必须固定保存：来源分支、生产引用（`main` 或正式标签）、完整 commit SHA、正式版本标签（如使用）、CI 制品名称、制品 SHA-256、唯一的 `Production Release` 运行编号、环境、UTC 部署时间、操作人、上一个生产 SHA 和验收结果。兼容旧模板时，制品与部署工作流编号填写同一个运行编号。当前非容器发布以制品名称和 SHA-256 为准；以后使用容器时还必须记录不可变镜像 digest，只有镜像版本名或 tag 不合格。
+5. 每次部署记录必须固定保存：来源分支、生产引用（`main` 或正式标签）、完整 commit SHA、正式版本标签（如使用）、CI 制品名称、制品 SHA-256、唯一的 `Production Release` 运行编号、环境、UTC 部署时间、操作人、上一个生产 SHA 和验收结果。检查来源的 `ci_evidence_run` 与本次 `deployment_workflow_run` 分别记录；复用制品时记录实际制品来源，不把不同运行编号混写成同一个。前端独立发布另记 backend SHA、各前端 SHA 和切换前后的指针。当前非容器发布以制品名称和 SHA-256 为准；以后使用容器时还必须记录不可变镜像 digest，只有镜像版本名或 tag 不合格。
 6. 缺少分支祖先关系、不可变制品标识、发布记录或上线验收证据时必须停止发布，禁止以手工复制、服务器现场构建或跳过门禁的方式继续。
 7. 回滚只允许切换到上一个已验证的不可变制品，并记录原因、`ROLLBACK_SHA` 和回滚验收结果；禁止强制回退 `main`、从旧分支重新构建或把旧 `dist` 覆盖到当前运行目录。
 
@@ -45,6 +47,10 @@ artifact_name:
 artifact_sha256:
 image_digest:
 artifact_workflow_run:
+ci_evidence_run:
+backend_sha:
+frontend_shas:
+previous_frontend_pointers:
 deployment_workflow_run:
 environment:
 deployed_at_utc:
@@ -69,7 +75,7 @@ verification_result:
 - 安全组：`sg-013cf38df187011ca`（`yunqiao-vendure-web`）
 - SSH 用户：`ubuntu`
 - 本机生产 SSH 私钥（仅记录路径）：`/Users/wangchao/Desktop/yamaxunmiyao2/yunqiao-vendure-prod-key.pem`
-- 本机访问：正常发布直接使用上述仓库外私钥与 EC2 公网 IPv4，命令必须带 `-i <上述路径> -o IdentitiesOnly=yes`；无需每次登录 AWS 控制台。私钥权限必须保持 `0600`，发布时 `22/tcp` 只允许当前管理员公网地址的 `/32`。私钥不可读取、打印、复制、上传或提交；SSH 不可用时才回退到 AWS Systems Manager Session Manager
+- 本机故障诊断访问：使用上述仓库外私钥与 EC2 公网 IPv4，命令必须带 `-i <上述路径> -o IdentitiesOnly=yes`；无需每次登录 AWS 控制台。私钥权限必须保持 `0600`，发布时 `22/tcp` 只允许当前管理员公网地址的 `/32`。私钥不可读取、打印、复制、上传或提交；SSH 不可用时才回退到 AWS Systems Manager Session Manager
 - 服务器源码与加密环境文件目录：`/var/www/kaiyuangouwu`
 - 不可变运行产物/回滚目录：`/var/www/kaiyuangouwu-releases`
 - 当前运行产物指针：`/var/www/kaiyuangouwu-current`（只能指向上述发布目录中已验证的候选目录）
@@ -80,8 +86,9 @@ verification_result:
 - Vendure 上游：`127.0.0.1:3002`
 - PM2 进程：`vendure-api`、`vendure-worker`
 - PM2 生产环境固定设置 `VENDURE_DISABLE_TELEMETRY=true`，防止 Vendure 的文件系统兜底在不可变运行目录内写入 `.vendure/.installation-id`
-- Storefront 静态目录：`/var/www/kaiyuangouwu-current/packages/storefront/dist`
-- Dashboard 静态目录：`/var/www/kaiyuangouwu-current/packages/next-admin/dist`（由 Vendure API 的 `DashboardPlugin` 提供）
+- 新流程 Storefront 指针：`/var/www/kaiyuangouwu-storefront-current`
+- 新流程 Dashboard 指针：`/var/www/kaiyuangouwu-next-admin-current`（Nginx 同时从该指针提供 HTML 与 assets，Admin API 保持原路径）
+- 首次运行时发布把两个指针指向运行产物中的对应 `dist`，之后前端发布可切换到 `/var/www/kaiyuangouwu-frontend-releases` 的不可变目录。运行时版本与前端版本分别记录。前端目录不参与现有运行时保留脚本的自动清理。
 - Nginx 配置基线：`deploy/nginx/damatong.conf`（保留兼容文件名，已覆盖双店域名）
 - 在源站验证尚未安装的候选片段，使用 `sudo -n python3 -B deploy/validate-nginx-candidate.py deploy/nginx/damatong.conf`。脚本显式保留 `www-data` 身份、隔离全部 5 个临时目录和日志，并检查线上目录元数据未变。禁止以 root 对遗漏 `user` 或临时目录隔离的自制配置运行 `nginx -t/-T`：语法检查也会调整临时目录所有者，导致线上大请求返回 500。正式安装后的配置仍按发布脚本执行默认 `nginx -t` 与 reload。
 - TLS 协议只在 `deploy/nginx/damatong.conf` 的 `http` 作用域声明一次，固定为 `ssl_protocols TLSv1.2 TLSv1.3;`；生产机 `/etc/nginx/nginx.conf` 不得保留发行版默认的重复 `ssl_protocols` 声明。
@@ -109,33 +116,45 @@ Nginx 会按 Cloudflare 官方 IPv4/IPv6 网段恢复 `CF-Connecting-IP`，按�
 
 删除域名时会先删除对应 Cloudflare custom hostname，但不自动删除 DNS 记录，便于恢复与审计。Token 不得出现在仓库、命令参数、GraphQL 响应、日志或发布记录中。
 
-当前 EC2 已由 SSM 托管，并绑定只访问所需 AWS 资源的实例角色。正常发布使用上文固定的仓库外私钥；若 SSH 端口或密钥不可用，再回退到 Session Manager。任何临时新增的 `22/tcp` 规则都必须只允许当前管理员公网地址的 `/32`，并在发布完成后立即撤销。不要读取、上传或提交私钥。
+当前 EC2 已由 SSM 托管，并绑定只访问所需 AWS 资源的实例角色。正式发布使用 GitHub OIDC/SSM 固定入口；人工故障诊断可使用上文固定的仓库外私钥，SSH 不可用时使用 Session Manager。任何临时新增的 `22/tcp` 规则都必须只允许当前管理员公网地址的 `/32`，并在发布完成后立即撤销。不要读取、上传或提交私钥。
 
 ## 发布门禁
 
 当前单机生产拓扑必须设置 `PRODUCTION_DEPLOYMENT_PROFILE=single-host` 和 `PRODUCTION_OBSERVABILITY_MODE=system`。只有数据库自动备份、恢复演练、外部健康检查、关键告警、持久资源与加密密钥存储均有真实证据时，才可将对应 `READINESS_OPERATIONS_JSON` 字段设为 `true`。
 
-在发布提交的干净隔离工作树中，通过进程环境安全注入生产等价的构建配置（密钥不得写入仓库或发布记录），并依次通过。必须先完成 monorepo 依赖拓扑构建再运行全量测试，禁止依赖开发工作区残留的 `lib`、`dist` 或 `package` 目录：
+检查范围由 `scripts/ci-impact.mjs` 决定，PR 和发布共用同一份规则。发布比较**当前生产后端 SHA 到目标 SHA 的全部累计差异**，不能只看最后一个提交，也不能只看本次 PR。
+
+| 改动                                              | CI 范围                                     | 发布路径                         |
+| ------------------------------------------------- | ------------------------------------------- | -------------------------------- |
+| 仅文档                                            | 范围识别与最终状态                          | 不部署网站                       |
+| Storefront 样式、文案、普通组件                   | 变更 lint、架构预算、关联前端测试与该包构建 | 商城静态指针                     |
+| Next Admin 样式、文案、普通组件                   | 变更 lint、架构预算、关联前端测试与该包构建 | 后台静态指针                     |
+| 两个前端同时变化                                  | 两个前端的相关检查                          | 同批切换，任一验收失败恢复两者   |
+| 插件和业务后端                                    | 受影响包与依赖构建、关联测试及适用集成检查  | 运行时发布                       |
+| 核心、共享依赖、锁文件、CI 工作流、未知可执行输入 | 扩大到公共影响范围；依赖变更增加审计        | 运行时发布                       |
+| 迁移、实体或受管配置/图片                         | 相应迁移、配置保留和发布门禁                | 保留备份、审核范围及兼容回滚限制 |
+
+`packages/dashboard` 是上游组件库，`packages/next-admin` 才是生产后台；二者不混用。独立 2FA 工具、构建配置、依赖清单和受管品牌素材不进入普通前端快速路径。插件变更仍可能通过依赖关系影响多个包，但不因路径以 `packages/` 开头就无条件启用所有检查。显式 `full=true` 才扩展到额外 Node 版本和 Windows 矩阵。
+
+在本地干净隔离工作树中可先只读预览范围：
 
 ```bash
-bun install --frozen-lockfile --linker=hoisted
-bun run lint:check
-bun run build
-bun run test
-bun run --cwd packages/operations-dashboard-plugin test
-READINESS_PROCESS_ROLE=server bun run --cwd packages/dev-server audit:production-env
-READINESS_PROCESS_ROLE=worker bun run --cwd packages/dev-server audit:production-env
-RUN_MIGRATIONS=true RUN_JOB_QUEUE=0 READINESS_PROCESS_ROLE=migration \
-    bun run --cwd packages/dev-server audit:production-env
-bun run --cwd packages/storefront test
-bun run --cwd packages/storefront build
-bun run --cwd packages/dev-server build
-bun run --cwd packages/dev-server build:production-runtime -- --require-platform linux/x64 --audit-level high
+node scripts/ci-impact.mjs --base <base-sha> --target <target-sha>
 ```
 
-最后一条命令只能在与 EC2 匹配的 `linux/x64` 干净构建机上执行。产物目录会包含平台、完整 Git SHA、`bun.lock` SHA-256、运行包清单、`RUNTIME-AUDIT.json` 和文件校验清单，并拒绝 `esbuild`、`less`、`tar`、`typescript`、`vite`、`webpack` 或达到指定审计阈值的包进入运行目录。使用 `--allow-dirty` 生成的产物只允许本地演练，不得部署。
+普通前端使用相应包的关联 Vitest 测试与 `bun run build`；测试使用 `NODE_ENV=test`，制品使用 `NODE_ENV=production`。后端使用 `scripts/ci-run.mjs` 按计划调用 Lerna，并在测试前恢复已构建的必要输出。全量构建/测试只在实际公共影响或明确要求时运行。生产环境、运行产物及 High+ 审计门禁仍然执行；不得使用开发工作区遗留产物替代验证。
 
-正式入口统一为 GitHub Actions 的 `Production Release`。它在同一个 `production-release` 并发组内按“现场预检 → 不可变制品构建 → 部署”串行运行：当前发布不会被取消，等待区只保留最新候选，旧候选不会形成数小时积压。现场预检在昂贵构建前读取 `deploy/production-storefronts.json`，逐一验证配置清单内的生产店铺域名和已审核 Channel 均可访问，并确认待执行迁移只来自审核清单；预检失败时停止，不消耗后续构建和部署时间。常规发布手动输入 `origin/main` 当前完整的 40 位小写 SHA；若包含已审核的店铺媒体，同时在唯一的可选 `media_keys` 和 `channel_codes` 输入中填写逗号分隔的 manifest key 与明确 Channel 范围，两者必须同时出现。媒体 key 与 Channel 范围会连同目标 SHA、制品名与制品 SHA-256 写入单独校验的 `release-plan.json`，下游只能使用同一运行生成的发布计划。当 `main` 只变更 `packages/image-generation-plugin/skill/image-prompt-pro/**` 或对应的已编译 bundle 时，工作流也会使用该 push 的完整 SHA 自动运行。若同一批 push 混入任何其他路径，自动任务会停止，必须按常规发布流程人工审核。正式制品只接受经过审核的双父 `main` 合并提交：第一父必须已被 PR 头提交包含，最终 `main` 源码树必须与 PR 头源码树完全相同，且该 PR 头必须存在成功的 `Build & Test` 运行。在这些证据都精确匹配后，制品阶段不再重复全仓单测、开发工作流测试和变更 lint，只使用 Node `24.19.0`、Bun `1.3.14` 和 `ubuntu-24.04` x64 执行冻结安装、全仓审计、Skill 回归、生产构建、发布专属结构检查、运行产物 High+ 门禁和自验证。任一 CI 证据、分支包含关系、源码树、SHA、源码清洁性、平台或发布门禁不匹配时都不会上传制品。依赖审计将同一份绑定 `bun.lock` 的 JSON 证据用于全仓与运行时门禁，按实际 severity 阻断 High+；仅对 Bun 明确返回的网络超时、连接关闭或底层传输错误最多尝试三次，退避为 15 秒和 60 秒；漏洞、其他命令错误、无效输出或重试耗尽仍立即失败关闭。
+正式入口是手动 `Production Release`，固定输入当前 `origin/main` 的完整 40 位 SHA。旧的 `Deploy Storefront Fast Lane` 仅委托该入口。取消 Skill 路径 push 自动发布，避免一次提交派生另一条发布链。GitHub Ruleset/必需状态并未被这些本地代码修改；`repository quality gates` 与 `all-passed` 保留稳定名称，条件任务通过后由最终任务汇总，不要求被跳过的无关任务独立通过。
+
+入口依次执行现场预检、累计范围判断、查找可复用检查、补齐缺失检查、构建或恢复产物、部署和相关验收。源树完全相同、检查覆盖全部待发布文件且来源为本仓库可信成功运行时，允许复用 PR 或既有发布的检查；不再限制双父合并提交，squash 也可按内容验证。证据缺失或范围不足时运行适用检查；证据不匹配时不能冒充通过。前端和运行时编译产物另外验证 SHA-256、源码树、Node `24.19.0`、Bun `1.3.14`、Linux x64 和影响构建的环境指纹。前端制品有效时连依赖安装也跳过。缺失产物只补构建；运行时只能复用完整生产构建，部分插件输出不能充当完整运行时。
+
+首次上线本改动必须走运行时发布，安装两个静态指针和 Nginx 路由。后续纯前端发布不迁移数据库、不重启 API/Worker，不要求生产后端 SHA 跟随每次美工提交。所有商城共用商城产物，后台使用自己的产物，店铺品牌/装修仍由 Admin 配置。静态发布与运行时发布共用 GitHub `production-release` 并发组及服务器 `/run/lock/vendure-production-deploy.lock`；当前发布不取消，待处理候选按 GitHub 并发规则保留。
+
+前端发布在切换后核验每个受影响公网入口、版本清单和入口 JS/CSS；任一失败恢复本批已切换的所有前端。对应页面的实际交互/视觉验收仍需按改动进行，静态 HTTP 检查不代表业务验收。后端发布继续执行版本、店铺与 Channel、Shop API、Dashboard 资源图、相关实时链路和迁移兼容性检查。同版本再次请求发布会核对实际组件版本，已完成的版本直接结束；若后端已是目标版本而前端指针异常，明确报错要求修复指针，不能用无差异全量重建循环处理。
+
+运行时制品只能在与 EC2 匹配的 Linux x64 构建机生成。既有平台、完整 SHA、锁文件摘要、运行包清单、`RUNTIME-AUDIT.json` 和文件清单校验保持；High+ 风险及不允许进入运行时的构建依赖仍阻断。审计网络错误最多一次重试，默认退避 15 秒；漏洞、非临时错误、无效输出和重试耗尽均停止该步骤。
+
+若包含已审核店铺媒体，仍需在 `media_keys` 与 `channel_codes` 精确填写范围，并在同一运行的 `release-plan.json` 中绑定目标 SHA、制品及校验值。新流程不增加任何店铺内容自动覆盖权限。
 
 登录视觉或 MOYAO AI 品牌变更必须在同一制品调度分别勾选 `auth_visuals` 或 `moyao_brand`，并填写已审核 `channel_codes`。品牌发布只接受 `channel_codes=__default_channel__`。这些字段也写入并校验 `release-plan.json`；缺少审核、Channel 不正确，或在没有对应变更时携带发布范围，都必须在备份和运行时切换前失败关闭。
 
@@ -151,13 +170,26 @@ bun run --cwd packages/dev-server build:production-runtime -- --require-platform
 
 大马通整店受管内容使用独立的 `damatong_storefront` 与 `damatong_channel_token` 发布范围，不复用容易混淆 Channel code 与 token 的通用字段。生产只接受公开的受审选择器 `damatong_channel_token=my-malaysia`；该字段不是生产 Channel 凭据。发布脚本先从 `damatong.net` 的 Shop API 读取域名实际路由的 Channel code，再在已认证的 Admin Channel 列表中精确匹配，并只在进程内使用真实 token，日志不得输出该 token。首次启用必须先单独发布本工作流和服务器保护逻辑，且该门禁引导版本不得携带大马通内容或勾选发布范围；确认生产已安装新保护逻辑后，第二个正式版本才可携带发布器、图片与内容并勾选该范围。
 
-同一次 `Production Release` 的制品任务成功后，可复用部署任务会在同一运行内自动接管手动任务和仅由上述 Skill 路径触发的 `main` push 发布。它使用 GitHub OIDC 临时凭证承担
+同一次 `Production Release` 的运行时制品任务成功后，可复用部署任务在同一运行内接管该固定版本。它使用 GitHub OIDC 临时凭证承担
 `arn:aws:iam::079740175286:role/yunqiao-vendure-github-deploy`，只把当前 SHA 的不可变归档写入
 `s3://yunqiao-vendure-prod-backup-079740175286-apne1/deployments/<sha>/`，再只向
 `i-041a146558e432cbf` 发送 `AWS-RunShellScript`。仓库和 GitHub 均不保存长期 AWS Access Key；常规发布在
-GitHub 的 `main` 分支手动运行一次 `Production Release`，Skill 规则路径变更则自动触发，两者都无需登录 AWS 控制台。
+GitHub 的 `main` 分支手动运行一次 `Production Release`，无需登录 AWS 控制台。
 
-`Production Release` 是唯一固定发布入口。每个准确的 `main` SHA 只允许创建一个运行；若同一版本出现网络、Runner、S3、SSM 或公网探针等临时失败，必须在原运行使用 **Re-run failed jobs**（CLI 为 `gh run rerun <run-id> --failed`），从失败任务继续并复用该运行已经通过校验的不可变制品。不得再次 dispatch 同一 SHA，也不得用 Re-run all jobs 重做已经成功的长构建。若失败需要修改代码，必须提交独立修复 PR；合并后的新 SHA 重新执行完整预检、构建和验收。
+### 发布失败后继续修复
+
+发布授权内发现问题应继续定位和修复，不停在“CI 红了”的报告。优先保存日志与上一健康版本，确认失败在检查、构建、部署还是验收；代码修复使用新 SHA，重新计算影响范围并复用仍有效的证据。当前授权只包含本地开发时，不得因此自行推送或部署。
+
+固定在原运行保留成功阶段，禁止空提交触发 CI、Re-run all jobs 或反复 dispatch 同一失败 SHA。可在拥有 GitHub 读取权限的环境中执行：
+
+```bash
+GITHUB_REPOSITORY=wangchaozhuanyong/kaiyuangouwu \
+    node deploy/release-recovery.mjs report <run-id>
+```
+
+确认是第一轮中的临时网络/Runner 故障且发布已经获准时，用同一脚本的 `retry <run-id>` 只重试失败任务一次。脚本读取实际尝试次数和失败日志；没有证据、代码断言、漏洞、权限、校验或迁移错误不能获得重试许可。第二次失败必须改变诊断或修复措施，不再原样重跑。权限/基础设施故障应修复相应配置，不制造无意义代码提交。
+
+部署失败使用既有兼容回滚。运行时迁移不可逆时保持安全停止并制定向前修复，不自动改生产数据。前端版本异常需先核对记录中的旧指针与不可变制品，再恢复及验收。发布状态只有在目标版本、相关功能以及必要页面检查均通过后才可标记完成；任务摘要会保留失败步骤和下一步处理建议。
 
 自动发布入口由工作流从目标 SHA 传送并校验固定的 `deploy/deploy-production-from-s3.sh`，成功后再安装到 `/usr/local/sbin/vendure-production-deploy-from-s3`。脚本在同一个生产锁内完成源码快进、S3 外层校验、运行产物自验证、受管 publisher 权限与目标的只读预检、按实际差异自动分级的数据库备份和迁移、PM2 切换、已审核媒体/登录视觉/品牌写入、Nginx 检查、双店公网基础检查、受影响功能验收、版本标记与失败回滚。Schema 或受管内容写入必须创建新的已验证异地备份；纯运行时代码可复用 24 小时内校验通过且有异地上传证据的备份，缺失、过期或校验失败时自动新建。若目标提交改动了受管数据但发布计划没有对应的精确审核范围，或者改动了库存修复发布器等不受支持的数据路径，制品任务会在完整构建前停止，服务器再次独立核对。已处于目标 SHA 的失败任务重跑会返回 `PRODUCTION_DEPLOY_ALREADY_CURRENT`，不重复备份、迁移或重启，并继续由后置任务核对准确运行 SHA、两店 Channel、Shop API、首页资源、Dashboard 资源图及受影响的实时链路。
 
