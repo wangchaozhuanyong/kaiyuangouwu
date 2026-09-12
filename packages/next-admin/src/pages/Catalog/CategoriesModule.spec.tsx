@@ -57,6 +57,7 @@ interface RenderCategoriesOptions {
     optionGroups?: TestOptionGroup[];
     linkedProducts?: TestLinkedProduct[];
     initialEntry?: string;
+    nestedCategories?: boolean;
 }
 
 afterEach(async () => {
@@ -70,9 +71,11 @@ async function renderCategories({
     optionGroups = [],
     linkedProducts = [],
     initialEntry = '/catalog/categories',
+    nestedCategories = false,
 }: RenderCategoriesOptions = {}) {
     (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     let featuredAsset: typeof oldImage | null = oldImage;
+    let channelId = 'channel-1';
     const requests = vi.fn();
     const client = new ApolloClient({
         cache: new InMemoryCache(),
@@ -84,7 +87,7 @@ async function renderCategories({
                         observer.next({
                             data: {
                                 collections: {
-                                    totalItems: 1,
+                                    totalItems: nestedCategories ? 2 : 1,
                                     items: [
                                         {
                                             __typename: 'Collection',
@@ -109,6 +112,33 @@ async function renderCategories({
                                                 },
                                             ],
                                         },
+                                        ...(nestedCategories
+                                            ? [
+                                                  {
+                                                      __typename: 'Collection',
+                                                      id: 'category-child',
+                                                      name: '绿茶',
+                                                      slug: 'green-tea',
+                                                      description: '',
+                                                      isPrivate: false,
+                                                      parentId: 'category-1',
+                                                      position: 0,
+                                                      productVariantCount: 0,
+                                                      inheritFilters: true,
+                                                      filters: [],
+                                                      featuredAsset: null,
+                                                      translations: [
+                                                          {
+                                                              id: 'translation-child',
+                                                              languageCode: 'zh_Hans',
+                                                              name: '绿茶',
+                                                              slug: 'green-tea',
+                                                              description: '',
+                                                          },
+                                                      ],
+                                                  },
+                                              ]
+                                            : []),
                                     ],
                                 },
                                 productOptionGroups: {
@@ -116,7 +146,7 @@ async function renderCategories({
                                     items: optionGroups,
                                 },
                                 facets: { totalItems: 0, items: [] },
-                                activeChannel: { id: 'channel-1', defaultLanguageCode: 'zh_Hans' },
+                                activeChannel: { id: channelId, defaultLanguageCode: 'zh_Hans' },
                                 collectionFilters: [],
                             },
                         });
@@ -208,8 +238,38 @@ async function renderCategories({
             input.dispatchEvent(new Event('input', { bubbles: true }));
         });
     };
-    return { container, requests, click, changeInput };
+    const changeChannel = async (id: string) => {
+        channelId = id;
+        await act(async () => {
+            await client.refetchQueries({ include: ['GetCatalogTaxonomy'] });
+        });
+    };
+    return { container, requests, click, changeInput, changeChannel };
 }
+
+describe('category tree expansion', () => {
+    it('starts collapsed and expands children only after an explicit action', async () => {
+        const { container, click } = await renderCategories({ nestedCategories: true });
+        expect(
+            container.querySelector('[aria-label="展开一级分类 茶叶"]')?.getAttribute('aria-expanded'),
+        ).toBe('false');
+        expect(container.querySelector('[aria-label="编辑分类 绿茶"]')).toBeNull();
+        await click('展开一级分类 茶叶');
+        expect(container.querySelector('[aria-label="编辑分类 绿茶"]')).not.toBeNull();
+        await click('全部收起');
+        expect(container.querySelector('[aria-label="编辑分类 绿茶"]')).toBeNull();
+        await click('全部展开');
+        expect(container.querySelector('[aria-label="编辑分类 绿茶"]')).not.toBeNull();
+    });
+
+    it('resets expansion when the active store changes', async () => {
+        const { container, click, changeChannel } = await renderCategories({ nestedCategories: true });
+        await click('全部展开');
+        await changeChannel('channel-2');
+        expect(container.querySelector('[aria-label="编辑分类 绿茶"]')).toBeNull();
+        expect(container.querySelector('[aria-label="展开一级分类 茶叶"]')).not.toBeNull();
+    });
+});
 
 describe('category image editing', () => {
     it('loads the existing image, saves its replacement, and reads it back without replacing the asset gallery', async () => {

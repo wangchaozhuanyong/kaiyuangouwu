@@ -193,7 +193,7 @@ export function CategoriesModule() {
     const [formFilters, setFormFilters] = useState<OperationValue[]>([]);
     const [customFieldValues, setCustomFieldValues] = useState<CustomFieldValueMap>({});
     const [saving, setSaving] = useState(false);
-    const [expandedCollectionIds, setExpandedCollectionIds] = useState<Set<string> | null>(null);
+    const [expandedCollectionIds, setExpandedCollectionIds] = useState<Set<string>>(() => new Set());
     const [optionGroupSearch, setOptionGroupSearch] = useState('');
     const [optionGroupPage, setOptionGroupPage] = useState(0);
     const [usageGroup, setUsageGroup] = useState<OptionGroupItem | null>(null);
@@ -298,6 +298,9 @@ export function CategoriesModule() {
     const collections = data?.collections.items ?? EMPTY_COLLECTIONS;
     const optionGroups = data?.productOptionGroups.items ?? EMPTY_OPTION_GROUPS;
     const facets = data?.facets.items ?? EMPTY_FACETS;
+    useEffect(() => {
+        setExpandedCollectionIds(new Set());
+    }, [data?.activeChannel.id]);
     // 内容翻译插件要求所有原生目录内容都从简体中文源语言写入。
     const languageCode = SOURCE_LANGUAGE_CODE;
 
@@ -334,8 +337,7 @@ export function CategoriesModule() {
         return roots;
     }, [collections]);
 
-    const visibleExpandedCollectionIds =
-        expandedCollectionIds ?? new Set(collectionTree.map(collection => collection.id));
+    const visibleExpandedCollectionIds = expandedCollectionIds;
     const allTopLevelCollectionsExpanded =
         collectionTree.length > 0 &&
         collectionTree.every(collection => visibleExpandedCollectionIds.has(collection.id));
@@ -345,7 +347,7 @@ export function CategoriesModule() {
 
     const toggleCollection = (collectionId: string) => {
         setExpandedCollectionIds(current => {
-            const next = new Set(current ?? collectionTree.map(collection => collection.id));
+            const next = new Set(current);
             if (next.has(collectionId)) next.delete(collectionId);
             else next.add(collectionId);
             return next;
