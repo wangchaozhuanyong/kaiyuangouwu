@@ -8,7 +8,15 @@ import { pathToFileURL } from 'node:url';
 import { packageInventory } from '../scripts/ci-impact.mjs';
 
 // Include the actual Lerna outputs, including the legacy Angular and job-queue packages.
-export const COMPILED_DIRECTORIES = ['dist', 'lib', 'dist-two-factor', 'package', 'client', 'compiler'];
+export const COMPILED_DIRECTORIES = [
+    'dist',
+    'lib',
+    'dist-two-factor',
+    'package',
+    'client',
+    'compiler',
+    'cli',
+];
 const hash = value => createHash('sha256').update(value).digest('hex');
 const tree = () => execFileSync('git', ['rev-parse', 'HEAD^{tree}'], { encoding: 'utf8' }).trim();
 const buildEnvironment = new RegExp(

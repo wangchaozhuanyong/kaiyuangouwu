@@ -13,6 +13,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 import { compiledExtractPython, validateBuildArtifact } from './build-artifact.mjs';
 import { frontendFingerprint, safeExtractPython, validateFrontendArtifact } from './frontend-artifact.mjs';
@@ -155,4 +156,48 @@ with tarfile.open(sys.argv[1],'w:gz') as a:
                 0,
             );
     }
+});
+test('compiled artifact round trip preserves the core CLI required by database tests', t => {
+    const { root } = fixture(t);
+    const repository = join(root, 'repository');
+    const core = join(repository, 'packages/core');
+    mkdirSync(join(core, 'cli'), { recursive: true });
+    mkdirSync(join(core, 'dist'));
+    writeFileSync(join(core, 'package.json'), '{"name":"@vendure/core","main":"dist/index.js"}');
+    writeFileSync(join(core, 'cli/index.js'), 'module.exports = { populate: true };');
+    writeFileSync(join(core, 'dist/index.js'), 'module.exports = {};');
+    const git = args => execFileSync('git', args, { cwd: repository, stdio: 'pipe' });
+    git(['init', '-q']);
+    git(['add', 'packages/core/package.json']);
+    git([
+        '-c',
+        'user.name=Artifact Test',
+        '-c',
+        'user.email=test@example.invalid',
+        'commit',
+        '-qm',
+        'fixture',
+    ]);
+    const artifact = join(root, 'compiled');
+    execFileSync(
+        process.execPath,
+        [fileURLToPath(new URL('./build-artifact.mjs', import.meta.url)), 'pack', artifact],
+        {
+            cwd: repository,
+            env: { ...process.env, CI_PLAN: '{"full":true}', COPYFILE_DISABLE: '1' },
+        },
+    );
+    rmSync(join(core, 'cli'), { recursive: true });
+    rmSync(join(core, 'dist'), { recursive: true });
+    execFileSync('python3', ['-c', compiledExtractPython, join(artifact, 'compiled.tar.gz'), repository]);
+    assert.equal(readFileSync(join(core, 'cli/index.js'), 'utf8'), 'module.exports = { populate: true };');
+    mkdirSync(join(repository, 'node_modules/@vendure'), { recursive: true });
+    symlinkSync(core, join(repository, 'node_modules/@vendure/core'));
+    execFileSync(
+        process.execPath,
+        ['-e', "require('node:assert/strict').equal(require('@vendure/core/cli').populate, true)"],
+        {
+            cwd: repository,
+        },
+    );
 });
