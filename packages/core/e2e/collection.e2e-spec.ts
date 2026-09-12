@@ -853,7 +853,7 @@ describe('Collection resolver', () => {
                 fail('did not return the collection');
                 return;
             }
-            expect(result.collection.children?.map(c => (c as any).position)).toEqual([0, 1, 2, 3, 4, 5, 6]);
+            expect(result.collection.children?.map(c => c.position)).toEqual([0, 1, 2, 3, 4, 5, 6]);
         });
 
         async function getChildrenOf(parentId: string): Promise<Array<{ name: string; id: string }>> {
