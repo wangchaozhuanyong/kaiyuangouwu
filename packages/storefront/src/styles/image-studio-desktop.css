@@ -43,6 +43,16 @@
         box-shadow: none;
     }
 
+    .ai-studio-composer,
+    .ai-studio-options,
+    .ai-studio-checkout {
+        background: transparent;
+        border: 0;
+        box-shadow: none;
+        padding: 0;
+        border-radius: 0;
+    }
+
     .ai-studio-sidebar-scroll {
         min-height: 0;
         padding: 16px 18px;

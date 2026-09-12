@@ -11,6 +11,9 @@ export default defineConfig(({ mode }) => {
 
     return {
         plugins: [TanStackRouterVite({ target: 'react', autoCodeSplitting: true }), tailwindcss(), react()],
+        resolve: {
+            dedupe: ['react', 'react-dom'],
+        },
         build: {
             target: ['chrome111', 'edge111', 'firefox128', 'safari16.4'],
             rollupOptions: {
