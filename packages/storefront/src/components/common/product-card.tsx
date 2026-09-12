@@ -12,6 +12,7 @@ import {
     trimText,
 } from '../../storefront-ui/product-display';
 import { MarketConfig, Product, StorefrontLanguage } from '../../types';
+
 import { buildProductRowSmartInfo } from './product-row';
 
 function cn(...classes: Array<string | false | null | undefined>) {
