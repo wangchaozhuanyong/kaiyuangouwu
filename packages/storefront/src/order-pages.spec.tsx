@@ -243,12 +243,24 @@ describe('LogisticsPage delivery overview', () => {
         ]);
 
         expect(markup).toContain('物流动态');
+        expect(markup).toContain('logistics-card-header');
+        expect(markup).toContain('logistics-status-text');
         expect(markup).toContain('运输中');
         expect(markup).toContain('订单测试商品');
         expect(markup).toContain('标准配送');
         expect(markup).toContain('TRACK-20841');
         expect(markup).toContain('查看订单详情');
         expect(markup).not.toContain('TEST-1');
+    });
+
+    it('ensures logistics-card and its header maintain proper grid alignment and surface frame', () => {
+        expect(orderPageStyles['logistics-card']).toContain('[background:var(--paper,_white)]');
+        expect(orderPageStyles['logistics-card']).toContain('[border:1px_solid_var(--line)]');
+        expect(orderPageStyles['logistics-card']).toContain('[border-radius:12px]');
+        expect(orderPageStyles['logistics-card-header']).toContain(
+            '[grid-template-columns:34px_minmax(0,_1fr)_auto]',
+        );
+        expect(orderPageStyles['logistics-status-text']).toContain('[min-width:0]');
     });
 });
 

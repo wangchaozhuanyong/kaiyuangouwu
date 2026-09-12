@@ -23,6 +23,7 @@ export const routeModuleLoaders = {
     businessServicesCopy: () => import('./pages/Storefront/BusinessServicesCopyModule'),
     clientPlugins: () => import('./pages/Plugins/ClientPluginsModule'),
     twoFactorCodes: () => import('./pages/Plugins/TwoFactorCodesModule'),
+    icloudRelay: () => import('./pages/Plugins/IcloudRelayModule'),
     aiImageSettings: () => import('./pages/Plugins/AiImageSettingsModule'),
     aiImageAccess: () => import('./pages/Plugins/AiImageAccessModule'),
     translations: () => import('./pages/Settings/TranslationsModule'),
@@ -64,6 +65,7 @@ export function getRouteModuleKey(target: string): RouteModuleKey | null {
     if (pathname === '/plugins/ai-access') return 'aiImageAccess';
     if (pathname === '/plugins/translations') return 'translations';
     if (pathname === '/plugins/two-factor-codes') return 'twoFactorCodes';
+    if (pathname === '/plugins/icloud-relay' || pathname === '/icloud-relay') return 'icloudRelay';
     if (pathname.startsWith('/plugins')) return 'clientPlugins';
     if (pathname === '/settings/team') return 'roles';
     if (pathname === '/settings/system-ops') return 'systemOps';

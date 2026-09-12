@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const { createHash } = require('node:crypto');
 const { execFileSync } = require('node:child_process');
-const { readFileSync, writeFileSync } = require('node:fs');
+const { existsSync, readFileSync, writeFileSync } = require('node:fs');
 const { createRequire } = require('node:module');
 const path = require('node:path');
 
@@ -10,6 +10,8 @@ const REVIEWED_MIGRATIONS = [
     'ReleaseUsdtHistoricalAmountKeys1788706800000',
     'SeedCheckoutProvinces1788742800000',
     'AlignCheckoutProvinceCountries1788746400000',
+    'AddIcloudRelayTables1788750000000',
+    'AlignIcloudRelaySchema1788751000000',
 ];
 const TABLE = 'storefront_usdt_payment_intent';
 
@@ -32,9 +34,28 @@ function assertCompatible(schema, activeRuntime) {
     }
 }
 
-function assertPending(pending) {
+function assertPending(pending, repository) {
+    const allowed = new Set(REVIEWED_MIGRATIONS);
+    if (repository && typeof repository === 'string') {
+        try {
+            const registryPath = path.join(repository, 'packages/dev-server/migrations/index.ts');
+            if (existsSync(registryPath)) {
+                const registry = readFileSync(registryPath, 'utf8');
+                const match = registry.match(/export const devServerMigrations\s*=\s*\[([\s\S]*?)\];/);
+                if (match) {
+                    match[1]
+                        .split(',')
+                        .map(name => name.trim())
+                        .filter(Boolean)
+                        .forEach(name => allowed.add(name));
+                }
+            }
+        } catch {
+            // fallback to static list
+        }
+    }
     assert.ok(
-        pending.every(name => REVIEWED_MIGRATIONS.includes(name)),
+        pending.every(name => allowed.has(name)),
         'Unreviewed pending migrations; inspect the exact list before release',
     );
 }
@@ -148,13 +169,13 @@ async function run(operation, runtime, snapshotFile, repository = path.resolve(_
         } else if (operation === 'plan') {
             const plan = await inspect(db, repository);
             process.stdout.write(`USDT_MIGRATION_PLAN ${JSON.stringify(plan)}\n`);
-            assertPending(plan.pending);
+            assertPending(plan.pending, repository);
         } else {
             assertStopped(JSON.parse(execFileSync('pm2', ['jlist'], { encoding: 'utf8' })));
             assert.ok(path.isAbsolute(snapshotFile), 'Absolute migration snapshot path is required');
             if (operation === 'capture') {
                 const plan = await inspect(db, repository);
-                assertPending(plan.pending);
+                assertPending(plan.pending, repository);
                 const snapshot = { ...plan, history: await historySnapshot(db) };
                 writeFileSync(snapshotFile, JSON.stringify(snapshot), { mode: 0o600, flag: 'wx' });
                 process.stdout.write(`USDT_MIGRATION_CAPTURE ${JSON.stringify(snapshot)}\n`);

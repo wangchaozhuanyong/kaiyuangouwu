@@ -69,6 +69,17 @@
         background-color: var(--admin-surface);
     }
 
+    /*
+     * 针对 Tailwind 子级组合器工具类（如 [&>article]:bg-white, [&>div]:bg-white）
+     * 建立深色模式兜底映射，防止子元素因缺乏直接类名而保留纯白背景，导致深色模式下文字底色倒挂。
+     */
+    .dark :where([class*='[&>']:where([class*=':bg-white']) > *),
+    .dark :where([class*='[&_']:where([class*=':bg-white']) *),
+    .dark .\[\&\>article\]\:bg-white > article,
+    .dark .\[\&\>div\]\:bg-white > div {
+        background-color: var(--admin-surface);
+    }
+
     .dark :where(.bg-white\/95, .bg-white\/90, .bg-white\/85) {
         background-color: rgb(17 24 39 / 94%);
     }

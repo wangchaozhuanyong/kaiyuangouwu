@@ -1,3 +1,4 @@
+// Release alignment: perf-unified-architecture-20260911
 import { createBrowserHistory, createRouter } from '@tanstack/react-router';
 import { useContext } from 'react';
 
@@ -38,8 +39,8 @@ export const router = createRouter({
     parseSearch: parseStorefrontSearch,
     stringifySearch: stringifyStorefrontSearch,
     defaultPreload: 'intent',
-    defaultPendingMs: 220,
-    defaultPendingMinMs: 320,
+    defaultPendingMs: 600,
+    defaultPendingMinMs: 0,
     defaultPendingComponent: StorefrontPendingPage,
     scrollRestoration: true,
     scrollToTopSelectors: ['[data-scroll-restoration-id="category-results"]'],

@@ -390,6 +390,12 @@ export const featureHelpContent = {
         example: '例如：搜索“AWS 生产”并复制当前 30 秒有效的验证码。',
         impact: '涉及敏感认证信息，只应授予必需人员。',
     },
+    'plugins.icloud-relay': {
+        purpose: '管理 iCloud 邮件中继主邮箱、虚拟邮箱和验证码查询通道。',
+        requirements: ['主邮箱需使用 App 专用密码', '买家根据专属查询码提取验证码'],
+        example: '例如：添加主邮箱并测试 IMAP 连通性，为买家分配虚拟邮箱查询码。',
+        impact: '主邮箱密码失效将导致无法自动收取新邮件与验证码。',
+    },
     'settings.store-profile': {
         purpose: '管理店铺基本资料、经营模式、独立域名、卖家与 Channel 关系。',
         requirements: ['选中要修改的店铺', '域名、币种与经营模式变更前评估前台影响'],

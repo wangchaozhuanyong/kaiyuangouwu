@@ -379,6 +379,7 @@ async function buildPrerequisites() {
         ['@vendure/asset-server-plugin', path.join(repoRoot, 'packages/asset-server-plugin')],
         ['@vendure/email-plugin', path.join(repoRoot, 'packages/email-plugin')],
         ['@vendure/commerce-fulfillment-plugin', path.join(repoRoot, 'packages/commerce-fulfillment-plugin')],
+        ['@vendure/icloud-relay-plugin', path.join(repoRoot, 'packages/icloud-relay-plugin')],
         ['@vendure/operations-dashboard-plugin', path.join(repoRoot, 'packages/operations-dashboard-plugin')],
         ['@vendure/two-factor-dashboard-plugin', path.join(repoRoot, 'packages/two-factor-dashboard-plugin')],
         ['@vendure/store-domain-plugin', path.join(repoRoot, 'packages/store-domain-plugin')],

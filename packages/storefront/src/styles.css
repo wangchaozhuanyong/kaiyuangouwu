@@ -5,7 +5,6 @@
 @import './styles/account-security.css';
 @import './styles/logistics.css';
 @import './styles/auth-flow.css';
-@import './styles/auth-overrides.css';
 @import './styles/brand-shell.css';
 @import './styles/account-catalog-surfaces.css';
 :root {
@@ -33,22 +32,30 @@
     --app-width: 430px;
     --bg: #f3f6fb;
     --paper: #ffffff;
+    --surface: #ffffff;
     --soft: #f8fafc;
     --product-media-bg: #f8fafc;
     --product-media-ratio: 1 / 1;
     --text: #0f172a;
     --muted: #64748b;
     --line: #e2e8f0;
+    --line-subtle: #f1f5f9;
     --accent: #635bff;
     --accent-hover: #5149e6;
     --accent-ink: #5149e6;
     --accent-soft: #eeefff;
+    --accent-disabled-bg: #e0e7ff;
+    --accent-disabled-text: #ffffff;
+    --accent-shadow: 0 8px 18px rgb(99 91 255 / 18%);
     --brand-background: #070b14;
     --brand-primary: #635bff;
     --brand-accent: #22d3ee;
     --brand-highlight: #8b5cf6;
     --success: #10b981;
     --warning: #f59e0b;
+    --warning-bg: #fffbeb;
+    --warning-border: #fde68a;
+    --warning-text: #92400e;
     --danger: #ef4444;
     --radius-sm: 8px;
     --radius-md: 12px;

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 import guard from '../../../deploy/usdt-migration-guard.cjs';
 
@@ -39,12 +40,16 @@ test('production migration preflight permits only the reviewed migration set', (
         'ReleaseUsdtHistoricalAmountKeys1788706800000',
         'SeedCheckoutProvinces1788742800000',
         'AlignCheckoutProvinceCountries1788746400000',
+        'AddIcloudRelayTables1788750000000',
     ]);
     assert.throws(
         () =>
             guard.assertPending(['AddUsdtActiveAmountKey1788703200000', 'UnexpectedMigration1789999999999']),
         /Unreviewed/,
     );
+    // When repository path is provided, registered migrations are automatically permitted
+    const repoPath = fileURLToPath(new URL('../../..', import.meta.url));
+    guard.assertPending(['AddTranslationOutbox1788739200000'], repoPath);
 });
 
 test('USDT history digest ignores the new reservation column but detects changed transaction links', async () => {

@@ -45,6 +45,7 @@ import {
     type EventWithAsyncData,
 } from '@vendure/email-plugin';
 import { HardenPlugin } from '@vendure/harden-plugin';
+import { IcloudRelayPlugin } from '@vendure/icloud-relay-plugin';
 import { ImageGenerationPlugin } from '@vendure/image-generation-plugin';
 import { NextAdminPlugin } from '@vendure/next-admin-plugin';
 import { OperationsDashboardPlugin } from '@vendure/operations-dashboard-plugin';
@@ -967,6 +968,10 @@ export const devConfig: VendureConfig = {
         // FieldTestPlugin,
         OperationsDashboardPlugin,
         TwoFactorDashboardPlugin,
+        IcloudRelayPlugin.init({
+            syncIntervalSeconds: 120,
+            retentionDays: 30,
+        }),
         ...(!BOOTSTRAP_BASE_SCHEMA
             ? [
                   ContentTranslationPlugin.init(

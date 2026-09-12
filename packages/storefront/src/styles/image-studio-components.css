@@ -40,7 +40,7 @@
     min-width: 150px;
     padding: 10px 14px;
     border-radius: 12px;
-    background: #f5f3ff;
+    background: var(--soft);
     text-align: right;
 }
 
@@ -60,12 +60,12 @@
     overflow: hidden;
     border: 1px solid var(--line);
     border-radius: 13px;
-    background: #fff;
+    background: var(--paper);
 }
 
 .ai-studio-prompt-wrap:focus-within {
-    border-color: #8b5cf6;
-    box-shadow: 0 0 0 3px rgb(139 92 246 / 12%);
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
 .ai-studio-prompt-wrap textarea {
@@ -109,11 +109,11 @@
     min-width: 0;
     max-width: 240px;
     padding-left: 8px;
-    border-left: 1px solid #e2ddec;
+    border-left: 1px solid var(--line);
     display: inline-flex;
     align-items: baseline;
     gap: 5px;
-    color: #8a8196;
+    color: var(--muted);
     font-size: 10px;
     line-height: 1.25;
     white-space: nowrap;
@@ -122,7 +122,7 @@
 .ai-studio-optimizer-model strong {
     min-width: 0;
     overflow: hidden;
-    color: #5e5371;
+    color: var(--text);
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     font-size: 10px;
     font-weight: var(--font-weight-semibold);
@@ -142,7 +142,7 @@
     align-items: center;
     justify-content: center;
     gap: 7px;
-    background: #fff;
+    background: var(--paper);
     color: var(--text);
     font-size: 13px;
     font-weight: var(--font-weight-semibold);
@@ -153,13 +153,22 @@
 .ai-studio-generate-button {
     border-color: var(--accent);
     background: var(--accent);
-    color: #fff;
+    color: var(--paper);
 }
 
-.ai-studio-prompt-tools button:disabled,
+.ai-studio-prompt-tools button:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+    color: var(--muted);
+}
+
 .ai-studio-generate-button:disabled {
     cursor: not-allowed;
-    opacity: 0.45;
+    border-color: transparent;
+    background: var(--accent-disabled-bg);
+    color: var(--accent-disabled-text);
+    opacity: 1;
+    box-shadow: none;
 }
 
 .ai-studio-prompt-tools svg,
@@ -226,13 +235,13 @@
     min-width: 0;
     min-height: 64px;
     padding: 10px 12px;
-    border: 1px dashed #c9c2da;
-    border-radius: 13px;
+    border: 1px dashed var(--line);
+    border-radius: var(--radius-sm);
     display: grid;
     grid-template-columns: 38px minmax(0, 1fr);
     align-items: center;
     gap: 10px;
-    background: #fbfaff;
+    background: var(--soft);
     color: var(--text);
     cursor: pointer;
     transition:
@@ -241,20 +250,20 @@
 }
 
 .ai-studio-reference-add:hover {
-    border-color: #9d7ee4;
-    background: #f7f3ff;
+    border-color: var(--accent);
+    background: var(--accent-soft);
 }
 
 .ai-studio-reference-add:focus-within {
     border-color: var(--accent);
-    outline: 3px solid rgb(124 58 237 / 12%);
+    outline: 3px solid color-mix(in srgb, var(--accent) 15%, transparent);
     outline-offset: 1px;
 }
 
 .ai-studio-reference-add.is-compact {
     min-height: 52px;
     border-style: solid;
-    background: #fff;
+    background: var(--paper);
 }
 
 .ai-studio-reference-add.is-compact .ai-studio-reference-add-icon {
@@ -268,7 +277,7 @@
     border-radius: 11px;
     display: grid;
     place-items: center;
-    background: #efe8ff;
+    background: var(--accent-soft);
     color: var(--accent);
 }
 
@@ -311,20 +320,20 @@
     display: grid;
     gap: 2px;
     color: var(--text);
-    background: #fff;
+    background: var(--paper);
     cursor: pointer;
 }
 
 .ai-studio-resolution-picker button.is-selected {
     border-color: var(--accent);
     color: var(--accent);
-    background: #f5f3ff;
+    background: var(--accent-soft);
     box-shadow: inset 0 0 0 1px var(--accent);
 }
 
 .ai-studio-resolution-picker button.is-unavailable {
     color: var(--muted);
-    background: #f8fafc;
+    background: var(--soft);
     cursor: not-allowed;
     opacity: 0.6;
 }
@@ -352,13 +361,13 @@
 .ai-studio-reference-card {
     min-width: 0;
     padding: 8px;
-    border: 1px solid #d8e9df;
+    border: 1px solid var(--line);
     border-radius: 14px;
     display: grid;
     grid-template-columns: 58px minmax(0, 1fr) auto;
     align-items: center;
     gap: 10px;
-    background: #f8fcfa;
+    background: var(--paper);
 }
 
 .ai-studio-reference-preview {
@@ -366,12 +375,12 @@
     width: 58px;
     height: 58px;
     overflow: hidden;
-    border: 1px solid #e1e6e3;
+    border: 1px solid var(--line);
     border-radius: 11px;
     display: grid;
     place-items: center;
-    background: #eef1f0;
-    color: #81768e;
+    background: var(--soft);
+    color: var(--muted);
 }
 
 .ai-studio-reference-index {
@@ -473,7 +482,7 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    background: #f0eaff;
+    background: var(--accent-soft);
     color: var(--accent);
     font-size: 11px;
     font-weight: var(--font-weight-semibold);
@@ -484,12 +493,12 @@
     width: 32px;
     padding: 0;
     background: transparent;
-    color: #7b8294;
+    color: var(--muted);
 }
 
 .ai-studio-reference-actions button:hover {
-    background: #f5eded;
-    color: #b54747;
+    background: color-mix(in srgb, var(--danger, #ef4444) 10%, var(--paper));
+    color: var(--danger, #b54747);
 }
 
 .ai-studio-reference-actions svg {
@@ -508,7 +517,7 @@
     grid-template-columns: minmax(0, 1fr) minmax(0, auto) 16px;
     align-items: center;
     gap: 10px;
-    background: #fff;
+    background: var(--paper);
     color: var(--muted);
     font-size: 12px;
     text-align: left;
@@ -567,13 +576,13 @@
     flex-direction: column;
     align-items: flex-start;
     gap: 6px;
-    background: #fff;
+    background: var(--paper);
     text-align: left;
 }
 
 .ai-studio-model-grid button.is-selected {
     border-color: var(--accent);
-    background: #f5f3ff;
+    background: var(--accent-soft);
     box-shadow: inset 0 0 0 1px var(--accent);
 }
 
@@ -628,7 +637,7 @@
 .ai-studio-checkout details p {
     padding: 10px;
     border-radius: 8px;
-    background: #f8fafc;
+    background: var(--soft);
     line-height: 1.6;
 }
 
@@ -646,17 +655,17 @@
 .ai-studio-settlement-summary {
     min-width: 0;
     overflow: hidden;
-    border: 1px solid #e7e1f5;
-    border-radius: 14px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
     display: grid;
     grid-template-columns: minmax(150px, 0.55fr) minmax(220px, 1fr);
     align-items: stretch;
-    background: #fbfaff;
+    background: var(--paper);
 }
 
 .ai-studio-settlement-amount {
     padding: 13px 16px;
-    border-right: 1px solid #e7e1f5;
+    border-right: 1px solid var(--line);
     display: grid;
     align-content: center;
     gap: 2px;
@@ -688,7 +697,7 @@
     height: 34px;
     padding: 8px;
     border-radius: 10px;
-    background: #ede9fe;
+    background: var(--accent-soft);
     color: var(--accent);
 }
 
@@ -715,9 +724,9 @@
 .ai-studio-generate-button {
     min-width: 168px;
     min-height: 50px;
-    border-radius: 14px;
+    border-radius: var(--radius-sm);
     background: var(--accent);
-    box-shadow: 0 8px 18px rgb(109 40 217 / 18%);
+    box-shadow: var(--accent-shadow);
     font-size: 15px;
     transition:
         background-color 160ms ease,
@@ -726,8 +735,8 @@
 }
 
 .ai-studio-generate-button:not(:disabled):hover {
-    background: #5b21b6;
-    box-shadow: 0 10px 22px rgb(91 33 182 / 24%);
+    background: var(--accent-hover);
+    box-shadow: var(--accent-shadow);
 }
 
 .ai-studio-generate-button:not(:disabled):active {
@@ -735,19 +744,24 @@
 }
 
 .ai-studio-generate-button:disabled {
+    background: var(--accent-disabled-bg);
+    color: var(--accent-disabled-text);
     box-shadow: none;
+    cursor: not-allowed;
+    border-color: transparent;
+    opacity: 1;
 }
 
 .ai-studio-low-balance {
     margin-top: 10px;
     padding: 10px 12px;
-    border: 1px solid #fde68a;
-    border-radius: 12px;
+    border: 1px solid var(--warning-border);
+    border-radius: var(--radius-sm);
     display: flex;
     align-items: flex-start;
     gap: 8px;
-    color: #92400e;
-    background: #fffbeb;
+    color: var(--warning-text);
+    background: var(--warning-bg);
     font-size: 12px;
     line-height: 1.5;
 }
@@ -785,7 +799,7 @@
 .ai-generation-status {
     padding: 5px 9px;
     border-radius: 999px;
-    background: #f3f4f6;
+    background: var(--soft);
     font-size: 11px;
 }
 
@@ -816,7 +830,7 @@
     overflow: hidden;
     border: 1px solid var(--line);
     border-radius: 10px;
-    background: #f8fafc;
+    background: var(--soft);
 }
 
 .ai-generation-output > img,
@@ -910,7 +924,7 @@
 
     .ai-studio-settlement-amount {
         border-right: 0;
-        border-bottom: 1px solid #e7e1f5;
+        border-bottom: 1px solid var(--line);
     }
 
     .ai-studio-generate-button {

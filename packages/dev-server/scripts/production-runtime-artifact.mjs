@@ -1,6 +1,6 @@
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { chmod, cp, mkdir, mkdtemp, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -23,7 +23,7 @@ const scriptPath = fileURLToPath(import.meta.url);
 export const repositoryRoot = path.resolve(path.dirname(scriptPath), '../../..');
 export const runtimeArtifactsRoot = path.join(repositoryRoot, 'artifacts', 'production-runtime');
 
-export const RUNTIME_PACKAGE_ASSETS = Object.freeze({
+const KNOWN_RUNTIME_PACKAGE_ASSETS = {
     'asset-server-plugin': ['lib'],
     'catalog-management-plugin': ['dist'],
     'commerce-fulfillment-plugin': ['dist'],
@@ -34,6 +34,7 @@ export const RUNTIME_PACKAGE_ASSETS = Object.freeze({
     'dev-server': ['dist', 'email-templates'],
     'email-plugin': ['lib', 'templates', 'dev-mailbox.html'],
     'harden-plugin': ['lib'],
+    'icloud-relay-plugin': ['dist'],
     'image-generation-plugin': ['dist'],
     'next-admin': ['dist'],
     'operations-dashboard-plugin': ['dist'],
@@ -45,7 +46,38 @@ export const RUNTIME_PACKAGE_ASSETS = Object.freeze({
     'storefront-content-plugin': ['dist'],
     'storefront-review-plugin': ['dist'],
     'telemetry-plugin': ['dist'],
-});
+};
+
+function resolveRuntimePackageAssets() {
+    const assets = { ...KNOWN_RUNTIME_PACKAGE_ASSETS };
+    try {
+        const packagesDir = path.join(repositoryRoot, 'packages');
+        if (existsSync(packagesDir)) {
+            const entries = readdirSync(packagesDir, { withFileTypes: true });
+            for (const entry of entries) {
+                if (
+                    entry.isDirectory() &&
+                    (entry.name.endsWith('-plugin') || entry.name.endsWith('-server'))
+                ) {
+                    if (!(entry.name in assets)) {
+                        const distPath = path.join(packagesDir, entry.name, 'dist');
+                        const libPath = path.join(packagesDir, entry.name, 'lib');
+                        if (existsSync(distPath)) {
+                            assets[entry.name] = ['dist'];
+                        } else if (existsSync(libPath)) {
+                            assets[entry.name] = ['lib'];
+                        }
+                    }
+                }
+            }
+        }
+    } catch {
+        // fallback to known
+    }
+    return Object.freeze(assets);
+}
+
+export const RUNTIME_PACKAGE_ASSETS = resolveRuntimePackageAssets();
 
 const STOREFRONT_MEDIA_RUNTIME_FILES = Object.freeze(
     storefrontMediaManifest.map(entry => path.relative(repositoryRoot, entry.file).split(path.sep).join('/')),
@@ -89,6 +121,7 @@ export const REQUIRED_RUNTIME_FILES = Object.freeze([
     'packages/next-admin-plugin/dist/index.js',
     'packages/dev-server/email-templates/order-confirmation/body.hbs',
     'packages/content-translation-plugin/dist/index.js',
+    'packages/icloud-relay-plugin/dist/index.js',
     'packages/image-generation-plugin/dist/index.js',
     'packages/two-factor-dashboard-plugin/dist/index.js',
     'packages/telemetry-plugin/dist/index.js',

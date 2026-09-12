@@ -243,8 +243,13 @@ describe('CartPage guest cart', () => {
     });
 
     it('keeps the offers row visually separate from the recommendation module', () => {
-        expect(readStorefrontStylesheet()).toMatch(
-            /\.cart-page > \.product-section\s*\{[^}]*margin-top:\s*16px;/u,
+        const stylesheet = readStorefrontStylesheet(['./styles/visual-presets.css']);
+        expect(stylesheet).toMatch(/\.cart-page > \.product-section\s*\{[^}]*margin-top:\s*24px;/u);
+        expect(stylesheet).toMatch(/\.cart-page > \.coupon-row[\s\S]*?width:\s*calc\(100% - 20px\);/u);
+        expect(stylesheet).toMatch(/\.cart-page > \.coupon-row[\s\S]*?margin:\s*10px 10px 0;/u);
+        expect(stylesheet).toMatch(/\.cart-page > \.coupon-row[\s\S]*?border-radius:\s*var\(--radius-md\);/u);
+        expect(stylesheet).toMatch(
+            /html\[data-storefront-preset='modern-oriental'\][\s\S]*?\.cart-page > \.coupon-row[\s\S]*?border-color:\s*var\(--line\);/u,
         );
     });
 
