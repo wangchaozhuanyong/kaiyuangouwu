@@ -1562,7 +1562,7 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
         }
         try {
             const locked = await this.connection
-                .getRepository(ctx, entity)
+                .getRepository<CustomerCoupon | StoreCouponCampaignConfig>(ctx, entity)
                 .createQueryBuilder('row')
                 .setLock('pessimistic_write')
                 .where('row.id = :id', { id })
