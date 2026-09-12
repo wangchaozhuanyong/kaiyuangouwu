@@ -1,5 +1,5 @@
 export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
-// Fully complies with CSP directive script-src 'self'
+// Fully complies with CSP directive script-src 'self' (No inline event handlers)
 
 (function() {
     'use strict';
@@ -15,7 +15,10 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
 
     // Initialize on DOM load
     document.addEventListener('DOMContentLoaded', () => {
+        initNavBack();
         initInputListeners();
+        initActionButtons();
+        initEventDelegation();
         renderRecentQueries();
 
         // If URL has ?code=XXX or ?q=XXX, auto fill and query
@@ -31,6 +34,27 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
         }
     });
 
+    // ====== Navigation ======
+    function initNavBack() {
+        const backLink = document.getElementById('navBackLink');
+        if (!backLink) return;
+
+        backLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            // If user has in-site history, back instantly via BFCache without page reload
+            const hasInternalHistory = window.history.length > 1 &&
+                document.referrer &&
+                document.referrer.indexOf(window.location.host) !== -1;
+
+            if (hasInternalHistory) {
+                window.history.back();
+            } else {
+                window.location.href = backLink.getAttribute('href') || '/services';
+            }
+        });
+    }
+
+    // ====== Input Listeners ======
     function initInputListeners() {
         const input = document.getElementById('codeInput');
         if (!input) return;
@@ -38,13 +62,141 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
         input.addEventListener('input', () => {
             toggleClearButton();
             hideMsg();
+            const wrapper = document.getElementById('inputWrapper');
+            if (wrapper) wrapper.classList.remove('has-error');
         });
 
         input.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
+                e.preventDefault();
                 window.doQuery();
             }
         });
+    }
+
+    function initActionButtons() {
+        const queryBtn = document.getElementById('queryBtn');
+        if (queryBtn) {
+            queryBtn.addEventListener('click', () => window.doQuery());
+        }
+
+        const pasteBtn = document.getElementById('pasteBtn');
+        if (pasteBtn) {
+            pasteBtn.addEventListener('click', () => window.pasteFromClipboard());
+        }
+
+        const clearBtn = document.getElementById('clearBtn');
+        if (clearBtn) {
+            clearBtn.addEventListener('click', () => window.clearInput());
+        }
+
+        const backQueryBtn = document.getElementById('backQueryBtn');
+        if (backQueryBtn) {
+            backQueryBtn.addEventListener('click', () => window.goBack());
+        }
+
+        const refreshNowBtn = document.getElementById('refreshNowBtn');
+        if (refreshNowBtn) {
+            refreshNowBtn.addEventListener('click', () => window.refreshCurrentQuery());
+        }
+
+        const clearAllBtn = document.getElementById('clearAllHistoryBtn');
+        if (clearAllBtn) {
+            clearAllBtn.addEventListener('click', () => window.clearAllHistory());
+        }
+
+        const autoToggle = document.getElementById('autoRefreshToggle');
+        if (autoToggle) {
+            autoToggle.addEventListener('change', function() {
+                window.toggleAutoRefresh(this);
+            });
+        }
+
+        const filterSel = document.getElementById('filterSelect');
+        if (filterSel) {
+            filterSel.addEventListener('change', () => window.filterMails());
+        }
+    }
+
+    // ====== Event Delegation (CSP compliant, no inline onclick) ======
+    function initEventDelegation() {
+        // Message box action buttons delegation
+        const msgBox = document.getElementById('msgBox');
+        if (msgBox) {
+            msgBox.addEventListener('click', (e) => {
+                const target = e.target.closest('[data-action]');
+                if (!target) return;
+                const action = target.getAttribute('data-action');
+                if (action === 'paste') {
+                    window.pasteFromClipboard();
+                } else if (action === 'clear') {
+                    window.clearInput();
+                } else if (action === 'retry') {
+                    window.doQuery();
+                }
+            });
+        }
+
+        // Recent list delegation
+        const recentList = document.getElementById('recentList');
+        if (recentList) {
+            recentList.addEventListener('click', (e) => {
+                const delBtn = e.target.closest('.recent-del-btn');
+                if (delBtn) {
+                    e.stopPropagation();
+                    const code = delBtn.getAttribute('data-code');
+                    if (code) window.deleteRecentQuery(e, code);
+                    return;
+                }
+                const item = e.target.closest('.recent-item');
+                if (item) {
+                    const code = item.getAttribute('data-code');
+                    if (code) window.selectRecentQuery(code);
+                }
+            });
+        }
+
+        // Mail list delegation
+        const mailList = document.getElementById('mailList');
+        if (mailList) {
+            mailList.addEventListener('click', (e) => {
+                const copyBtn = e.target.closest('.otp-copy-btn');
+                if (copyBtn) {
+                    e.stopPropagation();
+                    const code = copyBtn.getAttribute('data-otp');
+                    if (code) window.copyOtpCode(e, code, copyBtn);
+                    return;
+                }
+                const toggleBtn = e.target.closest('.toggle-body-btn');
+                if (toggleBtn) {
+                    const cardId = toggleBtn.getAttribute('data-card-id');
+                    if (cardId) {
+                        const card = document.getElementById(cardId);
+                        if (card) {
+                            card.classList.toggle('open');
+                            const span = toggleBtn.querySelector('span');
+                            if (span) {
+                                span.textContent = card.classList.contains('open') ? '收起正文 ▲' : '查看邮件正文 ▼';
+                            }
+                        }
+                    }
+                    return;
+                }
+                const emptyRefresh = e.target.closest('#emptyRefreshBtn');
+                if (emptyRefresh) {
+                    window.refreshCurrentQuery();
+                    return;
+                }
+                const emptyAuto = e.target.closest('#emptyAutoRefreshBtn');
+                if (emptyAuto) {
+                    const toggle = document.getElementById('autoRefreshToggle');
+                    if (toggle && !toggle.checked) {
+                        toggle.checked = true;
+                        window.toggleAutoRefresh(toggle);
+                    }
+                }
+            });
+        }
     }
 
     function toggleClearButton() {
@@ -71,14 +223,29 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
             }
             const text = await navigator.clipboard.readText();
             if (!text || !text.trim()) {
-                showMsg('剪贴板为空，请先复制查询码', 'info');
+                showMsg('剪贴板中未找到文本内容，请先复制查询码', 'info', {
+                    title: 'ℹ️ 剪贴板为空'
+                });
                 return;
             }
             const cleaned = cleanCode(text);
+            if (!cleaned) {
+                showMsg('剪贴板内容中未识别到有效查询码', 'warning', {
+                    title: '⚠️ 未识别到查询码'
+                });
+                return;
+            }
             const input = document.getElementById('codeInput');
-            input.value = cleaned;
-            toggleClearButton();
-            showMsg('已成功粘贴查询码 ✓', 'success');
+            if (input) {
+                input.value = cleaned;
+                toggleClearButton();
+                hideMsg();
+                const wrapper = document.getElementById('inputWrapper');
+                if (wrapper) wrapper.classList.remove('has-error');
+            }
+            showMsg('已成功粘贴查询码 ✓', 'success', {
+                title: '✓ 粘贴成功'
+            });
             setTimeout(hideMsg, 2000);
         } catch (err) {
             fallbackPastePrompt();
@@ -89,8 +256,13 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
         const pasted = window.prompt('请在此粘贴您的查询码:');
         if (pasted) {
             const input = document.getElementById('codeInput');
-            input.value = cleanCode(pasted);
-            toggleClearButton();
+            if (input) {
+                input.value = cleanCode(pasted);
+                toggleClearButton();
+                hideMsg();
+                const wrapper = document.getElementById('inputWrapper');
+                if (wrapper) wrapper.classList.remove('has-error');
+            }
         }
     }
 
@@ -101,6 +273,8 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
             input.focus();
             toggleClearButton();
             hideMsg();
+            const wrapper = document.getElementById('inputWrapper');
+            if (wrapper) wrapper.classList.remove('has-error');
         }
     };
 
@@ -111,7 +285,30 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
         const code = cleanCode(rawCode);
 
         if (!code) {
-            showMsg('请输入专属查询码', 'error');
+            showMsg(
+                '请输入专属查询码。查询码通常由商家在商品发货卡密中提供（例如 BUY-XXXX-XXXX）。若已复制，可直接点击下方粘贴。',
+                'error',
+                {
+                    title: '⚠️ 请输入专属查询码',
+                    isHtml: false,
+                    actions: '<button type="button" class="msg-action-btn btn-secondary" data-action="paste">📋 从剪贴板粘贴</button>'
+                }
+            );
+            if (input) input.focus();
+            return;
+        }
+
+        if (code.length < 5) {
+            showMsg(
+                '您输入的查询码字符较短（仅 ' + code.length + ' 位）。完整查询码通常形如 BUY-A1B2-C3D4，请确认是否复制完整。',
+                'warning',
+                {
+                    title: '⚠️ 查询码格式似乎不完整',
+                    isHtml: false,
+                    actions: '<button type="button" class="msg-action-btn btn-secondary" data-action="paste">📋 重新从剪贴板粘贴</button>' +
+                             '<button type="button" class="msg-action-btn btn-secondary" data-action="clear">清空重输</button>'
+                }
+            );
             if (input) input.focus();
             return;
         }
@@ -122,7 +319,10 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
         const btn = document.getElementById('queryBtn');
         const btnText = document.getElementById('btnText');
         if (btn) btn.disabled = true;
-        if (btnText) btnText.textContent = '正在查询邮件...';
+        if (input) input.readOnly = true;
+        if (btnText) {
+            btnText.innerHTML = '<span class="btn-spinner"></span> 正在查询邮件...';
+        }
         hideMsg();
 
         try {
@@ -149,7 +349,36 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
             const data = json.data?.icloudQueryMails;
 
             if (!data || !data.success) {
-                showMsg(data?.message || '无效的查询码，请检查后重试', 'error');
+                const serverMsg = data?.message || '无效的查询码，请核对后重试';
+                const isExpired = serverMsg.includes('过期') || serverMsg.includes('失效');
+
+                if (isExpired) {
+                    showMsg(
+                        '该查询码的使用期限已截止，无法继续接收新邮件。如需继续使用，请联系客服续期或更换新账号。',
+                        'warning',
+                        {
+                            title: '⏳ 查询码使用期限已届满',
+                            isHtml: false,
+                            actions: '<a href="/support" class="msg-action-btn btn-secondary" target="_blank">联系客服续期</a>' +
+                                     '<button type="button" class="msg-action-btn btn-secondary" data-action="clear">查询其他卡密</button>'
+                        }
+                    );
+                } else {
+                    showMsg(
+                        '云端系统中未检索到查询码 <code>' + escapeHtml(code) + '</code>。<br>' +
+                        '① 若刚完成卡密购买，云端数据同步通常需 10~30 秒，建议稍等片刻后点击重新查询；<br>' +
+                        '② 请核对复制的卡密是否多选或漏选了字符；<br>' +
+                        '③ 如确认无误仍无法查询，请点击下方联系客服协助核验。',
+                        'error',
+                        {
+                            title: '❌ 未找到匹配的邮件查询码',
+                            isHtml: true,
+                            actions: '<button type="button" class="msg-action-btn btn-secondary" data-action="retry">🔄 重新查询</button>' +
+                                     '<button type="button" class="msg-action-btn btn-secondary" data-action="clear">清空重输</button>' +
+                                     '<a href="/support" class="msg-action-btn btn-link" target="_blank">联系在线客服 →</a>'
+                        }
+                    );
+                }
                 return;
             }
 
@@ -167,9 +396,18 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
 
             showResults(data);
         } catch (err) {
-            showMsg('网络连接异常，请稍后重试', 'error');
+            showMsg(
+                '无法连接到邮件服务接口，可能是网络波动或Wi-Fi断连。请检查网络状态后点击重试。',
+                'error',
+                {
+                    title: '📡 网络连接请求失败',
+                    isHtml: false,
+                    actions: '<button type="button" class="msg-action-btn btn-secondary" data-action="retry">🔄 立即重试</button>'
+                }
+            );
         } finally {
             if (btn) btn.disabled = false;
+            if (input) input.readOnly = false;
             if (btnText) btnText.textContent = '查 询 邮 件';
         }
     };
@@ -285,9 +523,12 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
             list.innerHTML =
                 '<div class="empty-mail-box">' +
                 '<div class="empty-icon">📭</div>' +
-                '<div class="empty-title">暂未收到邮件</div>' +
-                '<div class="empty-desc">系统正在持续监听新邮件，第三方发出验证码后通常在 5~30 秒内到达</div>' +
-                '<button type="button" class="refresh-now-btn" onclick="refreshCurrentQuery()" style="margin: 0 auto;">🔄 检查新邮件</button>' +
+                '<div class="empty-title">暂未收到任何邮件</div>' +
+                '<div class="empty-desc">虚拟邮箱已处于实时监听状态，第三方发送验证码后通常在 5 ~ 30 秒内送达</div>' +
+                '<div style="display:flex; justify-content:center; gap:10px; margin-top:16px; flex-wrap:wrap;">' +
+                '<button type="button" class="refresh-now-btn" id="emptyRefreshBtn" style="margin:0;">🔄 检查新邮件</button>' +
+                '<button type="button" class="empty-autorefresh-btn" id="emptyAutoRefreshBtn">⚡ 开启自动刷新</button>' +
+                '</div>' +
                 '</div>';
             return;
         }
@@ -302,7 +543,7 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
                     '    <span class="otp-title">🔑 提取到的验证码</span>' +
                     '    <span class="otp-code-text">' + escapeHtml(m.extractedCode) + '</span>' +
                     '  </div>' +
-                    '  <button type="button" class="otp-copy-btn" onclick="copyOtpCode(event, \\'' + escapeAttr(m.extractedCode) + '\\', this)">一键复制</button>' +
+                    '  <button type="button" class="otp-copy-btn" data-otp="' + escapeAttr(m.extractedCode) + '">一键复制</button>' +
                     '</div>';
             }
 
@@ -314,7 +555,7 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
                 '    <span>' + timeStr + '</span>' +
                 '  </div>' +
                 '  <div class="mail-subject">' + escapeHtml(m.subject || '(无主题)') + '</div>' +
-                '  <button type="button" class="toggle-body-btn" onclick="toggleMailCard(' + idx + ')">' +
+                '  <button type="button" class="toggle-body-btn" data-card-id="mailCard_' + idx + '">' +
                 '    <span>查看邮件正文 ▼</span>' +
                 '  </button>' +
                 '  <div class="mail-body-content" id="mailBody_' + idx + '">' +
@@ -323,13 +564,23 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
                 '</div>'
             );
         }).join('');
+
+        // Attach load listener to iframes to auto-adjust height without inline onload
+        list.querySelectorAll('iframe.mail-iframe').forEach(iframe => {
+            iframe.addEventListener('load', () => {
+                try {
+                    if (iframe.contentDocument && iframe.contentDocument.body) {
+                        iframe.style.height = (iframe.contentDocument.body.scrollHeight + 20) + 'px';
+                    }
+                } catch (e) {}
+            });
+        });
     }
 
     function renderBodyContent(mail) {
         if (mail.bodyHtml) {
             const doc = escapeAttr(mail.bodyHtml);
-            const resizeScript = 'this.style.height=this.contentDocument.body.scrollHeight+\\'px\\'';
-            return '<iframe srcdoc="' + doc + '" sandbox="allow-same-origin" onload="' + resizeScript + '"></iframe>';
+            return '<iframe class="mail-iframe" srcdoc="' + doc + '" sandbox="allow-same-origin"></iframe>';
         }
         return '<pre>' + escapeHtml(mail.bodyText || '(此邮件无正文内容)') + '</pre>';
     }
@@ -452,15 +703,14 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
             const timeAgo = formatTime(item.updatedAt);
             const alias = item.aliasEmail ? escapeHtml(item.aliasEmail) : '';
             return (
-                '<div class="recent-item" onclick="selectRecentQuery(\\'' + escapeAttr(item.code) + '\\')">' +
+                '<div class="recent-item" data-code="' + escapeAttr(item.code) + '">' +
                 '  <div class="recent-left">' +
                 '    <span class="recent-code">' + escapeHtml(item.code) + '</span>' +
                 (alias ? '    <span class="recent-alias">' + alias + '</span>' : '') +
                 '  </div>' +
                 '  <div class="recent-right">' +
                 '    <span class="recent-time">' + timeAgo + '</span>' +
-                '    <button type="button" class="recent-del-btn" title="删除记录" ' +
-                '            onclick="deleteRecentQuery(event, \\'' + escapeAttr(item.code) + '\\')">✕</button>' +
+                '    <button type="button" class="recent-del-btn" data-code="' + escapeAttr(item.code) + '" title="删除记录">✕</button>' +
                 '  </div>' +
                 '</div>'
             );
@@ -491,19 +741,53 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
         } catch (err) {}
     };
 
-    // ====== Utilities ======
-    function showMsg(text, type) {
+    // ====== Feedback Messages & Utilities ======
+    function triggerInputShake() {
+        const wrapper = document.getElementById('inputWrapper');
+        if (wrapper) {
+            wrapper.classList.remove('has-error');
+            void wrapper.offsetWidth; // trigger DOM reflow
+            wrapper.classList.add('has-error');
+        }
+    }
+
+    function showMsg(message, type, options) {
         const box = document.getElementById('msgBox');
         if (!box) return;
+
+        type = type || 'error';
+        options = options || {};
+        let title = options.title || '';
+        let body = typeof message === 'string' ? message : '';
+        let actions = options.actions || '';
+
+        if (type === 'error') {
+            triggerInputShake();
+            if (!title) title = '⚠️ 查询异常';
+        } else if (type === 'warning') {
+            triggerInputShake();
+            if (!title) title = '⏳ 注意事项';
+        } else if (type === 'success') {
+            if (!title) title = '✓ 操作成功';
+        } else if (type === 'info') {
+            if (!title) title = 'ℹ️ 提示信息';
+        }
+
+        let headerHtml = '<div class="msg-header">' + escapeHtml(title) + '</div>';
+        let bodyHtml = '<div class="msg-body">' + (options.isHtml ? body : escapeHtml(body)) + '</div>';
+        let actionsHtml = actions ? '<div class="msg-actions">' + actions + '</div>' : '';
+
         box.className = 'toast-msg ' + type;
-        box.textContent = text;
+        box.innerHTML = headerHtml + bodyHtml + actionsHtml;
+        box.style.display = 'flex';
     }
 
     function hideMsg() {
         const box = document.getElementById('msgBox');
         if (!box) return;
         box.className = 'toast-msg';
-        box.textContent = '';
+        box.innerHTML = '';
+        box.style.display = 'none';
     }
 
     function formatTime(isoOrTimestamp) {
