@@ -8,7 +8,7 @@ import { parseArgs } from 'node:util';
 import semver from 'semver';
 
 const SEVERITIES = Object.freeze(['low', 'moderate', 'high', 'critical']);
-const DEFAULT_AUDIT_RETRY_DELAYS_MS = Object.freeze([15_000, 60_000]);
+const DEFAULT_AUDIT_RETRY_DELAYS_MS = Object.freeze([15_000]);
 const RETRYABLE_AUDIT_FAILURE =
     /(?:Timeout|ConnectionClosed):\s*audit request failed|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|ECONNREFUSED|fetch failed|socket hang up/iu;
 const scriptPath = fileURLToPath(import.meta.url);
@@ -214,8 +214,8 @@ export async function runBunAudit(
         wait = delayMs => new Promise(resolve => setTimeout(resolve, delayMs)),
     } = {},
 ) {
-    if (!Number.isInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 5) {
-        throw new Error('bun audit maxAttempts must be an integer between 1 and 5');
+    if (!Number.isInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 2) {
+        throw new Error('bun audit maxAttempts must be an integer between 1 and 2');
     }
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
         const result = runCommand();

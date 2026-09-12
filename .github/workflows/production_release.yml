@@ -1,13 +1,11 @@
 name: Production Release
 
 on:
-    push:
-        branches:
-            - main
-        paths:
-            - 'packages/image-generation-plugin/skill/image-prompt-pro/**'
-            - 'packages/image-generation-plugin/src/prompt/prompt-rules.bundle.json'
-            - 'packages/image-generation-plugin/src/prompt/prompt-rules.bundle.ts'
+    workflow_call:
+        inputs:
+            target_sha:
+                required: true
+                type: string
     workflow_dispatch:
         inputs:
             target_sha:
@@ -105,11 +103,12 @@ jobs:
                     exit 1
                   }
 
-                  runs="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/production_release.yml/runs?branch=main&per_page=100")"
+                  runs="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?branch=main&per_page=100")"
                   prior="$(
                     jq -r --arg sha "$TARGET_SHA" --argjson current "$GITHUB_RUN_ID" '
                       .workflow_runs
-                      | map(select(.head_sha == $sha and .id < $current))
+                      | map(select(.head_sha == $sha and .id < $current and
+                          (.path == ".github/workflows/production_release.yml" or .path == ".github/workflows/deploy_storefront_fast_lane.yml")))
                       | sort_by(.id)
                       | .[0]
                       | if . then [.id, .status, (.conclusion // ""), .html_url] | @tsv else empty end
@@ -118,20 +117,20 @@ jobs:
                   if [[ -n "$prior" ]]; then
                     IFS=$'\t' read -r prior_id prior_status prior_conclusion prior_url <<< "$prior"
                     if [[ "$prior_status" == "completed" && "$prior_conclusion" != "success" ]]; then
-                      echo "Release ${TARGET_SHA} already has run ${prior_id}. Re-run failed jobs on that run: gh run rerun ${prior_id} --failed" >&2
+                      echo "Release ${TARGET_SHA} already has run ${prior_id}. Diagnose that run: node deploy/release-recovery.mjs report ${prior_id}. Only proven transient failures permit one failed-job retry" >&2
                     elif [[ "$prior_status" == "completed" ]]; then
-                      echo "Release ${TARGET_SHA} was already completed by ${prior_url}; a no-change full rerun is forbidden" >&2
+                      echo "Previous successful release: ${prior_url}; verify live component versions before deciding to deploy" >&2
                     else
                       echo "Release ${TARGET_SHA} is already ${prior_status} in ${prior_url}; wait for that fixed run" >&2
                     fi
-                    exit 1
+                    if [[ "$prior_conclusion" != success ]]; then exit 1; fi
                   fi
                   {
                     echo '## Locked production release'
                     echo
                     echo "- Target SHA: \`$TARGET_SHA\`"
                     echo "- Workflow run: \`$GITHUB_RUN_ID\`"
-                    echo '- Retry policy: use **Re-run failed jobs** on this run; do not dispatch the same SHA again.'
+                    echo '- Retry policy: diagnose this run with deploy/release-recovery.mjs; at most one proven transient failed-job retry. Do not dispatch the same failed SHA again.'
                   } >> "$GITHUB_STEP_SUMMARY"
 
     preflight:
@@ -146,11 +145,90 @@ jobs:
             contents: read
             id-token: write
 
+    route:
+        name: select affected release and reusable checks
+        needs: preflight
+        runs-on: ubuntu-24.04
+        permissions:
+            contents: read
+            actions: read
+        outputs:
+            lane: ${{ steps.route.outputs.lane }}
+            components: ${{ steps.route.outputs.components }}
+            ci_run_id: ${{ steps.evidence.outputs.run_id }}
+        steps:
+            - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+              with:
+                  ref: ${{ inputs.target_sha || github.sha }}
+                  fetch-depth: 0
+            - name: Compare all undeployed changes
+              id: route
+              env:
+                  BASE_SHA: ${{ needs.preflight.outputs.deployed_sha }}
+                  TARGET_SHA: ${{ inputs.target_sha || github.sha }}
+                  STOREFRONT_SHA: ${{ needs.preflight.outputs.storefront_sha }}
+                  ADMIN_SHA: ${{ needs.preflight.outputs.admin_sha }}
+                  MANAGED: ${{ inputs.media_keys != '' || inputs.auth_visuals || inputs.moyao_brand || inputs.homepage_carousel || inputs.damatong_storefront || (inputs.referral_posters != '' && inputs.referral_posters != 'none') }}
+              run: node deploy/release-route.mjs
+            - name: Find successful checks for the exact content and required scope
+              if: steps.route.outputs.lane != 'none'
+              id: evidence
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  BASE_SHA: ${{ needs.preflight.outputs.deployed_sha }}
+                  TARGET_SHA: ${{ inputs.target_sha || github.sha }}
+              run: node scripts/release-evidence.mjs find "$BASE_SHA" "$TARGET_SHA"
+
+    checks:
+        name: validate missing checks once
+        needs: [preflight, route]
+        if: needs.route.outputs.lane != 'none' && needs.route.outputs.ci_run_id == ''
+        uses: ./.github/workflows/build_and_test.yml
+        with:
+            base_sha: ${{ needs.preflight.outputs.deployed_sha }}
+            target_sha: ${{ inputs.target_sha || github.sha }}
+        permissions:
+            contents: read
+            actions: read
+
+    ready:
+        name: confirm applicable checks passed
+        needs: [route, checks]
+        if: always() && needs.route.result == 'success'
+        runs-on: ubuntu-24.04
+        permissions: {}
+        steps:
+            - name: Validate reused or newly completed checks
+              env:
+                  LANE: ${{ needs.route.outputs.lane }}
+                  REUSED: ${{ needs.route.outputs.ci_run_id }}
+                  CHECKS_RESULT: ${{ needs.checks.result }}
+              run: |
+                  [[ "$LANE" == none || -n "$REUSED" || "$CHECKS_RESULT" == success ]]
+                  echo "Release route: $LANE; reused CI run: ${REUSED:-none}; new checks: $CHECKS_RESULT" >> "$GITHUB_STEP_SUMMARY"
+
+    frontend:
+        name: deploy affected static apps
+        needs: [preflight, route, ready]
+        if: needs.route.outputs.lane == 'frontend'
+        uses: ./.github/workflows/deploy_frontends.yml
+        with:
+            base_sha: ${{ needs.preflight.outputs.deployed_sha }}
+            target_sha: ${{ inputs.target_sha || github.sha }}
+            components: ${{ needs.route.outputs.components }}
+            ci_run_id: ${{ needs.route.outputs.ci_run_id || github.run_id }}
+        permissions:
+            contents: read
+            actions: read
+            id-token: write
+
     build:
         name: build immutable runtime
-        needs: preflight
+        needs: [preflight, route, ready]
+        if: needs.route.outputs.lane == 'runtime'
         uses: ./.github/workflows/build_production_runtime.yml
         with:
+            ci_run_id: ${{ needs.route.outputs.ci_run_id || github.run_id }}
             base_sha: ${{ needs.preflight.outputs.deployed_sha }}
             target_sha: ${{ inputs.target_sha || github.sha }}
             media_keys: ${{ inputs.media_keys || '' }}
@@ -255,3 +333,20 @@ jobs:
                     echo '- Stores and Channel mappings: `deploy/production-storefronts.json`'
                     echo "- Automatic affected checks: \`$AFFECTED_CHECKS\`"
                   } >> "$GITHUB_STEP_SUMMARY"
+
+    recovery:
+        name: explain release failure and bounded recovery
+        needs: [lock, preflight, route, checks, ready, frontend, build, deploy, postflight, acceptance]
+        if: always() && contains(needs.*.result, 'failure')
+        runs-on: ubuntu-24.04
+        permissions:
+            contents: read
+            actions: read
+        steps:
+            - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+              with:
+                  ref: ${{ inputs.target_sha || github.sha }}
+            - name: Classify the failure without re-dispatching CI
+              env:
+                  GH_TOKEN: ${{ github.token }}
+              run: node deploy/release-recovery.mjs report

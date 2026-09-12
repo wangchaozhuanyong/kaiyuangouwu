@@ -1,6 +1,30 @@
 name: Build & Test
 on:
     workflow_dispatch:
+        inputs:
+            base_sha:
+                description: 'Optional comparison base; defaults to the preceding commit'
+                type: string
+                default: ''
+            target_sha:
+                description: 'Optional revision to check'
+                type: string
+                default: ''
+            full:
+                description: 'Explicitly run the complete repository checks'
+                type: boolean
+                default: false
+    workflow_call:
+        inputs:
+            base_sha:
+                required: true
+                type: string
+            target_sha:
+                required: true
+                type: string
+            full:
+                type: boolean
+                default: false
     pull_request:
         branches:
             - main
@@ -9,35 +33,53 @@ env:
     CI: true
 
 concurrency:
-    group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+    group: ci-${{ github.event.pull_request.number || github.run_id }}
     cancel-in-progress: true
 
-# NOTE: The Redis service definition is duplicated across the e2e-* jobs
-# because GitHub Actions does not support YAML anchors or service definition reuse.
+# Keep the Redis service definition consistent across the e2e-* jobs.
 # When updating the service (version bumps, env changes, health checks), update ALL four copies:
 # e2e-sqljs, e2e-mariadb, e2e-mysql, e2e-postgres.
 jobs:
     quality-gates:
         name: repository quality gates
+        needs: detect-changes
+        if: needs.detect-changes.outputs.lane != 'none' || inputs.full
         runs-on: ubuntu-latest
+        timeout-minutes: 15
         permissions:
             contents: read
         steps:
             - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
               with:
+                  ref: ${{ inputs.target_sha || github.event.pull_request.head.sha || github.sha }}
                   fetch-depth: 0
             - uses: ./.github/actions/setup
-            - name: Check repository policies
+            - name: Check migration registry
+              if: needs.detect-changes.outputs.migration == 'true'
+              run: bun run check:migration-registry
+            - name: Check architecture budgets
+              run: bun run check:architecture-debt
+            - name: Check managed publishing policy
+              if: needs.detect-changes.outputs.publishing == 'true'
+              run: bun run check:storefront-publishing
+            - name: Check CI and release controls
+              if: needs.detect-changes.outputs.controls == 'true'
               run: |
-                  bun run check:migration-registry
-                  bun run check:architecture-debt
-                  bun run check:storefront-publishing
                   bun run test:repository-checks
+                  node --test packages/dev-server/scripts/deployment-security.spec.mjs \
+                      packages/dev-server/scripts/production-runtime-artifact.spec.mjs \
+                      packages/dev-server/scripts/production-runtime-audit.spec.mjs \
+                      packages/dev-server/scripts/production-operations.spec.mjs \
+                      packages/dev-server/scripts/production-release-impact.spec.mjs \
+                      packages/dev-server/scripts/production-release-smoke.spec.mjs \
+                      packages/dev-server/scripts/production-release-retention.spec.mjs
+                  node --test scripts/ci-impact.spec.mjs scripts/release-evidence.spec.mjs deploy/frontend-release.spec.mjs deploy/release-recovery.spec.mjs
             - name: Build lint prerequisites
+              if: needs.detect-changes.outputs.has_packages == 'true'
               run: bun run build:core-common
             - name: Lint changed source without new warnings
               env:
-                  BASE_SHA: ${{ github.event.pull_request.base.sha }}
+                  BASE_SHA: ${{ inputs.base_sha || github.event.pull_request.base.sha }}
               run: |
                   base="$BASE_SHA"
                   if [ -z "$base" ]; then base="HEAD^"; fi
@@ -46,93 +88,80 @@ jobs:
                   bun run lint:check -- --base "$base"
     detect-changes:
         name: detect changes
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
+        timeout-minutes: 5
         permissions:
             contents: read
         outputs:
+            plan: ${{ steps.check.outputs.plan }}
+            has_packages: ${{ steps.check.outputs.has_packages }}
+            has_frontends: ${{ steps.check.outputs.has_frontends }}
+            frontends: ${{ steps.check.outputs.frontends }}
             packages: ${{ steps.check.outputs.packages }}
-            dashboard: ${{ steps.check.outputs.dashboard }}
+            full: ${{ steps.check.outputs.full }}
             dependencies: ${{ steps.check.outputs.dependencies }}
+            codegen: ${{ steps.check.outputs.codegen }}
             e2e: ${{ steps.check.outputs.e2e }}
+            dashboard: ${{ steps.check.outputs.dashboard }}
+            icloud: ${{ steps.check.outputs.icloud }}
+            translation: ${{ steps.check.outputs.translation }}
+            storefrontIntegration: ${{ steps.check.outputs.storefrontIntegration }}
+            controls: ${{ steps.check.outputs.controls }}
+            migration: ${{ steps.check.outputs.migration }}
+            publishing: ${{ steps.check.outputs.publishing }}
+            lane: ${{ steps.check.outputs.lane }}
         steps:
-            - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+            - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
               with:
+                  ref: ${{ inputs.target_sha || github.event.pull_request.head.sha || github.sha }}
                   fetch-depth: 0
-            - name: Detect changed paths
+            - name: Explain the affected checks
               id: check
+              env:
+                  BASE_SHA: ${{ inputs.base_sha || github.event.pull_request.base.sha || 'HEAD^' }}
+                  FULL: ${{ inputs.full || false }}
               run: |
-                  if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-                    echo "packages=true" >> "$GITHUB_OUTPUT"
-                    echo "dashboard=true" >> "$GITHUB_OUTPUT"
-                    echo "dependencies=true" >> "$GITHUB_OUTPUT"
-                    echo "e2e=true" >> "$GITHUB_OUTPUT"
-                    exit 0
-                  fi
-
-                  base="${{ github.event.pull_request.base.sha }}"
-                  if [ -z "$base" ]; then base="${{ github.event.before }}"; fi
-                  if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ]; then
-                    base="HEAD~1"
-                  fi
-                  changed=$(git diff --name-only "$(git merge-base "$base" HEAD)" HEAD)
-
-                  if echo "$changed" | grep -qE '^(packages/|scripts/(architecture-debt|check-migration-registry|codegen/icloud-admin-contract)|package\.json|bun\.lock|bunfig\.toml)'; then
-                    echo "packages=true" >> "$GITHUB_OUTPUT"
-                  else
-                    echo "packages=false" >> "$GITHUB_OUTPUT"
-                  fi
-
-                  # Dashboard app-only checks should not run for the independently tested
-                  # operations dashboard plugin. The general build and unit-test jobs still
-                  # cover plugin compilation and its package tests.
-                  if echo "$changed" | grep -qE '^packages/dashboard/'; then
-                    echo "dashboard=true" >> "$GITHUB_OUTPUT"
-                  else
-                    echo "dashboard=false" >> "$GITHUB_OUTPUT"
-                  fi
-
-                  if echo "$changed" | grep -qE '(^|/)package\.json$|^(bun\.lock|bunfig\.toml|patches/|\.github/actions/setup/action\.yml|packages/dev-server/scripts/production-runtime-audit(\.spec)?\.mjs)$'; then
-                    echo "dependencies=true" >> "$GITHUB_OUTPUT"
-                  else
-                    echo "dependencies=false" >> "$GITHUB_OUTPUT"
-                  fi
-
-                  # The four database suites exercise only the packages that declare an
-                  # e2e script plus their shared core/testing inputs. Frontend, media and
-                  # deployment-only changes keep their build and unit gates without paying
-                  # for four unrelated database environments.
-                  if echo "$changed" | grep -qE '^(\.github/(actions/setup/action\.yml|workflows/(build_and_test|codegen)\.yml)|e2e-common/|patches/|package\.json$|bun\.lock$|bunfig\.toml$|tsconfig[^/]*\.json$|packages/(asset-server-plugin|cli|common|core|graphiql-plugin|job-queue-plugin|testing)/)'; then
-                    echo "e2e=true" >> "$GITHUB_OUTPUT"
-                  else
-                    echo "e2e=false" >> "$GITHUB_OUTPUT"
-                  fi
+                  base="$(git merge-base "$BASE_SHA" HEAD)"
+                  args=(--base "$base" --target HEAD)
+                  if [[ "$FULL" == true ]]; then args+=(--full); fi
+                  node scripts/ci-impact.mjs "${args[@]}"
     dependency-audit:
         name: dependency audit
         needs: detect-changes
         if: needs.detect-changes.outputs.dependencies == 'true'
         runs-on: ubuntu-latest
+        timeout-minutes: 10
         permissions:
             contents: read
         steps:
             - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+              with:
+                  ref: ${{ inputs.target_sha || github.event.pull_request.head.sha || github.sha }}
             - uses: ./.github/actions/setup
             - name: Audit dependencies at the production threshold
               run: node packages/dev-server/scripts/production-runtime-audit.mjs --audit-level high
     codegen:
         needs: detect-changes
-        if: needs.detect-changes.outputs.packages == 'true'
+        if: needs.detect-changes.outputs.codegen == 'true'
         uses: ./.github/workflows/codegen.yml
+        with:
+            target_sha: ${{ inputs.target_sha || github.event.pull_request.head.sha || github.sha }}
     build:
-        name: build
+        name: build affected packages
+        env:
+            CI_PLAN: ${{ needs.detect-changes.outputs.plan }}
         needs: detect-changes
-        if: needs.detect-changes.outputs.packages == 'true'
+        if: needs.detect-changes.outputs.has_packages == 'true'
         runs-on: ubuntu-latest
+        timeout-minutes: 45
         permissions:
             contents: read
         steps:
             - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+              with:
+                  ref: ${{ inputs.target_sha || github.event.pull_request.head.sha || github.sha }}
             - uses: ./.github/actions/setup
-            - name: Build
+            - name: Build affected packages and preserve compiled output
               env:
                   NODE_ENV: production
                   TZ: Asia/Shanghai
@@ -140,7 +169,6 @@ jobs:
                   VENDURE_DASHBOARD_URL: https://admin.build.test/dashboard
                   VENDURE_STOREFRONT_URL: https://store.build.test
                   VENDURE_EMAIL_FROM: Build Check <build@build.test>
-                  VENDURE_GOOGLE_TRANSLATION_API_KEY: build-check-google-translation-api-key
                   VENDURE_IMPORT_ASSETS_DIR: /tmp/vendure-build-import
                   VENDURE_ASSET_UPLOAD_DIR: /tmp/vendure-build-assets
                   DIGITAL_DELIVERY_ROOT: /tmp/vendure-build-digital
@@ -150,10 +178,7 @@ jobs:
                   CUSTOMER_AVATAR_STORAGE_ROOT: /tmp/vendure-build-avatars
                   IMAGE_GENERATION_DOWNLOAD_SECRET: build-check-image-download-key-000000000000000000000000
                   IMAGE_GENERATION_MASTER_KEY: build-check-image-master-key-000000000000000000000000
-                  TWO_FACTOR_DASHBOARD_ENCRYPTION_KEY: build-check-dashboard-2fa-key-000000000000000000000000
-                  USDT_PAYMENT_PROOF_SECRET: build-check-usdt-proof-secret-000000000000000000000000
-                  USDT_WALLET_ENCRYPTION_KEY: build-check-usdt-wallet-key-000000000000000000000000
-                  USDT_REFUND_SENDER_ADDRESSES: TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t
+                  VENDURE_GOOGLE_TRANSLATION_API_KEY: build-check-google-translation-api-key
                   STORE_DOMAIN_CNAME_TARGET: stores.build.test
                   STORE_DOMAIN_ROUTING_MODE: require-domain
                   STORE_DOMAIN_BYPASS_HOSTS: ''
@@ -165,7 +190,11 @@ jobs:
                   SUPERADMIN_USERNAME: build-check-admin
                   SUPERADMIN_PASSWORD: build-check-admin-password
                   COOKIE_SECRET: build-check-cookie-secret-000000000000000000000000
+                  TWO_FACTOR_DASHBOARD_ENCRYPTION_KEY: build-check-dashboard-2fa-key-000000000000000000000000
                   ORDER_CONFIRMATION_TOKEN_SECRET: build-check-order-token-secret-000000000000000000000000
+                  USDT_PAYMENT_PROOF_SECRET: build-check-usdt-proof-secret-000000000000000000000000
+                  USDT_WALLET_ENCRYPTION_KEY: build-check-usdt-wallet-key-000000000000000000000000
+                  USDT_REFUND_SENDER_ADDRESSES: TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t
                   STOREFRONT_PROMOTION_GATE_ENABLED: 'false'
                   STOREFRONT_ENTRY_SECRET: build-check-entry-secret-000000000000000000000000
                   DB: postgres
@@ -173,28 +202,44 @@ jobs:
                   DB_PASSWORD: build-check-password
                   DB_NAME: build-check
                   DB_SYNCHRONIZE: 'false'
-              run: bun run build
+              run: |
+                  node scripts/ci-run.mjs build
+                  node deploy/build-artifact.mjs pack "$RUNNER_TEMP/compiled-artifact"
+            - name: Name compiled artifact
+              id: compiled
+              run: echo "tree=$(git rev-parse HEAD^{tree})" >> "$GITHUB_OUTPUT"
+            - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+              with:
+                  name: compiled-${{ steps.compiled.outputs.tree }}
+                  path: ${{ runner.temp }}/compiled-artifact
+                  if-no-files-found: error
+                  overwrite: true
+                  retention-days: 7
     unit-tests:
-        name: unit tests
-        needs: detect-changes
-        if: needs.detect-changes.outputs.packages == 'true'
+        name: affected unit tests
+        env:
+            CI_PLAN: ${{ needs.detect-changes.outputs.plan }}
+        needs: [detect-changes, build]
+        if: needs.detect-changes.outputs.has_packages == 'true'
         runs-on: ubuntu-latest
+        timeout-minutes: 45
         permissions:
             contents: read
+            actions: read
         strategy:
             fail-fast: false
             matrix:
-                node: ${{ github.event_name == 'pull_request' && fromJSON('["22.x"]') || fromJSON('["20.x", "22.x", "24.x"]') }}
+                node: ${{ inputs.full && fromJSON('["20.x", "22.x", "24.x"]') || fromJSON('["22.x"]') }}
         services:
             icloud-mysql:
-                image: mysql:8.4
+                image: ${{ needs.detect-changes.outputs.icloud == 'true' && 'mysql:8.4' || '' }}
                 env:
                     MYSQL_ROOT_PASSWORD: password
                 ports:
                     - 33552:3306
                 options: --health-cmd="mysqladmin ping --silent" --health-interval=10s --health-timeout=5s --health-retries=10
             translation-postgres:
-                image: postgres:16
+                image: ${{ needs.detect-changes.outputs.translation == 'true' && 'postgres:16' || '' }}
                 env:
                     POSTGRES_USER: postgres
                     POSTGRES_DB: translation_outbox_e2e
@@ -205,54 +250,76 @@ jobs:
                 options: --health-cmd=pg_isready --health-interval=10s --health-timeout=5s --health-retries=3
         steps:
             - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+              with:
+                  ref: ${{ inputs.target_sha || github.event.pull_request.head.sha || github.sha }}
             - uses: ./.github/actions/setup
               with:
                   node-version: ${{ matrix.node }}
-            - name: Build
-              run: bunx lerna run ci
+            - name: Restore this run's compiled output
+              id: compiled
+              env:
+                  GH_TOKEN: ${{ github.token }}
+              run: node deploy/build-artifact.mjs restore-tests "$RUNNER_TEMP/compiled-input" "$GITHUB_RUN_ID"
+            - name: Build missing test prerequisites
+              if: steps.compiled.outputs.restored != 'true'
+              run: node scripts/ci-run.mjs prepare-tests
             - name: Build local application plugins
+              if: needs.detect-changes.outputs.full == 'true' && steps.compiled.outputs.restored != 'true'
               run: bun run --cwd packages/dev-server build:local-plugins
             - name: Unit tests
-              run: bun run test
+              run: node scripts/ci-run.mjs test
+            - name: Validate affected database migrations
+              if: needs.detect-changes.outputs.migration == 'true'
+              run: bun run --cwd packages/dev-server test:migrations
             - name: iCloud plugin and dashboard extension types
+              if: needs.detect-changes.outputs.icloud == 'true'
               working-directory: packages/icloud-relay-plugin
               run: bun run check-types
             - name: iCloud admin HTTP and SQL.js regression
+              if: needs.detect-changes.outputs.icloud == 'true'
               working-directory: packages/icloud-relay-plugin
               env:
                   DB: sqljs
               run: bun run test:integration
             - name: iCloud admin MySQL concurrency regression
+              if: needs.detect-changes.outputs.icloud == 'true'
               working-directory: packages/icloud-relay-plugin
               env:
                   DB: mysql
                   E2E_MYSQL_PORT: '33552'
               run: bun run test:integration
             - name: Translation outbox PostgreSQL retry and process recovery
+              if: needs.detect-changes.outputs.translation == 'true'
               working-directory: packages/content-translation-plugin
               env:
                   TRANSLATION_TEST_POSTGRES: '1'
               run: bunx vitest run src/content-translation-retry.service.spec.ts src/provider-process.spec.ts
             - name: Translation outbox PostgreSQL migration
+              if: needs.detect-changes.outputs.translation == 'true'
               working-directory: packages/dev-server
               env:
                   TRANSLATION_TEST_POSTGRES: '1'
               run: bunx vitest run migrations/translation-outbox.spec.ts
             - name: Translation outbox Admin and Shop API acceptance
+              if: needs.detect-changes.outputs.translation == 'true'
               env:
                   PACKAGE: storefront-content-plugin
                   VENDURE_DISABLE_TELEMETRY: 'true'
               run: bunx vitest run --config e2e-common/vitest.config.mts packages/storefront-content-plugin/e2e/translation-outbox.e2e-spec.ts
             - name: Catalog import translation outbox acceptance
+              if: needs.detect-changes.outputs.translation == 'true'
               env:
                   PACKAGE: content-translation-plugin
                   VENDURE_DISABLE_TELEMETRY: 'true'
               run: bunx vitest run --config e2e-common/vitest.config.mts packages/content-translation-plugin/e2e/catalog-import-rate-limit.e2e-spec.ts --maxWorkers=1
             - name: Operations dashboard regression tests
+              if: needs.detect-changes.outputs.full == 'true' || contains(fromJSON(needs.detect-changes.outputs.packages), 'operations-dashboard-plugin')
               run: bun run --cwd packages/operations-dashboard-plugin test
             - name: Install browser for storefront configuration acceptance
+              if: needs.detect-changes.outputs.storefrontIntegration == 'true'
               run: bunx playwright install --with-deps chromium
             - name: Verify saved configuration across stores and real homepage
+              if: needs.detect-changes.outputs.storefrontIntegration == 'true'
               env:
                   PACKAGE: storefront-content-plugin
                   VENDURE_DISABLE_TELEMETRY: 'true'
@@ -263,10 +330,13 @@ jobs:
         needs: detect-changes
         if: needs.detect-changes.outputs.dashboard == 'true'
         runs-on: ubuntu-latest
+        timeout-minutes: 10
         permissions:
             contents: read
         steps:
             - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+              with:
+                  ref: ${{ inputs.target_sha || github.event.pull_request.head.sha || github.sha }}
             - uses: ./.github/actions/setup
             - name: Check i18n catalogs are in sync
               working-directory: packages/dashboard
@@ -284,6 +354,8 @@ jobs:
             contents: read
         steps:
             - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+              with:
+                  ref: ${{ inputs.target_sha || github.event.pull_request.head.sha || github.sha }}
             - uses: ./.github/actions/setup
             - name: Build core and common packages
               run: bun run build:core-common
@@ -312,7 +384,7 @@ jobs:
     dashboard-storybook-windows:
         name: dashboard Storybook Windows Chrome gate
         needs: detect-changes
-        if: needs.detect-changes.outputs.dashboard == 'true'
+        if: needs.detect-changes.outputs.dashboard == 'true' && inputs.full
         runs-on: windows-latest
         timeout-minutes: 25
         permissions:
@@ -321,6 +393,8 @@ jobs:
             STORYBOOK_BROWSER_CHANNEL: chrome
         steps:
             - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+              with:
+                  ref: ${{ inputs.target_sha || github.event.pull_request.head.sha || github.sha }}
             - uses: ./.github/actions/setup
             - name: Build core and common packages
               run: bun run build:core-common
@@ -332,6 +406,7 @@ jobs:
         needs: detect-changes
         if: needs.detect-changes.outputs.dashboard == 'true'
         runs-on: ubuntu-latest
+        timeout-minutes: 30
         permissions:
             contents: read
         strategy:
@@ -340,6 +415,8 @@ jobs:
                 shard: [1, 2, 3, 4]
         steps:
             - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+              with:
+                  ref: ${{ inputs.target_sha || github.event.pull_request.head.sha || github.sha }}
             - uses: ./.github/actions/setup
             - name: Build
               run: bunx lerna run ci --scope @vendure/testing --include-dependencies
@@ -368,12 +445,15 @@ jobs:
               working-directory: packages/dashboard
     e2e-sqljs:
         name: e2e (sqljs)
-        needs: detect-changes
+        needs: [detect-changes, build]
         if: needs.detect-changes.outputs.e2e == 'true'
         runs-on: ubuntu-latest
         timeout-minutes: 30
         permissions:
             contents: read
+            actions: read
+        env:
+            CI_PLAN: ${{ needs.detect-changes.outputs.plan }}
         services:
             redis:
                 image: redis:7.4.1
@@ -382,27 +462,38 @@ jobs:
         strategy:
             fail-fast: false
             matrix:
-                node: ${{ github.event_name == 'pull_request' && fromJSON('["22.x"]') || fromJSON('["20.x", "22.x", "24.x"]') }}
+                node: ${{ inputs.full && fromJSON('["20.x", "22.x", "24.x"]') || fromJSON('["22.x"]') }}
         steps:
             - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+              with:
+                  ref: ${{ inputs.target_sha || github.event.pull_request.head.sha || github.sha }}
             - uses: ./.github/actions/setup
               with:
                   node-version: ${{ matrix.node }}
-            - name: Build
-              run: bunx lerna run ci
+            - name: Restore compiled test prerequisites
+              id: compiled
+              env:
+                  GH_TOKEN: ${{ github.token }}
+              run: node deploy/build-artifact.mjs restore-tests "$RUNNER_TEMP/compiled-input" "$GITHUB_RUN_ID"
+            - name: Build missing prerequisites
+              if: steps.compiled.outputs.restored != 'true'
+              run: node scripts/ci-run.mjs prepare-tests
             - name: e2e tests
               env:
                   E2E_REDIS_PORT: ${{ job.services.redis.ports['6379'] }}
                   DB: sqljs
-              run: bun run e2e
+              run: node scripts/ci-run.mjs e2e
     e2e-mariadb:
         name: e2e (mariadb)
-        needs: detect-changes
+        needs: [detect-changes, build]
         if: needs.detect-changes.outputs.e2e == 'true'
         runs-on: ubuntu-latest
         timeout-minutes: 45
         permissions:
             contents: read
+            actions: read
+        env:
+            CI_PLAN: ${{ needs.detect-changes.outputs.plan }}
         services:
             mariadb:
                 # With v11.6.2+, a default was changed, (https://mariadb.com/kb/en/innodb-system-variables/#innodb_snapshot_isolation)
@@ -420,28 +511,39 @@ jobs:
         strategy:
             fail-fast: false
             matrix:
-                node: ${{ github.event_name == 'pull_request' && fromJSON('["22.x"]') || fromJSON('["20.x", "22.x", "24.x"]') }}
+                node: ${{ inputs.full && fromJSON('["20.x", "22.x", "24.x"]') || fromJSON('["22.x"]') }}
         steps:
             - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+              with:
+                  ref: ${{ inputs.target_sha || github.event.pull_request.head.sha || github.sha }}
             - uses: ./.github/actions/setup
               with:
                   node-version: ${{ matrix.node }}
-            - name: Build
-              run: bunx lerna run ci
+            - name: Restore compiled test prerequisites
+              id: compiled
+              env:
+                  GH_TOKEN: ${{ github.token }}
+              run: node deploy/build-artifact.mjs restore-tests "$RUNNER_TEMP/compiled-input" "$GITHUB_RUN_ID"
+            - name: Build missing prerequisites
+              if: steps.compiled.outputs.restored != 'true'
+              run: node scripts/ci-run.mjs prepare-tests
             - name: e2e tests
               env:
                   E2E_MARIADB_PORT: ${{ job.services.mariadb.ports['3306'] }}
                   E2E_REDIS_PORT: ${{ job.services.redis.ports['6379'] }}
                   DB: mariadb
-              run: bun run e2e
+              run: node scripts/ci-run.mjs e2e
     e2e-mysql:
         name: e2e (mysql)
-        needs: detect-changes
+        needs: [detect-changes, build]
         if: needs.detect-changes.outputs.e2e == 'true'
         runs-on: ubuntu-latest
         timeout-minutes: 45
         permissions:
             contents: read
+            actions: read
+        env:
+            CI_PLAN: ${{ needs.detect-changes.outputs.plan }}
         services:
             mysql:
                 image: vendure/mysql-8-native-auth:latest
@@ -457,28 +559,39 @@ jobs:
         strategy:
             fail-fast: false
             matrix:
-                node: ${{ github.event_name == 'pull_request' && fromJSON('["22.x"]') || fromJSON('["20.x", "22.x", "24.x"]') }}
+                node: ${{ inputs.full && fromJSON('["20.x", "22.x", "24.x"]') || fromJSON('["22.x"]') }}
         steps:
             - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+              with:
+                  ref: ${{ inputs.target_sha || github.event.pull_request.head.sha || github.sha }}
             - uses: ./.github/actions/setup
               with:
                   node-version: ${{ matrix.node }}
-            - name: Build
-              run: bunx lerna run ci
+            - name: Restore compiled test prerequisites
+              id: compiled
+              env:
+                  GH_TOKEN: ${{ github.token }}
+              run: node deploy/build-artifact.mjs restore-tests "$RUNNER_TEMP/compiled-input" "$GITHUB_RUN_ID"
+            - name: Build missing prerequisites
+              if: steps.compiled.outputs.restored != 'true'
+              run: node scripts/ci-run.mjs prepare-tests
             - name: e2e tests
               env:
                   E2E_MYSQL_PORT: ${{ job.services.mysql.ports['3306'] }}
                   E2E_REDIS_PORT: ${{ job.services.redis.ports['6379'] }}
                   DB: mysql
-              run: bun run e2e
+              run: node scripts/ci-run.mjs e2e
     e2e-postgres:
         name: e2e (postgres)
-        needs: detect-changes
+        needs: [detect-changes, build]
         if: needs.detect-changes.outputs.e2e == 'true'
         runs-on: ubuntu-latest
         timeout-minutes: 30
         permissions:
             contents: read
+            actions: read
+        env:
+            CI_PLAN: ${{ needs.detect-changes.outputs.plan }}
         services:
             postgres:
                 image: postgres:16
@@ -495,26 +608,73 @@ jobs:
         strategy:
             fail-fast: false
             matrix:
-                node: ${{ github.event_name == 'pull_request' && fromJSON('["22.x"]') || fromJSON('["20.x", "22.x", "24.x"]') }}
+                node: ${{ inputs.full && fromJSON('["20.x", "22.x", "24.x"]') || fromJSON('["22.x"]') }}
         steps:
             - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+              with:
+                  ref: ${{ inputs.target_sha || github.event.pull_request.head.sha || github.sha }}
             - uses: ./.github/actions/setup
               with:
                   node-version: ${{ matrix.node }}
-            - name: Build
-              run: bunx lerna run ci
+            - name: Restore compiled test prerequisites
+              id: compiled
+              env:
+                  GH_TOKEN: ${{ github.token }}
+              run: node deploy/build-artifact.mjs restore-tests "$RUNNER_TEMP/compiled-input" "$GITHUB_RUN_ID"
+            - name: Build missing prerequisites
+              if: steps.compiled.outputs.restored != 'true'
+              run: node scripts/ci-run.mjs prepare-tests
             - name: e2e tests
               env:
                   E2E_POSTGRES_PORT: ${{ job.services.postgres.ports['5432'] }}
                   E2E_REDIS_PORT: ${{ job.services.redis.ports['6379'] }}
                   DB: postgres
-              run: bun run e2e
+              run: node scripts/ci-run.mjs e2e
+    frontend:
+        name: frontend (${{ matrix.component }})
+        needs: detect-changes
+        if: needs.detect-changes.outputs.has_frontends == 'true' && needs.detect-changes.outputs.full != 'true'
+        runs-on: ubuntu-24.04
+        timeout-minutes: 15
+        permissions:
+            contents: read
+        strategy:
+            fail-fast: false
+            matrix:
+                component: ${{ fromJSON(needs.detect-changes.outputs.frontends) }}
+        env:
+            CI_PLAN: ${{ needs.detect-changes.outputs.plan }}
+            COMPONENT: ${{ matrix.component }}
+        steps:
+            - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+              with:
+                  ref: ${{ inputs.target_sha || github.event.pull_request.head.sha || github.sha }}
+            - uses: ./.github/actions/setup
+            - name: Check and build the affected frontend
+              env:
+                  NODE_ENV: production
+              run: node scripts/ci-run.mjs frontend "$COMPONENT"
+            - name: Package reusable frontend
+              env:
+                  NODE_ENV: production
+              id: artifact
+              run: node deploy/frontend-artifact.mjs pack "$COMPONENT" "$RUNNER_TEMP/frontend-artifact"
+            - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+              with:
+                  name: ${{ steps.artifact.outputs.name }}
+                  path: ${{ runner.temp }}/frontend-artifact
+                  if-no-files-found: error
+                  overwrite: true
+                  retention-days: 7
     all-passed:
         name: all-passed
         runs-on: ubuntu-latest
-        permissions: {}
+        timeout-minutes: 5
+        permissions:
+            contents: read
         if: always()
         needs:
+            - frontend
             - quality-gates
             - detect-changes
             - dependency-audit
@@ -531,3 +691,17 @@ jobs:
             - e2e-postgres
         steps:
             - run: exit ${{ (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')) && 1 || 0 }}
+            - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+              with:
+                  ref: ${{ inputs.target_sha || github.event.pull_request.head.sha || github.sha }}
+            - name: Record exact checked source and scope
+              env:
+                  CI_PLAN: ${{ needs.detect-changes.outputs.plan }}
+              run: node scripts/release-evidence.mjs write
+            - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+              with:
+                  name: ci-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+                  path: ci-evidence.json
+                  if-no-files-found: error
+                  overwrite: true
+                  retention-days: 14

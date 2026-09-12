@@ -272,19 +272,22 @@ void test('production console proxies the dashboard health check to Vendure', as
     assert.match(healthLocation.groups.body, /include proxy_params;/u);
 });
 
-void test('production console serves immutable dashboard assets from the active release', async () => {
+void test('production console serves both dashboard entry and assets through the independent pointer', async () => {
     const config = await readFile(path.join(repositoryRoot, 'deploy/nginx/damatong.conf'), 'utf8');
     const consoleServer = config.slice(config.indexOf('server_name console.moyaoai.com;'));
     const assetLocation = consoleServer.match(
-        /location \^~ \/dashboard\/assets\/ \{(?<body>[\s\S]*?)\n    \}/u,
-    );
-
-    assert.ok(assetLocation?.groups?.body);
-    assert.match(
-        assetLocation.groups.body,
-        /alias \/var\/www\/kaiyuangouwu-current\/packages\/next-admin\/dist\/assets\//u,
-    );
-    assert.doesNotMatch(assetLocation.groups.body, /proxy_pass/u);
+        /location ~ \^\/dashboard\/assets\/[^\n]+ \{(?<body>[\s\S]*?)\n    \}/u,
+    )?.groups?.body;
+    const entryLocation = consoleServer.match(/location \/dashboard\/ \{(?<body>[\s\S]*?)\n    \}/u)?.groups
+        ?.body;
+    assert.ok(assetLocation);
+    assert.ok(entryLocation);
+    for (const body of [assetLocation, entryLocation]) {
+        assert.match(body, /root \/var\/www\/kaiyuangouwu-next-admin-current;/u);
+        assert.doesNotMatch(body, /proxy_pass|kaiyuangouwu-current/u);
+    }
+    assert.match(assetLocation, /try_files \$uri =404;/u);
+    assert.match(entryLocation, /try_files \$uri \/index\.html =503;/u);
 });
 
 void test('legacy browser fallback files remain exact static routes beside the direct storefront', async () => {
@@ -644,8 +647,11 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.match(releaseWorkflow, /group: production-release/u);
     assert.match(releaseWorkflow, /cancel-in-progress: false/u);
     assert.match(releaseWorkflow, /lock exact revision and reject duplicate full runs/u);
-    assert.match(releaseWorkflow, /gh run rerun \$\{prior_id\} --failed/u);
-    assert.match(releaseWorkflow, /a no-change full rerun is forbidden/u);
+    assert.match(releaseWorkflow, /node deploy\/release-recovery\.mjs report \$\{prior_id\}/u);
+    assert.match(releaseWorkflow, /verify live component versions before deciding to deploy/u);
+    assert.match(releaseWorkflow, /node deploy\/release-route\.mjs/u);
+    assert.match(releaseWorkflow, /needs\.route\.outputs\.lane == 'frontend'/u);
+    assert.match(releaseWorkflow, /needs\.route\.outputs\.lane == 'runtime'/u);
     assert.match(releaseWorkflow, /operation: preflight-release/u);
     assert.match(releaseWorkflow, /operation: postflight-release/u);
     assert.match(releaseWorkflow, /base_sha: \$\{\{ needs\.preflight\.outputs\.deployed_sha \}\}/u);
