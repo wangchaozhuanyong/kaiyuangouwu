@@ -1,4 +1,5 @@
 import { Outlet } from '@tanstack/react-router';
+import { clsx } from 'clsx';
 import { WifiOff } from 'lucide-react';
 import { Suspense } from 'react';
 
@@ -87,8 +88,37 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
                     />
                 )}
                 {toast && (
-                    <div className="toast" role="status" aria-live="polite">
-                        {toast}
+                    <div
+                        className={clsx(
+                            'toast',
+                            typeof toast === 'object' && toast.type && `toast--${toast.type}`,
+                        )}
+                        role="status"
+                        aria-live="polite"
+                    >
+                        {typeof toast === 'string' ? (
+                            toast
+                        ) : (
+                            <div className="toast-inner">
+                                {toast.type === 'success' && <span className="toast-icon">✓</span>}
+                                {toast.type === 'error' && <span className="toast-icon">✕</span>}
+                                {toast.type === 'warning' && <span className="toast-icon">⚠</span>}
+                                {toast.type === 'info' && <span className="toast-icon">ℹ</span>}
+                                <div className="toast-content">
+                                    {toast.title && <div className="toast-title">{toast.title}</div>}
+                                    <div className="toast-message">{toast.message}</div>
+                                </div>
+                                {toast.action && (
+                                    <button
+                                        type="button"
+                                        className="toast-action"
+                                        onClick={toast.action.onClick}
+                                    >
+                                        {toast.action.label}
+                                    </button>
+                                )}
+                            </div>
+                        )}
                     </div>
                 )}
                 <StorefrontUpdatePrompt language={language} />

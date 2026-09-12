@@ -102,7 +102,7 @@ function TwoFactorEntryPlugin({ language, onNavigate }: Readonly<ClientPluginCom
     return (
         <button
             type="button"
-            className="category-client-plugin category-client-plugin-two-factor bg-[linear-gradient(135deg,#ecfdf5,#fff_55%,#ecfeff)]"
+            className="category-client-plugin category-client-plugin-two-factor"
             onClick={() => onNavigate({ name: 'two-factor' })}
         >
             <span className="category-client-plugin-icon" aria-hidden="true">
@@ -126,7 +126,7 @@ function MailQueryEntryPlugin({ language }: Readonly<ClientPluginComponentProps>
     return (
         <button
             type="button"
-            className="category-client-plugin category-client-plugin-mail-query bg-[linear-gradient(135deg,#eff6ff,#fff_55%,#f0fdf4)]"
+            className="category-client-plugin category-client-plugin-mail-query"
             onClick={() => {
                 window.location.href = '/mail-query';
             }}

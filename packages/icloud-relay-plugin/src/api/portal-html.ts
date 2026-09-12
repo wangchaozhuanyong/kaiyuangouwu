@@ -29,6 +29,59 @@ export const PORTAL_HTML = `<!DOCTYPE html>
             --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
             --shadow-md: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
         }
+        html[data-storefront-preset='modern-oriental'] {
+            --primary: #b33928;
+            --primary-hover: #9c2e1f;
+            --primary-light: #fcf4f2;
+            --primary-border: #f3d4ce;
+            --bg: #f5f2eb;
+            --card-bg: #fffdf8;
+            --text: #2c2523;
+            --text-secondary: #706763;
+            --text-muted: #9b918c;
+            --border: #e5dec9;
+            --border-hover: #d2c8af;
+        }
+        html[data-storefront-preset='modern-oriental'] .top-nav {
+            background: #fffdf8;
+            border-bottom-color: var(--border);
+        }
+        html[data-storefront-preset='modern-oriental'] .nav-back-link {
+            background: #ebe6dc;
+            color: var(--text-secondary);
+        }
+        html[data-storefront-preset='modern-oriental'] .nav-back-link:hover {
+            background: var(--primary-light);
+            color: var(--primary);
+        }
+        html[data-storefront-preset='modern-oriental'] .code-input {
+            background: #faf7f2;
+            border-color: var(--border);
+        }
+        html[data-storefront-preset='modern-oriental'] .code-input:focus {
+            background: #fffdf8;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3.5px rgba(179, 57, 40, 0.12);
+        }
+        html[data-storefront-preset='modern-oriental'] .clear-btn {
+            background: #e5dec9;
+            color: var(--text-secondary);
+        }
+        html[data-storefront-preset='modern-oriental'] .clear-btn:hover {
+            background: #d2c8af;
+            color: var(--text);
+        }
+        html[data-storefront-preset='modern-oriental'] .query-btn {
+            background: linear-gradient(135deg, #b33928 0%, #9c2e1f 100%);
+            box-shadow: 0 4px 12px rgba(179, 57, 40, 0.25);
+        }
+        html[data-storefront-preset='modern-oriental'] .query-btn:hover {
+            box-shadow: 0 6px 16px rgba(179, 57, 40, 0.35);
+        }
+        html[data-storefront-preset='modern-oriental'] .empty-autorefresh-btn {
+            background: #fffdf8;
+            border-color: var(--border);
+        }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
