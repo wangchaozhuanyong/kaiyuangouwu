@@ -7,6 +7,55 @@ import { fileURLToPath } from 'node:url';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 
+void test('reused CI skips do not skip deployment, and skipped deployment cannot pass the release', async () => {
+    const workflow = await readFile(
+        path.join(repositoryRoot, '.github/workflows/production_release.yml'),
+        'utf8',
+    );
+    const job = name => workflow.split(`\n    ${name}:\n`)[1]?.split(/\n    [a-z][a-z-]*:\n/u)[0];
+    for (const name of ['frontend', 'build', 'deploy', 'postflight', 'acceptance']) {
+        const condition = job(name)?.match(/^        if: (.+)$/mu)?.[1];
+        assert.match(condition ?? '', /always\(\) && !cancelled\(\)/u, name);
+        assert.match(condition ?? '', /needs\.[a-z]+\.result == 'success'/u, name);
+    }
+    const script = job('complete')
+        .split('              run: |\n')[1]
+        .split('\n')
+        .map(line => (line.startsWith('                  ') ? line.slice(18) : line))
+        .join('\n');
+    const environment = {
+        ...process.env,
+        RELEASE_LANE: 'runtime',
+        ROUTE_RESULT: 'success',
+        READY_RESULT: 'success',
+        FRONTEND_RESULT: 'skipped',
+        BUILD_RESULT: 'success',
+        DEPLOY_RESULT: 'success',
+        POSTFLIGHT_RESULT: 'success',
+        ACCEPTANCE_RESULT: 'success',
+    };
+    const run = patch =>
+        spawnSync('bash', ['-c', script], { env: { ...environment, ...patch }, encoding: 'utf8' });
+    assert.equal(run({}).status, 0);
+    for (const field of [
+        'ROUTE_RESULT',
+        'READY_RESULT',
+        'BUILD_RESULT',
+        'DEPLOY_RESULT',
+        'POSTFLIGHT_RESULT',
+        'ACCEPTANCE_RESULT',
+    ])
+        for (const result of ['skipped', 'failure', 'cancelled'])
+            assert.notEqual(run({ [field]: result }).status, 0, `${field}=${result}`);
+    assert.equal(
+        run({ RELEASE_LANE: 'frontend', FRONTEND_RESULT: 'success', BUILD_RESULT: 'skipped' }).status,
+        0,
+    );
+    assert.notEqual(run({ RELEASE_LANE: 'frontend' }).status, 0);
+    assert.equal(run({ RELEASE_LANE: 'none', BUILD_RESULT: 'skipped', DEPLOY_RESULT: 'skipped' }).status, 0);
+    assert.notEqual(run({ RELEASE_LANE: '' }).status, 0);
+});
+
 void test('candidate Nginx validation isolates every temp path and rejects live metadata changes', () => {
     const script = path.join(repositoryRoot, 'deploy/validate-nginx-candidate.py');
     const python = `
