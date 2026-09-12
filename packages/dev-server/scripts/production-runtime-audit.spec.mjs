@@ -361,10 +361,13 @@ void test('repository and production workflows use the fail-closed retrying audi
         repositoryWorkflow,
         /inputs\.full && fromJSON\('\["20\.x", "22\.x", "24\.x"\]'\) \|\| fromJSON\('\["22\.x"\]'\)/u,
     );
-    assert.equal(
-        [...repositoryWorkflow.matchAll(/if: needs\.detect-changes\.outputs\.e2e == 'true'/gu)].length,
-        4,
-    );
+    assert.doesNotMatch(repositoryWorkflow, /if: needs\.detect-changes\.outputs\.e2e == 'true'/u);
+    for (const database of ['mysql', 'sqljs', 'postgres', 'mariadb']) {
+        assert.ok(
+            repositoryWorkflow.includes(`e2e_${database}: \${{ steps.check.outputs.e2e_${database} }}`),
+        );
+        assert.ok(repositoryWorkflow.includes(`if: needs.detect-changes.outputs.e2e_${database} == 'true'`));
+    }
     assert.match(
         productionWorkflow,
         /node packages\/dev-server\/scripts\/production-runtime-audit\.mjs[\s\\]+--audit-level high[\s\\]+--evidence-output/u,

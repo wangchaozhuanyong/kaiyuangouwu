@@ -1,13 +1,29 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
+import {
+    checkCovered,
+    checkFingerprint,
+    checkRequirements,
+    jobRecipe,
+    missingPlan,
+} from './ci-check-inputs.mjs';
+import { classifyChanges } from './ci-impact.mjs';
 import { packageCommands } from './ci-run.mjs';
-import { coversChanges, findEvidence, hasTrustedPullRequest, isTrustedRun } from './release-evidence.mjs';
+import {
+    coversChanges,
+    findEvidence,
+    findInputCoverage,
+    hasTrustedPullRequest,
+    isTrustedRun,
+    validateExecutedChecks,
+} from './release-evidence.mjs';
 
 test('a previous PR does not cover additional undeployed backend changes', () => {
     const css = 'packages/storefront/src/style.css';
@@ -153,4 +169,258 @@ test('frontend runner uses the test environment and stops before build when rela
     writeFileSync(log, '');
     assert.notEqual(run(true).status, 0);
     assert.equal(readFileSync(log, 'utf8').trim().split('\n').length, 1);
+});
+
+// Simulate the release that exposed repeated full runs: business checks pass, then only backup/CI controls change.
+const inputInventory = [
+    { directory: 'common', name: '@vendure/common' },
+    {
+        directory: 'core',
+        name: '@vendure/core',
+        dependencies: { '@vendure/common': '3' },
+        scripts: { e2e: 'test' },
+    },
+    { directory: 'storefront', name: '@vendure/storefront' },
+];
+const sourceSha = 'a'.repeat(40);
+const targetSha = 'b'.repeat(40);
+const workflow = readFileSync(new URL('../.github/workflows/build_and_test.yml', import.meta.url), 'utf8');
+function inputFixture(changes = {}) {
+    const source = {
+        'package.json': '{}',
+        'bun.lock': 'lock',
+        'packages/core/src/service.ts': 'business',
+        'packages/common/src/index.ts': 'shared',
+        'packages/storefront/src/a.ts': 'a',
+        'packages/storefront/src/b.ts': 'b',
+        'scripts/ci-impact.mjs': 'export function packageInventory() {\nreturn [];\n}',
+        'scripts/ci-run.mjs': 'runner',
+        'scripts/lint-check.mjs': 'lint',
+        'deploy/systemd/backup.py': 'backup-v1',
+        '.github/workflows/build_and_test.yml': workflow,
+    };
+    const target = { ...source, ...changes };
+    const data = { [sourceSha]: source, [targetSha]: target };
+    return {
+        source,
+        target,
+        reader: {
+            entries: ref =>
+                Object.entries(data[ref])
+                    .filter(([, text]) => text !== null)
+                    .sort(([a], [b]) => a.localeCompare(b))
+                    .map(([path, text]) => ({
+                        path,
+                        metadata: createHash('sha256').update(text).digest('hex'),
+                    })),
+            text: (ref, path) => data[ref][path],
+        },
+    };
+}
+function coverageFixture({ targetProof = true, changes, mutateRun, mutateProof, expired = false } = {}) {
+    const changedFiles = ['packages/core/src/service.ts', 'deploy/systemd/backup.py'];
+    const plan = classifyChanges(changedFiles, inputInventory);
+    const sourcePlan = classifyChanges(changedFiles, inputInventory, { full: true });
+    const narrow = classifyChanges(['deploy/systemd/backup.py'], inputInventory);
+    const runs = [
+        { id: 2, head_sha: targetSha },
+        { id: 1, head_sha: sourceSha },
+    ]
+        .filter(run => targetProof || run.id !== 2)
+        .map(run => ({
+            ...run,
+            status: 'completed',
+            conclusion: 'success',
+            event: 'workflow_dispatch',
+            path: '.github/workflows/build_and_test.yml',
+            head_repository: { full_name: 'owner/repo' },
+        }));
+    if (mutateRun) runs.forEach(mutateRun);
+    const proofs = {
+        1: { ...sourcePlan, version: 1, sourceSha, tree: 'source-tree', runId: 1 },
+        2: { ...narrow, version: 2, sourceSha: targetSha, tree: 'target-tree', runId: 2 },
+    };
+    if (mutateProof) Object.values(proofs).forEach(mutateProof);
+    const api = endpoint => {
+        if (endpoint.endsWith('/actions/runs?status=success&per_page=100')) return { workflow_runs: runs };
+        if (endpoint.includes('/git/commits/'))
+            return { tree: { sha: endpoint.endsWith(targetSha) ? 'target-tree' : 'source-tree' } };
+        const artifacts = /\/actions\/runs\/(\d+)\/artifacts/u.exec(endpoint);
+        if (artifacts)
+            return { artifacts: [{ id: +artifacts[1], expired, name: `ci-evidence-${artifacts[1]}-1` }] };
+        assert.fail(endpoint);
+    };
+    return {
+        repository: 'owner/repo',
+        targetSha,
+        plan,
+        inventory: inputInventory,
+        api,
+        proofReader: (_, id) => proofs[id],
+        reader: inputFixture({ 'deploy/systemd/backup.py': 'backup-v2', ...changes }).reader,
+    };
+}
+test('backup-only follow-up combines narrow target proof with older full business proof', async () => {
+    const result = await findInputCoverage(coverageFixture());
+    assert.equal(result.missing.length, 0);
+    assert.equal(result.anchor.runId, 2);
+    assert.equal(result.reused.find(item => item.check === 'backend:core').runId, 1);
+    assert.equal(result.reused.find(item => item.check === 'controls').runId, 2);
+});
+test('without target proof only missing control and file checks run; business and MySQL are reused', async () => {
+    const fixture = coverageFixture({ targetProof: false });
+    const result = await findInputCoverage(fixture);
+    const execution = missingPlan(fixture.plan, result.missing);
+    assert.deepEqual(execution.packages, []);
+    assert.deepEqual(execution.databases, []);
+    assert.equal(execution.full, false);
+    assert.equal(execution.controls, true);
+    assert.deepEqual(execution.lintFiles, ['deploy/systemd/backup.py']);
+    assert.equal(result.anchor, undefined);
+});
+test('shared dependency, lockfile, test commands, global environment and deleted source invalidate affected checks', () => {
+    const check = checkRequirements(
+        classifyChanges(['packages/core/src/service.ts'], inputInventory),
+        inputInventory,
+    ).find(item => item.id === 'backend:core');
+    for (const changes of [
+        { 'packages/common/src/index.ts': 'shared-v2' },
+        { 'bun.lock': 'new-lock' },
+        { 'scripts/ci-run.mjs': 'new-runner' },
+        { 'packages/core/src/service.ts': null },
+        { '.github/workflows/build_and_test.yml': workflow.replace('CI: true', 'CI: false') },
+        {
+            '.github/workflows/build_and_test.yml': workflow.replace(
+                'node scripts/ci-run.mjs build',
+                'node scripts/ci-run.mjs test',
+            ),
+        },
+    ]) {
+        const { reader } = inputFixture(changes);
+        assert.notEqual(
+            checkFingerprint(sourceSha, check, inputInventory, reader),
+            checkFingerprint(targetSha, check, inputInventory, reader),
+            JSON.stringify(Object.keys(changes)),
+        );
+    }
+});
+test('routing and job conditions alone do not invalidate unchanged business checks', () => {
+    const routed = workflow.replace("if: needs.detect-changes.outputs.e2e_mysql == 'true'", 'if: false');
+    assert.equal(jobRecipe(workflow, 'e2e-mysql'), jobRecipe(routed, 'e2e-mysql'));
+    const { reader } = inputFixture({ '.github/workflows/build_and_test.yml': routed });
+    const check = checkRequirements(
+        classifyChanges(['packages/core/src/service.ts'], inputInventory),
+        inputInventory,
+    )[0];
+    assert.equal(
+        checkFingerprint(sourceSha, check, inputInventory, reader),
+        checkFingerprint(targetSha, check, inputInventory, reader),
+    );
+});
+test('failed, foreign, expired and mismatched proof cannot supply reused checks', async () => {
+    for (const options of [
+        {
+            mutateRun: run => {
+                run.conclusion = 'failure';
+            },
+        },
+        {
+            mutateRun: run => {
+                run.head_repository.full_name = 'fork/repo';
+            },
+        },
+        { expired: true },
+        {
+            mutateProof: proof => {
+                proof.sourceSha = 'c'.repeat(40);
+            },
+        },
+        {
+            mutateProof: proof => {
+                proof.runId = 99;
+            },
+        },
+        {
+            mutateProof: proof => {
+                proof.tree = 'wrong';
+            },
+        },
+    ]) {
+        const result = await findInputCoverage(coverageFixture(options));
+        assert.ok(result.missing.some(item => item.id === 'backend:core'));
+        assert.equal(result.anchor, undefined);
+    }
+});
+test('related frontend tests do not claim coverage of another undeployed file or a whole-package request', () => {
+    const plan = classifyChanges(['packages/storefront/src/a.ts'], inputInventory);
+    const proof = { ...plan, version: 2 };
+    const other = checkRequirements(
+        classifyChanges(['packages/storefront/src/b.ts'], inputInventory),
+        inputInventory,
+    )[0];
+    assert.equal(checkCovered(proof, other, inputInventory), false);
+    assert.equal(
+        checkCovered(proof, { ...other, files: plan.files, wholePackage: true }, inputInventory),
+        false,
+    );
+    assert.equal(checkCovered({ ...proof, full: true }, other, inputInventory), true);
+});
+test('the evidence writer rejects a skipped required job and never calls reused checks freshly passed', () => {
+    const plan = classifyChanges(['packages/core/src/service.ts'], inputInventory);
+    const results = {
+        build: { result: 'success' },
+        'unit-tests': { result: 'success' },
+        'e2e-mysql': { result: 'skipped' },
+        'quality-gates': { result: 'success' },
+    };
+    assert.throws(() => validateExecutedChecks(plan, inputInventory, results), /e2e-mysql did not pass/u);
+    results['e2e-mysql'].result = 'success';
+    assert.doesNotThrow(() => validateExecutedChecks(plan, inputInventory, results));
+    const reused = missingPlan(plan, []);
+    assert.deepEqual(checkRequirements(reused, inputInventory), []);
+    assert.doesNotThrow(() => validateExecutedChecks(reused, inputInventory, {}));
+});
+
+test('historical input mismatches are rejected locally without per-run PR or artifact API lookups', async () => {
+    const fixture = coverageFixture({
+        targetProof: false,
+        changes: { 'packages/core/src/service.ts': 'business-v2' },
+        mutateRun: run => {
+            run.event = 'pull_request';
+            run.pull_requests = [{ number: 1 }];
+        },
+    });
+    fixture.reader.tree = () => 'source-tree';
+    const api = fixture.api;
+    const calls = [];
+    fixture.api = endpoint => {
+        calls.push(endpoint);
+        return api(endpoint);
+    };
+    const result = await findInputCoverage(fixture);
+    assert.equal(result.reused.length, 0);
+    assert.equal(calls.length, 2);
+    assert.ok(calls.every(endpoint => !endpoint.includes('/pulls/') && !endpoint.includes('/artifacts')));
+});
+
+test('deployment control test changes do not invalidate dev-server business checks', () => {
+    const { reader } = inputFixture({
+        'packages/dev-server/scripts/production-runtime-audit.spec.mjs': 'updated scope assertions',
+    });
+    const check = {
+        id: 'backend:dev-server',
+        kind: 'backend',
+        packages: ['dev-server'],
+        databases: [],
+        flags: [],
+    };
+    assert.equal(
+        checkFingerprint(sourceSha, check, inputInventory, reader),
+        checkFingerprint(targetSha, check, inputInventory, reader),
+    );
+    const controls = { id: 'controls', kind: 'controls', packages: [] };
+    assert.notEqual(
+        checkFingerprint(sourceSha, controls, inputInventory, reader),
+        checkFingerprint(targetSha, controls, inputInventory, reader),
+    );
 });
