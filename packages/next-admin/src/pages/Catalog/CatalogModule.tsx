@@ -51,6 +51,7 @@ import {
     isDefaultChannelCode,
 } from '../../utils/channel-display';
 import { collectionHierarchySummary } from '../../utils/commerce-mode';
+import { AdminImage } from '../../utils/admin-image';
 import { toUserFacingError } from '../../utils/user-facing-error';
 
 interface ProductVariantItem {
@@ -663,15 +664,13 @@ export function CatalogModule() {
                                                         className="w-10 h-10 bg-slate-100 rounded-lg border border-slate-200 flex items-center justify-center overflow-hidden shrink-0 cursor-pointer shadow-2xs"
                                                         aria-label={`编辑商品：${product.name}`}
                                                     >
-                                                        {product.featuredAsset?.preview ? (
-                                                            <img
-                                                                src={product.featuredAsset.preview}
-                                                                alt={product.name}
-                                                                className="w-full h-full object-cover"
-                                                            />
-                                                        ) : (
-                                                            <ImageIcon className="w-4 h-4 text-slate-300" />
-                                                        )}
+                                                        <AdminImage
+                                                            src={product.featuredAsset?.preview}
+                                                            alt={product.name}
+                                                            className="w-full h-full object-cover"
+                                                            thumbnailOptions={{ width: 160, height: 160, preset: 'storefront-thumbnail-160' }}
+                                                            fallbackIcon={<ImageIcon className="w-4 h-4 text-slate-300" />}
+                                                        />
                                                     </button>
                                                 </td>
 

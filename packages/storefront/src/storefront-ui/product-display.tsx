@@ -327,6 +327,19 @@ export function SafeImage(props: SafeImageProps) {
     return <SafeImageSource key={sourceIdentity} {...props} />;
 }
 
+const decodedImageUrls = new Set<string>();
+
+export function isImageAlreadyDecoded(src?: string | null, fallbackSrc?: string | null): boolean {
+    if (typeof window === 'undefined') return false;
+    if (src && decodedImageUrls.has(src)) return true;
+    if (fallbackSrc && decodedImageUrls.has(fallbackSrc)) return true;
+    return false;
+}
+
+export function markImageDecoded(url?: string | null): void {
+    if (url) decodedImageUrls.add(url);
+}
+
 function SafeImageSource({
     src,
     fallbackSrc,
@@ -340,13 +353,14 @@ function SafeImageSource({
     const [currentSrc, setCurrentSrc] = useState(src);
     const [failed, setFailed] = useState(false);
     const [useResponsiveSource, setUseResponsiveSource] = useState(true);
-    const [loaded, setLoaded] = useState(false);
-    const imageRef = useRef<HTMLImageElement>(null);
-
     const responsiveSource = useMemo(
         () => (imageKind && useResponsiveSource ? responsiveImageSources(currentSrc, imageKind) : null),
         [currentSrc, imageKind, useResponsiveSource],
     );
+    const effectiveSrc = responsiveSource?.fallbackSrc ?? currentSrc;
+    const [loaded, setLoaded] = useState(() => isImageAlreadyDecoded(effectiveSrc, src));
+    const imageRef = useRef<HTMLImageElement>(null);
+
     const effectivePlaceholderSrc =
         (placeholderSrc && imageKind
             ? (storefrontPlaceholderUrl(placeholderSrc, imageKind) ?? placeholderSrc)
@@ -355,18 +369,28 @@ function SafeImageSource({
 
     useEffect(() => {
         const imageElement = imageRef.current;
-        if (!imageElement?.complete || imageElement.naturalWidth < 1) return;
+        if (!imageElement) return;
+        if (imageElement.complete && imageElement.naturalWidth > 0) {
+            markImageDecoded(effectiveSrc);
+            setLoaded(true);
+            return;
+        }
         let cancelled = false;
-        void imageElement
-            .decode()
-            .catch(() => undefined)
-            .then(() => {
-                if (!cancelled && imageRef.current === imageElement) setLoaded(true);
-            });
+        if (typeof imageElement.decode === 'function') {
+            void imageElement
+                .decode()
+                .catch(() => undefined)
+                .then(() => {
+                    if (!cancelled && imageRef.current === imageElement) {
+                        markImageDecoded(effectiveSrc);
+                        setLoaded(true);
+                    }
+                });
+        }
         return () => {
             cancelled = true;
         };
-    }, [currentSrc, responsiveSource]);
+    }, [effectiveSrc, responsiveSource]);
 
     if (failed) {
         return (
@@ -385,7 +409,7 @@ function SafeImageSource({
         <img
             {...imageProps}
             ref={imageRef}
-            src={responsiveSource?.fallbackSrc ?? currentSrc}
+            src={effectiveSrc}
             srcSet={responsiveSource?.fallbackSrcSet ?? imageProps.srcSet}
             sizes={imageProps.sizes ?? responsiveSource?.sizes}
             width={imageProps.width ?? responsiveSource?.width}
@@ -395,6 +419,7 @@ function SafeImageSource({
             alt={alt}
             onLoad={event => {
                 const imageElement = event.currentTarget;
+                markImageDecoded(effectiveSrc);
                 void imageElement
                     .decode()
                     .catch(() => undefined)

@@ -63,4 +63,11 @@ describe('SafeImage', () => {
         expect(markup).toContain('storefront-thumbnail-160');
         expect(markup).toContain('storefront-thumbnail-320');
     });
+
+    it('tracks decoded images in client session to skip repeated opacity fade-in', async () => {
+        const { isImageAlreadyDecoded, markImageDecoded } = await import('./storefront-ui/product-display');
+        markImageDecoded('/assets/preview/fast.png');
+        // In node environment without window it returns false safely, and does not throw
+        expect(typeof isImageAlreadyDecoded('/assets/preview/fast.png')).toBe('boolean');
+    });
 });

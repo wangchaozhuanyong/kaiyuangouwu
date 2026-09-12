@@ -42,6 +42,7 @@ import {
 import { GET_ASSETS } from '../../graphql/catalog.graphql';
 import { usePageSize } from '../../hooks/use-page-size';
 import { copyAdminText } from '../../utils/admin-clipboard';
+import { AdminImage } from '../../utils/admin-image';
 import { toUserFacingError } from '../../utils/user-facing-error';
 
 interface AssetItem {
@@ -558,10 +559,11 @@ export function AssetsModule() {
                                     >
                                         <div className="relative flex aspect-square items-center justify-center overflow-hidden bg-slate-100">
                                             {asset.type === 'IMAGE' ? (
-                                                <img
+                                                <AdminImage
                                                     src={asset.preview}
                                                     alt={asset.name}
                                                     className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                                                    thumbnailOptions={{ width: 240, height: 240, preset: 'storefront-card-square-320' }}
                                                 />
                                             ) : asset.type === 'VIDEO' ? (
                                                 <Video className="h-9 w-9 text-slate-400" />

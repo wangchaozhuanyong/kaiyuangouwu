@@ -166,7 +166,45 @@ const authLink = setContext((_, { headers }) => {
 
 export const client = new ApolloClient({
     link: ApolloLink.from([authLink, adminMutationFeedbackLink, sensitiveActionPasswordLink, httpLink]),
-    cache: new InMemoryCache({ possibleTypes: CUSTOM_FIELD_POSSIBLE_TYPES }),
+    cache: new InMemoryCache({
+        possibleTypes: CUSTOM_FIELD_POSSIBLE_TYPES,
+        typePolicies: {
+            Query: {
+                fields: {
+                    products: {
+                        keyArgs: ['options', ['filter', 'sort']],
+                    },
+                    orders: {
+                        keyArgs: ['options', ['filter', 'sort']],
+                    },
+                    assets: {
+                        keyArgs: ['options', ['filter', 'sort']],
+                    },
+                    collections: {
+                        keyArgs: ['options', ['filter', 'sort']],
+                    },
+                },
+            },
+            Product: {
+                keyFields: ['id'],
+            },
+            Order: {
+                keyFields: ['id'],
+            },
+            Asset: {
+                keyFields: ['id'],
+            },
+            Collection: {
+                keyFields: ['id'],
+            },
+            Administrator: {
+                keyFields: ['id'],
+            },
+            Customer: {
+                keyFields: ['id'],
+            },
+        },
+    }),
 });
 
 const LOGOUT_MUTATION = gql`

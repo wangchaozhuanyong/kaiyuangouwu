@@ -5,7 +5,6 @@
 @import './styles/account-security.css';
 @import './styles/logistics.css';
 @import './styles/auth-flow.css';
-@import './styles/auth-overrides.css';
 @import './styles/brand-shell.css';
 @import './styles/account-catalog-surfaces.css';
 :root {
