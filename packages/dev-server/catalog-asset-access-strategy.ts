@@ -1,10 +1,27 @@
-import type { GetImageTransformParametersArgs, ImageTransformStrategy } from '@vendure/asset-server-plugin';
+import {
+    type GetImageTransformParametersArgs,
+    type ImageTransformStrategy,
+    PresetOnlyStrategy,
+} from '@vendure/asset-server-plugin';
 import { ConfigService, extractSessionToken, Injector, SessionService } from '@vendure/core';
 import {
     promotionAssetPaths,
     StorefrontPromotionAccessService,
     StorefrontPromotionService,
 } from '@vendure/store-management-plugin';
+
+export function createCatalogImageTransformStrategies(
+    bootstrapBaseSchema: boolean,
+): ImageTransformStrategy[] {
+    return [
+        ...(!bootstrapBaseSchema ? [new CatalogAssetAccessStrategy()] : []),
+        new PresetOnlyStrategy({
+            defaultPreset: 'storefront-original-preview',
+            permittedQuality: [75, 90],
+            permittedFormats: ['webp'],
+        }),
+    ];
+}
 
 // Reuse the asset server's existing pre-read strategy hook. The same check runs
 // before originals, previews and transformed cache files can be returned.

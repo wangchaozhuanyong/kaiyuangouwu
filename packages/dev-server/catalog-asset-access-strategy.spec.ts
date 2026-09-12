@@ -1,3 +1,4 @@
+import { PresetOnlyStrategy } from '@vendure/asset-server-plugin';
 import { ConfigService, SessionService } from '@vendure/core';
 import {
     StorefrontPromotionAccessService,
@@ -5,7 +6,10 @@ import {
 } from '@vendure/store-management-plugin';
 import { describe, expect, it, vi } from 'vitest';
 
-import { CatalogAssetAccessStrategy } from './catalog-asset-access-strategy';
+import {
+    CatalogAssetAccessStrategy,
+    createCatalogImageTransformStrategies,
+} from './catalog-asset-access-strategy';
 
 function harness(userId?: string) {
     const renderPublished = vi.fn().mockResolvedValue('<img src="/assets/preview/public-hero.jpg">');
@@ -31,6 +35,17 @@ function harness(userId?: string) {
 }
 
 describe('catalog media boundary', () => {
+    it('authorizes catalog media before applying the image preset', () => {
+        const strategies = createCatalogImageTransformStrategies(false);
+        expect(strategies).toHaveLength(2);
+        expect(strategies[0]).toBeInstanceOf(CatalogAssetAccessStrategy);
+        expect(strategies[1]).toBeInstanceOf(PresetOnlyStrategy);
+    });
+    it('does not depend on store plugins when bootstrapping the base schema', () => {
+        const strategies = createCatalogImageTransformStrategies(true);
+        expect(strategies).toHaveLength(1);
+        expect(strategies[0]).toBeInstanceOf(PresetOnlyStrategy);
+    });
     it.each([
         '/preview/private-product.jpg',
         '/source/private-product.jpg',
