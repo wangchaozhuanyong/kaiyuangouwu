@@ -25,6 +25,41 @@ const operations = require('../../../deploy/production-operations.cjs');
 const retention = require('../../../deploy/systemd/vendure-production-release-retention.cjs');
 const sourceSha = 'a'.repeat(40);
 
+void test('release preflight reads independent frontend revisions and detects missing bootstrap pointers', t => {
+    const root = mkdtempSync(path.join(os.tmpdir(), 'vendure-frontend-revisions-'));
+    t.after(() => rmSync(root, { recursive: true, force: true }));
+    const runtime = path.join(root, 'runtime');
+    const plan = { markerSha: sourceSha, currentRuntime: runtime };
+    assert.equal(
+        operations.frontendRevisionEvidence(plan, root),
+        'PRODUCTION_FRONTEND_REVISIONS storefront=unknown next-admin=unknown\n',
+    );
+    for (const component of ['storefront', 'next-admin']) {
+        const dist = path.join(runtime, 'packages', component, 'dist');
+        mkdirSync(dist, { recursive: true });
+        symlinkSync(dist, path.join(root, `kaiyuangouwu-${component}-current`));
+    }
+    assert.equal(
+        operations.frontendRevisionEvidence(plan, root),
+        `PRODUCTION_FRONTEND_REVISIONS storefront=${sourceSha} next-admin=${sourceSha}\n`,
+    );
+    const frontendSha = 'b'.repeat(40);
+    writeFileSync(
+        path.join(runtime, 'packages/next-admin/dist/frontend-release.json'),
+        JSON.stringify({ sourceSha: frontendSha }),
+    );
+    assert.equal(
+        operations.frontendRevisionEvidence(plan, root),
+        `PRODUCTION_FRONTEND_REVISIONS storefront=${sourceSha} next-admin=${frontendSha}\n`,
+    );
+    const source = readFileSync(path.join(repositoryRoot, 'deploy/production-operations.cjs'), 'utf8');
+    const preflight = source.slice(
+        source.indexOf("if (request.operation === 'preflight-release')"),
+        source.indexOf("if (request.operation === 'inspect-storefront-config')"),
+    );
+    assert.match(preflight, /process\.stdout\.write\(frontendRevisionEvidence\(plan\)\)/u);
+});
+
 void test('release workflow ships the fixed live preflight inputs and migration registry', () => {
     const workflow = readFileSync(
         path.join(repositoryRoot, '.github/workflows/production_operations.yml'),

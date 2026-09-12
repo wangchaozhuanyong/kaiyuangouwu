@@ -9,6 +9,7 @@ readonly repository="/var/www/kaiyuangouwu"
 readonly releases_dir="/var/www/kaiyuangouwu-releases"
 readonly current_pointer="/var/www/kaiyuangouwu-current"
 readonly storefront_pointer="/var/www/kaiyuangouwu-storefront-current"
+readonly admin_pointer="/var/www/kaiyuangouwu-next-admin-current"
 readonly current_marker="${releases_dir}/current-sha"
 readonly deploy_lock="/run/lock/vendure-production-deploy.lock"
 readonly expected_bucket="yunqiao-vendure-prod-backup-079740175286-apne1"
@@ -329,6 +330,10 @@ readonly previous_storefront="$(
         printf '%s' "${previous_runtime}/packages/storefront/dist"
     fi
 )"
+readonly previous_admin="$(
+    if [[ -L "${admin_pointer}" ]]; then readlink -f "${admin_pointer}";
+    else printf '%s' "${previous_runtime}/packages/next-admin/dist"; fi
+)"
 readonly staging_dir="$(mktemp -d "${releases_dir}/.incoming-${artifact_name}.XXXXXX")"
 readonly archive_path="${staging_dir}/${archive_name}"
 readonly checksum_path="${staging_dir}/${checksum_name}"
@@ -341,6 +346,7 @@ rollback_needed=0
 nginx_changed=0
 pointer_changed=0
 storefront_pointer_changed=0
+admin_pointer_changed=0
 
 refresh_image_processor() {
     local runtime="${1}"
@@ -378,6 +384,10 @@ rollback() {
     if [[ "${rollback_needed}" == "1" ]]; then
         rollback_needed=0
         printf 'ROLLBACK_BEGIN\n'
+        if [[ "${admin_pointer_changed}" == "1" ]]; then
+            sudo -n node "${repository}/deploy/storefront-release.mjs" switch \
+                "${previous_admin}" "${admin_pointer}" || printf 'ADMIN_ROLLBACK_FAILED\n' >&2
+        fi
         if [[ "${storefront_pointer_changed}" == "1" ]]; then
             sudo -n node "${repository}/deploy/storefront-release.mjs" switch \
                 "${previous_storefront:-${previous_runtime}/packages/storefront/dist}" "${storefront_pointer}" ||
@@ -788,6 +798,9 @@ sudo -n test -S /run/vendure-nginx-log/error.sock
 sudo -n node "${repository}/deploy/storefront-release.mjs" switch \
     "${candidate}/packages/storefront/dist" "${storefront_pointer}"
 storefront_pointer_changed=1
+sudo -n node "${repository}/deploy/storefront-release.mjs" switch \
+    "${candidate}/packages/next-admin/dist" "${admin_pointer}"
+admin_pointer_changed=1
 sudo -n cp -p "${nginx_target}" "${nginx_backup}"
 sudo -n install -o root -g root -m 0644 "${repository}/deploy/nginx/damatong.conf" "${nginx_target}"
 nginx_changed=1

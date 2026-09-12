@@ -159,12 +159,13 @@ void test('production artifact reuses exact successful CI evidence instead of re
     );
 
     assert.match(workflow, /actions: read/u);
-    assert.match(workflow, /read -r -a release_commit < <\(git rev-list --parents -n 1 "\$TARGET_SHA"\)/u);
-    assert.match(workflow, /git merge-base --is-ancestor "\$RELEASE_BASE_SHA" "\$REVIEWED_HEAD_SHA"/u);
-    assert.match(workflow, /TARGET_TREE="\$\(git rev-parse "\$TARGET_SHA\^\{tree\}"\)"/u);
-    assert.match(workflow, /REVIEWED_TREE="\$\(git rev-parse "\$REVIEWED_HEAD_SHA\^\{tree\}"\)"/u);
-    assert.match(workflow, /actions\/workflows\/build_and_test\.yml\/runs/u);
-    assert.match(workflow, /event=pull_request&status=success&head_sha=\$\{REVIEWED_HEAD_SHA\}/u);
+    assert.match(
+        workflow,
+        /node scripts\/release-evidence\.mjs verify "\$BASE_SHA" "\$TARGET_SHA" "\$CI_RUN_ID"/u,
+    );
+    assert.match(workflow, /node deploy\/build-artifact\.mjs restore/u);
+    assert.match(workflow, /if: steps\.compiled\.outputs\.restored != 'true'/u);
+    assert.doesNotMatch(workflow, /git rev-list --parents|RELEASE_BASE_SHA.*REVIEWED_HEAD_SHA/u);
     assert.doesNotMatch(workflow, /bun run --cwd packages\/dev-server test:dev-workflow/u);
     assert.doesNotMatch(workflow, /^\s+bun run test$/mu);
     assert.ok(

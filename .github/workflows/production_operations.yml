@@ -18,6 +18,12 @@ on:
                 default: ''
                 type: string
         outputs:
+            storefront_sha:
+                description: Active storefront revision, or unknown before bootstrap
+                value: ${{ jobs.operate.outputs.storefront_sha }}
+            admin_sha:
+                description: Active independent admin revision, or unknown before bootstrap
+                value: ${{ jobs.operate.outputs.admin_sha }}
             deployed_sha:
                 description: Exact immutable runtime SHA observed by release preflight
                 value: ${{ jobs.operate.outputs.deployed_sha }}
@@ -67,6 +73,8 @@ jobs:
         runs-on: ubuntu-24.04
         timeout-minutes: 15
         outputs:
+            storefront_sha: ${{ steps.operation.outputs.storefront_sha }}
+            admin_sha: ${{ steps.operation.outputs.admin_sha }}
             deployed_sha: ${{ steps.operation.outputs.deployed_sha }}
         env:
             AWS_REGION: ap-northeast-1
@@ -244,6 +252,10 @@ jobs:
                       exit 1
                     }
                     printf 'deployed_sha=%s\n' "${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+                    frontend_evidence="$(jq -r '.Output' "$RUNNER_TEMP/production-operations-result.json" | sed -n 's/^PRODUCTION_FRONTEND_REVISIONS //p' | tail -n 1)"
+                    if [[ "$frontend_evidence" =~ ^storefront=([a-f0-9]{40}|unknown)\ next-admin=([a-f0-9]{40}|unknown)$ ]]; then
+                        printf 'storefront_sha=%s\nadmin_sha=%s\n' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" >> "$GITHUB_OUTPUT"
+                    fi
                   fi
 
             - name: Record production operation result

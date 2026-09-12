@@ -3,6 +3,9 @@ name: Production Runtime Artifact
 on:
     workflow_call:
         inputs:
+            ci_run_id:
+                required: true
+                type: string
             base_sha:
                 required: true
                 type: string
@@ -212,68 +215,17 @@ jobs:
                   echo "backup_policy=$(jq -r '.backupPolicy' "$IMPACT_PATH")" >> "$GITHUB_OUTPUT"
                   echo "data_risk=$(jq -r '.dataRisk' "$IMPACT_PATH")" >> "$GITHUB_OUTPUT"
 
-            - name: Verify the exact release tree passed Build & Test
+            - name: Verify exact source and required CI scope
               env:
-                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  GH_TOKEN: ${{ github.token }}
+                  CI_RUN_ID: ${{ inputs.ci_run_id }}
+                  BASE_SHA: ${{ inputs.base_sha }}
                   TARGET_SHA: ${{ inputs.target_sha }}
               run: |
-                  read -r -a release_commit < <(git rev-list --parents -n 1 "$TARGET_SHA")
-                  if [[ "${#release_commit[@]}" -ne 3 ]]; then
-                    echo 'Production releases require a reviewed two-parent main merge commit' >&2
-                    exit 1
-                  fi
-
-                  RELEASE_BASE_SHA="${release_commit[1]}"
-                  REVIEWED_HEAD_SHA="${release_commit[2]}"
-                  git merge-base --is-ancestor "$RELEASE_BASE_SHA" "$REVIEWED_HEAD_SHA" || {
-                    echo 'The reviewed PR head did not include the final main base' >&2
-                    exit 1
-                  }
-
-                  TARGET_TREE="$(git rev-parse "$TARGET_SHA^{tree}")"
-                  REVIEWED_TREE="$(git rev-parse "$REVIEWED_HEAD_SHA^{tree}")"
-                  if [[ "$TARGET_TREE" != "$REVIEWED_TREE" ]]; then
-                    echo 'The final main tree differs from the reviewed PR tree' >&2
-                    exit 1
-                  fi
-
-                  CI_RUN_ID="$(gh api \
-                    "/repos/${GITHUB_REPOSITORY}/actions/workflows/build_and_test.yml/runs?event=pull_request&status=success&head_sha=${REVIEWED_HEAD_SHA}&per_page=20" \
-                    --jq '.workflow_runs[0].id // empty')"
-                  if [[ ! "$CI_RUN_ID" =~ ^[0-9]+$ ]]; then
-                    echo 'No successful Build & Test run exists for the reviewed PR head' >&2
-                    exit 1
-                  fi
-
+                  node scripts/release-evidence.mjs verify "$BASE_SHA" "$TARGET_SHA" "$CI_RUN_ID"
                   echo "CI_RUN_ID=$CI_RUN_ID" >> "$GITHUB_ENV"
-                  echo "REVIEWED_HEAD_SHA=$REVIEWED_HEAD_SHA" >> "$GITHUB_ENV"
-                  echo "TARGET_TREE=$TARGET_TREE" >> "$GITHUB_ENV"
-
-            - name: Restrict automatic releases to Skill-only changes
-              if: github.event_name == 'push'
-              env:
-                  BASE_SHA: ${{ github.event.before }}
-                  TARGET_SHA: ${{ github.sha }}
-              run: |
-                  if [[ ! "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]] || [[ "$BASE_SHA" =~ ^0{40}$ ]]; then
-                    echo "Automatic Skill release requires a valid previous main SHA" >&2
-                    exit 1
-                  fi
-                  git cat-file -e "$BASE_SHA^{commit}"
-                  mapfile -t changed_files < <(git diff --name-only "$BASE_SHA" "$TARGET_SHA")
-                  test "${#changed_files[@]}" -gt 0
-                  for changed_file in "${changed_files[@]}"; do
-                    case "$changed_file" in
-                      packages/image-generation-plugin/skill/image-prompt-pro/* | \
-                      packages/image-generation-plugin/src/prompt/prompt-rules.bundle.json | \
-                      packages/image-generation-plugin/src/prompt/prompt-rules.bundle.ts)
-                        ;;
-                      *)
-                        echo "Automatic Skill release rejected non-Skill change: $changed_file" >&2
-                        exit 1
-                        ;;
-                    esac
-                  done
+                  echo "REVIEWED_HEAD_SHA=$TARGET_SHA" >> "$GITHUB_ENV"
+                  echo "TARGET_TREE=$(git rev-parse HEAD^{tree})" >> "$GITHUB_ENV"
 
             - name: Setup Node.js
               uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
@@ -303,7 +255,54 @@ jobs:
                     --lockfile bun.lock
                   echo "BUN_AUDIT_REPORT=$BUN_AUDIT_REPORT" >> "$GITHUB_ENV"
 
+            - name: Reuse compiled output from the verified checks
+              id: compiled
+              env:
+                  NODE_ENV: production
+                  TZ: Asia/Shanghai
+                  VENDURE_SERVE_GRAPHIQL: 'false'
+                  VENDURE_DASHBOARD_URL: https://admin.build.test/dashboard
+                  VENDURE_STOREFRONT_URL: https://store.build.test
+                  VENDURE_EMAIL_FROM: Build Check <build@build.test>
+                  VENDURE_IMPORT_ASSETS_DIR: /tmp/vendure-build-import
+                  VENDURE_ASSET_UPLOAD_DIR: /tmp/vendure-build-assets
+                  DIGITAL_DELIVERY_ROOT: /tmp/vendure-build-digital
+                  DIGITAL_DELIVERY_SIGNING_SECRET: build-check-digital-secret-000000000000000000000000
+                  IMAGE_GENERATION_STORAGE_ROOT: /tmp/vendure-build-images
+                  CUSTOMER_IMAGE_PROCESSOR_SOCKET: /tmp/vendure-build-processor.sock
+                  CUSTOMER_AVATAR_STORAGE_ROOT: /tmp/vendure-build-avatars
+                  IMAGE_GENERATION_DOWNLOAD_SECRET: build-check-image-download-key-000000000000000000000000
+                  IMAGE_GENERATION_MASTER_KEY: build-check-image-master-key-000000000000000000000000
+                  VENDURE_GOOGLE_TRANSLATION_API_KEY: build-check-google-translation-api-key
+                  STORE_DOMAIN_CNAME_TARGET: stores.build.test
+                  STORE_DOMAIN_ROUTING_MODE: require-domain
+                  STORE_DOMAIN_BYPASS_HOSTS: ''
+                  SMTP_USER: build-check
+                  SMTP_PASSWORD: build-check-password
+                  SMTP_HOST: smtp.build.test
+                  SMTP_PORT: '587'
+                  SMTP_SECURE: 'false'
+                  SUPERADMIN_USERNAME: build-check-admin
+                  SUPERADMIN_PASSWORD: build-check-admin-password
+                  COOKIE_SECRET: build-check-cookie-secret-000000000000000000000000
+                  TWO_FACTOR_DASHBOARD_ENCRYPTION_KEY: build-check-dashboard-2fa-key-000000000000000000000000
+                  ORDER_CONFIRMATION_TOKEN_SECRET: build-check-order-token-secret-000000000000000000000000
+                  USDT_PAYMENT_PROOF_SECRET: build-check-usdt-proof-secret-000000000000000000000000
+                  USDT_WALLET_ENCRYPTION_KEY: build-check-usdt-wallet-key-000000000000000000000000
+                  USDT_REFUND_SENDER_ADDRESSES: TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t
+                  STOREFRONT_PROMOTION_GATE_ENABLED: 'false'
+                  STOREFRONT_ENTRY_SECRET: build-check-entry-secret-000000000000000000000000
+                  DB: postgres
+                  DB_USERNAME: build-check
+                  DB_PASSWORD: build-check-password
+                  DB_NAME: build-check
+                  DB_SYNCHRONIZE: 'false'
+                  GH_TOKEN: ${{ github.token }}
+                  CI_RUN_ID: ${{ inputs.ci_run_id }}
+              run: node deploy/build-artifact.mjs restore "$RUNNER_TEMP/compiled-input" "$CI_RUN_ID"
+
             - name: Build production bundles
+              if: steps.compiled.outputs.restored != 'true'
               env:
                   NODE_ENV: production
                   TZ: Asia/Shanghai
