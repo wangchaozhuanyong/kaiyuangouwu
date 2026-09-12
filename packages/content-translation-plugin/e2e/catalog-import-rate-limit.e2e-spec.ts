@@ -12,6 +12,7 @@ import {
     SettingsStoreEntry,
     StockLevel,
     TransactionalConnection,
+    User,
 } from '@vendure/core';
 import { createTestEnvironment, registerInitializer, SqljsInitializer, testConfig } from '@vendure/testing';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -128,10 +129,16 @@ describe('catalog import survives Google rate limits with a real isolated databa
             },
             customerCount: 0,
         });
-        ctx = await server.app
-            .get(RequestContextService)
-            .create({ apiType: 'admin', languageCode: LanguageCode.zh_Hans });
         connection = server.app.get(TransactionalConnection);
+        const administrator = await connection.rawConnection.getRepository(User).findOneOrFail({
+            where: { identifier: server.app.get(ConfigService).authOptions.superadminCredentials.identifier },
+            relations: { roles: { channels: true } },
+        });
+        ctx = await server.app.get(RequestContextService).create({
+            apiType: 'admin',
+            languageCode: LanguageCode.zh_Hans,
+            user: administrator,
+        });
         imports = server.app.get(CatalogImportService);
         imports.registerEnqueuer(() => Promise.resolve());
         ready = true;
