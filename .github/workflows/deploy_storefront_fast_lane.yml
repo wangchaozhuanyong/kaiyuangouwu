@@ -92,16 +92,19 @@ jobs:
                   archive_name = os.environ['ARCHIVE_NAME']
                   artifact_bucket = os.environ['ARTIFACT_BUCKET']
 
-                  script = f'''set -Eeuo pipefail
-                  TEMP_DIR="$(mktemp -d /tmp/storefront-fast-XXXXXX)"
-                  trap 'rm -rf -- "$TEMP_DIR"' EXIT
-                  aws s3 cp "s3://{artifact_bucket}/deployments/{target_sha}/{archive_name}" "$TEMP_DIR/{archive_name}" --only-show-errors
-                  TARGET_DIST="$(readlink -f /var/www/kaiyuangouwu-current/packages/storefront/dist)"
-                  mkdir -p "$TARGET_DIST"
-                  tar -xzf "$TEMP_DIR/{archive_name}" -C "$TARGET_DIST"
-                  chmod -R a+rX "$TARGET_DIST"
-                  echo STOREFRONT_FAST_LANE_DEPLOYED_OK
-                  '''
+                  script = '\n'.join([
+                      "/bin/bash <<'STOREFRONT_FAST_DEPLOY'",
+                      'set -Eeuo pipefail',
+                      'TEMP_DIR="$(mktemp -d /tmp/storefront-fast-XXXXXX)"',
+                      "trap 'rm -rf -- \"$TEMP_DIR\"' EXIT",
+                      f'aws s3 cp "s3://{artifact_bucket}/deployments/{target_sha}/{archive_name}" "$TEMP_DIR/{archive_name}" --only-show-errors',
+                      'TARGET_DIST="$(readlink -f /var/www/kaiyuangouwu-current/packages/storefront/dist)"',
+                      'mkdir -p "$TARGET_DIST"',
+                      f'tar -xzf "$TEMP_DIR/{archive_name}" -C "$TARGET_DIST"',
+                      'chmod -R a+rX "$TARGET_DIST"',
+                      'echo STOREFRONT_FAST_LANE_DEPLOYED_OK',
+                      'STOREFRONT_FAST_DEPLOY',
+                  ])
 
                   payload = json.dumps({'commands': [script], 'executionTimeout': ['300']})
                   Path(os.environ['RUNNER_TEMP'], 'ssm-parameters.json').write_text(payload)
