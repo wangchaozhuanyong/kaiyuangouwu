@@ -526,7 +526,7 @@ export function IcloudRelayModule() {
                 {(refreshError || queryError) && (
                     <div
                         role="alert"
-                        className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-800"
+                        className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-800 dark:text-red-200"
                     >
                         {refreshError || '列表加载失败，请点击刷新重试；已有数据可能不是最新结果。'}
                     </div>

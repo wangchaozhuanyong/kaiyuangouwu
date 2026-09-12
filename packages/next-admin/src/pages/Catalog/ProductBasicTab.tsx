@@ -291,7 +291,10 @@ export function ProductBasicTab() {
             >
                 <div className="grid gap-5 md:grid-cols-2">
                     <div>
-                        <h2 className="text-sm font-bold text-slate-900">商品筛选属性与标签</h2>
+                        <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                            商品筛选属性与标签
+                            <FeatureHelpButton topic="catalog.facets" title="商品筛选属性与标签" />
+                        </h2>
                         <p className="mt-1 text-xs leading-5 text-slate-500">
                             品牌、材质等属性可在属性管理中创建，再为本商品选择对应标签，用于搜索和筛选。
                         </p>
@@ -316,7 +319,10 @@ export function ProductBasicTab() {
                         </div>
                     </div>
                     <div>
-                        <h2 className="text-sm font-bold text-slate-900">系统创建时间</h2>
+                        <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                            系统创建时间
+                            <FeatureHelpButton topic="catalog.product-dates" title="系统创建时间" />
+                        </h2>
                         <p className="mt-1 text-xs leading-5 text-slate-500">
                             商品首次在本系统建档的时间，自动记录，无需填写。
                         </p>

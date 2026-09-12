@@ -134,9 +134,11 @@ describe('Pinned provider TLS identity', () => {
     it('retains certificate validation and verifies the original hostname and SNI', async () => {
         const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
         const key = privateKey.export({ type: 'pkcs8', format: 'pem' });
+        // OpenSSL 3 on Linux cannot reopen Node's socket-backed stdin as a file.
+        // A POSIX pipe keeps the ephemeral key in memory on both Linux and macOS.
         const cert = execFileSync(
-            'openssl',
-            ['req', '-new', '-x509', '-key', '/dev/stdin', '-subj', '/CN=provider-tls.invalid', '-days', '1'],
+            'sh',
+            ['-c', 'cat | openssl req -new -x509 -key /dev/stdin -subj /CN=provider-tls.invalid -days 1'],
             { input: key, stdio: ['pipe', 'pipe', 'ignore'] },
         );
         let servername: string | false | undefined;
