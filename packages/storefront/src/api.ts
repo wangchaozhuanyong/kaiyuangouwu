@@ -146,6 +146,10 @@ export class ShopApi {
         return this.contentReviewsApi.storefrontContent(signal);
     }
 
+    async storefrontAccountContent(signal?: AbortSignal): Promise<StorefrontContentResponse> {
+        return this.contentReviewsApi.storefrontAccountContent(signal);
+    }
+
     async activeCouponCampaigns(signal?: AbortSignal): Promise<StorefrontCouponCampaign[]> {
         return this.contentReviewsApi.activeCouponCampaigns(signal);
     }

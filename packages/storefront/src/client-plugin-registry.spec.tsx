@@ -1,4 +1,3 @@
-import type { StorefrontContentBlock, StorefrontContentItem } from './types';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
@@ -8,6 +7,7 @@ import {
     resolveCategoryClientPlugins,
     resolveClientPlugins,
 } from './client-plugins/client-plugin-registry';
+import { type StorefrontContentBlock, type StorefrontContentItem } from './types';
 
 function pluginItem(
     code: string,

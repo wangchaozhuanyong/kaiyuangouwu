@@ -71,10 +71,13 @@ describe('storefront bootstrap boundaries', () => {
 
     it('copies a changed market configuration with its original response age', () => {
         config = nextConfig();
-        const key = storefrontQueryKeys.config(
-            storefrontQueryKeys.market(marketForStorefrontConfig(config)),
-            'zh_Hans',
-        );
+        const key = [
+            ...storefrontQueryKeys.config(
+                storefrontQueryKeys.market(marketForStorefrontConfig(config)),
+                'zh_Hans',
+            ),
+            'account',
+        ];
         render();
         expect(client.getQueryData(key)).toEqual(config);
         expect(client.getQueryState(key)?.dataUpdatedAt).toBe(dataUpdatedAt);
@@ -85,10 +88,13 @@ describe('storefront bootstrap boundaries', () => {
 
     it('does not overwrite a newer configuration already cached for the destination', () => {
         config = nextConfig();
-        const key = storefrontQueryKeys.config(
-            storefrontQueryKeys.market(marketForStorefrontConfig(config)),
-            'zh_Hans',
-        );
+        const key = [
+            ...storefrontQueryKeys.config(
+                storefrontQueryKeys.market(marketForStorefrontConfig(config)),
+                'zh_Hans',
+            ),
+            'account',
+        ];
         const newer = { ...config, description: 'Newer response' };
         client.setQueryData(key, newer, { updatedAt: dataUpdatedAt + 1000 });
         render();

@@ -43,6 +43,7 @@ const translate = vi.fn((request: any) =>
     }),
 );
 const config = mergeConfig(testConfig, {
+    authOptions: { requireVerification: false },
     apiOptions: { port: 3298, cors: { origin: 'http://127.0.0.1:5198', credentials: true } },
     defaultLanguageCode: LanguageCode.zh_Hans,
     plugins: [
@@ -116,6 +117,21 @@ describe('real Admin API saves and Shop API publication with the translation out
             customerCount: 0,
         });
         await adminClient.asSuperAdmin();
+        await shopClient.query(gql`
+            mutation {
+                registerCustomerAccount(
+                    input: {
+                        emailAddress: "outbox-catalog@example.test"
+                        password: "OutboxFixturePass123!"
+                        firstName: "Outbox"
+                        lastName: "Fixture"
+                    }
+                ) {
+                    __typename
+                }
+            }
+        `);
+        await shopClient.asUserWithCredentials('outbox-catalog@example.test', 'OutboxFixturePass123!');
         translate.mockClear();
         // Isolate assertions from initial country/zone fixture translations.
         await server.app

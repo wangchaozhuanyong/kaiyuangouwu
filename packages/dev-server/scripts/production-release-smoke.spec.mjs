@@ -14,6 +14,7 @@ import {
 async function startFixtureServer({
     requirePromotionCookie = false,
     redirectStorefrontToPromo = false,
+    anonymousCatalogPublic = false,
 } = {}) {
     const server = createServer((request, response) => {
         const requestUrl = new URL(request.url ?? '/', 'http://127.0.0.1');
@@ -38,8 +39,31 @@ async function startFixtureServer({
                 );
                 return;
             }
-            response.writeHead(200, { 'content-type': 'application/json' });
-            response.end('{"data":{"__typename":"Query","activeChannel":{"code":"fixture-store"}}}');
+            let body = '';
+            request.on('data', chunk => {
+                body += chunk;
+            });
+            request.on('end', () => {
+                response.writeHead(200, { 'content-type': 'application/json' });
+                if (body.includes('PrivateCatalogProbe')) {
+                    response.end(
+                        JSON.stringify(
+                            anonymousCatalogPublic
+                                ? {
+                                      data: {
+                                          products: {
+                                              totalItems: 1,
+                                              items: [{ id: '1', name: 'Private fixture' }],
+                                          },
+                                      },
+                                  }
+                                : { data: null, errors: [{ extensions: { code: 'FORBIDDEN' } }] },
+                        ),
+                    );
+                    return;
+                }
+                response.end('{"data":{"__typename":"Query","activeChannel":{"code":"fixture-store"}}}');
+            });
             return;
         }
         if (request.method === 'GET' && requestUrl.pathname === '/promo') {
@@ -47,6 +71,11 @@ async function startFixtureServer({
             response.end(
                 '<form action="/promo/enter"><input value="signed&amp;ticket" name="ticket"></form>',
             );
+            return;
+        }
+        if (request.method === 'GET' && requestUrl.pathname === '/sitemap.xml') {
+            response.writeHead(200, { 'content-type': 'application/xml' });
+            response.end(`<urlset><url><loc>http://${request.headers.host}/promo</loc></url></urlset>`);
             return;
         }
         if (request.method === 'POST' && requestUrl.pathname === '/promo/enter') {
@@ -126,6 +155,19 @@ async function startFixtureServer({
     };
 }
 
+test('rejects a release which exposes product data to an anonymous request', async t => {
+    const fixture = await startFixtureServer({ anonymousCatalogPublic: true });
+    t.after(fixture.close);
+    await assert.rejects(
+        verifyProductionRelease({
+            storefrontUrl: fixture.origin,
+            dashboardUrl: `${fixture.origin}/dashboard/`,
+            timeoutMs: 1_000,
+        }),
+        /anonymous product access was not denied/,
+    );
+});
+
 test('verifies the direct storefront, optional promotion entry and production public surfaces', async t => {
     const fixture = await startFixtureServer();
     t.after(fixture.close);
@@ -141,10 +183,13 @@ test('verifies the direct storefront, optional promotion entry and production pu
         'public health',
         'dashboard health',
         'public Shop API',
+        'anonymous catalog denial',
         'expected Channel',
         'direct storefront',
         'optional promotion page',
         'optional promotion entry',
+        'promotion cookie cannot unlock catalog',
+        'catalog links absent from sitemap',
         'storefront build asset',
         'dashboard asset graph',
         'public Admin API denial',

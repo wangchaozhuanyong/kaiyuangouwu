@@ -17,7 +17,7 @@ export class StorefrontContentShopResolver {
     @Query()
     @Allow(Permission.Public)
     storefrontContent(@Ctx() ctx: RequestContext) {
-        return this.storefrontContentService.findPublished(ctx);
+        return this.storefrontContentService.findPublished(ctx, !ctx.activeUserId);
     }
 
     @Query()

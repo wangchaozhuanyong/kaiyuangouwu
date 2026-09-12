@@ -55,7 +55,10 @@ function resolveRuntimePackageAssets() {
         if (existsSync(packagesDir)) {
             const entries = readdirSync(packagesDir, { withFileTypes: true });
             for (const entry of entries) {
-                if (entry.isDirectory() && (entry.name.endsWith('-plugin') || entry.name.endsWith('-server'))) {
+                if (
+                    entry.isDirectory() &&
+                    (entry.name.endsWith('-plugin') || entry.name.endsWith('-server'))
+                ) {
                     if (!(entry.name in assets)) {
                         const distPath = path.join(packagesDir, entry.name, 'dist');
                         const libPath = path.join(packagesDir, entry.name, 'lib');

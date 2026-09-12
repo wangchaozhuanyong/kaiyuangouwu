@@ -120,9 +120,7 @@ describe('category navigation responsive spacing', () => {
         expect(stylesheet).toMatch(
             /\.primary-categories-all-icon\s*\{[^}]*border:\s*1px solid color-mix\([^}]*color:\s*var\(--accent\);/,
         );
-        expect(stylesheet).toMatch(
-            /\.category-page \.primary-category-strip\s*\{[^}]*gap:\s*4px;/,
-        );
+        expect(stylesheet).toMatch(/\.category-page \.primary-category-strip\s*\{[^}]*gap:\s*4px;/);
         expect(stylesheet).toMatch(
             /\.category-page \.primary-categories-all\s*\{[^}]*width:\s*72px;[^}]*min-width:\s*72px;[^}]*flex:\s*0 0 72px;/,
         );

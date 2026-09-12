@@ -1,4 +1,4 @@
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { ShopApi } from '../api';
@@ -100,7 +100,21 @@ export function useStorefrontBootstrap() {
         }
     }, []);
 
-    const queryContext = { api, market, language, vendureLanguageCode, storefrontContextResolved };
+    const accountQuery = useQuery({
+        queryKey: storefrontQueryKeys.customer(storefrontQueryKeys.market(market), vendureLanguageCode),
+        queryFn: ({ signal }) => api.activeCustomer(signal),
+        enabled: storefrontContextResolved,
+        staleTime: 0,
+    });
+    const catalogAccessGranted = Boolean(accountQuery.data);
+    const queryContext = {
+        api,
+        market,
+        language,
+        vendureLanguageCode,
+        storefrontContextResolved,
+        catalogAccessGranted,
+    };
     const visualConfig = useStorefrontVisualPreset(
         api,
         market,
@@ -181,10 +195,13 @@ export function useStorefrontBootstrap() {
         ) {
             const nextLanguage = readStoredLanguage(nextMarket);
             if (nextLanguage === language) {
-                const nextConfigKey = storefrontQueryKeys.config(
-                    storefrontQueryKeys.market(nextMarket),
-                    vendureLanguageCode,
-                );
+                const nextConfigKey = [
+                    ...storefrontQueryKeys.config(
+                        storefrontQueryKeys.market(nextMarket),
+                        vendureLanguageCode,
+                    ),
+                    catalogAccessGranted ? 'authenticated' : 'account',
+                ];
                 const nextConfigState = queryClient.getQueryState(nextConfigKey);
                 // Copy the response age as well as its data, and preserve a newer destination value.
                 if (!nextConfigState?.data || nextConfigState.dataUpdatedAt < configQuery.dataUpdatedAt) {
@@ -223,7 +240,15 @@ export function useStorefrontBootstrap() {
         setLogoOnDarkUrl(config.logoOnDarkUrl ?? null);
         setStorefrontDescription(config.description?.trim() ?? '');
         setStorefrontTagline(config.tagline?.trim() ?? '');
-    }, [configQuery.data, configQuery.dataUpdatedAt, language, market, queryClient, vendureLanguageCode]);
+    }, [
+        catalogAccessGranted,
+        configQuery.data,
+        configQuery.dataUpdatedAt,
+        language,
+        market,
+        queryClient,
+        vendureLanguageCode,
+    ]);
 
     useStorefrontBrandColors(configQuery.data, visualConfig.presetId);
 
@@ -278,6 +303,7 @@ export function useStorefrontBootstrap() {
         cartState,
         api,
         queryContext,
+        catalogAccessGranted,
         legalIdentity,
         refetchStorefront,
         toggleLanguage,

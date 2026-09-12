@@ -4,6 +4,7 @@ import { ContentTranslationPlugin } from '@vendure/content-translation-plugin';
 import {
     Asset,
     AutoIncrementIdStrategy,
+    Customer,
     DefaultSearchPlugin,
     mergeConfig,
     TransactionalConnection,
@@ -27,6 +28,7 @@ import { BrandingFixturePlugin } from './branding-fixture.plugin';
 
 // A new in-memory SQL.js database and a loopback API. No existing configuration or account is used.
 const config = mergeConfig(testConfig, {
+    authOptions: { requireVerification: false, tokenMethod: ['cookie', 'bearer'] },
     apiOptions: {
         port: 5299,
         hostname: '127.0.0.1',
@@ -113,6 +115,21 @@ beforeAll(async () => {
         customerCount: 0,
     });
     await adminClient.asSuperAdmin();
+    await shopClient.query(gql`
+        mutation {
+            registerCustomerAccount(
+                input: {
+                    emailAddress: "unified-catalog@example.test"
+                    password: "UnifiedFixturePass123!"
+                    firstName: "Unified"
+                    lastName: "Fixture"
+                }
+            ) {
+                __typename
+            }
+        }
+    `);
+    await shopClient.asUserWithCredentials('unified-catalog@example.test', 'UnifiedFixturePass123!');
     const { activeChannel, zones } = await adminClient.query(gql`
         query {
             activeChannel {
@@ -187,6 +204,14 @@ beforeAll(async () => {
         stores.push(createChannel);
     }
     const connection = server.app.get(TransactionalConnection);
+    const fixtureCustomer = await connection.rawConnection.getRepository(Customer).findOneByOrFail({
+        emailAddress: 'unified-catalog@example.test',
+    });
+    await connection.rawConnection
+        .createQueryBuilder()
+        .relation(Customer, 'channels')
+        .of(fixtureCustomer.id)
+        .add(stores.slice(1).map(store => store.id));
     for (const [index, store] of stores.slice(0, 2).entries()) {
         await connection.rawConnection.getRepository(StoreProfile).save(
             new StoreProfile({
@@ -368,6 +393,12 @@ describe('unified storefront Admin API to Shop API', () => {
             await vite.listen();
             for (const width of [390, 1440]) {
                 const page = await browser.newPage({ viewport: { width, height: 844 } });
+                const signedIn = await page.request.post('http://127.0.0.1:5299/shop-api', {
+                    data: {
+                        query: 'mutation { login(username: "unified-catalog@example.test", password: "UnifiedFixturePass123!") { __typename } }',
+                    },
+                });
+                expect((await signedIn.json()).data.login.__typename).toBe('CurrentUser');
                 const errors: string[] = [];
                 page.on('pageerror', error => errors.push(error.message));
                 page.on('console', message => {
@@ -487,6 +518,12 @@ describe('unified storefront Admin API to Shop API', () => {
             await vite.listen();
             for (const width of [390, 1024, 1440, 1920]) {
                 const page = await browser.newPage({ viewport: { width, height: 1000 } });
+                const signedIn = await page.request.post('http://127.0.0.1:5299/shop-api', {
+                    data: {
+                        query: 'mutation { login(username: "unified-catalog@example.test", password: "UnifiedFixturePass123!") { __typename } }',
+                    },
+                });
+                expect((await signedIn.json()).data.login.__typename).toBe('CurrentUser');
                 const errors: string[] = [];
                 page.on('pageerror', error => errors.push(error.message));
                 page.on('console', message => {
@@ -678,6 +715,12 @@ describe('unified storefront Admin API to Shop API', () => {
             await vite.listen();
             for (const width of [390, 1024, 1440, 1920]) {
                 const page = await browser.newPage({ viewport: { width, height: 1000 } });
+                const signedIn = await page.request.post('http://127.0.0.1:5299/shop-api', {
+                    data: {
+                        query: 'mutation { login(username: "unified-catalog@example.test", password: "UnifiedFixturePass123!") { __typename } }',
+                    },
+                });
+                expect((await signedIn.json()).data.login.__typename).toBe('CurrentUser');
                 for (const [index, store] of stores.entries()) {
                     const name = ['MOYAO', 'Damatong', 'Store'][index];
                     await page.goto(
@@ -1011,6 +1054,12 @@ describe('unified storefront Admin API to Shop API', () => {
                 },
                 { auth: adminClient.getAuthToken(), channel: stores[0].token },
             );
+            const signedIn = await context.request.post('http://127.0.0.1:5299/shop-api', {
+                data: {
+                    query: 'mutation { login(username: "unified-catalog@example.test", password: "UnifiedFixturePass123!") { __typename } }',
+                },
+            });
+            expect((await signedIn.json()).data.login.__typename).toBe('CurrentUser');
             const page = await context.newPage();
             const preview = await context.newPage();
             const pageUrl = `http://127.0.0.1:5300/e2e/unification/index.html?channel=${stores[0].token}&name=MOYAO&page=login`;

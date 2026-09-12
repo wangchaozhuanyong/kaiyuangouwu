@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
-import type { TwoFactorAccount } from './types';
-import type { ActiveCustomer } from '../../types';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { type ActiveCustomer } from '../../types';
+
 import { TwoFactorPage } from './two-factor-page';
+import { type TwoFactorAccount } from './types';
 
 const storageState = vi.hoisted(() => ({
     available: false,

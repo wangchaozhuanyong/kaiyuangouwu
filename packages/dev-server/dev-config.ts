@@ -1,6 +1,6 @@
 /* eslint-disable no-console */
 import { OnApplicationBootstrap } from '@nestjs/common';
-import { AssetServerPlugin, PresetOnlyStrategy } from '@vendure/asset-server-plugin';
+import { AssetServerPlugin } from '@vendure/asset-server-plugin';
 import { CatalogManagementPlugin } from '@vendure/catalog-management-plugin';
 import {
     AutoCardDeliveryReadyEvent,
@@ -77,6 +77,7 @@ import {
     buildSignedStorefrontAccountActionUrl,
 } from './account-auth';
 import { catalogAdminApiMiddleware } from './catalog-admin-api-middleware';
+import { createCatalogImageTransformStrategies } from './catalog-asset-access-strategy';
 import { contentTranslationOptions } from './content-translation-config';
 import { emailLanguageVariables, localizedEmailSubjects, localizedEmailText } from './email-localization';
 import { createManualDeliveryEmailGuard } from './manual-delivery-email-guard';
@@ -1028,11 +1029,8 @@ export const devConfig: VendureConfig = {
                 { name: 'storefront-detail-1200', width: 1200, height: 1200, mode: 'resize' },
                 { name: 'storefront-detail-1600', width: 1600, height: 1600, mode: 'resize' },
             ],
-            imageTransformStrategy: new PresetOnlyStrategy({
-                defaultPreset: 'storefront-original-preview',
-                permittedQuality: [75, 90],
-                permittedFormats: ['webp'],
-            }),
+            cacheHeader: 'private, no-store',
+            imageTransformStrategy: createCatalogImageTransformStrategies(BOOTSTRAP_BASE_SCHEMA),
         }),
         DefaultSearchPlugin.init({ bufferUpdates: false, indexStockStatus: true }),
         // Enable if you need to debug the job queue

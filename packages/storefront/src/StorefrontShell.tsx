@@ -1,4 +1,4 @@
-import { Outlet } from '@tanstack/react-router';
+import { Outlet, lazyRouteComponent } from '@tanstack/react-router';
 import { WifiOff } from 'lucide-react';
 import { Suspense } from 'react';
 
@@ -11,8 +11,11 @@ import { DesktopHeader } from './components/common/desktop-header';
 import { DesktopLayoutContext, useDesktopViewport } from './desktop-layout';
 import { type useStorefrontAppState } from './hooks/useStorefrontAppState';
 import { RouteTransitionLoader } from './route-loading';
+import { isPublicStorefrontRoute } from './storefront-access';
 import { StorefrontContext } from './StorefrontContext';
 import { StorefrontUpdatePrompt } from './StorefrontUpdatePrompt';
+
+const LoginRoutePage = lazyRouteComponent(() => import('./route-pages/auth-route-pages'), 'LoginRoutePage');
 
 type StorefrontShellProps = { state: ReturnType<typeof useStorefrontAppState> };
 
@@ -29,13 +32,20 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
         language,
         logoUrl,
         storefrontName,
+        customer,
+        customerLoadState,
+        customerLoadError,
+        retryAccount,
     } = state;
+    const protectedRoute = !isPublicStorefrontRoute(displayedRoute.name);
+    const waitingForAccount = !customer && customerLoadState !== 'ready';
+    const accountFailed = customerLoadState === 'error' || customerLoadState === 'paused';
 
     return (
         <StorefrontContext.Provider value={storefrontContextValue}>
             <DesktopLayoutContext.Provider value={desktop}>
                 <div
-                    data-route={displayedRoute.name}
+                    data-route={protectedRoute && !customer ? 'login' : displayedRoute.name}
                     className={`storefront-app${online ? '' : ' is-offline'}${desktop ? ' desktop-store-layout' : ''}`}
                 >
                     <a className="skip-link" href="#storefront-content">
@@ -49,7 +59,7 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
                                 : 'You are offline. Some actions may fail.'}
                         </div>
                     )}
-                    {desktop && (
+                    {desktop && customer && (
                         <DesktopHeader
                             navigationBlock={navigationBlock}
                             cartQuantity={cart?.totalQuantity ?? 0}
@@ -57,12 +67,12 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
                     )}
                     <div
                         className={
-                            desktop && isDesktopAccountRoute(displayedRoute.name)
+                            desktop && customer && isDesktopAccountRoute(displayedRoute.name)
                                 ? 'desktop-account-layout'
                                 : undefined
                         }
                     >
-                        {desktop && <DesktopAccountNavigation />}
+                        {desktop && customer && <DesktopAccountNavigation />}
                         <div id="storefront-content" tabIndex={-1}>
                             <Suspense
                                 fallback={
@@ -73,12 +83,34 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
                                     />
                                 }
                             >
-                                <Outlet />
+                                {protectedRoute && waitingForAccount ? (
+                                    accountFailed ? (
+                                        <div role="alert" className="empty-state">
+                                            <p>{customerLoadError}</p>
+                                            <button type="button" onClick={() => void retryAccount()}>
+                                                {isZh ? '重试' : 'Try again'}
+                                            </button>
+                                            <a href="/promo">
+                                                {isZh ? '返回介绍页' : 'Back to introduction'}
+                                            </a>
+                                        </div>
+                                    ) : (
+                                        <RouteTransitionLoader
+                                            language={language}
+                                            logoUrl={logoUrl}
+                                            storefrontName={storefrontName}
+                                        />
+                                    )
+                                ) : protectedRoute && !customer ? (
+                                    <LoginRoutePage />
+                                ) : (
+                                    <Outlet />
+                                )}
                             </Suspense>
                         </div>
                     </div>
                 </div>
-                {!desktop && shouldShowBottomNavigation(displayedRoute.name, navigationBlock) && (
+                {!desktop && customer && shouldShowBottomNavigation(displayedRoute.name, navigationBlock) && (
                     <BottomNavigation
                         activeRoute={displayedRoute.name}
                         cartQuantity={cart?.totalQuantity ?? 0}
@@ -91,6 +123,7 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
                         {toast}
                     </div>
                 )}
+
                 <StorefrontUpdatePrompt language={language} />
             </DesktopLayoutContext.Provider>
         </StorefrontContext.Provider>

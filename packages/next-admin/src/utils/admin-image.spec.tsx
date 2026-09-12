@@ -1,4 +1,3 @@
-import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
@@ -32,7 +31,9 @@ describe('getAdminThumbnailUrl', () => {
     });
 
     it('leaves non-asset URLs untouched', () => {
-        expect(getAdminThumbnailUrl('https://example.com/external.png')).toBe('https://example.com/external.png');
+        expect(getAdminThumbnailUrl('https://example.com/external.png')).toBe(
+            'https://example.com/external.png',
+        );
         expect(getAdminThumbnailUrl('data:image/svg+xml;base64,...')).toBe('data:image/svg+xml;base64,...');
     });
 });
@@ -40,13 +41,11 @@ describe('getAdminThumbnailUrl', () => {
 describe('AdminImage', () => {
     it('renders img with webp thumbnail src and lazy loading by default', () => {
         const markup = renderToStaticMarkup(
-            <AdminImage
-                src="/assets/preview/10/img.png"
-                alt="Test"
-                className="test-class"
-            />,
+            <AdminImage src="/assets/preview/10/img.png" alt="Test" className="test-class" />,
         );
-        expect(markup).toContain('src="/assets/preview/10/img.png?preset=storefront-thumbnail-160&amp;format=webp&amp;w=160&amp;h=160&amp;q=80"');
+        expect(markup).toContain(
+            'src="/assets/preview/10/img.png?preset=storefront-thumbnail-160&amp;format=webp&amp;w=160&amp;h=160&amp;q=80"',
+        );
         expect(markup).toContain('loading="lazy"');
         expect(markup).toContain('decoding="async"');
         expect(markup).toContain('alt="Test"');
@@ -55,11 +54,7 @@ describe('AdminImage', () => {
 
     it('renders fallbackIcon when src is missing', () => {
         const markup = renderToStaticMarkup(
-            <AdminImage
-                src={null}
-                alt="Test"
-                fallbackIcon={<span data-testid="fallback">No Image</span>}
-            />,
+            <AdminImage src={null} alt="Test" fallbackIcon={<span data-testid="fallback">No Image</span>} />,
         );
         expect(markup).toContain('No Image');
         expect(markup).not.toContain('<img');

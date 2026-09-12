@@ -478,7 +478,9 @@ export function TwoFactorPage({
                 <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:col-span-2 lg:p-5">
                     <div className="flex items-center justify-between gap-2 sm:gap-3">
                         <div className="min-w-0">
-                            <h2 className="m-0 text-base font-black text-slate-950 sm:text-lg whitespace-nowrap">{copy.accountList}</h2>
+                            <h2 className="m-0 text-base font-black text-slate-950 sm:text-lg whitespace-nowrap">
+                                {copy.accountList}
+                            </h2>
                             <p className="mb-0 mt-0.5 text-[11px] font-semibold text-slate-500 sm:mt-1 sm:text-xs">
                                 {accounts.length} / {MAX_TWO_FACTOR_ACCOUNTS}
                             </p>
