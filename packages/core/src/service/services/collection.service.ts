@@ -177,11 +177,11 @@ export class CollectionService implements OnModuleInit {
                         job.setProgress(Math.ceil((completed / collectionIds.length) * 100));
                         if (affectedVariantIds.length) {
                             // To avoid performance issues on huge collections we first split the affected variant ids into chunks
-                            this.chunkArray(affectedVariantIds, 50000).forEach(chunk =>
-                                this.eventBus.publish(
+                            this.chunkArray(affectedVariantIds, 50000).forEach(chunk => {
+                                void this.eventBus.publish(
                                     new CollectionModificationEvent(ctx, collection, chunk),
-                                ),
-                            );
+                                );
+                            });
                         }
                     }
                 }
@@ -209,7 +209,7 @@ export class CollectionService implements OnModuleInit {
             });
         }
 
-        return qb.getManyAndCount().then(async ([collections, totalItems]) => {
+        return qb.getManyAndCount().then(([collections, totalItems]) => {
             const items = collections.map(collection =>
                 this.translator.translate(collection, ctx, ['parent']),
             );
@@ -534,7 +534,8 @@ export class CollectionService implements OnModuleInit {
             entityType: Collection,
             translationType: CollectionTranslation,
             beforeSave: async coll => {
-                await this.channelService.assignToCurrentChannel(coll, ctx);
+                // Categories belong to their store; the default storefront is not an aggregate catalog.
+                await this.channelService.assignToCurrentChannel(coll, ctx, false);
                 const parent = await this.getParentCollection(ctx, input.parentId);
                 if (parent) {
                     coll.parent = parent;

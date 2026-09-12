@@ -240,12 +240,10 @@ describe('Collection resolver', () => {
             });
 
             expect(createCollection.slug).toBe('accessories');
-            expect(createCollection.translations.find(t => t.languageCode === LanguageCode.en)?.slug).toBe(
+            expect(createCollection.translations.find(t => t.languageCode === 'en')?.slug).toBe(
                 'accessories',
             );
-            expect(createCollection.translations.find(t => t.languageCode === LanguageCode.de)?.slug).toBe(
-                'zubehoer',
-            );
+            expect(createCollection.translations.find(t => t.languageCode === 'de')?.slug).toBe('zubehoer');
         });
 
         it('create with duplicate slug is renamed to be unique', async () => {
@@ -269,12 +267,10 @@ describe('Collection resolver', () => {
                 },
             });
 
-            expect(createCollection.translations.find(t => t.languageCode === LanguageCode.en)?.slug).toBe(
+            expect(createCollection.translations.find(t => t.languageCode === 'en')?.slug).toBe(
                 'accessories-2',
             );
-            expect(createCollection.translations.find(t => t.languageCode === LanguageCode.de)?.slug).toBe(
-                'zubehoer-2',
-            );
+            expect(createCollection.translations.find(t => t.languageCode === 'de')?.slug).toBe('zubehoer-2');
         });
 
         it('creates the duplicate slug without suffix in another channel', async () => {
@@ -298,12 +294,10 @@ describe('Collection resolver', () => {
                     filters: [],
                 },
             });
-            expect(createCollection.translations.find(t => t.languageCode === LanguageCode.en)?.slug).toBe(
+            expect(createCollection.translations.find(t => t.languageCode === 'en')?.slug).toBe(
                 'accessories',
             );
-            expect(createCollection.translations.find(t => t.languageCode === LanguageCode.de)?.slug).toBe(
-                'zubehoer',
-            );
+            expect(createCollection.translations.find(t => t.languageCode === 'de')?.slug).toBe('zubehoer');
         });
 
         it('creates a root collection to become a 1st level collection later #779', async () => {
@@ -859,7 +853,7 @@ describe('Collection resolver', () => {
                 fail('did not return the collection');
                 return;
             }
-            expect(result.collection.children?.map(c => (c as any).position)).toEqual([0, 1, 2, 3, 4, 5, 6]);
+            expect(result.collection.children?.map(c => c.position)).toEqual([0, 1, 2, 3, 4, 5, 6]);
         });
 
         async function getChildrenOf(parentId: string): Promise<Array<{ name: string; id: string }>> {
@@ -2165,6 +2159,7 @@ describe('Collection resolver', () => {
         const CHANNEL_A_TOKEN = 'coll-cross-channel-a';
         const CHANNEL_B_TOKEN = 'coll-cross-channel-b';
         let targetCollectionId: string;
+        let childCollectionId: string;
 
         beforeAll(async () => {
             adminClient.setChannelToken(E2E_DEFAULT_CHANNEL_TOKEN);
@@ -2199,10 +2194,47 @@ describe('Collection resolver', () => {
                 },
             });
             targetCollectionId = createCollection.id;
+            const child = await adminClient.query(createCollectionDocument, {
+                input: {
+                    parentId: targetCollectionId,
+                    filters: [],
+                    translations: [
+                        {
+                            languageCode: LanguageCode.en,
+                            name: 'Channel-A Child',
+                            description: '',
+                            slug: 'channel-a-child',
+                        },
+                    ],
+                },
+            });
+            childCollectionId = child.createCollection.id;
         });
 
         afterAll(() => {
             adminClient.setChannelToken(E2E_DEFAULT_CHANNEL_TOKEN);
+        });
+
+        it('keeps new store categories and their children out of the default storefront', async () => {
+            // #259 follow-up: default-channel inheritance exposed another store's child categories.
+            adminClient.setChannelToken(E2E_DEFAULT_CHANNEL_TOKEN);
+            for (const id of [targetCollectionId, childCollectionId]) {
+                const { collection } = await adminClient.query(getCollectionDocument, { id });
+                expect(collection).toBeNull();
+                const { collections } = await adminClient.query(getCollectionListDocument, {
+                    options: { filter: { id: { eq: id } } },
+                });
+                expect(collections.items).toEqual([]);
+                expect(collections.totalItems).toBe(0);
+                await expect(
+                    adminClient.query(updateCollectionDocument, { input: { id, isPrivate: true } }),
+                ).rejects.toThrow(/No Collection with the id .* could be found/);
+            }
+            adminClient.setChannelToken(CHANNEL_A_TOKEN);
+            const { collection: childCollection } = await adminClient.query(getCollectionDocument, {
+                id: childCollectionId,
+            });
+            expect(childCollection?.name).toBe('Channel-A Child');
         });
 
         it('cannot update a Collection belonging to another channel', async () => {

@@ -114,19 +114,21 @@ export class ChannelService {
      * @description
      * Assigns a ChannelAware entity to the default Channel as well as any channel
      * specified in the RequestContext. This method will not save the entity to the database, but
-     * assigns the `channels` property of the entity. Products and variants pass `false` for
-     * `includeDefaultChannel`: sales membership must always be explicit.
+     * assigns the `channels` property of the entity. Products, variants and collections pass `false`
+     * for `includeDefaultChannel`: storefront catalog membership must always be explicit.
      */
     async assignToCurrentChannel<T extends ChannelAware & VendureEntity>(
         entity: T,
         ctx: RequestContext,
         includeDefaultChannel = true,
     ): Promise<T> {
+        // Internal initialization can use RequestContext.empty(), which has no selected Channel.
+        const currentChannelId = ctx.channelId ?? (await this.getDefaultChannel(ctx)).id;
         const channelIds = includeDefaultChannel
-            ? unique([ctx.channelId, (await this.getDefaultChannel(ctx)).id])
-            : [ctx.channelId];
+            ? unique([currentChannelId, (await this.getDefaultChannel(ctx)).id])
+            : [currentChannelId];
         entity.channels = channelIds.map(id => ({ id })) as any;
-        await this.eventBus.publish(new ChangeChannelEvent(ctx, entity, [ctx.channelId], 'assigned'));
+        await this.eventBus.publish(new ChangeChannelEvent(ctx, entity, [currentChannelId], 'assigned'));
         return entity;
     }
 
