@@ -46,6 +46,7 @@ const viewLabels: Record<string, string> = {
     profit: '利润统计',
     translations: '多语言翻译',
     jobs: '系统任务',
+    health: '服务健康',
     usdt: 'USDT 收款',
     plugins: '客户端插件',
     copy: '商业服务文案',
@@ -394,11 +395,30 @@ const data: Record<string, unknown> = {
     },
     jobs: { items: jobs, totalItems: 1000 },
     jobQueues: [
-        { name: 'translate-content', running: true },
-        { name: 'apply-collection-filters', running: true },
+        { name: 'translate-content', running: view !== 'health' },
+        { name: 'apply-collection-filters', running: view !== 'health' },
     ],
     scheduledTasks: [],
-    settingsStoreFieldDefinitions: [],
+    settingsStoreFieldDefinitions:
+        view === 'health' && params.get('worker') !== 'missing'
+            ? [
+                  {
+                      key: 'systemOperations.workerHeartbeat',
+                      readonly: true,
+                      scopeType: 'GLOBAL',
+                      currentValue: {
+                          state: params.get('worker') === 'stopped' ? 'STOPPED' : 'RUNNING',
+                          heartbeatAt: new Date(
+                              Date.now() - (params.get('worker') === 'stale' ? 90_000 : 0),
+                          ).toISOString(),
+                          queues: [
+                              { name: 'translate-content', running: true },
+                              { name: 'apply-collection-filters', running: true },
+                          ],
+                      },
+                  },
+              ]
+            : [],
     apiKeys: empty,
     activeAdministrator: null,
     storefrontContentBlocks: [],
@@ -564,6 +584,7 @@ const modules: Record<string, React.ReactNode> = {
     profit: <ProfitReportModule />,
     translations: <TranslationsModule />,
     jobs: <SystemOpsModule />,
+    health: <SystemOpsModule />,
     usdt: <UsdtPaymentManagementModule />,
     plugins: <ClientPluginsModule />,
     copy: <BusinessServicesCopyModule />,
@@ -619,7 +640,9 @@ createRoot(document.getElementById('root')!).render(
                                                 ? '/catalog/products/layout-product'
                                                 : view === 'jobs'
                                                   ? '/settings/system-ops?tab=jobs'
-                                                  : '/',
+                                                  : view === 'health'
+                                                    ? '/settings/system-ops?tab=health'
+                                                    : '/',
                                         ]}
                                     >
                                         <Routes>

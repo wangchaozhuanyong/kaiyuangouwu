@@ -75,7 +75,10 @@ export class AccountApi extends BaseDomainApi {
         form.set('operations', JSON.stringify(operations));
         form.set('map', JSON.stringify({ 0: ['variables.file'] }));
         form.set('0', file, file.name);
-        const headers: Record<string, string> = { 'language-code': this.languageCode };
+        const headers: Record<string, string> = {
+            'language-code': this.languageCode,
+            'Apollo-Require-Preflight': 'true',
+        };
         if (SEND_CLIENT_CHANNEL_TOKEN) headers['vendure-token'] = this.market.code;
         if (this.authToken) headers.authorization = `Bearer ${this.authToken}`;
         const separator = API_URL.includes('?') ? '&' : '?';

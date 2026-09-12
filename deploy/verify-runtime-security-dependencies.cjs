@@ -80,31 +80,75 @@ function assertPatchedTiptap(tiptap, version) {
     assert.equal('onerror' in attributes, false);
 }
 
-function verifyRuntimeSecurityDependencies(runtimeDirectory) {
+function inspectRuntimeSecurityDependencies(runtimeDirectory) {
+    let runtimeRoot;
     try {
         assert.ok(typeof runtimeDirectory === 'string' && path.isAbsolute(runtimeDirectory));
-        const runtimeRoot = realpathSync(runtimeDirectory);
+        runtimeRoot = realpathSync(runtimeDirectory);
         assert.ok(statSync(runtimeRoot).isDirectory());
-        const manifest = runtimeFile(runtimeRoot, path.join(runtimeRoot, 'packages/dev-server/package.json'));
-        const fromRuntime = Module.createRequire(manifest);
-        const expressEntry = runtimeFile(runtimeRoot, fromRuntime.resolve('express'));
-        const fromExpress = Module.createRequire(expressEntry);
-        const qsEntry = runtimeFile(runtimeRoot, fromExpress.resolve('qs'));
-        const tiptapEntry = runtimeFile(runtimeRoot, fromRuntime.resolve('@tiptap/core'));
-        const versions = {
-            express: packageVersion(runtimeRoot, expressEntry, 'express'),
-            qs: packageVersion(runtimeRoot, qsEntry, 'qs'),
-            '@tiptap/core': packageVersion(runtimeRoot, tiptapEntry, '@tiptap/core'),
-        };
-        withRuntimeDependencies(runtimeRoot, () => {
-            assertPatchedQs(fromExpress(qsEntry));
-            assertPatchedTiptap(fromRuntime(tiptapEntry), versions['@tiptap/core']);
-        });
-        return { status: 'PASS', packages: versions };
+        runtimeFile(runtimeRoot, path.join(runtimeRoot, 'packages/dev-server/package.json'));
     } catch {
-        // Dependency exceptions and assertion diffs can contain arbitrary values or paths.
-        throw new Error('Runtime dependency security verification failed');
+        return { status: 'FAIL', packages: {}, checks: [{ name: 'runtime', status: 'FAIL', phase: 'root' }] };
     }
+
+    const packages = {};
+    const checks = [];
+    // Resolve dependencies from their actual consumer. A hoisted installation can
+    // hide incorrect lookup contexts which fail under Bun's isolated linker.
+    // A missing consumer/dependency remains a failure, never an implicit skip.
+    for (const name of ['express-qs', 'tiptap']) {
+        let phase = 'consumer';
+        try {
+            const owner = name === 'express-qs' ? 'core' : 'dashboard';
+            const ownerManifest = path.join(runtimeRoot, 'packages', owner, 'package.json');
+            const manifest = runtimeFile(
+                runtimeRoot,
+                existsSync(ownerManifest)
+                    ? ownerManifest
+                    : path.join(runtimeRoot, 'packages/dev-server/package.json'),
+            );
+            const fromConsumer = Module.createRequire(manifest);
+            if (name === 'express-qs') {
+                phase = 'resolve-express';
+                const expressEntry = runtimeFile(runtimeRoot, fromConsumer.resolve('express'));
+                const fromExpress = Module.createRequire(expressEntry);
+                phase = 'resolve-qs';
+                const qsEntry = runtimeFile(runtimeRoot, fromExpress.resolve('qs'));
+                phase = 'metadata';
+                packages.express = packageVersion(runtimeRoot, expressEntry, 'express');
+                packages.qs = packageVersion(runtimeRoot, qsEntry, 'qs');
+                phase = 'behavior';
+                withRuntimeDependencies(runtimeRoot, () => assertPatchedQs(fromExpress(qsEntry)));
+            } else {
+                phase = 'resolve-tiptap';
+                const tiptapEntry = runtimeFile(runtimeRoot, fromConsumer.resolve('@tiptap/core'));
+                phase = 'metadata';
+                packages['@tiptap/core'] = packageVersion(runtimeRoot, tiptapEntry, '@tiptap/core');
+                phase = 'behavior';
+                withRuntimeDependencies(runtimeRoot, () =>
+                    assertPatchedTiptap(fromConsumer(tiptapEntry), packages['@tiptap/core']),
+                );
+            }
+            checks.push({ name, status: 'PASS' });
+        } catch {
+            // Only fixed check names/phases and validated versions leave the
+            // probe. Never expose dependency exceptions, assertion diffs or paths.
+            checks.push({ name, status: 'FAIL', phase });
+        }
+    }
+    return { status: checks.every(check => check.status === 'PASS') ? 'PASS' : 'FAIL', packages, checks };
 }
 
-module.exports = { verifyRuntimeSecurityDependencies };
+function verifyRuntimeSecurityDependencies(runtimeDirectory) {
+    const result = inspectRuntimeSecurityDependencies(runtimeDirectory);
+    if (result.status !== 'PASS') {
+        const phases = result.checks
+            .filter(check => check.status === 'FAIL')
+            .map(check => `${check.name}:${check.phase}`)
+            .join(',');
+        throw new Error(`Runtime dependency security verification failed [${phases}]`);
+    }
+    return { status: 'PASS', packages: result.packages };
+}
+
+module.exports = { inspectRuntimeSecurityDependencies, verifyRuntimeSecurityDependencies };

@@ -10,8 +10,10 @@ import {
 
 import { adminApiExtensions } from './api/api-extensions';
 import { MetricsResolver } from './api/metrics.resolver';
+import { OrderEventsController } from './api/order-events.controller';
 import { manageDashboardGlobalViews } from './constants';
 import { MetricsService } from './service/metrics.service';
+import { OrderEventsService } from './service/order-events.service';
 import { createNextAdminStaticServer } from './static-server';
 
 export interface NextAdminPluginOptions {
@@ -24,7 +26,8 @@ export interface NextAdminPluginOptions {
 @VendurePlugin({
     imports: [PluginCommonModule],
     adminApiExtensions: { schema: adminApiExtensions, resolvers: [MetricsResolver] },
-    providers: [MetricsService],
+    providers: [MetricsService, OrderEventsService],
+    controllers: [OrderEventsController],
     configuration: config => {
         config.authOptions.customPermissions.push(manageDashboardGlobalViews);
         config.settingsStoreFields['vendure.dashboard'] = [

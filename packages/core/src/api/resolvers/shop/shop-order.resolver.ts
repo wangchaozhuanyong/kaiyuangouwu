@@ -479,33 +479,39 @@ export class ShopOrderResolver {
         return this.orderService.removeCouponCode(ctx, order.id, args.couponCode);
     }
 
-    @Transaction()
+    @Transaction('manual')
     @Mutation()
     @Allow(Permission.UpdateOrder, Permission.Owner)
     async addPaymentToOrder(
         @Ctx() ctx: RequestContext,
         @Args() args: MutationAddPaymentToOrderArgs & ActiveOrderArgs,
     ): Promise<ErrorResultUnion<AddPaymentToOrderResult, Order>> {
-        if (ctx.authorizedAsOwnerOnly) {
-            const sessionOrder = await this.activeOrderService.getActiveOrder(
-                ctx,
-                args[ACTIVE_ORDER_INPUT_FIELD_NAME],
-            );
-            if (sessionOrder) {
-                const order = await this.orderService.addPaymentToOrder(ctx, sessionOrder.id, args.input);
-                if (isGraphQlErrorResult(order)) {
+        return this.orderService.withOrderMutationTransaction(ctx, async txCtx => {
+            if (txCtx.authorizedAsOwnerOnly) {
+                const sessionOrder = await this.activeOrderService.getActiveOrder(
+                    txCtx,
+                    args[ACTIVE_ORDER_INPUT_FIELD_NAME],
+                );
+                if (sessionOrder) {
+                    const order = await this.orderService.addPaymentToOrder(
+                        txCtx,
+                        sessionOrder.id,
+                        args.input,
+                    );
+                    if (isGraphQlErrorResult(order)) {
+                        return order;
+                    }
+                    if (order.active === false) {
+                        await this.customerService.createAddressesForNewCustomer(txCtx, order);
+                    }
+                    if (order.active === false && txCtx.session?.activeOrderId === sessionOrder.id) {
+                        await this.sessionService.unsetActiveOrder(txCtx, txCtx.session);
+                    }
                     return order;
                 }
-                if (order.active === false) {
-                    await this.customerService.createAddressesForNewCustomer(ctx, order);
-                }
-                if (order.active === false && ctx.session?.activeOrderId === sessionOrder.id) {
-                    await this.sessionService.unsetActiveOrder(ctx, ctx.session);
-                }
-                return order;
             }
-        }
-        return new NoActiveOrderError();
+            return new NoActiveOrderError();
+        });
     }
 
     @Transaction()

@@ -45,18 +45,23 @@ import {
 
 export function StoreEditor({
     profile,
+    sellers = [],
+    sellerOptionsReady = true,
     sharedChannel,
     onClose,
     onCompleted,
     onError,
 }: {
     profile: StoreProfileRecord;
+    sellers?: Array<{ id: string; name: string }>;
+    sellerOptionsReady?: boolean;
     sharedChannel?: BrandChannel;
     onClose: () => void;
     onCompleted: (message: string) => Promise<void>;
     onError: (message: string) => void;
 }) {
     const requestConfirmation = useConfirmDialog();
+    const [sellerId, setSellerId] = useState(profile.channel.seller?.id ?? '');
     const [originalEnglish] = useState(() => ({
         ...profile,
         ...profile.channel.customFields,
@@ -94,6 +99,10 @@ export function StoreEditor({
         if (saving) return;
         setSaveError('');
         const statusChanged = status !== profile.status;
+        const sellerChanged = sellerId !== (profile.channel.seller?.id ?? '');
+        const selectedSeller = sellers.find(seller => seller.id === sellerId);
+        if (sellerChanged && (!sellerOptionsReady || !selectedSeller))
+            return reportError('请选择有效的所属商家主体；列表不完整时请刷新后重试');
         if (!nameZh.trim()) return reportError('请填写中文店铺名称');
         if ([supportEmail, privacyEmail].some(value => value.trim() && !isValidEmail(value))) {
             return reportError('请填写有效的客服邮箱和隐私邮箱');
@@ -101,10 +110,20 @@ export function StoreEditor({
         if (statusChanged && status === 'ACTIVE' && !profile.activationReadiness.ready)
             return reportError('上线检查未通过，暂时不能启用店铺');
         let currentPassword: string | undefined;
-        if (statusChanged) {
+        if (statusChanged || sellerChanged) {
+            const changes = [
+                ...(sellerChanged
+                    ? [
+                          `所属商家主体从“${profile.channel.seller?.name ?? '未绑定'}”改为“${selectedSeller!.name}”`,
+                      ]
+                    : []),
+                ...(statusChanged
+                    ? [`运行状态从${storeStatusLabel(profile.status)}改为${storeStatusLabel(status)}`]
+                    : []),
+            ];
             const confirmation = await requestConfirmation({
-                title: '确认变更店铺运行状态？',
-                description: `将“${storeName(profile)}”从${storeStatusLabel(profile.status)}改为${storeStatusLabel(status)}。此操作需要验证当前管理员密码。`,
+                title: sellerChanged ? '确认变更店铺归属？' : '确认变更店铺运行状态？',
+                description: `“${storeName(profile)}”：${changes.join('；')}。此操作需要验证当前管理员密码。`,
                 confirmLabel: '验证并变更',
                 tone: 'warning',
                 requireCurrentPassword: true,
@@ -133,7 +152,9 @@ export function StoreEditor({
                 privacyEmail: privacyEmail.trim() || null,
                 internalNote: internalNote.trim() || null,
                 sortOrder,
-                ...(statusChanged ? { status, currentPassword } : {}),
+                ...(statusChanged ? { status } : {}),
+                ...(sellerChanged ? { sellerId } : {}),
+                ...(statusChanged || sellerChanged ? { currentPassword } : {}),
             };
             await saveStoreProfileWithBrandAssets(
                 client,
@@ -142,7 +163,7 @@ export function StoreEditor({
                 omitUnchangedEnglish(input, originalEnglish),
             );
             try {
-                await onCompleted('中文已保存，英文待同步');
+                await onCompleted(sellerChanged ? '店铺归属和档案已保存' : '中文已保存，英文待同步');
             } catch {
                 reportError('店铺档案已保存，刷新失败，请稍后刷新页面');
             }
@@ -160,6 +181,41 @@ export function StoreEditor({
                 if (!saving) onClose();
             }}
         >
+            <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <Field label="所属商家主体（店铺归属）">
+                    <select
+                        aria-label="所属商家主体（店铺归属）"
+                        aria-describedby="store-seller-help"
+                        value={sellerId}
+                        onChange={event => setSellerId(event.target.value)}
+                        disabled={saving || !sellerOptionsReady}
+                        className={inputClass}
+                    >
+                        <option value="" disabled>
+                            请选择所属商家主体
+                        </option>
+                        {profile.channel.seller &&
+                            !sellers.some(seller => seller.id === profile.channel.seller!.id) && (
+                                <option value={profile.channel.seller.id}>
+                                    {profile.channel.seller.name}（当前绑定）
+                                </option>
+                            )}
+                        {sellers.map(seller => (
+                            <option key={seller.id} value={seller.id}>
+                                {seller.name}（ID：{seller.id}）
+                            </option>
+                        ))}
+                    </select>
+                </Field>
+                <p id="store-seller-help" className="mt-2 text-[10px] leading-4 text-slate-500">
+                    决定本店归属哪个商家，商家主体列表的占用情况以此为准。选择后点击下方保存生效。
+                </p>
+                {!sellerOptionsReady && (
+                    <p role="alert" className="mt-2 text-xs text-amber-700">
+                        商家列表尚未加载完整，请刷新后再改绑。
+                    </p>
+                )}
+            </div>
             <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="中文店铺名称 *">
                     <input
@@ -264,11 +320,11 @@ export function StoreEditor({
                 <div className="mb-3">
                     <p className="text-xs font-bold text-slate-800">法律与联系信息</p>
                     <p className="mt-1 text-[10px] leading-4 text-slate-500">
-                        由隐私政策和使用条款自动引用；四项填写完整后才能通过店铺上线检查。
+                        以下内容供隐私政策和使用条款引用；店铺归属请使用上方“所属商家主体”。四项填写完整后才能通过店铺上线检查。
                     </p>
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
-                    <Field label="法定经营主体">
+                    <Field label="法定经营主体（法律文案）">
                         <input
                             value={legalEntityName}
                             maxLength={200}

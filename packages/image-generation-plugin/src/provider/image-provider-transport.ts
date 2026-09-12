@@ -1,4 +1,5 @@
 import { IMAGE_GENERATION_DELIVERY_TIMEOUT_MS } from '../constants';
+import { SafeProviderUrlService } from '../security/safe-provider-url.service';
 
 import {
     IMAGE_GENERATION_TIMEOUT_MESSAGE,
@@ -10,7 +11,7 @@ import {
     DefinitiveImageProviderError,
     RetryableImageProviderError,
 } from './image-provider-errors';
-import { readResponseText, remainingTimeout } from './image-provider-io';
+import { pinnedProviderRequest, readResponseText, remainingTimeout } from './image-provider-io';
 import { ProviderJsonResponse } from './image-provider-response';
 import {
     httpFailure,
@@ -21,6 +22,8 @@ import {
 } from './image-provider-telemetry';
 
 export class ImageProviderTransport {
+    constructor(private readonly safeUrls: SafeProviderUrlService) {}
+
     requestGenerationJson(
         url: URL,
         apiKey: string,
@@ -104,12 +107,16 @@ export class ImageProviderTransport {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), timeoutMs);
         try {
-            return await fetch(url, {
+            const target = await this.safeUrls.resolveForRequest(url.toString()).catch(() => {
+                throw new DefinitiveImageProviderError('中转站地址未通过网络安全校验');
+            });
+            return await pinnedProviderRequest(target, {
                 ...init,
                 signal: controller.signal,
                 redirect: init.redirect ?? 'manual',
             });
         } catch (error) {
+            if (error instanceof DefinitiveImageProviderError) throw error;
             throw new AmbiguousImageProviderError(
                 error instanceof Error && error.name === 'AbortError'
                     ? timeoutMessage

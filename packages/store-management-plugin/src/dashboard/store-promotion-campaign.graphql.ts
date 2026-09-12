@@ -195,6 +195,13 @@ export const revokeStoreCouponCampaignOutstandingMutation = gql`
     mutation RevokeStoreCouponCampaignOutstanding($id: ID!, $password: String!, $reason: String) {
         revokeStoreCouponCampaignOutstanding(id: $id, password: $password, reason: $reason) {
             campaignId
+            skippedCount
+            failedCount
+            outcomes {
+                couponId
+                status
+                reason
+            }
             affectedCount
         }
     }

@@ -40,6 +40,8 @@ export class StoreProfileAdminResolver {
             if (input.status === 'SUSPENDED') {
                 throw new UserInputError('暂停营业必须使用安全清退入口');
             }
+        }
+        if (input.status != null || input.sellerId !== undefined) {
             await this.passwordService.assertCurrentPassword(ctx, input.currentPassword ?? '');
         }
         return this.storeProfileService.update(ctx, input);

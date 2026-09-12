@@ -76,7 +76,7 @@ jobs:
                   fi
                   changed=$(git diff --name-only "$(git merge-base "$base" HEAD)" HEAD)
 
-                  if echo "$changed" | grep -qE '^(packages/|scripts/(architecture-debt|check-migration-registry)|package\.json|bun\.lock|bunfig\.toml)'; then
+                  if echo "$changed" | grep -qE '^(packages/|scripts/(architecture-debt|check-migration-registry|codegen/icloud-admin-contract)|package\.json|bun\.lock|bunfig\.toml)'; then
                     echo "packages=true" >> "$GITHUB_OUTPUT"
                   else
                     echo "packages=false" >> "$GITHUB_OUTPUT"
@@ -146,6 +146,8 @@ jobs:
                   DIGITAL_DELIVERY_ROOT: /tmp/vendure-build-digital
                   DIGITAL_DELIVERY_SIGNING_SECRET: build-check-digital-secret-000000000000000000000000
                   IMAGE_GENERATION_STORAGE_ROOT: /tmp/vendure-build-images
+                  CUSTOMER_IMAGE_PROCESSOR_SOCKET: /tmp/vendure-build-processor.sock
+                  CUSTOMER_AVATAR_STORAGE_ROOT: /tmp/vendure-build-avatars
                   IMAGE_GENERATION_DOWNLOAD_SECRET: build-check-image-download-key-000000000000000000000000
                   IMAGE_GENERATION_MASTER_KEY: build-check-image-master-key-000000000000000000000000
                   TWO_FACTOR_DASHBOARD_ENCRYPTION_KEY: build-check-dashboard-2fa-key-000000000000000000000000
@@ -184,6 +186,13 @@ jobs:
             matrix:
                 node: ${{ github.event_name == 'pull_request' && fromJSON('["22.x"]') || fromJSON('["20.x", "22.x", "24.x"]') }}
         services:
+            icloud-mysql:
+                image: mysql:8.4
+                env:
+                    MYSQL_ROOT_PASSWORD: password
+                ports:
+                    - 33552:3306
+                options: --health-cmd="mysqladmin ping --silent" --health-interval=10s --health-timeout=5s --health-retries=10
             translation-postgres:
                 image: postgres:16
                 env:
@@ -205,6 +214,20 @@ jobs:
               run: bun run --cwd packages/dev-server build:local-plugins
             - name: Unit tests
               run: bun run test
+            - name: iCloud plugin and dashboard extension types
+              working-directory: packages/icloud-relay-plugin
+              run: bun run check-types
+            - name: iCloud admin HTTP and SQL.js regression
+              working-directory: packages/icloud-relay-plugin
+              env:
+                  DB: sqljs
+              run: bun run test:integration
+            - name: iCloud admin MySQL concurrency regression
+              working-directory: packages/icloud-relay-plugin
+              env:
+                  DB: mysql
+                  E2E_MYSQL_PORT: '33552'
+              run: bun run test:integration
             - name: Translation outbox PostgreSQL retry and process recovery
               working-directory: packages/content-translation-plugin
               env:

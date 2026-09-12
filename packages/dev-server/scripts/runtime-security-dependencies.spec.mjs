@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import Module, { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
@@ -7,6 +7,7 @@ import test from 'node:test';
 
 const require = createRequire(import.meta.url);
 const {
+    inspectRuntimeSecurityDependencies,
     verifyRuntimeSecurityDependencies,
 } = require('../../../deploy/verify-runtime-security-dependencies.cjs');
 
@@ -92,7 +93,7 @@ for (const failure of ['unsafeArray', 'unsafeBuffer', 'unsafeTiptap']) {
         const originalLoad = Module._load;
 
         assert.throws(() => verifyRuntimeSecurityDependencies(runtime), {
-            message: 'Runtime dependency security verification failed',
+            message: `Runtime dependency security verification failed [${failure === 'unsafeTiptap' ? 'tiptap' : 'express-qs'}:behavior]`,
         });
         assert.equal(Module._load, originalLoad);
     });
@@ -161,11 +162,79 @@ void test('redacts arbitrary dependency exceptions and returns no source or path
     assert.throws(
         () => verifyRuntimeSecurityDependencies(runtime),
         error => {
-            assert.equal(error.message, 'Runtime dependency security verification failed');
+            assert.equal(
+                error.message,
+                'Runtime dependency security verification failed [express-qs:behavior]',
+            );
             assert.equal(error.cause, undefined);
             assert.equal(error.stack.includes('FAKE_SECRET_MUST_NOT_ESCAPE'), false);
             assert.equal(error.stack.includes(runtime), false);
             return true;
         },
     );
+});
+
+void test('checks qs even when Tiptap is absent and keeps the operation failed', t => {
+    const { runtime, tiptap } = fixture(t);
+    rmSync(tiptap, { recursive: true });
+    const result = inspectRuntimeSecurityDependencies(runtime);
+    assert.deepEqual(result, {
+        status: 'FAIL',
+        packages: { express: '5.2.1', qs: '6.15.2' },
+        checks: [
+            { name: 'express-qs', status: 'PASS' },
+            { name: 'tiptap', status: 'FAIL', phase: 'resolve-tiptap' },
+        ],
+    });
+    assert.throws(() => verifyRuntimeSecurityDependencies(runtime), {
+        message: 'Runtime dependency security verification failed [tiptap:resolve-tiptap]',
+    });
+});
+
+void test('reports independent dependency failures without echoing arbitrary exceptions', t => {
+    const { runtime, qs, tiptap } = fixture(t);
+    writeFileSync(path.join(qs, 'index.cjs'), "throw new Error('FAKE_PRIVATE_VALUE');");
+    rmSync(tiptap, { recursive: true });
+    const result = inspectRuntimeSecurityDependencies(runtime);
+    assert.deepEqual(result.checks, [
+        { name: 'express-qs', status: 'FAIL', phase: 'behavior' },
+        { name: 'tiptap', status: 'FAIL', phase: 'resolve-tiptap' },
+    ]);
+    assert.equal(JSON.stringify(result).includes('FAKE_PRIVATE_VALUE'), false);
+    assert.equal(JSON.stringify(result).includes(runtime), false);
+});
+
+void test('uses the Dashboard consumer with an isolated dependency layout', t => {
+    const { runtime, tiptap } = fixture(t);
+    const dashboard = path.join(runtime, 'packages/dashboard');
+    mkdirSync(path.join(dashboard, 'node_modules/@tiptap'), { recursive: true });
+    writeFileSync(path.join(dashboard, 'package.json'), '{"name":"@vendure/dashboard"}');
+    renameSync(tiptap, path.join(dashboard, 'node_modules/@tiptap/core'));
+    assert.equal(verifyRuntimeSecurityDependencies(runtime).status, 'PASS');
+});
+
+void test('checks Core own Express dependency instead of an unrelated hoisted safe copy', t => {
+    const { runtime } = fixture(t);
+    const core = path.join(runtime, 'packages/core');
+    mkdirSync(core, { recursive: true });
+    writeFileSync(path.join(core, 'package.json'), '{"name":"@vendure/core"}');
+    const express = writePackage(core, 'express', '5.2.1', 'module.exports = {};');
+    writePackage(express, 'qs', '6.15.2', 'exports.parse = () => ({});');
+    assert.deepEqual(inspectRuntimeSecurityDependencies(runtime).checks, [
+        { name: 'express-qs', status: 'FAIL', phase: 'behavior' },
+        { name: 'tiptap', status: 'PASS' },
+    ]);
+});
+
+void test('rejects an outside consumer manifest before executing its dependencies', t => {
+    const { directory, runtime } = fixture(t);
+    const dashboard = path.join(runtime, 'packages/dashboard');
+    mkdirSync(dashboard, { recursive: true });
+    const outside = path.join(directory, 'outside-package.json');
+    writeFileSync(outside, '{"name":"@vendure/dashboard"}');
+    symlinkSync(outside, path.join(dashboard, 'package.json'));
+    assert.deepEqual(inspectRuntimeSecurityDependencies(runtime).checks, [
+        { name: 'express-qs', status: 'PASS' },
+        { name: 'tiptap', status: 'FAIL', phase: 'consumer' },
+    ]);
 });

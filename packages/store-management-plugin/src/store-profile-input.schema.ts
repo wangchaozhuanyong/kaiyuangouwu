@@ -4,6 +4,7 @@ export const storeProfileInputSchema = gql`
     input UpdateStoreProfileInput {
         id: ID!
         expectedUpdatedAt: DateTime!
+        sellerId: ID
         storefrontNameZh: String
         storefrontNameEn: String
         storefrontNameEnLocked: Boolean

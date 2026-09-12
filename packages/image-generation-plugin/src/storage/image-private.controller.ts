@@ -1,5 +1,4 @@
 import { Controller, Get, Param, Res } from '@nestjs/common';
-import { createReadStream, statSync } from 'node:fs';
 
 import { ImagePrivateStorageService } from './image-private-storage.service';
 
@@ -14,9 +13,16 @@ export class ImagePrivateController {
             response.status(404).send('Image link is invalid or expired');
             return;
         }
-        const { asset, path, download } = authorized;
+        const { asset, download } = authorized;
+        let bytes: Buffer;
+        try {
+            bytes = await this.storage.read(asset);
+        } catch {
+            response.status(404).send('Image is unavailable');
+            return;
+        }
         response.setHeader('Content-Type', asset.mimeType);
-        response.setHeader('Content-Length', String(statSync(path).size));
+        response.setHeader('Content-Length', String(bytes.length));
         response.setHeader(
             'Content-Disposition',
             `${download ? 'attachment' : 'inline'}; filename="${asciiFileName(asset.originalName)}"`,
@@ -24,7 +30,7 @@ export class ImagePrivateController {
         response.setHeader('Cache-Control', 'private, no-store, max-age=0');
         response.setHeader('X-Content-Type-Options', 'nosniff');
         response.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
-        createReadStream(path).pipe(response);
+        response.send(bytes);
     }
 }
 

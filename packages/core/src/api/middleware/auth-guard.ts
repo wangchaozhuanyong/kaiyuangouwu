@@ -12,6 +12,7 @@ import { Logger, LogLevel } from '../../config/logger/vendure-logger';
 import { CachedSession } from '../../config/session-cache/session-cache-strategy';
 import { CustomerChannelAssignmentService } from '../../service/helpers/customer-channel-assignment/customer-channel-assignment.service';
 import { RequestContextService } from '../../service/helpers/request-context/request-context.service';
+import { getUserChannelsPermissions } from '../../service/helpers/utils/get-user-channels-permissions';
 import { ApiKeyService } from '../../service/services/api-key.service';
 import { SessionService } from '../../service/services/session.service';
 import { extractSessionToken, ExtractTokenResult } from '../common/extract-session-token';
@@ -202,7 +203,17 @@ export class AuthGuard implements CanActivate {
 
         const session = await this.sessionService.getSessionFromToken(apiKey.apiKeyHash);
         if (session) {
-            return session;
+            // The key lookup already loads current roles. Do not authorize from stale
+            // permissions if another API instance has an independently cached session.
+            return {
+                ...session,
+                user: {
+                    id: apiKey.user.id,
+                    identifier: apiKey.user.identifier,
+                    verified: apiKey.user.verified,
+                    channelPermissions: getUserChannelsPermissions(apiKey.user),
+                },
+            };
         }
 
         // At this point we may assert:

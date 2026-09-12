@@ -474,6 +474,49 @@ describe('StorefrontContentService publication guard', () => {
 });
 
 describe('StorefrontContentService sharing content isolation', () => {
+    it('only returns account policies and support to an anonymous Shop API caller', async () => {
+        const blocks = ['HERO', 'CATEGORY_SHOWCASE', 'LEGAL', 'SUPPORT', 'CUSTOM'].map(
+            (type, index) =>
+                new StorefrontContentBlock({
+                    id: String(index),
+                    type: type as never,
+                    enabled: true,
+                    imageUrl: '/assets/preview/fixture.jpg',
+                    settings: {},
+                    translations: [
+                        {
+                            languageCode: LanguageCode.zh_Hans,
+                            title: 'Fixture',
+                            body: '',
+                            subtitle: '',
+                            ctaLabel: '',
+                        },
+                        {
+                            languageCode: LanguageCode.en,
+                            title: 'Fixture',
+                            body: '',
+                            subtitle: '',
+                            ctaLabel: '',
+                        },
+                    ],
+                    items: [],
+                }),
+        );
+        const repository = { find: vi.fn().mockResolvedValue(blocks) };
+        const service = new StorefrontContentService(
+            { getRepository: vi.fn().mockReturnValue(repository) } as never,
+            { translate: vi.fn(value => value) } as never,
+            { storefrontUrl: vi.fn() } as never,
+            {} as never,
+        );
+        const result = await service.findPublished({ channelId: 'store-a' } as never, true);
+        expect(result.map(block => block.type)).toEqual(['LEGAL', 'SUPPORT']);
+        expect(repository.find).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: expect.objectContaining({ channelId: 'store-a', type: expect.anything() }),
+            }),
+        );
+    });
     it('keeps sharing records available to admin but excludes them from published homepage content', async () => {
         const blocks = [undefined, 'referral-system-poster', 'referral-custom-poster'].map(
             (purpose, index) =>

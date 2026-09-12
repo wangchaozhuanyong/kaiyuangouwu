@@ -4,6 +4,7 @@ import { ID } from '@vendure/common/lib/shared-types';
 import {
     FacetService,
     FacetValueService,
+    Permission,
     ProductService,
     ProductVariant,
     ProductVariantService,
@@ -56,6 +57,7 @@ import { CatalogImportWriter } from './catalog-import-writer';
 import { CatalogOperationsService } from './catalog-operations.service';
 import { catalogCreateNewSourceRecordKey } from './catalog-row-identity';
 import { CatalogSupplierService } from './catalog-supplier.service';
+import { manageCatalogImportPermission } from './constants';
 import { CatalogImportJob } from './entities/catalog-import-job.entity';
 import { CatalogImportRow } from './entities/catalog-import-row.entity';
 import { CatalogSourceBinding } from './entities/catalog-source-binding.entity';
@@ -670,6 +672,7 @@ export class CatalogImportService {
     }
 
     async queueExecution(ctx: RequestContext, id: ID): Promise<CatalogImportJob> {
+        this.assertExecutionPermission(ctx);
         const job = await this.findJob(ctx, id);
         if (!isCatalogImportResolutionState(job.state)) {
             throw new UserInputError('当前任务状态不能执行');
@@ -682,6 +685,9 @@ export class CatalogImportService {
         job.errorMessage = null;
         job.progress = 0;
         job.completedAt = null;
+        // Execute as the administrator authorizing this attempt, including when a
+        // different administrator retries a job whose previous actor lost access.
+        job.actorId = String(ctx.activeUserId);
         await this.connection.getRepository(ctx, CatalogImportJob).save(job);
         if (!this.enqueue) throw new UserInputError('导入队列尚未就绪，请稍后重试');
         await this.enqueue(job.id);
@@ -689,9 +695,10 @@ export class CatalogImportService {
     }
 
     async executeJob(ctx: RequestContext, id: ID, onProgress: (progress: number) => void): Promise<void> {
+        this.assertExecutionPermission(ctx);
         const repository = this.connection.getRepository(ctx, CatalogImportJob);
         const claimed = await repository.update(
-            { id, state: 'QUEUED' },
+            { id, state: 'QUEUED', channelId: ctx.channelId },
             {
                 state: 'RUNNING',
                 startedAt: new Date(),
@@ -772,6 +779,15 @@ export class CatalogImportService {
             completedAt: new Date(),
             errorMessage: errorCount > 0 ? `${errorCount} 行未执行，请查看报告` : null,
         });
+    }
+
+    private assertExecutionPermission(ctx: RequestContext): void {
+        if (
+            !ctx.activeUserId ||
+            !ctx.userHasPermissions([Permission.SuperAdmin, manageCatalogImportPermission.Update])
+        ) {
+            throw new UserInputError('当前账号没有此门店的导入执行权限');
+        }
     }
 
     async rollback(ctx: RequestContext, id: ID): Promise<CatalogImportJob> {

@@ -79,7 +79,13 @@ type TestContext = { manager?: DataSource['manager'] };
 describe('USDT amount lifecycle on a real database', () => {
     let db: DataSource;
     let service: UsdtPaymentService;
-    const orderService = { addPaymentToOrder: vi.fn() };
+    const orderService = {
+        addPaymentToOrder: vi.fn(),
+        withOrderMutationTransaction: (_ctx: TestContext, work: (ctx: TestContext) => Promise<unknown>) =>
+            db.options.type === 'sqljs'
+                ? db.transaction(manager => work({ manager }))
+                : db.transaction('READ COMMITTED', manager => work({ manager })),
+    };
     const eventBus = { publish: vi.fn() };
     const chain = { scanIncomingTransfers: vi.fn(), solidifiedTransaction: vi.fn() };
     let nextOrder: number;

@@ -98,6 +98,7 @@ export interface UpdateVirtualEmailInput {
 
 export interface PublicMailItem {
     id: ID;
+    virtualEmailId?: ID | null;
     fromAddress: string;
     fromName: string;
     subject: string;

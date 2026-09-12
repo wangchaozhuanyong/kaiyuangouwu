@@ -23,6 +23,7 @@ export function useStorefrontMerchandising({
     language,
     vendureLanguageCode,
     storefrontContextResolved,
+    catalogAccessGranted,
     customer,
     recentProductIds,
     products,
@@ -69,7 +70,7 @@ export function useStorefrontMerchandising({
             take: bestSellerCandidateCount,
         }),
         queryFn: ({ signal }) => api.catalog({ sort: 'sales', take: bestSellerCandidateCount }, signal),
-        enabled: storefrontContextResolved && showBestSellers,
+        enabled: storefrontContextResolved && catalogAccessGranted && showBestSellers,
         staleTime: PUBLIC_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
         meta: publicQueryMeta(),
@@ -86,6 +87,7 @@ export function useStorefrontMerchandising({
         queryFn: () => api.productSales(bestSellerCandidates.map(product => product.id)),
         enabled:
             storefrontContextResolved &&
+            catalogAccessGranted &&
             showBestSellers &&
             !bestSellerCatalogQuery.isPending &&
             bestSellerCandidates.length > 0,
@@ -96,7 +98,7 @@ export function useStorefrontMerchandising({
 
     const pinnedBestSellerQuery = useProductsByIdsQuery({
         api,
-        productIds: pinnedBestSellerIds,
+        productIds: catalogAccessGranted ? pinnedBestSellerIds : [],
         market,
         language,
     });
@@ -113,7 +115,7 @@ export function useStorefrontMerchandising({
 
     const personalizationSourceQuery = useProductsByIdsQuery({
         api,
-        productIds: personalizationSourceIds,
+        productIds: catalogAccessGranted ? personalizationSourceIds : [],
         market,
         language,
     });
@@ -126,7 +128,7 @@ export function useStorefrontMerchandising({
         }),
         queryFn: ({ signal }) =>
             api.catalog({ sort: 'recommended', take: recommendationCandidateCount }, signal),
-        enabled: storefrontContextResolved && showRecommendations,
+        enabled: storefrontContextResolved && catalogAccessGranted && showRecommendations,
         staleTime: PUBLIC_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
         meta: publicQueryMeta(),

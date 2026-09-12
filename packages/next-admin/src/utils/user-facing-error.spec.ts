@@ -17,7 +17,7 @@ describe('toUserFacingError', () => {
             new Error('CombinedGraphQLErrors: Cannot query field secret'),
             '数据加载失败，请稍后重试或联系系统管理员',
         );
-        expect(message).toContain('管理服务没有返回可识别的失败原因');
+        expect(message).toContain('页面与管理服务的接口不一致');
         expect(message).toContain('处理方法：');
         expect(message).not.toContain('secret');
     });

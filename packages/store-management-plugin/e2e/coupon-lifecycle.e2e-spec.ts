@@ -10,7 +10,10 @@ import {
     mergeConfig,
     Order,
     OrderService,
+    Payment,
+    PaymentMethod,
     PaymentMethodHandler,
+    PaymentMethodService,
     Promotion,
     Refund,
     RefundStateTransitionEvent,
@@ -18,7 +21,7 @@ import {
     TransactionalConnection,
 } from '@vendure/core';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
-import { createTestEnvironment } from '@vendure/testing';
+import { createTestEnvironment, SimpleGraphQLClient } from '@vendure/testing';
 import fs from 'fs/promises';
 import gql from 'graphql-tag';
 import path from 'path';
@@ -27,11 +30,18 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { initialData } from '../../../e2e-common/e2e-initial-data';
 import { TEST_SETUP_TIMEOUT_MS, testConfig } from '../../../e2e-common/test-config';
 import { awaitRunningJobs } from '../../core/e2e/utils/await-running-jobs';
+import { CouponOrderAllocation } from '../src/entities/coupon-order-allocation.entity';
 import { CustomerCoupon } from '../src/entities/customer-coupon.entity';
 import { StoreCouponCampaignConfig } from '../src/entities/store-coupon-campaign-config.entity';
 import { StoreProfile } from '../src/entities/store-profile.entity';
+import { customerCouponEntitlement } from '../src/promotion/store-commerce-promotion-actions';
+import { StoreCouponLifecycleService } from '../src/promotion/store-coupon-lifecycle.service';
+import { StorePromotionCampaignService } from '../src/promotion/store-promotion-campaign.service';
 import { StoreManagementPlugin } from '../src/store-management.plugin';
+import { usdtTrc20PaymentHandler } from '../src/usdt/usdt-payment-handler';
+import { createUsdtPaymentProof } from '../src/usdt/usdt-payment-proof';
 
+let deferRefunds = false;
 const couponPaymentHandler = new PaymentMethodHandler({
     code: 'coupon-e2e-payment',
     description: [{ languageCode: LanguageCode.en, value: 'Coupon E2E payment' }],
@@ -43,11 +53,14 @@ const couponPaymentHandler = new PaymentMethodHandler({
         metadata: {},
     }),
     settlePayment: () => ({ success: true }),
-    createRefund: (_ctx, _input, amount) => ({
-        state: 'Settled',
-        transactionId: `coupon-e2e-refund-${amount}`,
-        metadata: {},
-    }),
+    createRefund: (_ctx, _input, amount) =>
+        deferRefunds
+            ? false
+            : {
+                  state: 'Settled',
+                  transactionId: `coupon-e2e-refund-${amount}`,
+                  metadata: {},
+              },
 });
 
 const translationProvider: ContentTranslationProvider = {
@@ -393,6 +406,38 @@ describe('coupon lifecycle closed loop', () => {
             customerCount: 0,
         });
         await adminClient.asSuperAdmin();
+        const paymentContext = await server.app.get(RequestContextService).create({ apiType: 'admin' });
+        const existingUsdt = await server.app
+            .get(TransactionalConnection)
+            .getRepository(paymentContext, PaymentMethod)
+            .findOne({ where: { code: 'usdt-trc20' } });
+        if (!existingUsdt)
+            await server.app.get(PaymentMethodService).create(paymentContext, {
+                code: 'usdt-trc20',
+                enabled: true,
+                handler: { code: usdtTrc20PaymentHandler.code, arguments: [] },
+                translations: [
+                    {
+                        languageCode: LanguageCode.zh_Hans,
+                        name: 'Disposable USDT proof fixture',
+                        description: '',
+                    },
+                ],
+            });
+        const paymentRepository = server.app
+            .get(TransactionalConnection)
+            .getRepository(paymentContext, PaymentMethod);
+        const fixtureUsdt = await paymentRepository.findOneOrFail({
+            where: { code: 'usdt-trc20' },
+            relations: { channels: true },
+        });
+        await paymentRepository.update(fixtureUsdt.id, { enabled: true });
+        if (!fixtureUsdt.channels.some(channel => String(channel.id) === String(paymentContext.channelId)))
+            await paymentRepository
+                .createQueryBuilder()
+                .relation('channels')
+                .of(fixtureUsdt)
+                .add(paymentContext.channelId);
         const product = await adminClient.query(CREATE_PRODUCT, {
             input: {
                 enabled: true,
@@ -840,6 +885,29 @@ describe('coupon lifecycle closed loop', () => {
             ),
         ).toBe(false);
         await expect(shopClient.query(CLAIM, { campaignId: merchantCampaignId })).rejects.toThrow('其他店铺');
+        for (const mutation of [
+            `mutation ($id: ID!, $password: String!) { setStorePromotionEnabled(id: $id, enabled: false, password: $password) { id } }`,
+            `mutation ($id: ID!, $password: String!) { deleteStorePromotion(id: $id, password: $password) { result } }`,
+        ])
+            await expect(
+                adminClient.query(gql(mutation), {
+                    id: merchantCampaignId,
+                    password: SUPER_ADMIN_USER_PASSWORD,
+                }),
+            ).rejects.toThrow('其他店铺');
+        await expect(
+            adminClient.query(
+                gql`
+                    mutation ($id: ID!) {
+                        updateStorePromotionName(id: $id, name: "Wrong shop") {
+                            id
+                        }
+                    }
+                `,
+                { id: merchantCampaignId },
+            ),
+        ).rejects.toThrow('其他店铺');
+
         await expect(
             adminClient.query(
                 gql`
@@ -854,6 +922,12 @@ describe('coupon lifecycle closed loop', () => {
         shopClient.setRequestHeader('Authorization', null);
         shopClient.setRequestHeader('vendure-token', token);
         try {
+            // Private storefronts require login before exposing another channel's campaigns.
+            await expect(shopClient.query(ACTIVE_COUPONS)).rejects.toThrow('not currently authorized');
+            await shopClient.asUserWithCredentials(
+                'coupon-audit-channel-isolation@example.com',
+                'CouponAudit123!',
+            );
             expect(
                 (await shopClient.query(ACTIVE_COUPONS)).activeStorefrontCoupons.some(
                     (item: any) => item.id === merchantCampaignId,
@@ -861,6 +935,67 @@ describe('coupon lifecycle closed loop', () => {
             ).toBe(true);
         } finally {
             shopClient.setRequestHeader('vendure-token', null);
+        }
+    });
+
+    it('prevents native promotion mutations from bypassing coupon lifecycle management', async () => {
+        await auditCustomer('closure-native-admin');
+        const coupon = await auditClaim({ name: 'Closure native admin guard' });
+        adminClient.setRequestHeader('x-vendure-sensitive-action-password', SUPER_ADMIN_USER_PASSWORD);
+        try {
+            await expect(
+                adminClient.query(
+                    gql`
+                        mutation ($id: ID!) {
+                            updatePromotion(input: { id: $id, enabled: false }) {
+                                __typename
+                            }
+                        }
+                    `,
+                    { id: coupon.campaignId },
+                ),
+            ).rejects.toThrow('优惠券管理入口');
+            await expect(
+                adminClient.query(
+                    gql`
+                        mutation ($id: ID!) {
+                            deletePromotion(id: $id) {
+                                result
+                            }
+                        }
+                    `,
+                    { id: coupon.campaignId },
+                ),
+            ).rejects.toThrow('优惠券管理入口');
+            await expect(
+                adminClient.query(
+                    gql`
+                        mutation ($ids: [ID!]!) {
+                            deletePromotions(ids: $ids) {
+                                result
+                            }
+                        }
+                    `,
+                    { ids: [coupon.campaignId] },
+                ),
+            ).rejects.toThrow('优惠券管理入口');
+            for (const mutation of ['assignPromotionsToChannel', 'removePromotionsFromChannel']) {
+                await expect(
+                    adminClient.query(
+                        gql`mutation ($ids: [ID!]!, $channel: ID!) {
+                    ${mutation}(input: { promotionIds: $ids, channelId: $channel }) { id }
+                }`,
+                        { ids: [coupon.campaignId], channel: 'T_1' },
+                    ),
+                ).rejects.toThrow('优惠券管理入口');
+            }
+            expect(
+                (await shopClient.query(MY_COUPONS)).myStorefrontCoupons.find(
+                    (item: any) => item.id === coupon.id,
+                ).status,
+            ).toBe('AVAILABLE');
+        } finally {
+            adminClient.setRequestHeader('x-vendure-sensitive-action-password', null);
         }
     });
 
@@ -1174,6 +1309,808 @@ describe('coupon lifecycle closed loop', () => {
         );
     }, 30_000);
 
+    it('paginates more than 200 old coupons and selects the valid entitlement beyond the historical batch', async () => {
+        await auditCustomer('closure-pages');
+        const coupon = await auditClaim({ name: 'Closure pages', issueLimit: 1000 });
+        const connection = server.app.get(TransactionalConnection);
+        const strategy = server.app.get(ConfigService).entityOptions.entityIdStrategy;
+        const repository = connection.rawConnection.getRepository(CustomerCoupon);
+        const original = await repository.findOneByOrFail({ id: strategy.decodeId(coupon.id) });
+        const history = Array.from({ length: 205 }, () =>
+            repository.create({
+                ...original,
+                id: undefined,
+                version: 1,
+                claimedAt: new Date(Date.now() - 10 * 86_400_000),
+                validFrom: new Date(Date.now() - 10 * 86_400_000),
+                validUntil: new Date(Date.now() - 3 * 86_400_000),
+                status: 'EXPIRED',
+            }),
+        );
+        await repository.save(history);
+        expect((await shopClient.query(MY_COUPONS)).myStorefrontCoupons).toHaveLength(206);
+        const query = gql`
+            query ($options: StoreCouponPageOptions) {
+                myStorefrontCouponsPage(options: $options) {
+                    totalItems
+                    items {
+                        id
+                        status
+                    }
+                }
+            }
+        `;
+        const page1 = (await shopClient.query(query, { options: { take: 200 } })).myStorefrontCouponsPage;
+        const page2 = (await shopClient.query(query, { options: { skip: 200, take: 200 } }))
+            .myStorefrontCouponsPage;
+        expect(page1.totalItems).toBe(206);
+        expect(page2.items).toHaveLength(6);
+        expect(new Set([...page1.items, ...page2.items].map((item: any) => item.id)).size).toBe(206);
+        expect(
+            (await shopClient.query(query, { options: { statuses: ['AVAILABLE'], usableOnly: true } }))
+                .myStorefrontCouponsPage.items,
+        ).toEqual([{ id: coupon.id, status: 'AVAILABLE' }]);
+        await shopClient.query(ADD_ITEM, { productVariantId });
+        expect((await shopClient.query(APPLY_BEST_OWNED_COUPON)).applyBestStorefrontCoupon.id).toBe(
+            coupon.id,
+        );
+        const orderId = strategy.decodeId((await shopClient.query(AUDIT_ORDER)).activeOrder.id);
+        const allocationRepo = connection.rawConnection.getRepository(CouponOrderAllocation);
+        await allocationRepo.save(
+            history.map(item =>
+                allocationRepo.create({
+                    channelId: item.channelId,
+                    customerId: item.customerId,
+                    customerCouponId: item.id,
+                    promotionId: item.promotionId,
+                    orderId,
+                    status: 'USED',
+                    campaignName: 'Historical usage',
+                    currencyCode: original.currencyCode,
+                    appliedAt: item.claimedAt,
+                    usedAt: item.claimedAt,
+                }),
+            ),
+        );
+        const usageQuery = gql`
+            query ($options: StoreCouponPageOptions) {
+                myStorefrontCouponUsageRecordsPage(options: $options) {
+                    items {
+                        id
+                        status
+                    }
+                    totalItems
+                }
+            }
+        `;
+        const usage1 = (await shopClient.query(usageQuery, { options: { take: 200, statuses: ['USED'] } }))
+            .myStorefrontCouponUsageRecordsPage;
+        const usage2 = (
+            await shopClient.query(usageQuery, { options: { skip: 200, take: 200, statuses: ['USED'] } })
+        ).myStorefrontCouponUsageRecordsPage;
+        expect(usage1.totalItems).toBe(205);
+        expect(usage2.items).toHaveLength(5);
+        expect(new Set([...usage1.items, ...usage2.items].map((item: any) => item.id)).size).toBe(205);
+        expect((await shopClient.query(USAGE_RECORDS)).myStorefrontCouponUsageRecords).toHaveLength(205);
+    });
+
+    it('releases allocation and discount when revoking a reserved unpaid coupon', async () => {
+        await auditCustomer('closure-revoke-allocation');
+        const coupon = await auditClaim({ name: 'Closure revoke allocation' });
+        await shopClient.query(ADD_ITEM, { productVariantId });
+        await shopClient.query(APPLY_OWNED_COUPON, { id: coupon.id });
+        const before = (await shopClient.query(AUDIT_ORDER)).activeOrder;
+        await adminClient.query(
+            gql`
+                mutation ($id: ID!) {
+                    revokeStoreCustomerCoupon(id: $id) {
+                        id
+                        status
+                    }
+                }
+            `,
+            { id: coupon.id },
+        );
+        const after = (await shopClient.query(AUDIT_ORDER)).activeOrder;
+        expect(after.couponCodes).toEqual([]);
+        expect(after.totalWithTax).toBeGreaterThan(before.totalWithTax);
+        const strategy = server.app.get(ConfigService).entityOptions.entityIdStrategy;
+        const allocation = await server.app
+            .get(TransactionalConnection)
+            .rawConnection.getRepository(CouponOrderAllocation)
+            .findOneByOrFail({ customerCouponId: strategy.decodeId(coupon.id) });
+        expect(allocation.status).toBe('RELEASED');
+    });
+
+    it.each(['before', 'equal', 'after', 'unverified'] as const)(
+        'uses trusted actual payment time at the expiry boundary: %s',
+        async boundary => {
+            await auditCustomer('closure-payment-' + boundary);
+            const coupon = await auditClaim({ name: 'Closure trusted payment ' + boundary });
+            await shopClient.query(ADD_ITEM, { productVariantId });
+            await shopClient.query(APPLY_OWNED_COUPON, { id: coupon.id });
+            await prepareOrderForPayment();
+            const order = (await shopClient.query(AUDIT_ORDER)).activeOrder;
+            const connection = server.app.get(TransactionalConnection);
+            const strategy = server.app.get(ConfigService).entityOptions.entityIdStrategy;
+            const repository = connection.rawConnection.getRepository(CustomerCoupon);
+            const stored = await repository.findOneByOrFail({ id: strategy.decodeId(coupon.id) });
+            const expiresAt = Math.floor(Date.now() / 1000) * 1000 - 10_000;
+            await repository.update(stored.id, {
+                validFrom: new Date(expiresAt - 86_400_000),
+                validUntil: new Date(expiresAt),
+            });
+            const paidAt =
+                boundary === 'before'
+                    ? expiresAt - 1000
+                    : boundary === 'equal'
+                      ? expiresAt
+                      : expiresAt + 1000;
+            const proof = createUsdtPaymentProof({
+                channelId: String(stored.channelId),
+                orderId: String(strategy.decodeId(order.id)),
+                quoteId: 'closure-' + boundary,
+                fiatCurrencyCode: 'USD',
+                fiatAmount: order.totalWithTax,
+                transactionId: ['before', 'equal', 'after', 'unverified']
+                    .indexOf(boundary)
+                    .toString()
+                    .repeat(64),
+                usdtAmount: '1.000000',
+                receivingAddressFingerprint: 'f'.repeat(64),
+                expiresAt: Date.now() + 60_000,
+                ...(boundary === 'unverified' ? {} : { paidAt }),
+            });
+            const result = (
+                await shopClient.query(
+                    gql`
+                        mutation ($proof: String!) {
+                            addPaymentToOrder(
+                                input: {
+                                    method: "usdt-trc20"
+                                    metadata: { proof: $proof, paidAt: "2000-01-01T00:00:00Z" }
+                                }
+                            ) {
+                                __typename
+                                ... on Order {
+                                    id
+                                    state
+                                }
+                                ... on ErrorResult {
+                                    message
+                                }
+                            }
+                        }
+                    `,
+                    { proof },
+                )
+            ).addPaymentToOrder;
+            const fresh = await repository.findOneByOrFail({ id: stored.id });
+            if (boundary === 'before') {
+                expect(result, JSON.stringify(result)).toMatchObject({
+                    __typename: 'Order',
+                    state: 'PaymentSettled',
+                });
+                expect(fresh.status).toBe('USED');
+                expect(fresh.usedAt?.getTime()).toBe(paidAt);
+                const ctx = await server.app.get(RequestContextService).create({ apiType: 'admin' });
+                const paidOrder = await connection.rawConnection
+                    .getRepository(Order)
+                    .findOneByOrFail({ id: strategy.decodeId(order.id) });
+                const promotion = await connection.rawConnection
+                    .getRepository(Promotion)
+                    .findOneByOrFail({ id: fresh.promotionId });
+                expect(await customerCouponEntitlement.check(ctx, paidOrder, [], promotion)).toBe(true);
+            } else {
+                expect(result.__typename).toBe('PaymentFailedError');
+                expect(fresh.status).toBe('LOCKED');
+                expect((await shopClient.query(AUDIT_ORDER)).activeOrder).toEqual(order);
+            }
+        },
+    );
+
+    it('releases entitlement, allocation and ledger through the native removeCouponCode entry', async () => {
+        await auditCustomer('closure-native-remove');
+        const coupon = await auditClaim({ name: 'Closure native removal' });
+        await shopClient.query(ADD_ITEM, { productVariantId });
+        await shopClient.query(APPLY_OWNED_COUPON, { id: coupon.id });
+        const before = (await shopClient.query(AUDIT_ORDER)).activeOrder;
+        const result = await shopClient.query(
+            gql`
+                mutation ($code: String!) {
+                    removeCouponCode(couponCode: $code) {
+                        ... on Order {
+                            couponCodes
+                            totalWithTax
+                        }
+                    }
+                }
+            `,
+            { code: before.couponCodes[0] },
+        );
+        expect(result.removeCouponCode.couponCodes).toEqual([]);
+        expect(result.removeCouponCode.totalWithTax).toBeGreaterThan(before.totalWithTax);
+        const connection = server.app.get(TransactionalConnection);
+        const id = server.app.get(ConfigService).entityOptions.entityIdStrategy.decodeId(coupon.id);
+        const fresh = await connection.rawConnection.getRepository(CustomerCoupon).findOneByOrFail({ id });
+        expect(fresh.status).toBe('AVAILABLE');
+        expect(fresh.lockedOrderId).toBeNull();
+        const allocation = await connection.rawConnection
+            .getRepository(CouponOrderAllocation)
+            .findOneByOrFail({ customerCouponId: id });
+        expect(allocation.status).toBe('RELEASED');
+    });
+
+    it('keeps a manual payment receipt and original discount when actual payment time cannot be verified', async () => {
+        await auditCustomer('closure-manual-time');
+        const coupon = await auditClaim({ name: 'Closure manual payment' });
+        await shopClient.query(ADD_ITEM, { productVariantId });
+        await shopClient.query(APPLY_OWNED_COUPON, { id: coupon.id });
+        await prepareOrderForPayment();
+        const before = (await shopClient.query(AUDIT_ORDER)).activeOrder;
+        adminClient.setRequestHeader('x-vendure-sensitive-action-password', SUPER_ADMIN_USER_PASSWORD);
+        const result = await adminClient.query(
+            gql`
+                mutation ($input: ManualPaymentInput!) {
+                    addManualPaymentToOrder(input: $input) {
+                        __typename
+                        ... on ErrorResult {
+                            message
+                        }
+                    }
+                }
+            `,
+            {
+                input: {
+                    orderId: before.id,
+                    method: 'manual coupon QA',
+                    transactionId: 'closure-manual-receipt',
+                    metadata: { paidAt: '2026-01-01T00:00:00Z' },
+                },
+            },
+        );
+        adminClient.setRequestHeader('x-vendure-sensitive-action-password', null);
+        expect(result.addManualPaymentToOrder.__typename).toBe('ManualPaymentStateError');
+        expect(result.addManualPaymentToOrder.message).toContain('人工核对');
+        expect((await shopClient.query(AUDIT_ORDER)).activeOrder).toEqual(before);
+        const payment = await server.app
+            .get(TransactionalConnection)
+            .rawConnection.getRepository(Payment)
+            .findOneByOrFail({ transactionId: 'closure-manual-receipt' });
+        expect(payment.state).toBe('Error');
+        expect(payment.amount).toBe(before.totalWithTax);
+        expect(payment.metadata.manualReview.required).toBe(true);
+    });
+
+    it('reports payment-pending coupons as skipped during bulk revocation', async () => {
+        await auditCustomer('closure-revoke-pending');
+        const coupon = await auditClaim({ name: 'Closure pending skip' });
+        await shopClient.query(ADD_ITEM, { productVariantId });
+        await shopClient.query(APPLY_OWNED_COUPON, { id: coupon.id });
+        await prepareOrderForPayment();
+        const result = await adminClient.query(
+            gql`
+                mutation ($id: ID!, $password: String!) {
+                    revokeStoreCouponCampaignOutstanding(id: $id, password: $password) {
+                        affectedCount
+                        skippedCount
+                        failedCount
+                        outcomes {
+                            reason
+                        }
+                    }
+                }
+            `,
+            { id: coupon.campaignId, password: SUPER_ADMIN_USER_PASSWORD },
+        );
+        expect(result.revokeStoreCouponCampaignOutstanding).toMatchObject({
+            affectedCount: 0,
+            skippedCount: 1,
+            failedCount: 0,
+        });
+        expect(result.revokeStoreCouponCampaignOutstanding.outcomes[0].reason).toContain('付款');
+        expect(
+            (await shopClient.query(MY_COUPONS)).myStorefrontCoupons.find(
+                (item: any) => item.id === coupon.id,
+            ).status,
+        ).toBe('LOCKED');
+    });
+
+    it('preserves received funds when a coupon becomes invalid between preflight and confirmation', async () => {
+        await auditCustomer('closure-confirmation-review');
+        const coupon = await auditClaim({ name: 'Closure confirmation review' });
+        await shopClient.query(ADD_ITEM, { productVariantId });
+        await shopClient.query(APPLY_OWNED_COUPON, { id: coupon.id });
+        await prepareOrderForPayment();
+        const connection = server.app.get(TransactionalConnection);
+        const strategy = server.app.get(ConfigService).entityOptions.entityIdStrategy;
+        const original = couponPaymentHandler.createPayment.bind(couponPaymentHandler);
+        const spy = vi
+            .spyOn(couponPaymentHandler, 'createPayment')
+            .mockImplementationOnce(async (...args) => {
+                await connection
+                    .getRepository(args[0], CustomerCoupon)
+                    .update(strategy.decodeId(coupon.id), { validUntil: new Date(Date.now() - 1000) });
+                return original(...args);
+            });
+        try {
+            const result = (await shopClient.query(PAY, { method: couponPaymentHandler.code }))
+                .addPaymentToOrder;
+            expect(result.__typename).toBe('PaymentFailedError');
+            const order = (await shopClient.query(AUDIT_ORDER)).activeOrder;
+            const stored = await connection.rawConnection
+                .getRepository(Order)
+                .findOneOrFail({ where: { id: strategy.decodeId(order.id) }, relations: { payments: true } });
+            expect(stored.payments).toHaveLength(1);
+            expect(stored.payments[0]).toMatchObject({
+                state: 'Error',
+                metadata: { manualReview: { required: true, receivedState: 'Settled' } },
+            });
+            expect(stored.payments[0].amount).toBe(order.totalWithTax);
+            expect(
+                (await shopClient.query(PAY, { method: couponPaymentHandler.code })).addPaymentToOrder
+                    .__typename,
+            ).toBe('PaymentFailedError');
+            expect(
+                await connection.rawConnection.getRepository(Order).findOneOrFail({
+                    where: { id: strategy.decodeId(order.id) },
+                    relations: { payments: true },
+                }),
+            ).toMatchObject({ payments: [{ id: stored.payments[0].id }] });
+        } finally {
+            spy.mockRestore();
+        }
+    });
+
+    it('previews, verifies and idempotently repairs an orphan allocation with the v2 tool', async () => {
+        await auditCustomer('closure-repair');
+        const coupon = await auditClaim({ name: 'Closure repair' });
+        await shopClient.query(ADD_ITEM, { productVariantId });
+        await shopClient.query(APPLY_OWNED_COUPON, { id: coupon.id });
+        const strategy = server.app.get(ConfigService).entityOptions.entityIdStrategy;
+        const repository = server.app
+            .get(TransactionalConnection)
+            .rawConnection.getRepository(CustomerCoupon);
+        // Reproduce the historical revocation bug, retaining the order's old discount and LOCKED allocation.
+        await repository.update(strategy.decodeId(coupon.id), {
+            status: 'REVOKED',
+            revokedAt: new Date(),
+            lockedOrderId: null,
+            lockedAt: null,
+            lockExpiresAt: null,
+        });
+        const query = gql`
+            query ($id: ID!) {
+                storeCouponClosureRepairPreview(campaignId: $id)
+            }
+        `;
+        const mutation = gql`
+            mutation ($id: ID!, $fingerprint: String!, $password: String!) {
+                repairStoreCouponClosure(campaignId: $id, fingerprint: $fingerprint, password: $password)
+            }
+        `;
+        const plan = (await adminClient.query(query, { id: coupon.campaignId }))
+            .storeCouponClosureRepairPreview;
+        expect(plan.repairVersion).toBe('coupon-closure-v2');
+        expect(plan.items[0].actions).toEqual([expect.objectContaining({ type: 'RELEASE_ALLOCATION' })]);
+        await expect(
+            adminClient.query(mutation, {
+                id: coupon.campaignId,
+                fingerprint: 'outdated',
+                password: SUPER_ADMIN_USER_PASSWORD,
+            }),
+        ).rejects.toThrow('重新核对');
+        const result = (
+            await adminClient.query(mutation, {
+                id: coupon.campaignId,
+                fingerprint: plan.fingerprint,
+                password: SUPER_ADMIN_USER_PASSWORD,
+            })
+        ).repairStoreCouponClosure;
+        expect(result).toMatchObject({ changedCoupons: 1, conflicts: [] });
+        expect(result.after.items[0].actions).toEqual([]);
+        expect((await shopClient.query(AUDIT_ORDER)).activeOrder.couponCodes).toEqual([]);
+        const repeated = (
+            await adminClient.query(mutation, {
+                id: coupon.campaignId,
+                fingerprint: result.after.fingerprint,
+                password: SUPER_ADMIN_USER_PASSWORD,
+            })
+        ).repairStoreCouponClosure;
+        expect(repeated.changedCoupons).toBe(0);
+        const changed = await repository.findOneByOrFail({ id: strategy.decodeId(coupon.id) });
+        expect(changed.status).toBe('REVOKED');
+    });
+
+    it('processes expiry and repair previews beyond a full maintenance batch', async () => {
+        await auditCustomer('closure-maintenance-pages');
+        const coupon = await auditClaim({ name: 'Closure maintenance pages', issueLimit: 1000 });
+        const strategy = server.app.get(ConfigService).entityOptions.entityIdStrategy;
+        const repository = server.app
+            .get(TransactionalConnection)
+            .rawConnection.getRepository(CustomerCoupon);
+        const seed = await repository.findOneByOrFail({ id: strategy.decodeId(coupon.id) });
+        await repository.update(seed.id, { validUntil: new Date(Date.now() - 1000) });
+        await repository.save(
+            Array.from({ length: 500 }, () =>
+                repository.create({
+                    ...seed,
+                    id: undefined,
+                    version: 1,
+                    validUntil: new Date(Date.now() - 1000),
+                }),
+            ),
+        );
+        await server.app.get(StoreCouponLifecycleService).reconcile();
+        expect(await repository.count({ where: { promotionId: seed.promotionId, status: 'EXPIRED' } })).toBe(
+            501,
+        );
+        const result = (
+            await adminClient.query(
+                gql`
+                    query ($id: ID!) {
+                        storeCouponClosureRepairPreview(campaignId: $id)
+                    }
+                `,
+                { id: coupon.campaignId },
+            )
+        ).storeCouponClosureRepairPreview;
+        expect(result.items).toHaveLength(501);
+        expect(result.items.every((item: any) => item.actions.length === 0)).toBe(true);
+    }, 30_000);
+
+    it('repairs a proven full-refund callback gap without extending the original expiry', async () => {
+        await auditCustomer('closure-missed-refund');
+        const coupon = await auditClaim({ name: 'Closure missed refund' });
+        const paid = await auditPay(coupon.id);
+        const lifecycle = server.app.get(StoreCouponLifecycleService);
+        const skipped = vi.spyOn(lifecycle, 'handleSettledRefund').mockResolvedValueOnce(undefined);
+        try {
+            await auditRefund(paid);
+        } finally {
+            skipped.mockRestore();
+        }
+        const plan = (
+            await adminClient.query(
+                gql`
+                    query ($id: ID!) {
+                        storeCouponClosureRepairPreview(campaignId: $id)
+                    }
+                `,
+                { id: coupon.campaignId },
+            )
+        ).storeCouponClosureRepairPreview;
+        expect(plan.items[0].actions).toEqual([expect.objectContaining({ type: 'REFUND' })]);
+        const repaired = (
+            await adminClient.query(
+                gql`
+                    mutation ($id: ID!, $fingerprint: String!, $password: String!) {
+                        repairStoreCouponClosure(
+                            campaignId: $id
+                            fingerprint: $fingerprint
+                            password: $password
+                        )
+                    }
+                `,
+                { id: coupon.campaignId, fingerprint: plan.fingerprint, password: SUPER_ADMIN_USER_PASSWORD },
+            )
+        ).repairStoreCouponClosure;
+        expect(repaired).toMatchObject({ changedCoupons: 1, conflicts: [] });
+        expect((await shopClient.query(MY_COUPONS)).myStorefrontCoupons[0]).toMatchObject({
+            status: 'RETURNED',
+            validUntil: coupon.validUntil,
+            returnCount: 1,
+        });
+        expect(repaired.after.items[0].actions).toEqual([]);
+    });
+
+    it.runIf(process.env.DB === 'mysql')(
+        'serializes a claim with campaign disable and keeps the issued campaign enabled',
+        async () => {
+            await auditCustomer('closure-disable-race');
+            const created = (
+                await adminClient.query(CREATE_COUPON, {
+                    input: {
+                        name: 'Closure claim disable race',
+                        kind: 'ORDER_FIXED',
+                        minimumSpend: 0,
+                        discountAmount: 500,
+                        issueLimit: 1,
+                        validityDays: 7,
+                    },
+                })
+            ).createStoreCouponCampaign;
+            const lifecycle = server.app.get(StoreCouponLifecycleService);
+            const campaigns = server.app.get(StorePromotionCampaignService);
+            const originalLock = lifecycle.lockRow.bind(lifecycle);
+            const originalCampaignLock = campaigns.lockOwnedCampaign.bind(campaigns);
+            let reached!: () => void;
+            let release!: () => void;
+            const locked = new Promise<void>(resolve => {
+                reached = resolve;
+            });
+            const queued = new Promise<void>(resolve => {
+                release = resolve;
+            });
+            const claimSpy = vi.spyOn(lifecycle, 'lockRow').mockImplementation(async (...args: any[]) => {
+                const result = await originalLock(...args);
+                if (args[1] === StoreCouponCampaignConfig) {
+                    reached();
+                    await queued;
+                }
+                return result;
+            });
+            const mutationSpy = vi
+                .spyOn(campaigns, 'lockOwnedCampaign')
+                .mockImplementation((...args: any[]) => {
+                    release();
+                    return originalCampaignLock(...args);
+                });
+            const claim = shopClient.query(CLAIM, { campaignId: created.id });
+            try {
+                await locked;
+                const disable = adminClient.query(
+                    gql`
+                        mutation ($id: ID!, $password: String!) {
+                            setStorePromotionEnabled(id: $id, enabled: false, password: $password) {
+                                id
+                            }
+                        }
+                    `,
+                    { id: created.id, password: SUPER_ADMIN_USER_PASSWORD },
+                );
+                await expect(disable).rejects.toThrow('已经发放');
+                expect((await claim).claimStorefrontCoupon.status).toBe('AVAILABLE');
+            } finally {
+                release();
+                claimSpy.mockRestore();
+                mutationSpy.mockRestore();
+                await claim.catch(() => undefined);
+            }
+        },
+        30_000,
+    );
+
+    it('rejects an expired entitlement before charging a prepared order', async () => {
+        await auditCustomer('closure-expiry');
+        const coupon = await auditClaim({ name: 'Closure expiry' });
+        await shopClient.query(ADD_ITEM, { productVariantId });
+        await shopClient.query(APPLY_OWNED_COUPON, { id: coupon.id });
+        await prepareOrderForPayment();
+        const connection = server.app.get(TransactionalConnection);
+        const strategy = server.app.get(ConfigService).entityOptions.entityIdStrategy;
+        await connection.rawConnection.getRepository(CustomerCoupon).update(strategy.decodeId(coupon.id), {
+            validUntil: new Date(Date.now() - 1000),
+        });
+        const result = (await shopClient.query(PAY, { method: couponPaymentHandler.code })).addPaymentToOrder;
+        expect(result.__typename).toBe('CouponRemovedDuringCheckoutError');
+        const stored = await connection.rawConnection.getRepository(CustomerCoupon).findOneByOrFail({
+            id: strategy.decodeId(coupon.id),
+        });
+        expect(stored.status).toBe('EXPIRED');
+        const allocation = await connection.rawConnection
+            .getRepository(CouponOrderAllocation)
+            .findOneByOrFail({
+                customerCouponId: stored.id,
+            });
+        expect(allocation.status).toBe('RELEASED');
+    });
+
+    it.runIf(process.env.DB === 'mysql').each(['same-customer', 'different-customers'])(
+        'prevents duplicate claims and oversubscription with concurrent snapshots: %s',
+        async mode => {
+            const secondClient = new SimpleGraphQLClient(config, (shopClient as any).apiUrl);
+            if (mode === 'different-customers') {
+                await secondClient.query(REGISTER, {
+                    input: {
+                        emailAddress: 'coupon-audit-closure-claims-second@example.com',
+                        firstName: 'Second',
+                        lastName: 'Claim',
+                        password: 'CouponAudit123!',
+                    },
+                });
+                await secondClient.asUserWithCredentials(
+                    'coupon-audit-closure-claims-second@example.com',
+                    'CouponAudit123!',
+                );
+            }
+            await auditCustomer('closure-claims-' + mode);
+            const created = (
+                await adminClient.query(CREATE_COUPON, {
+                    input: {
+                        name: 'Closure last coupon',
+                        kind: 'ORDER_FIXED',
+                        discountAmount: 1000,
+                        validityDays: 7,
+                        issueLimit: 1,
+                    },
+                })
+            ).createStoreCouponCampaign;
+            const lifecycle = server.app.get(StoreCouponLifecycleService);
+            const original = lifecycle.lockRow.bind(lifecycle);
+            const gate = twoPartyGate();
+            const spy = vi.spyOn(lifecycle, 'lockRow').mockImplementation(async (...args: any[]) => {
+                if (args[1] === StoreCouponCampaignConfig) await gate();
+                return original(...args);
+            });
+            try {
+                const results = await Promise.allSettled([
+                    shopClient.query(CLAIM, { campaignId: created.id }),
+                    (mode === 'same-customer' ? shopClient : secondClient).query(CLAIM, {
+                        campaignId: created.id,
+                    }),
+                ]);
+                expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1);
+                const connection = server.app.get(TransactionalConnection);
+                const strategy = server.app.get(ConfigService).entityOptions.entityIdStrategy;
+                expect(
+                    await connection.rawConnection.getRepository(CustomerCoupon).countBy({
+                        promotionId: strategy.decodeId(created.id),
+                    }),
+                ).toBe(1);
+            } finally {
+                spy.mockRestore();
+            }
+        },
+    );
+
+    it.runIf(process.env.DB === 'mysql').each(['same-payment', 'different-payments'])(
+        'returns a coupon when distinct concurrent refunds together cover the paid order: %s',
+        async mode => {
+            await auditCustomer('closure-split-refunds-' + mode);
+            const coupon = await auditClaim({ name: 'Closure split refunds' });
+            let paid: any;
+            if (mode === 'different-payments') {
+                await shopClient.query(ADD_ITEM, { productVariantId });
+                await shopClient.query(APPLY_OWNED_COUPON, { id: coupon.id });
+                await prepareOrderForPayment();
+                const originalPayment = couponPaymentHandler.createPayment.bind(couponPaymentHandler);
+                const split = vi
+                    .spyOn(couponPaymentHandler, 'createPayment')
+                    .mockImplementationOnce(async (...args) => {
+                        const result = await originalPayment(...args);
+                        return { ...result, amount: Math.floor(result.amount / 2) };
+                    });
+                try {
+                    expect(
+                        (await shopClient.query(PAY, { method: couponPaymentHandler.code })).addPaymentToOrder
+                            .state,
+                    ).toBe('ArrangingPayment');
+                } finally {
+                    split.mockRestore();
+                }
+                paid = await payOrder();
+                expect(paid.payments).toHaveLength(2);
+            } else paid = await auditPay(coupon.id);
+            const refunds: any[] = [];
+            adminClient.setRequestHeader('x-vendure-sensitive-action-password', SUPER_ADMIN_USER_PASSWORD);
+            deferRefunds = true;
+            try {
+                const parts =
+                    mode === 'different-payments'
+                        ? paid.payments
+                        : [Math.floor(paid.totalWithTax / 2), Math.ceil(paid.totalWithTax / 2)].map(
+                              amount => ({ id: paid.payments[0].id, amount }),
+                          );
+                for (const part of parts) {
+                    const result = (
+                        await adminClient.query(REFUND, {
+                            input: {
+                                paymentId: part.id,
+                                amount: part.amount,
+                                lines: [],
+                                shipping: 0,
+                                adjustment: 0,
+                                reason: 'Disposable split refund',
+                            },
+                        })
+                    ).refundOrder;
+                    expect(result, JSON.stringify(result)).toMatchObject({ state: 'Pending' });
+                    refunds.push(result);
+                }
+                const connection = server.app.get(TransactionalConnection);
+                const strategy = server.app.get(ConfigService).entityOptions.entityIdStrategy;
+                const ids = new Set(refunds.map(refund => String(strategy.decodeId(refund.id))));
+                const original = connection.getEntityOrThrow.bind(connection);
+                const gate = twoPartyGate();
+                const seen = new Set<string>();
+                const spy = vi.spyOn(connection, 'getEntityOrThrow').mockImplementation((async (
+                    ...args: any[]
+                ) => {
+                    const value = await (original as any)(...args);
+                    if (args[1] === Refund && ids.has(String(args[2])) && !seen.has(String(args[2]))) {
+                        seen.add(String(args[2]));
+                        await gate();
+                    }
+                    return value;
+                }) as any);
+                try {
+                    await Promise.all(
+                        refunds.map(refund =>
+                            adminClient.query(
+                                gql`
+                                    mutation ($input: SettleRefundInput!) {
+                                        settleRefund(input: $input) {
+                                            __typename
+                                            ... on Refund {
+                                                id
+                                                state
+                                            }
+                                            ... on ErrorResult {
+                                                message
+                                            }
+                                        }
+                                    }
+                                `,
+                                { input: { id: refund.id, transactionId: 'closure-' + refund.id } },
+                            ),
+                        ),
+                    );
+                } finally {
+                    spy.mockRestore();
+                }
+                const mine = (await shopClient.query(MY_COUPONS)).myStorefrontCoupons;
+                expect(mine.find((item: any) => item.id === coupon.id)).toMatchObject({
+                    status: 'RETURNED',
+                    returnCount: 1,
+                });
+            } finally {
+                deferRefunds = false;
+                adminClient.setRequestHeader('x-vendure-sensitive-action-password', null);
+            }
+        },
+        30_000,
+    );
+
+    it.runIf(process.env.DB === 'mysql')(
+        'does not overwrite a paid coupon from a stale batch revocation snapshot',
+        async () => {
+            await auditCustomer('closure-revoke-race');
+            const coupon = await auditClaim({ name: 'Closure revoke race' });
+            const lifecycle = server.app.get(StoreCouponLifecycleService);
+            const original = lifecycle.revokeCoupon.bind(lifecycle);
+            let reached!: () => void;
+            let resume!: () => void;
+            const paused = new Promise<void>(resolve => {
+                reached = resolve;
+            });
+            const released = new Promise<void>(resolve => {
+                resume = resolve;
+            });
+            const spy = vi.spyOn(lifecycle, 'revokeCoupon').mockImplementation(async (...args: any[]) => {
+                reached();
+                await released;
+                return original(...args);
+            });
+            const revoked = adminClient.query(
+                gql`
+                    mutation ($id: ID!, $password: String!) {
+                        revokeStoreCouponCampaignOutstanding(id: $id, password: $password) {
+                            affectedCount
+                        }
+                    }
+                `,
+                { id: coupon.campaignId, password: SUPER_ADMIN_USER_PASSWORD },
+            );
+            try {
+                await paused;
+                await auditPay(coupon.id);
+                resume();
+                expect((await revoked).revokeStoreCouponCampaignOutstanding.affectedCount).toBe(0);
+                expect(
+                    (await shopClient.query(MY_COUPONS)).myStorefrontCoupons.find(
+                        (item: any) => item.id === coupon.id,
+                    ).status,
+                ).toBe('USED');
+            } finally {
+                resume();
+                spy.mockRestore();
+                await revoked.catch(() => undefined);
+            }
+        },
+        30_000,
+    );
+
     it.runIf(process.env.DB === 'mysql')(
         'serializes repeated refund events with database row locks',
         async () => {
@@ -1215,6 +2152,19 @@ describe('coupon lifecycle closed loop', () => {
         30_000,
     );
 });
+
+function twoPartyGate() {
+    let arrived = 0;
+    let release!: () => void;
+    const pending = new Promise<void>(resolve => {
+        release = resolve;
+    });
+    return async () => {
+        arrived++;
+        if (arrived === 2) release();
+        await pending;
+    };
+}
 
 async function prepareOrderForPayment(): Promise<any> {
     await shopClient.query(SET_ADDRESS);

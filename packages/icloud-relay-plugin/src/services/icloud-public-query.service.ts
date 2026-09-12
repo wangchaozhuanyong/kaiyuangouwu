@@ -88,9 +88,10 @@ export class IcloudPublicQueryService {
             });
 
             // Update query tracking
-            virtualMatch.lastQueriedAt = new Date();
-            virtualMatch.lastQueriedIp = clientIp;
-            await virtualRepo.save(virtualMatch);
+            await virtualRepo.update(
+                { id: virtualMatch.id },
+                { lastQueriedAt: new Date(), lastQueriedIp: clientIp },
+            );
 
             // Reset failed attempts on success
             this.failedAttempts.delete(clientIp);
@@ -155,10 +156,13 @@ export class IcloudPublicQueryService {
                 select: ['id', 'aliasEmail', 'note'],
             });
 
+            const aliasById = new Map(virtuals.map(v => [String(v.id), v.aliasEmail]));
+
             // Update query tracking
-            primaryMatch.lastQueriedAt = new Date();
-            primaryMatch.lastQueriedIp = clientIp;
-            await primaryRepo.save(primaryMatch);
+            await primaryRepo.update(
+                { id: primaryMatch.id },
+                { lastQueriedAt: new Date(), lastQueriedIp: clientIp },
+            );
 
             this.failedAttempts.delete(clientIp);
 
@@ -179,7 +183,9 @@ export class IcloudPublicQueryService {
                 codeExpiresAt: primaryMatch.codeExpiresAt,
                 remainingDays: this.codeService.getRemainingDays(primaryMatch.codeExpiresAt),
                 totalEmails: mails.length,
-                items: mails.map(m => this.toPublicMailItem(m, primaryMatch.email)),
+                items: mails.map(m =>
+                    this.toPublicMailItem(m, aliasById.get(String(m.virtualEmailId)) || primaryMatch.email),
+                ),
                 virtualEmailsList: virtuals.map(v => ({
                     id: v.id,
                     aliasEmail: this.maskEmail(v.aliasEmail),
@@ -267,6 +273,7 @@ export class IcloudPublicQueryService {
     private toPublicMailItem(mail: IcloudReceivedMail, targetEmail: string): PublicMailItem {
         return {
             id: mail.id,
+            virtualEmailId: mail.virtualEmailId,
             fromAddress: mail.fromAddress,
             fromName: mail.fromName,
             subject: mail.subject,

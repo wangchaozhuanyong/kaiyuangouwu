@@ -233,3 +233,134 @@ function storageWith(asset: ImagePrivateAsset) {
         save,
     };
 }
+
+function objectFixture(failSave = false) {
+    const objects = new Map<string, Buffer>();
+    const records = new Map<string, ImagePrivateAsset>();
+    const blobStore = {
+        put: vi.fn((key: string, bytes: Buffer) => {
+            objects.set(key, bytes);
+            return Promise.resolve();
+        }),
+        get: vi.fn((key: string) => {
+            const bytes = objects.get(key);
+            if (!bytes) throw new Error('not found');
+            return Promise.resolve(bytes);
+        }),
+        has: vi.fn((key: string) => Promise.resolve(objects.has(key))),
+        delete: vi.fn((key: string) => {
+            objects.delete(key);
+            return Promise.resolve();
+        }),
+        list: vi.fn().mockResolvedValue({ items: [] }),
+    };
+    const repository = {
+        save: vi.fn((asset: ImagePrivateAsset) => {
+            if (failSave) throw new Error('synthetic rollback');
+            asset.id ||= 'asset-1';
+            records.set(String(asset.id), asset);
+            return Promise.resolve(asset);
+        }),
+        findOne: vi.fn(({ where }: any) =>
+            Promise.resolve(
+                [...records.values()].find(asset =>
+                    Object.entries(where).every(
+                        ([field, value]) => String((asset as any)[field]) === String(value),
+                    ),
+                ) ?? null,
+            ),
+        ),
+    };
+    const service = new ImagePrivateStorageService(
+        { getRepository: () => repository, rawConnection: { getRepository: () => repository } } as any,
+        { production: false, storageRoot: '/unused-legacy-images', blobStore },
+    );
+    return { service, blobStore, objects, records, repository };
+}
+
+async function syntheticReference(service: ImagePrivateStorageService) {
+    const bytes = await sharp({ create: { width: 10, height: 10, channels: 3, background: '#fff' } })
+        .png()
+        .toBuffer();
+    return service.storeReference(context(), 10, {
+        filename: 'synthetic.png',
+        mimetype: 'image/png',
+        createReadStream: () => Readable.from(bytes),
+    });
+}
+
+describe('private object storage ownership and lifecycle', () => {
+    it('retains failed cleanup records and only counts confirmed removals', async () => {
+        const { service, blobStore, repository } = objectFixture();
+        const asset = await syntheticReference(service);
+        asset.expiresAt = new Date(Date.now() - 1);
+        const query: any = {
+            where: () => query,
+            andWhere: () => query,
+            take: () => query,
+            getMany: () => Promise.resolve([asset]),
+        };
+        const remove = vi.fn().mockResolvedValue(asset);
+        Object.assign(repository, {
+            createQueryBuilder: () => query,
+            find: vi.fn().mockResolvedValue([]),
+            remove,
+        });
+        blobStore.delete.mockRejectedValueOnce(new Error('synthetic storage outage'));
+        expect(await service.purgeExpired()).toBe(0);
+        expect(remove).not.toHaveBeenCalled();
+        expect(await service.purgeExpired()).toBe(1);
+        expect(remove).toHaveBeenCalledWith(asset);
+    });
+
+    it('stores normalized bytes privately and binds download signatures to customer and channel', async () => {
+        const { service, objects, records } = objectFixture();
+        const asset = await syntheticReference(service);
+        expect(asset.storageKey).toMatch(/^private\/v1\/reference\//);
+        expect(objects.size).toBe(1);
+        expect((await service.read(asset)).length).toBe(asset.byteSize);
+        expect(service.signedUrl(asset, 11)).toBeNull();
+        const token = signedToken(service, asset);
+        expect((await service.authorize(token))?.asset.id).toBe(asset.id);
+        expect(await service.authorize(token + 'x')).toBeUndefined();
+        records.set(String(asset.id), new ImagePrivateAsset({ ...asset, channelId: 999 }));
+        expect(await service.authorize(token)).toBeUndefined();
+    });
+
+    it('revokes a deleted asset even when physical deletion temporarily fails', async () => {
+        const { service, blobStore, objects } = objectFixture();
+        const asset = await syntheticReference(service);
+        const token = signedToken(service, asset);
+        expect(await service.deleteOwned(context(), asset.id, 11)).toBe(false);
+        expect(objects.size).toBe(1);
+        blobStore.delete.mockRejectedValueOnce(new Error('synthetic storage outage'));
+        expect(await service.deleteOwned(context(), asset.id, 10)).toBe(true);
+        expect(objects.size).toBe(1);
+        expect(asset.providerMetadata).toEqual({ storageDeletionPending: true });
+        expect(await service.authorize(token)).toBeUndefined();
+        await expect(service.read(asset)).rejects.toThrow('图片已删除或过期');
+    });
+
+    it('removes the object when database persistence fails', async () => {
+        const { service, objects } = objectFixture(true);
+        await expect(syntheticReference(service)).rejects.toThrow('synthetic rollback');
+        expect(objects.size).toBe(0);
+    });
+
+    it('rejects expired links and corrupted stored data', async () => {
+        const { service, objects } = objectFixture();
+        const asset = await syntheticReference(service);
+        const token = signedToken(service, asset);
+        objects.set(asset.storageKey, Buffer.from('corrupted'));
+        await expect(service.read(asset)).rejects.toThrow('图片完整性校验失败');
+        vi.useFakeTimers();
+        vi.setSystemTime(Date.now() + 301_000);
+        expect(await service.authorize(token)).toBeUndefined();
+    });
+});
+
+function signedToken(service: ImagePrivateStorageService, asset: ImagePrivateAsset): string {
+    const token = service.signedUrl(asset, 10)?.split('/').pop();
+    if (!token) throw new Error('Expected an authorized test link');
+    return token;
+}

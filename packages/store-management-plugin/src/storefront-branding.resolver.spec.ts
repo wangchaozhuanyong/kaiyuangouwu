@@ -13,7 +13,7 @@ function createResolver(profile: Record<string, unknown> | null) {
 }
 
 describe('StorefrontBrandingShopResolver', () => {
-    it('returns the public description and name for the requested storefront language', async () => {
+    it('keeps store identity public and requires sign-in for the sales description', async () => {
         const resolver = createResolver({
             descriptionZh: 'AI 软件商城',
             descriptionEn: 'AI software store',
@@ -30,6 +30,13 @@ describe('StorefrontBrandingShopResolver', () => {
 
         await expect(resolver.storefrontBranding(ctx)).resolves.toMatchObject({
             name: '软件商城',
+            description: '',
+            tagline: '',
+        });
+        await expect(
+            resolver.storefrontBranding({ ...ctx, activeUserId: 'customer-1' }),
+        ).resolves.toMatchObject({
+            name: '软件商城',
             description: 'AI 软件商城',
         });
     });
@@ -42,6 +49,7 @@ describe('StorefrontBrandingShopResolver', () => {
             logoAsset: null,
         });
         const result = await resolver.storefrontBranding({
+            activeUserId: 'customer-1',
             channelId: 'channel-1',
             languageCode: 'en',
             channel: {
@@ -108,6 +116,7 @@ describe('StorefrontBrandingShopResolver', () => {
             resolver.storefrontBranding({
                 channelId: 'channel-1',
                 languageCode: 'en',
+                activeUserId: 'customer-1',
                 channel: {
                     code: 'moyao-ai-main',
                     customFields: { storefrontNameZh: 'MOYAO AI｜模钥', storefrontNameEn: 'MOYAO AI' },

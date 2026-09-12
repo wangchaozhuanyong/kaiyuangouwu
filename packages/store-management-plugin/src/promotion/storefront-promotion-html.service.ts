@@ -717,7 +717,7 @@ export class StorefrontPromotionHtmlService {
             .replace(/expression\s*\([^)]*\)/gi, '')
             .replace(/(?:javascript|vbscript)\s*:/gi, '')
             .replace(/data\s*:\s*text\/html/gi, '')
-            .replace(/(?:behavior|-moz-binding)\s*:[^;}]+[;}]?/gi, '')
+            .replace(/(?<![\w-])(?:behavior|-moz-binding)\s*:[^;}]+;?/gi, '')
             .replace(/url\(\s*(["']?)(.*?)\1\s*\)/gi, (_match, _quote: string, source: string) => {
                 const safeSource = this.storefrontImageUrl(source, trustedImageUrls.has(source));
                 return safeSource ? `url("${safeSource.replace(/["\\]/g, '')}")` : 'none';

@@ -821,14 +821,18 @@ export class CatalogOperationsService {
         if (input.quantityOnHand < 0 || !Number.isInteger(input.quantityOnHand)) {
             throw new UserInputError('批次数量必须是非负整数');
         }
-        const manufacturedAt = nullableDate(input.manufacturedAt, '生产日期');
-        const expiresAt = nullableDate(input.expiresAt, '到期日期');
-        if (manufacturedAt && expiresAt && expiresAt < manufacturedAt) {
-            throw new UserInputError('到期日期不能早于生产日期');
-        }
         const variant = await this.connection.getEntityOrThrow(ctx, ProductVariant, input.productVariantId, {
             channelId: ctx.channelId,
         });
+        const manufacturedAt = nullableDate(input.manufacturedAt, '生产日期');
+        const explicitExpiresAt = nullableDate(input.expiresAt, '到期日期');
+        const shelfLifeDays = nullableNumber(
+            (variant.customFields as unknown as Record<string, unknown> | undefined)?.shelfLifeDays,
+        );
+        const expiresAt = explicitExpiresAt ?? defaultExpiryDate(manufacturedAt, shelfLifeDays);
+        if (manufacturedAt && expiresAt && expiresAt < manufacturedAt) {
+            throw new UserInputError('到期日期不能早于生产日期');
+        }
         const repository = this.connection.getRepository(ctx, InventoryLot);
         const existing = input.id
             ? await repository.findOne({ where: { id: input.id, variantId: variant.id } })
@@ -1287,6 +1291,13 @@ function nullableDate(value: Date | string | null | undefined, label: string): D
     const date = value instanceof Date ? value : new Date(value);
     if (!Number.isFinite(date.getTime())) throw new UserInputError(`${label}无效`);
     return date;
+}
+
+function defaultExpiryDate(manufacturedAt: Date | null, shelfLifeDays: number | null): Date | null {
+    if (!manufacturedAt || shelfLifeDays == null || !Number.isInteger(shelfLifeDays) || shelfLifeDays < 0) {
+        return null;
+    }
+    return new Date(manufacturedAt.getTime() + shelfLifeDays * 86_400_000);
 }
 
 function blankToNull(value: string | null | undefined): string | null | undefined {

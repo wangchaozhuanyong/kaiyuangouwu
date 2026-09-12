@@ -13,6 +13,7 @@ export function useStorefrontCustomerData({
     language,
     vendureLanguageCode,
     storefrontContextResolved,
+    catalogAccessGranted,
 }: StorefrontQueryContext) {
     const text = uiCopy[language];
     const cartQueryKey = storefrontQueryKeys.cart(storefrontQueryKeys.market(market), vendureLanguageCode);
@@ -25,7 +26,7 @@ export function useStorefrontCustomerData({
     const cartQuery = useQuery({
         queryKey: cartQueryKey,
         queryFn: ({ signal }) => api.cart(signal),
-        enabled: storefrontContextResolved,
+        enabled: storefrontContextResolved && catalogAccessGranted,
         staleTime: 0,
     });
 
@@ -47,7 +48,7 @@ export function useStorefrontCustomerData({
     const couponCampaignsQuery = useQuery({
         queryKey: couponCampaignsQueryKey,
         queryFn: ({ signal }) => api.activeCouponCampaigns(signal),
-        enabled: customerQuery.data !== undefined,
+        enabled: Boolean(customer),
         staleTime: 0,
     });
 
@@ -61,7 +62,7 @@ export function useStorefrontCustomerData({
 
     const customerCouponsQuery = useQuery({
         queryKey: customerCouponQueryKey,
-        queryFn: ({ signal }) => api.myCoupons(signal),
+        queryFn: ({ signal }) => api.myAvailableCoupons(signal),
         enabled: Boolean(customer),
         staleTime: 0,
     });
@@ -74,12 +75,12 @@ export function useStorefrontCustomerData({
             vendureLanguageCode,
             customer?.id ?? '',
         ),
-        queryFn: ({ signal }) => api.myCouponUsageRecords(signal),
+        queryFn: ({ signal }) => api.myCouponUsageRecordsPage({ take: 20 }, signal),
         enabled: Boolean(customer),
         staleTime: 0,
     });
 
-    const couponUsageRecords = customerCouponUsageRecordsQuery.data ?? [];
+    const couponUsageRecords = customerCouponUsageRecordsQuery.data?.items ?? [];
 
     const customerCouponsError = !customer
         ? ''

@@ -36,7 +36,6 @@ import type {
     RegisterCustomerInput,
     ShippingMethod,
     StoreCommerceMode,
-    StoreCouponUsageRecord,
     StoreCustomerCoupon,
     StorefrontCart,
     StorefrontCatalogInput,
@@ -144,6 +143,10 @@ export class ShopApi {
 
     async storefrontContent(signal?: AbortSignal): Promise<StorefrontContentResponse> {
         return this.contentReviewsApi.storefrontContent(signal);
+    }
+
+    async storefrontAccountContent(signal?: AbortSignal): Promise<StorefrontContentResponse> {
+        return this.contentReviewsApi.storefrontAccountContent(signal);
     }
 
     async activeCouponCampaigns(signal?: AbortSignal): Promise<StorefrontCouponCampaign[]> {
@@ -427,13 +430,17 @@ export class ShopApi {
         return this.cartCheckoutApi.reopenCart(expectedRevision);
     }
 
-    async myCoupons(signal?: AbortSignal): Promise<StoreCustomerCoupon[]> {
-        return this.cartCheckoutApi.myCoupons(signal);
-    }
+    myCouponsPage: CartCheckoutApi['myCouponsPage'] = (...args) =>
+        this.cartCheckoutApi.myCouponsPage(...args);
+    myCouponUsageRecordsPage: CartCheckoutApi['myCouponUsageRecordsPage'] = (...args) =>
+        this.cartCheckoutApi.myCouponUsageRecordsPage(...args);
+    myAvailableCoupons: CartCheckoutApi['myAvailableCoupons'] = (...args) =>
+        this.cartCheckoutApi.myAvailableCoupons(...args);
 
-    async myCouponUsageRecords(signal?: AbortSignal): Promise<StoreCouponUsageRecord[]> {
-        return this.cartCheckoutApi.myCouponUsageRecords(signal);
-    }
+    myCoupons: CartCheckoutApi['myCoupons'] = (...args) => this.cartCheckoutApi.myCoupons(...args);
+
+    myCouponUsageRecords: CartCheckoutApi['myCouponUsageRecords'] = (...args) =>
+        this.cartCheckoutApi.myCouponUsageRecords(...args);
 
     async claimCoupon(campaignId: string): Promise<StoreCustomerCoupon> {
         return this.cartCheckoutApi.claimCoupon(campaignId);

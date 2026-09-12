@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Post, Query, Req, Res } from '@nestjs/common';
-import { ProductService } from '@vendure/core';
+import { ConfigService, extractSessionToken, SessionService } from '@vendure/core';
 import type { Request, Response } from 'express';
 
 import { isAccountEntryRoute } from './account-entry-proof';
@@ -13,7 +13,8 @@ export class StorefrontPromotionController {
     constructor(
         private readonly accessService: StorefrontPromotionAccessService,
         private readonly promotionService: StorefrontPromotionService,
-        private readonly productService: ProductService,
+        private readonly sessionService: SessionService,
+        private readonly configService: ConfigService,
     ) {}
 
     @Get()
@@ -49,16 +50,18 @@ export class StorefrontPromotionController {
 
     @Get('access')
     async access(@Req() req: Request, @Res() res: Response): Promise<void> {
-        if (!this.accessService.enabled) {
-            res.status(204).send();
-            return;
-        }
+        res.setHeader('Cache-Control', 'private, no-store');
+        const options = this.configService.authOptions;
+        const extracted = extractSessionToken(req, options.tokenMethod, options.apiKeyHeaderKey);
+        const session =
+            extracted && extracted.method !== 'api-key'
+                ? await this.sessionService.getSessionFromToken(extracted.token)
+                : undefined;
         const request = await this.accessService.resolveRequest(req);
-        if (request && this.accessService.hasValidEntryCookie(req, request)) {
+        if (request && session?.user?.id) {
             res.status(204).send();
             return;
         }
-        res.setHeader('Cache-Control', 'no-store');
         res.status(401).send();
     }
 
@@ -99,7 +102,8 @@ export class StorefrontPromotionController {
         res.setHeader('Cache-Control', 'public, max-age=300');
         res.type('text/plain').send(
             `User-agent: *\n` +
-                `Allow: /\n` +
+                `Disallow: /\n` +
+                `Allow: /promo$\n` +
                 `Disallow: /promo/enter\n` +
                 `Disallow: /promo/access\n` +
                 `Disallow: /promo/account-entry\n` +
@@ -114,40 +118,7 @@ export class StorefrontPromotionController {
             res.status(404).type('text/plain').send('Storefront not found');
             return;
         }
-        const productUrls: string[] = [];
-        let skip = 0;
-        let totalItems = 0;
-        do {
-            const products = await this.productService.findAll(request.ctx, {
-                skip,
-                take: 100,
-                filter: { enabled: { eq: true } },
-            });
-            totalItems = products.totalItems;
-            productUrls.push(
-                ...products.items.map(
-                    product =>
-                        `  <url><loc>https://${request.host}/product?id=${encodeURIComponent(
-                            String(product.id),
-                        )}</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>`,
-                ),
-            );
-            if (products.items.length === 0) break;
-            skip += products.items.length;
-        } while (skip < totalItems);
-
-        const publicPages = [
-            ['/', 'daily', '1.0'],
-            ['/category', 'daily', '0.9'],
-            ['/services', 'weekly', '0.7'],
-            ['/announcements', 'weekly', '0.6'],
-            ['/flash-sale', 'daily', '0.7'],
-            ['/recommendations', 'daily', '0.7'],
-            ['/support', 'monthly', '0.5'],
-            ['/legal?id=privacy', 'yearly', '0.3'],
-            ['/legal?id=terms', 'yearly', '0.3'],
-            ['/promo', 'daily', '0.7'],
-        ] as const;
+        const publicPages = [['/promo', 'daily', '0.7']] as const;
         const publicPageUrls = publicPages.map(
             ([path, changefreq, priority]) =>
                 `  <url><loc>https://${request.host}${path}</loc><changefreq>${changefreq}</changefreq><priority>${priority}</priority></url>`,
@@ -156,7 +127,7 @@ export class StorefrontPromotionController {
         res.type('application/xml').send(
             `<?xml version="1.0" encoding="UTF-8"?>\n` +
                 `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
-                `${[...publicPageUrls, ...productUrls].join('\n')}\n` +
+                `${publicPageUrls.join('\n')}\n` +
                 `</urlset>\n`,
         );
     }

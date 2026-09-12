@@ -167,6 +167,7 @@ export const adminApiExtensions = gql`
 export const shopApiExtensions = gql`
     type IcloudPublicMailItem {
         id: ID!
+        virtualEmailId: ID
         fromAddress: String!
         fromName: String!
         subject: String!

@@ -2,7 +2,16 @@ import { normalizeBase32Secret } from './totp';
 import { MAX_TWO_FACTOR_ACCOUNTS } from './types';
 
 export type BatchImportErrorCode =
-    'MISSING_NAME' | 'MISSING_SECRET' | 'INVALID_SECRET' | 'DUPLICATE_SECRET' | 'LIMIT_REACHED';
+    | 'MISSING_NAME'
+    | 'MISSING_SECRET'
+    | 'INVALID_SECRET'
+    | 'DUPLICATE_SECRET'
+    | 'LIMIT_REACHED'
+    | 'INPUT_TOO_LARGE';
+
+export const MAX_BATCH_CHARACTERS = 64 * 1024;
+const MAX_BATCH_LINES = 200;
+const MAX_BATCH_LINE_CHARACTERS = 1024;
 
 export interface ParsedBatchAccount {
     lineNumber: number;
@@ -26,6 +35,14 @@ export function parseBatchImport(
     maximumAccounts = MAX_TWO_FACTOR_ACCOUNTS,
     unnamedPrefix = '未命名',
 ): BatchImportResult {
+    // Bound work before splitting, normalizing or allocating per-row errors.
+    if (input.length > MAX_BATCH_CHARACTERS) {
+        return { accounts: [], errors: [{ lineNumber: 1, code: 'INPUT_TOO_LARGE' }] };
+    }
+    const lines = input.split(/\r?\n/);
+    if (lines.length > MAX_BATCH_LINES || lines.some(line => line.length > MAX_BATCH_LINE_CHARACTERS)) {
+        return { accounts: [], errors: [{ lineNumber: 1, code: 'INPUT_TOO_LARGE' }] };
+    }
     const accounts: ParsedBatchAccount[] = [];
     const errors: BatchImportError[] = [];
     const seenSecrets = new Set<string>();
@@ -37,7 +54,6 @@ export function parseBatchImport(
         }
     }
 
-    const lines = input.split(/\r?\n/);
     let unnamedIndex = 0;
     for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
         const lineNumber = lineIndex + 1;

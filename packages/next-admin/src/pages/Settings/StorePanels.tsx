@@ -678,6 +678,10 @@ export function SellersPanel({
     return (
         <>
             <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                <p className="border-b border-slate-100 px-4 py-3 text-xs leading-5 text-slate-500">
+                    占用情况来自店铺的所属商家绑定。需要调整时，请到“店铺实例 → 编辑店铺档案 →
+                    所属商家主体”；“法定经营主体”用于法律文案。
+                </p>
                 <div className="overflow-x-auto">
                     <table className="w-full min-w-[940px] border-collapse text-left text-xs">
                         <thead>

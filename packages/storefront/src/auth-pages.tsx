@@ -1118,7 +1118,7 @@ function AuthLayout({
                                         <span key={`${tag}-${index}`}>{tag}</span>
                                     ))}
                                 </div>
-                            ) : (
+                            ) : heroMessage.benefits.length || heroMessage.serviceTypes.length ? (
                                 <div className="auth-hero-footer">
                                     <div
                                         className={`auth-hero-benefits auth-hero-benefits-${heroVariant}`}
@@ -1156,7 +1156,7 @@ function AuthLayout({
                                         </div>
                                     ) : null}
                                 </div>
-                            )}
+                            ) : null}
                         </>
                     )}
                 </div>

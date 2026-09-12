@@ -67,6 +67,7 @@ describe('storefront coupon coordination', () => {
             language: 'zh',
             vendureLanguageCode: 'zh_Hans',
             storefrontContextResolved: true,
+            catalogAccessGranted: true,
             cart: {
                 id: 'cart-a',
                 revision: 1,

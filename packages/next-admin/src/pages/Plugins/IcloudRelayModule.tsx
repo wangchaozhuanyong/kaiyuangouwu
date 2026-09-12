@@ -13,7 +13,8 @@ import {
     UploadCloud,
     X,
 } from 'lucide-react';
-import { useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useRef, useState, type ReactNode, type SetStateAction } from 'react';
+import { validateIcloudInput } from '../../../../icloud-relay-plugin/src/client/admin-validation.js';
 
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
@@ -34,11 +35,8 @@ import {
     UPDATE_ICLOUD_PRIMARY_ACCOUNT_MUTATION,
     UPDATE_ICLOUD_VIRTUAL_EMAIL_MUTATION,
     type IcloudPrimaryAccount,
-    type IcloudPrimaryAccountsResult,
     type IcloudReceivedMail,
-    type IcloudReceivedMailsResult,
     type IcloudVirtualEmail,
-    type IcloudVirtualEmailsResult,
 } from '../../graphql/icloud-relay.graphql';
 import { copyAdminText } from '../../utils/admin-clipboard';
 import { toUserFacingError } from '../../utils/user-facing-error';
@@ -50,66 +48,46 @@ export function IcloudRelayModule() {
     const [tab, setTab] = useState<ActiveTab>('primary');
     const [notice, setNotice] = useState('');
     const [error, setError] = useState('');
+    const dialogEpoch = useRef(0);
+    const [refreshError, setRefreshError] = useState('');
     const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
     // Primary Accounts Queries
-    const primaryQuery = useQuery<IcloudPrimaryAccountsResult>(ICLOUD_PRIMARY_ACCOUNTS_QUERY, {
+    const primaryQuery = useQuery(ICLOUD_PRIMARY_ACCOUNTS_QUERY, {
         fetchPolicy: 'cache-and-network',
     });
 
     // Virtual Emails Queries
     const [filterPrimaryId, setFilterPrimaryId] = useState<string>('');
     const [virtualSearch, setVirtualSearch] = useState('');
-    const virtualQuery = useQuery<IcloudVirtualEmailsResult>(ICLOUD_VIRTUAL_EMAILS_QUERY, {
+    const virtualQuery = useQuery(ICLOUD_VIRTUAL_EMAILS_QUERY, {
         variables: { primaryAccountId: filterPrimaryId || undefined },
         fetchPolicy: 'cache-and-network',
     });
 
     // Received Mails Queries
     const [mailSearch, setMailSearch] = useState('');
-    const mailsQuery = useQuery<IcloudReceivedMailsResult>(ICLOUD_RECEIVED_MAILS_QUERY, {
+    const mailsQuery = useQuery(ICLOUD_RECEIVED_MAILS_QUERY, {
         variables: { limit: 100 },
         fetchPolicy: 'cache-and-network',
     });
 
     // Mutations
-    const [createPrimary, createPrimaryState] = useMutation<{
-        createIcloudPrimaryAccount: IcloudPrimaryAccount;
-    }>(CREATE_ICLOUD_PRIMARY_ACCOUNT_MUTATION);
-    const [updatePrimary, updatePrimaryState] = useMutation<{
-        updateIcloudPrimaryAccount: IcloudPrimaryAccount;
-    }>(UPDATE_ICLOUD_PRIMARY_ACCOUNT_MUTATION);
-    const [deletePrimary] = useMutation<{ deleteIcloudPrimaryAccount: boolean }>(
-        DELETE_ICLOUD_PRIMARY_ACCOUNT_MUTATION,
-    );
-    const [testConnection, testConnectionState] = useMutation<{
-        testIcloudConnection: { success: boolean; message?: string | null };
-    }>(TEST_ICLOUD_CONNECTION_MUTATION);
-    const [syncAccount, syncAccountState] = useMutation<{
-        syncIcloudAccount: { success: boolean; syncedCount: number; error?: string | null };
-    }>(SYNC_ICLOUD_ACCOUNT_MUTATION);
-    const [resetMasterCode] = useMutation<{ resetIcloudMasterCode: IcloudPrimaryAccount }>(
-        RESET_ICLOUD_MASTER_CODE_MUTATION,
-    );
+    const [createPrimary, createPrimaryState] = useMutation(CREATE_ICLOUD_PRIMARY_ACCOUNT_MUTATION);
+    const [updatePrimary, updatePrimaryState] = useMutation(UPDATE_ICLOUD_PRIMARY_ACCOUNT_MUTATION);
+    const [deletePrimary] = useMutation(DELETE_ICLOUD_PRIMARY_ACCOUNT_MUTATION);
+    const [testConnection, testConnectionState] = useMutation(TEST_ICLOUD_CONNECTION_MUTATION);
+    const [syncAccount, syncAccountState] = useMutation(SYNC_ICLOUD_ACCOUNT_MUTATION);
+    const [resetMasterCode] = useMutation(RESET_ICLOUD_MASTER_CODE_MUTATION);
 
-    const [createVirtual, createVirtualState] = useMutation<{
-        createIcloudVirtualEmail: IcloudVirtualEmail;
-    }>(CREATE_ICLOUD_VIRTUAL_EMAIL_MUTATION);
-    const [batchCreateVirtual, batchCreateState] = useMutation<{
-        batchCreateIcloudVirtualEmails: { createdCount: number; skippedCount: number; errors: string[] };
-    }>(BATCH_CREATE_ICLOUD_VIRTUAL_EMAILS_MUTATION);
-    const [updateVirtual] = useMutation<{ updateIcloudVirtualEmail: IcloudVirtualEmail }>(
-        UPDATE_ICLOUD_VIRTUAL_EMAIL_MUTATION,
-    );
-    const [deleteVirtual] = useMutation<{ deleteIcloudVirtualEmail: boolean }>(
-        DELETE_ICLOUD_VIRTUAL_EMAIL_MUTATION,
-    );
-    const [resetVirtualCode] = useMutation<{ resetIcloudVirtualEmailCode: IcloudVirtualEmail }>(
-        RESET_ICLOUD_VIRTUAL_EMAIL_CODE_MUTATION,
-    );
+    const [createVirtual, createVirtualState] = useMutation(CREATE_ICLOUD_VIRTUAL_EMAIL_MUTATION);
+    const [batchCreateVirtual, batchCreateState] = useMutation(BATCH_CREATE_ICLOUD_VIRTUAL_EMAILS_MUTATION);
+    const [updateVirtual, updateVirtualState] = useMutation(UPDATE_ICLOUD_VIRTUAL_EMAIL_MUTATION);
+    const [deleteVirtual] = useMutation(DELETE_ICLOUD_VIRTUAL_EMAIL_MUTATION);
+    const [resetVirtualCode] = useMutation(RESET_ICLOUD_VIRTUAL_EMAIL_CODE_MUTATION);
 
     // Dialog States
-    const [primaryDialog, setPrimaryDialog] = useState<{
+    const [primaryDialog, setPrimaryDialogState] = useState<{
         open: boolean;
         editing: IcloudPrimaryAccount | null;
         email: string;
@@ -125,7 +103,7 @@ export function IcloudRelayModule() {
         codeResetIntervalDays: 30,
     });
 
-    const [virtualDialog, setVirtualDialog] = useState<{
+    const [virtualDialog, setVirtualDialogState] = useState<{
         open: boolean;
         editing: IcloudVirtualEmail | null;
         primaryAccountId: string;
@@ -139,7 +117,7 @@ export function IcloudRelayModule() {
         note: '',
     });
 
-    const [batchDialog, setBatchDialog] = useState<{
+    const [batchDialog, setBatchDialogState] = useState<{
         open: boolean;
         primaryAccountId: string;
         emailsText: string;
@@ -149,7 +127,39 @@ export function IcloudRelayModule() {
         emailsText: '',
     });
 
+    const setPrimaryDialog = (update: SetStateAction<typeof primaryDialog>) => {
+        dialogEpoch.current++;
+        setPrimaryDialogState(update);
+    };
+    const setVirtualDialog = (update: SetStateAction<typeof virtualDialog>) => {
+        dialogEpoch.current++;
+        setVirtualDialogState(update);
+    };
+    const setBatchDialog = (update: SetStateAction<typeof batchDialog>) => {
+        dialogEpoch.current++;
+        setBatchDialogState(update);
+    };
     const [mailDetailDialog, setMailDetailDialog] = useState<IcloudReceivedMail | null>(null);
+
+    const queryError = [primaryQuery.error, virtualQuery.error, mailsQuery.error].find(Boolean);
+    async function refreshData(afterWrite = false): Promise<boolean> {
+        setRefreshError('');
+        const results = await Promise.allSettled([
+            primaryQuery.refetch(),
+            virtualQuery.refetch(),
+            mailsQuery.refetch(),
+        ]);
+        const failed = results.find(result => result.status === 'rejected' || result.value.error);
+        if (failed) {
+            setRefreshError(
+                afterWrite
+                    ? '操作已完成，但列表加载失败。请点击刷新重试，无需再次提交。'
+                    : '列表加载失败，请点击刷新重试。',
+            );
+            return false;
+        }
+        return true;
+    }
 
     const primaryAccounts = useMemo(
         () => primaryQuery.data?.icloudPrimaryAccounts ?? [],
@@ -197,21 +207,43 @@ export function IcloudRelayModule() {
 
     // Primary Account Actions
     const handleSavePrimary = async () => {
+        const epoch = dialogEpoch.current;
         setError('');
         setNotice('');
+        const validation = validateIcloudInput({
+            email: primaryDialog.email,
+            note: primaryDialog.note,
+            codeResetIntervalDays: Number(primaryDialog.codeResetIntervalDays),
+            ...(!primaryDialog.editing || primaryDialog.appPassword
+                ? { appPassword: primaryDialog.appPassword }
+                : {}),
+        });
+        if (validation) {
+            setError(validation);
+            return;
+        }
         try {
             if (primaryDialog.editing) {
                 await updatePrimary({
                     variables: {
-                        id: primaryDialog.editing.id,
                         input: {
-                            email: primaryDialog.email.trim(),
+                            id: primaryDialog.editing.id,
+                            ...(primaryDialog.email.trim() !== primaryDialog.editing.email
+                                ? { email: primaryDialog.email.trim() }
+                                : {}),
                             appPassword: primaryDialog.appPassword.trim() || undefined,
-                            note: primaryDialog.note.trim() || undefined,
-                            codeResetIntervalDays: Number(primaryDialog.codeResetIntervalDays) || 30,
+                            note: primaryDialog.note.trim(),
+                            ...(Number(primaryDialog.codeResetIntervalDays) !==
+                            primaryDialog.editing.codeResetIntervalDays
+                                ? { codeResetIntervalDays: Number(primaryDialog.codeResetIntervalDays) }
+                                : {}),
                         },
                     },
                 });
+                if (epoch !== dialogEpoch.current) {
+                    await refreshData(true);
+                    return;
+                }
                 setNotice('主邮箱信息已更新');
             } else {
                 if (!primaryDialog.email.trim() || !primaryDialog.appPassword.trim()) {
@@ -223,11 +255,15 @@ export function IcloudRelayModule() {
                         input: {
                             email: primaryDialog.email.trim(),
                             appPassword: primaryDialog.appPassword.trim(),
-                            note: primaryDialog.note.trim() || undefined,
-                            codeResetIntervalDays: Number(primaryDialog.codeResetIntervalDays) || 30,
+                            note: primaryDialog.note.trim(),
+                            codeResetIntervalDays: Number(primaryDialog.codeResetIntervalDays),
                         },
                     },
                 });
+                if (epoch !== dialogEpoch.current) {
+                    await refreshData(true);
+                    return;
+                }
                 setNotice('成功添加主邮箱');
             }
             setPrimaryDialog({
@@ -238,9 +274,9 @@ export function IcloudRelayModule() {
                 note: '',
                 codeResetIntervalDays: 30,
             });
-            void primaryQuery.refetch();
+            await refreshData(true);
         } catch (e) {
-            setError(toUserFacingError(e, '保存主邮箱失败'));
+            if (epoch === dialogEpoch.current) setError(toUserFacingError(e, '保存主邮箱失败'));
         }
     };
 
@@ -254,7 +290,7 @@ export function IcloudRelayModule() {
             } else {
                 setError(`❌ 连接失败：${res.data?.testIcloudConnection.message || '请检查密码与配置'}`);
             }
-            void primaryQuery.refetch();
+            await refreshData(true);
         } catch (e) {
             setError(toUserFacingError(e, '测试连接发生异常'));
         }
@@ -267,9 +303,7 @@ export function IcloudRelayModule() {
             const res = await syncAccount({ variables: { id } });
             if (res.data?.syncIcloudAccount.success) {
                 setNotice(`✅ 同步完成，已拉取并更新 ${res.data.syncIcloudAccount.syncedCount} 封新邮件`);
-                void primaryQuery.refetch();
-                void virtualQuery.refetch();
-                void mailsQuery.refetch();
+                await refreshData(true);
             } else {
                 setError(`❌ 同步失败：${res.data?.syncIcloudAccount.error || '未知错误'}`);
             }
@@ -290,7 +324,7 @@ export function IcloudRelayModule() {
         try {
             await resetMasterCode({ variables: { id } });
             setNotice('主查询码已重置');
-            void primaryQuery.refetch();
+            await refreshData(true);
         } catch (e) {
             setError(toUserFacingError(e, '重置主查询码失败'));
         }
@@ -308,7 +342,7 @@ export function IcloudRelayModule() {
         try {
             await deletePrimary({ variables: { id } });
             setNotice('主邮箱已删除');
-            void primaryQuery.refetch();
+            await refreshData(true);
         } catch (e) {
             setError(toUserFacingError(e, '删除主邮箱失败'));
         }
@@ -316,18 +350,31 @@ export function IcloudRelayModule() {
 
     // Virtual Email Actions
     const handleSaveVirtual = async () => {
+        const epoch = dialogEpoch.current;
         setError('');
         setNotice('');
+        const validation = validateIcloudInput({
+            note: virtualDialog.note,
+            ...(!virtualDialog.editing ? { aliasEmail: virtualDialog.aliasEmail } : {}),
+        });
+        if (validation) {
+            setError(validation);
+            return;
+        }
         try {
             if (virtualDialog.editing) {
                 await updateVirtual({
                     variables: {
-                        id: virtualDialog.editing.id,
                         input: {
-                            note: virtualDialog.note.trim() || undefined,
+                            id: virtualDialog.editing.id,
+                            note: virtualDialog.note.trim(),
                         },
                     },
                 });
+                if (epoch !== dialogEpoch.current) {
+                    await refreshData(true);
+                    return;
+                }
                 setNotice('虚拟邮箱备注已更新');
             } else {
                 if (!virtualDialog.primaryAccountId || !virtualDialog.aliasEmail.trim()) {
@@ -339,21 +386,25 @@ export function IcloudRelayModule() {
                         input: {
                             primaryAccountId: virtualDialog.primaryAccountId,
                             aliasEmail: virtualDialog.aliasEmail.trim(),
-                            note: virtualDialog.note.trim() || undefined,
+                            note: virtualDialog.note.trim(),
                         },
                     },
                 });
+                if (epoch !== dialogEpoch.current) {
+                    await refreshData(true);
+                    return;
+                }
                 setNotice('成功添加虚拟邮箱');
             }
             setVirtualDialog({ open: false, editing: null, primaryAccountId: '', aliasEmail: '', note: '' });
-            void virtualQuery.refetch();
-            void primaryQuery.refetch();
+            await refreshData(true);
         } catch (e) {
-            setError(toUserFacingError(e, '保存虚拟邮箱失败'));
+            if (epoch === dialogEpoch.current) setError(toUserFacingError(e, '保存虚拟邮箱失败'));
         }
     };
 
     const handleBatchImportVirtual = async () => {
+        const epoch = dialogEpoch.current;
         setError('');
         setNotice('');
         if (!batchDialog.primaryAccountId) {
@@ -370,32 +421,28 @@ export function IcloudRelayModule() {
             return;
         }
 
-        const items = lines.map(line => {
-            const parts = line.split(/[,\t\s]+/);
-            return {
-                aliasEmail: parts[0],
-                note: parts.slice(1).join(' ') || undefined,
-            };
-        });
-
         try {
             const res = await batchCreateVirtual({
                 variables: {
                     input: {
                         primaryAccountId: batchDialog.primaryAccountId,
-                        items,
+                        rawInput: batchDialog.emailsText.trim(),
                     },
                 },
             });
+            if (epoch !== dialogEpoch.current) {
+                await refreshData(true);
+                return;
+            }
             const result = res.data?.batchCreateIcloudVirtualEmails;
             setNotice(
-                `批量导入完成：成功创建 ${result?.createdCount ?? 0} 个，跳过 ${result?.skippedCount ?? 0} 个重复项`,
+                `批量导入完成：成功创建 ${result?.createdCount ?? 0} 个，跳过 ${result?.skippedCount ?? 0} 个`,
             );
+            if (result?.errors.length) setError(result.errors.join('；'));
             setBatchDialog({ open: false, primaryAccountId: '', emailsText: '' });
-            void virtualQuery.refetch();
-            void primaryQuery.refetch();
+            await refreshData(true);
         } catch (e) {
-            setError(toUserFacingError(e, '批量导入失败'));
+            if (epoch === dialogEpoch.current) setError(toUserFacingError(e, '批量导入失败'));
         }
     };
 
@@ -411,7 +458,7 @@ export function IcloudRelayModule() {
         try {
             await resetVirtualCode({ variables: { id } });
             setNotice('买家查询码已重置');
-            void virtualQuery.refetch();
+            await refreshData(true);
         } catch (e) {
             setError(toUserFacingError(e, '重置买家查询码失败'));
         }
@@ -429,8 +476,7 @@ export function IcloudRelayModule() {
         try {
             await deleteVirtual({ variables: { id } });
             setNotice('虚拟邮箱已删除');
-            void virtualQuery.refetch();
-            void primaryQuery.refetch();
+            await refreshData(true);
         } catch (e) {
             setError(toUserFacingError(e, '删除虚拟邮箱失败'));
         }
@@ -458,10 +504,10 @@ export function IcloudRelayModule() {
                         <button
                             type="button"
                             onClick={() => {
-                                void primaryQuery.refetch();
-                                void virtualQuery.refetch();
-                                void mailsQuery.refetch();
-                                setNotice('数据已刷新');
+                                setNotice('');
+                                void refreshData().then(ok => {
+                                    if (ok) setNotice('数据已刷新');
+                                });
                             }}
                             className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors"
                         >
@@ -477,6 +523,14 @@ export function IcloudRelayModule() {
             {/* Main Area */}
             <main className="mx-auto w-full max-w-[1500px] flex-1 space-y-5 overflow-y-auto p-5 sm:p-8">
                 {/* Notice / Error banners */}
+                {(refreshError || queryError) && (
+                    <div
+                        role="alert"
+                        className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-800 dark:text-red-200"
+                    >
+                        {refreshError || '列表加载失败，请点击刷新重试；已有数据可能不是最新结果。'}
+                    </div>
+                )}
                 {notice && (
                     <div className="flex items-center justify-between gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-xs text-emerald-800">
                         <div className="flex items-center gap-2">
@@ -554,7 +608,8 @@ export function IcloudRelayModule() {
                             </p>
                             <button
                                 type="button"
-                                onClick={() =>
+                                onClick={() => {
+                                    setError('');
                                     setPrimaryDialog({
                                         open: true,
                                         editing: null,
@@ -562,8 +617,8 @@ export function IcloudRelayModule() {
                                         appPassword: '',
                                         note: '',
                                         codeResetIntervalDays: 30,
-                                    })
-                                }
+                                    });
+                                }}
                                 className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-blue-700 transition-colors shadow-2xs"
                             >
                                 <Plus className="h-3.5 w-3.5" />
@@ -590,7 +645,11 @@ export function IcloudRelayModule() {
                                         {primaryAccounts.length === 0 ? (
                                             <tr>
                                                 <td colSpan={8} className="p-8 text-center text-slate-400">
-                                                    暂无主邮箱配置，请点击右上角「新增主邮箱」开始配置。
+                                                    {primaryQuery.error
+                                                        ? '主邮箱加载失败，请刷新重试。'
+                                                        : primaryQuery.loading
+                                                          ? '正在加载主邮箱…'
+                                                          : '暂无主邮箱配置，请点击右上角「新增主邮箱」开始配置。'}
                                                 </td>
                                             </tr>
                                         ) : (
@@ -717,7 +776,8 @@ export function IcloudRelayModule() {
                                                             </button>
                                                             <button
                                                                 type="button"
-                                                                onClick={() =>
+                                                                onClick={() => {
+                                                                    setError('');
                                                                     setPrimaryDialog({
                                                                         open: true,
                                                                         editing: account,
@@ -727,8 +787,8 @@ export function IcloudRelayModule() {
                                                                         codeResetIntervalDays:
                                                                             account.codeResetIntervalDays ||
                                                                             30,
-                                                                    })
-                                                                }
+                                                                    });
+                                                                }}
                                                                 className="rounded border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
                                                                 title="编辑主邮箱"
                                                             >
@@ -790,13 +850,14 @@ export function IcloudRelayModule() {
                             <div className="flex items-center gap-2">
                                 <button
                                     type="button"
-                                    onClick={() =>
+                                    onClick={() => {
+                                        setError('');
                                         setBatchDialog({
                                             open: true,
                                             primaryAccountId: primaryAccounts[0]?.id ?? '',
                                             emailsText: '',
-                                        })
-                                    }
+                                        });
+                                    }}
                                     disabled={!primaryAccounts.length}
                                     className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50"
                                 >
@@ -805,15 +866,16 @@ export function IcloudRelayModule() {
                                 </button>
                                 <button
                                     type="button"
-                                    onClick={() =>
+                                    onClick={() => {
+                                        setError('');
                                         setVirtualDialog({
                                             open: true,
                                             editing: null,
                                             primaryAccountId: primaryAccounts[0]?.id ?? '',
                                             aliasEmail: '',
                                             note: '',
-                                        })
-                                    }
+                                        });
+                                    }}
                                     disabled={!primaryAccounts.length}
                                     className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-blue-700 transition-colors shadow-2xs disabled:opacity-50"
                                 >
@@ -841,9 +903,13 @@ export function IcloudRelayModule() {
                                         {filteredVirtualEmails.length === 0 ? (
                                             <tr>
                                                 <td colSpan={7} className="p-8 text-center text-slate-400">
-                                                    {virtualEmails.length === 0
-                                                        ? '暂无虚拟邮箱配置，请点击右上角「新增虚拟邮箱」'
-                                                        : '没有匹配的虚拟邮箱'}
+                                                    {virtualQuery.error
+                                                        ? '虚拟邮箱加载失败，请刷新重试。'
+                                                        : virtualQuery.loading
+                                                          ? '正在加载虚拟邮箱…'
+                                                          : virtualEmails.length === 0
+                                                            ? '暂无虚拟邮箱配置，请点击右上角「新增虚拟邮箱」'
+                                                            : '没有匹配的虚拟邮箱'}
                                                 </td>
                                             </tr>
                                         ) : (
@@ -913,15 +979,16 @@ export function IcloudRelayModule() {
                                                             </button>
                                                             <button
                                                                 type="button"
-                                                                onClick={() =>
+                                                                onClick={() => {
+                                                                    setError('');
                                                                     setVirtualDialog({
                                                                         open: true,
                                                                         editing: v,
                                                                         primaryAccountId: v.primaryAccountId,
                                                                         aliasEmail: v.aliasEmail,
                                                                         note: v.note || '',
-                                                                    })
-                                                                }
+                                                                    });
+                                                                }}
                                                                 className="rounded border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
                                                                 title="编辑备注"
                                                             >
@@ -984,9 +1051,13 @@ export function IcloudRelayModule() {
                                         {filteredReceivedMails.length === 0 ? (
                                             <tr>
                                                 <td colSpan={5} className="p-8 text-center text-slate-400">
-                                                    {receivedMails.length === 0
-                                                        ? '暂无收信记录，请点击上方「刷新」或在主邮箱管理中点击「同步」'
-                                                        : '没有匹配的收信记录'}
+                                                    {mailsQuery.error
+                                                        ? '收信记录加载失败，请刷新重试。'
+                                                        : mailsQuery.loading
+                                                          ? '正在加载收信记录…'
+                                                          : receivedMails.length === 0
+                                                            ? '暂无收信记录，请点击上方「刷新」或在主邮箱管理中点击「同步」'
+                                                            : '没有匹配的收信记录'}
                                                 </td>
                                             </tr>
                                         ) : (
@@ -1064,6 +1135,7 @@ export function IcloudRelayModule() {
             {/* Modal: Primary Account Add / Edit */}
             {primaryDialog.open && (
                 <AdminModal
+                    error={error}
                     title={primaryDialog.editing ? '编辑主邮箱' : '新增 iCloud 主邮箱'}
                     description="配置 iCloud 邮箱及 App 专用密码，系统将自动连接收信"
                     onClose={() => setPrimaryDialog(prev => ({ ...prev, open: false }))}
@@ -1146,6 +1218,7 @@ export function IcloudRelayModule() {
             {/* Modal: Virtual Email Add / Edit */}
             {virtualDialog.open && (
                 <AdminModal
+                    error={error}
                     title={virtualDialog.editing ? '编辑虚拟邮箱' : '新增虚拟邮箱'}
                     description="为虚拟邮箱分配所属主邮箱并生成买家专属查询码"
                     onClose={() => setVirtualDialog(prev => ({ ...prev, open: false }))}
@@ -1171,8 +1244,14 @@ export function IcloudRelayModule() {
                             </div>
                         )}
                         <div>
-                            <label className="block text-slate-700 font-bold mb-1">虚拟邮箱地址 *</label>
+                            <label
+                                htmlFor="icloud-virtual-email"
+                                className="block text-slate-700 font-bold mb-1"
+                            >
+                                虚拟邮箱地址 *
+                            </label>
                             <input
+                                id="icloud-virtual-email"
                                 type="email"
                                 value={virtualDialog.aliasEmail}
                                 disabled={Boolean(virtualDialog.editing)}
@@ -1182,8 +1261,14 @@ export function IcloudRelayModule() {
                             />
                         </div>
                         <div>
-                            <label className="block text-slate-700 font-bold mb-1">备注说明</label>
+                            <label
+                                htmlFor="icloud-virtual-note"
+                                className="block text-slate-700 font-bold mb-1"
+                            >
+                                备注说明
+                            </label>
                             <input
+                                id="icloud-virtual-note"
                                 type="text"
                                 value={virtualDialog.note}
                                 onChange={e => setVirtualDialog(p => ({ ...p, note: e.target.value }))}
@@ -1202,10 +1287,12 @@ export function IcloudRelayModule() {
                             <button
                                 type="button"
                                 onClick={handleSaveVirtual}
-                                disabled={createVirtualState.loading}
+                                disabled={createVirtualState.loading || updateVirtualState.loading}
                                 className="px-4 py-1.5 rounded-lg bg-blue-600 text-white font-bold hover:bg-blue-700 text-xs shadow-2xs"
                             >
-                                {createVirtualState.loading ? '保存中…' : '保存'}
+                                {createVirtualState.loading || updateVirtualState.loading
+                                    ? '保存中…'
+                                    : '保存'}
                             </button>
                         </div>
                     </div>
@@ -1215,6 +1302,7 @@ export function IcloudRelayModule() {
             {/* Modal: Batch Import Virtual Emails */}
             {batchDialog.open && (
                 <AdminModal
+                    error={error}
                     title="批量导入虚拟邮箱"
                     description="一行一个虚拟邮箱地址，每行空格后可跟备注说明"
                     onClose={() => setBatchDialog(prev => ({ ...prev, open: false }))}
@@ -1322,11 +1410,13 @@ export function IcloudRelayModule() {
 function AdminModal({
     title,
     description,
+    error,
     onClose,
     children,
 }: {
     title: string;
     description?: string;
+    error?: string;
     onClose: () => void;
     children: ReactNode;
 }) {
@@ -1358,6 +1448,11 @@ function AdminModal({
                         <X className="h-4 w-4" />
                     </button>
                 </div>
+                {error && (
+                    <div role="alert" className="mt-4 rounded-lg bg-red-50 p-3 text-xs text-red-700">
+                        {error}
+                    </div>
+                )}
                 {children}
             </AccessibleDialogSurface>
         </div>

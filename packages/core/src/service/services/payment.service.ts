@@ -1,3 +1,4 @@
+// organize-imports-ignore
 import { Injectable } from '@nestjs/common';
 import { ManualPaymentInput, RefundOrderInput } from '@vendure/common/lib/generated-types';
 import { DeepPartial, ID } from '@vendure/common/lib/shared-types';
@@ -43,6 +44,64 @@ import { PaymentMethodService } from './payment-method.service';
 @Injectable()
 @Instrument()
 export class PaymentService {
+    private readonly confirmationValidators = new Map<
+        string,
+        (
+            ctx: RequestContext,
+            order: Order,
+            payment: Payment,
+            state: PaymentState,
+            source: 'handler' | 'manual',
+        ) => Promise<string | undefined>
+    >();
+
+    registerConfirmationValidator(
+        id: string,
+        validator: (
+            ctx: RequestContext,
+            order: Order,
+            payment: Payment,
+            state: PaymentState,
+            source: 'handler' | 'manual',
+        ) => Promise<string | undefined>,
+    ): void {
+        this.confirmationValidators.set(id, validator);
+    }
+
+    private async validateConfirmation(
+        ctx: RequestContext,
+        order: Order,
+        payment: Payment,
+        state: PaymentState,
+        source: 'handler' | 'manual' = 'handler',
+    ): Promise<PaymentState> {
+        if (state !== 'Authorized' && state !== 'Settled') return state;
+        for (const validator of this.confirmationValidators.values()) {
+            let error: string | undefined;
+            try {
+                error = await this.connection.withTransaction(ctx, txCtx =>
+                    validator(txCtx, order, payment, state, source),
+                );
+            } catch {
+                error = 'Payment received but validation could not be completed; manual review required';
+            }
+            if (error) {
+                payment.errorMessage = 'PAYMENT_REVIEW_REQUIRED: ' + error;
+                payment.metadata = {
+                    ...payment.metadata,
+                    manualReview: {
+                        required: true,
+                        receivedState: state,
+                        reason: error,
+                        recordedAt: new Date().toISOString(),
+                    },
+                };
+                return 'Error';
+            }
+        }
+        return state;
+    }
+
     constructor(
         private connection: TransactionalConnection,
         private paymentStateMachine: PaymentStateMachine,
@@ -141,11 +200,12 @@ export class PaymentService {
             const payment = await this.connection
                 .getRepository(txCtx, Payment)
                 .save(new Payment({ ...result, method, state: initialState }));
+            const confirmedState = await this.validateConfirmation(txCtx, order, payment, result.state);
             const { finalize } = await this.paymentStateMachine.transition(
                 txCtx,
                 order,
                 payment,
-                result.state,
+                confirmedState,
             );
             await this.connection.getRepository(txCtx, Payment).save(payment, { reload: false });
             await this.connection
@@ -155,7 +215,7 @@ export class PaymentService {
                 .of(order)
                 .add(payment);
             await this.eventBus.publish(
-                new PaymentStateTransitionEvent(initialState, result.state, txCtx, payment, order),
+                new PaymentStateTransitionEvent(initialState, confirmedState, txCtx, payment, order),
             );
             await finalize();
             return payment;
@@ -230,6 +290,8 @@ export class PaymentService {
         fromState: PaymentState,
         toState: PaymentState,
     ) {
+        if (fromState !== toState)
+            toState = await this.validateConfirmation(ctx, payment.order, payment, toState);
         if (fromState === toState) {
             // in case metadata was changed
             await this.connection.getRepository(ctx, Payment).save(payment, { reload: false });
@@ -271,7 +333,7 @@ export class PaymentService {
      */
     async createManualPayment(ctx: RequestContext, order: Order, amount: number, input: ManualPaymentInput) {
         const initialState = 'Created';
-        const endState = 'Settled';
+        let endState: PaymentState = 'Settled';
         // Wrapped in withTransaction so the payment create, state transition, save,
         // relation add and onTransitionEnd hooks all commit or roll back together.
         // #4686.
@@ -286,12 +348,8 @@ export class PaymentService {
                     state: initialState,
                 }),
             );
-            const { finalize } = await this.paymentStateMachine.transition(
-                txCtx,
-                order,
-                payment,
-                endState,
-            );
+            endState = await this.validateConfirmation(txCtx, order, payment, endState, 'manual');
+            const { finalize } = await this.paymentStateMachine.transition(txCtx, order, payment, endState);
             await this.connection.getRepository(txCtx, Payment).save(payment, { reload: false });
             await this.connection
                 .getRepository(txCtx, Order)

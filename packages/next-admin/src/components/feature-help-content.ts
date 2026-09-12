@@ -69,6 +69,12 @@ export const featureHelpContent = {
         example: '例如：将中文商品名设为“Codex Pro X5”，英文名设为“Codex Pro X5”。',
         impact: '影响整个商品 SPU，不是单个 SKU。',
     },
+    'catalog.product-dates': {
+        purpose: '查看商品在本系统首次建档的时间，并区分外部来源创建日期。',
+        requirements: ['系统创建时间自动记录，无需填写', '来源创建日期未知时可留空'],
+        example: '例如：旧系统商品导入后，本系统记录导入建档时间，原创建日期保存在来源创建日期中。',
+        impact: '来源创建日期不会改变系统创建时间，也不代表生产日期或上架日期。',
+    },
     'catalog.product-policy': {
         purpose: '设定商品的交付类型、退款政策与人工交付时效。',
         requirements: ['先确认商品是实物还是虚拟交付', '时效以分钟填写且不得为负数'],

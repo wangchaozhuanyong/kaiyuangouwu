@@ -3,6 +3,43 @@ import { describe, expect, it } from 'vitest';
 import { formatOperationFailure, normalizeOperationFailure } from './operation-failure';
 
 describe('normalizeOperationFailure', () => {
+    it.each([
+        {
+            message: 'Unknown argument "id" on field "Mutation.updateIcloudVirtualEmail".',
+            extensions: { code: 'GRAPHQL_VALIDATION_FAILED' },
+        },
+        {
+            message:
+                'Variable "$input" got invalid value { note: "private" }; Field "id" of required type "ID!" was not provided.',
+            extensions: { code: 'BAD_USER_INPUT' },
+        },
+        { message: 'Field "items" is not defined by type "BatchCreateIcloudVirtualEmailsInput".' },
+    ])('identifies a contract mismatch without blaming form input: $message', error => {
+        const failure = normalizeOperationFailure({ errors: [error] }, { referenceId: 'request-1234' });
+        expect(failure).toMatchObject({
+            code: 'API_CONTRACT_MISMATCH',
+            traceId: 'request-1234',
+            retryable: false,
+        });
+        const text = formatOperationFailure(failure);
+        expect(text).toContain('页面与管理服务的接口不一致');
+        expect(text).not.toContain('修正对应字段');
+        expect(text).not.toContain('private');
+        expect(text).not.toContain('updateIcloud');
+    });
+
+    it('preserves GraphQL extension codes on Error instances and HTTP 400 bodies', () => {
+        const error = Object.assign(new Error('Invalid request'), {
+            extensions: { code: 'GRAPHQL_VALIDATION_FAILED' },
+        });
+        expect(normalizeOperationFailure(error).code).toBe('API_CONTRACT_MISMATCH');
+        const transport = Object.assign(new Error('Response not successful: Received status code 400'), {
+            bodyText: JSON.stringify({ errors: [{ message: error.message, extensions: error.extensions }] }),
+        });
+        expect(normalizeOperationFailure(transport).code).toBe('API_CONTRACT_MISMATCH');
+        expect(() => normalizeOperationFailure({ bodyText: '<html>server error</html>' })).not.toThrow();
+    });
+
     it('keeps a safe business reason and extracts structured blockers and recovery steps', () => {
         const failure = normalizeOperationFailure({
             message: '商家主体仍被店铺使用',

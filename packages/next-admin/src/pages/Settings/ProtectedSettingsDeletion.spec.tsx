@@ -113,6 +113,84 @@ afterEach(() => {
 });
 
 describe('protected settings deletion', () => {
+    it('refreshes seller occupancy after one store is rebound and still protects the other store', async () => {
+        const requestConfirmation = vi.fn<RequestConfirmation>();
+        const onError = vi.fn();
+        const sellers = [
+            { ...storeManagementData.sellers.items[0], name: '大马仓库' },
+            { ...storeManagementData.sellers.items[0], id: 'seller-2', name: '模钥科技' },
+        ];
+        const profiles: StoreManagementResult['storeProfiles'] = ['模钥店铺', '大马通'].map(
+            (name, index) => ({
+                id: `profile-${index}`,
+                updatedAt: '2026-09-12T00:00:00.000Z',
+                status: 'ACTIVE',
+                sortOrder: index,
+                descriptionZh: '',
+                descriptionEn: '',
+                taglineZh: null,
+                taglineEn: null,
+                brandBackgroundColor: null,
+                brandPrimaryColor: null,
+                brandAccentColor: null,
+                brandHighlightColor: null,
+                legalEntityName: null,
+                legalRegistrationCountry: null,
+                supportEmail: null,
+                privacyEmail: null,
+                internalNote: null,
+                primaryDomain: null,
+                storefrontUrl: null,
+                isOperational: true,
+                activationReadiness: { ready: true, checks: [] },
+                logoAsset: null,
+                logoOnLightAsset: null,
+                logoOnDarkAsset: null,
+                channel: {
+                    id: `channel-${index}`,
+                    code: `store-${index}`,
+                    token: `test-channel-${index}`,
+                    defaultCurrencyCode: 'MYR',
+                    defaultLanguageCode: 'zh_Hans',
+                    seller: sellers[0],
+                    customFields: { storefrontNameZh: name, storefrontNameEn: name },
+                },
+            }),
+        );
+        const renderPanel = async () =>
+            act(async () =>
+                root.render(
+                    <ConfirmDialogContext.Provider value={requestConfirmation}>
+                        <SellersPanel
+                            sellers={sellers}
+                            profiles={profiles}
+                            customFieldDefinitions={[]}
+                            onChanged={async () => undefined}
+                            onError={onError}
+                        />
+                    </ConfirmDialogContext.Provider>,
+                ),
+            );
+        const rowFor = (name: string) =>
+            container.querySelector(`button[aria-label="删除${name}"]`)!.closest('tr')!;
+        await renderPanel();
+        expect(rowFor('大马仓库').textContent).toContain('模钥店铺');
+        expect(rowFor('大马仓库').textContent).toContain('大马通');
+        expect(rowFor('模钥科技').textContent).toContain('未被店铺占用');
+
+        profiles[0] = { ...profiles[0], channel: { ...profiles[0].channel, seller: sellers[1] } };
+        await renderPanel();
+        expect(rowFor('大马仓库').textContent).not.toContain('模钥店铺');
+        expect(rowFor('大马仓库').textContent).toContain('大马通');
+        expect(rowFor('模钥科技').textContent).toContain('模钥店铺');
+        expect(rowFor('模钥科技').textContent).not.toContain('大马通');
+        await act(async () =>
+            container.querySelector<HTMLButtonElement>('button[aria-label="删除大马仓库"]')!.click(),
+        );
+        expect(onError).toHaveBeenCalledWith(expect.stringContaining('正在占用的店铺：大马通'));
+        expect(requestConfirmation).not.toHaveBeenCalled();
+    });
+
     it('uses one password confirmation for payment and shipping deletion', async () => {
         const requestConfirmation = vi
             .fn<RequestConfirmation>()

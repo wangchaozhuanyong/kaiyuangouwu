@@ -91,6 +91,16 @@ import './types';
                     { languageCode: LanguageCode.zh_Hans, value: '商品条码' },
                     { languageCode: LanguageCode.en, value: 'Barcode' },
                 ],
+                description: [
+                    {
+                        languageCode: LanguageCode.zh_Hans,
+                        value: '商品包装上的扫描码；没有条码可留空。它不是 SKU 内部编码。',
+                    },
+                    {
+                        languageCode: LanguageCode.en,
+                        value: 'Scannable code printed on the package. Leave blank when unavailable; this is not the internal SKU.',
+                    },
+                ],
             },
             {
                 name: 'specification',
@@ -100,6 +110,16 @@ import './types';
                 label: [
                     { languageCode: LanguageCode.zh_Hans, value: '规格' },
                     { languageCode: LanguageCode.en, value: 'Specification' },
+                ],
+                description: [
+                    {
+                        languageCode: LanguageCode.zh_Hans,
+                        value: '给员工查看的规格说明，例如 500ml、红色 / XL；不会自动生成 SKU 组合。',
+                    },
+                    {
+                        languageCode: LanguageCode.en,
+                        value: 'Human-readable specification such as 500 ml or Red / XL; it does not generate SKU combinations.',
+                    },
                 ],
             },
             {
@@ -111,6 +131,17 @@ import './types';
                     { languageCode: LanguageCode.zh_Hans, value: '销售单位' },
                     { languageCode: LanguageCode.en, value: 'Sale unit' },
                 ],
+                description: [
+                    {
+                        languageCode: LanguageCode.zh_Hans,
+                        value: '销售和库存展示使用的单位，例如瓶、盒、件。',
+                    },
+                    {
+                        languageCode: LanguageCode.en,
+                        value: 'Unit used for sales and stock display, for example bottle, box, or piece.',
+                    },
+                ],
+                ui: { component: 'catalog-unit-input' },
             },
             {
                 name: 'purchaseUnit',
@@ -121,6 +152,17 @@ import './types';
                     { languageCode: LanguageCode.zh_Hans, value: '采购单位' },
                     { languageCode: LanguageCode.en, value: 'Purchase unit' },
                 ],
+                description: [
+                    {
+                        languageCode: LanguageCode.zh_Hans,
+                        value: '向供应商进货时使用的单位，例如箱；只用于采购和换算。',
+                    },
+                    {
+                        languageCode: LanguageCode.en,
+                        value: 'Unit used when purchasing from a supplier, for example carton; used for purchasing and conversion.',
+                    },
+                ],
+                ui: { component: 'catalog-unit-input' },
             },
             {
                 name: 'packageQuantity',
@@ -133,6 +175,16 @@ import './types';
                     { languageCode: LanguageCode.zh_Hans, value: '包装换算数量' },
                     { languageCode: LanguageCode.en, value: 'Package conversion quantity' },
                 ],
+                description: [
+                    {
+                        languageCode: LanguageCode.zh_Hans,
+                        value: '1 个采购单位包含多少个销售单位。例如 1 箱 = 12 瓶填 12；单位相同填 1。',
+                    },
+                    {
+                        languageCode: LanguageCode.en,
+                        value: 'Number of sale units in one purchase unit. Enter 12 for 1 carton = 12 bottles, or 1 when the units match.',
+                    },
+                ],
             },
             {
                 name: 'shelfLifeDays',
@@ -143,6 +195,16 @@ import './types';
                 label: [
                     { languageCode: LanguageCode.zh_Hans, value: '默认保质期（天）' },
                     { languageCode: LanguageCode.en, value: 'Default shelf life (days)' },
+                ],
+                description: [
+                    {
+                        languageCode: LanguageCode.zh_Hans,
+                        value: '仅作为批次到期日的默认天数。新增库存批次并填写生产日期后自动计算到期日期；只填这里不能追踪现有库存何时过期。',
+                    },
+                    {
+                        languageCode: LanguageCode.en,
+                        value: 'Default days used to calculate a lot expiry date from its production date. This field alone cannot track when existing stock expires.',
+                    },
                 ],
             },
         );

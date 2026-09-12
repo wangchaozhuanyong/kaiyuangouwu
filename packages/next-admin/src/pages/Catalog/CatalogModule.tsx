@@ -45,13 +45,13 @@ import {
 } from '../../graphql/commerce.graphql';
 import { useUrlListState } from '../../hooks/use-url-list-state';
 import { useUrlSortState } from '../../hooks/use-url-sort-state';
+import { AdminImage } from '../../utils/admin-image';
 import {
     getCatalogEmptyStateDescription,
     getChannelDisplayLabel,
     isDefaultChannelCode,
 } from '../../utils/channel-display';
 import { collectionHierarchySummary } from '../../utils/commerce-mode';
-import { AdminImage } from '../../utils/admin-image';
 import { toUserFacingError } from '../../utils/user-facing-error';
 
 interface ProductVariantItem {
@@ -668,8 +668,14 @@ export function CatalogModule() {
                                                             src={product.featuredAsset?.preview}
                                                             alt={product.name}
                                                             className="w-full h-full object-cover"
-                                                            thumbnailOptions={{ width: 160, height: 160, preset: 'storefront-thumbnail-160' }}
-                                                            fallbackIcon={<ImageIcon className="w-4 h-4 text-slate-300" />}
+                                                            thumbnailOptions={{
+                                                                width: 160,
+                                                                height: 160,
+                                                                preset: 'storefront-thumbnail-160',
+                                                            }}
+                                                            fallbackIcon={
+                                                                <ImageIcon className="w-4 h-4 text-slate-300" />
+                                                            }
                                                         />
                                                     </button>
                                                 </td>

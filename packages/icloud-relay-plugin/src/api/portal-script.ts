@@ -4,25 +4,18 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
 (function() {
     'use strict';
 
-    // Synchronize visual preset for seamless theme adaptation
-    try {
-        const visualPreset = localStorage.getItem('storefront-visual-preset');
-        if (visualPreset) {
-            document.documentElement.setAttribute('data-storefront-preset', visualPreset);
-        }
-    } catch (e) {}
-
     const API_ENDPOINT = '/shop-api';
     const STORAGE_KEY = 'icloud_relay_recent_queries';
     let currentQueryCode = '';
     let allMails = [];
     let virtualEmailsList = [];
-    let autoRefreshTimer = null;
+    let activeRequest = null;
     let countdownInterval = null;
     let countdownSeconds = 10;
 
     // Initialize on DOM load
     document.addEventListener('DOMContentLoaded', () => {
+        loadStorefrontBranding();
         initNavBack();
         initInputListeners();
         initActionButtons();
@@ -41,6 +34,61 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
             }
         }
     });
+
+    // Resolve the store through the same host-routed Shop API as the storefront.
+    async function loadStorefrontBranding() {
+        try {
+            const res = await fetch(API_ENDPOINT + '?languageCode=zh_Hans', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query: 'query MailPortalBranding { activeChannel { id } ' +
+                    'storefrontBranding { name } storefrontVisualPreset { channelId presetId } }' })
+            });
+            const json = await res.json();
+            const data = json.data;
+            if (!res.ok || json.errors || !data?.activeChannel?.id ||
+                String(data.storefrontVisualPreset?.channelId) !== String(data.activeChannel.id)) return;
+            const preset = data.storefrontVisualPreset.presetId;
+            document.documentElement.setAttribute('data-storefront-preset',
+                preset === 'modern-oriental' ? preset : 'classic');
+            const name = data.storefrontBranding?.name?.trim();
+            if (name) {
+                document.querySelectorAll('[data-portal-store-name]').forEach(el => { el.textContent = name; });
+                document.title = '邮件验证码查询中心 - ' + name;
+            }
+        } catch (e) {
+            // Keep neutral branding when the current store cannot be verified.
+        }
+    }
+
+    function resetRequestButtons() {
+        const btn = document.getElementById('queryBtn');
+        const input = document.getElementById('codeInput');
+        const btnText = document.getElementById('btnText');
+        const refreshBtn = document.getElementById('refreshNowBtn');
+        if (btn) btn.disabled = false;
+        if (input) input.readOnly = false;
+        if (btnText) btnText.textContent = '查 询 邮 件';
+        if (refreshBtn) {
+            refreshBtn.disabled = false;
+            refreshBtn.innerHTML = '<span>🔄</span> 立即刷新';
+        }
+    }
+
+    function cancelQueryRequest() {
+        if (activeRequest) activeRequest.abort();
+        activeRequest = null;
+        resetRequestButtons();
+    }
+
+    function stopAutoRefresh() {
+        if (countdownInterval) clearInterval(countdownInterval);
+        countdownInterval = null;
+        const toggle = document.getElementById('autoRefreshToggle');
+        if (toggle) toggle.checked = false;
+        const cd = document.getElementById('countdownText');
+        if (cd) cd.textContent = '';
+    }
 
     // ====== Navigation ======
     function initNavBack() {
@@ -216,8 +264,8 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
 
     function cleanCode(str) {
         if (!str) return '';
-        // Extract BUY-XXXX-XXXX or MST-XXXX-XXXX or clean raw string
-        const match = str.match(/(?:BUY|MST)-[A-Za-z0-9]{3,8}-[A-Za-z0-9]{3,8}/i);
+        // Extract BUY-XXXX-XXXX or MSTR-XXXX-XXXX or clean raw string
+        const match = str.match(/(?:BUY|MSTR)-[A-Za-z0-9]{3,8}-[A-Za-z0-9]{3,8}/i);
         if (match) return match[0].toUpperCase();
         return str.trim().toUpperCase().replace(/[^A-Z0-9-]/g, '');
     }
@@ -321,7 +369,16 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
             return;
         }
 
+        stopAutoRefresh();
+        cancelQueryRequest();
+        const request = new AbortController();
+        activeRequest = request;
         currentQueryCode = code;
+        allMails = [];
+        virtualEmailsList = [];
+        document.getElementById('filterSelect').value = '';
+        document.getElementById('queryCard').style.display = 'block';
+        document.getElementById('resultSection').style.display = 'none';
         if (input) input.value = code;
 
         const btn = document.getElementById('queryBtn');
@@ -335,6 +392,7 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
 
         try {
             const res = await fetch(API_ENDPOINT, {
+                signal: request.signal,
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -344,7 +402,7 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
                             codeExpiresAt remainingDays totalEmails
                             items {
                                 id fromAddress fromName subject receivedAt
-                                extractedCode bodyText bodyHtml targetEmail
+                                extractedCode bodyText bodyHtml targetEmail virtualEmailId
                             }
                             virtualEmailsList { id aliasEmail note }
                         }
@@ -354,6 +412,7 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
             });
 
             const json = await res.json();
+            if (activeRequest !== request || request.signal.aborted) return;
             const data = json.data?.icloudQueryMails;
 
             if (!data || !data.success) {
@@ -404,6 +463,7 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
 
             showResults(data);
         } catch (err) {
+            if (activeRequest !== request || request.signal.aborted) return;
             showMsg(
                 '无法连接到邮件服务接口，可能是网络波动或Wi-Fi断连。请检查网络状态后点击重试。',
                 'error',
@@ -414,14 +474,19 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
                 }
             );
         } finally {
-            if (btn) btn.disabled = false;
-            if (input) input.readOnly = false;
-            if (btnText) btnText.textContent = '查 询 邮 件';
+            if (activeRequest === request) {
+                activeRequest = null;
+                resetRequestButtons();
+            }
         }
     };
 
     window.refreshCurrentQuery = async function() {
-        if (!currentQueryCode) return;
+        if (!currentQueryCode || activeRequest ||
+            document.getElementById('resultSection').style.display !== 'block') return;
+        const request = new AbortController();
+        activeRequest = request;
+        const code = currentQueryCode;
         const refreshBtn = document.getElementById('refreshNowBtn');
         if (refreshBtn) {
             refreshBtn.disabled = true;
@@ -430,6 +495,7 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
 
         try {
             const res = await fetch(API_ENDPOINT, {
+                signal: request.signal,
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -439,26 +505,28 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
                             codeExpiresAt remainingDays totalEmails
                             items {
                                 id fromAddress fromName subject receivedAt
-                                extractedCode bodyText bodyHtml targetEmail
+                                extractedCode bodyText bodyHtml targetEmail virtualEmailId
                             }
                             virtualEmailsList { id aliasEmail note }
                         }
                     }\`,
-                    variables: { code: currentQueryCode }
+                    variables: { code }
                 })
             });
             const json = await res.json();
+            if (activeRequest !== request || request.signal.aborted) return;
             const data = json.data?.icloudQueryMails;
             if (data && data.success) {
                 allMails = data.items || [];
+                virtualEmailsList = data.virtualEmailsList || [];
                 showResults(data);
             }
         } catch (e) {
             // Ignore background refresh errors
         } finally {
-            if (refreshBtn) {
-                refreshBtn.disabled = false;
-                refreshBtn.innerHTML = '<span>🔄</span> 立即刷新';
+            if (activeRequest === request) {
+                activeRequest = null;
+                resetRequestButtons();
             }
         }
     };
@@ -476,7 +544,7 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
         const emailLabel = data.aliasEmail || data.primaryEmail || 'iCloud 邮箱';
         const summaryEmail = document.getElementById('summaryEmail');
         if (summaryEmail) {
-            const typePill = data.targetType === 'PRIMARY_MASTER'
+            const typePill = data.targetType === 'PRIMARY'
                 ? '<span class="code-type-pill pill-master">主管理码</span>'
                 : '<span class="code-type-pill pill-buyer">买家专属</span>';
             summaryEmail.innerHTML = '<span>' + escapeHtml(emailLabel) + '</span>' + typePill;
@@ -501,16 +569,19 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
         if (virtualEmailsList.length > 0 && filterWrapper) {
             filterWrapper.style.display = 'block';
             const select = document.getElementById('filterSelect');
+            const previousFilter = select.value;
             select.innerHTML = '<option value="">全部虚拟邮箱 (' + allMails.length + ' 封邮件)</option>';
             virtualEmailsList.forEach(v => {
-                select.innerHTML += '<option value="' + escapeAttr(v.aliasEmail) + '">' +
+                select.innerHTML += '<option value="' + escapeAttr(String(v.id)) + '">' +
                     escapeHtml(v.aliasEmail) + (v.note ? ' (' + escapeHtml(v.note) + ')' : '') + '</option>';
             });
+            if (virtualEmailsList.some(v => String(v.id) === previousFilter)) select.value = previousFilter;
         } else if (filterWrapper) {
             filterWrapper.style.display = 'none';
+            document.getElementById('filterSelect').value = '';
         }
 
-        renderMails(allMails);
+        window.filterMails();
     }
 
     window.filterMails = function() {
@@ -520,7 +591,7 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
             renderMails(allMails);
             return;
         }
-        renderMails(allMails.filter(m => m.targetEmail === filter));
+        renderMails(allMails.filter(m => String(m.virtualEmailId) === filter));
     };
 
     function renderMails(mails) {
@@ -644,6 +715,7 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
     // ====== Auto Refresh Feature ======
     window.toggleAutoRefresh = function(checkbox) {
         const cd = document.getElementById('countdownText');
+        if (countdownInterval) clearInterval(countdownInterval);
         if (checkbox.checked) {
             countdownSeconds = 10;
             if (cd) cd.textContent = countdownSeconds + 's';
@@ -663,12 +735,11 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
     };
 
     window.goBack = function() {
-        if (autoRefreshTimer) clearInterval(autoRefreshTimer);
-        if (countdownInterval) clearInterval(countdownInterval);
-        const toggle = document.getElementById('autoRefreshToggle');
-        if (toggle) toggle.checked = false;
-        const cd = document.getElementById('countdownText');
-        if (cd) cd.textContent = '';
+        stopAutoRefresh();
+        cancelQueryRequest();
+        currentQueryCode = '';
+        allMails = [];
+        virtualEmailsList = [];
 
         document.getElementById('queryCard').style.display = 'block';
         document.getElementById('resultSection').style.display = 'none';

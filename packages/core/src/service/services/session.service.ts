@@ -166,6 +166,17 @@ export class SessionService implements EntitySubscriberInterface, OnModuleInit {
         let serializedSession = await this.withTimeout(this.sessionCacheStrategy.get(sessionToken));
         const stale = !!(serializedSession && serializedSession.cacheExpiry < new Date().getTime() / 1000);
         const expired = !!(serializedSession && serializedSession.expires < new Date());
+        if (serializedSession?.user && !stale && !expired) {
+            // Cache invalidation may be local to an API instance. Check the lightweight
+            // session row before trusting cached authentication after a password reset
+            // or permission change, while still caching the expensive user/role joins.
+            const stillValid = await this.connection.rawConnection.getRepository(Session).existsBy({
+                id: serializedSession.id,
+                token: sessionToken,
+                invalidated: false,
+            });
+            if (!stillValid) serializedSession = undefined;
+        }
         if (!serializedSession || stale || expired) {
             const session = await this.findSessionByToken(sessionToken);
             if (session) {
@@ -173,6 +184,7 @@ export class SessionService implements EntitySubscriberInterface, OnModuleInit {
                 await this.withTimeout(this.sessionCacheStrategy.set(serializedSession));
                 return serializedSession;
             } else {
+                await this.withTimeout(this.sessionCacheStrategy.delete(sessionToken));
                 return;
             }
         }

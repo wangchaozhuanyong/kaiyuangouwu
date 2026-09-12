@@ -1,0 +1,29 @@
+# Template only. Review the executable, database and configuration paths before installation.
+[Unit]
+Description=Update customer-image antivirus definitions
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=clamav
+Group=clamav
+ExecStart=/usr/bin/freshclam --config-file=/etc/clamav/customer-image-freshclam.conf --stdout
+UMask=0027
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+ReadWritePaths=/var/lib/clamav
+InaccessiblePaths=-/etc/vendure -/var/lib/vendure -/opt/vendure/current/packages/dev-server/.env
+MemoryMax=2G
+CPUQuota=100%
+TasksMax=16
+TimeoutStartSec=10min

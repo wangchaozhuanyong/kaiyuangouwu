@@ -1,0 +1,10 @@
+# Match DatabaseDirectory and NotifyClamd to the reviewed clamd configuration.
+DatabaseDirectory /var/lib/clamav
+DatabaseOwner clamav
+DatabaseMirror database.clamav.net
+NotifyClamd /etc/clamav/clamd.conf
+ConnectTimeout 10
+ReceiveTimeout 30
+MaxAttempts 2
+TestDatabases yes
+# Log to the service journal; no customer contents or credentials are involved.

@@ -66,11 +66,11 @@ describe('store commerce promotion actions', () => {
         expect(getRepository).toHaveBeenCalledWith(ctx, CustomerCoupon);
         expect(queryBuilder.andWhere).toHaveBeenCalledWith(
             expect.stringContaining("coupon.status = 'LOCKED'"),
-            { orderId: 'order-1' },
+            expect.objectContaining({ orderId: 'order-1', now: expect.any(Date) }),
         );
         expect(queryBuilder.andWhere).toHaveBeenCalledWith(
             expect.stringContaining("coupon.status = 'USED'"),
-            { orderId: 'order-1' },
+            expect.objectContaining({ orderId: 'order-1', now: expect.any(Date) }),
         );
 
         queryBuilder.getRawOne.mockResolvedValueOnce(undefined);

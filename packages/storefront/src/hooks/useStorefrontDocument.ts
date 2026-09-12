@@ -9,34 +9,6 @@ import { productImage, setMetaContent, trimText } from '../storefront-utils';
 import { cacheLogoUrl } from '../StorefrontErrorBoundary';
 import { type Product, type StorefrontConfig } from '../types';
 
-const nonIndexableRoutes = new Set<RouteName>([
-    'cart',
-    'account',
-    'purchase',
-    'checkout',
-    'payment',
-    'order-confirmation',
-    'orders',
-    'logistics',
-    'order-detail',
-    'addresses',
-    'account-security',
-    'favorites',
-    'history',
-    'notifications',
-    'coupons',
-    'referral',
-    'reviews',
-    'image-studio',
-    'two-factor',
-    'login',
-    'register',
-    'verify-account',
-    'forgot-password',
-    'reset-password',
-    'not-found',
-]);
-
 export function useStorefrontBrandColors(
     config: StorefrontConfig | undefined,
     presetId: StorefrontVisualPresetId = 'classic',
@@ -152,17 +124,14 @@ export function useStorefrontMetadata({
                 : isZh
                   ? `${storefrontName}精选商品`
                   : `Featured products from ${storefrontName}`;
-        const isIndexable = !nonIndexableRoutes.has(route.name);
+        const isIndexable = false;
         const canonicalUrl = new URL(window.location.href);
         canonicalUrl.hash = '';
         if (!isIndexable) canonicalUrl.search = '';
 
         document.title = title;
         setMetaContent('meta[name="description"]', description);
-        setMetaContent(
-            'meta[name="robots"]',
-            isIndexable ? 'index, follow, max-image-preview:large' : 'noindex, nofollow',
-        );
+        setMetaContent('meta[name="robots"]', 'noindex, nofollow, noarchive');
         setMetaContent('meta[name="application-name"]', storefrontName);
         setMetaContent('meta[property="og:type"]', route.name === 'product' ? 'product' : 'website');
         setMetaContent('meta[property="og:site_name"]', storefrontName);

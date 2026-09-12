@@ -37,7 +37,7 @@ export function LoginRoutePage() {
                 storefrontName={runtime.storefrontName}
                 legalContent={runtime.legalContent}
                 authVisualContent={findAuthVisualContent(runtime.contentBlocks, 'login')}
-                onBack={runtime.goBack}
+                onBack={runtime.customer ? runtime.goBack : () => window.location.assign('/promo')}
                 onSuccess={runtime.completeAuthentication}
                 onContentTarget={runtime.openContentTarget}
             />

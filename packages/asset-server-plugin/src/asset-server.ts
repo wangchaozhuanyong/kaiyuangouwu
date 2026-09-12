@@ -96,6 +96,7 @@ export class AssetServer {
                     mimeType = (await getFileType(file))?.mime || 'application/octet-stream';
                 }
                 res.contentType(mimeType);
+                res.setHeader('X-Content-Type-Options', 'nosniff');
                 res.setHeader('content-security-policy', "default-src 'self'");
                 res.setHeader('Cache-Control', this.cacheHeader);
                 res.send(file);
@@ -139,6 +140,7 @@ export class AssetServer {
                             mimeType = (await getFileType(imageBuffer))?.mime || 'image/jpeg';
                         }
                         res.set('Content-Type', mimeType);
+                        res.setHeader('X-Content-Type-Options', 'nosniff');
                         res.setHeader('content-security-policy', "default-src 'self'");
                         res.send(imageBuffer);
                         return;
@@ -180,6 +182,11 @@ export class AssetServer {
                 targetMode = matchingPreset.mode;
             }
         }
+        const customerAvatar = this.sanitizeFilePath(req.path).startsWith('avatars/v2/');
+        if (customerAvatar) {
+            if (targetWidth) targetWidth = Math.min(targetWidth, 512);
+            if (targetHeight) targetHeight = Math.min(targetHeight, 512);
+        }
         const transformsImage =
             targetWidth ||
             targetHeight ||
@@ -188,11 +195,12 @@ export class AssetServer {
             (parameters.preset && this.presets.some(p => p.name === parameters.preset));
         // Sharp rasterizes SVG transformations to PNG by default. The cache extension must
         // describe those bytes so both generated responses and later cache hits use the right MIME type.
-        const format =
-            parameters.format ??
-            (transformsImage && path.extname(this.sanitizeFilePath(req.path)).toLowerCase() === '.svg'
-                ? 'png'
-                : undefined);
+        const format = customerAvatar
+            ? 'webp'
+            : (parameters.format ??
+              (transformsImage && path.extname(this.sanitizeFilePath(req.path)).toLowerCase() === '.svg'
+                  ? 'png'
+                  : undefined));
         return {
             ...parameters,
             width: targetWidth,

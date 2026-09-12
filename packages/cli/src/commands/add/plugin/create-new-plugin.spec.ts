@@ -1,4 +1,11 @@
+import { select, text } from '@clack/prompts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { analyzeProject } from '../../../shared/shared-prompts';
+import { VendureConfigRef } from '../../../shared/vendure-config-ref';
+import { createFile } from '../../../utilities/ast-utils';
+
+import { createNewPlugin } from './create-new-plugin';
 
 // Cancel symbol to simulate user pressing Ctrl+C / Escape in prompts
 const CANCEL_SYMBOL = Symbol('clack:cancel');
@@ -45,22 +52,16 @@ vi.mock('fs-extra', () => ({
     default: { existsSync: vi.fn(() => false) },
 }));
 
-import { select, text } from '@clack/prompts';
-
-import { analyzeProject } from '../../../shared/shared-prompts';
-import { VendureConfigRef } from '../../../shared/vendure-config-ref';
-import { createFile } from '../../../utilities/ast-utils';
-
-import { createNewPlugin } from './create-new-plugin';
-
 function setupMocks() {
     // Re-apply VendureConfigRef mock each time (vi.restoreAllMocks clears it)
-    vi.mocked(VendureConfigRef).mockImplementation((() => ({
-        addToPluginsArray: vi.fn(),
-        sourceFile: {
-            getProject: vi.fn(() => ({ save: vi.fn().mockResolvedValue(undefined) })),
-        },
-    })) as any);
+    vi.mocked(VendureConfigRef).mockImplementation(function () {
+        return {
+            addToPluginsArray: vi.fn(),
+            sourceFile: {
+                getProject: vi.fn(() => ({ save: vi.fn().mockResolvedValue(undefined) })),
+            },
+        } as unknown as VendureConfigRef;
+    });
 
     const mockPluginClass = {
         rename: vi.fn(),

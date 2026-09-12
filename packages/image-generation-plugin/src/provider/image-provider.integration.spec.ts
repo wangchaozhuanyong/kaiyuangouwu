@@ -44,6 +44,8 @@ beforeEach(() => {
 describe('ImageProviderClient mock relay integration', () => {
     const cipher = { decrypt: () => 'mock-relay-key' } as unknown as ImageProviderCipherService;
     const safeUrls: SafeProviderUrlService = {
+        resolveForRequest: (value: string) =>
+            Promise.resolve({ url: new URL(value), address: '127.0.0.1', family: 4 }),
         validate: (value: string) => Promise.resolve(new URL(value)),
         endpoint: (base: URL, pathname: string) =>
             new URL(`${base.toString().replace(/\/$/u, '')}/${pathname.replace(/^\//u, '')}`),

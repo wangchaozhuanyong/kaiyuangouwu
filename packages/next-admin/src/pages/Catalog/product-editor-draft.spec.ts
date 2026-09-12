@@ -4,6 +4,7 @@ import type { ProductDetailRecord } from './product-editor-types';
 
 const product: ProductDetailRecord = {
     id: 'p1',
+    createdAt: '2026-09-12T00:00:00.000Z',
     enabled: true,
     name: 'Translated name',
     slug: 'translated',

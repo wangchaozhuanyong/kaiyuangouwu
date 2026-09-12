@@ -88,13 +88,21 @@ export const PROMOTION_VISUAL_SCRIPT = String.raw`(() => {
         if(finalArea)endObserver.observe(finalArea);if(footer)endObserver.observe(footer);
         const itemObserver=new IntersectionObserver(entries=>entries.forEach(entry=>entry.target.classList.toggle('is-scene-active',entry.isIntersecting&&entry.intersectionRatio>.5)),{threshold:[.2,.5,.75],rootMargin:'-18% 0px -22% 0px'});
         document.querySelectorAll('[data-promo-scene-item]').forEach(node=>itemObserver.observe(node));
-        const links=Array.from(document.querySelectorAll('.promo-nav a[href^="#"]'));
-        const navObserver=new IntersectionObserver(entries=>entries.forEach(entry=>{if(entry.isIntersecting)links.forEach(link=>link.classList.toggle('is-active',link.getAttribute('href')==='#'+entry.target.id));}),{threshold:.16,rootMargin:'-24% 0px -58% 0px'});
-        links.forEach(link=>{const target=document.querySelector(link.getAttribute('href'));if(target)navObserver.observe(target);});
     } else {
         if(header)header.classList.add('is-scrolled');
         scheduleCarousel();
     }
+    const navLinks=Array.from(document.querySelectorAll('.promo-nav a[href^="#"]'));
+    const navSections=navLinks.map(link=>({link,target:document.querySelector(link.getAttribute('href'))})).filter(item=>item.target);
+    let navigationQueued=false;
+    const updateNavigation=()=>{
+        navigationQueued=false;
+        const readingLine=(header?header.getBoundingClientRect().bottom:0)+40;
+        const current=navSections.find(item=>{const rect=item.target.getBoundingClientRect();return rect.top<=readingLine&&rect.bottom>readingLine;});
+        navLinks.forEach(link=>{const active=Boolean(current&&current.link===link);link.classList.toggle('is-active',active);if(active)link.setAttribute('aria-current','location');else link.removeAttribute('aria-current');});
+    };
+    const scheduleNavigation=()=>{if(!navigationQueued){navigationQueued=true;requestAnimationFrame(updateNavigation);}};
+    if(navSections.length){window.addEventListener('scroll',scheduleNavigation,{passive:true});window.addEventListener('resize',scheduleNavigation);scheduleNavigation();}
     document.addEventListener('visibilitychange',scheduleCarousel);
     const faqItems=Array.from(document.querySelectorAll('.promo-faq-item')),faqAnimations=new WeakMap(),faqAnswerAnimations=new WeakMap();
     const finishFaq=(item,animation,opening)=>{

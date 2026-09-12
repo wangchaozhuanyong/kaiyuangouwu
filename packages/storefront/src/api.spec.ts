@@ -1389,6 +1389,7 @@ describe('ShopApi storefront mutations', () => {
 
         const request = fetchMock.mock.calls[0][1] as RequestInit;
         expect(request.headers).not.toHaveProperty('content-type');
+        expect(request.headers).toHaveProperty('Apollo-Require-Preflight', 'true');
         expect(request.body).toBeInstanceOf(FormData);
         const form = request.body as FormData;
         const operationsEntry = form.get('operations');
@@ -1404,6 +1405,27 @@ describe('ShopApi storefront mutations', () => {
         expect(operations.variables).toEqual({ file: null });
         expect(JSON.parse(mapEntry)).toEqual({ 0: ['variables.file'] });
         expect((form.get('0') as File).name).toBe('avatar.png');
+    });
+
+    it('requires a CORS preflight for image reference uploads while preserving multipart metadata', async () => {
+        const reference = { id: 'reference-fixture' };
+        const fetchMock = mockGraphQlResponse({ uploadImageReference: reference });
+        const file = new File(['synthetic'], 'reference.png', { type: 'image/png' });
+        await expect(new ShopApi(market).uploadImageReference(file, true)).resolves.toEqual(reference);
+        const request = fetchMock.mock.calls[0][1] as RequestInit;
+        expect(request.headers).toHaveProperty('Apollo-Require-Preflight', 'true');
+        expect(request.headers).not.toHaveProperty('content-type');
+        expect(request.credentials).toBe('include');
+        const form = request.body as FormData;
+        const operations = form.get('operations');
+        const map = form.get('map');
+        if (typeof operations !== 'string' || typeof map !== 'string')
+            throw Error('Missing multipart metadata');
+        expect(JSON.parse(operations).variables).toEqual({
+            file: null,
+            termsAccepted: true,
+        });
+        expect(JSON.parse(map)).toEqual({ 0: ['variables.file'] });
     });
 
     it('paginates and filters customer orders on the server', async () => {

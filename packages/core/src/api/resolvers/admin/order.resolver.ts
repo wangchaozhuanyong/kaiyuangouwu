@@ -112,7 +112,7 @@ export class OrderResolver {
         return this.orderService.cancelOrder(ctx, args.input);
     }
 
-    @Transaction()
+    @Transaction('manual')
     @Mutation()
     @Allow(Permission.UpdateOrder)
     async refundOrder(
@@ -122,7 +122,7 @@ export class OrderResolver {
         return this.orderService.refundOrder(ctx, args.input);
     }
 
-    @Transaction()
+    @Transaction('manual')
     @Mutation()
     @Allow(Permission.UpdateOrder)
     async settleRefund(@Ctx() ctx: RequestContext, @Args() args: MutationSettleRefundArgs) {

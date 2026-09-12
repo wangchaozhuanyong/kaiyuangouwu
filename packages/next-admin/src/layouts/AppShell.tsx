@@ -56,6 +56,7 @@ import type { ThemePreference } from '../theme/theme';
 import { logoutAdministrator, switchActiveChannel } from '../apollo';
 import { AccessibleDialogSurface } from '../components/AccessibleDialogSurface';
 import { AdminPermissionsProvider } from '../components/admin-permissions-context';
+import { OrderNotifications } from '../components/OrderNotifications';
 import { ThemeToggleButton } from '../components/ThemeToggleButton';
 import { CustomFieldsProvider } from '../custom-fields/CustomFieldsProvider';
 import {
@@ -1162,6 +1163,18 @@ export function AppShell() {
                     </button>
 
                     <div className="flex items-center gap-2 sm:gap-4">
+                        {activeAdministrator &&
+                            channelData?.activeChannel &&
+                            !isChannelSwitching &&
+                            !isLoggingOut &&
+                            hasAnyAdminPermission(activePermissions, ['ReadOrder']) && (
+                                <OrderNotifications
+                                    key={`${activeAdministrator.id}:${channelData.activeChannel.id}`}
+                                    administratorId={activeAdministrator.id}
+                                    channelId={channelData.activeChannel.id}
+                                    channelToken={channelData.activeChannel.token}
+                                />
+                            )}
                         <label className="relative flex items-center gap-1.5 text-xs font-bold text-slate-600">
                             <Store className="h-4 w-4 shrink-0 text-blue-600" aria-hidden="true" />
                             <span className="sr-only sm:not-sr-only">当前店铺</span>

@@ -33,6 +33,7 @@ describe('customer query boundaries', () => {
             language: 'zh',
             vendureLanguageCode: 'zh_Hans',
             storefrontContextResolved,
+            catalogAccessGranted: Boolean(customer),
         });
 
     it('waits for account resolution before querying claimable campaigns', () => {
@@ -44,7 +45,8 @@ describe('customer query boundaries', () => {
         mocks.useQuery.mockClear();
         read();
         const guestOptions = mocks.useQuery.mock.calls.map(([input]) => input);
-        expect(guestOptions.find(input => input.queryKey.includes('coupon-campaigns')).enabled).toBe(true);
+        expect(guestOptions.find(input => input.queryKey.includes('coupon-campaigns')).enabled).toBe(false);
+        expect(guestOptions.find(input => input.queryKey.at(-1) === 'cart').enabled).toBe(false);
         expect(guestOptions.find(input => input.queryKey.at(-1) === 'coupons').enabled).toBe(false);
     });
 

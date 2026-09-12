@@ -1,6 +1,6 @@
 import { Inject, Injectable, OnModuleInit, Optional } from '@nestjs/common';
 import { Logger, RequestContext, TransactionalConnection } from '@vendure/core';
-import { LessThan } from 'typeorm';
+import { LessThan, MoreThan } from 'typeorm';
 
 import { ICLOUD_RELAY_PLUGIN_OPTIONS, loggerCtx } from '../constants';
 import { IcloudPrimaryAccount } from '../entities/icloud-primary-account.entity';
@@ -8,6 +8,7 @@ import { IcloudReceivedMail } from '../entities/icloud-received-mail.entity';
 import { IcloudVirtualEmail } from '../entities/icloud-virtual-email.entity';
 import { IcloudAccessCodeService } from '../services/icloud-access-code.service';
 import { IcloudImapSyncService } from '../services/icloud-imap-sync.service';
+import { updateIcloudRecord } from '../services/icloud-record-update';
 import { IcloudAccountStatus, IcloudRelayPluginOptions } from '../types';
 
 /**
@@ -112,43 +113,59 @@ export class IcloudJobService implements OnModuleInit {
 
             // Rotate expired primary account master codes
             const primaryRepo = this.connection.getRepository(ctx, IcloudPrimaryAccount);
-            const expiredPrimaries = await primaryRepo.find({
+            const allPrimaries = await primaryRepo.find({
                 where: {
                     codeExpiresAt: LessThan(now),
-                    codeResetIntervalDays: LessThan(0), // Only auto-rotate if > 0
+                    codeResetIntervalDays: MoreThan(0),
                 },
             });
-            // Actually filter in JS since typeorm LessThan doesn't negate well
-            const allPrimaries = await primaryRepo.find();
             for (const account of allPrimaries) {
                 if (
                     account.codeResetIntervalDays > 0 &&
                     account.codeExpiresAt &&
                     new Date(account.codeExpiresAt) < now
                 ) {
-                    account.masterQueryCode = this.codeService.generateCode('MSTR');
-                    account.codeExpiresAt = this.codeService.calculateExpiration(
-                        account.codeResetIntervalDays,
+                    const changed = await updateIcloudRecord(
+                        primaryRepo,
+                        account,
+                        {
+                            masterQueryCode: this.codeService.generateCode('MSTR'),
+                            codeExpiresAt: this.codeService.calculateExpiration(
+                                account.codeResetIntervalDays,
+                            ),
+                        },
+                        ['masterQueryCode', 'codeExpiresAt', 'codeResetIntervalDays'],
+                        'skip',
                     );
-                    await primaryRepo.save(account);
+                    if (!changed) continue;
                     Logger.info(`主邮箱 ${account.email} 查询码已自动重置`, loggerCtx);
                 }
             }
 
             // Rotate expired virtual email buyer codes
             const virtualRepo = this.connection.getRepository(ctx, IcloudVirtualEmail);
-            const allVirtuals = await virtualRepo.find();
+            const allVirtuals = await virtualRepo.find({
+                where: { codeExpiresAt: LessThan(now), codeResetIntervalDays: MoreThan(0) },
+            });
             for (const virtual of allVirtuals) {
                 if (
                     virtual.codeResetIntervalDays > 0 &&
                     virtual.codeExpiresAt &&
                     new Date(virtual.codeExpiresAt) < now
                 ) {
-                    virtual.buyerQueryCode = this.codeService.generateCode('BUY');
-                    virtual.codeExpiresAt = this.codeService.calculateExpiration(
-                        virtual.codeResetIntervalDays,
+                    const changed = await updateIcloudRecord(
+                        virtualRepo,
+                        virtual,
+                        {
+                            buyerQueryCode: this.codeService.generateCode('BUY'),
+                            codeExpiresAt: this.codeService.calculateExpiration(
+                                virtual.codeResetIntervalDays,
+                            ),
+                        },
+                        ['buyerQueryCode', 'codeExpiresAt', 'codeResetIntervalDays'],
+                        'skip',
                     );
-                    await virtualRepo.save(virtual);
+                    if (!changed) continue;
                     Logger.verbose(`虚拟邮箱 ${virtual.aliasEmail} 查询码已自动重置`, loggerCtx);
                 }
             }

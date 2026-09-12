@@ -1,0 +1,47 @@
+# Review paths, runtime UID/GID and ClamAV permissions on the target host before installation.
+[Unit]
+Description=Vendure customer image quarantine and decoder
+After=clamav-daemon.service
+Requires=clamav-daemon.service
+
+[Service]
+Type=simple
+User=vendure-image
+Group=vendure-image
+SupplementaryGroups=clamav
+WorkingDirectory=/opt/vendure/current
+ExecStart=/usr/bin/node /opt/vendure/current/deploy/image-worker/server.cjs
+Environment=NODE_ENV=production
+Environment=CUSTOMER_IMAGE_PROCESSOR_SOCKET=/run/vendure-image-worker/processor.sock
+Environment=CUSTOMER_IMAGE_CLAMD_SOCKET=/run/clamav/clamd.ctl
+Environment=CUSTOMER_IMAGE_QUARANTINE_DIR=/tmp/quarantine
+RuntimeDirectory=vendure-image-worker
+RuntimeDirectoryMode=0750
+RuntimeDirectoryPreserve=no
+TemporaryFileSystem=/tmp:rw,size=128M,mode=1777
+UMask=0077
+NoNewPrivileges=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ProtectProc=invisible
+RestrictSUIDSGID=yes
+RestrictAddressFamilies=AF_UNIX
+CapabilityBoundingSet=
+ReadWritePaths=/run/vendure-image-worker
+# Bind these to the actual secret and data paths. Never mount the commerce environment into this unit.
+InaccessiblePaths=-/etc/vendure -/var/lib/vendure -/opt/vendure/current/packages/dev-server/.env
+MemoryMax=768M
+CPUQuota=150%
+TasksMax=32
+LimitNOFILE=128
+TimeoutStopSec=20
+KillMode=control-group
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

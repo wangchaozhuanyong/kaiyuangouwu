@@ -25,12 +25,13 @@ import {
     X,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { CustomFieldDefinition, CustomFieldValueMap } from '../../custom-fields/custom-field-types';
+
 import { getServerHealthUrl, sensitiveActionContext } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { PageSizeSelect } from '../../components/PageSizeSelect';
-import type { CustomFieldDefinition, CustomFieldValueMap } from '../../custom-fields/custom-field-types';
 import {
     addCustomFieldsToDocument,
     customFieldInputFromValues,
@@ -63,7 +64,9 @@ import { getRoleCodeLabel, getRoleLabel, getStatusLabel } from '../../utils/stat
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { LookupPager } from '../Catalog/LookupPager';
 import { formatDateTime } from '../Sales/sales-utils';
+
 import { SettingsContentSkeleton } from './settings-ui';
+import { getSystemWorkerHealth } from './system-worker-health';
 import { TelegramNotificationsPanel } from './TelegramNotificationsPanel';
 
 type Tab = 'HEALTH' | 'JOBS' | 'SCHEDULES' | 'SETTINGS' | 'API_KEYS' | 'TELEGRAM';
@@ -322,7 +325,7 @@ function HealthPanel({ data, graphQLError }: { data?: SystemOperationsResult; gr
     const jobs = data?.jobs.items ?? [];
     const activeJobs = jobs.filter(job => !job.isSettled).length;
     const failedJobs = jobs.filter(job => ['FAILED', 'RETRYING'].includes(job.state)).length;
-    const stoppedQueues = queues.filter(queue => !queue.running);
+    const worker = getSystemWorkerHealth(data?.settingsStoreFieldDefinitions ?? []);
     const graphqlHealthy = Boolean(data) && !graphQLError;
 
     return (
@@ -350,18 +353,7 @@ function HealthPanel({ data, graphQLError }: { data?: SystemOperationsResult; gr
                     detail={graphQLError ? toUserFacingError(graphQLError) : '运维 GraphQL 数据读取正常'}
                     tone={graphqlHealthy ? 'green' : 'rose'}
                 />
-                <Metric
-                    label="工作队列"
-                    value={queues.length ? `${queues.length - stoppedQueues.length}/${queues.length}` : '—'}
-                    detail={
-                        stoppedQueues.length
-                            ? `${stoppedQueues.map(queue => queue.name).join('、')} 未运行`
-                            : queues.length
-                              ? '全部 worker 正在运行'
-                              : '尚未读取队列数据'
-                    }
-                    tone={stoppedQueues.length ? 'amber' : queues.length ? 'green' : 'slate'}
-                />
+                <Metric label="后台任务服务" value={worker.label} detail={worker.detail} tone={worker.tone} />
                 <Metric
                     label="近期任务"
                     value={`${activeJobs} 执行中`}
@@ -373,7 +365,14 @@ function HealthPanel({ data, graphQLError }: { data?: SystemOperationsResult; gr
                 <div className="rounded-xl border border-slate-200 bg-white p-5">
                     <div className="flex items-start gap-3">
                         <div
-                            className={`rounded-lg p-2 ${health.state === 'healthy' ? 'bg-emerald-50 text-emerald-700' : health.state === 'unhealthy' ? 'bg-rose-50 text-rose-700' : 'bg-blue-50 text-blue-700'}`}
+                            className={[
+                                'rounded-lg p-2',
+                                health.state === 'healthy'
+                                    ? 'bg-emerald-50 text-emerald-700'
+                                    : health.state === 'unhealthy'
+                                      ? 'bg-rose-50 text-rose-700'
+                                      : 'bg-blue-50 text-blue-700',
+                            ].join(' ')}
                         >
                             <Server className="h-5 w-5" />
                         </div>
@@ -387,7 +386,8 @@ function HealthPanel({ data, graphQLError }: { data?: SystemOperationsResult; gr
                                 <code className="rounded bg-slate-100 px-1 font-mono text-[10px]">
                                     /health
                                 </code>
-                                ，并结合管理 API 和任务 worker 的真实返回判断运行状态。
+                                ，并读取管理 API 与后台任务服务写入数据库的心跳。已注册 {queues.length}{' '}
+                                个任务队列。
                             </p>
                         </div>
                     </div>
@@ -805,7 +805,14 @@ function SchedulesPanel({
                                 </td>
                                 <td className="h-[52px] whitespace-nowrap px-3 py-0">
                                     <span
-                                        className={`rounded px-2 py-1 text-[9px] font-bold ${task.isRunning ? 'bg-blue-50 text-blue-700' : task.enabled ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}
+                                        className={[
+                                            'rounded px-2 py-1 text-[9px] font-bold',
+                                            task.isRunning
+                                                ? 'bg-blue-50 text-blue-700'
+                                                : task.enabled
+                                                  ? 'bg-emerald-50 text-emerald-700'
+                                                  : 'bg-slate-100 text-slate-500',
+                                        ].join(' ')}
                                     >
                                         {task.isRunning ? '执行中' : task.enabled ? '已启用' : '已停用'}
                                     </span>
@@ -1437,8 +1444,10 @@ function SecretDialog({ title, value, onClose }: { title: string; value: string;
             <div className="mt-5 flex justify-end gap-2">
                 <button
                     type="button"
-                    onClick={async () => {
-                        if (await copyAdminText(value, 'API 密钥')) setCopied(true);
+                    onClick={() => {
+                        void copyAdminText(value, 'API 密钥').then(copied => {
+                            if (copied) setCopied(true);
+                        });
                     }}
                     className={secondaryButton}
                 >
@@ -1468,7 +1477,11 @@ function SettingsValueEditor({
 }) {
     const complex = typeof field.currentValue === 'object' && field.currentValue !== null;
     const [draft, setDraft] = useState(
-        complex ? JSON.stringify(field.currentValue, null, 2) : String(field.currentValue ?? ''),
+        field.currentValue == null
+            ? ''
+            : typeof field.currentValue === 'object'
+              ? JSON.stringify(field.currentValue, null, 2)
+              : String(field.currentValue),
     );
     const submit = () => {
         try {
@@ -1544,7 +1557,7 @@ function formatJson(value: unknown) {
     try {
         return JSON.stringify(value);
     } catch {
-        return String(value);
+        return '无法显示此数据';
     }
 }
 function Metric({
@@ -1590,7 +1603,10 @@ function TabButton({
         <button
             type="button"
             onClick={onClick}
-            className={`flex shrink-0 items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-bold ${active ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
+            className={[
+                'flex shrink-0 items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-bold',
+                active ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50',
+            ].join(' ')}
         >
             {icon}
             {children}
@@ -1700,7 +1716,12 @@ function Message({
     const success = kind === 'success';
     return (
         <div
-            className={`flex items-center gap-2 rounded-xl border p-3 text-xs ${success ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-rose-200 bg-rose-50 text-rose-800'}`}
+            className={[
+                'flex items-center gap-2 rounded-xl border p-3 text-xs',
+                success
+                    ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                    : 'border-rose-200 bg-rose-50 text-rose-800',
+            ].join(' ')}
         >
             {success ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
             <span className="flex-1">{children}</span>
@@ -1714,9 +1735,12 @@ function errorText(error: unknown) {
     return toUserFacingError(error, '系统运维操作失败，请稍后重试');
 }
 const inputClass =
-    'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-normal text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-50 disabled:text-slate-400';
+    'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-normal text-slate-800 ' +
+    'outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-50 disabled:text-slate-400';
 const primaryButton =
-    'flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50';
+    'flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs ' +
+    'font-bold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50';
 const secondaryButton =
-    'flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50';
+    'flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 ' +
+    'py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50';
 const theadClass = 'border-b border-slate-200 bg-slate-50 text-[10px] font-bold text-slate-500';

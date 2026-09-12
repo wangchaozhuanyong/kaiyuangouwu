@@ -1,0 +1,11 @@
+[Unit]
+Description=Refresh customer-image antivirus definitions every six hours
+
+[Timer]
+OnCalendar=*-*-* 00,06,12,18:00:00
+RandomizedDelaySec=30min
+Persistent=yes
+Unit=vendure-image-signature-update.service
+
+[Install]
+WantedBy=timers.target

@@ -33,7 +33,7 @@
     "devDependencies": {
         "@types/express": "^5.0.0",
         "typescript": "5.8.2",
-        "vitest": "^3.2.4",
+        "vitest": "^4.1.11",
         "@vendure/storefront-cart-plugin": "0.1.0"
     }
 }

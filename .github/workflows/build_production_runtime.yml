@@ -316,6 +316,8 @@ jobs:
                   DIGITAL_DELIVERY_ROOT: /tmp/vendure-build-digital
                   DIGITAL_DELIVERY_SIGNING_SECRET: build-check-digital-secret-000000000000000000000000
                   IMAGE_GENERATION_STORAGE_ROOT: /tmp/vendure-build-images
+                  CUSTOMER_IMAGE_PROCESSOR_SOCKET: /tmp/vendure-build-processor.sock
+                  CUSTOMER_AVATAR_STORAGE_ROOT: /tmp/vendure-build-avatars
                   IMAGE_GENERATION_DOWNLOAD_SECRET: build-check-image-download-key-000000000000000000000000
                   IMAGE_GENERATION_MASTER_KEY: build-check-image-master-key-000000000000000000000000
                   VENDURE_GOOGLE_TRANSLATION_API_KEY: build-check-google-translation-api-key

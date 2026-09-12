@@ -964,7 +964,7 @@ describe('HomePage category promotion', () => {
         expect(markup).not.toContain('不应显示的按钮文案');
     });
 
-    it('uses the balanced marketplace treatment and localized service badge when configured', () => {
+    it('uses the balanced marketplace treatment and localized selection badge when configured', () => {
         const markup = renderHome({
             configuredBlockTypes: [...baseProps.configuredBlockTypes, 'CATEGORY_AD'],
             contentBlocks: [
@@ -976,7 +976,7 @@ describe('HomePage category promotion', () => {
         });
 
         expect(markup).toContain('category-promotion-section is-color-marketplace');
-        expect(markup).toContain('热门服务');
+        expect(markup).toContain('查看精选');
         expect(markup).not.toContain('Category edit');
     });
 });

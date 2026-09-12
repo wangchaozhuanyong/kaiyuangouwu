@@ -1,0 +1,3 @@
+# Review hostnames; install only the final reviewed file under /etc/nginx/customer-vault-frames/.
+# Match the storefront VITE_TWO_FACTOR_ORIGIN and isolated build VITE_TWO_FACTOR_PARENT_ORIGINS.
+shop.example.com "https://vault.example.net";

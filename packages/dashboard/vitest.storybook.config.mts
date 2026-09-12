@@ -1,5 +1,6 @@
 import { storybookTest } from '@storybook/addon-vitest/vitest-plugin';
 import react from '@vitejs/plugin-react';
+import { playwright } from '@vitest/browser-playwright';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Plugin } from 'vite';
@@ -76,8 +77,6 @@ const browserOptimizeDependencies = [
     'react-day-picker/locale/uz',
     'react-day-picker/locale/zh-CN',
     'react-day-picker/locale/zh-TW',
-    'strip-literal',
-    'strip-literal > js-tokens',
     'tailwind-merge',
     'zod/v3',
 ];
@@ -122,6 +121,9 @@ export default defineConfig({
     optimizeDeps: {
         force: true,
         include: browserOptimizeDependencies,
+        // This suite runs current Playwright Chromium/Chrome. Vitest 4's js-tokens
+        // dependency uses string export names; production build targets stay unchanged.
+        esbuildOptions: { target: 'esnext' },
     },
     test: {
         name: 'storybook',
@@ -132,13 +134,8 @@ export default defineConfig({
         browser: {
             enabled: true,
             headless: true,
-            provider: 'playwright',
-            instances: [
-                {
-                    browser: 'chromium',
-                    ...(browserChannel && { launch: { channel: browserChannel } }),
-                },
-            ],
+            provider: playwright(browserChannel ? { launchOptions: { channel: browserChannel } } : {}),
+            instances: [{ browser: 'chromium' }],
         },
     },
 });

@@ -3597,6 +3597,7 @@ function newHeroBlock(position: number, slideNumber: number): ContentBlock {
             },
             {
                 languageCode: 'en',
+                // i18n-audit-ignore -- Stored English translation paired with the zh_Hans draft above.
                 title: 'New carousel slide',
                 subtitle: '',
                 body: '',

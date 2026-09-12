@@ -24,6 +24,34 @@ const bindings: StorefrontPromotionBindings = {
 describe('StorefrontPromotionHtmlService', () => {
     const service = new StorefrontPromotionHtmlService();
 
+    it('preserves scroll behavior and following responsive rules while stripping unsafe CSS properties', () => {
+        const css = `html{scroll-behavior:smooth;scroll-padding-top:100px}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{animation:none!important}}
+@media(max-width:900px){.header{display:grid}}
+.legacy{behavior:url(/assets/legacy.htc);color:red;-moz-binding:url(/assets/legacy.xml)}
+.after{display:block}`;
+        const html = service.render({
+            contentType: 'HTML',
+            source: `<html><head><style>${css}</style></head><body><p style="scroll-behavior:auto;BEHAVIOR:url(/assets/legacy.htc);color:red">Safe</p></body></html>`,
+            bindings,
+            entryTicket: 'test-ticket',
+        });
+        const $ = load(html);
+        const cleaned = $('style').first().text();
+
+        expect(cleaned).toContain('html{scroll-behavior:smooth;scroll-padding-top:100px}');
+        expect(cleaned).toContain(
+            '@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{animation:none!important}}',
+        );
+        expect(cleaned).toContain('@media(max-width:900px){.header{display:grid}}');
+        expect(cleaned).toContain('.legacy{color:red;}');
+        expect(cleaned).toContain('.after{display:block}');
+        expect(cleaned.match(/\{/g)?.length).toBe(cleaned.match(/\}/g)?.length);
+        expect(cleaned).not.toContain('legacy.htc');
+        expect(cleaned).not.toContain('-moz-binding');
+        expect($('p').attr('style')).toBe('scroll-behavior:auto;color:red');
+    });
+
     it('removes active content and keeps only the signed store entry form', () => {
         const html = service.render({
             contentType: 'HTML',
@@ -271,7 +299,10 @@ describe('StorefrontPromotionHtmlService', () => {
         expect(PROMOTION_VISUAL_SCRIPT).not.toContain("getContext('2d'");
         expect(PROMOTION_VISUAL_SCRIPT).not.toContain('webgl');
         expect(PROMOTION_VISUAL_SCRIPT).not.toContain('canvas');
-        expect(PROMOTION_VISUAL_SCRIPT).not.toContain("addEventListener('scroll'");
+        // Section navigation uses one passive, frame-coalesced position update.
+        expect(PROMOTION_VISUAL_SCRIPT).toContain(
+            "window.addEventListener('scroll',scheduleNavigation,{passive:true})",
+        );
         expect(PROMOTION_VISUAL_SCRIPT).toContain('const slideInterval=3000');
         expect(PROMOTION_VISUAL_SCRIPT).toContain("form.addEventListener('submit'");
         expect(PROMOTION_VISUAL_SCRIPT).toContain("fetch('/promo',{cache:'no-store'");

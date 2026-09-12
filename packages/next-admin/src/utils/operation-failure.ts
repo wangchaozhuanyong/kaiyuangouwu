@@ -2,6 +2,7 @@ export type OperationFailureCode =
     | 'PARTIAL_FAILURE'
     | 'RESOURCE_IN_USE'
     | 'VALIDATION_FAILED'
+    | 'API_CONTRACT_MISMATCH'
     | 'PERMISSION_DENIED'
     | 'SESSION_EXPIRED'
     | 'PASSWORD_INVALID'
@@ -53,6 +54,8 @@ const conflictPattern = /conflict|duplicate|already exists|unique constraint|重
 const stalePattern =
     /stale|optimistic|expectedupdatedat|concurrent|version mismatch|已发生变化|并发|版本不一致/i;
 const notFoundPattern = /not found|does not exist|no .* with (?:the )?id|找不到|不存在|已被删除/i;
+const contractPattern =
+    /unknown argument .+ on field|cannot query field|unknown type ["']|field ["'][^"']+["'] (?:of required type .+ was not provided|is not defined by type)|variable ["']\$[^"']+["'] got invalid value/i;
 const validationPattern =
     /user.input.error|validation|invalid|required|must |cannot be empty|不能为空|必填|格式不正确|不符合要求|超出允许范围/i;
 const serverPattern = /internal.server.error|status code 5\d\d|server error|服务器(?:内部|处理)?异常/i;
@@ -70,6 +73,8 @@ const codeAliases: Record<string, OperationFailureCode> = {
     SENSITIVE_ACTION_PASSWORD_REQUIRED: 'PASSWORD_INVALID',
     USER_INPUT_ERROR: 'VALIDATION_FAILED',
     BAD_USER_INPUT: 'VALIDATION_FAILED',
+    GRAPHQL_VALIDATION_FAILED: 'API_CONTRACT_MISMATCH',
+    GRAPHQL_PARSE_FAILED: 'API_CONTRACT_MISMATCH',
     ENTITY_NOT_FOUND: 'NOT_FOUND',
     NOT_FOUND: 'NOT_FOUND',
     INTERNAL_SERVER_ERROR: 'SERVER_ERROR',
@@ -106,7 +111,9 @@ export function normalizeOperationFailure(
     const traceId =
         readTraceId(extensions.traceId) ||
         readTraceId(extensions.requestId) ||
-        (code === 'SERVER_ERROR' || code === 'UNKNOWN' ? readTraceId(options.referenceId) : undefined);
+        (['SERVER_ERROR', 'UNKNOWN', 'API_CONTRACT_MISMATCH'].includes(code)
+            ? readTraceId(options.referenceId)
+            : undefined);
 
     return {
         code,
@@ -180,6 +187,7 @@ function isGenericUnknownMessage(message: string) {
 
 function classifyFailure(code: string, message: string): OperationFailureCode {
     const normalizedCode = code.trim().toUpperCase();
+    if (contractPattern.test(message)) return 'API_CONTRACT_MISMATCH';
     const direct = codeAliases[normalizedCode];
     if (direct) return direct;
     if (/PASSWORD_(?:INVALID|INCORRECT)|INVALID_CREDENTIALS/u.test(normalizedCode)) return 'PASSWORD_INVALID';
@@ -222,6 +230,12 @@ function defaultFailureCopy(
             return {
                 reason: '该数据仍被其他业务记录使用，当前不能直接删除',
                 resolution: ['先解除关联或将占用记录改绑到其他对象，再重新删除'],
+                retryable: false,
+            };
+        case 'API_CONTRACT_MISMATCH':
+            return {
+                reason: '页面与管理服务的接口不一致',
+                resolution: ['刷新页面后重试；如果仍失败，请联系管理员检查页面与服务版本'],
                 retryable: false,
             };
         case 'VALIDATION_FAILED':
@@ -303,16 +317,25 @@ function readErrorDescriptor(error: unknown): ErrorDescriptor {
     if (typeof error === 'string') return { message: error.trim(), code: '' };
     if (error instanceof Error) {
         const record = error as Error & Record<string, unknown>;
-        const nested = readNestedGraphqlError(record.errors) ?? readNestedGraphqlError(record.graphQLErrors);
+        const nested =
+            readNestedGraphqlError(record.errors) ??
+            readNestedGraphqlError(record.graphQLErrors) ??
+            readGraphqlResponseBody(record.bodyText);
         if (nested) return nested;
         return {
             message: error.message.trim(),
-            code: readString(record.code) || '',
+            code:
+                readString(isRecord(record.extensions) ? record.extensions.code : undefined) ||
+                readString(record.code) ||
+                '',
             extensions: isRecord(record.extensions) ? record.extensions : undefined,
         };
     }
     if (!isRecord(error)) return { message: '', code: '' };
-    const nested = readNestedGraphqlError(error.errors) ?? readNestedGraphqlError(error.graphQLErrors);
+    const nested =
+        readNestedGraphqlError(error.errors) ??
+        readNestedGraphqlError(error.graphQLErrors) ??
+        readGraphqlResponseBody(error.bodyText);
     if (nested) return nested;
     const extensions = isRecord(error.extensions) ? error.extensions : undefined;
     return {
@@ -320,6 +343,16 @@ function readErrorDescriptor(error: unknown): ErrorDescriptor {
         code: readString(extensions?.code) || readString(error.errorCode) || readString(error.code) || '',
         extensions,
     };
+}
+
+function readGraphqlResponseBody(value: unknown): ErrorDescriptor | undefined {
+    if (typeof value !== 'string' || value.length > 65536) return undefined;
+    try {
+        const body: unknown = JSON.parse(value);
+        return isRecord(body) ? readNestedGraphqlError(body.errors) : undefined;
+    } catch {
+        return undefined;
+    }
 }
 
 function readNestedGraphqlError(value: unknown) {

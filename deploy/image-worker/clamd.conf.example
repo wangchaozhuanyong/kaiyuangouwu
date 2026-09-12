@@ -1,0 +1,16 @@
+# Dedicated or reviewed existing ClamAV daemon. Update signatures with a separately scoped updater.
+LocalSocket /run/clamav/clamd.ctl
+LocalSocketGroup clamav
+LocalSocketMode 660
+FixStaleSocket yes
+User clamav
+DatabaseDirectory /var/lib/clamav
+ScanArchive no
+MaxThreads 2
+MaxQueue 4
+StreamMaxLength 30M
+MaxFileSize 30M
+MaxScanSize 60M
+MaxScanTime 10000
+AlertExceedsMax yes
+# TCP listeners and customer-content logging must remain disabled.

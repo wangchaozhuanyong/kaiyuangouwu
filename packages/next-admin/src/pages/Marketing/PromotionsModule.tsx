@@ -125,7 +125,14 @@ export function PromotionsModule() {
     const [setEnabled, enabledState] = useMutation(SET_PROMOTION_ENABLED_MUTATION);
     const [stopIssuance, stopState] = useMutation(STOP_COUPON_ISSUANCE_MUTATION);
     const [archiveCoupon, archiveState] = useMutation(ARCHIVE_COUPON_CAMPAIGN_MUTATION);
-    const [revokeOutstanding, revokeState] = useMutation(REVOKE_COUPON_CAMPAIGN_MUTATION);
+    const [revokeOutstanding, revokeState] = useMutation<{
+        revokeStoreCouponCampaignOutstanding: {
+            affectedCount: number;
+            skippedCount?: number;
+            failedCount?: number;
+            outcomes?: Array<{ reason: string }>;
+        };
+    }>(REVOKE_COUPON_CAMPAIGN_MUTATION);
     const [deletePromotion, deleteState] = useMutation<{
         deleteStorePromotion: { result: string; message?: string | null };
     }>(DELETE_STORE_PROMOTION_MUTATION);
@@ -153,20 +160,28 @@ export function PromotionsModule() {
         setNotice('');
         setActionError('');
         try {
+            let resultMessage = '';
             if (sensitiveAction.kind === 'TOGGLE')
                 await setEnabled({
                     variables: { id: sensitiveAction.id, enabled: sensitiveAction.enabled, password },
                 });
             if (sensitiveAction.kind === 'STOP')
                 await stopIssuance({ variables: { id: sensitiveAction.id, password } });
-            if (sensitiveAction.kind === 'REVOKE')
-                await revokeOutstanding({
+            if (sensitiveAction.kind === 'REVOKE') {
+                const response = await revokeOutstanding({
                     variables: {
                         id: sensitiveAction.id,
                         password,
                         reason: reason.trim() || '管理员在营销后台批量作废未使用优惠券',
                     },
                 });
+                const result = response.data?.revokeStoreCouponCampaignOutstanding;
+                if (!result) throw new Error('无法读取批量作废结果，请刷新后核对');
+                const reasons = [
+                    ...new Set((result.outcomes ?? []).map((item: { reason: string }) => item.reason)),
+                ].join('；');
+                resultMessage = `已作废 ${result.affectedCount} 张，跳过 ${result.skippedCount ?? 0} 张，失败 ${result.failedCount ?? 0} 张${reasons ? `。${reasons}` : ''}`;
+            }
             if (sensitiveAction.kind === 'ARCHIVE')
                 await archiveCoupon({ variables: { id: sensitiveAction.id, password } });
             if (sensitiveAction.kind === 'DELETE') {
@@ -178,7 +193,7 @@ export function PromotionsModule() {
                     throw new Error(deletion?.message || '后端拒绝删除该营销活动');
                 }
             }
-            setNotice(sensitiveSuccessMessage(sensitiveAction));
+            setNotice(resultMessage || sensitiveSuccessMessage(sensitiveAction));
             setSensitiveAction(null);
             await refreshAll();
         } catch (error) {

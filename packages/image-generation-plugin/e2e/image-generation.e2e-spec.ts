@@ -3,7 +3,7 @@ import {
     ContentTranslationPlugin,
     type ContentTranslationProvider,
 } from '@vendure/content-translation-plugin';
-import { Customer, mergeConfig, TransactionalConnection } from '@vendure/core';
+import { Channel, Customer, mergeConfig, RequestContext, TransactionalConnection } from '@vendure/core';
 import { ReferralWallet, ReferralWalletUsage, StoreManagementPlugin } from '@vendure/store-management-plugin';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 import { createTestEnvironment } from '@vendure/testing';
@@ -13,6 +13,7 @@ import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import sharp from 'sharp';
+import { MoreThanOrEqual } from 'typeorm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { initialData } from '../../../e2e-common/e2e-initial-data';
@@ -25,6 +26,18 @@ import { ImagePrivateAsset } from '../src/entities/image-private-asset.entity';
 import { ImageGenerationQueueService } from '../src/image-generation-queue.service';
 import { ImageGenerationPlugin } from '../src/image-generation.plugin';
 import { ImagePrivateStorageService } from '../src/storage/image-private-storage.service';
+
+// Provider requests now use the pinned transport rather than global fetch.
+// Keep the full database/API flow local by intercepting that external boundary too.
+vi.mock('../src/provider/image-provider-io', async importOriginal => ({
+    ...(await importOriginal<typeof import('../src/provider/image-provider-io')>()),
+    pinnedProviderRequest: (target: { url: URL }, init: RequestInit) => {
+        if (!['1.1.1.1', '8.8.8.8'].includes(target.url.hostname)) {
+            throw new Error('Unexpected external request in isolated image test');
+        }
+        return providerFetch(target.url, init);
+    },
+}));
 
 const storageRoot = mkdtempSync(path.join(tmpdir(), 'vendure-image-generation-e2e-'));
 const pngBase64 =
@@ -1075,6 +1088,83 @@ describe('AI image generation full flow', () => {
             6,
         );
     }, 30_000);
+
+    it('binds private images to the database owner and channel and revokes HTTP links', async () => {
+        const upload = await shopClient.fileUploadMutation({
+            mutation: UPLOAD_REFERENCE,
+            filePaths: [referenceFixture],
+            mapVariables: () => ({ file: null }),
+        });
+        const reference = upload.uploadImageReference;
+        const connection = server.app.get(TransactionalConnection);
+        const repository = connection.rawConnection.getRepository(ImagePrivateAsset);
+        const asset = await repository.findOneByOrFail({
+            id: Number(String(reference.id).replace(/^T_/u, '')),
+        });
+        const channel = await connection.rawConnection
+            .getRepository(Channel)
+            .findOneByOrFail({ id: asset.channelId });
+        const ctx = new RequestContext({
+            apiType: 'shop',
+            channel,
+            isAuthorized: true,
+            authorizedAsOwnerOnly: true,
+        });
+        const otherChannel = new RequestContext({
+            apiType: 'shop',
+            channel: new Channel({ ...channel, id: 999999 }),
+            isAuthorized: true,
+            authorizedAsOwnerOnly: true,
+        });
+        const storage = server.app.get(ImagePrivateStorageService);
+        expect(storage.signedUrl(asset, 999999)).toBeNull();
+        expect(await storage.deleteOwned(ctx, asset.id, 999999)).toBe(false);
+        expect(await storage.deleteOwned(otherChannel, asset.id, asset.customerId)).toBe(false);
+        const url = `http://127.0.0.1:${config.apiOptions.port}${reference.previewUrl}`;
+        const response = await originalFetch(url);
+        expect(response.status).toBe(200);
+        expect(response.headers.get('content-type')).toContain('image/png');
+        expect(response.headers.get('cache-control')).toContain('no-store');
+        expect(response.headers.get('x-content-type-options')).toBe('nosniff');
+        expect(response.headers.get('content-security-policy')).toContain("default-src 'none'");
+        expect((await response.arrayBuffer()).byteLength).toBe(asset.byteSize);
+        expect((await originalFetch(url + 'x')).status).toBe(404);
+        await repository.update(asset.id, { expiresAt: new Date(0) });
+        expect((await originalFetch(url)).status).toBe(404);
+        await repository.update(asset.id, { expiresAt: new Date(Date.now() + 60_000) });
+        expect(await storage.deleteOwned(ctx, asset.id, asset.customerId)).toBe(true);
+        expect((await originalFetch(url)).status).toBe(404);
+    });
+    it.runIf(config.dbConnectionOptions.type === 'mysql')(
+        'serializes competing uploads at the minute quota using real database locks',
+        async () => {
+            const connection = server.app.get(TransactionalConnection);
+            const customer = await connection.rawConnection
+                .getRepository(Customer)
+                .findOneByOrFail({ emailAddress: 'image-e2e@example.com' });
+            const repository = connection.rawConnection.getRepository(ImagePrivateAsset);
+            const where = {
+                customerId: customer.id,
+                kind: 'REFERENCE',
+                createdAt: MoreThanOrEqual(new Date(Date.now() - 60_000)),
+            };
+            const count = await repository.count({ where });
+            const upload = () =>
+                shopClient.fileUploadMutation({
+                    mutation: UPLOAD_REFERENCE,
+                    filePaths: [referenceFixture],
+                    mapVariables: () => ({ file: null }),
+                });
+            for (let index = count; index < 4; index++) await upload();
+            const results = await Promise.allSettled([upload(), upload()]);
+            expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1);
+            const rejected = results.find(result => result.status === 'rejected');
+            expect(rejected?.status === 'rejected' ? String(rejected.reason) : '').toContain(
+                '每分钟最多上传 5 张',
+            );
+            expect(await repository.count({ where })).toBe(5);
+        },
+    );
 });
 
 async function waitForJob(id: string, terminalStates: string[]) {

@@ -106,3 +106,90 @@ describe('promotion visual entry recovery', () => {
         expect(harness.nativeSubmit).not.toHaveBeenCalled();
     });
 });
+
+describe('promotion navigation position', () => {
+    function navigationHarness() {
+        const frames: Array<() => void> = [];
+        const events = new Map<string, () => void>();
+        const positions = new Map<string, { top: number; bottom: number }>([
+            ['shopping', { top: 700, bottom: 1400 }],
+            ['visa', { top: 1400, bottom: 2466 }],
+            ['ai', { top: 2466, bottom: 3200 }],
+        ]);
+        const links = [...positions.keys()].map(id => {
+            const attributes = new Map([['href', `#${id}`]]);
+            const classes = new Set<string>();
+            return {
+                id,
+                attributes,
+                classes,
+                getAttribute: (name: string) => attributes.get(name),
+                setAttribute: (name: string, value: string) => attributes.set(name, value),
+                removeAttribute: (name: string) => attributes.delete(name),
+                classList: {
+                    toggle: (name: string, enabled: boolean) =>
+                        enabled ? classes.add(name) : classes.delete(name),
+                },
+            };
+        });
+        const header = { classList: { add: vi.fn() }, getBoundingClientRect: () => ({ bottom: 100 }) };
+        const page = { setAttribute: vi.fn() };
+        const documentMock = {
+            documentElement: { classList: { add: vi.fn() } },
+            querySelector: (selector: string) => {
+                if (selector === '[data-promo-motion]') return page;
+                if (selector === '[data-promo-header]') return header;
+                if (selector.startsWith('#') && positions.has(selector.slice(1))) {
+                    return { getBoundingClientRect: () => positions.get(selector.slice(1)) };
+                }
+                return null;
+            },
+            querySelectorAll: (selector: string) => (selector === '.promo-nav a[href^="#"]' ? links : []),
+            addEventListener: vi.fn(),
+        };
+        runInNewContext(PROMOTION_VISUAL_SCRIPT, {
+            document: documentMock,
+            window: { addEventListener: (name: string, callback: () => void) => events.set(name, callback) },
+            matchMedia: () => ({ matches: true }),
+            requestAnimationFrame: (callback: () => void) => frames.push(callback),
+        });
+        const flush = () => {
+            while (frames.length) frames.shift()?.();
+        };
+        flush();
+        return { links, positions, events, frames, flush };
+    }
+
+    it('selects a tall visa section at the reading line instead of retaining a previous section', () => {
+        const h = navigationHarness();
+        expect(h.links.every(link => !link.classes.has('is-active'))).toBe(true);
+        h.positions.set('shopping', { top: -577, bottom: 132 });
+        h.positions.set('visa', { top: 132, bottom: 1198 });
+        h.positions.set('ai', { top: 1198, bottom: 1931 });
+        h.events.get('scroll')?.();
+        h.flush();
+
+        expect(h.links.filter(link => link.classes.has('is-active')).map(link => link.id)).toEqual(['visa']);
+        expect(h.links[1].attributes.get('aria-current')).toBe('location');
+        expect(h.links[0].attributes.has('aria-current')).toBe(false);
+    });
+
+    it('coalesces scroll updates and clears the active service after the service sections end', () => {
+        const h = navigationHarness();
+        h.positions.set('shopping', { top: -2000, bottom: -1300 });
+        h.positions.set('visa', { top: -1300, bottom: -234 });
+        h.positions.set('ai', { top: -234, bottom: 499 });
+        h.events.get('scroll')?.();
+        h.events.get('scroll')?.();
+        expect(h.frames).toHaveLength(1);
+        h.flush();
+        expect(h.links[2].attributes.get('aria-current')).toBe('location');
+
+        h.positions.set('ai', { top: -800, bottom: -67 });
+        h.events.get('resize')?.();
+        h.flush();
+        expect(
+            h.links.every(link => !link.classes.has('is-active') && !link.attributes.has('aria-current')),
+        ).toBe(true);
+    });
+});

@@ -222,6 +222,12 @@ export class ApiKeyService {
         });
         await this.customFieldRelationService.updateRelations(ctx, ApiKey, input, apiKey);
 
+        if (input.roleIds) {
+            // The underlying user may be shared by multiple keys or an impersonated login.
+            // Revoke all of its sessions so none keep permissions from the previous roles.
+            await this.sessionService.deleteSessionsByUser(ctx, entity.user);
+        }
+
         Logger.verbose(`Updated ApiKey (${apiKey.id}) by User (${String(ctx.activeUserId)})`);
         await this.eventBus.publish(new ApiKeyEvent(ctx, apiKey, 'updated', input));
 

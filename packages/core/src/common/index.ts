@@ -12,6 +12,7 @@ export * from './injector';
 export * from './instrument-decorator';
 export * from './normalize-avatar-image';
 export * from './permission-definition';
+export * from './process-customer-image';
 export * from './round-money';
 export * from './self-refreshing-cache';
 export * from './ttl-cache';
