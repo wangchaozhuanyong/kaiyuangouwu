@@ -12,6 +12,7 @@ import type {
 } from '../types';
 import type { StorefrontContentQueryResult } from './helpers';
 
+import { isAccountContentBlockType } from '../../../storefront-content-plugin/src/content-publication';
 import {
     type StorefrontVisualPresetConfig,
     normalizeStorefrontDesktopLayout,
@@ -186,9 +187,7 @@ export class ContentReviewsApi extends BaseDomainApi {
             signal,
         );
         return {
-            blocks: result.storefrontContent.filter(
-                block => block.type === 'LEGAL' || block.type === 'SUPPORT',
-            ),
+            blocks: result.storefrontContent.filter(block => isAccountContentBlockType(block.type)),
             flashSales: [],
             systemAnnouncements: [],
             settings: { heroAutoplayIntervalSeconds: 5, configuredBlockTypes: [] },

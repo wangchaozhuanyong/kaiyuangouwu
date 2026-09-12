@@ -207,6 +207,16 @@ void test('production Nginx routes protected downloads and hardens both APIs', a
     assert.match(storefrontServer, /listen 443 ssl http2 default_server;/u);
     assert.match(storefrontServer, /server_name moyaoai\.com damatong\.net _;/u);
     assert.match(storefrontServer, /auth_request \/_storefront_authenticated;/u);
+    const logoRestoreLocation = storefrontServer.match(
+        /location = \/storefront\/restore-logo\.js \{(?<body>[\s\S]*?)\n    \}/u,
+    );
+    assert.ok(logoRestoreLocation?.groups?.body);
+    assert.match(logoRestoreLocation.groups.body, /try_files \$uri =404;/u);
+    assert.doesNotMatch(logoRestoreLocation.groups.body, /auth_request/u);
+    assert.match(
+        storefrontServer,
+        /location \^~ \/storefront\/ \{\s+auth_request \/_storefront_authenticated;/u,
+    );
     assert.match(storefrontServer, /proxy_pass http:\/\/vendure_backend\/promo\/access;/u);
     assert.doesNotMatch(storefrontServer, /@storefront_promotion_entry/u);
     assert.match(storefrontServer, /location \/ \{[\s\S]*?try_files \$uri \$uri\/ \/index\.html;/u);

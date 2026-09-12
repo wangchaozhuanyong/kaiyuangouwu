@@ -474,8 +474,17 @@ describe('StorefrontContentService publication guard', () => {
 });
 
 describe('StorefrontContentService sharing content isolation', () => {
-    it('only returns account policies and support to an anonymous Shop API caller', async () => {
-        const blocks = ['HERO', 'CATEGORY_SHOWCASE', 'LEGAL', 'SUPPORT', 'CUSTOM'].map(
+    it('returns published account visuals, policies and support without exposing the catalog to anonymous callers', async () => {
+        const blocks = [
+            'HERO',
+            'CATEGORY_SHOWCASE',
+            'LEGAL',
+            'SUPPORT',
+            'AUTH_LOGIN',
+            'AUTH_REGISTER',
+            'CUSTOM',
+            'ACCOUNT_HERO',
+        ].map(
             (type, index) =>
                 new StorefrontContentBlock({
                     id: String(index),
@@ -510,12 +519,45 @@ describe('StorefrontContentService sharing content isolation', () => {
             {} as never,
         );
         const result = await service.findPublished({ channelId: 'store-a' } as never, true);
-        expect(result.map(block => block.type)).toEqual(['LEGAL', 'SUPPORT']);
+        expect(result.map(block => block.type)).toEqual(['LEGAL', 'SUPPORT', 'AUTH_LOGIN', 'AUTH_REGISTER']);
         expect(repository.find).toHaveBeenCalledWith(
             expect.objectContaining({
                 where: expect.objectContaining({ channelId: 'store-a', type: expect.anything() }),
             }),
         );
+        const login = blocks.find(block => block.type === 'AUTH_LOGIN');
+        if (!login) throw new Error('Missing login fixture');
+        repository.find.mockResolvedValue([
+            new StorefrontContentBlock({
+                ...login,
+                translations: [
+                    {
+                        languageCode: LanguageCode.zh_Hans,
+                        title: '登录',
+                        subtitle: '',
+                        body: '',
+                        ctaLabel: '',
+                    },
+                ],
+            }),
+        ]);
+        const englishContext = { channelId: 'store-a', languageCode: LanguageCode.en } as never;
+        await expect(service.findPublished(englishContext, true)).resolves.toEqual([]);
+        expect(
+            (await service.findPublished(englishContext, true, LanguageCode.zh_Hans)).map(
+                block => block.type,
+            ),
+        ).toEqual(['AUTH_LOGIN']);
+        repository.find.mockResolvedValue([
+            new StorefrontContentBlock({ ...login, id: 'disabled', enabled: false }),
+            new StorefrontContentBlock({
+                ...login,
+                id: 'scheduled',
+                startsAt: new Date(Date.now() + 60_000),
+            }),
+            new StorefrontContentBlock({ ...login, id: 'expired', endsAt: new Date(Date.now() - 60_000) }),
+        ]);
+        await expect(service.findPublished({ channelId: 'store-a' } as never, true)).resolves.toEqual([]);
     });
     it('keeps sharing records available to admin but excludes them from published homepage content', async () => {
         const blocks = [undefined, 'referral-system-poster', 'referral-custom-poster'].map(

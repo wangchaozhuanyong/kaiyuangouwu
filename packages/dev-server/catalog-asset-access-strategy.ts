@@ -3,12 +3,14 @@ import {
     type ImageTransformStrategy,
     PresetOnlyStrategy,
 } from '@vendure/asset-server-plugin';
+import { LanguageCode } from '@vendure/common/lib/generated-types';
 import { ConfigService, extractSessionToken, Injector, SessionService } from '@vendure/core';
 import {
     promotionAssetPaths,
     StorefrontPromotionAccessService,
     StorefrontPromotionService,
 } from '@vendure/store-management-plugin';
+import { StorefrontContentService } from '@vendure/storefront-content-plugin';
 
 export function createCatalogImageTransformStrategies(
     bootstrapBaseSchema: boolean,
@@ -48,14 +50,37 @@ export class CatalogAssetAccessStrategy implements ImageTransformStrategy {
         if (session?.user?.id) return input;
         const request = await this.injector.get(StorefrontPromotionAccessService).resolveRequest(req);
         if (!request) throw new Error('Asset access denied');
-        const html = await this.injector.get(StorefrontPromotionService).renderPublished(request.ctx, '');
-        const paths = promotionAssetPaths(html, `https://${request.host}`);
         let identifier: string;
         try {
             identifier = decodeURIComponent(req.path).replace(/^\/(?:assets\/)?/, '');
         } catch {
             throw new Error('Asset access denied');
         }
+        const origin = `https://${request.host}`;
+        const blocks = await this.injector
+            .get(StorefrontContentService)
+            .findPublished(request.ctx, true, LanguageCode.zh_Hans);
+        // Only the exact image URLs emitted by published account content are public.
+        // Images are shared between translations. Check source-language publication so
+        // an English browser header cannot hide a visual on a published Chinese page.
+        for (const block of blocks) {
+            for (const image of [block, ...block.items]) {
+                if (!image.imageUrl) continue;
+                try {
+                    const url = new URL(image.imageUrl, origin);
+                    if (
+                        url.origin === origin &&
+                        url.pathname.startsWith('/assets/') &&
+                        decodeURIComponent(url.pathname).slice('/assets/'.length) === identifier
+                    )
+                        return input;
+                } catch {
+                    /* Invalid URLs do not grant access. */
+                }
+            }
+        }
+        const html = await this.injector.get(StorefrontPromotionService).renderPublished(request.ctx, '');
+        const paths = promotionAssetPaths(html, origin);
         if (!paths.has(identifier)) throw new Error('Asset access denied');
         return input;
     }

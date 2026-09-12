@@ -16,6 +16,7 @@ export const productFields = `
         currencyCode
         saleableStockLevel
         autoCardAvailableStock
+        storeCouponCollectionIds
         featuredAsset { id preview }
         product { id name featuredAsset { id preview } }
         customFields { fulfillmentType digitalDeliveryMode digitalStockPolicy }

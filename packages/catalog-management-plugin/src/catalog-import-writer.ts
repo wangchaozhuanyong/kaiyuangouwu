@@ -37,6 +37,7 @@ import {
     variantExecutionKey,
 } from './catalog-import-planning';
 import { CatalogImportPreview } from './catalog-import-preview';
+import { rollbackState } from './catalog-import-rollback-state';
 import { catalogImportStoreError } from './catalog-import-store';
 import { CatalogOperationsService } from './catalog-operations.service';
 import { resolveImportExecutionVariantId } from './catalog-row-identity';
@@ -600,6 +601,7 @@ export class CatalogImportWriter {
             supplierCreated,
             importCategory: catalogCategoryPath(row.normalizedData) || null,
             afterSnapshot,
+            rollbackState: await rollbackState(this.connection, ctx, variant.id),
         };
         row.appliedAt = new Date();
         row.message = row.action === 'CREATE' ? '新增成功' : '更新成功';

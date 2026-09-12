@@ -35,9 +35,17 @@ cleanup_restore_database() {
 }
 trap cleanup_restore_database EXIT
 
-readonly backup_file="$(find "${vendure_backup_dir}" -maxdepth 1 -type f -name 'vendure-*.sql.gz' -printf '%T@ %p\n' | sort -nr | awk 'NR == 1 { sub(/^[^ ]+ /, ""); print }')"
-if [[ -z "${backup_file}" ]]; then
+# The checksum file is published last, so an in-progress backup cannot hide the last complete one.
+backup_checksum="$(find "${vendure_backup_dir}" -maxdepth 1 -type f -name 'vendure-*.sql.gz.sha256' -printf '%T@ %p\n' | sort -nr | awk 'NR == 1 { sub(/^[^ ]+ /, ""); print }')"
+readonly backup_checksum
+readonly backup_file="${backup_checksum%.sha256}"
+if [[ -z "${backup_checksum}" ]]; then
     printf 'No verified backup is available for the restore drill\n' >&2
+    exit 1
+fi
+
+if [[ ! -s "${backup_file}.manifest.json" ]]; then
+    printf 'Backup lacks a source data manifest; record-level recovery cannot be verified\n' >&2
     exit 1
 fi
 
@@ -61,12 +69,16 @@ if [[ "${backup_tables}" -eq 0 || "${backup_tables}" -ne "${restored_tables}" ]]
     exit 1
 fi
 
+readonly manifest_tool="$(dirname "$(readlink -f "$0")")/vendure-mysql-backup-manifest.py"
+verified_data="$(python3 "${manifest_tool}" verify "${restore_database}" "${backup_file}.manifest.json")"
+readonly verified_data
+
 mysql --protocol=socket --user=root --execute="DROP DATABASE \`${restore_database}\`"
 restore_database_created=false
 
 install -d -m 0700 "${vendure_evidence_dir}"
-printf '{"completedAt":"%s","backupFile":"%s","temporaryRestoreDatabase":"%s","sourceTables":%s,"backupTables":%s,"restoredTables":%s}\n' \
-    "${restore_stamp}" "${backup_file}" "${restore_database}" "${source_tables}" "${backup_tables}" "${restored_tables}" \
+printf '{"completedAt":"%s","backupFile":"%s","temporaryRestoreDatabase":"%s","sourceTables":%s,"backupTables":%s,"restoredTables":%s,"dataValidation":%s}\n' \
+    "${restore_stamp}" "${backup_file}" "${restore_database}" "${source_tables}" "${backup_tables}" "${restored_tables}" "${verified_data}" \
     > "${vendure_evidence_dir}/restore-drill.json"
 
 printf 'Restore drill passed and temporary database removed: database=%s backup_tables=%s restored_tables=%s current_source_tables=%s\n' \

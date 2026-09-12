@@ -37,37 +37,50 @@ if [[ -n "${offsite_backup_uri}" && "${offsite_backup_uri}" != s3://* ]]; then
 fi
 
 install -d -m 0700 "${vendure_backup_dir}"
+if ! command -v flock >/dev/null 2>&1; then
+    printf 'The existing production flock utility is required for backup serialization\n' >&2
+    exit 1
+fi
+exec 8>"${vendure_backup_dir}/.backup.lock"
+if ! flock --nonblock 8; then
+    printf 'Another MySQL backup is already running\n' >&2
+    exit 1
+fi
 
 readonly backup_stamp="$(date -u +%Y%m%dT%H%M%SZ)"
 readonly backup_file="${vendure_backup_dir}/vendure-${backup_stamp}.sql.gz"
 readonly backup_partial="${backup_file}.part"
+if [[ -e "${backup_file}" || -e "${backup_partial}" || -e "${backup_file}.manifest.json" ]]; then
+    printf 'Refusing to overwrite an existing backup with the same timestamp\n' >&2
+    exit 1
+fi
 
 preserve_failed_backup() {
     if [[ -f "${backup_partial}" ]]; then
         mv "${backup_partial}" "${backup_partial}.failed"
     fi
+    if [[ -f "${backup_partial}.manifest.json" ]]; then
+        mv "${backup_partial}.manifest.json" "${backup_partial}.manifest.json.failed"
+    fi
+    if [[ -f "${backup_file}.sha256.part" ]]; then
+        mv "${backup_file}.sha256.part" "${backup_file}.sha256.part.failed"
+    fi
 }
 trap preserve_failed_backup EXIT
 
-MYSQL_PWD="${DB_PASSWORD}" mysqldump \
-    --host="${DB_HOST}" \
-    --port="${DB_PORT}" \
-    --user="${DB_USERNAME}" \
-    --single-transaction \
-    --routines \
-    --triggers \
-    --events \
-    --hex-blob \
-    --set-gtid-purged=OFF \
-    --no-tablespaces \
-    "${DB_NAME}" | gzip -9 > "${backup_partial}"
+# One MVCC read snapshot covers both the export and its row manifest.
+# The DDL-only backup lock permits business writes. Timeout closes the snapshot and releases the lock.
+readonly manifest_tool="$(dirname "$(readlink -f "$0")")/vendure-mysql-backup-manifest.py"
+timeout --kill-after=5s 15m python3 "${manifest_tool}" capture "${backup_partial}"
 
 gzip -t "${backup_partial}"
+mv "${backup_partial}.manifest.json" "${backup_file}.manifest.json"
 mv "${backup_partial}" "${backup_file}"
 (
     cd "${vendure_backup_dir}"
-    sha256sum "$(basename "${backup_file}")" > "$(basename "${backup_file}.sha256")"
+    sha256sum "$(basename "${backup_file}")" "$(basename "${backup_file}.manifest.json")" > "$(basename "${backup_file}.sha256.part")"
 )
+mv "${backup_file}.sha256.part" "${backup_file}.sha256"
 
 if [[ -n "${offsite_backup_uri}" ]]; then
     if ! command -v aws >/dev/null 2>&1; then
@@ -76,6 +89,7 @@ if [[ -n "${offsite_backup_uri}" ]]; then
     fi
     readonly offsite_prefix="${offsite_backup_uri%/}"
     aws s3 cp "${backup_file}" "${offsite_prefix}/$(basename "${backup_file}")" --only-show-errors
+    aws s3 cp "${backup_file}.manifest.json" "${offsite_prefix}/$(basename "${backup_file}.manifest.json")" --only-show-errors
     aws s3 cp "${backup_file}.sha256" "${offsite_prefix}/$(basename "${backup_file}.sha256")" --only-show-errors
 fi
 trap - EXIT

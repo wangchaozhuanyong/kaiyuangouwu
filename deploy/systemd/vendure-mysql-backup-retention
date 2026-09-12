@@ -11,5 +11,5 @@ if [[ ! "${vendure_retention_days}" =~ ^[0-9]+$ ]] || ((vendure_retention_days <
 fi
 
 find "${vendure_backup_dir}" -maxdepth 1 -type f \
-    \( -name 'vendure-*.sql.gz' -o -name 'vendure-*.sql.gz.sha256' -o -name '*.part.failed' \) \
+    \( -name 'vendure-*.sql.gz' -o -name 'vendure-*.sql.gz.sha256' -o -name 'vendure-*.sql.gz.manifest.json' -o -name '*.part.failed' -o -name '*.part.manifest.json.failed' \) \
     -mtime "+${vendure_retention_days}" -print -delete

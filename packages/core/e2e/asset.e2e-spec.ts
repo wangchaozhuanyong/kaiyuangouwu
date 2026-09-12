@@ -1,11 +1,24 @@
 import { DeletionResult, LogicalOperator, SortOrder } from '@vendure/common/lib/generated-types';
 import { omit } from '@vendure/common/lib/omit';
 import { pick } from '@vendure/common/lib/pick';
-import { mergeConfig } from '@vendure/core';
+import {
+    Asset,
+    AssetEvent,
+    AssetService,
+    AssetType,
+    ConfigService,
+    DefaultJobQueuePlugin,
+    EventBus,
+    JobQueueService,
+    mergeConfig,
+    RequestContextService,
+    TransactionalConnection,
+} from '@vendure/core';
 import { createErrorResultGuard, createTestEnvironment, ErrorResultGuard } from '@vendure/testing';
 import fs from 'fs-extra';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { initialData } from '../../../e2e-common/e2e-initial-data';
 import { TEST_SETUP_TIMEOUT_MS, testConfig } from '../../../e2e-common/test-config';
@@ -24,6 +37,7 @@ import {
 describe('Asset resolver', () => {
     const { server, adminClient } = createTestEnvironment(
         mergeConfig(testConfig(), {
+            plugins: [DefaultJobQueuePlugin.init({ pollInterval: 50 })],
             assetOptions: {
                 permittedFileTypes: ['image/*', '.pdf', '.zip'],
             },
@@ -635,6 +649,123 @@ describe('Asset resolver', () => {
                 source: expect.stringContaining('test.svg'),
             });
             expect(createAssets[0]).not.toHaveProperty('message');
+        });
+    });
+    // AUD-004: exercise the real transaction and persisted job queue with synthetic files.
+    describe('file deletion transaction boundary', () => {
+        async function fixture() {
+            const connection = server.app.get(TransactionalConnection);
+            const ctx = await server.app.get(RequestContextService).create({ apiType: 'admin' });
+            const directory = await fs.mkdtemp(path.join(tmpdir(), 'asset-delete-'));
+            const source = path.join(directory, 'original.txt');
+            const preview = path.join(directory, 'preview.txt');
+            await fs.writeFile(source, 'synthetic original');
+            await fs.writeFile(preview, 'synthetic preview');
+            const asset = await connection.getRepository(ctx, Asset).save(
+                new Asset({
+                    type: AssetType.BINARY,
+                    mimeType: 'text/plain',
+                    fileSize: 18,
+                    source,
+                    preview,
+                    channels: [ctx.channel],
+                    translations: [],
+                }),
+            );
+            const storage = server.app.get(ConfigService).assetOptions.assetStorageStrategy;
+            const exists = vi.spyOn(storage, 'fileExists').mockImplementation(file => fs.pathExists(file));
+            const remove = vi.spyOn(storage, 'deleteFile').mockImplementation(file => fs.unlink(file));
+            const service = server.app.get(AssetService);
+            const removeAsset = (txCtx: typeof ctx) =>
+                (service as any).deleteUnconditional(txCtx, [new Asset(asset)]);
+            return {
+                connection,
+                ctx,
+                asset,
+                source,
+                preview,
+                remove,
+                removeAsset,
+                clean: async () => {
+                    exists.mockRestore();
+                    remove.mockRestore();
+                    await fs.remove(directory);
+                },
+            };
+        }
+
+        it('preserves database row and both files when a blocking event aborts deletion', async () => {
+            const f = await fixture();
+            let abort = true;
+            server.app.get(EventBus).registerBlockingEventHandler({
+                event: AssetEvent,
+                id: 'audit-asset-delete-failure',
+                handler: event => {
+                    if (abort && event.type === 'deleted' && String(event.entity.id) === String(f.asset.id))
+                        throw new Error('injected event failure');
+                },
+            });
+            try {
+                await expect(f.removeAsset(f.ctx)).rejects.toThrow('injected event failure');
+                expect(
+                    await f.connection.getRepository(f.ctx, Asset).findOneBy({ id: f.asset.id }),
+                ).not.toBeNull();
+                expect(await fs.pathExists(f.source)).toBe(true);
+                expect(await fs.pathExists(f.preview)).toBe(true);
+                expect(f.remove).not.toHaveBeenCalled();
+            } finally {
+                abort = false;
+                await f.clean();
+            }
+        });
+
+        it('keeps files and the row when an outer transaction rolls back after enqueue', async () => {
+            const f = await fixture();
+            try {
+                await expect(
+                    f.connection.withTransaction(f.ctx, async ctx => {
+                        await f.removeAsset(ctx);
+                        expect(await fs.pathExists(f.source)).toBe(true);
+                        throw new Error('injected outer rollback');
+                    }),
+                ).rejects.toThrow('injected outer rollback');
+                await server.app.get(JobQueueService).start();
+                expect(
+                    await f.connection.getRepository(f.ctx, Asset).findOneBy({ id: f.asset.id }),
+                ).not.toBeNull();
+                expect(f.remove).not.toHaveBeenCalled();
+            } finally {
+                await f.clean();
+            }
+        });
+
+        it('retries a partial storage failure after commit without losing the cleanup job', async () => {
+            const f = await fixture();
+            let failPreview = true;
+            f.remove.mockImplementation(async file => {
+                if (file === f.preview && failPreview) {
+                    failPreview = false;
+                    throw new Error('synthetic transient storage failure');
+                }
+                await fs.unlink(file);
+            });
+            try {
+                await f.removeAsset(f.ctx);
+                await vi.waitFor(
+                    async () => {
+                        expect(await fs.pathExists(f.source)).toBe(false);
+                        expect(await fs.pathExists(f.preview)).toBe(false);
+                    },
+                    { timeout: 10000 },
+                );
+                expect(
+                    await f.connection.getRepository(f.ctx, Asset).findOneBy({ id: f.asset.id }),
+                ).toBeNull();
+                expect(f.remove.mock.calls.filter(([file]) => file === f.source)).toHaveLength(1);
+                expect(f.remove.mock.calls.filter(([file]) => file === f.preview)).toHaveLength(2);
+            } finally {
+                await f.clean();
+            }
         });
     });
 });

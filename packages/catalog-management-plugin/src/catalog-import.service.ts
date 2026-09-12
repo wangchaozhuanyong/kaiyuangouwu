@@ -53,6 +53,7 @@ import {
 } from './catalog-import-planning';
 import { CatalogImportPreview, type CatalogIndexProduct } from './catalog-import-preview';
 import { CatalogImportRollback } from './catalog-import-rollback';
+import { supportsRollbackLocks } from './catalog-import-rollback-state';
 import { CatalogImportWriter } from './catalog-import-writer';
 import { CatalogOperationsService } from './catalog-operations.service';
 import { catalogCreateNewSourceRecordKey } from './catalog-row-identity';
@@ -791,19 +792,31 @@ export class CatalogImportService {
     }
 
     async rollback(ctx: RequestContext, id: ID): Promise<CatalogImportJob> {
-        const job = await this.findJob(ctx, id);
-        if (!['COMPLETED', 'COMPLETED_WITH_ERRORS'].includes(job.state)) {
-            throw new UserInputError('只有已完成的任务可以回滚');
-        }
-        const rows = (await this.findRows(ctx, id)).filter(row => row.appliedAt).reverse();
-        await this.assertRollbackSafe(ctx, rows);
-        for (const row of rows) {
-            await this.connection.withTransaction(ctx, async txCtx => this.rollbackRow(txCtx, job, row));
-        }
-        job.state = 'ROLLED_BACK';
-        job.rolledBackAt = new Date();
-        job.progress = 100;
-        await this.connection.getRepository(ctx, CatalogImportJob).save(job);
+        await this.connection.withTransaction(
+            ctx,
+            async txCtx => {
+                const query = this.connection
+                    .getRepository(txCtx, CatalogImportJob)
+                    .createQueryBuilder('job')
+                    .where('job.id = :id AND job.channelId = :channelId', { id, channelId: txCtx.channelId });
+                if (supportsRollbackLocks(this.connection)) query.setLock('pessimistic_write');
+                const job = await query.getOne();
+                if (!job) throw new UserInputError('导入任务不存在或不属于当前门店');
+                // A retried request must not apply the stock/cost compensation twice.
+                if (job.state === 'ROLLED_BACK') return;
+                if (!['COMPLETED', 'COMPLETED_WITH_ERRORS'].includes(job.state)) {
+                    throw new UserInputError('只有已完成的任务可以回滚');
+                }
+                const rows = (await this.findRows(txCtx, id)).filter(row => row.appliedAt).reverse();
+                await this.assertRollbackSafe(txCtx, rows);
+                for (const row of rows) await this.rollbackRow(txCtx, job, row);
+                job.state = 'ROLLED_BACK';
+                job.rolledBackAt = new Date();
+                job.progress = 100;
+                await this.connection.getRepository(txCtx, CatalogImportJob).save(job);
+            },
+            supportsRollbackLocks(this.connection) ? 'READ COMMITTED' : undefined,
+        );
         await this.searchService.reindex(ctx);
         return this.findJob(ctx, id);
     }
