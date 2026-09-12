@@ -8,9 +8,11 @@ import {
     prefetchProductAsset,
     PriceDisplay,
     ProductImage,
+    sanitizeProductSubtitle,
     trimText,
 } from '../../storefront-ui/product-display';
 import { MarketConfig, Product, StorefrontLanguage } from '../../types';
+import { buildProductRowSmartInfo } from './product-row';
 
 function cn(...classes: Array<string | false | null | undefined>) {
     return twMerge(clsx(classes));
@@ -37,12 +39,8 @@ export function ProductCard({
     const variant = product.variants[0];
     const availability = productAvailability(variant);
     const stockLabel = productAvailabilityLabel(availability, isZh ? 'zh' : 'en');
-    const rawDescription = product.description?.trim();
-    const showDescription = Boolean(
-        rawDescription &&
-        rawDescription !== product.name.trim() &&
-        !rawDescription.startsWith(product.name.trim()),
-    );
+    const subtitle = sanitizeProductSubtitle(product.description, product.name, 26);
+    const smartInfo = buildProductRowSmartInfo(product, language);
 
     return (
         <article
@@ -81,20 +79,30 @@ export function ProductCard({
                 </button>
             )}
 
-            <div className="product-card-media aspect-square w-full overflow-hidden rounded-t-[inherit] [&_.responsive-picture]:block [&_.responsive-picture]:h-full [&_.responsive-picture]:w-full [&_.image-placeholder]:h-full [&_.image-placeholder]:w-full [&_.image-placeholder]:bg-[var(--product-media-bg)] [&_img]:block [&_img]:h-full [&_img]:w-full [&_img]:object-contain">
+            <div className="product-card-media aspect-square min-[900px]:aspect-[4/3] w-full overflow-hidden rounded-t-[inherit] [&_.responsive-picture]:block [&_.responsive-picture]:h-full [&_.responsive-picture]:w-full [&_.image-placeholder]:h-full [&_.image-placeholder]:w-full [&_.image-placeholder]:bg-[var(--product-media-bg)] [&_img]:block [&_img]:h-full [&_img]:w-full [&_img]:object-contain">
                 <ProductImage product={product} />
             </div>
 
             <strong className="mt-1.5 line-clamp-2 max-w-full overflow-hidden text-ellipsis px-2.5 text-left text-[13px] font-semibold leading-[1.35] text-[var(--text)] min-[1024px]:mt-2.5 min-[1024px]:text-[15px]">
                 {product.name}
             </strong>
-            {showDescription && (
+            {subtitle ? (
                 <span className="mt-[2px] block max-w-full overflow-hidden text-ellipsis whitespace-nowrap px-2.5 text-[11.5px] leading-[1.3] text-[var(--muted)] min-[1024px]:text-[13px]">
-                    {trimText(product.description, 26)}
+                    {subtitle}
                 </span>
-            )}
+            ) : null}
+            <div className="mt-1 flex flex-wrap items-center gap-1.5 px-2.5">
+                <span className="inline-flex items-center rounded border border-[#e0f2fe] bg-[#f0f9ff] px-1.5 py-[1px] text-[10px] font-semibold text-[#0284c7]">
+                    {smartInfo.primary}
+                </span>
+                {smartInfo.secondary ? (
+                    <span className="inline-flex items-center text-[10.5px] text-[#94a3b8]">
+                        {smartInfo.secondary}
+                    </span>
+                ) : null}
+            </div>
 
-            <footer className="mt-auto flex min-h-[34px] items-center justify-between gap-2 px-2.5 pt-1">
+            <footer className="mt-auto flex min-h-[34px] items-center justify-between gap-2 px-2.5 pt-2">
                 <div className="min-w-0 [&_b]:text-[16px] [&_b]:font-extrabold [&_b]:leading-[1.2] [&_b]:tracking-[-0.02em] [&_b]:text-[var(--accent)] [&_b]:[font-family:var(--font-numeric)]">
                     <PriceDisplay
                         value={variant ? variant.priceWithTax : 0}
