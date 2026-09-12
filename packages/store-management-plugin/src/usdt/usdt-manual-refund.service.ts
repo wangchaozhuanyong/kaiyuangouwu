@@ -126,7 +126,8 @@ export class UsdtManualRefundService {
         }
 
         try {
-            return await this.connection.withTransaction(ctx, async txCtx => {
+            return await this.orderService.withOrderMutationTransaction(ctx, async txCtx => {
+                await this.orderService.lockOrderForRefund(txCtx, initialContext.payment.order.id);
                 await this.lockPayment(txCtx, input.paymentId);
                 const paymentContext = await this.requirePaymentContext(txCtx, input.paymentId);
                 this.assertAuthorized(txCtx, paymentContext.intent);

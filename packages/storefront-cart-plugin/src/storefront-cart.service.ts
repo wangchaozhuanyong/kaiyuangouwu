@@ -491,7 +491,14 @@ export class StorefrontCartService {
         if (!order) {
             return new CartProjectionError('ORDER_MISSING', 'The pending checkout order no longer exists.');
         }
-        if (order.payments.some(payment => payment.state === 'Authorized' || payment.state === 'Settled')) {
+        if (
+            order.payments.some(
+                payment =>
+                    payment.state === 'Authorized' ||
+                    payment.state === 'Settled' ||
+                    payment.metadata?.manualReview?.required,
+            )
+        ) {
             return new CartCheckoutLockedError(cart.state);
         }
         if (order.state !== 'ArrangingPayment' && order.state !== 'AddingItems') {

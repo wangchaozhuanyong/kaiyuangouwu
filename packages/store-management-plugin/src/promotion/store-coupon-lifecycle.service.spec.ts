@@ -15,13 +15,20 @@ const ctx = {
 
 describe('StoreCouponLifecycleService', () => {
     it('scopes coupon ownership to the authenticated customer for separate email accounts', async () => {
-        const find = vi.fn(async () => []);
+        const find = vi.fn(async (_options?: unknown) => []);
         const findOneByUserId = vi.fn(async (_ctx: unknown, userId: string) => ({
             id: userId === 'user-1' ? 'customer-1' : 'customer-2',
             emailAddress: userId === 'user-1' ? 'account-a@example.com' : 'account-b@example.com',
         }));
         const service = new StoreCouponLifecycleService(
-            { getRepository: () => ({ find }) } as any,
+            {
+                getRepository: () => ({
+                    findAndCount: async (options: unknown) => {
+                        const items = await find(options);
+                        return [items, items.length];
+                    },
+                }),
+            } as any,
             { findOneByUserId } as any,
             {} as any,
             {} as any,
@@ -58,7 +65,7 @@ describe('StoreCouponLifecycleService', () => {
             } as any,
             {} as any,
             {} as any,
-            {} as any,
+            { registerCheckoutValidator: vi.fn(), registerPaymentConfirmationValidator: vi.fn() } as any,
             {
                 registerBlockingEventHandler: vi.fn((config: any) => {
                     handlers.set(config.id, config.handler);
@@ -232,6 +239,8 @@ describe('StoreCouponLifecycleService', () => {
             promotionId: 'promotion-1',
             customerId: 'customer-1',
             status: 'LOCKED',
+            validFrom: new Date(Date.now() - 60_000),
+            validUntil: new Date(Date.now() + 60_000),
             lockedOrderId: 'order-1',
             campaignName: '满减券',
             promotion: { couponCode: 'CPN_INTERNAL' },
@@ -239,6 +248,13 @@ describe('StoreCouponLifecycleService', () => {
         } as any;
         const order = {
             id: 'order-1',
+            customerId: 'customer-1',
+            payments: [
+                {
+                    state: 'Settled',
+                    metadata: { couponPaymentValidation: { paidAt: new Date().toISOString() } },
+                },
+            ],
             currencyCode: 'CNY',
             totalWithTax: 10_000,
             lines: [
@@ -263,7 +279,15 @@ describe('StoreCouponLifecycleService', () => {
         const allocationSave = vi.fn(async (value: unknown) => value);
         const ledgerSave = vi.fn(async (value: unknown) => value);
         const repositories = new Map<any, any>([
-            [CustomerCoupon, { find: vi.fn(async () => [coupon]), update: couponUpdate }],
+            [
+                CustomerCoupon,
+                {
+                    find: vi.fn(async () => [coupon]),
+                    findOneOrFail: vi.fn(() => Promise.resolve({ ...coupon, status: 'LOCKED' })),
+                    update: couponUpdate,
+                    createQueryBuilder: () => chainQueryBuilder({ getOne: async () => coupon }),
+                },
+            ],
             [CouponOrderAllocation, { findOne: vi.fn(async () => undefined), save: allocationSave }],
             [CouponLedgerEntry, { findOne: vi.fn(async () => undefined), save: ledgerSave }],
         ]);
@@ -339,9 +363,14 @@ describe('StoreCouponLifecycleService', () => {
             validUntil: new Date(now + 60_000),
             claimedAt: new Date(now - index * 1_000),
         })) as any[];
+        const couponRepository = {
+            findOne: vi.fn(async () => null),
+            find: vi.fn().mockResolvedValueOnce(coupons).mockResolvedValue([]),
+        };
+        for (const promotion of promotions) Object.assign(promotion, { conditions: [] });
         const service = new StoreCouponLifecycleService(
             {
-                getRepository: () => ({ find: vi.fn(async () => coupons) }),
+                getRepository: () => couponRepository,
             } as any,
             { findOneByUserId: vi.fn(async () => ({ id: 'customer-1' })) } as any,
             {
@@ -375,7 +404,7 @@ describe('StoreCouponLifecycleService', () => {
     });
 
     it('keeps a refunded allocation in the customer usage history', async () => {
-        const find = vi.fn(async () => [
+        const find = vi.fn(async (_options?: unknown) => [
             {
                 id: 'allocation-1',
                 customerCouponId: 'coupon-1',
@@ -397,7 +426,14 @@ describe('StoreCouponLifecycleService', () => {
             },
         ]);
         const service = new StoreCouponLifecycleService(
-            { getRepository: () => ({ find }) } as any,
+            {
+                getRepository: () => ({
+                    findAndCount: async (options: unknown) => {
+                        const items = await find(options);
+                        return [items, items.length];
+                    },
+                }),
+            } as any,
             { findOneByUserId: vi.fn(async () => ({ id: 'customer-1' })) } as any,
             {} as any,
             {} as any,
@@ -420,9 +456,10 @@ describe('StoreCouponLifecycleService', () => {
                     channelId: 'channel-1',
                     customerId: 'customer-1',
                     status: expect.anything(),
+                    usedAt: expect.anything(),
                 },
                 relations: { customerCoupon: true, order: true },
-                order: { usedAt: 'DESC' },
+                order: { usedAt: 'DESC', id: 'DESC' },
             }),
         );
     });
@@ -605,7 +642,7 @@ function createRefundHarness({
         returnCount: 0,
         validUntil: new Date(Date.now() + 24 * 60 * 60_000),
         campaignConfig: { returnOnFullRefund: true },
-        promotion: { couponCode: 'CPN_INTERNAL' },
+        promotion: { couponCode: 'CPN_INTERNAL', enabled: true, deletedAt: null },
     } as any;
     const allocation = {
         id: 'allocation-1',
@@ -627,6 +664,7 @@ function createRefundHarness({
             CustomerCoupon,
             {
                 findOne: vi.fn(async () => coupon),
+                createQueryBuilder: () => chainQueryBuilder({ getOne: async () => coupon }),
                 update: vi.fn(async (criteria: any, changes: any) => {
                     if (coupon.status !== criteria.status || coupon.usedOrderId !== criteria.usedOrderId)
                         return { affected: 0 };
@@ -652,7 +690,9 @@ function createRefundHarness({
         totalWithTax: orderTotal,
         payments: [
             {
-                refunds: [{ id: 'refund-1', state: 'Settled', total: settledRefundTotal }],
+                refunds: [
+                    { id: 'refund-1', state: 'Settled', total: settledRefundTotal, updatedAt: new Date() },
+                ],
             },
         ],
     };
@@ -663,7 +703,7 @@ function createRefundHarness({
         } as any,
         {} as any,
         {} as any,
-        {} as any,
+        { lockOrderForRefund: vi.fn(async () => undefined) } as any,
         {} as any,
         {} as any,
         {} as any,

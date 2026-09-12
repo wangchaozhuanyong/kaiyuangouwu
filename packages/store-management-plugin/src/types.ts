@@ -294,6 +294,9 @@ export interface StorePromotionNameView {
 }
 
 export interface StoreCouponCampaignActionResult {
+    skippedCount?: number;
+    failedCount?: number;
+    outcomes?: Array<{ couponId: ID; status: string; reason: string }>;
     campaignId: ID;
     affectedCount: number;
 }

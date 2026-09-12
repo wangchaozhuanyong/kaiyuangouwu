@@ -829,6 +829,15 @@ export const adminApiExtensions = gql`
     type StoreCouponCampaignActionResult {
         campaignId: ID!
         affectedCount: Int!
+        skippedCount: Int
+        failedCount: Int
+        outcomes: [StoreCouponActionOutcome!]
+    }
+
+    type StoreCouponActionOutcome {
+        couponId: ID!
+        status: String!
+        reason: String!
     }
 
     input UpdateReferralProgramInput {
@@ -1135,6 +1144,7 @@ export const adminApiExtensions = gql`
         storefrontPromotionPage: StorefrontPromotionPage!
         storeCouponCampaigns: [StoreCouponCampaign!]!
         storeCouponRepairPreview(campaignId: ID!): JSON!
+        storeCouponClosureRepairPreview(campaignId: ID!): JSON!
         storeCouponLedger(options: StoreCouponLedgerEntryListOptions): StoreCouponLedgerEntryList!
         storeCouponDailyReport(from: DateTime!, to: DateTime!, campaignId: ID): [StoreCouponDailyMetric!]!
         storeFlashSales: [StoreFlashSale!]!
@@ -1176,6 +1186,7 @@ export const adminApiExtensions = gql`
         previewStorefrontPromotionPage(input: UpdateStorefrontPromotionDraftInput!): String!
         createStoreCouponCampaign(input: CreateStoreCouponCampaignInput!): StoreCouponCampaign!
         repairStoreCouponCampaign(campaignId: ID!, fingerprint: String!, password: String!): JSON!
+        repairStoreCouponClosure(campaignId: ID!, fingerprint: String!, password: String!): JSON!
         createStoreFlashSale(input: CreateStoreFlashSaleInput!): StoreFlashSale!
         setStorePromotionEnabled(id: ID!, enabled: Boolean!, password: String!): StorePromotionToggleResult!
         updateStorePromotionName(id: ID!, name: String!): StorePromotionNameResult!
@@ -1316,7 +1327,9 @@ export const shopApiExtensions = gql`
         storefrontCurrencyConfiguration: StoreCurrencyConfiguration!
         activeStorefrontCoupons: [StorefrontCoupon!]!
         myStorefrontCoupons: [StoreCustomerCoupon!]!
+        myStorefrontCouponsPage(options: StoreCouponPageOptions): StoreCustomerCouponList!
         myStorefrontCouponUsageRecords: [StoreCouponUsageRecord!]!
+        myStorefrontCouponUsageRecordsPage(options: StoreCouponPageOptions): StoreCouponUsageRecordList!
         activeStorefrontFlashSales: [StoreFlashSale!]!
         activeSystemAnnouncements: [StorefrontSystemAnnouncement!]!
         referralProgram: ReferralProgram!

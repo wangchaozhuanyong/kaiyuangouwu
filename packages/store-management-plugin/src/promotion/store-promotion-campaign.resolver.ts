@@ -20,6 +20,7 @@ import {
     StoreCouponLedgerEntryListOptions,
 } from '../types';
 
+import { StoreCouponClosureRepairService } from './store-coupon-closure-repair.service';
 import { couponCollectionsForVariant } from './store-coupon-collections';
 import { StoreCouponLifecycleService } from './store-coupon-lifecycle.service';
 import { StoreCouponRepairService } from './store-coupon-repair.service';
@@ -32,6 +33,7 @@ export class StorePromotionCampaignAdminResolver {
         private readonly lifecycleService: StoreCouponLifecycleService,
         private readonly passwordService: MerchantInitialPasswordService,
         private readonly repairService: StoreCouponRepairService,
+        private readonly closureRepair: StoreCouponClosureRepairService,
         private readonly cartCommands: CartCommandService,
     ) {}
 
@@ -47,7 +49,26 @@ export class StorePromotionCampaignAdminResolver {
         return this.repairService.preview(ctx, campaignId);
     }
 
-    @Transaction()
+    @Query()
+    @Allow(Permission.ReadPromotion)
+    storeCouponClosureRepairPreview(@Ctx() ctx: RequestContext, @Args('campaignId') campaignId: ID) {
+        return this.closureRepair.preview(ctx, campaignId);
+    }
+
+    @Transaction('manual')
+    @Mutation()
+    @Allow(Permission.UpdatePromotion)
+    async repairStoreCouponClosure(
+        @Ctx() ctx: RequestContext,
+        @Args('campaignId') campaignId: ID,
+        @Args('fingerprint') fingerprint: string,
+        @Args('password') password: string,
+    ) {
+        await this.passwordService.assertCurrentPassword(ctx, password);
+        return this.closureRepair.apply(ctx, campaignId, fingerprint);
+    }
+
+    @Transaction('manual')
     @Mutation()
     @Allow(Permission.UpdatePromotion)
     async repairStoreCouponCampaign(
@@ -57,7 +78,9 @@ export class StorePromotionCampaignAdminResolver {
         @Args('password') password: string,
     ) {
         await this.passwordService.assertCurrentPassword(ctx, password);
-        return this.repairService.apply(ctx, campaignId, fingerprint);
+        return this.cartCommands.runTransaction(ctx, () =>
+            this.repairService.apply(ctx, campaignId, fingerprint),
+        );
     }
 
     @Query()
@@ -103,7 +126,7 @@ export class StorePromotionCampaignAdminResolver {
         return this.campaignService.createFlashSale(ctx, input);
     }
 
-    @Transaction()
+    @Transaction('manual')
     @Mutation()
     @Allow(Permission.UpdatePromotion)
     setStorePromotionEnabled(
@@ -114,17 +137,21 @@ export class StorePromotionCampaignAdminResolver {
     ) {
         return this.passwordService
             .assertCurrentPassword(ctx, password)
-            .then(() => this.campaignService.setEnabled(ctx, id, enabled));
+            .then(() =>
+                this.cartCommands.runTransaction(ctx, () =>
+                    this.campaignService.setEnabled(ctx, id, enabled),
+                ),
+            );
     }
 
-    @Transaction()
+    @Transaction('manual')
     @Mutation()
     @Allow(Permission.UpdatePromotion)
     updateStorePromotionName(@Ctx() ctx: RequestContext, @Args('id') id: ID, @Args('name') name: string) {
-        return this.campaignService.updateName(ctx, id, name);
+        return this.cartCommands.runTransaction(ctx, () => this.campaignService.updateName(ctx, id, name));
     }
 
-    @Transaction()
+    @Transaction('manual')
     @Mutation()
     @Allow(Permission.UpdatePromotion)
     stopStoreCouponIssuance(
@@ -134,7 +161,9 @@ export class StorePromotionCampaignAdminResolver {
     ) {
         return this.passwordService
             .assertCurrentPassword(ctx, password)
-            .then(() => this.campaignService.stopCouponIssuance(ctx, id));
+            .then(() =>
+                this.cartCommands.runTransaction(ctx, () => this.campaignService.stopCouponIssuance(ctx, id)),
+            );
     }
 
     @Transaction('manual')
@@ -147,10 +176,14 @@ export class StorePromotionCampaignAdminResolver {
     ) {
         return this.passwordService
             .assertCurrentPassword(ctx, password)
-            .then(() => this.campaignService.archiveCouponCampaign(ctx, id));
+            .then(() =>
+                this.cartCommands.runTransaction(ctx, () =>
+                    this.campaignService.archiveCouponCampaign(ctx, id),
+                ),
+            );
     }
 
-    @Transaction()
+    @Transaction('manual')
     @Mutation()
     @Allow(Permission.UpdatePromotion)
     revokeStoreCouponCampaignOutstanding(
@@ -159,22 +192,21 @@ export class StorePromotionCampaignAdminResolver {
         @Args('password') password: string,
         @Args('reason') reason?: string,
     ) {
-        return this.cartCommands.runTransaction(ctx, async () => {
-            await this.passwordService.assertCurrentPassword(ctx, password);
-            return this.lifecycleService.revokeCampaignOutstanding(ctx, id, reason);
-        });
+        return this.passwordService
+            .assertCurrentPassword(ctx, password)
+            .then(() => this.lifecycleService.revokeCampaignOutstanding(ctx, id, reason));
     }
 
-    @Transaction()
+    @Transaction('manual')
     @Mutation()
     @Allow(Permission.DeletePromotion)
     deleteStorePromotion(@Ctx() ctx: RequestContext, @Args('id') id: ID, @Args('password') password: string) {
         return this.passwordService
             .assertCurrentPassword(ctx, password)
-            .then(() => this.campaignService.delete(ctx, id));
+            .then(() => this.cartCommands.runTransaction(ctx, () => this.campaignService.delete(ctx, id)));
     }
 
-    @Transaction()
+    @Transaction('manual')
     @Mutation()
     @Allow(Permission.UpdatePromotion)
     grantStoreCoupon(
@@ -182,7 +214,9 @@ export class StorePromotionCampaignAdminResolver {
         @Args('campaignId') campaignId: ID,
         @Args('customerId') customerId: ID,
     ) {
-        return this.lifecycleService.grant(ctx, campaignId, customerId);
+        return this.cartCommands.runTransaction(ctx, () =>
+            this.lifecycleService.grant(ctx, campaignId, customerId),
+        );
     }
 
     @Transaction('manual')
@@ -229,11 +263,30 @@ export class StorePromotionCampaignShopResolver {
         return this.lifecycleService.findMyUsageRecords(ctx);
     }
 
-    @Transaction()
+    @Query()
+    @Allow(Permission.Authenticated)
+    myStorefrontCouponsPage(
+        @Ctx() ctx: RequestContext,
+        @Args('options')
+        options?: { skip?: number; take?: number; statuses?: string[]; usableOnly?: boolean },
+    ) {
+        return this.lifecycleService.findMinePage(ctx, options);
+    }
+
+    @Query()
+    @Allow(Permission.Authenticated)
+    myStorefrontCouponUsageRecordsPage(
+        @Ctx() ctx: RequestContext,
+        @Args('options') options?: { skip?: number; take?: number; statuses?: string[] },
+    ) {
+        return this.lifecycleService.findMyUsageRecordsPage(ctx, options);
+    }
+
+    @Transaction('manual')
     @Mutation()
     @Allow(Permission.Authenticated)
     claimStorefrontCoupon(@Ctx() ctx: RequestContext, @Args('campaignId') campaignId: ID) {
-        return this.lifecycleService.claim(ctx, campaignId);
+        return this.cartCommands.runTransaction(ctx, () => this.lifecycleService.claim(ctx, campaignId));
     }
 
     @Transaction('manual')

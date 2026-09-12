@@ -33,6 +33,16 @@ export const usdtTrc20PaymentHandler = new PaymentMethodHandler({
             state: 'Settled' as const,
             transactionId: `tron:${proof.transactionId}`,
             metadata: {
+                verifiedUsdtPayment: {
+                    proof: metadata.proof,
+                    paidAt: proof.paidAt ?? null,
+                    transactionId: proof.transactionId,
+                    quoteId: proof.quoteId,
+                    channelId: proof.channelId,
+                    orderId: proof.orderId,
+                    fiatAmount: proof.fiatAmount,
+                    fiatCurrencyCode: proof.fiatCurrencyCode,
+                },
                 public: {
                     network: 'TRC20',
                     quoteId: proof.quoteId,

@@ -451,105 +451,178 @@ export class UsdtPaymentService {
             apiType: 'admin',
             channelOrToken: intent.channel,
         });
-        return this.connection.withTransaction(channelContext, async ctx => {
-            const repository = this.connection.getRepository(ctx, StorefrontUsdtPaymentIntent);
-            const locked = await this.findLockedIntent(ctx, intent.id);
-            if (
-                !locked ||
-                ![USDT_PAYMENT_INTENT_STATUS.pending, USDT_PAYMENT_INTENT_STATUS.expired].includes(
-                    locked.status as 'PENDING' | 'EXPIRED',
-                ) ||
-                !locked.activeMatchKey
-            ) {
-                return locked?.status ?? USDT_PAYMENT_INTENT_STATUS.manualReview;
-            }
-            const claimed = await repository.findOne({ where: { transactionId: transfer.transactionId } });
-            if (claimed && String(claimed.id) !== String(locked.id)) return locked.status;
-            const history = await repository.findOne({
-                where: { matchKey: locked.matchKey, id: Not(locked.id) },
-            });
-            locked.transactionId = transfer.transactionId;
-            locked.senderAddress = transfer.from;
-            locked.receivedUsdtAmount = transfer.amount;
-            locked.blockNumber = blockNumber;
-            locked.blockTimestamp = transfer.blockTimestamp;
-            locked.lastCheckedAt = now;
-            // Claim the transaction before calling Vendure or notifying operators. The unique index
-            // also arbitrates different workers trying to attach one transfer to different intents.
-            await repository.save(locked, { reload: false });
-            if (history) {
-                locked.status = USDT_PAYMENT_INTENT_STATUS.manualReview;
-                locked.failureReason = '付款金额曾用于其他报价，需核实付款归属后处理';
+        // Commit verified receipt evidence before any order/discount validation can fail.
+        // This transaction is intentionally separate from the later fulfillment transaction.
+        const receiptStatus = await this.orderService.withOrderMutationTransaction(
+            channelContext,
+            async ctx => {
+                const locked = await this.findLockedIntent(ctx, intent.id);
+                if (!locked || !['PENDING', 'EXPIRED'].includes(locked.status) || !locked.activeMatchKey)
+                    return locked?.status ?? USDT_PAYMENT_INTENT_STATUS.manualReview;
+                const repository = this.connection.getRepository(ctx, StorefrontUsdtPaymentIntent);
+                const claimed = await repository.findOne({
+                    where: { transactionId: transfer.transactionId },
+                });
+                if (claimed && String(claimed.id) !== String(locked.id)) return locked.status;
+                if (locked.transactionId && locked.transactionId !== transfer.transactionId) {
+                    locked.status = USDT_PAYMENT_INTENT_STATUS.manualReview;
+                    locked.failureReason = '同一付款请求收到多笔转账，请人工核对';
+                    await repository.save(locked, { reload: false });
+                    await this.publishManualReview(
+                        ctx,
+                        locked,
+                        locked.failureReason,
+                        transfer,
+                        'multiple-receipts',
+                    );
+                    return locked.status;
+                }
+                locked.transactionId = transfer.transactionId;
+                locked.senderAddress = transfer.from;
+                locked.receivedUsdtAmount = transfer.amount;
+                locked.blockNumber = blockNumber;
+                locked.blockTimestamp = transfer.blockTimestamp;
+                locked.lastCheckedAt = now;
                 await repository.save(locked, { reload: false });
-                await this.publishManualReview(ctx, locked, locked.failureReason, transfer, 'reused-amount');
+                return null;
+            },
+        );
+        if (receiptStatus) return receiptStatus;
+        try {
+            return await this.orderService.withOrderMutationTransaction(channelContext, async ctx => {
+                const repository = this.connection.getRepository(ctx, StorefrontUsdtPaymentIntent);
+                const locked = await this.findLockedIntent(ctx, intent.id);
+                if (
+                    !locked ||
+                    ![USDT_PAYMENT_INTENT_STATUS.pending, USDT_PAYMENT_INTENT_STATUS.expired].includes(
+                        locked.status as 'PENDING' | 'EXPIRED',
+                    ) ||
+                    !locked.activeMatchKey
+                ) {
+                    return locked?.status ?? USDT_PAYMENT_INTENT_STATUS.manualReview;
+                }
+                const claimed = await repository.findOne({
+                    where: { transactionId: transfer.transactionId },
+                });
+                if (claimed && String(claimed.id) !== String(locked.id)) return locked.status;
+                const history = await repository.findOne({
+                    where: { matchKey: locked.matchKey, id: Not(locked.id) },
+                });
+                locked.transactionId = transfer.transactionId;
+                locked.senderAddress = transfer.from;
+                locked.receivedUsdtAmount = transfer.amount;
+                locked.blockNumber = blockNumber;
+                locked.blockTimestamp = transfer.blockTimestamp;
+                locked.lastCheckedAt = now;
+                // Claim the transaction before calling Vendure or notifying operators. The unique index
+                // also arbitrates different workers trying to attach one transfer to different intents.
+                await repository.save(locked, { reload: false });
+                if (history) {
+                    locked.status = USDT_PAYMENT_INTENT_STATUS.manualReview;
+                    locked.failureReason = '付款金额曾用于其他报价，需核实付款归属后处理';
+                    await repository.save(locked, { reload: false });
+                    await this.publishManualReview(
+                        ctx,
+                        locked,
+                        locked.failureReason,
+                        transfer,
+                        'reused-amount',
+                    );
+                    return locked.status;
+                }
+                if (
+                    locked.network !== USDT_TRC20_NETWORK ||
+                    locked.tokenContractAddress !== USDT_TRC20_CONTRACT_ADDRESS ||
+                    !isValidTronMainnetAddress(locked.receivingAddress) ||
+                    locked.receivingAddressFingerprint !==
+                        fingerprintReceivingAddress(locked.receivingAddress)
+                ) {
+                    locked.status = USDT_PAYMENT_INTENT_STATUS.manualReview;
+                    locked.failureReason = '订单绑定的收款钱包快照未通过完整性校验';
+                    await repository.save(locked, { reload: false });
+                    await this.publishManualReview(
+                        ctx,
+                        locked,
+                        locked.failureReason,
+                        transfer,
+                        'wallet-snapshot',
+                    );
+                    return locked.status;
+                }
+
+                const quote = await this.connection.getEntityOrThrow(
+                    ctx,
+                    StorefrontUsdtCheckoutQuote,
+                    locked.quoteId,
+                );
+                const proof = createUsdtPaymentProof({
+                    channelId: String(locked.channelId),
+                    quoteId: String(locked.quoteId),
+                    orderId: String(locked.orderId),
+                    fiatCurrencyCode: quote.fiatCurrencyCode,
+                    fiatAmount: quote.fiatAmount,
+                    transactionId: transfer.transactionId,
+                    usdtAmount: locked.expectedUsdtAmount,
+                    receivingAddressFingerprint: locked.receivingAddressFingerprint,
+                    expiresAt: Date.now() + PAYMENT_PROOF_TTL_MS,
+                    paidAt: transfer.blockTimestamp.getTime(),
+                });
+                const paymentResult = await this.orderService.addPaymentToOrder(ctx, locked.orderId, {
+                    method: USDT_TRC20_PAYMENT_METHOD_CODE,
+                    metadata: { proof },
+                });
+                if (isGraphQlErrorResult(paymentResult)) {
+                    locked.status = USDT_PAYMENT_INTENT_STATUS.manualReview;
+                    locked.failureReason = (
+                        'paymentErrorMessage' in paymentResult
+                            ? String(paymentResult.paymentErrorMessage)
+                            : paymentResult.message
+                    ).slice(0, 500);
+                    await repository.save(locked, { reload: false });
+                    await this.publishManualReview(
+                        ctx,
+                        locked,
+                        locked.failureReason,
+                        transfer,
+                        'vendure-payment',
+                    );
+                    return locked.status;
+                }
+
+                const payment = await this.connection.getRepository(ctx, Payment).findOne({
+                    where: { transactionId: `tron:${transfer.transactionId}` },
+                });
+                if (!payment || payment.state !== 'Settled') {
+                    throw new Error('USDT payment was not persisted in the Settled state');
+                }
+                locked.paymentId = payment.id;
+                locked.status = USDT_PAYMENT_INTENT_STATUS.settled;
+                locked.settledAt = now;
+                locked.failureReason = null;
+                await repository.save(locked, { reload: false });
                 return locked.status;
-            }
-            if (
-                locked.network !== USDT_TRC20_NETWORK ||
-                locked.tokenContractAddress !== USDT_TRC20_CONTRACT_ADDRESS ||
-                !isValidTronMainnetAddress(locked.receivingAddress) ||
-                locked.receivingAddressFingerprint !== fingerprintReceivingAddress(locked.receivingAddress)
-            ) {
+            });
+        } catch {
+            // The receipt above remains committed even if a pricing hook or transaction fails.
+            return this.orderService.withOrderMutationTransaction(channelContext, async ctx => {
+                const locked = await this.findLockedIntent(ctx, intent.id);
+                if (!locked) return USDT_PAYMENT_INTENT_STATUS.manualReview;
+                if (locked.status === USDT_PAYMENT_INTENT_STATUS.settled) return locked.status;
                 locked.status = USDT_PAYMENT_INTENT_STATUS.manualReview;
-                locked.failureReason = '订单绑定的收款钱包快照未通过完整性校验';
-                await repository.save(locked, { reload: false });
+                locked.failureReason = '已确认到账，订单校验或入账处理异常，请人工核对；请勿重复付款';
+                await this.connection
+                    .getRepository(ctx, StorefrontUsdtPaymentIntent)
+                    .save(locked, { reload: false });
                 await this.publishManualReview(
                     ctx,
                     locked,
                     locked.failureReason,
                     transfer,
-                    'wallet-snapshot',
+                    'order-validation-exception',
                 );
                 return locked.status;
-            }
-
-            const quote = await this.connection.getEntityOrThrow(
-                ctx,
-                StorefrontUsdtCheckoutQuote,
-                locked.quoteId,
-            );
-            const proof = createUsdtPaymentProof({
-                channelId: String(locked.channelId),
-                quoteId: String(locked.quoteId),
-                orderId: String(locked.orderId),
-                fiatCurrencyCode: quote.fiatCurrencyCode,
-                fiatAmount: quote.fiatAmount,
-                transactionId: transfer.transactionId,
-                usdtAmount: locked.expectedUsdtAmount,
-                receivingAddressFingerprint: locked.receivingAddressFingerprint,
-                expiresAt: Date.now() + PAYMENT_PROOF_TTL_MS,
             });
-            const paymentResult = await this.orderService.addPaymentToOrder(ctx, locked.orderId, {
-                method: USDT_TRC20_PAYMENT_METHOD_CODE,
-                metadata: { proof },
-            });
-            if (isGraphQlErrorResult(paymentResult)) {
-                locked.status = USDT_PAYMENT_INTENT_STATUS.manualReview;
-                locked.failureReason = paymentResult.message.slice(0, 500);
-                await repository.save(locked, { reload: false });
-                await this.publishManualReview(
-                    ctx,
-                    locked,
-                    locked.failureReason,
-                    transfer,
-                    'vendure-payment',
-                );
-                return locked.status;
-            }
-
-            const payment = await this.connection.getRepository(ctx, Payment).findOne({
-                where: { transactionId: `tron:${transfer.transactionId}` },
-            });
-            if (!payment || payment.state !== 'Settled') {
-                throw new Error('USDT payment was not persisted in the Settled state');
-            }
-            locked.paymentId = payment.id;
-            locked.status = USDT_PAYMENT_INTENT_STATUS.settled;
-            locked.settledAt = now;
-            locked.failureReason = null;
-            await repository.save(locked, { reload: false });
-            return locked.status;
-        });
+        }
     }
 
     private async publishAmountMismatch(

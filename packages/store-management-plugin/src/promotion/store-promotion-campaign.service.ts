@@ -45,6 +45,7 @@ import {
 
 import { idListArg, numberArg, stringArg } from './promotion-operation-args';
 import { parseFlashSaleVariantRules } from './store-commerce-promotion-actions';
+import { lockCouponCampaign } from './store-coupon-campaign-lock';
 
 @Injectable()
 export class StorePromotionCampaignService {
@@ -410,6 +411,7 @@ export class StorePromotionCampaignService {
         if (!existingPromotion || !this.isManagedPromotion(existingPromotion)) {
             throw new UserInputError('找不到该营销活动');
         }
+        if (this.toCouponView(existingPromotion)) await this.lockOwnedCampaign(ctx, existingPromotion);
         if (!enabled && this.toCouponView(existingPromotion)) {
             const issuedCount = await this.connection
                 .getRepository(ctx, CustomerCoupon)
@@ -445,6 +447,7 @@ export class StorePromotionCampaignService {
         if (!promotion || !this.isManagedPromotion(promotion)) {
             throw new UserInputError('找不到该营销活动');
         }
+        if (this.toCouponView(promotion)) await this.lockOwnedCampaign(ctx, promotion);
         const name = this.requiredText(value, '活动名称', 120);
         const result = await this.promotionService.updatePromotion(ctx, {
             id,
@@ -471,7 +474,7 @@ export class StorePromotionCampaignService {
         if (!promotion || !this.toCouponView(promotion)) {
             throw new UserInputError('找不到该优惠券活动');
         }
-        const config = await this.configForPromotion(ctx, promotion);
+        const config = await this.lockOwnedCampaign(ctx, promotion);
         const now = new Date();
         if (!config.claimEndsAt || config.claimEndsAt > now) {
             config.claimEndsAt = new Date(Math.floor(now.getTime() / 1000) * 1000);
@@ -496,7 +499,7 @@ export class StorePromotionCampaignService {
         if (!promotion || !this.toCouponView(promotion)) {
             throw new UserInputError('找不到该优惠券活动');
         }
-        const config = await this.configForPromotion(ctx, promotion);
+        const config = await this.lockOwnedCampaign(ctx, promotion);
         if (!config.archivedAt) {
             const now = new Date();
             config.archivedAt = now;
@@ -524,6 +527,7 @@ export class StorePromotionCampaignService {
             throw new UserInputError('找不到该营销活动');
         }
         if (this.toCouponView(promotion)) {
+            await this.lockOwnedCampaign(ctx, promotion);
             const issuedCount = await this.connection
                 .getRepository(ctx, CustomerCoupon)
                 .count({ where: { channelId: ctx.channelId, promotionId: id } });
@@ -842,6 +846,10 @@ export class StorePromotionCampaignService {
             this.toCouponView(promotion) ||
             promotion.actions.some(action => action.code === 'store_flash_sale_price'),
         );
+    }
+
+    private async lockOwnedCampaign(ctx: RequestContext, promotion: Promotion) {
+        return lockCouponCampaign(this.connection, ctx, await this.configForPromotion(ctx, promotion));
     }
 
     private async configForPromotion(ctx: RequestContext, promotion: Promotion) {

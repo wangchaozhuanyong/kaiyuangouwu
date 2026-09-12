@@ -1,3 +1,6 @@
+// organize-imports-ignore
+import type { ShopApi } from '../api';
+import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useRouter } from '@tanstack/react-router';
 import { Badge, CalendarDays, Check, ChevronRight, MapPin, TicketPercent } from 'lucide-react';
 import { ReactNode, useState } from 'react';
@@ -19,6 +22,7 @@ import {
     couponCardsFromCampaigns,
     couponScopeLabel,
 } from '../storefront-coupons';
+import { storefrontErrorMessage } from '../storefront-errors';
 import { CouponCenterPageContext } from '../storefront-page-contexts';
 import { routeNavigateOptions, type RouteState } from '../storefront-router';
 import { EmptyState, InlineError, Subpage } from '../storefront-ui/page-shell';
@@ -30,6 +34,7 @@ import {
 } from '../types';
 
 export interface CouponCenterPageProps {
+    pagination?: { api: ShopApi; queryKey: readonly unknown[] };
     coupons: StorefrontCouponCampaign[];
     myCoupons: StoreCustomerCoupon[];
     usageRecords: StoreCouponUsageRecord[];
@@ -59,17 +64,18 @@ export function CouponCenterPage() {
     const {
         coupons,
         myCoupons,
-        usageRecords,
+        usageRecords: initialUsageRecords,
+        pagination,
         currencyCode,
         displayCurrencyCode,
         language,
         loading,
         campaignsLoading,
         campaignsError,
-        myCouponsLoading,
-        myCouponsError,
-        usageRecordsLoading,
-        usageRecordsError,
+        myCouponsLoading: initialMyCouponsLoading,
+        myCouponsError: initialMyCouponsError,
+        usageRecordsLoading: initialUsageRecordsLoading,
+        usageRecordsError: initialUsageRecordsError,
         onRetryCampaigns,
         onRetryMyCoupons,
         onRetryUsageRecords,
@@ -77,6 +83,61 @@ export function CouponCenterPage() {
     } = CouponCenterPageContext.useValue();
     const isZh = language === 'zh';
     const [activeTab, setActiveTab] = useState<CouponCenterTab>('ACTIVITIES');
+    const [page, setPage] = useState(0);
+    const pageSize = 20;
+    const ownedPage = useQuery({
+        queryKey: [
+            ...(pagination?.queryKey ?? ['coupon-center']),
+            'owned-page',
+            activeTab === 'UNUSED' ? page : 0,
+        ],
+        queryFn: ({ signal }) =>
+            pagination
+                ? pagination.api.myCouponsPage(
+                      {
+                          skip: (activeTab === 'UNUSED' ? page : 0) * pageSize,
+                          take: pageSize,
+                          statuses: ['AVAILABLE', 'RETURNED', 'LOCKED'],
+                      },
+                      signal,
+                  )
+                : Promise.resolve({ items: [], totalItems: 0 }),
+        enabled: Boolean(pagination),
+        staleTime: 0,
+    });
+    const historyPage = useQuery({
+        queryKey: [
+            ...(pagination?.queryKey ?? ['coupon-center']),
+            'usage-page',
+            activeTab === 'HISTORY' ? page : 0,
+        ],
+        queryFn: ({ signal }) =>
+            pagination
+                ? pagination.api.myCouponUsageRecordsPage(
+                      { skip: (activeTab === 'HISTORY' ? page : 0) * pageSize, take: pageSize },
+                      signal,
+                  )
+                : Promise.resolve({ items: [], totalItems: 0 }),
+        enabled: Boolean(pagination),
+        staleTime: 0,
+    });
+    const usageRecords = pagination ? (historyPage.data?.items ?? []) : initialUsageRecords;
+    const myCouponsLoading =
+        pagination && activeTab === 'UNUSED' ? ownedPage.isFetching : initialMyCouponsLoading;
+    const usageRecordsLoading = pagination ? historyPage.isFetching : initialUsageRecordsLoading;
+    const myCouponsError =
+        pagination && activeTab === 'UNUSED'
+            ? ownedPage.error instanceof Error
+                ? storefrontErrorMessage(ownedPage.error, language)
+                : ''
+            : initialMyCouponsError;
+    const usageRecordsError = pagination
+        ? historyPage.error instanceof Error
+            ? storefrontErrorMessage(historyPage.error, language)
+            : ''
+        : initialUsageRecordsError;
+    const totalItems =
+        activeTab === 'UNUSED' ? (ownedPage.data?.totalItems ?? 0) : (historyPage.data?.totalItems ?? 0);
     const [claimingId, setClaimingId] = useState<string | null>(null);
     const [error, setError] = useState('');
     const ownershipLoadState = myCouponsLoading
@@ -101,7 +162,10 @@ export function CouponCenterPage() {
         couponCampaignsForTab(customerAwareCampaigns, activeTab).map(campaign => campaign.id),
     );
     const visibleCampaignCards = campaignCards.filter(card => campaignIds.has(card.campaignId));
-    const visibleCustomerCoupons = customerCouponsForTab(myCoupons, activeTab);
+    const visibleCustomerCoupons = customerCouponsForTab(
+        pagination ? (ownedPage.data?.items ?? []) : myCoupons,
+        activeTab,
+    );
 
     const claim = async (campaignId: string) => {
         if (claimingId) return;
@@ -123,13 +187,25 @@ export function CouponCenterPage() {
                         type="button"
                         className={activeTab === tab ? 'is-active' : ''}
                         aria-current={activeTab === tab ? 'page' : undefined}
-                        onClick={() => setActiveTab(tab)}
+                        onClick={() => {
+                            setActiveTab(tab);
+                            setPage(0);
+                        }}
                     >
                         <span>{tabLabel(tab, language)}</span>
                         <small>
                             {couponTabCountDisplay(
                                 tab,
-                                couponCenterTabCount(tab, customerAwareCampaigns, myCoupons, usageRecords),
+                                pagination && tab === 'UNUSED'
+                                    ? (ownedPage.data?.totalItems ?? 0)
+                                    : pagination && tab === 'HISTORY'
+                                      ? (historyPage.data?.totalItems ?? 0)
+                                      : couponCenterTabCount(
+                                            tab,
+                                            customerAwareCampaigns,
+                                            myCoupons,
+                                            usageRecords,
+                                        ),
                                 campaignsLoading,
                                 campaignsError,
                                 myCouponsLoading,
@@ -257,7 +333,7 @@ export function CouponCenterPage() {
                     error={myCouponsError}
                     hasData={visibleCustomerCoupons.length > 0}
                     language={language}
-                    onRetry={onRetryMyCoupons}
+                    onRetry={pagination ? () => void ownedPage.refetch() : onRetryMyCoupons}
                     empty={<CouponTabEmpty tab={activeTab} language={language} onShop={shopNow} />}
                 >
                     <section className="coupon-center-panel" aria-busy={loading}>
@@ -306,7 +382,7 @@ export function CouponCenterPage() {
                     error={usageRecordsError}
                     hasData={usageRecords.length > 0}
                     language={language}
-                    onRetry={onRetryUsageRecords}
+                    onRetry={pagination ? () => void historyPage.refetch() : onRetryUsageRecords}
                     empty={<CouponTabEmpty tab={activeTab} language={language} onShop={shopNow} />}
                 >
                     <section className="coupon-center-panel" aria-busy={loading}>
@@ -336,6 +412,32 @@ export function CouponCenterPage() {
                 </CouponQueryBoundary>
             )}
 
+            {pagination &&
+            (activeTab === 'UNUSED' || activeTab === 'HISTORY') &&
+            (totalItems > pageSize || page > 0) ? (
+                <nav className="coupon-center-pagination" aria-label={isZh ? '优惠券分页' : 'Coupon pages'}>
+                    <button
+                        type="button"
+                        disabled={page === 0 || myCouponsLoading || usageRecordsLoading}
+                        onClick={() => setPage(value => value - 1)}
+                    >
+                        {isZh ? '上一页' : 'Previous'}
+                    </button>
+                    <span aria-live="polite">
+                        {page + 1} / {Math.max(1, Math.ceil(totalItems / pageSize))} ·{' '}
+                        {isZh ? `共 ${totalItems} 条` : `${totalItems} total`}
+                    </span>
+                    <button
+                        type="button"
+                        disabled={
+                            (page + 1) * pageSize >= totalItems || myCouponsLoading || usageRecordsLoading
+                        }
+                        onClick={() => setPage(value => value + 1)}
+                    >
+                        {isZh ? '下一页' : 'Next'}
+                    </button>
+                </nav>
+            ) : null}
             {error ? (
                 <small className="form-error coupon-center-error" role="alert">
                     {error}

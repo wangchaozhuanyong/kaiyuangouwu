@@ -11,6 +11,7 @@ export interface UsdtPaymentProofPayload {
     usdtAmount: string;
     receivingAddressFingerprint: string;
     expiresAt: number;
+    paidAt?: number;
 }
 
 let paymentProofSecret = 'development-usdt-payment-proof-secret';
@@ -46,6 +47,10 @@ export function verifyUsdtPaymentProof(proof: unknown): UsdtPaymentProofPayload 
             !/^[a-fA-F0-9]{64}$/u.test(payload.transactionId ?? '') ||
             !/^\d+\.\d{6}$/u.test(payload.usdtAmount ?? '') ||
             !/^[a-f0-9]{64}$/u.test(payload.receivingAddressFingerprint ?? '') ||
+            (payload.paidAt != null &&
+                (!Number.isSafeInteger(payload.paidAt) ||
+                    payload.paidAt <= 0 ||
+                    payload.paidAt > Date.now())) ||
             !Number.isFinite(payload.expiresAt) ||
             Number(payload.expiresAt) <= Date.now()
         ) {
