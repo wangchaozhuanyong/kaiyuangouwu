@@ -56,7 +56,7 @@
         "cron-time-generator": "^2.0.3",
         "croner": "^10.0.1",
         "cronstrue": "^3.14.0",
-        "csv-parse": "^6.2.1",
+        "csv-parse": "^7.0.2",
         "dataloader": "^2.2.3",
         "express": "^5.1.0",
         "file-type": "^21.3.1",

@@ -269,6 +269,10 @@ export function StoreSettingsModule() {
                 <StoreEditor
                     key={storeEditor.id}
                     profile={storeEditor}
+                    sellers={query.data?.sellers.items ?? []}
+                    sellerOptionsReady={Boolean(
+                        query.data && query.data.sellers.items.length >= query.data.sellers.totalItems,
+                    )}
                     sharedChannel={
                         query.data?.storeProfiles.find(
                             profile => profile.channel.code === '__default_channel__',

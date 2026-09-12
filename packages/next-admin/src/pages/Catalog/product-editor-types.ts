@@ -83,6 +83,7 @@ export interface CatalogChannel {
 
 export interface ProductDetailRecord {
     id: string;
+    createdAt: string;
     enabled: boolean;
     name: string;
     slug: string;

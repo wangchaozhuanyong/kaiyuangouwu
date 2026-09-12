@@ -294,6 +294,9 @@ export interface StorePromotionNameView {
 }
 
 export interface StoreCouponCampaignActionResult {
+    skippedCount?: number;
+    failedCount?: number;
+    outcomes?: Array<{ couponId: ID; status: string; reason: string }>;
     campaignId: ID;
     affectedCount: number;
 }
@@ -357,6 +360,7 @@ export interface StoreActivationReadiness {
 export interface UpdateStoreProfileInput {
     id: ID;
     expectedUpdatedAt: Date;
+    sellerId?: ID | null;
     storefrontNameZh?: string | null;
     storefrontNameEn?: string | null;
     storefrontNameEnLocked?: boolean | null;

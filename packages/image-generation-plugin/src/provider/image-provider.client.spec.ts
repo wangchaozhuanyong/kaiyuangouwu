@@ -12,6 +12,12 @@ import {
     RetryableImageProviderError,
 } from './image-provider.client';
 
+// Protocol unit tests substitute only the socket transport; integration tests use real sockets.
+vi.mock('./image-provider-io', async importOriginal => ({
+    ...(await importOriginal<typeof import('./image-provider-io')>()),
+    pinnedProviderRequest: (target: { url: URL }, init: RequestInit) => fetch(target.url, init),
+}));
+
 afterEach(() => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
@@ -19,6 +25,9 @@ afterEach(() => {
 
 describe('ImageProviderClient', () => {
     const safeUrls = {
+        resolveForRequest: vi.fn((value: string) =>
+            Promise.resolve({ url: new URL(value), address: '93.184.216.34', family: 4 }),
+        ),
         validate: vi.fn((value: string) => Promise.resolve(new URL(value))),
         endpoint: vi.fn(
             (base: URL, pathname: string) => new URL(`${base.toString().replace(/\/$/u, '')}/${pathname}`),

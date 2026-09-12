@@ -480,6 +480,16 @@ function createHarness({
                     }),
                     find: vi.fn(() => (campaignConfig ? [campaignConfig] : [])),
                     findOne: vi.fn(() => campaignConfig),
+                    findOneOrFail: vi.fn(() => campaignConfig),
+                    createQueryBuilder: () => {
+                        const builder = {
+                            update: vi.fn().mockReturnThis(),
+                            set: vi.fn().mockReturnThis(),
+                            where: vi.fn().mockReturnThis(),
+                            execute: vi.fn().mockResolvedValue({ affected: 1 }),
+                        };
+                        return builder;
+                    },
                 };
             }
             return {

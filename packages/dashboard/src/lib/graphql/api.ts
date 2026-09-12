@@ -27,6 +27,7 @@ const awesomeClient = new AwesomeGraphQLClient({
         const channelToken = localStorage.getItem(LS_KEY_SELECTED_CHANNEL_TOKEN);
         const sessionToken = localStorage.getItem(LS_KEY_SESSION_TOKEN);
         const headers = new Headers(options.headers);
+        headers.set('Apollo-Require-Preflight', 'true');
         const displayLanguage = headers.get(DISPLAY_LANGUAGE_HEADER);
         const requestKind = headers.get(REQUEST_KIND_HEADER) === 'mutation' ? 'mutation' : 'query';
 

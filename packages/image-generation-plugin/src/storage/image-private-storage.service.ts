@@ -1,17 +1,22 @@
 import { Inject, Injectable, OnModuleDestroy } from '@nestjs/common';
 import { ID } from '@vendure/common/lib/shared-types';
-import { RequestContext, TransactionalConnection, UserInputError } from '@vendure/core';
+import { processCustomerImage, RequestContext, TransactionalConnection, UserInputError } from '@vendure/core';
 import { fileTypeFromBuffer } from 'file-type';
 import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { lstat, mkdir, opendir, readFile, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import sharp from 'sharp';
-import { In, LessThan } from 'typeorm';
+import { In, IsNull, LessThan, Not } from 'typeorm';
 
 import { IMAGE_GENERATION_OPTIONS, MAX_REFERENCE_BYTES, MAX_REFERENCE_PIXELS } from '../constants';
 import { ImagePrivateAsset } from '../entities/image-private-asset.entity';
-import { ImageGenerationPluginOptions, ImageResolution, ProviderGenerationResult } from '../types';
+import {
+    ImageGenerationPluginOptions,
+    ImageResolution,
+    PrivateImageBlobStore,
+    ProviderGenerationResult,
+} from '../types';
 
 const DEVELOPMENT_SECRET = 'vendure-development-image-download-signing-secret-do-not-use';
 const OUTPUT_RETENTION_MS = 90 * 24 * 60 * 60 * 1_000;
@@ -28,6 +33,8 @@ export interface UploadedImageFile {
 @Injectable()
 export class ImagePrivateStorageService implements OnModuleDestroy {
     private readonly root: string;
+    private readonly objects?: PrivateImageBlobStore;
+    private objectScanCursor?: string;
     private readonly signingSecret: string;
     private orphanScan?: AsyncGenerator<string | undefined>;
     private purgeInFlight?: Promise<number>;
@@ -36,6 +43,7 @@ export class ImagePrivateStorageService implements OnModuleDestroy {
         private readonly connection: TransactionalConnection,
         @Inject(IMAGE_GENERATION_OPTIONS) options: ImageGenerationPluginOptions,
     ) {
+        this.objects = options.blobStore;
         const production = options.production ?? process.env.NODE_ENV === 'production';
         const configuredRoot = options.storageRoot ?? process.env.IMAGE_GENERATION_STORAGE_ROOT;
         if (production && (!configuredRoot || !path.isAbsolute(configuredRoot))) {
@@ -64,12 +72,12 @@ export class ImagePrivateStorageService implements OnModuleDestroy {
         maxBytes = MAX_REFERENCE_BYTES,
     ): Promise<ImagePrivateAsset> {
         const uploaded = await readUpload(upload, Math.min(MAX_REFERENCE_BYTES, maxBytes));
-        const bytes = await normalizeReferenceImage(uploaded);
+        const bytes = await processCustomerImage(uploaded, 'reference');
         if (bytes.length > maxBytes) throw new UserInputError('参考图总容量不足，请删除旧参考图后重试');
         return this.store(ctx, customerId, 'REFERENCE', bytes, upload.filename, null, REFERENCE_RETENTION_MS);
     }
 
-    storeGenerated(
+    async storeGenerated(
         ctx: RequestContext,
         customerId: ID,
         result: ProviderGenerationResult,
@@ -81,7 +89,7 @@ export class ImagePrivateStorageService implements OnModuleDestroy {
             ctx,
             customerId,
             'OUTPUT',
-            result.bytes,
+            await processCustomerImage(result.bytes, 'output'),
             outputName,
             result.metadata ?? null,
             OUTPUT_RETENTION_MS,
@@ -92,14 +100,29 @@ export class ImagePrivateStorageService implements OnModuleDestroy {
     async read(asset: ImagePrivateAsset): Promise<Buffer> {
         if (asset.deletedAt || asset.expiresAt.getTime() <= Date.now())
             throw new UserInputError('图片已删除或过期');
-        return readFile(this.absolutePath(asset.storageKey));
+        const bytes = this.isObjectKey(asset.storageKey)
+            ? await this.objectStore().get(asset.storageKey)
+            : await readFile(this.absolutePath(asset.storageKey));
+        if (
+            bytes.length !== asset.byteSize ||
+            createHash('sha256').update(bytes).digest('hex') !== asset.sha256
+        ) {
+            throw new UserInputError('图片完整性校验失败');
+        }
+        return bytes;
     }
 
     signedUrl(asset: ImagePrivateAsset, customerId: ID, download = false): string | null {
-        if (asset.deletedAt || asset.expiresAt.getTime() <= Date.now()) return null;
+        if (
+            asset.deletedAt ||
+            asset.expiresAt.getTime() <= Date.now() ||
+            String(asset.customerId) !== String(customerId)
+        )
+            return null;
         const payload = {
             assetId: String(asset.id),
             customerId: String(customerId),
+            channelId: String(asset.channelId),
             expiresAt: Math.floor(Date.now() / 1000) + LINK_TTL_SECONDS,
             download,
         };
@@ -109,7 +132,8 @@ export class ImagePrivateStorageService implements OnModuleDestroy {
 
     async authorize(
         token: string,
-    ): Promise<{ asset: ImagePrivateAsset; path: string; download: boolean } | undefined> {
+    ): Promise<{ asset: ImagePrivateAsset; path?: string; download: boolean } | undefined> {
+        if (token.length > 2048) return;
         const [encoded, suppliedSignature, extra] = token.split('.');
         if (!encoded || !suppliedSignature || extra) return;
         const expectedSignature = this.signature(encoded);
@@ -120,20 +144,30 @@ export class ImagePrivateStorageService implements OnModuleDestroy {
             const payload = JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8')) as {
                 assetId?: string;
                 customerId?: string;
+                channelId?: string;
                 expiresAt?: number;
                 download?: boolean;
             };
             if (
                 !payload.assetId ||
                 !payload.customerId ||
+                !payload.channelId ||
                 !Number.isInteger(payload.expiresAt) ||
                 (payload.expiresAt ?? 0) <= Date.now() / 1000
             )
                 return;
             const asset = await this.connection.rawConnection.getRepository(ImagePrivateAsset).findOne({
-                where: { id: payload.assetId as ID, customerId: payload.customerId as ID },
+                where: {
+                    id: payload.assetId as ID,
+                    customerId: payload.customerId as ID,
+                    channelId: payload.channelId as ID,
+                },
             });
             if (!asset || asset.deletedAt || asset.expiresAt.getTime() <= Date.now()) return;
+            if (this.isObjectKey(asset.storageKey)) {
+                if (!(await this.objectStore().has(asset.storageKey))) return;
+                return { asset, download: payload.download === true };
+            }
             const filePath = this.absolutePath(asset.storageKey);
             if (!existsSync(filePath)) return;
             return { asset, path: filePath, download: payload.download === true };
@@ -150,9 +184,15 @@ export class ImagePrivateStorageService implements OnModuleDestroy {
         if (!asset || asset.deletedAt) return false;
         asset.deletedAt = new Date();
         asset.originalName = 'deleted';
-        asset.providerMetadata = null;
+        asset.providerMetadata = { storageDeletionPending: true };
         await repository.save(asset, { reload: false });
-        await unlink(this.absolutePath(asset.storageKey)).catch(() => undefined);
+        try {
+            await this.removeFile(asset.storageKey);
+            asset.providerMetadata = null;
+            await repository.save(asset, { reload: false });
+        } catch {
+            /* Keep the tombstone and retry physical deletion during scheduled cleanup. */
+        }
         return true;
     }
 
@@ -201,6 +241,7 @@ export class ImagePrivateStorageService implements OnModuleDestroy {
     async onModuleDestroy(): Promise<void> {
         await this.purgeInFlight;
         await this.orphanScan?.return(undefined);
+        this.objects?.destroy?.();
     }
 
     private async purgeBatch(): Promise<number> {
@@ -211,22 +252,60 @@ export class ImagePrivateStorageService implements OnModuleDestroy {
             .andWhere('asset.deletedAt IS NULL')
             .take(200)
             .getMany();
+        let removed = 0;
         for (const asset of expired) {
-            await unlink(this.absolutePath(asset.storageKey)).catch(() => undefined);
-            await repository.remove(asset);
+            if (
+                await this.removeFile(asset.storageKey).then(
+                    () => true,
+                    () => false,
+                )
+            ) {
+                await repository.remove(asset);
+                removed++;
+            }
         }
-        const tombstoneLimit = Math.max(0, 200 - expired.length);
+        const pendingLimit = Math.min(50, Math.max(0, 200 - expired.length));
+        const pending = pendingLimit
+            ? await repository.find({
+                  where: { deletedAt: Not(IsNull()), providerMetadata: Not(IsNull()) },
+                  take: pendingLimit,
+              })
+            : [];
+        for (const asset of pending) {
+            if (!asset.providerMetadata?.storageDeletionPending) continue;
+            if (
+                await this.removeFile(asset.storageKey).then(
+                    () => true,
+                    () => false,
+                )
+            ) {
+                asset.providerMetadata = null;
+                await repository.save(asset, { reload: false });
+            }
+        }
+        const tombstoneLimit = Math.max(0, 200 - expired.length - pending.length);
         const staleTombstones = tombstoneLimit
             ? await repository.find({
                   where: { deletedAt: LessThan(new Date(Date.now() - 31 * 24 * 60 * 60_000)) },
                   take: tombstoneLimit,
               })
             : [];
-        if (staleTombstones.length) await repository.remove(staleTombstones);
+        for (const asset of staleTombstones) {
+            if (
+                await this.removeFile(asset.storageKey).then(
+                    () => true,
+                    () => false,
+                )
+            ) {
+                await repository.remove(asset);
+                removed++;
+            }
+        }
         return (
-            expired.length +
-            staleTombstones.length +
-            (await this.purgeOrphans(Math.max(0, 200 - expired.length - staleTombstones.length)))
+            removed +
+            (await this.purgeOrphans(
+                Math.max(0, 200 - expired.length - pending.length - staleTombstones.length),
+            ))
         );
     }
 
@@ -280,10 +359,13 @@ export class ImagePrivateStorageService implements OnModuleDestroy {
         }
         const now = new Date();
         const dateSegment = now.toISOString().slice(0, 7);
-        const storageKey = `${kind.toLowerCase()}/${dateSegment}/${randomUUID()}.${detected.ext}`;
-        const outputPath = this.absolutePath(storageKey);
-        await mkdir(path.dirname(outputPath), { recursive: true, mode: 0o700 });
-        await writeFile(outputPath, bytes, { mode: 0o600, flag: 'wx' });
+        const storageKey = `${this.objects ? 'private/v1/' : ''}${kind.toLowerCase()}/${dateSegment}/${randomUUID()}.${detected.ext}`;
+        if (this.objects) await this.objects.put(storageKey, bytes);
+        else {
+            const outputPath = this.absolutePath(storageKey);
+            await mkdir(path.dirname(outputPath), { recursive: true, mode: 0o700 });
+            await writeFile(outputPath, bytes, { mode: 0o600, flag: 'wx' });
+        }
         try {
             return await this.connection.getRepository(ctx, ImagePrivateAsset).save(
                 new ImagePrivateAsset({
@@ -303,9 +385,26 @@ export class ImagePrivateStorageService implements OnModuleDestroy {
                 }),
             );
         } catch (error) {
-            await unlink(outputPath).catch(() => undefined);
+            await this.removeFile(storageKey).catch(() => undefined);
             throw error;
         }
+    }
+
+    private isObjectKey(key: string): boolean {
+        return key.startsWith('private/v1/');
+    }
+
+    private objectStore(): PrivateImageBlobStore {
+        if (!this.objects) throw new Error('Private image object storage is not configured');
+        return this.objects;
+    }
+
+    private async removeFile(key: string): Promise<void> {
+        if (this.isObjectKey(key)) await this.objectStore().delete(key);
+        else
+            await unlink(this.absolutePath(key)).catch(error => {
+                if (error.code !== 'ENOENT') throw error;
+            });
     }
 
     private absolutePath(storageKey: string): string {
@@ -319,7 +418,29 @@ export class ImagePrivateStorageService implements OnModuleDestroy {
     }
 
     private async purgeOrphans(limit: number): Promise<number> {
-        if (limit <= 0 || !existsSync(this.root)) return 0;
+        if (limit <= 0) return 0;
+        if (this.objects) {
+            const page = await this.objects.list(limit, this.objectScanCursor);
+            this.objectScanCursor = page.cursor;
+            const objectCandidates = page.items.filter(
+                item => item.modifiedAt.getTime() < Date.now() - 60 * 60_000,
+            );
+            if (!objectCandidates.length) return 0;
+            const objectExisting = await this.connection.rawConnection.getRepository(ImagePrivateAsset).find({
+                where: { storageKey: In(objectCandidates.map(item => item.key)) },
+                select: { storageKey: true },
+            });
+            const objectKnown = new Set(objectExisting.map(asset => asset.storageKey));
+            let objectRemoved = 0;
+            for (const item of objectCandidates) {
+                if (!objectKnown.has(item.key)) {
+                    await this.objects.delete(item.key);
+                    objectRemoved++;
+                }
+            }
+            return objectRemoved;
+        }
+        if (!existsSync(this.root)) return 0;
         this.orphanScan ??= storageFiles(this.root);
         const cutoff = Date.now() - 60 * 60_000;
         const candidates: Array<{ path: string; storageKey: string }> = [];
@@ -358,21 +479,6 @@ export class ImagePrivateStorageService implements OnModuleDestroy {
                 removed += 1;
         }
         return removed;
-    }
-}
-
-async function normalizeReferenceImage(bytes: Buffer): Promise<Buffer> {
-    const detected = await fileTypeFromBuffer(bytes);
-    if (!detected || !['image/jpeg', 'image/png', 'image/webp'].includes(detected.mime)) {
-        throw new UserInputError('仅支持 JPEG、PNG 或 WebP 图片');
-    }
-    const pipeline = sharp(bytes, { failOn: 'error', limitInputPixels: MAX_REFERENCE_PIXELS }).rotate();
-    try {
-        if (detected.mime === 'image/jpeg') return await pipeline.jpeg({ quality: 95 }).toBuffer();
-        if (detected.mime === 'image/webp') return await pipeline.webp({ quality: 95 }).toBuffer();
-        return await pipeline.png({ compressionLevel: 9 }).toBuffer();
-    } catch {
-        throw new UserInputError('图片文件损坏或像素过大');
     }
 }
 

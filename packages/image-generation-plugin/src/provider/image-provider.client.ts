@@ -35,13 +35,14 @@ export {
 } from './image-provider-errors';
 @Injectable()
 export class ImageProviderClient {
-    private readonly transport = new ImageProviderTransport();
+    private readonly transport: ImageProviderTransport;
     private readonly resultReader: ImageProviderResultReader;
     private readonly protocols: ImageProviderProtocols;
     constructor(
         private readonly cipher: ImageProviderCipherService,
         private readonly safeUrls: SafeProviderUrlService,
     ) {
+        this.transport = new ImageProviderTransport(safeUrls);
         this.resultReader = new ImageProviderResultReader(safeUrls);
         this.protocols = new ImageProviderProtocols(safeUrls, this.transport, this.resultReader);
     }

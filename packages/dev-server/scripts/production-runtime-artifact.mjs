@@ -55,7 +55,10 @@ function resolveRuntimePackageAssets() {
         if (existsSync(packagesDir)) {
             const entries = readdirSync(packagesDir, { withFileTypes: true });
             for (const entry of entries) {
-                if (entry.isDirectory() && (entry.name.endsWith('-plugin') || entry.name.endsWith('-server'))) {
+                if (
+                    entry.isDirectory() &&
+                    (entry.name.endsWith('-plugin') || entry.name.endsWith('-server'))
+                ) {
                     if (!(entry.name in assets)) {
                         const distPath = path.join(packagesDir, entry.name, 'dist');
                         const libPath = path.join(packagesDir, entry.name, 'lib');
@@ -109,7 +112,14 @@ const DAMATONG_RUNTIME_FILES = Object.freeze(
     damatongAssets.map(entry => path.relative(repositoryRoot, entry.file).split(path.sep).join('/')),
 );
 
+export const CUSTOMER_IMAGE_WORKER_FILES = Object.freeze([
+    'deploy/image-worker/server.cjs',
+    'deploy/image-worker/decoder.cjs',
+    'deploy/image-worker/clamd.cjs',
+]);
+
 export const REQUIRED_RUNTIME_FILES = Object.freeze([
+    ...CUSTOMER_IMAGE_WORKER_FILES,
     'packages/catalog-management-plugin/dist/index.js',
     'packages/dev-server/dist/index.js',
     'packages/dev-server/dist/index-worker.js',
@@ -123,6 +133,7 @@ export const REQUIRED_RUNTIME_FILES = Object.freeze([
     'packages/two-factor-dashboard-plugin/dist/index.js',
     'packages/telemetry-plugin/dist/index.js',
     'packages/storefront/dist/index.html',
+    'packages/storefront/dist-two-factor/index.html',
     'packages/dev-server/scripts/catalog-cigarette-media.mjs',
     'packages/dev-server/scripts/sync-storefront-media.mjs',
     'packages/dev-server/scripts/sync-auth-visuals.mjs',
@@ -259,6 +270,10 @@ async function pruneInstallerWorkspace(stagingRoot) {
 }
 
 async function copyRuntimeBuildOutputs(stagingRoot) {
+    for (const relative of CUSTOMER_IMAGE_WORKER_FILES) {
+        await mkdir(path.dirname(path.join(stagingRoot, relative)), { recursive: true });
+        await cp(path.join(repositoryRoot, relative), path.join(stagingRoot, relative));
+    }
     for (const [packageDirectory, assets] of Object.entries(RUNTIME_PACKAGE_ASSETS)) {
         for (const asset of assets) {
             const source = path.join(repositoryRoot, 'packages', packageDirectory, asset);
@@ -287,6 +302,11 @@ async function copyRuntimeBuildOutputs(stagingRoot) {
     }
     await mkdir(path.join(stagingRoot, 'packages/storefront'), { recursive: true });
     await cp(storefrontSource, path.join(stagingRoot, 'packages/storefront/dist'), { recursive: true });
+    await cp(
+        path.join(repositoryRoot, 'packages/storefront/dist-two-factor'),
+        path.join(stagingRoot, 'packages/storefront/dist-two-factor'),
+        { recursive: true },
+    );
 }
 
 export async function copyStorefrontMediaReleaseInputs(stagingRoot) {

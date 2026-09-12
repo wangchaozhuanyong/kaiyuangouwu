@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
-import type { TwoFactorAccount } from './types';
-import type { ActiveCustomer } from '../../types';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ActiveCustomer } from '../../types';
+import type { TwoFactorAccount } from './types';
 
 import { TwoFactorPage } from './two-factor-page';
 
@@ -12,13 +12,21 @@ const storageState = vi.hoisted(() => ({
     accounts: [] as TwoFactorAccount[],
 }));
 
-vi.mock('./browser-storage', () => ({
-    clearBrowserAccounts: vi.fn(),
-    loadBrowserAccounts: vi.fn(() => ({
+vi.mock('./use-browser-vault', () => ({
+    useBrowserVault: () => ({
         accounts: storageState.accounts,
         available: storageState.available,
-    })),
-    saveBrowserAccounts: vi.fn(() => storageState.available),
+        exists: false,
+        legacy: false,
+        unlocked: false,
+        busy: false,
+        error: false,
+        canWrite: true,
+        save: vi.fn().mockResolvedValue(true),
+        lock: vi.fn(),
+        open: vi.fn(),
+        backup: vi.fn(),
+    }),
 }));
 
 vi.mock('./totp', async () => {
@@ -59,7 +67,7 @@ describe('TwoFactorPage', () => {
         vi.clearAllMocks();
     });
 
-    it('disables saving a generated code when local storage is unavailable', async () => {
+    it('allows a temporary account when persistent storage is unavailable', async () => {
         await act(async () => {
             root.render(
                 <TwoFactorPage
@@ -94,7 +102,7 @@ describe('TwoFactorPage', () => {
             button.textContent?.includes('保存到列表'),
         );
         expect(saveButton).toBeDefined();
-        expect(saveButton?.disabled).toBe(true);
+        expect(saveButton?.disabled).toBe(false);
     });
 
     it('collapses both explanations by default and expands them on request', async () => {
@@ -137,7 +145,7 @@ describe('TwoFactorPage', () => {
             '密钥不会上传到服务器',
         );
         expect(container.querySelector('#storefront-two-factor-privacy-details')?.textContent).toContain(
-            '关闭浏览器或退出登录后仍会保留',
+            '默认临时使用',
         );
     });
 
@@ -189,6 +197,7 @@ describe('TwoFactorPage', () => {
     });
 
     it('keeps batch import and add account buttons aligned on the right without wrapping', async () => {
+        storageState.available = true;
         await act(async () => {
             root.render(
                 <TwoFactorPage
@@ -202,7 +211,7 @@ describe('TwoFactorPage', () => {
             await Promise.resolve();
         });
 
-        const headerTitle = [...container.querySelectorAll('h2')].find(h2 =>
+        const headerTitle = [...container.querySelectorAll<HTMLHeadingElement>('h2')].find(h2 =>
             h2.textContent?.includes('2FA 账号列表'),
         );
         expect(headerTitle).toBeDefined();

@@ -82,6 +82,23 @@ const vendureFetch: typeof fetch = async (input, init) => {
     return response;
 };
 
+/** One authenticated event stream; reconnects reuse the existing session and selected Channel. */
+export const openAdminOrderEvents = (channelToken: string, signal: AbortSignal, lastEventId?: string) => {
+    const url = new URL(ADMIN_API_URL, window.location.origin);
+    url.pathname = '/admin-order-events';
+    url.search = '';
+    const token = getAuthToken();
+    return vendureFetch(url.toString(), {
+        signal,
+        headers: {
+            ...channelRequestContext(channelToken).headers,
+            accept: 'text/event-stream',
+            ...(token ? { authorization: `Bearer ${token}` } : {}),
+            ...(lastEventId ? { 'Last-Event-ID': lastEventId } : {}),
+        },
+    });
+};
+
 interface GraphqlUploadResponse<T> {
     data?: T;
     errors?: Array<{ message: string }>;
@@ -122,6 +139,7 @@ export const uploadAdminFiles = async <T>(
             const response = await vendureFetch(getLocalizedAdminApiUrl(), {
                 method: 'POST',
                 headers: {
+                    'Apollo-Require-Preflight': 'true',
                     ...channelContext.headers,
                     ...(token ? { authorization: `Bearer ${token}` } : {}),
                 },
@@ -169,22 +187,6 @@ export const client = new ApolloClient({
     cache: new InMemoryCache({
         possibleTypes: CUSTOM_FIELD_POSSIBLE_TYPES,
         typePolicies: {
-            Query: {
-                fields: {
-                    products: {
-                        keyArgs: ['options', ['filter', 'sort']],
-                    },
-                    orders: {
-                        keyArgs: ['options', ['filter', 'sort']],
-                    },
-                    assets: {
-                        keyArgs: ['options', ['filter', 'sort']],
-                    },
-                    collections: {
-                        keyArgs: ['options', ['filter', 'sort']],
-                    },
-                },
-            },
             Product: {
                 keyFields: ['id'],
             },

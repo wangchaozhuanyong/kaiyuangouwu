@@ -1,5 +1,5 @@
 import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
-import { DynamicModule } from '@nestjs/common';
+import { DynamicModule, Type } from '@nestjs/common';
 import { GraphQLModule, GraphQLTypesLoader } from '@nestjs/graphql';
 import { GraphQLSchema, printSchema, ValidationContext } from 'graphql';
 
@@ -23,9 +23,8 @@ export interface GraphQLApiOptions {
     typePaths: string[];
     apiPath: string;
     debug: boolean;
-    playground: boolean | any;
-    // eslint-disable-next-line @typescript-eslint/ban-types
-    resolverModule: Function;
+    playground: ApolloDriverConfig['playground'];
+    resolverModule: Type<unknown>;
     validationRules: Array<(context: ValidationContext) => any>;
 }
 
@@ -108,7 +107,8 @@ async function createGraphQLOptions(
         // manually configure the graphql-upload package. See https://github.com/vendurehq/vendure/issues/396
         uploads: false,
         playground: options.playground,
-        csrfPrevention: false,
+        // Multipart clients must explicitly require a preflight before cookie-authenticated operations.
+        csrfPrevention: true,
         debug: options.debug || false,
         context: (req: any) => req,
         // This is handled by the Express cors plugin

@@ -284,3 +284,14 @@ void test('runtime verification rejects files added after the integrity manifest
         await rm(fixtureRoot, { recursive: true, force: true });
     }
 });
+
+void test('runtime artifact requires isolated decoder and dedicated vault output', () => {
+    for (const relative of [
+        'deploy/image-worker/server.cjs',
+        'deploy/image-worker/decoder.cjs',
+        'deploy/image-worker/clamd.cjs',
+        'packages/storefront/dist-two-factor/index.html',
+    ]) {
+        assert.ok(REQUIRED_RUNTIME_FILES.includes(relative), relative);
+    }
+});

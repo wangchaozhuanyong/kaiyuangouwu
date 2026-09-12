@@ -1,7 +1,8 @@
 import 'reflect-metadata';
 
 import { ContentTranslationService } from '@vendure/content-translation-plugin';
-import { Channel, EntityNotFoundError } from '@vendure/core';
+import { Channel, EntityNotFoundError, Seller } from '@vendure/core';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 
 import { StoreProfile } from './entities/store-profile.entity';
@@ -83,6 +84,14 @@ function createService(
     const connection = {
         getRepository: vi.fn((_ctx, entity) => {
             if (entity === StoreProfile) return profileRepository;
+            if (entity === Seller) {
+                const sellers = domainRepository.sellers as Array<{ id: string; name: string }> | undefined;
+                return {
+                    findOne: vi.fn(({ where }) =>
+                        Promise.resolve(sellers?.find(seller => seller.id === where.id) ?? null),
+                    ),
+                };
+            }
             if (entity === Channel) {
                 return { createQueryBuilder: vi.fn().mockReturnValue(channelLockBuilder) };
             }
@@ -127,6 +136,113 @@ function createService(
 }
 
 describe('StoreProfileService', () => {
+    it('rebinds only the selected store while keeping the legal identity independently editable', async () => {
+        const current = profile({ legalEntityName: '注册公司名称' });
+        const repository = {
+            findOne: vi.fn().mockResolvedValue(current),
+            save: vi.fn(value => Promise.resolve(value)),
+        };
+        const seller = { id: 'seller-2', name: '新商家' };
+        const { service, channelService } = createService(repository, {
+            sellers: [seller],
+            find: vi.fn().mockResolvedValue([]),
+        });
+        const result = await service.update({} as any, {
+            id: current.id,
+            expectedUpdatedAt: current.updatedAt,
+            sellerId: seller.id,
+        });
+        expect(channelService.update).toHaveBeenCalledTimes(1);
+        expect(channelService.update).toHaveBeenCalledWith(expect.anything(), {
+            id: current.channelId,
+            sellerId: seller.id,
+            customFields: channel().customFields,
+        });
+        expect(result.channel).toMatchObject({ id: current.channelId, sellerId: seller.id, seller });
+        expect(result.legalEntityName).toBe('注册公司名称');
+        expect(repository.save).toHaveBeenCalledOnce();
+    });
+
+    it.each([null, '', 'missing-seller'])(
+        'rejects invalid seller %s before writing profile or channel',
+        async sellerId => {
+            const current = profile();
+            const repository = { findOne: vi.fn().mockResolvedValue(current), save: vi.fn() };
+            const { service, channelService } = createService(repository, { sellers: [] });
+            await expect(
+                service.update({} as any, { id: current.id, expectedUpdatedAt: current.updatedAt, sellerId }),
+            ).rejects.toThrow(/商家主体/);
+            expect(channelService.update).not.toHaveBeenCalled();
+            expect(repository.save).not.toHaveBeenCalled();
+        },
+    );
+
+    it('advances the profile version on a seller-only save and rejects a second write from the old page', async () => {
+        const current = profile({ isPublished: false });
+        const originalVersion = current.updatedAt;
+        const repository = {
+            findOne: vi.fn().mockResolvedValue(current),
+            save: vi.fn(value => Promise.resolve(value)),
+        };
+        const { service, channelService } = createService(repository, {
+            sellers: [
+                { id: 'seller-2', name: '新商家' },
+                { id: 'seller-3', name: '另一商家' },
+            ],
+            find: vi.fn().mockResolvedValue([]),
+        });
+        const result = await service.update({} as any, {
+            id: current.id,
+            expectedUpdatedAt: originalVersion,
+            sellerId: 'seller-2',
+        });
+        expect(result.updatedAt.getTime()).toBeGreaterThan(originalVersion.getTime());
+        await expect(
+            service.update({} as any, {
+                id: current.id,
+                expectedUpdatedAt: originalVersion,
+                sellerId: 'seller-3',
+            }),
+        ).rejects.toThrow('CONCURRENT_MODIFICATION');
+        expect(channelService.update).toHaveBeenCalledOnce();
+        expect(repository.save).toHaveBeenCalledOnce();
+    });
+
+    it('does not overwrite another administrator’s rebind with a stale profile version', async () => {
+        const current = profile();
+        const repository = { findOne: vi.fn().mockResolvedValue(current), save: vi.fn() };
+        const { service, channelService } = createService(repository, {
+            sellers: [{ id: 'seller-2', name: '新商家' }],
+        });
+        await expect(
+            service.update({} as any, {
+                id: current.id,
+                expectedUpdatedAt: new Date('2026-01-01'),
+                sellerId: 'seller-2',
+            }),
+        ).rejects.toThrow('CONCURRENT_MODIFICATION');
+        expect(channelService.update).not.toHaveBeenCalled();
+        expect(repository.save).not.toHaveBeenCalled();
+    });
+
+    it('editing legal text alone preserves the existing seller binding', async () => {
+        const current = profile();
+        const repository = {
+            findOne: vi.fn().mockResolvedValue(current),
+            save: vi.fn(value => Promise.resolve(value)),
+        };
+        const { service, channelService } = createService(repository, {
+            find: vi.fn().mockResolvedValue([]),
+        });
+        const result = await service.update({} as any, {
+            id: current.id,
+            expectedUpdatedAt: current.updatedAt,
+            legalEntityName: '新的法律文案',
+        });
+        expect(result.channel.sellerId).toBe('platform-seller');
+        expect(result.legalEntityName).toBe('新的法律文案');
+        expect(channelService.update).not.toHaveBeenCalled();
+    });
     it.each(['admin', 'merchant'] as const)(
         'preserves reviewed English through %s publish, repeat and rollback without a provider',
         async mode => {
@@ -551,7 +667,9 @@ describe('StoreProfileService', () => {
     });
 
     it('accepts the actual Damatong publisher names through the API service', async () => {
-        const configPath = '../../dev-server/scripts/damatong-storefront-config.mjs';
+        const configPath = fileURLToPath(
+            new URL('../../dev-server/scripts/damatong-storefront-config.mjs', import.meta.url),
+        );
         const { damatongStorefront } = await import(configPath);
         const current = profile();
         const profileRepository = {

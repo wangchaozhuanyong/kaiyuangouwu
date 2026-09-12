@@ -17,8 +17,8 @@ const AiImageStudioPage = lazyRouteComponent(
     'AiImageStudioPage',
 );
 const TwoFactorPage = lazyRouteComponent(
-    () => import('../client-plugins/two-factor/two-factor-page'),
-    'TwoFactorPage',
+    () => import('../client-plugins/two-factor/isolated-entry'),
+    'CustomerTwoFactorEntry',
 );
 
 export function ServicesRoutePage() {

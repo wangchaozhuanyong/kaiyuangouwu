@@ -2312,3 +2312,39 @@
         display: none;
     }
 }
+
+/* Account-only entry pages have no public marketing artwork. */
+@media (max-width: 1023px) {
+    .auth-page:not(.auth-page-managed) .auth-hero {
+        height: 188px;
+        min-height: 188px;
+        background: var(--auth-visual-background);
+    }
+
+    .auth-page:not(.auth-page-managed) .auth-hero::after {
+        display: none;
+    }
+
+    .auth-page:not(.auth-page-managed) .auth-hero-message {
+        padding: 62px 20px 20px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+        text-align: center;
+    }
+
+    .auth-page:not(.auth-page-managed) .auth-hero-kicker {
+        justify-content: center;
+    }
+
+    .auth-page:not(.auth-page-managed) .auth-brand-lockup strong {
+        color: var(--auth-visual-foreground);
+        text-shadow: none;
+    }
+
+    .auth-page:not(.auth-page-managed) .auth-hero-copy {
+        margin: 0;
+        justify-items: center;
+    }
+}

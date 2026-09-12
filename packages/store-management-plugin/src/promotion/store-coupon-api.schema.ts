@@ -1,6 +1,21 @@
 import { gql } from 'graphql-tag';
 
 export const storeCustomerCouponSchema = gql`
+    input StoreCouponPageOptions {
+        skip: Int
+        take: Int
+        statuses: [String!]
+        usableOnly: Boolean
+    }
+    type StoreCustomerCouponList {
+        items: [StoreCustomerCoupon!]!
+        totalItems: Int!
+    }
+    type StoreCouponUsageRecordList {
+        items: [StoreCouponUsageRecord!]!
+        totalItems: Int!
+    }
+
     type StoreCustomerCoupon {
         id: ID!
         campaignId: ID!

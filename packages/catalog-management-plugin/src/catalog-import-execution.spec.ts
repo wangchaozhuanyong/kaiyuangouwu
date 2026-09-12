@@ -81,7 +81,11 @@ describe('catalog import execution progress', () => {
             },
         );
         const progress = vi.fn();
-        await service.executeJob({} as RequestContext, 'job', progress);
+        await service.executeJob(
+            { activeUserId: 'actor', userHasPermissions: () => true } as unknown as RequestContext,
+            'job',
+            progress,
+        );
         expect(progress).toHaveBeenCalledTimes(101);
         expect(new Set(progress.mock.calls.map(([value]) => value)).size).toBe(101);
         expect(progress).toHaveBeenLastCalledWith(100);
@@ -104,12 +108,12 @@ describe('catalog import execution progress', () => {
     });
     it('marks infrastructure failures retryable instead of leaving an import running forever', async () => {
         const repository = {
-            findOne: vi.fn().mockResolvedValue({ id: 'job', state: 'QUEUED', channel: {} }),
+            findOne: vi.fn().mockResolvedValue({ id: 'job', actorId: 'actor', state: 'QUEUED', channel: {} }),
             update: vi.fn().mockResolvedValue({ affected: 1 }),
         };
         const queue = new CatalogImportQueueService(
             { rawConnection: { getRepository: () => repository } } as never,
-            { create: vi.fn().mockResolvedValue({}) } as never,
+            { create: vi.fn().mockResolvedValue({ userHasPermissions: () => true }) } as never,
             undefined as never,
             { executeJob: vi.fn().mockRejectedValue(new Error('category queue unavailable')) } as never,
         );
@@ -123,5 +127,58 @@ describe('catalog import execution progress', () => {
                 errorMessage: 'category queue unavailable',
             },
         );
+    });
+
+    it('rejects direct execution and enqueue before any database access without import permission', async () => {
+        const connection = { getRepository: vi.fn() };
+        const service = new CatalogImportService(
+            connection as never,
+            undefined as never,
+            undefined as never,
+            undefined as never,
+            undefined as never,
+            undefined as never,
+            undefined as never,
+            undefined as never,
+            undefined as never,
+            undefined as never,
+            undefined as never,
+        );
+        const ctx = { activeUserId: 'actor', userHasPermissions: () => false } as unknown as RequestContext;
+        await expect(service.executeJob(ctx, 'job', vi.fn())).rejects.toThrow('没有此门店的导入执行权限');
+        await expect(service.queueExecution(ctx, 'job')).rejects.toThrow('没有此门店的导入执行权限');
+        expect(connection.getRepository).not.toHaveBeenCalled();
+    });
+
+    it('records the administrator authorizing a retry before dispatching it', async () => {
+        const job = { id: 'job', state: 'FAILED', actorId: 'revoked-actor' } as CatalogImportJob;
+        const saved = vi.fn().mockResolvedValue(job);
+        const connection = { getRepository: () => ({ count: () => Promise.resolve(0), save: saved }) };
+        const service = new CatalogImportService(
+            connection as never,
+            undefined as never,
+            undefined as never,
+            undefined as never,
+            undefined as never,
+            undefined as never,
+            undefined as never,
+            undefined as never,
+            undefined as never,
+            undefined as never,
+            undefined as never,
+        );
+        vi.spyOn(service, 'findJob').mockResolvedValue(job);
+        const dispatch = vi.fn().mockImplementation(() => {
+            expect(saved).toHaveBeenCalled();
+            expect(job.actorId).toBe('authorized-retry-actor');
+            return Promise.resolve();
+        });
+        service.registerEnqueuer(dispatch);
+        const ctx = {
+            activeUserId: 'authorized-retry-actor',
+            userHasPermissions: () => true,
+        } as unknown as RequestContext;
+        await service.queueExecution(ctx, 'job');
+        expect(dispatch).toHaveBeenCalledWith('job');
     });
 });

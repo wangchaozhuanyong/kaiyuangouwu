@@ -3,6 +3,7 @@ import { KeyRound, Mail, Puzzle, Share2, Sparkles, Terminal, Truck, WalletCards 
 import { lazy, type ComponentType } from 'react';
 import { Navigate } from 'react-router-dom';
 
+import { CatalogUnitCustomFieldInput } from '../pages/Catalog/catalog-unit-input';
 import { CatalogBulkChannelAction } from '../pages/Catalog/CatalogBulkChannelAction';
 import { CatalogExportAction } from '../pages/Catalog/CatalogExportAction';
 import {
@@ -197,6 +198,9 @@ defineNextAdminExtension({
 
 defineNextAdminExtension({
     id: 'catalog-management-plugin',
+    customFieldComponents: {
+        'catalog-unit-input': CatalogUnitCustomFieldInput,
+    },
     routes: [
         {
             id: 'catalog-suppliers',

@@ -9,6 +9,7 @@ import { runCouponRepair } from './repair-coupon-lifecycle.mjs';
 const directory = await mkdtemp(path.join(os.tmpdir(), 'coupon-repair-cli-'));
 after(() => rm(directory, { recursive: true, force: true }));
 const plan = {
+    repairVersion: 'coupon-lifecycle-v1',
     channelId: '1',
     campaignId: '2',
     fingerprint: 'reviewed-fingerprint',
@@ -105,4 +106,25 @@ test('refuses remote writes and existing output paths before sending requests', 
     await assert.rejects(runCouponRepair(options), /EEXIST/);
     assert.equal(calls.length, 0);
     assert.equal(await readFile(options.out, 'utf8'), 'keep existing review');
+});
+
+test('refuses applying another repair version before any request', async () => {
+    const { options, calls } = harness('wrong-version.json');
+    const reviewed = path.join(directory, 'wrong-version-plan.json');
+    await writeFile(
+        reviewed,
+        JSON.stringify({
+            target: {
+                apiOrigin: options.apiOrigin,
+                channelId: options.channelId,
+                campaignId: options.campaignId,
+            },
+            plan,
+        }),
+    );
+    await assert.rejects(
+        runCouponRepair({ ...options, version: 'coupon-closure-v2', apply: true, planFile: reviewed }),
+        /different repair version/,
+    );
+    assert.equal(calls.length, 0);
 });

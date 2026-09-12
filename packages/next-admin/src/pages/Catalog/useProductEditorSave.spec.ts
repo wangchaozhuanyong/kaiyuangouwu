@@ -24,6 +24,7 @@ type SaveInput = Parameters<typeof useProductEditorSave>[0];
 function fixture(): SaveInput {
     const product: ProductDetailRecord = {
         id: 'product-1',
+        createdAt: '2026-09-12T00:00:00.000Z',
         enabled: true,
         name: '原名称',
         slug: 'original',

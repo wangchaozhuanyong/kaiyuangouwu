@@ -23,7 +23,7 @@ import { orderStatusRefreshInterval } from './order-refresh';
 import { isTestPaymentMethod, paymentAvailability } from './payment-readiness';
 import { PUBLIC_QUERY_GC_TIME, ROUTE_QUERY_STALE_TIME, storefrontQueryKeys } from './query-client';
 import { PageSkeleton } from './route-loading';
-import { storefrontErrorMessage } from './storefront-errors';
+import { storefrontErrorCode, storefrontErrorMessage } from './storefront-errors';
 import { routeNavigateOptions } from './storefront-router';
 import { TaxSummaryRows } from './tax-summary';
 import {
@@ -285,6 +285,10 @@ export function PaymentPage({
             const paidOrder = await api.addPaymentToOrder(selectedMethod);
             await onComplete(paidOrder, confirmationToken);
         } catch (requestError) {
+            if (storefrontErrorCode(requestError) === 'COUPON_REMOVED_DURING_CHECKOUT_ERROR') {
+                const refreshed = await api.cart().catch(() => null);
+                if (refreshed?.checkoutOrder) onOrderChange(refreshed.checkoutOrder);
+            }
             setPaymentError(
                 requestError instanceof Error
                     ? storefrontErrorMessage(requestError, language)

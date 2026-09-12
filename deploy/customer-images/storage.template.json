@@ -1,0 +1,321 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Reviewed customer-image resources. No role attachment, migration, DNS change or application deployment.",
+    "Resources": {
+        "AvatarBucket": {
+            "Type": "AWS::S3::Bucket",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
+            "Properties": {
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "IgnorePublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "RestrictPublicBuckets": true
+                },
+                "OwnershipControls": {
+                    "Rules": [
+                        {
+                            "ObjectOwnership": "BucketOwnerEnforced"
+                        }
+                    ]
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "RecoverableVersions",
+                            "Status": "Enabled",
+                            "NoncurrentVersionExpiration": {
+                                "NoncurrentDays": 7
+                            },
+                            "AbortIncompleteMultipartUpload": {
+                                "DaysAfterInitiation": 1
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "PrivateImageBucket": {
+            "Type": "AWS::S3::Bucket",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
+            "Properties": {
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "IgnorePublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "RestrictPublicBuckets": true
+                },
+                "OwnershipControls": {
+                    "Rules": [
+                        {
+                            "ObjectOwnership": "BucketOwnerEnforced"
+                        }
+                    ]
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "RecoverableVersions",
+                            "Status": "Enabled",
+                            "NoncurrentVersionExpiration": {
+                                "NoncurrentDays": 7
+                            },
+                            "AbortIncompleteMultipartUpload": {
+                                "DaysAfterInitiation": 1
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "AvatarBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "AvatarBucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "DenyInsecureTransport",
+                            "Effect": "Deny",
+                            "Principal": "*",
+                            "Action": "s3:*",
+                            "Resource": [
+                                {
+                                    "Fn::GetAtt": ["AvatarBucket", "Arn"]
+                                },
+                                {
+                                    "Fn::Sub": "${AvatarBucket.Arn}/*"
+                                }
+                            ],
+                            "Condition": {
+                                "Bool": {
+                                    "aws:SecureTransport": "false"
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "CdnReadsOnlyAvatars",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudfront.amazonaws.com"
+                            },
+                            "Action": "s3:GetObject",
+                            "Resource": {
+                                "Fn::Sub": "${AvatarBucket.Arn}/avatars/v2/*"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "AWS:SourceArn": {
+                                        "Fn::Sub": "arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${AvatarDistribution}"
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "PrivateImageBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "PrivateImageBucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "DenyInsecureTransport",
+                            "Effect": "Deny",
+                            "Principal": "*",
+                            "Action": "s3:*",
+                            "Resource": [
+                                {
+                                    "Fn::GetAtt": ["PrivateImageBucket", "Arn"]
+                                },
+                                {
+                                    "Fn::Sub": "${PrivateImageBucket.Arn}/*"
+                                }
+                            ],
+                            "Condition": {
+                                "Bool": {
+                                    "aws:SecureTransport": "false"
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "AvatarOriginAccess": {
+            "Type": "AWS::CloudFront::OriginAccessControl",
+            "Properties": {
+                "OriginAccessControlConfig": {
+                    "Name": {
+                        "Fn::Sub": "${AWS::StackName}-avatars"
+                    },
+                    "OriginAccessControlOriginType": "s3",
+                    "SigningBehavior": "always",
+                    "SigningProtocol": "sigv4"
+                }
+            }
+        },
+        "AvatarHeaders": {
+            "Type": "AWS::CloudFront::ResponseHeadersPolicy",
+            "Properties": {
+                "ResponseHeadersPolicyConfig": {
+                    "Name": {
+                        "Fn::Sub": "${AWS::StackName}-avatar-headers"
+                    },
+                    "SecurityHeadersConfig": {
+                        "ContentTypeOptions": {
+                            "Override": true
+                        },
+                        "ContentSecurityPolicy": {
+                            "ContentSecurityPolicy": "default-src 'none'; sandbox",
+                            "Override": true
+                        },
+                        "ReferrerPolicy": {
+                            "ReferrerPolicy": "no-referrer",
+                            "Override": true
+                        },
+                        "StrictTransportSecurity": {
+                            "AccessControlMaxAgeSec": 31536000,
+                            "Override": true
+                        }
+                    },
+                    "RemoveHeadersConfig": {
+                        "Items": [
+                            {
+                                "Header": "Set-Cookie"
+                            }
+                        ]
+                    }
+                }
+            }
+        },
+        "AvatarDistribution": {
+            "Type": "AWS::CloudFront::Distribution",
+            "Properties": {
+                "DistributionConfig": {
+                    "Enabled": true,
+                    "HttpVersion": "http2and3",
+                    "Origins": [
+                        {
+                            "Id": "avatar-bucket",
+                            "DomainName": {
+                                "Fn::GetAtt": ["AvatarBucket", "RegionalDomainName"]
+                            },
+                            "OriginAccessControlId": {
+                                "Ref": "AvatarOriginAccess"
+                            },
+                            "S3OriginConfig": {
+                                "OriginAccessIdentity": ""
+                            }
+                        }
+                    ],
+                    "DefaultCacheBehavior": {
+                        "TargetOriginId": "avatar-bucket",
+                        "ViewerProtocolPolicy": "redirect-to-https",
+                        "AllowedMethods": ["GET", "HEAD"],
+                        "CachedMethods": ["GET", "HEAD"],
+                        "Compress": false,
+                        "CachePolicyId": "658327ea-f89d-4fab-a63d-7e88639e58f6",
+                        "ResponseHeadersPolicyId": {
+                            "Ref": "AvatarHeaders"
+                        }
+                    },
+                    "ViewerCertificate": {
+                        "CloudFrontDefaultCertificate": true
+                    }
+                }
+            }
+        },
+        "ApplicationImagePolicy": {
+            "Type": "AWS::IAM::ManagedPolicy",
+            "Properties": {
+                "Description": "Attach to the reviewed commerce runtime role; never to the image decoder.",
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Action": ["s3:ListBucket"],
+                            "Resource": [
+                                {
+                                    "Fn::GetAtt": ["AvatarBucket", "Arn"]
+                                },
+                                {
+                                    "Fn::GetAtt": ["PrivateImageBucket", "Arn"]
+                                }
+                            ]
+                        },
+                        {
+                            "Effect": "Allow",
+                            "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
+                            "Resource": [
+                                {
+                                    "Fn::Sub": "${AvatarBucket.Arn}/avatars/v2/*"
+                                },
+                                {
+                                    "Fn::Sub": "${PrivateImageBucket.Arn}/private/v1/*"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "AvatarBucket": {
+            "Value": {
+                "Ref": "AvatarBucket"
+            }
+        },
+        "PrivateImageBucket": {
+            "Value": {
+                "Ref": "PrivateImageBucket"
+            }
+        },
+        "AvatarCdnOrigin": {
+            "Value": {
+                "Fn::Sub": "https://${AvatarDistribution.DomainName}"
+            }
+        },
+        "RuntimePolicyArn": {
+            "Value": {
+                "Ref": "ApplicationImagePolicy"
+            }
+        }
+    }
+}

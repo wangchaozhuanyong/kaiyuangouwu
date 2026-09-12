@@ -8,3 +8,7 @@ export * from './src/config/s3-asset-storage-strategy';
 export * from './src/config/sharp-asset-preview-strategy';
 export * from './src/plugin';
 export * from './src/types';
+
+export * from './src/config/customer-avatar-naming-strategy';
+export * from './src/config/customer-avatar-storage-strategy';
+export * from './src/config/private-image-object-store';

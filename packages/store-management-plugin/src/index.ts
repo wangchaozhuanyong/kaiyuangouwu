@@ -98,3 +98,7 @@ export { UsdtManualRefundService } from './usdt/usdt-manual-refund.service.js';
 
 export { CustomerCoupon } from './entities/customer-coupon.entity.js';
 export { StoreCouponLifecycleService } from './promotion/store-coupon-lifecycle.service.js';
+export { StorefrontPromotionAccessService } from './promotion/storefront-promotion-access.service.js';
+export { StorefrontPromotionService } from './promotion/storefront-promotion.service.js';
+
+export { promotionAssetPaths } from './promotion/promotion-public-assets.js';

@@ -60,6 +60,7 @@ import {
     customerCouponEntitlement,
     flashSalePriceAction,
 } from './promotion/store-commerce-promotion-actions';
+import { StoreCouponClosureRepairService } from './promotion/store-coupon-closure-repair.service';
 import { StoreCouponLifecycleService } from './promotion/store-coupon-lifecycle.service';
 import { StoreCouponRepairService } from './promotion/store-coupon-repair.service';
 import { reconcileStoreCouponsTask } from './promotion/store-coupon-tasks';
@@ -115,12 +116,14 @@ import {
     StorefrontBrandingAdminResolver,
     StorefrontBrandingShopResolver,
 } from './storefront-branding.resolver';
+import { StorefrontCatalogAccessInterceptor } from './storefront-catalog-access.interceptor';
 import { StorefrontRegionShopResolver } from './storefront-region.resolver';
 import {
     SystemAnnouncementAdminResolver,
     SystemAnnouncementShopResolver,
 } from './system-announcement.resolver';
 import { SystemAnnouncementService } from './system-announcement.service';
+import { SystemWorkerHealthService } from './system-worker-health.service';
 import {
     StorefrontTrafficAdminResolver,
     StorefrontTrafficShopResolver,
@@ -176,6 +179,7 @@ import {
     ],
     controllers: [StorefrontPromotionController, StorefrontRealtimeController],
     providers: [
+        SystemWorkerHealthService,
         CartCouponCommandAdapter,
         MerchantCatalogAccessService,
         MerchantInitialPasswordService,
@@ -200,6 +204,7 @@ import {
         StorePromotionCampaignService,
         StoreCouponLifecycleService,
         StoreCouponRepairService,
+        StoreCouponClosureRepairService,
         ReferralService,
         StorefrontTrafficService,
         ReferralWalletSpendService,
@@ -222,9 +227,20 @@ import {
             provide: APP_INTERCEPTOR,
             useClass: StorefrontActivationInterceptor,
         },
+        {
+            provide: APP_INTERCEPTOR,
+            useClass: StorefrontCatalogAccessInterceptor,
+        },
     ],
     exports: [ReferralWalletSpendService],
     configuration: config => {
+        config.settingsStoreFields ??= {};
+        config.settingsStoreFields.systemOperations = [
+            ...(config.settingsStoreFields.systemOperations ?? []).filter(
+                field => field.name !== 'workerHeartbeat',
+            ),
+            { name: 'workerHeartbeat', readonly: true, requiresPermission: Permission.ReadSystem },
+        ];
         config.authOptions.customPermissions.push(
             storeProfilePermission,
             referralPermission,

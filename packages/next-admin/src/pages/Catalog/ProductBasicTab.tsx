@@ -1,8 +1,10 @@
-import { Image as ImageIcon, X } from 'lucide-react';
+import { ExternalLink, Image as ImageIcon, X } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { ImageAssetUploadButton, type UploadedImageAsset } from '../../components/ImageAssetUploadButton';
 import { DynamicCustomFieldsForm } from '../../custom-fields/DynamicCustomFieldsForm';
 import type { RefundPolicy } from '../../graphql/commerce.graphql';
+import { formatDateTime } from '../Sales/sales-utils';
 import { useProductEditor } from './ProductEditorContext';
 import { SOURCE_LANGUAGE_CODE } from './product-editor-types';
 
@@ -20,6 +22,7 @@ export function ProductBasicTab() {
         dynamicCustomFieldValues,
         setDynamicCustomFieldValues,
         productExtensionFields,
+        setActiveTab,
         selectedAssetIds,
         setSelectedAssetIds,
         setIsAssetPickerOpen,
@@ -282,6 +285,55 @@ export function ProductBasicTab() {
                     </button>
                 )}
             </section>
+            <section
+                aria-label="商品属性与建档信息"
+                className="rounded-xl border border-slate-200 bg-white p-5 shadow-2xs"
+            >
+                <div className="grid gap-5 md:grid-cols-2">
+                    <div>
+                        <h2 className="text-sm font-bold text-slate-900">商品筛选属性与标签</h2>
+                        <p className="mt-1 text-xs leading-5 text-slate-500">
+                            品牌、材质等属性可在属性管理中创建，再为本商品选择对应标签，用于搜索和筛选。
+                        </p>
+                        <div className="mt-3 flex flex-wrap items-center gap-3 text-xs font-semibold text-blue-700">
+                            <button
+                                type="button"
+                                disabled={saving}
+                                onClick={() => setActiveTab('FACETS_COLLECTIONS')}
+                                className="rounded-lg border border-blue-200 px-3 py-2 hover:bg-blue-50 disabled:opacity-50"
+                            >
+                                选择本商品的属性标签
+                            </button>
+                            <Link
+                                to="/catalog/categories?tab=facets"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 rounded py-2 hover:underline"
+                            >
+                                管理属性与标签（新窗口）
+                                <ExternalLink className="h-3.5 w-3.5" />
+                            </Link>
+                        </div>
+                    </div>
+                    <div>
+                        <h2 className="text-sm font-bold text-slate-900">系统创建时间</h2>
+                        <p className="mt-1 text-xs leading-5 text-slate-500">
+                            商品首次在本系统建档的时间，自动记录，无需填写。
+                        </p>
+                        <p className="mt-3 text-sm text-slate-700">
+                            {isCreateMode ? (
+                                '首次保存商品后自动记录'
+                            ) : productData?.product?.createdAt ? (
+                                <time dateTime={productData.product.createdAt}>
+                                    {formatDateTime(productData.product.createdAt)}
+                                </time>
+                            ) : (
+                                '暂未读取到系统创建时间，请刷新后重试'
+                            )}
+                        </p>
+                    </div>
+                </div>
+            </section>
             <DynamicCustomFieldsForm
                 helpTopic="catalog.product-editor"
                 fields={productExtensionFields}
@@ -289,6 +341,14 @@ export function ProductBasicTab() {
                 onChange={setDynamicCustomFieldValues}
                 disabled={saving}
                 title="商品扩展属性"
+                description="这里填写系统已启用的商品补充字段，修改后随商品保存。筛选属性与标签请使用上方入口设置。"
+                footer={
+                    productExtensionFields.some(field => field.name === 'sourceCreatedAt') ? (
+                        <p className="w-full text-xs leading-5 text-slate-500">
+                            来源创建日期为选填项，用于保留旧系统或来源报表中的商品创建时间。导入时沿用表格中的“创建日期”；手动新建商品或来源日期未知时可留空，不会默认填成今天。它不影响系统创建时间，也不是生产日期或上架日期。
+                        </p>
+                    ) : undefined
+                }
                 languageCodes={[
                     ...new Set([
                         SOURCE_LANGUAGE_CODE,

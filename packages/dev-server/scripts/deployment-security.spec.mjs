@@ -10,7 +10,7 @@ const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url))
 void test('candidate Nginx validation isolates every temp path and rejects live metadata changes', () => {
     const script = path.join(repositoryRoot, 'deploy/validate-nginx-candidate.py');
     const python = `
-import importlib.util, pathlib, subprocess, sys
+import importlib.util, pathlib, subprocess, sys, tempfile
 from unittest.mock import patch
 spec=importlib.util.spec_from_file_location('candidate',sys.argv[1])
 m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
@@ -25,6 +25,7 @@ def validate_command(command, **kwargs):
         assert kind+'_temp_path '+str(root/kind)+';' in rendered
     assert '/var/log/nginx/' not in rendered and 'syslog:server=' not in rendered
     assert 'include /etc/nginx/proxy_params;' in rendered
+    assert '/etc/nginx/customer-vault-frames/' not in rendered
     return subprocess.CompletedProcess(command, 0)
 with patch.object(m,'live_metadata',return_value={'directory':(33,0,448,1)}), patch.object(m.subprocess,'run',side_effect=validate_command):
     assert m.validate_candidate(source)['productionTempDirectoriesUnchanged']
@@ -36,6 +37,24 @@ for unsafe in ['client_body_temp_path /var/lib/nginx/body;', 'include /etc/nginx
     try:m.candidate_config(unsafe,pathlib.Path('/tmp/isolated'))
     except ValueError:pass
     else:raise AssertionError('Unisolated input must fail before running nginx')
+with tempfile.TemporaryDirectory() as directory:
+    root=pathlib.Path(directory)
+    mapping=root/'reviewed.map'
+    mapping.write_text('shop.example.com "https://vault.example.net";')
+    rendered=m.candidate_config(source,root,root)
+    assert 'shop.example.com "https://vault.example.net";' in rendered
+    assert '/etc/nginx/customer-vault-frames/' not in rendered
+    unsafe_maps = [
+        'shop.example.com "http://vault.example.net";',
+        'default "https://vault.example.net";',
+        'default "https://vault.example.net"; } server { listen 9999; }',
+        'shop.example.com "https://vault.example.net"; include /tmp/unreviewed;',
+    ]
+    for unsafe in unsafe_maps:
+        mapping.write_text(unsafe)
+        try:m.candidate_config(source,root,root)
+        except ValueError:pass
+        else:raise AssertionError('Unreviewed frame map directives must be rejected')
 print('candidate isolation passed')
 `;
     const result = spawnSync(
@@ -175,7 +194,7 @@ void test('production Nginx routes protected downloads and hardens both APIs', a
         [...config.matchAll(/if \(\$trusted_cloudflare_origin = 0\) \{ return 444; \}/gu)].length,
         4,
     );
-    assert.match(config, /root \/var\/www\/kaiyuangouwu-current\/packages\/storefront\/dist;/u);
+    assert.match(config, /root \/var\/www\/kaiyuangouwu-storefront-current;/u);
     const httpDefaultServer = config.slice(
         config.indexOf('listen 80 default_server;'),
         config.indexOf('server_name moyaoai.com www.moyaoai.com console.moyaoai.com'),
@@ -187,7 +206,8 @@ void test('production Nginx routes protected downloads and hardens both APIs', a
     );
     assert.match(storefrontServer, /listen 443 ssl http2 default_server;/u);
     assert.match(storefrontServer, /server_name moyaoai\.com damatong\.net _;/u);
-    assert.doesNotMatch(storefrontServer, /auth_request|_storefront_promotion_gate/u);
+    assert.match(storefrontServer, /auth_request \/_storefront_authenticated;/u);
+    assert.match(storefrontServer, /proxy_pass http:\/\/vendure_backend\/promo\/access;/u);
     assert.doesNotMatch(storefrontServer, /@storefront_promotion_entry/u);
     assert.match(storefrontServer, /location \/ \{[\s\S]*?try_files \$uri \$uri\/ \/index\.html;/u);
     const realtimeLocations = [
@@ -204,6 +224,20 @@ void test('production Nginx routes protected downloads and hardens both APIs', a
             /access_log \/var\/log\/nginx\/moyao-storefront-realtime\.log vendure_realtime;/u,
         );
         assert.match(location.groups.body, /proxy_ignore_client_abort off;/u);
+    }
+});
+
+void test('admin order event streams reach both ingresses without proxy buffering', async () => {
+    const config = await readFile(path.join(repositoryRoot, 'deploy/nginx/damatong.conf'), 'utf8');
+    const routes = [...config.matchAll(/location = \/admin-order-events \{(?<body>[\s\S]*?)\n    \}/gu)];
+    assert.equal(routes.length, 2);
+    for (const route of routes) {
+        assert.match(route.groups.body, /proxy_pass http:\/\/vendure_backend;/u);
+        assert.match(route.groups.body, /proxy_buffering off;/u);
+        assert.match(route.groups.body, /proxy_cache off;/u);
+        assert.match(route.groups.body, /proxy_read_timeout 1h;/u);
+        assert.match(route.groups.body, /limit_conn vendure_realtime_per_ip 12;/u);
+        assert.doesNotMatch(route.groups.body, /proxy_set_header (?:Authorization|vendure-token)/u);
     }
 });
 
@@ -391,7 +425,9 @@ void test('production runbook verifies a direct storefront with an optional prom
     assert.match(runbook, /--mode origin-full/u);
     assert.match(runbook, /audit_realtime_capacity=true/u);
     assert.doesNotMatch(runbook, /curl[^\n]*storefront-realtime\/events/u);
-    assert.match(runbook, /主域名首页和 Shop API 无推广 Cookie 也能直接访问/u);
+    assert.match(runbook, /主域名账户入口和公开品牌查询可访问/u);
+    assert.match(runbook, /匿名商品查询必须返回 `FORBIDDEN`/u);
+    assert.match(runbook, /即使携带推广入口 Cookie，也不能读取商品/u);
     assert.doesNotMatch(runbook, /STOREFRONT_ENTRY_REQUIRED/u);
     assert.doesNotMatch(runbook, /curl -I https:\/\/damatong\.net\/assets\//u);
 });

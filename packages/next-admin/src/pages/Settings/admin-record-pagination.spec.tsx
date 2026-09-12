@@ -70,14 +70,14 @@ afterEach(async () => {
     await act(async () => cleanups.splice(0).forEach(cleanup => cleanup()));
 });
 
-async function render(element: ReactElement) {
+async function render(element: ReactElement, route = '/?tab=jobs') {
     const container = document.createElement('div');
     document.body.append(container);
     const root = createRoot(container);
     const update = async () => {
         await act(async () =>
             root.render(
-                <MemoryRouter initialEntries={['/?tab=jobs']}>
+                <MemoryRouter initialEntries={[route]}>
                     <ConfirmDialogContext.Provider value={async () => false}>
                         <FeatureHelpProvider>{cloneElement(element)}</FeatureHelpProvider>
                     </ConfirmDialogContext.Provider>
@@ -237,4 +237,38 @@ describe('admin record pagination', () => {
         expect(container.querySelector('tbody tr')?.textContent).toContain('job-2');
         expect(container.textContent).toContain('50 条 · 1 / 3 页');
     });
+});
+
+it('uses the independent Worker heartbeat when API-local queues are stopped', async () => {
+    vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ status: 'ok' }) }),
+    );
+    try {
+        query.data = {
+            jobs: { items: [], totalItems: 0 },
+            jobQueues: [{ name: 'mail', running: false }],
+            scheduledTasks: [],
+            apiKeys: { items: [], totalItems: 0 },
+            activeAdministrator: null,
+            settingsStoreFieldDefinitions: [
+                {
+                    key: 'systemOperations.workerHeartbeat',
+                    readonly: true,
+                    scopeType: 'GLOBAL',
+                    currentValue: {
+                        state: 'RUNNING',
+                        heartbeatAt: new Date().toISOString(),
+                        queues: [{ name: 'mail', running: true }],
+                    },
+                },
+            ],
+        };
+        const { container } = await render(<SystemOpsModule />, '/?tab=health');
+        expect(container.textContent).toContain('后台任务服务');
+        expect(container.textContent).toContain('1 个队列运行中，心跳正常');
+        expect(container.textContent).not.toContain('mail 未运行');
+    } finally {
+        vi.unstubAllGlobals();
+    }
 });

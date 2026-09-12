@@ -1,0 +1,44 @@
+@import 'tailwindcss' source(none);
+@source '../src/client-plugins/two-factor';
+@source '../src/storefront-ui/page-shell.tsx';
+@source './main.tsx';
+
+:root {
+    font-family:
+        system-ui,
+        -apple-system,
+        sans-serif;
+    color: #0f172a;
+    background: #fff;
+}
+body {
+    margin: 0;
+}
+button {
+    cursor: pointer;
+}
+button:disabled {
+    cursor: not-allowed;
+}
+.subpage {
+    min-height: 100vh;
+}
+.subpage-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid #e2e8f0;
+}
+.subpage-header button {
+    display: grid;
+    place-items: center;
+    min-width: 44px;
+    min-height: 44px;
+    border-radius: 0.75rem;
+}
+.subpage-header svg {
+    width: 20px;
+    height: 20px;
+}

@@ -4,14 +4,16 @@ import {
     Job,
     JobQueue,
     JobQueueService,
+    Permission,
     RequestContextService,
     TransactionalConnection,
     User,
+    UserInputError,
 } from '@vendure/core';
 
 import { safeMessage } from './catalog-import-helpers';
 import { CatalogImportService } from './catalog-import.service';
-import { CATALOG_IMPORT_QUEUE } from './constants';
+import { CATALOG_IMPORT_QUEUE, manageCatalogImportPermission } from './constants';
 import { CatalogImportJob } from './entities/catalog-import-job.entity';
 
 interface CatalogImportQueueData {
@@ -60,6 +62,22 @@ export class CatalogImportQueueService implements OnApplicationBootstrap {
             user: actor ?? undefined,
         });
         try {
+            if (
+                !actor ||
+                actor.deletedAt ||
+                !ctx.userHasPermissions([Permission.SuperAdmin, manageCatalogImportPermission.Update])
+            ) {
+                await this.connection.rawConnection.getRepository(CatalogImportJob).update(
+                    { id: importJob.id, state: 'QUEUED' },
+                    {
+                        state: 'FAILED',
+                        errorMessage:
+                            '导入执行账号已失效或不再拥有当前门店的导入权限，请由有权限的管理员重新执行',
+                        completedAt: new Date(),
+                    },
+                );
+                throw new UserInputError('导入执行权限已失效');
+            }
             await this.imports.executeJob(ctx, importJob.id, progress => job.setProgress(progress));
         } catch (error) {
             await this.connection.rawConnection

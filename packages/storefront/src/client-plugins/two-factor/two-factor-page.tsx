@@ -17,15 +17,19 @@ import {
     Trash2,
     Upload,
 } from 'lucide-react';
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { ActiveCustomer, StorefrontLanguage } from '../../types';
+import type { BatchImportErrorCode } from './batch-parser';
+import type { TwoFactorAccount } from './types';
 
 import { EmptyState, Subpage } from '../../storefront-ui/page-shell';
-import { ActiveCustomer, StorefrontLanguage } from '../../types';
 
-import { BatchImportErrorCode, parseBatchImport } from './batch-parser';
-import { clearBrowserAccounts, loadBrowserAccounts, saveBrowserAccounts } from './browser-storage';
+import { MAX_BATCH_CHARACTERS, parseBatchImport } from './batch-parser';
 import { formatTotpCode, generateTotp, getTotpSecondsRemaining, normalizeBase32Secret } from './totp';
-import { MAX_TWO_FACTOR_ACCOUNTS, TwoFactorAccount } from './types';
+import { MAX_TWO_FACTOR_ACCOUNTS } from './types';
+import { useBrowserVault } from './use-browser-vault';
+import { VaultControls } from './vault-controls';
 
 interface TwoFactorPageProps {
     customer: ActiveCustomer | null;
@@ -35,7 +39,11 @@ interface TwoFactorPageProps {
     onNotify: (message: string) => void;
 }
 
-export function TwoFactorPage({
+export function TwoFactorPage(props: Readonly<TwoFactorPageProps>) {
+    return <TwoFactorPageSession key={props.customer?.id ?? 'anonymous'} {...props} />;
+}
+
+function TwoFactorPageSession({
     customer,
     language,
     onBack,
@@ -44,11 +52,9 @@ export function TwoFactorPage({
 }: Readonly<TwoFactorPageProps>) {
     const isZh = language === 'zh';
     const ownerId = customer?.id ?? '';
-    const loadedOwnerId = useRef('');
+    const sensitiveRevision = useRef(0);
     const [now, setNow] = useState(() => Date.now());
-    const [accounts, setAccounts] = useState<TwoFactorAccount[]>([]);
     const [codes, setCodes] = useState<Record<string, string>>({});
-    const [storageAvailable, setStorageAvailable] = useState(true);
     const [quickInput, setQuickInput] = useState('');
     const [quickSecret, setQuickSecret] = useState<string | null>(null);
     const [quickCode, setQuickCode] = useState<string | null>(null);
@@ -66,6 +72,32 @@ export function TwoFactorPage({
     const [batchValidated, setBatchValidated] = useState(false);
     const [search, setSearch] = useState('');
     const [revealedIds, setRevealedIds] = useState<Set<string>>(() => new Set());
+    const clearSensitiveState = useCallback(() => {
+        sensitiveRevision.current++;
+        setCodes({});
+        setQuickInput('');
+        setQuickSecret(null);
+        setQuickCode(null);
+        setQuickError('');
+        setQuerying(false);
+        setAccountSecret('');
+        setProjectName('');
+        setBatchInput('');
+        setShowBatchImport(false);
+        setShowAccountForm(false);
+        setEditingId(null);
+        setRevealedIds(new Set());
+        setSearch('');
+    }, []);
+    const vault = useBrowserVault(ownerId, clearSensitiveState);
+    const { accounts, canWrite: storageAvailable } = vault;
+    const persistAccounts = vault.save;
+    useEffect(
+        () => () => {
+            sensitiveRevision.current++;
+        },
+        [],
+    );
     const secondsRemaining = getTotpSecondsRemaining(now);
     const timeStep = Math.floor(now / 30_000);
     const copy = copyFor(language);
@@ -90,20 +122,6 @@ export function TwoFactorPage({
         const interval = window.setInterval(() => setNow(Date.now()), 1_000);
         return () => window.clearInterval(interval);
     }, []);
-
-    useEffect(() => {
-        if (!ownerId) {
-            loadedOwnerId.current = '';
-            setAccounts([]);
-            setCodes({});
-            return;
-        }
-        if (loadedOwnerId.current === ownerId) return;
-        const stored = loadBrowserAccounts(ownerId);
-        loadedOwnerId.current = ownerId;
-        setAccounts(stored.accounts);
-        setStorageAvailable(stored.available);
-    }, [ownerId]);
 
     useEffect(() => {
         let active = true;
@@ -138,19 +156,6 @@ export function TwoFactorPage({
         };
     }, [quickSecret, timeStep]);
 
-    const persistAccounts = useCallback(
-        (nextAccounts: TwoFactorAccount[]): boolean => {
-            if (!ownerId || !storageAvailable || !saveBrowserAccounts(ownerId, nextAccounts)) {
-                setStorageAvailable(false);
-                onNotify(copy.storageUnavailable);
-                return false;
-            }
-            setAccounts(nextAccounts);
-            return true;
-        },
-        [copy.storageUnavailable, onNotify, ownerId, storageAvailable],
-    );
-
     if (!customer) {
         return (
             <Subpage title={copy.title} language={language} onBack={onBack}>
@@ -167,25 +172,32 @@ export function TwoFactorPage({
 
     const queryCode = async (event: FormEvent) => {
         event.preventDefault();
+        const epoch = sensitiveRevision.current;
         setQuerying(true);
         setQuickError('');
         try {
             const secret = normalizeBase32Secret(quickInput);
             setQuickSecret(secret);
-            setQuickCode(await generateTotp(secret));
+            const code = await generateTotp(secret);
+            if (sensitiveRevision.current !== epoch) return;
+            setQuickCode(code);
             setNow(Date.now());
         } catch {
+            if (sensitiveRevision.current !== epoch) return;
             setQuickSecret(null);
             setQuickCode(null);
             setQuickError(copy.invalidSecret);
         } finally {
-            setQuerying(false);
+            if (sensitiveRevision.current === epoch) setQuerying(false);
         }
     };
 
     const pasteSecret = async () => {
+        const epoch = sensitiveRevision.current;
         try {
             const value = await navigator.clipboard.readText();
+            if (sensitiveRevision.current !== epoch) return;
+            if (value.length > 1024) throw new Error('too large');
             if (!value.trim()) throw new Error('empty');
             setQuickInput(value.trim());
             setQuickSecret(null);
@@ -215,7 +227,7 @@ export function TwoFactorPage({
         setShowAccountForm(true);
     };
 
-    const saveAccount = (event: FormEvent) => {
+    const saveAccount = async (event: FormEvent) => {
         event.preventDefault();
         const name = projectName.trim();
         if (!name) {
@@ -255,13 +267,15 @@ export function TwoFactorPage({
                       lastUsedAt: null,
                   },
               ];
-        if (!persistAccounts(nextAccounts)) return;
+        if (!(await persistAccounts(nextAccounts))) return;
         setShowAccountForm(false);
+        setAccountSecret('');
+        setProjectName('');
         setEditingId(null);
         onNotify(editingId ? copy.accountUpdated : copy.accountAdded);
     };
 
-    const importAccounts = () => {
+    const importAccounts = async () => {
         setBatchValidated(true);
         if (batchResult.errors.length || !batchResult.accounts.length) return;
         const createdAt = new Date().toISOString();
@@ -275,30 +289,32 @@ export function TwoFactorPage({
                 lastUsedAt: null,
             })),
         ];
-        if (!persistAccounts(nextAccounts)) return;
+        if (!(await persistAccounts(nextAccounts))) return;
         setBatchInput('');
         setBatchValidated(false);
         setShowBatchImport(false);
         onNotify(copy.accountsImported);
     };
 
-    const deleteAccount = (account: TwoFactorAccount) => {
+    const deleteAccount = async (account: TwoFactorAccount) => {
         if (!window.confirm(copy.deleteConfirm)) return;
-        if (persistAccounts(accounts.filter(item => item.id !== account.id))) onNotify(copy.accountDeleted);
+        if (await persistAccounts(accounts.filter(item => item.id !== account.id)))
+            onNotify(copy.accountDeleted);
     };
 
-    const clearAll = () => {
+    const clearAll = async () => {
         if (!window.confirm(copy.clearConfirm)) return;
-        clearBrowserAccounts(ownerId);
-        setAccounts([]);
+        if (!(await persistAccounts([]))) return;
         setCodes({});
         onNotify(copy.accountsCleared);
     };
 
     const copyAccountCode = async (account: TwoFactorAccount) => {
+        const epoch = sensitiveRevision.current;
         const code = codes[account.id];
         if (!code || !(await copyCode(code))) return;
-        persistAccounts(
+        if (sensitiveRevision.current !== epoch) return;
+        await persistAccounts(
             accounts.map(item =>
                 item.id === account.id ? { ...item, lastUsedAt: new Date().toISOString() } : item,
             ),
@@ -309,6 +325,11 @@ export function TwoFactorPage({
         <Subpage title={copy.title} language={language} onBack={onBack}>
             <div className="desktop-two-factor-content mx-auto grid w-full max-w-6xl gap-4 px-3 pb-10 pt-3 lg:grid-cols-[minmax(0,1.5fr)_minmax(280px,0.5fr)] lg:px-6">
                 <section className="rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-cyan-50 p-4 shadow-sm lg:p-5">
+                    <VaultControls
+                        key={`${ownerId}-${vault.unlocked}-${vault.exists}-${sensitiveRevision.current}`}
+                        vault={vault}
+                        isZh={isZh}
+                    />
                     <div className="flex items-start gap-3">
                         <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-emerald-600 text-white">
                             <KeyRound className="size-5" aria-hidden="true" />
@@ -348,6 +369,7 @@ export function TwoFactorPage({
                             id="storefront-two-factor-secret"
                             className="min-h-12 w-full rounded-xl border border-slate-300 bg-white px-3 font-mono text-sm outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
                             type="password"
+                            maxLength={1024}
                             autoComplete="off"
                             spellCheck={false}
                             value={quickInput}
@@ -478,8 +500,10 @@ export function TwoFactorPage({
                 <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:col-span-2 lg:p-5">
                     <div className="flex items-center justify-between gap-2 sm:gap-3">
                         <div className="min-w-0">
-                            <h2 className="m-0 text-base font-black text-slate-950 sm:text-lg whitespace-nowrap">{copy.accountList}</h2>
-                            <p className="mb-0 mt-0.5 text-[11px] font-semibold text-slate-500 sm:mt-1 sm:text-xs">
+                            <h2 className="m-0 text-base sm:text-lg max-[350px]:text-sm font-black text-slate-950 whitespace-nowrap">
+                                {copy.accountList}
+                            </h2>
+                            <p className="mb-0 mt-0.5 sm:mt-1 text-xs font-semibold text-slate-500 whitespace-nowrap">
                                 {accounts.length} / {MAX_TWO_FACTOR_ACCOUNTS}
                             </p>
                         </div>
@@ -490,8 +514,8 @@ export function TwoFactorPage({
                                 disabled={!storageAvailable}
                                 onClick={() => setShowBatchImport(value => !value)}
                             >
-                                <Upload className="size-3.5 shrink-0 sm:size-4" aria-hidden="true" />
-                                <span>{copy.batchImport}</span>
+                                <Upload className="size-3.5 sm:size-4 shrink-0" aria-hidden="true" />
+                                {copy.batchImport}
                             </button>
                             <button
                                 className={headerPrimaryButtonClass}
@@ -499,8 +523,8 @@ export function TwoFactorPage({
                                 disabled={!storageAvailable}
                                 onClick={() => openAccountForm()}
                             >
-                                <Plus className="size-3.5 shrink-0 sm:size-4" aria-hidden="true" />
-                                <span>{copy.addAccount}</span>
+                                <Plus className="size-3.5 sm:size-4 shrink-0" aria-hidden="true" />
+                                {copy.addAccount}
                             </button>
                         </div>
                     </div>
@@ -508,7 +532,7 @@ export function TwoFactorPage({
                     {showAccountForm ? (
                         <form
                             className="mt-4 grid gap-3 rounded-2xl border border-emerald-200 bg-emerald-50/50 p-4 md:grid-cols-2"
-                            onSubmit={saveAccount}
+                            onSubmit={event => void saveAccount(event)}
                         >
                             <label className="grid gap-1.5 text-sm font-bold text-slate-800">
                                 {copy.projectName}
@@ -524,6 +548,7 @@ export function TwoFactorPage({
                                 <input
                                     className={`${inputClass} font-mono`}
                                     type="password"
+                                    maxLength={1024}
                                     autoComplete="off"
                                     spellCheck={false}
                                     value={accountSecret}
@@ -545,7 +570,11 @@ export function TwoFactorPage({
                                 <button
                                     className={secondaryButtonClass}
                                     type="button"
-                                    onClick={() => setShowAccountForm(false)}
+                                    onClick={() => {
+                                        setShowAccountForm(false);
+                                        setAccountSecret('');
+                                        setProjectName('');
+                                    }}
                                 >
                                     {copy.cancel}
                                 </button>
@@ -563,6 +592,9 @@ export function TwoFactorPage({
                                 <textarea
                                     id="storefront-two-factor-batch"
                                     className={`${inputClass} min-h-36 resize-y font-mono`}
+                                    maxLength={MAX_BATCH_CHARACTERS}
+                                    autoComplete="off"
+                                    spellCheck={false}
                                     value={batchInput}
                                     placeholder={copy.batchPlaceholder}
                                     onChange={event => {
@@ -597,14 +629,17 @@ export function TwoFactorPage({
                                     className={primaryButtonClass}
                                     type="button"
                                     disabled={!batchInput.trim()}
-                                    onClick={importAccounts}
+                                    onClick={() => void importAccounts()}
                                 >
                                     {copy.importAccounts}
                                 </button>
                                 <button
                                     className={secondaryButtonClass}
                                     type="button"
-                                    onClick={() => setShowBatchImport(false)}
+                                    onClick={() => {
+                                        setShowBatchImport(false);
+                                        setBatchInput('');
+                                    }}
                                 >
                                     {copy.cancel}
                                 </button>
@@ -629,7 +664,7 @@ export function TwoFactorPage({
                             <button
                                 className={`${secondaryButtonClass} text-red-600`}
                                 type="button"
-                                onClick={clearAll}
+                                onClick={() => void clearAll()}
                             >
                                 <Trash2 className="size-4" />
                                 {copy.clearAll}
@@ -682,7 +717,7 @@ export function TwoFactorPage({
                                                     )
                                                 }
                                                 onEdit={() => openAccountForm(account)}
-                                                onDelete={() => deleteAccount(account)}
+                                                onDelete={() => void deleteAccount(account)}
                                             />
                                         </div>
                                         <div className="mt-2 flex min-h-12 items-center gap-2 rounded-xl bg-slate-50 px-2.5 py-1.5">
@@ -918,6 +953,7 @@ function batchErrorLabel(code: BatchImportErrorCode, copy: Copy): string {
         INVALID_SECRET: copy.invalidSecret,
         DUPLICATE_SECRET: copy.duplicateSecret,
         LIMIT_REACHED: copy.accountLimit,
+        INPUT_TOO_LARGE: copy.inputTooLarge,
     }[code];
 }
 
@@ -950,16 +986,16 @@ function copyFor(language: StorefrontLanguage) {
         noUpload: isZh ? '密钥不会上传到服务器' : 'Secrets are never uploaded',
         localGeneration: isZh ? '验证码只在当前浏览器生成' : 'Codes are generated in this browser',
         persistentLocal: isZh
-            ? '关闭浏览器或退出登录后仍会保留'
-            : 'Kept after closing the browser or signing out',
+            ? '默认临时使用；主动启用后才加密保存'
+            : 'Temporary by default; encrypted saving is opt-in',
         expand: isZh ? '展开' : 'Expand',
         collapse: isZh ? '收起' : 'Collapse',
         publicDevice: isZh
-            ? '密钥保存在当前浏览器的本地存储中，不额外加密。仅建议在自己的设备上使用；主动清空账号列表或清除本站站点数据后会被删除。'
-            : "Secrets are kept unencrypted in this browser's local storage. Use this only on your own device; clearing the account list or this site's data removes them.",
+            ? '临时账号在锁定或离开页面后清除。加密保存需要独立口令；请下载加密备份。解锁期间仍应防范恶意脚本和浏览器扩展，仅在可信设备上使用。'
+            : 'Temporary accounts clear when locked or leaving the page. Encrypted saving requires a separate passphrase; download an encrypted backup. Malicious scripts or extensions can still read data while unlocked. Use a trusted device.',
         storageUnavailable: isZh
-            ? '当前浏览器无法使用本地存储，仍可临时查询，但无法保存账号。'
-            : 'Local storage is unavailable. You can query a code but cannot save accounts.',
+            ? '请先解锁已保存的账号；仍可临时查询验证码。'
+            : 'Unlock saved accounts first. Temporary code queries remain available.',
         accountList: isZh ? '2FA 账号列表' : '2FA account list',
         batchImport: isZh ? '批量导入' : 'Bulk import',
         addAccount: isZh ? '添加账号' : 'Add account',
@@ -1001,6 +1037,9 @@ function copyFor(language: StorefrontLanguage) {
         projectRequired: isZh ? '请输入项目名称' : 'Enter a project name',
         projectTooLong: isZh ? '项目名称不能超过 80 个字符' : 'Project name cannot exceed 80 characters',
         duplicateSecret: isZh ? '该 2FA 密钥已存在' : 'This 2FA secret already exists',
+        inputTooLarge: isZh
+            ? '输入过大：最多 64K 字符、200 行，每行最多 1024 字符'
+            : 'Input too large: maximum 64K characters, 200 lines, 1024 characters per line',
         accountLimit: isZh ? '最多可保存 100 个账号' : 'You can save up to 100 accounts',
         pasteFailed: isZh ? '无法读取剪贴板，请手动粘贴' : 'Could not read the clipboard. Paste manually.',
         copied: isZh ? '动态码已复制' : 'Code copied',

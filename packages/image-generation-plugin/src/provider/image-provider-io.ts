@@ -1,5 +1,9 @@
 import { request as httpRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
+import { Readable, pipeline } from 'node:stream';
+import { createBrotliDecompress, createGunzip, createInflate } from 'node:zlib';
+
+import { PinnedProviderUrl } from '../security/safe-provider-url.service';
 
 import { MAX_PROVIDER_IMAGE_BYTES, REQUEST_TIMEOUT_MS } from './image-provider-constants';
 import {
@@ -8,6 +12,72 @@ import {
     ImageProviderError,
 } from './image-provider-errors';
 import { safeError } from './image-provider-telemetry';
+
+/** Connect only to the address checked for this request, retaining Host and TLS identity. */
+export async function pinnedProviderRequest(target: PinnedProviderUrl, init: RequestInit): Promise<Response> {
+    const encoded = new Request(target.url, init);
+    const headers = Object.fromEntries(encoded.headers.entries());
+    headers.host = target.url.host;
+    headers['accept-encoding'] = 'identity';
+    return new Promise((resolve, reject) => {
+        const transport = target.url.protocol === 'https:' ? httpsRequest : httpRequest;
+        const request = transport(
+            target.url,
+            {
+                method: encoded.method,
+                headers,
+                agent: false,
+                signal: init.signal ?? undefined,
+                lookup: (_hostname, options, callback) => {
+                    if (options.all) callback(null, [{ address: target.address, family: target.family }]);
+                    else callback(null, target.address, target.family);
+                },
+            },
+            response => {
+                const responseHeaders = new Headers();
+                for (const [name, value] of Object.entries(response.headers)) {
+                    if (Array.isArray(value)) value.forEach(item => responseHeaders.append(name, item));
+                    else if (value !== undefined) responseHeaders.set(name, value);
+                }
+                const status = response.statusCode ?? 502;
+                if (encoded.method === 'HEAD' || [204, 205, 304].includes(status)) {
+                    response.resume();
+                    resolve(new Response(null, { status, headers: responseHeaders }));
+                    return;
+                }
+                const encoding = responseHeaders.get('content-encoding')?.toLowerCase();
+                const decoder =
+                    encoding === 'gzip'
+                        ? createGunzip()
+                        : encoding === 'deflate'
+                          ? createInflate()
+                          : encoding === 'br'
+                            ? createBrotliDecompress()
+                            : undefined;
+                let body: Readable = response;
+                if (decoder) {
+                    body = decoder;
+                    responseHeaders.delete('content-encoding');
+                    responseHeaders.delete('content-length');
+                    pipeline(response, decoder, () => undefined);
+                }
+                resolve(
+                    new Response(Readable.toWeb(body) as ReadableStream<Uint8Array>, {
+                        status,
+                        headers: responseHeaders,
+                    }),
+                );
+            },
+        );
+        request.on('error', reject);
+        if (encoded.body) {
+            const body = Readable.fromWeb(encoded.body as Parameters<typeof Readable.fromWeb>[0]);
+            pipeline(body, request, error => {
+                if (error) reject(error);
+            });
+        } else request.end();
+    });
+}
 export async function pinnedImageDownload(input: {
     url: URL;
     address: string;
@@ -101,7 +171,10 @@ export async function readResponseBytes(
     timeoutMessage: string,
 ): Promise<Buffer> {
     const declared = Number(response.headers.get('content-length') ?? 0);
-    if (declared > maxBytes) throw new DefinitiveImageProviderError('中转站响应超过安全大小限制');
+    if (declared > maxBytes) {
+        await response.body?.cancel().catch(() => undefined);
+        throw new DefinitiveImageProviderError('中转站响应超过安全大小限制');
+    }
     if (!response.body) return Buffer.alloc(0);
     const reader = response.body.getReader();
     const chunks: Buffer[] = [];

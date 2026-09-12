@@ -144,6 +144,7 @@ export function fixtureData(presetId = 'modern-oriental', signedIn = true) {
     return {
         storefrontVisualPreset: { channelId: 'qa-channel', presetId, revision: 'qa-1' },
         activeChannel: {
+            id: 'qa-channel',
             code: 'qa-channel',
             defaultLanguageCode: 'zh_Hans',
             defaultCurrencyCode: 'MYR',

@@ -1,6 +1,8 @@
 import { Injectable, OnApplicationBootstrap } from '@nestjs/common';
+import { PaymentInput } from '@vendure/common/lib/generated-shop-types';
 import { ID } from '@vendure/common/lib/shared-types';
 import {
+    CouponCodeEvent,
     CurrencyCode,
     Customer,
     CustomerService,
@@ -11,6 +13,8 @@ import {
     OrderCalculator,
     OrderService,
     OrderStateTransitionEvent,
+    Payment,
+    PaymentState,
     Promotion,
     PromotionService,
     RefundStateTransitionEvent,
@@ -20,7 +24,15 @@ import {
     UserInputError,
 } from '@vendure/core';
 import { StorefrontCartService } from '@vendure/storefront-cart-plugin';
-import { In, IsNull, LessThanOrEqual, Like, LockNotSupportedOnGivenDriverError, Not } from 'typeorm';
+import {
+    In,
+    IsNull,
+    LessThanOrEqual,
+    Like,
+    LockNotSupportedOnGivenDriverError,
+    MoreThan,
+    Not,
+} from 'typeorm';
 
 import { CouponLedgerEntry } from '../entities/coupon-ledger-entry.entity';
 import {
@@ -40,14 +52,18 @@ import {
     StoreCouponUsageRecordView,
     StoreCustomerCouponView,
 } from '../types';
+import { verifyUsdtPaymentProof } from '../usdt/usdt-payment-proof';
+import { USDT_TRC20_PAYMENT_METHOD_CODE } from '../usdt/usdt-payment.constants';
 
 import {
     COUPON_LOCK_MINUTES,
     CouponLedgerEventType,
     couponLedgerEventTypes,
+    customerCouponStatuses,
     usableCustomerCouponStatuses,
 } from './coupon-lifecycle.constants';
 import { idListArg, numberArg, stringArg } from './promotion-operation-args';
+import { lockCouponCampaign } from './store-coupon-campaign-lock';
 
 @Injectable()
 export class StoreCouponLifecycleService implements OnApplicationBootstrap {
@@ -63,11 +79,20 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
     ) {}
 
     async onApplicationBootstrap(): Promise<void> {
+        this.orderService.registerCheckoutValidator(
+            'store-coupon-entitlements',
+            (ctx, order, input, source) => this.validateBeforePayment(ctx, order.id, input, source),
+        );
+        this.orderService.registerPaymentConfirmationValidator(
+            'store-coupon-entitlements',
+            (ctx, order, payment, state, source) =>
+                this.validateConfirmedPayment(ctx, order.id, payment, state, source),
+        );
         this.eventBus.registerBlockingEventHandler({
             event: OrderStateTransitionEvent,
             id: 'store-coupon-handle-paid-or-cancelled-order',
             handler: event => {
-                if (event.toState === 'PaymentAuthorized' || event.toState === 'PaymentSettled') {
+                if (event.toState === 'PaymentSettled') {
                     return this.redeemForPaidOrder(event.ctx, event.order.id);
                 }
                 if (event.toState === 'Cancelled') {
@@ -84,6 +109,33 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
                     ? this.handleSettledRefund(event.ctx, event.order.id, event.refund.id)
                     : Promise.resolve(),
         });
+        this.eventBus.registerBlockingEventHandler({
+            event: CouponCodeEvent,
+            id: 'store-coupon-release-native-removal',
+            handler: async event => {
+                if (event.type !== 'removed') return;
+                const candidates = await this.connection.getRepository(event.ctx, CustomerCoupon).find({
+                    where: {
+                        channelId: event.ctx.channelId,
+                        lockedOrderId: event.orderId,
+                        status: 'LOCKED',
+                        promotion: { couponCode: event.couponCode },
+                    },
+                });
+                for (const candidate of candidates) {
+                    await this.lockRow(event.ctx, CustomerCoupon, candidate.id);
+                    const fresh = await this.connection
+                        .getRepository(event.ctx, CustomerCoupon)
+                        .findOneByOrFail({ id: candidate.id });
+                    if (fresh.status !== 'LOCKED' || !idsAreEqual(fresh.lockedOrderId, event.orderId))
+                        continue;
+                    if (await this.isCouponOrderPaymentPending(event.ctx, event.orderId))
+                        throw new UserInputError('订单正在付款，请先取消付款后再移除优惠券');
+                    // Core applies the new price after this blocking event. Do not recursively remove the code.
+                    await this.releaseLockedCouponWithinCart(event.ctx, fresh, null, '客户移除订单优惠券');
+                }
+            },
+        });
         await this.backfillLegacyCouponEntitlements();
     }
 
@@ -99,43 +151,86 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
     }
 
     async findMine(ctx: RequestContext): Promise<StoreCustomerCouponView[]> {
+        const items: StoreCustomerCouponView[] = [];
+        while (true) {
+            const page = await this.findMinePage(ctx, { skip: items.length, take: 200 });
+            items.push(...page.items);
+            if (!page.items.length || items.length >= page.totalItems) return items;
+        }
+    }
+
+    async findMinePage(
+        ctx: RequestContext,
+        options: { skip?: number; take?: number; statuses?: string[]; usableOnly?: boolean } = {},
+    ) {
         const customer = await this.activeCustomerOrThrow(ctx);
         await this.reconcileCustomer(ctx, customer.id);
-        const coupons = await this.connection.getRepository(ctx, CustomerCoupon).find({
-            where: { channelId: ctx.channelId, customerId: customer.id },
+        if (options.statuses?.some(status => !customerCouponStatuses.includes(status as any)))
+            throw new UserInputError('优惠券状态无效');
+        const now = new Date();
+        const where = {
+            channelId: ctx.channelId,
+            customerId: customer.id,
+            ...(options.statuses?.length ? { status: In(options.statuses) } : {}),
+            ...(options.usableOnly
+                ? {
+                      status: In(
+                          usableCustomerCouponStatuses.filter(
+                              status => !options.statuses?.length || options.statuses.includes(status),
+                          ),
+                      ),
+                      validFrom: LessThanOrEqual(now),
+                      promotion: { enabled: true, deletedAt: IsNull() },
+                      campaignConfig: { channelId: ctx.channelId },
+                  }
+                : {}),
+        };
+        const [coupons, totalItems] = await this.connection.getRepository(ctx, CustomerCoupon).findAndCount({
+            where: options.usableOnly
+                ? [
+                      { ...where, validUntil: IsNull() },
+                      { ...where, validUntil: MoreThan(now) },
+                  ]
+                : where,
             relations: { promotion: true, campaignConfig: true },
-            order: { claimedAt: 'DESC' },
-            take: 200,
+            order: { claimedAt: 'DESC', id: 'DESC' },
+            skip: boundedInteger(options.skip, 0, 0, Number.MAX_SAFE_INTEGER),
+            take: boundedInteger(options.take, 50, 1, 200),
         });
-        for (const coupon of coupons) {
-            if (
-                usableCustomerCouponStatuses.includes(coupon.status) &&
-                (!coupon.promotion || coupon.promotion.deletedAt || !coupon.promotion.enabled)
-            ) {
-                if (
-                    coupon.lockedOrderId &&
-                    (await this.carts?.isOrderPaymentLocked(ctx, coupon.lockedOrderId))
-                )
-                    continue;
-                await this.revokeCoupon(ctx, coupon, '优惠券活动已删除或停用，系统自动作废');
-            }
-        }
-        return coupons.map(coupon => this.toCustomerCouponView(ctx, coupon));
+        return { items: coupons.map(coupon => this.toCustomerCouponView(ctx, coupon)), totalItems };
     }
 
     async findMyUsageRecords(ctx: RequestContext): Promise<StoreCouponUsageRecordView[]> {
+        const items: StoreCouponUsageRecordView[] = [];
+        while (true) {
+            const page = await this.findMyUsageRecordsPage(ctx, { skip: items.length, take: 200 });
+            items.push(...page.items);
+            if (!page.items.length || items.length >= page.totalItems) return items;
+        }
+    }
+
+    async findMyUsageRecordsPage(
+        ctx: RequestContext,
+        options: { skip?: number; take?: number; statuses?: string[] } = {},
+    ) {
+        if (options.statuses?.some(status => !['USED', 'REFUNDED'].includes(status)))
+            throw new UserInputError('用券记录状态无效');
         const customer = await this.activeCustomerOrThrow(ctx);
-        const allocations = await this.connection.getRepository(ctx, CouponOrderAllocation).find({
-            where: {
-                channelId: ctx.channelId,
-                customerId: customer.id,
-                status: In(['USED', 'REFUNDED']),
-            },
-            relations: { customerCoupon: true, order: true },
-            order: { usedAt: 'DESC' },
-            take: 200,
-        });
-        return allocations.flatMap(allocation => {
+        const [allocations, totalItems] = await this.connection
+            .getRepository(ctx, CouponOrderAllocation)
+            .findAndCount({
+                where: {
+                    channelId: ctx.channelId,
+                    customerId: customer.id,
+                    status: In(options.statuses?.length ? options.statuses : ['USED', 'REFUNDED']),
+                    usedAt: Not(IsNull()),
+                },
+                relations: { customerCoupon: true, order: true },
+                order: { usedAt: 'DESC', id: 'DESC' },
+                skip: boundedInteger(options.skip, 0, 0, Number.MAX_SAFE_INTEGER),
+                take: boundedInteger(options.take, 50, 1, 200),
+            });
+        const items = allocations.flatMap(allocation => {
             if (!allocation.usedAt || !allocation.customerCoupon || !allocation.order) return [];
             return [
                 {
@@ -171,6 +266,7 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
                 },
             ];
         });
+        return { items, totalItems };
     }
 
     async apply(ctx: RequestContext, customerCouponId: ID): Promise<StoreCustomerCouponView> {
@@ -290,27 +386,18 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
         if (!order || !order.lines?.length) return null;
 
         await this.reconcileCustomer(ctx, customer.id);
-        const coupons = await this.connection.getRepository(ctx, CustomerCoupon).find({
-            where: { channelId: ctx.channelId, customerId: customer.id },
+        const selected = await this.connection.getRepository(ctx, CustomerCoupon).findOne({
+            where: {
+                channelId: ctx.channelId,
+                customerId: customer.id,
+                lockedOrderId: order.id,
+                status: 'LOCKED',
+            },
             relations: { promotion: true, campaignConfig: true },
-            order: { claimedAt: 'ASC' },
-            take: 200,
+            order: { id: 'ASC' },
         });
-        const selected = coupons.find(
-            coupon => coupon.status === 'LOCKED' && idsAreEqual(coupon.lockedOrderId, order.id),
-        );
         if (selected) return this.toCustomerCouponView(ctx, selected);
-
         const now = new Date();
-        const candidates = coupons.filter(
-            coupon =>
-                usableCustomerCouponStatuses.includes(coupon.status) &&
-                coupon.validFrom <= now &&
-                !this.isExpired(coupon, now) &&
-                Boolean(coupon.promotion?.enabled && !coupon.promotion.deletedAt),
-        );
-        if (!candidates.length) return null;
-
         const allPromotions = await this.promotionService.getActivePromotionsInChannel(ctx);
         const exhaustedPromotionIds = await this.promotionService.getExhaustedPromotionIds(
             ctx,
@@ -321,36 +408,65 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
             promotion => !exhaustedPromotionIds.has(promotion.id.toString()),
         );
         const ownedCouponCodes = new Set(
-            coupons
-                .map(coupon => coupon.promotion?.couponCode?.toLocaleLowerCase())
+            allPromotions
+                .filter(promotion =>
+                    promotion.conditions.some(
+                        condition => condition.code === 'store_customer_coupon_entitlement',
+                    ),
+                )
+                .map(promotion => promotion.couponCode?.toLocaleLowerCase())
                 .filter((couponCode): couponCode is string => Boolean(couponCode)),
         );
         const baseCouponCodes = (order.couponCodes ?? []).filter(
             couponCode => !ownedCouponCodes.has(couponCode.toLocaleLowerCase()),
         );
-        const estimates: CouponSavingsEstimate[] = [];
-
-        for (const coupon of candidates) {
-            const promotion = activePromotions.find(active => idsAreEqual(active.id, coupon.promotionId));
-            if (!promotion?.couponCode) continue;
-            const validation = await this.promotionService.validateCouponCode(
-                ctx,
-                promotion.couponCode,
-                customer.id,
-                order.id,
-            );
-            if (isGraphQlErrorResult(validation)) continue;
-            const amountWithTax = await this.estimateCouponSavings(
-                ctx,
-                order.id,
-                promotion,
-                activePromotions,
-                baseCouponCodes,
-            );
-            if (amountWithTax > 0) estimates.push({ coupon, amountWithTax });
+        let best: CouponSavingsEstimate | undefined;
+        let cursor: ID | undefined;
+        while (true) {
+            const where = {
+                channelId: ctx.channelId,
+                customerId: customer.id,
+                status: In(usableCustomerCouponStatuses),
+                validFrom: LessThanOrEqual(now),
+                promotion: { enabled: true, deletedAt: IsNull() },
+                campaignConfig: { channelId: ctx.channelId },
+                ...(cursor == null ? {} : { id: MoreThan(cursor) }),
+            };
+            const candidates = await this.connection.getRepository(ctx, CustomerCoupon).find({
+                where: [
+                    { ...where, validUntil: IsNull() },
+                    { ...where, validUntil: MoreThan(now) },
+                ],
+                relations: { promotion: true, campaignConfig: true },
+                order: { id: 'ASC' },
+                take: 100,
+            });
+            if (!candidates.length) break;
+            for (const coupon of candidates) {
+                cursor = coupon.id;
+                const promotion = activePromotions.find(active => idsAreEqual(active.id, coupon.promotionId));
+                if (!promotion?.couponCode) continue;
+                const validation = await this.promotionService.validateCouponCode(
+                    ctx,
+                    promotion.couponCode,
+                    customer.id,
+                    order.id,
+                );
+                if (isGraphQlErrorResult(validation)) continue;
+                const amountWithTax = await this.estimateCouponSavings(
+                    ctx,
+                    order.id,
+                    promotion,
+                    activePromotions,
+                    baseCouponCodes,
+                );
+                if (amountWithTax > 0) {
+                    const estimate = { coupon, amountWithTax };
+                    if (!best || compareCouponSavings(estimate, best) < 0) best = estimate;
+                }
+            }
         }
 
-        const best = estimates.sort(compareCouponSavings)[0];
         return best ? this.apply(ctx, best.coupon.id) : null;
     }
 
@@ -377,7 +493,8 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
         if (coupon.status === 'USED' || coupon.status === 'EXPIRED' || coupon.status === 'REVOKED') {
             throw new UserInputError('当前状态的优惠券不能撤销');
         }
-        await this.revokeCoupon(ctx, coupon, reason?.trim() || '管理员撤销优惠券');
+        const outcome = await this.revokeCoupon(ctx, coupon, reason?.trim() || '管理员撤销优惠券');
+        if (!outcome.applied) throw new UserInputError(outcome.reason);
         const customer = await this.customerService.findOne(ctx, coupon.customerId);
         if (customer) await this.publishCustomerCouponChanged(ctx, customer);
         return this.toCustomerCouponView(ctx, coupon);
@@ -388,34 +505,59 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
         campaignId: ID,
         reason?: string | null,
     ): Promise<StoreCouponCampaignActionResult> {
-        const promotion = await this.promotionService.findOne(ctx, campaignId);
-        if (!promotion?.couponCode) throw new UserInputError('找不到该优惠券活动');
-        const config = await this.configForPromotion(ctx, promotion);
-        const now = new Date();
-        if (!config.claimEndsAt || config.claimEndsAt > now) {
-            config.claimEndsAt = new Date(Math.floor(now.getTime() / 1000) * 1000);
-            await this.connection
-                .getRepository(ctx, StoreCouponCampaignConfig)
-                .save(config, { reload: false });
-        }
-
-        const repository = this.connection.getRepository(ctx, CustomerCoupon);
+        await this.inTransaction(ctx, async txCtx => {
+            const promotion = await this.promotionService.findOne(txCtx, campaignId);
+            if (!promotion?.couponCode) throw new UserInputError('找不到该优惠券活动');
+            const config = await lockCouponCampaign(
+                this.connection,
+                txCtx,
+                await this.configForPromotion(txCtx, promotion),
+            );
+            const now = new Date(Math.floor(Date.now() / 1000) * 1000);
+            if (!config.claimEndsAt || config.claimEndsAt > now) {
+                await this.connection
+                    .getRepository(txCtx, StoreCouponCampaignConfig)
+                    .update(config.id, { claimEndsAt: now });
+            }
+        });
         let affectedCount = 0;
+        let skippedCount = 0;
+        let failedCount = 0;
+        const outcomes: Array<{ couponId: ID; status: string; reason: string }> = [];
+        let cursor: ID | undefined;
         while (true) {
-            const coupons = await repository.find({
+            const coupons = await this.connection.getRepository(ctx, CustomerCoupon).find({
                 where: {
                     channelId: ctx.channelId,
                     promotionId: campaignId,
+                    ...(cursor == null ? {} : { id: MoreThan(cursor) }),
                     status: In(['AVAILABLE', 'RETURNED', 'LOCKED']),
                 },
-                relations: { promotion: true, campaignConfig: true },
                 order: { id: 'ASC' },
                 take: 100,
             });
             if (!coupons.length) break;
             for (const coupon of coupons) {
-                await this.revokeCoupon(ctx, coupon, reason?.trim() || '管理员批量作废活动中的未使用优惠券');
-                affectedCount++;
+                cursor = coupon.id;
+                try {
+                    const result = await this.revokeCoupon(
+                        ctx,
+                        coupon,
+                        reason?.trim() || '管理员批量作废活动中的未使用优惠券',
+                    );
+                    if (result.applied) affectedCount++;
+                    else {
+                        skippedCount++;
+                        outcomes.push({ couponId: coupon.id, status: 'SKIPPED', reason: result.reason });
+                    }
+                } catch (error) {
+                    failedCount++;
+                    outcomes.push({
+                        couponId: coupon.id,
+                        status: 'FAILED',
+                        reason: error instanceof Error ? error.message : '处理失败，请重试',
+                    });
+                }
             }
         }
         await this.eventBus.publish(
@@ -425,33 +567,101 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
                 entityIds: [campaignId],
             }),
         );
-        return { campaignId, affectedCount };
+        return { campaignId, affectedCount, skippedCount, failedCount, outcomes };
     }
 
-    private async revokeCoupon(ctx: RequestContext, coupon: CustomerCoupon, note: string) {
-        const work = (txCtx: RequestContext) => this.revokeCouponWithinCart(txCtx, coupon, note);
-        return coupon.lockedOrderId && this.carts
-            ? this.carts.withOrderChange(ctx, coupon.lockedOrderId, work)
-            : work(ctx);
+    private inTransaction<T>(ctx: RequestContext, work: (ctx: RequestContext) => Promise<T>): Promise<T> {
+        return this.carts
+            ? this.carts.withTransaction(ctx, work)
+            : this.connection.withTransaction(
+                  ctx,
+                  work,
+                  ['mysql', 'mariadb', 'postgres'].includes(this.connection.rawConnection.options.type)
+                      ? 'READ COMMITTED'
+                      : undefined,
+              );
     }
 
-    private async revokeCouponWithinCart(ctx: RequestContext, coupon: CustomerCoupon, note: string) {
-        if (coupon.status === 'LOCKED' && coupon.lockedOrderId != null) {
-            const order = await this.orderService.findOne(ctx, coupon.lockedOrderId, [
-                'lines',
-                'shippingLines',
-            ]);
-            if (order) await this.orderService.removeCouponCode(ctx, order.id, coupon.promotion.couponCode);
+    private async revokeCoupon(ctx: RequestContext, snapshot: CustomerCoupon, note: string) {
+        return this.inTransaction(ctx, async txCtx => {
+            const repository = this.connection.getRepository(txCtx, CustomerCoupon);
+            const before = await repository.findOne({
+                where: { id: snapshot.id, channelId: txCtx.channelId },
+            });
+            if (!before) return { applied: false, reason: '优惠券不存在' };
+            await this.lockRow(txCtx, CustomerCoupon, before.id);
+            const coupon = await repository.findOneOrFail({
+                where: { id: before.id, channelId: txCtx.channelId },
+                relations: { promotion: true, campaignConfig: true },
+            });
+            if (!idsAreEqual(coupon.campaignConfig.channelId, txCtx.channelId))
+                throw new UserInputError('该优惠券属于其他店铺');
+            if (String(before.lockedOrderId ?? '') !== String(coupon.lockedOrderId ?? ''))
+                return { applied: false, reason: '订单占用已变化，请重试' };
+            if (!['AVAILABLE', 'RETURNED', 'LOCKED'].includes(coupon.status))
+                return { applied: false, reason: `优惠券当前状态为 ${coupon.status}` };
+            if (coupon.lockedOrderId && (await this.isCouponOrderPaymentPending(txCtx, coupon.lockedOrderId)))
+                return { applied: false, reason: '订单正在付款，暂不作废' };
+            const work = async (workCtx: RequestContext) => {
+                await this.terminalTransition(workCtx, coupon, 'REVOKED', note);
+                Object.assign(snapshot, coupon);
+                return { applied: true, reason: '' };
+            };
+            return coupon.lockedOrderId && this.carts
+                ? this.carts.withOrderChange(txCtx, coupon.lockedOrderId, work)
+                : work(txCtx);
+        });
+    }
+
+    /** Caller holds cart (when present), then coupon. Keep allocation and ledger atomic. */
+    private async isCouponOrderPaymentPending(ctx: RequestContext, orderId: ID): Promise<boolean> {
+        if (await this.carts?.isOrderPaymentLocked(ctx, orderId)) return true;
+        const order = await this.orderService.findOne(ctx, orderId, ['payments']);
+        return (
+            !!order &&
+            (order.state === 'ArrangingPayment' ||
+                order.payments.some(
+                    payment =>
+                        payment.state === 'Authorized' ||
+                        payment.state === 'Settled' ||
+                        payment.metadata?.manualReview?.required,
+                ))
+        );
+    }
+
+    private async terminalTransition(
+        ctx: RequestContext,
+        coupon: CustomerCoupon,
+        status: 'EXPIRED' | 'REVOKED',
+        note: string,
+    ) {
+        if (!['AVAILABLE', 'RETURNED', 'LOCKED'].includes(coupon.status)) return;
+        const orderId = coupon.lockedOrderId;
+        if (coupon.status === 'LOCKED' && orderId != null) {
+            const order = await this.orderService.findOne(ctx, orderId, ['lines', 'shippingLines']);
+            await this.releaseLockedCouponWithinCart(ctx, coupon, order ?? null, note);
         }
-        coupon.status = 'REVOKED';
-        coupon.revokedAt = new Date();
-        coupon.lockedAt = null;
-        coupon.lockExpiresAt = null;
-        coupon.lockedOrderId = null;
-        await this.connection.getRepository(ctx, CustomerCoupon).save(coupon, { reload: false });
-        await this.addLedger(ctx, coupon, 'REVOKED', {
-            actorType: 'ADMIN',
+        const repository = this.connection.getRepository(ctx, CustomerCoupon);
+        const current = await repository.findOneOrFail({ where: { id: coupon.id } });
+        const now = new Date();
+        const changes = {
+            status,
+            lockedAt: null,
+            lockExpiresAt: null,
+            lockedOrderId: null,
+            ...(status === 'EXPIRED' ? { expiredAt: now } : { revokedAt: now }),
+        };
+        const result = await repository.update(
+            { id: coupon.id, channelId: ctx.channelId, status: coupon.status, version: current.version },
+            changes,
+        );
+        if (result.affected !== 1) throw new UserInputError('优惠券状态已变化，请重试');
+        Object.assign(coupon, changes);
+        await this.addLedger(ctx, coupon, status, {
+            actorType: status === 'REVOKED' ? 'ADMIN' : 'SYSTEM',
+            orderId: orderId ?? undefined,
             note,
+            ...(status === 'EXPIRED' ? { idempotencyKey: `EXPIRED:${coupon.id}` } : {}),
         });
     }
 
@@ -505,61 +715,97 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
 
     async reconcile(): Promise<{ expired: number; released: number }> {
         const now = new Date();
-        const coupons = await this.connection.rawConnection.getRepository(CustomerCoupon).find({
-            where: [
-                { status: In(['AVAILABLE', 'RETURNED']), validUntil: LessThanOrEqual(now) },
-                { status: 'LOCKED', lockExpiresAt: LessThanOrEqual(now) },
-            ],
-            relations: { channel: true, promotion: true, campaignConfig: true, lockedOrder: true },
-            take: 500,
-        });
         let expired = 0;
         let released = 0;
-        for (const coupon of coupons) {
-            const ctx = await this.requestContextService.create({
-                apiType: 'admin',
-                channelOrToken: coupon.channel,
+        let cursor: ID | undefined;
+        while (true) {
+            const coupons = await this.connection.rawConnection.getRepository(CustomerCoupon).find({
+                where: [
+                    {
+                        status: In(['AVAILABLE', 'RETURNED']),
+                        validUntil: LessThanOrEqual(now),
+                        ...(cursor == null ? {} : { id: MoreThan(cursor) }),
+                    },
+                    {
+                        status: 'LOCKED',
+                        lockExpiresAt: LessThanOrEqual(now),
+                        ...(cursor == null ? {} : { id: MoreThan(cursor) }),
+                    },
+                ],
+                relations: { channel: true, promotion: true, campaignConfig: true, lockedOrder: true },
+                take: 500,
+                order: { id: 'ASC' },
             });
-            await (
-                this.carts?.withTransaction.bind(this.carts) ??
-                this.connection.withTransaction.bind(this.connection)
-            )(ctx, async txCtx => {
-                if (coupon.lockedOrderId) await this.carts?.lockForOrder(txCtx, coupon.lockedOrderId);
-                await this.connection
-                    .getRepository(txCtx, CustomerCoupon)
-                    .createQueryBuilder()
-                    .update(CustomerCoupon)
-                    .set({ updatedAt: () => 'updatedAt' })
-                    .where({ id: coupon.id })
-                    .execute();
-                const fresh = await this.connection.getRepository(txCtx, CustomerCoupon).findOne({
-                    where: { id: coupon.id },
-                    relations: { promotion: true, campaignConfig: true },
+            if (!coupons.length) break;
+            for (const coupon of coupons) {
+                cursor = coupon.id;
+                const ctx = await this.requestContextService.create({
+                    apiType: 'admin',
+                    channelOrToken: coupon.channel,
                 });
-                if (!fresh || String(fresh.lockedOrderId ?? '') !== String(coupon.lockedOrderId ?? ''))
-                    return;
-                if (
-                    fresh.lockedOrderId &&
-                    (await this.carts?.isOrderPaymentLocked(txCtx, fresh.lockedOrderId))
-                )
-                    return;
-                if (fresh.status === 'LOCKED' && fresh.lockExpiresAt && fresh.lockExpiresAt <= now) {
-                    const order = fresh.lockedOrderId
-                        ? await this.orderService.findOne(txCtx, fresh.lockedOrderId, [
-                              'lines',
-                              'shippingLines',
-                          ])
-                        : undefined;
-                    await this.releaseLockedCoupon(txCtx, fresh, order ?? null, '购物车锁定超时自动释放');
-                    released++;
-                }
-                if (this.isExpired(fresh, now) && fresh.status !== 'USED' && fresh.status !== 'REVOKED') {
-                    await this.expireCoupon(txCtx, fresh, '优惠券到期自动失效');
-                    expired++;
-                }
-            });
+                await (
+                    this.carts?.withTransaction.bind(this.carts) ??
+                    this.connection.withTransaction.bind(this.connection)
+                )(ctx, async txCtx => {
+                    if (coupon.lockedOrderId) await this.carts?.lockForOrder(txCtx, coupon.lockedOrderId);
+                    await this.connection
+                        .getRepository(txCtx, CustomerCoupon)
+                        .createQueryBuilder()
+                        .update(CustomerCoupon)
+                        .set({ updatedAt: () => 'updatedAt' })
+                        .where({ id: coupon.id })
+                        .execute();
+                    const fresh = await this.connection.getRepository(txCtx, CustomerCoupon).findOne({
+                        where: { id: coupon.id },
+                        relations: { promotion: true, campaignConfig: true },
+                    });
+                    if (!fresh || String(fresh.lockedOrderId ?? '') !== String(coupon.lockedOrderId ?? ''))
+                        return;
+                    if (
+                        fresh.lockedOrderId &&
+                        (await this.isCouponOrderPaymentPending(txCtx, fresh.lockedOrderId))
+                    )
+                        return;
+                    if (fresh.status === 'LOCKED' && fresh.lockExpiresAt && fresh.lockExpiresAt <= now) {
+                        const order = fresh.lockedOrderId
+                            ? await this.orderService.findOne(txCtx, fresh.lockedOrderId, [
+                                  'lines',
+                                  'shippingLines',
+                              ])
+                            : undefined;
+                        await this.releaseLockedCoupon(txCtx, fresh, order ?? null, '购物车锁定超时自动释放');
+                        released++;
+                    }
+                    if (this.isExpired(fresh, now) && fresh.status !== 'USED' && fresh.status !== 'REVOKED') {
+                        await this.expireCoupon(txCtx, fresh, '优惠券到期自动失效');
+                        expired++;
+                    }
+                });
+            }
         }
         return { expired, released };
+    }
+
+    async reconcileRefundForOrder(
+        ctx: RequestContext,
+        orderId: ID,
+        refundId: ID,
+        customerCouponId?: ID,
+    ): Promise<void> {
+        await this.handleSettledRefund(ctx, orderId, refundId, customerCouponId);
+    }
+
+    async lockCouponForRepair(ctx: RequestContext, couponId: ID): Promise<void> {
+        await this.lockRow(ctx, CustomerCoupon, couponId);
+    }
+
+    async releaseCouponForRepair(ctx: RequestContext, coupon: CustomerCoupon): Promise<void> {
+        const order = coupon.lockedOrderId
+            ? await this.orderService.findOne(ctx, coupon.lockedOrderId, ['lines', 'shippingLines'])
+            : undefined;
+        await this.releaseLockedCoupon(ctx, coupon, order ?? null, '定时核对：释放失效订单占用');
+        if (this.isExpired(coupon, new Date()))
+            await this.expireCoupon(ctx, coupon, '定时核对：按原到期时间失效');
     }
 
     private async backfillLegacyCouponEntitlements(): Promise<void> {
@@ -595,12 +841,15 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
         customer: Customer,
         grantedByAdmin: boolean,
     ): Promise<StoreCustomerCouponView> {
-        const promotion = await this.promotionService.findOne(ctx, campaignId);
+        let promotion = await this.promotionService.findOne(ctx, campaignId);
         if (!promotion?.couponCode || !promotion.enabled)
             throw new UserInputError('优惠券活动不存在或已停用');
         const config = await this.configForPromotion(ctx, promotion);
         const lockedConfig = await this.lockRow(ctx, StoreCouponCampaignConfig, config.id);
         if (lockedConfig) Object.assign(config, lockedConfig);
+        promotion = await this.promotionService.findOne(ctx, campaignId);
+        if (!promotion?.couponCode || !promotion.enabled || promotion.deletedAt)
+            throw new UserInputError('优惠券活动不存在或已停用');
         const now = new Date();
         if (!config.validityDays && promotion.endsAt && promotion.endsAt <= now)
             throw new UserInputError('优惠券活动已结束');
@@ -674,7 +923,7 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
         return this.toCustomerCouponView(ctx, coupon);
     }
 
-    private async publishCustomerCouponChanged(
+    async publishCustomerCouponChanged(
         ctx: RequestContext,
         customer: Customer,
         publicContentChanged = false,
@@ -699,6 +948,193 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
         );
     }
 
+    private async paymentCouponIssues(ctx: RequestContext, order: Order, paidAt: Date) {
+        const issues: Array<{ coupon?: CustomerCoupon; code: string; reason: string }> = [];
+        await this.carts?.lockForOrder(ctx, order.id);
+        await this.orderService.lockOrderForRefund(ctx, order.id);
+        for (const code of [...order.couponCodes].sort()) {
+            const promotion = await this.connection
+                .getRepository(ctx, Promotion)
+                .findOne({ where: { couponCode: code } });
+            if (!promotion) continue; // The native coupon validator handles ordinary or deleted promotions.
+            const config = await this.connection
+                .getRepository(ctx, StoreCouponCampaignConfig)
+                .findOne({ where: { promotionId: promotion.id } });
+            if (
+                !config &&
+                !promotion.conditions.some(
+                    condition => condition.code === 'store_customer_coupon_entitlement',
+                )
+            )
+                continue;
+            const snapshot = await this.connection.getRepository(ctx, CustomerCoupon).findOne({
+                where: { channelId: ctx.channelId, promotionId: promotion.id, lockedOrderId: order.id },
+            });
+            if (snapshot) await this.lockRow(ctx, CustomerCoupon, snapshot.id);
+            const coupon = snapshot
+                ? await this.connection.getRepository(ctx, CustomerCoupon).findOne({
+                      where: { id: snapshot.id },
+                      relations: { promotion: true, campaignConfig: true },
+                  })
+                : null;
+            let reason = '';
+            if (
+                !config ||
+                !idsAreEqual(config.channelId, ctx.channelId) ||
+                !coupon ||
+                !idsAreEqual(coupon.customerId, order.customerId)
+            )
+                reason = '优惠券归属或订单占用不一致';
+            else if (coupon.status !== 'LOCKED' || !idsAreEqual(coupon.lockedOrderId, order.id))
+                reason = '优惠券已失效或不再由本订单占用';
+            else if (coupon.validFrom > paidAt || this.isExpired(coupon, paidAt))
+                reason = '付款成功时间不在优惠券有效期内';
+            else if (!promotion.enabled || promotion.deletedAt) reason = '优惠券活动已停用';
+            else if (discountSnapshot(order, promotion.id).amountWithTax <= 0)
+                reason = '优惠券未产生实际优惠';
+            if (reason) issues.push({ coupon: coupon ?? undefined, code, reason });
+        }
+        return issues;
+    }
+
+    private async hasCouponEntitlements(ctx: RequestContext, order: Order): Promise<boolean> {
+        for (const code of order.couponCodes) {
+            const promotion = await this.connection
+                .getRepository(ctx, Promotion)
+                .findOne({ where: { couponCode: code } });
+            if (
+                promotion &&
+                (promotion.conditions.some(
+                    condition => condition.code === 'store_customer_coupon_entitlement',
+                ) ||
+                    (await this.connection
+                        .getRepository(ctx, StoreCouponCampaignConfig)
+                        .count({ where: { promotionId: promotion.id } })))
+            )
+                return true;
+        }
+        return false;
+    }
+
+    private async validateBeforePayment(
+        ctx: RequestContext,
+        orderId: ID,
+        input: PaymentInput,
+        source: 'handler' | 'manual' = 'handler',
+    ) {
+        const order = await this.loadOrder(ctx, orderId);
+        if (source === 'manual')
+            return { preserveReceivedQuote: await this.hasCouponEntitlements(ctx, order) };
+        if (order.payments.some(payment => payment.metadata?.manualReview?.required))
+            return { error: 'PAYMENT_REVIEW_REQUIRED: 该订单已有待核对收款，请勿重复付款' };
+        if (!(await this.hasCouponEntitlements(ctx, order))) return {};
+        const isUsdt = input.method === USDT_TRC20_PAYMENT_METHOD_CODE;
+        const proof = isUsdt ? verifyUsdtPaymentProof(input.metadata?.proof) : null;
+        if (
+            isUsdt &&
+            (!proof ||
+                !proof.paidAt ||
+                proof.channelId !== String(ctx.channelId) ||
+                proof.orderId !== String(order.id) ||
+                proof.fiatCurrencyCode !== String(order.currencyCode) ||
+                proof.fiatAmount !==
+                    order.totalWithTax -
+                        (order.payments ?? [])
+                            .filter(p => p.state === 'Settled' || p.state === 'Authorized')
+                            .reduce((sum, p) => sum + p.amount, 0))
+        ) {
+            return { error: 'PAYMENT_REVIEW_REQUIRED: 付款时间或支付凭证无法核实，请人工核对到账记录' };
+        }
+        const issues = await this.paymentCouponIssues(ctx, order, new Date(proof?.paidAt ?? Date.now()));
+        if (!issues.length) return {};
+        // The verified transfer has already happened. Keep the accepted quote and funds evidence.
+        if (
+            isUsdt ||
+            order.payments.some(
+                payment =>
+                    payment.state === 'Authorized' ||
+                    payment.state === 'Settled' ||
+                    payment.metadata?.manualReview?.required,
+            )
+        ) {
+            return {
+                error:
+                    'PAYMENT_REVIEW_REQUIRED: ' +
+                    issues.map(issue => issue.reason).join('；') +
+                    '，已收款订单需人工核对',
+            };
+        }
+        for (const issue of issues) {
+            const coupon = issue.coupon;
+            if (coupon?.status === 'LOCKED' && idsAreEqual(coupon.lockedOrderId, order.id)) {
+                if (this.isExpired(coupon, new Date()))
+                    await this.terminalTransition(ctx, coupon, 'EXPIRED', issue.reason);
+                else await this.releaseLockedCouponWithinCart(ctx, coupon, order, issue.reason);
+            } else {
+                await this.orderService.removeCouponCode(ctx, order.id, issue.code);
+            }
+        }
+        if (this.carts && (await this.carts.isOrderPaymentLocked(ctx, order.id))) {
+            const cart = await this.carts.getCart(ctx);
+            const reopened = await this.carts.reopenCart(ctx, cart.revision);
+            if (isGraphQlErrorResult(reopened)) throw new UserInputError(reopened.message);
+        }
+        return { removedCouponCodes: issues.map(issue => issue.code) };
+    }
+
+    private async validateConfirmedPayment(
+        ctx: RequestContext,
+        orderId: ID,
+        payment: Payment,
+        state: PaymentState,
+        source: 'handler' | 'manual',
+    ): Promise<string | undefined> {
+        const order = await this.loadOrder(ctx, orderId);
+        if (!(await this.hasCouponEntitlements(ctx, order))) return;
+        const isUsdt = payment.method === USDT_TRC20_PAYMENT_METHOD_CODE;
+        const evidence = isUsdt ? payment.metadata?.verifiedUsdtPayment : null;
+        let paidAt = new Date();
+        if (isUsdt) {
+            const proof = verifyUsdtPaymentProof(evidence?.proof);
+            if (
+                !proof ||
+                proof.paidAt !== evidence?.paidAt ||
+                proof.orderId !== evidence?.orderId ||
+                proof.channelId !== evidence?.channelId ||
+                proof.transactionId !== evidence?.transactionId ||
+                proof.fiatAmount !== evidence?.fiatAmount
+            )
+                return '可信付款凭证校验失败，请人工核对';
+            if (
+                !evidence ||
+                !Number.isSafeInteger(evidence.paidAt) ||
+                evidence.paidAt <= 0 ||
+                evidence.paidAt > Date.now() ||
+                evidence.channelId !== String(ctx.channelId) ||
+                evidence.orderId !== String(orderId) ||
+                evidence.fiatCurrencyCode !== order.currencyCode ||
+                evidence.fiatAmount !== payment.amount ||
+                payment.transactionId !== `tron:${evidence.transactionId}`
+            )
+                return '可信付款时间或到账证据缺失，请人工核对';
+            paidAt = new Date(evidence.paidAt);
+        }
+        if (!isUsdt && source === 'manual') return '人工登记的付款时间无法核实，请核对原始支付凭证';
+        const issues = await this.paymentCouponIssues(ctx, order, paidAt);
+        if (issues.length) return issues.map(issue => issue.reason).join('；') + '，已收款订单需人工核对';
+        if (state === 'Settled')
+            payment.metadata = {
+                ...payment.metadata,
+                couponPaymentValidation: {
+                    paidAt: paidAt.toISOString(),
+                    source: isUsdt ? 'VERIFIED_TRC20_BLOCK' : 'SERVER_HANDLER_SUCCESS',
+                    orderId: String(orderId),
+                    channelId: String(ctx.channelId),
+                    transactionId: payment.transactionId,
+                },
+            };
+    }
+
     private async redeemForPaidOrder(ctx: RequestContext, orderId: ID): Promise<void> {
         const repository = this.connection.getRepository(ctx, CustomerCoupon);
         const coupons = await repository.find({
@@ -707,13 +1143,31 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
         });
         if (!coupons.length) return;
         const order = await this.loadOrder(ctx, orderId);
-        for (const coupon of coupons) {
+        const settledPayments = order.payments.filter(payment => payment.state === 'Settled');
+        const times = settledPayments.map(payment =>
+            Date.parse(payment.metadata?.couponPaymentValidation?.paidAt ?? ''),
+        );
+        if (!times.length || times.some(time => !Number.isFinite(time))) return;
+        const paidAt = new Date(Math.max(...times));
+        for (const candidate of coupons) {
+            await this.lockRow(ctx, CustomerCoupon, candidate.id);
+            const coupon = await repository.findOneOrFail({
+                where: { id: candidate.id, channelId: ctx.channelId },
+                relations: { promotion: true, campaignConfig: true },
+            });
+            if (coupon.status !== 'LOCKED' || !idsAreEqual(coupon.lockedOrderId, order.id)) continue;
+            if (
+                coupon.validFrom > paidAt ||
+                this.isExpired(coupon, paidAt) ||
+                !idsAreEqual(coupon.customerId, order.customerId)
+            )
+                continue;
             const discount = discountSnapshot(order, coupon.promotionId);
             if (discount.amountWithTax <= 0) {
                 await this.releaseLockedCoupon(ctx, coupon, null, '订单未产生实际优惠，自动释放优惠券');
                 continue;
             }
-            const usedAt = new Date();
+            const usedAt = paidAt;
             const transition = await repository.update(
                 {
                     id: coupon.id,
@@ -775,32 +1229,53 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
         }
     }
 
-    private async handleSettledRefund(ctx: RequestContext, orderId: ID, refundId: ID): Promise<void> {
+    private async handleSettledRefund(
+        ctx: RequestContext,
+        orderId: ID,
+        refundId: ID,
+        customerCouponId?: ID,
+    ): Promise<void> {
+        await this.orderService.lockOrderForRefund(ctx, orderId);
         const order = await this.loadOrder(ctx, orderId);
         const settledRefundTotal = (order.payments ?? [])
             .flatMap(payment => payment.refunds ?? [])
             .filter(refund => refund.state === 'Settled')
             .reduce((total, refund) => total + refund.total, 0);
         const allocations = await this.connection.getRepository(ctx, CouponOrderAllocation).find({
-            where: { channelId: ctx.channelId, orderId, status: In(['USED', 'REFUNDED']) },
+            where: {
+                channelId: ctx.channelId,
+                orderId,
+                status: In(['USED', 'REFUNDED']),
+                ...(customerCouponId == null ? {} : { customerCouponId }),
+            },
         });
         for (const allocation of allocations) {
             const paidTotal =
                 allocation.orderTotalWithTax > 0 ? allocation.orderTotalWithTax : order.totalWithTax;
             const fullRefund = paidTotal > 0 && settledRefundTotal >= paidTotal;
+            await this.lockRow(ctx, CustomerCoupon, allocation.customerCouponId);
             const coupon = await this.connection.getRepository(ctx, CustomerCoupon).findOne({
                 where: { id: allocation.customerCouponId },
                 relations: { promotion: true, campaignConfig: true },
             });
             if (!coupon) continue;
             const previousRefundedAmount = allocation.refundedAmount;
-            allocation.refundId = refundId;
+            if (!allocation.refundId || !allocation.refundedAt) allocation.refundId = refundId;
             allocation.refundedAmount = Math.round(
                 allocation.discountAmountWithTax * Math.min(1, settledRefundTotal / Math.max(1, paidTotal)),
             );
             if (fullRefund) {
                 allocation.status = 'REFUNDED';
-                allocation.refundedAt = new Date();
+                if (!allocation.refundedAt) {
+                    let cumulative = 0;
+                    const refunds = order.payments
+                        .flatMap(payment => payment.refunds ?? [])
+                        .filter(refund => refund.state === 'Settled')
+                        .sort((a, b) => a.updatedAt.getTime() - b.updatedAt.getTime());
+                    allocation.refundedAt =
+                        refunds.find(refund => (cumulative += refund.total) >= paidTotal)?.updatedAt ??
+                        new Date();
+                }
             }
             await this.connection
                 .getRepository(ctx, CouponOrderAllocation)
@@ -817,7 +1292,9 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
                 fullRefund &&
                 coupon.status === 'USED' &&
                 idsAreEqual(coupon.usedOrderId, orderId) &&
-                coupon.campaignConfig.returnOnFullRefund
+                coupon.campaignConfig.returnOnFullRefund &&
+                coupon.promotion.enabled &&
+                !coupon.promotion.deletedAt
             ) {
                 await this.returnCoupon(ctx, coupon, {
                     orderId,
@@ -900,7 +1377,7 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
                 lockedOrderId: null,
             },
         );
-        if (transition.affected !== 1) return;
+        if (transition.affected !== 1) throw new UserInputError('优惠券状态已变化，请重试');
         if (order && coupon.promotion?.couponCode) {
             await this.orderService.removeCouponCode(ctx, order.id, coupon.promotion.couponCode);
         }
@@ -923,18 +1400,27 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
         });
     }
 
-    private async expireCoupon(ctx: RequestContext, coupon: CustomerCoupon, note: string) {
-        if (coupon.status === 'EXPIRED') return;
-        coupon.status = 'EXPIRED';
-        coupon.expiredAt = new Date();
-        coupon.lockedAt = null;
-        coupon.lockExpiresAt = null;
-        coupon.lockedOrderId = null;
-        await this.connection.getRepository(ctx, CustomerCoupon).save(coupon, { reload: false });
-        await this.addLedger(ctx, coupon, 'EXPIRED', {
-            actorType: 'SYSTEM',
-            idempotencyKey: `EXPIRED:${coupon.id}`,
-            note,
+    private async expireCoupon(ctx: RequestContext, snapshot: CustomerCoupon, note: string) {
+        return this.inTransaction(ctx, async txCtx => {
+            await this.lockRow(txCtx, CustomerCoupon, snapshot.id);
+            const fresh = await this.connection.getRepository(txCtx, CustomerCoupon).findOneOrFail({
+                where: { id: snapshot.id, channelId: txCtx.channelId },
+                relations: { promotion: true, campaignConfig: true },
+            });
+            if (
+                !this.isExpired(fresh, new Date()) ||
+                !['AVAILABLE', 'RETURNED', 'LOCKED'].includes(fresh.status)
+            )
+                return;
+            if (fresh.lockedOrderId && (await this.isCouponOrderPaymentPending(txCtx, fresh.lockedOrderId)))
+                return;
+            const work = async (workCtx: RequestContext) => {
+                await this.terminalTransition(workCtx, fresh, 'EXPIRED', note);
+                Object.assign(snapshot, fresh);
+            };
+            return fresh.lockedOrderId && this.carts
+                ? this.carts.withOrderChange(txCtx, fresh.lockedOrderId, work)
+                : work(txCtx);
         });
     }
 
@@ -1017,7 +1503,7 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
         allocation.discountAmountWithTax = discount.amountWithTax;
         allocation.orderTotalWithTax = order.totalWithTax;
         allocation.lineAllocations = discount.lines;
-        if (status === 'USED') allocation.usedAt = new Date();
+        if (status === 'USED') allocation.usedAt = coupon.usedAt;
         await repository.save(allocation, { reload: false });
     }
 
@@ -1066,19 +1552,30 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
         entity: typeof CustomerCoupon | typeof StoreCouponCampaignConfig,
         id: ID,
     ) {
+        let observedOrderId: ID | null = null;
         if (entity === CustomerCoupon && this.carts) {
             const coupon = await this.connection
                 .getRepository(ctx, CustomerCoupon)
                 .findOne({ where: { id, channelId: ctx.channelId } });
-            if (coupon?.lockedOrderId) await this.carts.lockForOrder(ctx, coupon.lockedOrderId);
+            observedOrderId = coupon?.lockedOrderId ?? null;
+            if (observedOrderId != null) await this.carts.lockForOrder(ctx, observedOrderId);
         }
         try {
-            return await this.connection
-                .getRepository(ctx, entity)
+            const locked = await this.connection
+                .getRepository<CustomerCoupon | StoreCouponCampaignConfig>(ctx, entity)
                 .createQueryBuilder('row')
                 .setLock('pessimistic_write')
                 .where('row.id = :id', { id })
                 .getOne();
+            if (
+                entity === CustomerCoupon &&
+                this.carts &&
+                locked &&
+                String(('lockedOrderId' in locked ? locked.lockedOrderId : null) ?? '') !==
+                    String(observedOrderId ?? '')
+            )
+                throw new UserInputError('优惠券占用订单已变化，请重试');
+            return locked;
         } catch (error) {
             if (!isLockNotSupportedError(error)) throw error;
         }

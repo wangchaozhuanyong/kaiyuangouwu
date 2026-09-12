@@ -12,6 +12,7 @@ import {
     EventBus,
     ID,
     RequestContext,
+    Seller,
     TransactionalConnection,
     UserInputError,
     idsAreEqual,
@@ -126,6 +127,18 @@ export class StoreProfileService {
         const profile = await this.lockProfileById(ctx, input.id);
         this.assertExpectedUpdatedAt(profile.updatedAt, input.expectedUpdatedAt);
 
+        let seller: Seller | undefined;
+        if (input.sellerId !== undefined) {
+            if (input.sellerId == null || !String(input.sellerId).trim()) {
+                throw new UserInputError('请选择有效的所属商家主体');
+            }
+            seller =
+                (await this.connection.getRepository(ctx, Seller).findOne({
+                    where: { id: input.sellerId },
+                })) ?? undefined;
+            if (!seller) throw new UserInputError('所选商家主体已不存在，请刷新后重新选择');
+        }
+
         const status = input.status ?? profile.status;
         const activating = profile.status !== 'ACTIVE' && status === 'ACTIVE';
         this.assertStatus(status);
@@ -157,11 +170,12 @@ export class StoreProfileService {
         );
         this.updateBrandColors(profile, input);
         this.updateLegalIdentity(profile, input);
-        await this.updateStorefrontNames(
+        await this.updateStorefrontChannel(
             ctx,
             profile,
             input.storefrontNameZh,
             localized.get('storefrontName') ?? input.storefrontNameEn,
+            seller,
         );
 
         if (input.logoAssetId !== undefined) {
@@ -182,6 +196,10 @@ export class StoreProfileService {
             }
         }
 
+        if (seller) {
+            // A Channel-only rebind must also invalidate older StoreProfile editing sessions.
+            profile.updatedAt = new Date(Math.max(Date.now(), profile.updatedAt.getTime() + 1));
+        }
         const saved = await repository.save(profile);
         await this.recordProfileTranslationState(ctx, saved, prepared);
         await this.publishChanged(ctx, saved);
@@ -219,7 +237,7 @@ export class StoreProfileService {
         }
         await this.updateBrandAssets(ctx, profile, input);
 
-        await this.updateStorefrontNames(
+        await this.updateStorefrontChannel(
             ctx,
             profile,
             input.storefrontNameZh,
@@ -627,13 +645,14 @@ export class StoreProfileService {
         return normalized;
     }
 
-    private async updateStorefrontNames(
+    private async updateStorefrontChannel(
         ctx: RequestContext,
         profile: StoreProfile,
         storefrontNameZhInput: string | null | undefined,
         storefrontNameEnInput: string | null | undefined,
+        seller?: Seller,
     ): Promise<void> {
-        if (storefrontNameZhInput == null && storefrontNameEnInput == null) {
+        if (storefrontNameZhInput == null && storefrontNameEnInput == null && !seller) {
             return;
         }
         const customFields = profile.channel.customFields as StorefrontChannelFields;
@@ -650,6 +669,7 @@ export class StoreProfileService {
         );
         const updatedChannel = await this.channelService.update(ctx, {
             id: profile.channelId,
+            ...(seller ? { sellerId: seller.id } : {}),
             customFields: {
                 ...customFields,
                 storefrontNameZh,
@@ -659,6 +679,8 @@ export class StoreProfileService {
         if (isGraphQlErrorResult(updatedChannel)) {
             throw new UserInputError(updatedChannel.message);
         }
+        // ChannelService reloads scalar fields; retain the resolved seller for the returned profile.
+        updatedChannel.seller = seller ?? profile.channel.seller;
         profile.channel = updatedChannel;
     }
 }

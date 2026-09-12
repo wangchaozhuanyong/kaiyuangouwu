@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Logger, RequestContext, TransactionalConnection } from '@vendure/core';
 import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
+import { IsNull, LessThan, Or } from 'typeorm';
 
 import { loggerCtx } from '../constants';
 import { IcloudPrimaryAccount } from '../entities/icloud-primary-account.entity';
@@ -196,9 +197,14 @@ export class IcloudImapSyncService {
 
                         // Update virtual email counter
                         if (matchedVirtualEmail) {
-                            matchedVirtualEmail.mailCount += 1;
-                            matchedVirtualEmail.lastMailReceivedAt = receivedAt;
-                            await virtualEmailRepo.save(matchedVirtualEmail);
+                            await virtualEmailRepo.increment({ id: matchedVirtualEmail.id }, 'mailCount', 1);
+                            await virtualEmailRepo.update(
+                                {
+                                    id: matchedVirtualEmail.id,
+                                    lastMailReceivedAt: Or(IsNull(), LessThan(receivedAt)),
+                                },
+                                { lastMailReceivedAt: receivedAt },
+                            );
                         }
                     } catch (parseErr: any) {
                         Logger.error(`Failed to parse email UID ${item.uid}: ${parseErr.message}`, loggerCtx);
@@ -206,11 +212,23 @@ export class IcloudImapSyncService {
                 }
 
                 // Update account sync state
-                account.lastSyncedUid = maxUid;
-                account.lastSyncedAt = new Date();
-                account.status = IcloudAccountStatus.ACTIVE;
-                account.lastSyncError = null;
-                await primaryAccountRepo.save(account);
+                // Sync owns only sync fields. Never restore stale credentials, notes or codes.
+                await primaryAccountRepo.update(
+                    { id: account.id, lastSyncedUid: LessThan(maxUid) },
+                    { lastSyncedUid: maxUid },
+                );
+                await primaryAccountRepo.update({ id: account.id }, { lastSyncedAt: new Date() });
+                if (account.status !== IcloudAccountStatus.DISABLED)
+                    await primaryAccountRepo.update(
+                        {
+                            id: account.id,
+                            status: account.status,
+                            encryptedAppPassword: account.encryptedAppPassword,
+                            imapHost: account.imapHost,
+                            imapPort: account.imapPort,
+                        },
+                        { status: IcloudAccountStatus.ACTIVE, lastSyncError: null },
+                    );
 
                 return { success: true, syncedCount };
             } finally {
@@ -219,9 +237,17 @@ export class IcloudImapSyncService {
             }
         } catch (err: any) {
             Logger.error(`IMAP sync error for ${account.email}: ${err.message}`, loggerCtx);
-            account.status = IcloudAccountStatus.AUTH_ERROR;
-            account.lastSyncError = err.message;
-            await primaryAccountRepo.save(account);
+            if (account.status !== IcloudAccountStatus.DISABLED)
+                await primaryAccountRepo.update(
+                    {
+                        id: account.id,
+                        status: account.status,
+                        encryptedAppPassword: account.encryptedAppPassword,
+                        imapHost: account.imapHost,
+                        imapPort: account.imapPort,
+                    },
+                    { status: IcloudAccountStatus.AUTH_ERROR, lastSyncError: err.message },
+                );
             return { success: false, syncedCount, error: err.message };
         }
     }

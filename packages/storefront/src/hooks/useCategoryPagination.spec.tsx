@@ -2,7 +2,7 @@
 import { QueryClient, QueryClientProvider, onlineManager } from '@tanstack/react-query';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 import { MarketConfig, Product, ProductSearchPage, StorefrontCatalogInput } from '../types';
 
@@ -39,7 +39,7 @@ describe('category automatic pagination', () => {
     let container: HTMLDivElement;
     let root: ReturnType<typeof createRoot>;
     let pagination: ReturnType<typeof useCategoryPagination>;
-    let catalog: ReturnType<typeof vi.fn>;
+    let catalog: Mock<(input: StorefrontCatalogInput, signal?: AbortSignal) => Promise<ProductSearchPage>>;
     let input: StorefrontCatalogInput;
     let enabled: boolean;
     let suspended: boolean;
@@ -191,7 +191,9 @@ describe('category automatic pagination', () => {
     });
 
     it('deduplicates overlapping products without changing server offsets', async () => {
-        catalog.mockImplementation(args => Promise.resolve(args.skip === 12 ? page(11) : page(args.skip)));
+        catalog.mockImplementation(args =>
+            Promise.resolve(args.skip === 12 ? page(11) : page(args.skip ?? 0)),
+        );
         render();
         await settle();
         intersect();
@@ -210,8 +212,8 @@ describe('category automatic pagination', () => {
     it('preserves products and pauses after a failed next page until explicit retry', async () => {
         let failing = true;
         catalog.mockImplementation(args => {
-            if (args.skip > 0 && failing) return Promise.reject(new Error('Temporary failure'));
-            return Promise.resolve(page(args.skip));
+            if ((args.skip ?? 0) > 0 && failing) return Promise.reject(new Error('Temporary failure'));
+            return Promise.resolve(page(args.skip ?? 0));
         });
         render();
         await settle();
@@ -238,8 +240,9 @@ describe('category automatic pagination', () => {
     it.each(['empty', 'repeated'])('pauses an abnormal %s page and retries the same offset', async mode => {
         let invalid = true;
         catalog.mockImplementation(args => {
-            if (args.skip > 0 && invalid) return Promise.resolve(mode === 'empty' ? page(12, 0) : page(0));
-            return Promise.resolve(page(args.skip));
+            if ((args.skip ?? 0) > 0 && invalid)
+                return Promise.resolve(mode === 'empty' ? page(12, 0) : page(0));
+            return Promise.resolve(page(args.skip ?? 0));
         });
         render();
         await settle();
@@ -280,7 +283,7 @@ describe('category automatic pagination', () => {
         });
         await settle();
         expect(catalog).toHaveBeenCalledTimes(3);
-        expect(catalog.mock.calls[1][1].aborted).toBe(true);
+        expect(catalog.mock.calls[1][1]?.aborted).toBe(true);
         old.resolve(page(12));
         fresh.resolve(page(100, 12, 12));
         await settle();
@@ -371,7 +374,7 @@ describe('category automatic pagination', () => {
         });
         await settle(1500);
         expect(pagination.query.isRefetchError).toBe(true);
-        catalog.mockImplementation(args => Promise.resolve(page(args.skip)));
+        catalog.mockImplementation(args => Promise.resolve(page(args.skip ?? 0)));
         act(() => {
             void pagination.loadMore();
             void pagination.loadMore();

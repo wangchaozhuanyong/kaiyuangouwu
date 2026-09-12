@@ -63,11 +63,13 @@ describe('UsdtManualRefundService', () => {
             createdAt: new Date('2026-08-29T10:00:00.000Z'),
         });
         orderService = {
+            withOrderMutationTransaction: vi.fn((ctx, work) => work(ctx)),
+            lockOrderForRefund: vi.fn(() => Promise.resolve()),
             refundOrder: vi.fn().mockResolvedValue(pendingRefund),
-            settleRefund: vi.fn().mockImplementation(async (_ctx, input) => {
+            settleRefund: vi.fn().mockImplementation((_ctx, input) => {
                 pendingRefund.state = 'Settled';
                 pendingRefund.transactionId = input.transactionId;
-                return pendingRefund;
+                return Promise.resolve(pendingRefund);
             }),
         };
         tronClient = {

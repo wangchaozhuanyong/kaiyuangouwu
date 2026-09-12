@@ -36,7 +36,9 @@ import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatDateTime, formatMoney } from '../Sales/sales-utils';
 import { dateInputToUtcDateTime } from './catalog-date';
+import { calculateDefaultExpiryDate } from './catalog-expiry';
 import { calculateDraftMargin } from './catalog-margin';
+import { CatalogUnitInput } from './catalog-unit-input';
 
 interface VariantDraft {
     id: string;
@@ -259,18 +261,23 @@ export function CatalogOperationsBlock({ context }: { context: NextAdminPageBloc
                                 <div className="grid gap-3 border-t border-slate-100 p-4 sm:grid-cols-2 xl:grid-cols-3">
                                     <TextField
                                         label={`采购成本 (${workspace.currencyCode})`}
+                                        description="这个 SKU 每个销售单位的采购成本，用于计算毛利；不是销售价。"
                                         type="number"
                                         value={draft.purchaseCost}
                                         onChange={purchaseCost => updateDraft(variant.id, { purchaseCost })}
                                     />
                                     <TextField
                                         label="当前仓库库存"
+                                        description="当前仓库实际在库数量；保存修改会生成库存调整流水。"
                                         type="number"
                                         value={draft.stockOnHand}
                                         onChange={stockOnHand => updateDraft(variant.id, { stockOnHand })}
                                     />
                                     <label className="text-xs font-bold text-slate-600">
                                         供货商
+                                        <span className="mt-0.5 block text-[10px] font-normal leading-4 text-slate-400">
+                                            记录这个 SKU 从谁处采购；没有固定供货商可不关联。
+                                        </span>
                                         <select
                                             value={draft.supplierId}
                                             onChange={event =>
@@ -294,28 +301,33 @@ export function CatalogOperationsBlock({ context }: { context: NextAdminPageBloc
                                     <div className="grid gap-3 border-t border-slate-100 p-4 sm:grid-cols-2 xl:grid-cols-4">
                                         <TextField
                                             label="SKU 内部编码"
+                                            description="系统识别这个销售规格的唯一编号；同一店铺不能重复。"
                                             value={draft.sku}
                                             onChange={sku => updateDraft(variant.id, { sku })}
                                         />
                                         <TextField
                                             label="商品条码"
+                                            description="商品包装上的扫描码；没有条码可留空。它不是 SKU 内部编码。"
                                             value={draft.barcode}
                                             onChange={barcode => updateDraft(variant.id, { barcode })}
                                         />
                                         <TextField
                                             label="规格说明"
+                                            description="给员工查看的规格，例如 500ml、红色 / XL；不会生成 SKU 组合。"
                                             value={draft.specification}
                                             onChange={specification =>
                                                 updateDraft(variant.id, { specification })
                                             }
                                         />
-                                        <TextField
+                                        <UnitField
                                             label="销售单位"
+                                            description="销售和库存展示使用的单位，例如瓶、盒、件。"
                                             value={draft.saleUnit}
                                             onChange={saleUnit => updateDraft(variant.id, { saleUnit })}
                                         />
-                                        <TextField
+                                        <UnitField
                                             label="采购单位"
+                                            description="向供应商进货时使用的单位，例如箱；只用于采购和换算。"
                                             value={draft.purchaseUnit}
                                             onChange={purchaseUnit =>
                                                 updateDraft(variant.id, { purchaseUnit })
@@ -323,6 +335,7 @@ export function CatalogOperationsBlock({ context }: { context: NextAdminPageBloc
                                         />
                                         <TextField
                                             label="包装换算"
+                                            description="1 个采购单位含多少销售单位。例如 1 箱 = 12 瓶填 12；同单位填 1。"
                                             type="number"
                                             value={draft.packageQuantity}
                                             onChange={packageQuantity =>
@@ -330,7 +343,8 @@ export function CatalogOperationsBlock({ context }: { context: NextAdminPageBloc
                                             }
                                         />
                                         <TextField
-                                            label="保质期（天）"
+                                            label="默认保质期（天）"
+                                            description="只作批次默认值。新增库存批次并填写生产日期后自动算到期日；只填这里不能知道现有库存何时过期。"
                                             type="number"
                                             value={draft.shelfLifeDays}
                                             onChange={shelfLifeDays =>
@@ -339,6 +353,7 @@ export function CatalogOperationsBlock({ context }: { context: NextAdminPageBloc
                                         />
                                         <TextField
                                             label="库存下限"
+                                            description="库存低于此数量时标记为低库存；留空表示不设置。"
                                             type="number"
                                             value={draft.minimumStock}
                                             onChange={minimumStock =>
@@ -347,6 +362,7 @@ export function CatalogOperationsBlock({ context }: { context: NextAdminPageBloc
                                         />
                                         <TextField
                                             label="库存上限"
+                                            description="补货计划的最高库存；不能低于库存下限，留空表示不设置。"
                                             type="number"
                                             value={draft.maximumStock}
                                             onChange={maximumStock =>
@@ -392,11 +408,14 @@ export function CatalogOperationsBlock({ context }: { context: NextAdminPageBloc
                         <span className="text-xs text-slate-500">已记录 {visibleLots.length} 个批次</span>
                     </div>
                     <p className="mt-1 text-xs text-slate-500">
-                        只有需要追踪生产日期或到期日期时才需要设置。
+                        真正的到期时间记录在每一批库存上；系统按到期日期优先出库，并识别过期库存。
                     </p>
                 </summary>
                 {!visibleLots.length ? (
-                    <p className="mt-3 text-xs text-slate-500">当前仓库还没有库存批次</p>
+                    <p className="mt-3 text-xs text-slate-500">
+                        当前仓库还没有库存批次，因此现在无法判断这批库存何时过期。请在对应 SKU
+                        的“更多经营资料”中新增库存批次。
+                    </p>
                 ) : (
                     <div className="mt-3 overflow-x-auto rounded-lg border border-slate-200">
                         <table className="min-w-[850px] w-full text-left text-xs">
@@ -472,6 +491,7 @@ export function CatalogOperationsBlock({ context }: { context: NextAdminPageBloc
                 <LotEditor
                     value={lotDraft}
                     currencyCode={workspace.currencyCode}
+                    defaultShelfLifeDays={shelfLifeDaysFromDraft(drafts[lotDraft.productVariantId])}
                     saving={lotState.loading}
                     onClose={() => setLotDraft(null)}
                     onSave={commitLot}
@@ -598,8 +618,18 @@ export function ProductPackagingBlock({ context }: { context: NextAdminPageBlock
                     value={unitsPerPackage}
                     onChange={setUnitsPerPackage}
                 />
-                <TextField label="散件单位" value={unitLabel} onChange={setUnitLabel} />
-                <TextField label="整包单位" value={packageLabel} onChange={setPackageLabel} />
+                <UnitField
+                    label="散件单位"
+                    description="例如瓶、罐、件；可从常用单位选择或自定义。"
+                    value={unitLabel}
+                    onChange={setUnitLabel}
+                />
+                <UnitField
+                    label="整包单位"
+                    description="例如箱、盒、包；可从常用单位选择或自定义。"
+                    value={packageLabel}
+                    onChange={setPackageLabel}
+                />
                 <div className="flex flex-col justify-end gap-2">
                     <Toggle label="启用包装销售" checked={enabled} onChange={setEnabled} />
                     <Toggle label="库存不足时自动拆包" checked={autoUnpack} onChange={setAutoUnpack} />
@@ -996,12 +1026,14 @@ export function ProductVariantCustomFieldsBlock({ context }: { context: NextAdmi
 function LotEditor({
     value,
     currencyCode,
+    defaultShelfLifeDays,
     saving,
     onClose,
     onSave,
 }: {
     value: LotDraft;
     currencyCode: string;
+    defaultShelfLifeDays: number | null;
     saving: boolean;
     onClose: () => void;
     onSave: (value: LotDraft) => Promise<void>;
@@ -1009,6 +1041,22 @@ function LotEditor({
     const [draft, setDraft] = useState(value);
     const update = (field: keyof LotDraft, next: string) =>
         setDraft(current => ({ ...current, [field]: next }));
+    const updateManufacturedAt = (manufacturedAt: string) => {
+        setDraft(current => {
+            const previousDefaultExpiry = calculateDefaultExpiryDate(
+                current.manufacturedAt,
+                defaultShelfLifeDays,
+            );
+            const canUseDefault = !current.expiresAt || current.expiresAt === previousDefaultExpiry;
+            return {
+                ...current,
+                manufacturedAt,
+                expiresAt: canUseDefault
+                    ? calculateDefaultExpiryDate(manufacturedAt, defaultShelfLifeDays)
+                    : current.expiresAt,
+            };
+        });
+    };
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4">
             <AccessibleDialogSurface
@@ -1022,32 +1070,42 @@ function LotEditor({
                         <X className="h-4 w-4" />
                     </button>
                 </div>
+                <p className="mt-4 rounded-lg border border-blue-100 bg-blue-50/60 px-3 py-2 text-xs leading-5 text-blue-800">
+                    {defaultShelfLifeDays == null
+                        ? '这个 SKU 没有设置默认保质期。请手动填写实际到期日期；只记录生产日期不会自动判断过期。'
+                        : `这个 SKU 的默认保质期是 ${defaultShelfLifeDays} 天。填写生产日期后会自动带出到期日期，你仍可按包装上的实际日期修改。`}
+                </p>
                 <div className="mt-5 grid gap-3 sm:grid-cols-2">
                     <TextField
                         label="批次号 *"
+                        description="用于区分每次进货或生产的库存，例如包装上的生产批号。"
                         value={draft.lotCode}
                         onChange={lotCode => update('lotCode', lotCode)}
                     />
                     <TextField
                         label="批次数量 *"
+                        description="这一批当前入库的实际数量。"
                         type="number"
                         value={draft.quantityOnHand}
                         onChange={quantity => update('quantityOnHand', quantity)}
                     />
                     <TextField
                         label="生产日期"
+                        description="填写后可根据默认保质期自动计算到期日期。"
                         type="date"
                         value={draft.manufacturedAt}
-                        onChange={date => update('manufacturedAt', date)}
+                        onChange={updateManufacturedAt}
                     />
                     <TextField
                         label="到期日期"
+                        description="以商品包装上的实际日期为准；系统用它识别临期、过期和出库顺序。"
                         type="date"
                         value={draft.expiresAt}
                         onChange={date => update('expiresAt', date)}
                     />
                     <TextField
                         label={`批次成本 (${currencyCode})`}
+                        description="这一批货的实际单位成本；不同批次价格不同时填写。"
                         type="number"
                         value={draft.purchaseCost}
                         onChange={cost => update('purchaseCost', cost)}
@@ -1158,13 +1216,21 @@ const optionalInteger = (value: string, label: string) => (value.trim() ? intege
 const dateOnly = (value?: string | null) => (value ? new Date(value).toLocaleDateString('zh-CN') : '—');
 const inputDate = (value?: string | null) => (value ? new Date(value).toISOString().slice(0, 10) : '');
 
+function shelfLifeDaysFromDraft(draft?: VariantDraft): number | null {
+    if (!draft?.shelfLifeDays.trim()) return null;
+    const value = Number(draft.shelfLifeDays);
+    return Number.isInteger(value) && value >= 0 ? value : null;
+}
+
 function TextField({
     label,
+    description,
     value,
     onChange,
     type = 'text',
 }: {
     label: string;
+    description?: string;
     value: string;
     onChange: (value: string) => void;
     type?: string;
@@ -1172,14 +1238,43 @@ function TextField({
     return (
         <label className="text-xs font-bold text-slate-600">
             {label}
+            {description && (
+                <span className="mt-0.5 block text-[10px] font-normal leading-4 text-slate-400">
+                    {description}
+                </span>
+            )}
             <input
                 type={type}
                 min={type === 'number' ? 0 : undefined}
                 step={type === 'number' ? 'any' : undefined}
                 value={value}
                 onChange={event => onChange(event.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal"
+                className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal"
             />
+        </label>
+    );
+}
+
+function UnitField({
+    label,
+    description,
+    value,
+    onChange,
+}: {
+    label: string;
+    description: string;
+    value: string;
+    onChange: (value: string) => void;
+}) {
+    return (
+        <label className="text-xs font-bold text-slate-600">
+            {label}
+            <span className="mt-0.5 block text-[10px] font-normal leading-4 text-slate-400">
+                {description}
+            </span>
+            <div className="mt-1.5">
+                <CatalogUnitInput value={value} onChange={onChange} ariaLabel={label} />
+            </div>
         </label>
     );
 }

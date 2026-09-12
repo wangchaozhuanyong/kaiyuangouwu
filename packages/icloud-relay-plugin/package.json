@@ -7,7 +7,8 @@
     "scripts": {
         "build": "tsc --project tsconfig.build.json",
         "check-types": "tsc --project tsconfig.json --noEmit",
-        "test": "vitest run"
+        "test": "vitest run",
+        "test:integration": "cross-env PACKAGE=icloud-relay-plugin VENDURE_DISABLE_TELEMETRY=true vitest --config ../../e2e-common/vitest.config.mts --run e2e/admin-contract.e2e-spec.ts"
     },
     "dependencies": {
         "@nestjs/common": "^11.0.12",
@@ -26,6 +27,7 @@
         "@types/sanitize-html": "^2.16.1",
         "@vendure/testing": "3.7.2",
         "typescript": "5.9.3",
-        "vitest": "^3.2.4"
+        "vitest": "^4.1.11",
+        "@graphql-typed-document-node/core": "^3.2.0"
     }
 }

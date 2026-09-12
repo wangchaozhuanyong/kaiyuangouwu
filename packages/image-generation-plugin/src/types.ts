@@ -33,7 +33,21 @@ export type ImageGenerationFailureCode =
     | 'SETTLEMENT'
     | 'UNKNOWN_RESULT';
 
+export interface PrivateImageBlobStore {
+    destroy?(): void;
+    put(key: string, bytes: Buffer): Promise<void>;
+    get(key: string): Promise<Buffer>;
+    has(key: string): Promise<boolean>;
+    delete(key: string): Promise<void>;
+    list(
+        limit: number,
+        cursor?: string,
+    ): Promise<{ items: Array<{ key: string; modifiedAt: Date }>; cursor?: string }>;
+}
+
 export interface ImageGenerationPluginOptions {
+    /** Optional private object backend for new images. Legacy files remain readable in storageRoot. */
+    blobStore?: PrivateImageBlobStore;
     storageRoot?: string;
     downloadSigningSecret?: string;
     production?: boolean;

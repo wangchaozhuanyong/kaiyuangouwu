@@ -8,6 +8,7 @@ readonly artifact_s3_prefix="${3:-}"
 readonly repository="/var/www/kaiyuangouwu"
 readonly releases_dir="/var/www/kaiyuangouwu-releases"
 readonly current_pointer="/var/www/kaiyuangouwu-current"
+readonly storefront_pointer="/var/www/kaiyuangouwu-storefront-current"
 readonly current_marker="${releases_dir}/current-sha"
 readonly deploy_lock="/run/lock/vendure-production-deploy.lock"
 readonly expected_bucket="yunqiao-vendure-prod-backup-079740175286-apne1"
@@ -321,6 +322,13 @@ readonly archive_name="${artifact_name}.tar.gz"
 readonly checksum_name="${archive_name}.sha256"
 readonly candidate="${releases_dir}/${artifact_name}"
 readonly previous_runtime="$(readlink -f "${current_pointer}")"
+readonly previous_storefront="$(
+    if [[ -L "${storefront_pointer}" ]]; then
+        readlink -f "${storefront_pointer}"
+    else
+        printf '%s' "${previous_runtime}/packages/storefront/dist"
+    fi
+)"
 readonly staging_dir="$(mktemp -d "${releases_dir}/.incoming-${artifact_name}.XXXXXX")"
 readonly archive_path="${staging_dir}/${archive_name}"
 readonly checksum_path="${staging_dir}/${checksum_name}"
@@ -332,6 +340,7 @@ readonly swap_controller="/usr/local/sbin/vendure-production-swap"
 rollback_needed=0
 nginx_changed=0
 pointer_changed=0
+storefront_pointer_changed=0
 
 cleanup() {
     if [[ "${staging_dir}" == "${releases_dir}/.incoming-${artifact_name}."* ]]; then
@@ -346,6 +355,11 @@ rollback() {
     if [[ "${rollback_needed}" == "1" ]]; then
         rollback_needed=0
         printf 'ROLLBACK_BEGIN\n'
+        if [[ "${storefront_pointer_changed}" == "1" ]]; then
+            sudo -n node "${repository}/deploy/storefront-release.mjs" switch \
+                "${previous_storefront:-${previous_runtime}/packages/storefront/dist}" "${storefront_pointer}" ||
+                printf 'STOREFRONT_ROLLBACK_FAILED\n' >&2
+        fi
         if ! node "${repository}/deploy/usdt-migration-guard.cjs" check-runtime "${previous_runtime}"; then
             pm2 stop vendure-worker vendure-api 9>&- || true
             pm2 save 9>&- || true
@@ -744,6 +758,11 @@ for attempt in $(seq 1 20); do
 done
 sudo -n systemctl is-active --quiet vendure-nginx-error-log.service
 sudo -n test -S /run/vendure-nginx-log/error.sock
+# Initialize/switch the frontend before Nginx starts using its independent pointer.
+# Both full releases and the fast lane are covered by the shared deployment lock.
+sudo -n node "${repository}/deploy/storefront-release.mjs" switch \
+    "${candidate}/packages/storefront/dist" "${storefront_pointer}"
+storefront_pointer_changed=1
 sudo -n cp -p "${nginx_target}" "${nginx_backup}"
 sudo -n install -o root -g root -m 0644 "${repository}/deploy/nginx/damatong.conf" "${nginx_target}"
 nginx_changed=1

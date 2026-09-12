@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ID, RequestContext, TransactionalConnection, UserInputError } from '@vendure/core';
 
+import { validateIcloudInput } from '../client/admin-validation';
 import { IcloudPrimaryAccount } from '../entities/icloud-primary-account.entity';
 import { IcloudReceivedMail } from '../entities/icloud-received-mail.entity';
 import { IcloudVirtualEmail } from '../entities/icloud-virtual-email.entity';
@@ -17,6 +18,7 @@ import {
 import { IcloudAccessCodeService } from './icloud-access-code.service';
 import { IcloudCipherService } from './icloud-cipher.service';
 import { IcloudImapSyncService, SyncAccountResult, TestConnectionResult } from './icloud-imap-sync.service';
+import { updateIcloudRecord } from './icloud-record-update';
 
 export interface PrimaryAccountView {
     id: ID;
@@ -66,6 +68,11 @@ export class IcloudAdminService {
         private readonly imapSyncService: IcloudImapSyncService,
     ) {}
 
+    private validate(input: object): void {
+        const error = validateIcloudInput(input as Record<string, unknown>);
+        if (error) throw new UserInputError(error);
+    }
+
     // ==========================================
     // Primary Account Methods
     // ==========================================
@@ -101,6 +108,7 @@ export class IcloudAdminService {
         ctx: RequestContext,
         input: CreatePrimaryAccountInput,
     ): Promise<PrimaryAccountView> {
+        this.validate(input);
         const repo = this.connection.getRepository(ctx, IcloudPrimaryAccount);
         const email = input.email.toLowerCase().trim();
 
@@ -127,46 +135,40 @@ export class IcloudAdminService {
         });
 
         const saved = await repo.save(account);
-        return this.toPrimaryView(saved, 0);
+        return this.toPrimaryView(await repo.findOneByOrFail({ id: saved.id }), 0);
     }
 
     async updatePrimaryAccount(
         ctx: RequestContext,
         input: UpdatePrimaryAccountInput,
     ): Promise<PrimaryAccountView> {
+        this.validate(input);
         const repo = this.connection.getRepository(ctx, IcloudPrimaryAccount);
         const account = await repo.findOne({ where: { id: input.id } });
         if (!account) {
             throw new UserInputError(`未找到 ID 为 ${input.id} 的主邮箱`);
         }
 
-        if (input.email) {
-            account.email = input.email.toLowerCase().trim();
+        const patch: Partial<IcloudPrimaryAccount> = {};
+        if (input.email !== undefined) patch.email = input.email.toLowerCase().trim();
+        if (input.appPassword !== undefined)
+            patch.encryptedAppPassword = this.cipher.encrypt(input.appPassword.trim());
+        if (input.note !== undefined) patch.note = input.note;
+        if (input.status !== undefined) patch.status = input.status;
+        if (input.imapHost !== undefined) patch.imapHost = input.imapHost.trim();
+        if (input.imapPort !== undefined) patch.imapPort = input.imapPort;
+        if (input.masterQueryCode !== undefined) patch.masterQueryCode = input.masterQueryCode.trim();
+        if (
+            input.codeResetIntervalDays !== undefined &&
+            input.codeResetIntervalDays !== account.codeResetIntervalDays
+        ) {
+            patch.codeResetIntervalDays = input.codeResetIntervalDays;
+            patch.codeExpiresAt = this.codeService.calculateExpiration(input.codeResetIntervalDays);
         }
-        if (input.appPassword) {
-            account.encryptedAppPassword = this.cipher.encrypt(input.appPassword.trim());
-        }
-        if (input.note !== undefined) {
-            account.note = input.note;
-        }
-        if (input.status) {
-            account.status = input.status;
-        }
-        if (input.imapHost) {
-            account.imapHost = input.imapHost;
-        }
-        if (input.imapPort) {
-            account.imapPort = input.imapPort;
-        }
-        if (input.codeResetIntervalDays !== undefined) {
-            account.codeResetIntervalDays = input.codeResetIntervalDays;
-            account.codeExpiresAt = this.codeService.calculateExpiration(input.codeResetIntervalDays);
-        }
-        if (input.masterQueryCode) {
-            account.masterQueryCode = input.masterQueryCode.trim();
-        }
-
-        const saved = await repo.save(account);
+        const guards = Object.keys(patch) as Array<keyof IcloudPrimaryAccount>;
+        if ('codeExpiresAt' in patch) guards.push('masterQueryCode');
+        await updateIcloudRecord(repo, account, patch, guards);
+        const saved = await repo.findOneByOrFail({ id: account.id });
         const virtualRepo = this.connection.getRepository(ctx, IcloudVirtualEmail);
         const count = await virtualRepo.count({ where: { primaryAccountId: saved.id } });
         return this.toPrimaryView(saved, count);
@@ -203,9 +205,16 @@ export class IcloudAdminService {
             throw new UserInputError('主邮箱不存在');
         }
 
-        account.masterQueryCode = this.codeService.generateCode('MSTR');
-        account.codeExpiresAt = this.codeService.calculateExpiration(account.codeResetIntervalDays);
-        const saved = await repo.save(account);
+        await updateIcloudRecord(
+            repo,
+            account,
+            {
+                masterQueryCode: this.codeService.generateCode('MSTR'),
+                codeExpiresAt: this.codeService.calculateExpiration(account.codeResetIntervalDays),
+            },
+            ['masterQueryCode', 'codeExpiresAt', 'codeResetIntervalDays'],
+        );
+        const saved = await repo.findOneByOrFail({ id });
 
         const virtualRepo = this.connection.getRepository(ctx, IcloudVirtualEmail);
         const count = await virtualRepo.count({ where: { primaryAccountId: saved.id } });
@@ -239,6 +248,7 @@ export class IcloudAdminService {
     }
 
     async createVirtualEmail(ctx: RequestContext, input: CreateVirtualEmailInput): Promise<VirtualEmailView> {
+        this.validate(input);
         const primaryRepo = this.connection.getRepository(ctx, IcloudPrimaryAccount);
         const primary = await primaryRepo.findOne({ where: { id: input.primaryAccountId } });
         if (!primary) {
@@ -269,14 +279,16 @@ export class IcloudAdminService {
         });
 
         const saved = await virtualRepo.save(virtual);
-        saved.primaryAccount = primary;
-        return this.toVirtualView(saved);
+        return this.toVirtualView(
+            await virtualRepo.findOneOrFail({ where: { id: saved.id }, relations: ['primaryAccount'] }),
+        );
     }
 
     async batchCreateVirtualEmails(
         ctx: RequestContext,
         input: BatchCreateVirtualEmailsInput,
     ): Promise<{ createdCount: number; skippedCount: number; errors: string[] }> {
+        this.validate(input);
         const primaryRepo = this.connection.getRepository(ctx, IcloudPrimaryAccount);
         const primary = await primaryRepo.findOne({ where: { id: input.primaryAccountId } });
         if (!primary) {
@@ -284,10 +296,7 @@ export class IcloudAdminService {
         }
 
         const virtualRepo = this.connection.getRepository(ctx, IcloudVirtualEmail);
-        const lines = input.rawInput
-            .split(/[\r\n]+/)
-            .map(l => l.trim())
-            .filter(l => l.length > 0);
+        const lines = input.rawInput.split(/\r\n|\r|\n/).map(l => l.trim());
 
         let createdCount = 0;
         let skippedCount = 0;
@@ -295,22 +304,24 @@ export class IcloudAdminService {
 
         const intervalDays = input.codeResetIntervalDays ?? primary.codeResetIntervalDays ?? 30;
 
-        for (const line of lines) {
+        for (const [index, line] of lines.entries()) {
+            if (!line) continue;
             // Support "alias@domain.com" or "alias@domain.com,note" or "alias@domain.com  note"
-            const parts = line.split(/[,\t|]+/);
-            const alias = parts[0]?.toLowerCase().trim();
-            const note = parts[1]?.trim() || null;
+            const parsed = /^([^,\t|\s]+)(?:[,\t|\s]+(.*))?$/.exec(line);
+            const alias = parsed?.[1]?.toLowerCase();
+            const note = parsed?.[2]?.trim() || null;
 
-            if (!alias || !alias.includes('@')) {
+            const validationError = validateIcloudInput({ aliasEmail: alias, note });
+            if (validationError) {
                 skippedCount++;
-                errors.push(`忽略非法邮箱格式: ${line}`);
+                errors.push(`第 ${index + 1} 行：${validationError}`);
                 continue;
             }
 
             const existing = await virtualRepo.findOne({ where: { aliasEmail: alias } });
             if (existing) {
                 skippedCount++;
-                errors.push(`邮箱已存在跳过: ${alias}`);
+                errors.push(`第 ${index + 1} 行：邮箱已存在跳过: ${alias}`);
                 continue;
             }
 
@@ -336,6 +347,7 @@ export class IcloudAdminService {
     }
 
     async updateVirtualEmail(ctx: RequestContext, input: UpdateVirtualEmailInput): Promise<VirtualEmailView> {
+        this.validate(input);
         const repo = this.connection.getRepository(ctx, IcloudVirtualEmail);
         const item = await repo.findOne({
             where: { id: input.id },
@@ -345,24 +357,22 @@ export class IcloudAdminService {
             throw new UserInputError(`虚拟邮箱不存在`);
         }
 
-        if (input.aliasEmail) {
-            item.aliasEmail = input.aliasEmail.toLowerCase().trim();
+        const patch: Partial<IcloudVirtualEmail> = {};
+        if (input.aliasEmail !== undefined) patch.aliasEmail = input.aliasEmail.toLowerCase().trim();
+        if (input.note !== undefined) patch.note = input.note;
+        if (input.status !== undefined) patch.status = input.status;
+        if (input.buyerQueryCode !== undefined) patch.buyerQueryCode = input.buyerQueryCode.trim();
+        if (
+            input.codeResetIntervalDays !== undefined &&
+            input.codeResetIntervalDays !== item.codeResetIntervalDays
+        ) {
+            patch.codeResetIntervalDays = input.codeResetIntervalDays;
+            patch.codeExpiresAt = this.codeService.calculateExpiration(input.codeResetIntervalDays);
         }
-        if (input.note !== undefined) {
-            item.note = input.note;
-        }
-        if (input.status) {
-            item.status = input.status;
-        }
-        if (input.buyerQueryCode) {
-            item.buyerQueryCode = input.buyerQueryCode.trim();
-        }
-        if (input.codeResetIntervalDays !== undefined) {
-            item.codeResetIntervalDays = input.codeResetIntervalDays;
-            item.codeExpiresAt = this.codeService.calculateExpiration(input.codeResetIntervalDays);
-        }
-
-        const saved = await repo.save(item);
+        const guards = Object.keys(patch) as Array<keyof IcloudVirtualEmail>;
+        if ('codeExpiresAt' in patch) guards.push('buyerQueryCode');
+        await updateIcloudRecord(repo, item, patch, guards);
+        const saved = await repo.findOneOrFail({ where: { id: item.id }, relations: ['primaryAccount'] });
         return this.toVirtualView(saved);
     }
 
@@ -382,9 +392,16 @@ export class IcloudAdminService {
             throw new UserInputError('虚拟邮箱不存在');
         }
 
-        item.buyerQueryCode = this.codeService.generateCode('BUY');
-        item.codeExpiresAt = this.codeService.calculateExpiration(item.codeResetIntervalDays);
-        const saved = await repo.save(item);
+        await updateIcloudRecord(
+            repo,
+            item,
+            {
+                buyerQueryCode: this.codeService.generateCode('BUY'),
+                codeExpiresAt: this.codeService.calculateExpiration(item.codeResetIntervalDays),
+            },
+            ['buyerQueryCode', 'codeExpiresAt', 'codeResetIntervalDays'],
+        );
+        const saved = await repo.findOneOrFail({ where: { id }, relations: ['primaryAccount'] });
         return this.toVirtualView(saved);
     }
 
@@ -429,8 +446,7 @@ export class IcloudAdminService {
         mail.virtualEmailId = virtual.id;
         const saved = await mailRepo.save(mail);
 
-        virtual.mailCount += 1;
-        await virtualRepo.save(virtual);
+        await virtualRepo.increment({ id: virtual.id }, 'mailCount', 1);
 
         return saved;
     }

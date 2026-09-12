@@ -55,6 +55,9 @@ function fixture() {
         }),
     };
     const sessionRepository = {
+        existsBy: vi.fn(({ id, token }: { id: number; token: string }) =>
+            Promise.resolve(rows.get(token)?.id === id && rows.get(token)?.invalidated === false),
+        ),
         update: vi.fn().mockResolvedValue({ affected: 1 }),
         find: vi.fn(({ where }: any) =>
             Promise.resolve([...rows.values()].filter(row => row.user.id === where.user.id)),
@@ -132,6 +135,14 @@ function fixture() {
 }
 
 describe('UserService password change revokes sessions (F-02)', () => {
+    it('rejects a revoked session retained in another API instance cache', async () => {
+        const x = fixture();
+        const staleSession = x.cache.get('synthetic-session-20');
+        if (!staleSession) throw new Error('Expected a cached customer session');
+        await x.service.resetPasswordByToken(x.ctx, 'synthetic-reset-token', 'synthetic-new-password');
+        x.cache.set(staleSession.token, staleSession);
+        expect(await x.sessions.getSessionFromToken(staleSession.token)).toBeUndefined();
+    });
     it('reset revokes all previous devices in both the cache and database, leaving other users alone', async () => {
         const x = fixture();
         await expect(

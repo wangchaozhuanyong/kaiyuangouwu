@@ -563,7 +563,11 @@ export function AssetsModule() {
                                                     src={asset.preview}
                                                     alt={asset.name}
                                                     className="h-full w-full object-cover transition-transform group-hover:scale-105"
-                                                    thumbnailOptions={{ width: 240, height: 240, preset: 'storefront-card-square-320' }}
+                                                    thumbnailOptions={{
+                                                        width: 240,
+                                                        height: 240,
+                                                        preset: 'storefront-card-square-320',
+                                                    }}
                                                 />
                                             ) : asset.type === 'VIDEO' ? (
                                                 <Video className="h-9 w-9 text-slate-400" />

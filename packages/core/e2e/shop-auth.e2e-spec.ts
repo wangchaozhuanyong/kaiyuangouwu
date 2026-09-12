@@ -5,6 +5,7 @@ import { HistoryEntryType } from '@vendure/common/lib/generated-types';
 import { pick } from '@vendure/common/lib/pick';
 import {
     AccountRegistrationEvent,
+    ConfigService,
     EventBus,
     EventBusModule,
     IdentifierChangeEvent,
@@ -120,6 +121,39 @@ describe('Shop auth & accounts', () => {
         await server.destroy();
     });
 
+    describe.each(['shop', 'admin'] as const)('%s API CSRF prevention', apiType => {
+        const endpoint = () => {
+            const options = server.app.get(ConfigService).apiOptions;
+            return `http://127.0.0.1:${options.port}/${apiType === 'shop' ? options.shopApiPath : options.adminApiPath}`;
+        };
+        it.each([false, true])(
+            'multipart requires an explicit preflight header (present: %s)',
+            async preflight => {
+                const form = new FormData();
+                form.set('operations', JSON.stringify({ query: '{ __typename }' }));
+                form.set('map', '{}');
+                const response = await fetch(endpoint(), {
+                    method: 'POST',
+                    body: form,
+                    headers: preflight ? { 'Apollo-Require-Preflight': 'true' } : {},
+                });
+                expect(response.status).toBe(preflight ? 200 : 400);
+                const body = await response.json();
+                if (preflight) expect(body.data.__typename).toBe('Query');
+                else expect(body.errors[0].message).toContain('CSRF');
+            },
+        );
+        it.each([false, true])('GET requires an explicit preflight header (present: %s)', async preflight => {
+            const url = new URL(endpoint());
+            url.searchParams.set('query', '{ __typename }');
+            const response = await fetch(url, {
+                headers: preflight ? { 'Apollo-Require-Preflight': 'true' } : {},
+            });
+            expect(response.status).toBe(preflight ? 200 : 400);
+            await response.text();
+        });
+    });
+
     describe('customer account creation with deferred password', () => {
         const password = 'password';
         const emailAddress = 'test1@test.com';
@@ -182,7 +216,7 @@ describe('Shop auth & accounts', () => {
         it('issues a new token if attempting to register a second time', async () => {
             const sendEmail = new Promise<string>(resolve => {
                 sendEmailFn.mockImplementation((event: AccountRegistrationEvent) => {
-                    resolve(event.user.getNativeAuthenticationMethod().verificationToken!);
+                    resolve(event.user.getNativeAuthenticationMethod().verificationToken);
                 });
             });
             const input: RegisterCustomerInput = {
@@ -207,7 +241,7 @@ describe('Shop auth & accounts', () => {
         it('refreshCustomerVerification issues a new token', async () => {
             const sendEmail = new Promise<string>(resolve => {
                 sendEmailFn.mockImplementation((event: AccountRegistrationEvent) => {
-                    resolve(event.user.getNativeAuthenticationMethod().verificationToken!);
+                    resolve(event.user.getNativeAuthenticationMethod().verificationToken);
                 });
             });
             const { refreshCustomerVerification } = await shopClient.query(refreshTokenDocument, {

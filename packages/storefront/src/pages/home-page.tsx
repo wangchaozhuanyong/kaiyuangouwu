@@ -4,6 +4,7 @@ import {
     Bell,
     Check,
     ChevronDown,
+    ChevronLeft,
     ChevronRight,
     CircleCheck,
     Clock3,
@@ -946,6 +947,22 @@ export function HomePage() {
                                     onPointerUp={event => finishHeroSwipe(event)}
                                     onPointerCancel={event => finishHeroSwipe(event, true)}
                                     onDragStart={event => event.preventDefault()}
+                                    onKeyDown={event => {
+                                        if (
+                                            !desktop ||
+                                            heroCount < 2 ||
+                                            !['ArrowLeft', 'ArrowRight'].includes(event.key)
+                                        )
+                                            return;
+                                        event.preventDefault();
+                                        selectHeroManually(
+                                            heroIndexAfterManualMove(
+                                                heroIndex,
+                                                heroCount,
+                                                event.key === 'ArrowLeft' ? -1 : 1,
+                                            ),
+                                        );
+                                    }}
                                 >
                                     {managedHero && (
                                         <HeroScene
@@ -969,6 +986,38 @@ export function HomePage() {
                                                 />
                                             }
                                         />
+                                    )}
+                                    {desktop && heroCount > 1 && (
+                                        <>
+                                            <button
+                                                type="button"
+                                                className="desktop-hero-arrow is-previous"
+                                                aria-label={isZh ? '上一张轮播图' : 'Previous slide'}
+                                                onClick={() =>
+                                                    selectHeroManually(
+                                                        heroIndexAfterManualMove(heroIndex, heroCount, -1),
+                                                    )
+                                                }
+                                            >
+                                                <ChevronLeft aria-hidden="true" />
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className="desktop-hero-arrow is-next"
+                                                aria-label={isZh ? '下一张轮播图' : 'Next slide'}
+                                                onClick={() =>
+                                                    selectHeroManually(
+                                                        heroIndexAfterManualMove(heroIndex, heroCount, 1),
+                                                    )
+                                                }
+                                            >
+                                                <ChevronRight aria-hidden="true" />
+                                            </button>
+                                            <span className="desktop-hero-count" aria-hidden="true">
+                                                <strong>{String(heroIndex + 1).padStart(2, '0')}</strong>
+                                                <span>/ {String(heroCount).padStart(2, '0')}</span>
+                                            </span>
+                                        </>
                                     )}
                                     {heroCount > 1 && (
                                         <div
@@ -1660,7 +1709,7 @@ function CategoryPromotionSection({
                         </span>
                     )}
                     <span className="category-promotion-visual-copy" aria-hidden="true">
-                        <small>{isZh ? '热门服务' : 'Featured service'}</small>
+                        <small>{isZh ? '查看精选' : 'Explore selection'}</small>
                     </span>
                 </button>
 
@@ -1710,6 +1759,7 @@ function FeaturedCollectionSection({
     onContentTarget: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
 }) {
     const isZh = language === 'zh';
+    const desktop = useDesktopLayout();
     const blockHasTarget = block.targetType !== 'NONE' && Boolean(block.targetValue);
     const mosaicProducts = products.slice(0, 5);
 
@@ -1754,6 +1804,16 @@ function FeaturedCollectionSection({
                             const priceLabel = pricedVariant
                                 ? formatMoney(pricedVariant.priceWithTax, pricedVariant.currencyCode, locale)
                                 : null;
+                            const productCopy = (
+                                <span className="featured-collection-product-overlay" aria-hidden="true">
+                                    <strong>{product.name}</strong>
+                                    {priceLabel ? (
+                                        <span className="featured-collection-product-price">
+                                            {priceLabel}
+                                        </span>
+                                    ) : null}
+                                </span>
+                            );
                             return (
                                 <button
                                     key={product.id}
@@ -1775,18 +1835,9 @@ function FeaturedCollectionSection({
                                                 <LayoutGrid aria-hidden="true" />
                                             </span>
                                         )}
-                                        <span
-                                            className="featured-collection-product-overlay"
-                                            aria-hidden="true"
-                                        >
-                                            <strong>{product.name}</strong>
-                                            {priceLabel ? (
-                                                <span className="featured-collection-product-price">
-                                                    {priceLabel}
-                                                </span>
-                                            ) : null}
-                                        </span>
+                                        {!desktop && productCopy}
                                     </span>
+                                    {desktop && productCopy}
                                 </button>
                             );
                         })}
@@ -1838,12 +1889,10 @@ function ContentStorySection({
                     )}
                 </button>
                 <div className="content-story-copy">
-                    <span className="content-story-kicker">
-                        <span aria-hidden="true" />
-                        {isZh ? '内容故事' : 'Editorial story'}
-                    </span>
+                    <p className="content-story-kicker">
+                        {block.subtitle || (isZh ? '内容故事' : 'Editorial story')}
+                    </p>
                     <h2 id={`${block.id}-title`}>{block.title}</h2>
-                    {block.subtitle ? <p className="content-story-subtitle">{block.subtitle}</p> : null}
                     {block.body ? <p className="content-story-body">{block.body}</p> : null}
                     {blockHasTarget ? (
                         <button

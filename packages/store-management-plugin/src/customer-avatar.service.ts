@@ -123,7 +123,7 @@ export class CustomerAvatarService {
             previous = avatars.items;
             const created = await this.assetService.create(txCtx, {
                 file: Promise.resolve({
-                    filename: `customer-avatar-${String(customer.id)}-${randomUUID()}.webp`,
+                    filename: `customer-avatar-${randomUUID()}.webp`,
                     mimetype: 'image/webp',
                     encoding: uploaded.encoding ?? '7bit',
                     createReadStream: () => Readable.from(bytes),
@@ -147,7 +147,7 @@ export class CustomerAvatarService {
 
     private async removeUnusedAvatar(ctx: RequestContext, old: Asset, customer: Customer): Promise<void> {
         const defaultChannel = await this.channelService.getDefaultChannel(ctx);
-        const removed = await this.connection.withTransaction(ctx, async txCtx => {
+        await this.connection.withTransaction(ctx, async txCtx => {
             if (
                 !['sqljs', 'sqlite', 'better-sqlite3'].includes(
                     String(this.connection.rawConnection.options.type),
@@ -206,14 +206,13 @@ export class CustomerAvatarService {
                     if (referenced) return;
                 }
             }
-            await this.connection.getRepository(txCtx, Asset).remove(asset);
-            return asset;
-        });
-        if (removed) {
+            // Keep the row and its quota until both files have been removed. A storage
+            // outage must not leave an untracked object after the replacement commits.
             const storage = this.config.assetOptions.assetStorageStrategy;
-            await storage.deleteFile(removed.source);
-            await storage.deleteFile(removed.preview);
-        }
+            await storage.deleteFile(asset.source);
+            await storage.deleteFile(asset.preview);
+            await this.connection.getRepository(txCtx, Asset).remove(asset);
+        });
     }
 
     private async activeCustomerOrThrow(ctx: RequestContext): Promise<Customer> {

@@ -1,0 +1,20 @@
+# Separate virtual host / registrable domain. Replace every example path and origin before installation.
+server {
+    listen 443 ssl;
+    server_name vault.example.net;
+    ssl_certificate /reviewed/path/fullchain.pem;
+    ssl_certificate_key /reviewed/path/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    root /opt/vendure/current/packages/storefront/dist-two-factor;
+    index index.html;
+    server_tokens off;
+    add_header Content-Security-Policy "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors https://shop.example.com" always;
+    add_header X-Content-Type-Options nosniff always;
+    add_header Referrer-Policy no-referrer always;
+    add_header Cache-Control no-store always;
+    add_header Strict-Transport-Security "max-age=31536000" always;
+    # No API proxy, cookie forwarding, analytics injection, directory indexes or source maps.
+    location / { try_files $uri =404; }
+    location ~ /\. { return 404; }
+    location ~ \.map$ { return 404; }
+}

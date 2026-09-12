@@ -169,6 +169,7 @@ export function CouponsRoutePage() {
                     coupons: runtime.activeCoupons,
                     myCoupons: runtime.myCoupons,
                     usageRecords: runtime.couponUsageRecords,
+                    pagination: { api: runtime.api, queryKey: runtime.customerCouponQueryKey },
                     currencyCode: runtime.market.currencyCode,
                     displayCurrencyCode: runtime.displayCurrencyCode,
                     language: runtime.language,

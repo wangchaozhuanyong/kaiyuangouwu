@@ -30,3 +30,15 @@ describe('storefront 2FA batch import', () => {
         expect(limited.errors).toEqual([{ lineNumber: 2, code: 'LIMIT_REACHED' }]);
     });
 });
+
+describe('2FA import resource budget', () => {
+    it.each(['x'.repeat(65_537), 'a'.repeat(1025), '\n'.repeat(201)])(
+        'rejects excessive input before returning any records',
+        input => {
+            expect(parseBatchImport(input)).toEqual({
+                accounts: [],
+                errors: [{ lineNumber: 1, code: 'INPUT_TOO_LARGE' }],
+            });
+        },
+    );
+});

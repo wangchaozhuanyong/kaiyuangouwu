@@ -95,7 +95,7 @@ describe('CustomerAvatarService', () => {
         const input = assetService.create.mock.calls[0][1];
         expect(input.tags).toEqual(['customer-avatar', 'customer-avatar-owner:customer-1']);
         const replayableUpload = await input.file;
-        expect(replayableUpload.filename).toMatch(/^customer-avatar-customer-1-[a-f0-9-]+\.webp$/u);
+        expect(replayableUpload.filename).toMatch(/^customer-avatar-[a-f0-9-]+\.webp$/u);
         expect(replayableUpload.mimetype).toBe('image/webp');
     });
 
@@ -131,7 +131,7 @@ describe('CustomerAvatarService', () => {
             .png()
             .toBuffer();
         for (const bytes of [Buffer.from('not an image'), png.subarray(0, 45), oversized]) {
-            await expect(test.service.uploadMine(ctx, upload(bytes))).rejects.toThrow('头像文件损坏');
+            await expect(test.service.uploadMine(ctx, upload(bytes))).rejects.toThrow('图片安全检查未通过');
         }
         expect(test.assetService.create).not.toHaveBeenCalled();
     });
@@ -209,6 +209,31 @@ describe('CustomerAvatarService', () => {
             ),
         ).rejects.toThrow('头像图片不能超过 5MB');
         expect(assetService.create).not.toHaveBeenCalled();
+    });
+
+    it.each(['source', 'preview'])('retains the old quota row when %s cleanup fails', async failing => {
+        const test = createService();
+        const old = {
+            id: 'old',
+            createdAt: new Date(0),
+            source: 'source',
+            preview: 'preview',
+            tags: [{ value: 'customer-avatar' }, { value: 'customer-avatar-owner:customer-1' }],
+            channels: [{ id: 'channel-1' }, { id: 'default' }],
+        };
+        test.assetService.findAll.mockResolvedValue({ items: [old], totalItems: 1 });
+        test.repository.findOne.mockResolvedValue(old as any);
+        test.assetService.create.mockResolvedValue({ id: 'new' });
+        test.storage.deleteFile.mockImplementation(key =>
+            key === failing ? Promise.reject(new Error('synthetic storage outage')) : Promise.resolve(),
+        );
+        await expect(test.service.uploadMine(ctx, upload(await imageBytes()))).resolves.toEqual({
+            id: 'new',
+        });
+        expect(test.repository.remove).not.toHaveBeenCalled();
+        test.storage.deleteFile.mockResolvedValue(undefined);
+        await test.service.uploadMine(ctx, upload(await imageBytes()));
+        expect(test.repository.remove).toHaveBeenCalledWith(old);
     });
 
     it('returns no avatar for a guest or an account without a customer profile', async () => {

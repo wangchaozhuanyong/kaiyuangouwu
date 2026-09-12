@@ -1,0 +1,155 @@
+mutation BatchCreateIcloudVirtualEmails($input: BatchCreateIcloudVirtualEmailsInput!) {
+    batchCreateIcloudVirtualEmails(input: $input) {
+        createdCount
+        skippedCount
+        errors
+    }
+}
+
+mutation CreateIcloudPrimaryAccount($input: CreateIcloudPrimaryAccountInput!) {
+    createIcloudPrimaryAccount(input: $input) {
+        ...IcloudPrimaryAccountFields
+    }
+}
+
+fragment IcloudPrimaryAccountFields on IcloudPrimaryAccountView {
+    id
+    createdAt
+    updatedAt
+    email
+    note
+    status
+    imapHost
+    imapPort
+    masterQueryCode
+    codeExpiresAt
+    codeResetIntervalDays
+    remainingDays
+    lastQueriedAt
+    lastQueriedIp
+    lastSyncedAt
+    lastSyncError
+    virtualEmailCount
+}
+
+mutation CreateIcloudVirtualEmail($input: CreateIcloudVirtualEmailInput!) {
+    createIcloudVirtualEmail(input: $input) {
+        ...IcloudVirtualEmailFields
+    }
+}
+
+fragment IcloudVirtualEmailFields on IcloudVirtualEmailView {
+    id
+    createdAt
+    updatedAt
+    primaryAccountId
+    primaryAccountEmail
+    aliasEmail
+    note
+    status
+    buyerQueryCode
+    codeExpiresAt
+    codeResetIntervalDays
+    remainingDays
+    lastQueriedAt
+    lastQueriedIp
+    mailCount
+    lastMailReceivedAt
+}
+
+mutation DeleteIcloudMail($mailId: ID!) {
+    deleteIcloudMail(mailId: $mailId)
+}
+
+mutation DeleteIcloudPrimaryAccount($id: ID!) {
+    deleteIcloudPrimaryAccount(id: $id)
+}
+
+mutation DeleteIcloudVirtualEmail($id: ID!) {
+    deleteIcloudVirtualEmail(id: $id)
+}
+
+query IcloudPrimaryAccounts {
+    icloudPrimaryAccounts {
+        ...IcloudPrimaryAccountFields
+    }
+}
+
+query IcloudReceivedMails($virtualEmailId: ID, $primaryAccountId: ID, $unassignedOnly: Boolean, $limit: Int) {
+    icloudReceivedMails(
+        virtualEmailId: $virtualEmailId
+        primaryAccountId: $primaryAccountId
+        unassignedOnly: $unassignedOnly
+        limit: $limit
+    ) {
+        ...IcloudReceivedMailFields
+    }
+}
+
+fragment IcloudReceivedMailFields on IcloudReceivedMailView {
+    id
+    createdAt
+    primaryAccountId
+    virtualEmailId
+    messageId
+    fromAddress
+    fromName
+    subject
+    bodyHtml
+    bodyText
+    extractedCode
+    receivedAt
+    isRead
+    isStarred
+}
+
+query IcloudVirtualEmails($primaryAccountId: ID) {
+    icloudVirtualEmails(primaryAccountId: $primaryAccountId) {
+        ...IcloudVirtualEmailFields
+    }
+}
+
+mutation ReassignIcloudMail($mailId: ID!, $virtualEmailId: ID!) {
+    reassignIcloudMail(mailId: $mailId, virtualEmailId: $virtualEmailId) {
+        ...IcloudReceivedMailFields
+    }
+}
+
+mutation ResetIcloudMasterCode($id: ID!) {
+    resetIcloudMasterCode(id: $id) {
+        ...IcloudPrimaryAccountFields
+    }
+}
+
+mutation ResetIcloudVirtualEmailCode($id: ID!) {
+    resetIcloudVirtualEmailCode(id: $id) {
+        ...IcloudVirtualEmailFields
+    }
+}
+
+mutation SyncIcloudAccount($id: ID!) {
+    syncIcloudAccount(id: $id) {
+        success
+        syncedCount
+        error
+    }
+}
+
+mutation TestIcloudConnection($id: ID!) {
+    testIcloudConnection(id: $id) {
+        success
+        message
+    }
+}
+
+mutation UpdateIcloudPrimaryAccount($input: UpdateIcloudPrimaryAccountInput!) {
+    updateIcloudPrimaryAccount(input: $input) {
+        ...IcloudPrimaryAccountFields
+    }
+}
+
+mutation UpdateIcloudVirtualEmail($input: UpdateIcloudVirtualEmailInput!) {
+    updateIcloudVirtualEmail(input: $input) {
+        ...IcloudVirtualEmailFields
+    }
+}

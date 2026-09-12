@@ -333,6 +333,39 @@ describe('CatalogOperationsService', () => {
         expect(recordCost).toHaveBeenCalledWith(txCtx, 'variant-new', 'CNY', 7_000, 'MANUAL', null);
     });
 
+    it('derives a saved lot expiry date from its production date and the SKU default shelf life', async () => {
+        const { connection, service } = createService();
+        const lotRepository = {
+            findOne: vi.fn(() => Promise.resolve(null)),
+            save: vi.fn(value => Promise.resolve(Object.assign(value, { id: 'lot-1' }))),
+        };
+        vi.spyOn(service, 'requireStockLocation').mockResolvedValue({} as never);
+        connection.getEntityOrThrow.mockResolvedValue({
+            id: 'variant-1',
+            customFields: { shelfLifeDays: 30 },
+        });
+        connection.getRepository.mockReturnValue(lotRepository as never);
+
+        const saved = await service.saveLot({ channelId: 'channel-1' } as never, {
+            productVariantId: 'variant-1',
+            stockLocationId: 'stock-1',
+            lotCode: 'LOT-20260910',
+            manufacturedAt: '2026-09-10T00:00:00.000Z',
+            expiresAt: null,
+            quantityOnHand: 0,
+            purchaseCostMicrounits: null,
+            currencyCode: CurrencyCode.CNY,
+        });
+
+        expect(saved.expiresAt).toEqual(new Date('2026-10-10T00:00:00.000Z'));
+        expect(lotRepository.save).toHaveBeenCalledWith(
+            expect.objectContaining({
+                manufacturedAt: new Date('2026-09-10T00:00:00.000Z'),
+                expiresAt: new Date('2026-10-10T00:00:00.000Z'),
+            }),
+        );
+    });
+
     it('filters summary rows by cost, margin, low stock and expiry', async () => {
         const { service } = createService();
         vi.spyOn(service, 'exportRows').mockResolvedValue({

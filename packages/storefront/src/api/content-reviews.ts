@@ -170,6 +170,31 @@ export class ContentReviewsApi extends BaseDomainApi {
         };
     }
 
+    async storefrontAccountContent(signal?: AbortSignal): Promise<StorefrontContentResponse> {
+        const result = await this.request<Pick<StorefrontContentQueryResult, 'storefrontContent'>>(
+            `query StorefrontAccountContent {
+                storefrontContent {
+                    id code type layoutVariant enabled position startsAt endsAt
+                    title subtitle body ctaLabel imageUrl backgroundColor textColor
+                    targetType targetValue settings
+                    items {
+                        id enabled position imageUrl targetType targetValue settings label description
+                    }
+                }
+            }`,
+            undefined,
+            signal,
+        );
+        return {
+            blocks: result.storefrontContent.filter(
+                block => block.type === 'LEGAL' || block.type === 'SUPPORT',
+            ),
+            flashSales: [],
+            systemAnnouncements: [],
+            settings: { heroAutoplayIntervalSeconds: 5, configuredBlockTypes: [] },
+        };
+    }
+
     async storefrontContent(signal?: AbortSignal): Promise<StorefrontContentResponse> {
         let result: StorefrontContentQueryResult;
         try {
