@@ -170,6 +170,11 @@ export function checkFingerprint(ref, check, inventory, reader) {
         .entries(ref)
         .filter(({ path }) => {
             if (isDocumentation(path)) return false;
+            if (
+                ['backend', 'frontend'].includes(check.kind) &&
+                /^packages\/dev-server\/scripts\/.*\.spec\.mjs$/u.test(path)
+            )
+                return false;
             if (sharedInput(path)) return true;
             if (check.kind === 'architecture')
                 return path.startsWith('packages/') || path.startsWith('scripts/architecture-debt');

@@ -402,3 +402,25 @@ test('historical input mismatches are rejected locally without per-run PR or art
     assert.equal(calls.length, 2);
     assert.ok(calls.every(endpoint => !endpoint.includes('/pulls/') && !endpoint.includes('/artifacts')));
 });
+
+test('deployment control test changes do not invalidate dev-server business checks', () => {
+    const { reader } = inputFixture({
+        'packages/dev-server/scripts/production-runtime-audit.spec.mjs': 'updated scope assertions',
+    });
+    const check = {
+        id: 'backend:dev-server',
+        kind: 'backend',
+        packages: ['dev-server'],
+        databases: [],
+        flags: [],
+    };
+    assert.equal(
+        checkFingerprint(sourceSha, check, inputInventory, reader),
+        checkFingerprint(targetSha, check, inputInventory, reader),
+    );
+    const controls = { id: 'controls', kind: 'controls', packages: [] };
+    assert.notEqual(
+        checkFingerprint(sourceSha, controls, inputInventory, reader),
+        checkFingerprint(targetSha, controls, inputInventory, reader),
+    );
+});

@@ -106,6 +106,7 @@ jobs:
             full: ${{ steps.check.outputs.full }}
             dependencies: ${{ steps.check.outputs.dependencies }}
             codegen: ${{ steps.check.outputs.codegen }}
+            e2e: ${{ steps.check.outputs.e2e }}
             e2e_mysql: ${{ steps.check.outputs.e2e_mysql }}
             e2e_sqljs: ${{ steps.check.outputs.e2e_sqljs }}
             e2e_postgres: ${{ steps.check.outputs.e2e_postgres }}
