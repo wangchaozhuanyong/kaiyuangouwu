@@ -342,6 +342,29 @@ nginx_changed=0
 pointer_changed=0
 storefront_pointer_changed=0
 
+refresh_image_processor() {
+    local runtime="${1}"
+    if [[ ! -f "${runtime}/deploy/image-worker/server.cjs" ]]; then
+        # A rollback to a release predating isolated image processing must stop it.
+        if [[ "$(sudo -n systemctl show vendure-image-worker.service -p LoadState --value)" != "not-found" ]]; then
+            sudo -n systemctl stop vendure-image-worker.service
+        fi
+        return
+    fi
+    [[ "$(readlink -f "${current_pointer}")" == "${runtime}" ]] || return 1
+    [[ "${CUSTOMER_IMAGE_PROCESSOR_SOCKET:-}" == /* ]] || return 1
+    sudo -n systemctl restart vendure-image-worker.service
+    for attempt in $(seq 1 20); do
+        if sudo -n systemctl is-active --quiet vendure-image-worker.service && \
+            [[ -S "${CUSTOMER_IMAGE_PROCESSOR_SOCKET}" ]]; then
+            printf 'PRODUCTION_IMAGE_PROCESSOR_READY runtime=%s\n' "${runtime}"
+            return 0
+        fi
+        sleep 0.25
+    done
+    return 1
+}
+
 cleanup() {
     if [[ "${staging_dir}" == "${releases_dir}/.incoming-${artifact_name}."* ]]; then
         rm -rf -- "${staging_dir}"
@@ -374,6 +397,8 @@ rollback() {
         if [[ "${pointer_changed}" == "1" ]]; then
             sudo -n ln -s "${previous_runtime}" "/var/www/.kaiyuangouwu-current.rollback.$$" || true
             sudo -n mv -Tf "/var/www/.kaiyuangouwu-current.rollback.$$" "${current_pointer}" || true
+            refresh_image_processor "${previous_runtime}" ||
+                printf 'IMAGE_PROCESSOR_ROLLBACK_FAILED\n' >&2
         fi
         if [[ "${nginx_changed}" == "1" && -f "${nginx_backup}" ]]; then
             sudo -n install -o root -g root -m 0644 "${nginx_backup}" "${nginx_target}" || true
@@ -772,6 +797,7 @@ sudo -n systemctl reload nginx
 sudo -n ln -s "${candidate}" "/var/www/.kaiyuangouwu-current.new.$$"
 sudo -n mv -Tf "/var/www/.kaiyuangouwu-current.new.$$" "${current_pointer}"
 pointer_changed=1
+refresh_image_processor "${candidate}"
 
 curl --fail --silent --show-error --max-time 10 http://127.0.0.1:3002/health >/dev/null
 curl --fail --silent --show-error --max-time 10 http://127.0.0.1:3002/image-generation/health >/dev/null
