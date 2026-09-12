@@ -577,6 +577,10 @@ pm2 stop vendure-worker vendure-api 9>&-
 pm2 save 9>&-
 node "${usdt_guard}" capture "${candidate}" "${usdt_snapshot}"
 printf 'DEPLOY_MIGRATION_BEGIN\n'
+# Install the snapshot proof helper together with its callers before the pre-migration backup.
+for backup_tool in vendure-mysql-backup vendure-mysql-backup-manifest.py vendure-mysql-backup-retention; do
+    sudo -n install -o root -g root -m 0755 "${repository}/deploy/systemd/${backup_tool}" "/usr/local/sbin/${backup_tool}"
+done
 backup_file=""
 backup_invocation_id=""
 backup_age_seconds=""
@@ -597,6 +601,7 @@ load_verified_backup() {
     backup_file="${BASH_REMATCH[1]}"
     sudo -n test -s "${backup_file}" || return 1
     sudo -n test -s "${backup_file}.sha256" || return 1
+    sudo -n test -s "${backup_file}.manifest.json" || return 1
     sudo -n /bin/bash -c 'cd "$1" && sha256sum --check --status "$2"' \
         backup-check "$(dirname "${backup_file}")" "$(basename "${backup_file}.sha256")" || return 1
     backup_epoch="$(sudo -n stat --format='%Y' "${backup_file}")"

@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
 import { DeletionResult } from '@vendure/common/lib/generated-types';
-import { ConfigService, mergeConfig } from '@vendure/core';
+import { ConfigService, JobQueueService, mergeConfig } from '@vendure/core';
 import { createTestEnvironment } from '@vendure/testing';
 import { exec } from 'child_process';
 import fs from 'fs-extra';
@@ -244,7 +244,8 @@ describe('AssetServerPlugin', () => {
     });
 
     describe('deletion', () => {
-        it('deleting Asset deletes binary file', async () => {
+        it('deleting Asset queues binary file cleanup after commit', async () => {
+            await server.app.get(JobQueueService).start();
             const { deleteAsset } = await adminClient.query(deleteAssetDocument, {
                 input: {
                     assetId: asset.id,
@@ -254,8 +255,11 @@ describe('AssetServerPlugin', () => {
 
             expect(deleteAsset.result).toBe(DeletionResult.DELETED);
 
-            expect(fs.existsSync(sourceFilePath)).toBe(false);
-            expect(fs.existsSync(previewFilePath)).toBe(false);
+            await expect
+                .poll(() => [fs.existsSync(sourceFilePath), fs.existsSync(previewFilePath)], {
+                    timeout: 10_000,
+                })
+                .toEqual([false, false]);
         });
     });
 

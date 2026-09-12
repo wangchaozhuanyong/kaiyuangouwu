@@ -33,7 +33,11 @@ import {
     storefrontContentTargetTypes,
     storefrontNavigationTargetPaths,
 } from './constants';
-import { createContentPublicationChecker } from './content-publication';
+import {
+    accountContentBlockTypes,
+    createContentPublicationChecker,
+    isAccountContentBlockType,
+} from './content-publication';
 import { StorefrontContentBlockTranslation } from './entities/storefront-content-block-translation.entity';
 import { StorefrontContentBlock } from './entities/storefront-content-block.entity';
 import { StorefrontContentItemTranslation } from './entities/storefront-content-item-translation.entity';
@@ -88,14 +92,18 @@ export class StorefrontContentService {
         return block ? this.translateBlock(block, ctx, false) : undefined;
     }
 
-    async findPublished(ctx: RequestContext, accountOnly = false): Promise<StorefrontContentBlock[]> {
+    async findPublished(
+        ctx: RequestContext,
+        accountOnly = false,
+        publicationLanguageCode = ctx.languageCode,
+    ): Promise<StorefrontContentBlock[]> {
         const now = new Date();
         const blocks = await this.connection.getRepository(ctx, StorefrontContentBlock).find({
             where: {
                 channelId: ctx.channelId,
                 enabled: true,
                 code: Not(STOREFRONT_VISUAL_PRESET_CODE),
-                ...(accountOnly ? { type: In(['LEGAL', 'SUPPORT']) } : {}),
+                ...(accountOnly ? { type: In([...accountContentBlockTypes]) } : {}),
             },
             relations: {
                 imageAsset: true,
@@ -105,8 +113,11 @@ export class StorefrontContentService {
             order: { position: 'ASC', createdAt: 'ASC', items: { position: 'ASC', createdAt: 'ASC' } },
         });
         return blocks
-            .filter(block => !accountOnly || block.type === 'LEGAL' || block.type === 'SUPPORT')
-            .filter(block => contentPublicationStatus(block, now.getTime(), ctx.languageCode) === 'PUBLISHED')
+            .filter(block => !accountOnly || isAccountContentBlockType(block.type))
+            .filter(
+                block =>
+                    contentPublicationStatus(block, now.getTime(), publicationLanguageCode) === 'PUBLISHED',
+            )
             .map(block => this.translateBlock(block, ctx, true));
     }
 

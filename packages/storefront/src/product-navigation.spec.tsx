@@ -76,12 +76,6 @@ describe('product image navigation layers', () => {
                                     name: '下级分类',
                                     slug: 'grandchild',
                                     parentId: 'child',
-                                    breadcrumbs: [
-                                        { id: 'root' },
-                                        { id: 'parent' },
-                                        { id: 'child' },
-                                        { id: 'grandchild' },
-                                    ],
                                 },
                             ],
                         },

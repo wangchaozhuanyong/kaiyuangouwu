@@ -34,6 +34,28 @@ afterEach(() => {
 });
 
 describe('ShopApi storefront config', () => {
+    it('keeps login and registration visuals in public account content without exposing catalog blocks', async () => {
+        const blocks = [
+            'LEGAL',
+            'SUPPORT',
+            'AUTH_LOGIN',
+            'AUTH_REGISTER',
+            'HERO',
+            'CUSTOM',
+            'ACCOUNT_HERO',
+        ].map(type => ({
+            id: type,
+            type,
+            imageUrl: `/assets/preview/${type}.png`,
+            title: type,
+        }));
+        mockGraphQlResponse({ storefrontContent: blocks });
+        const result = await new ShopApi(market).storefrontAccountContent();
+        expect(result.blocks).toEqual(blocks.slice(0, 4));
+        expect(result.flashSales).toEqual([]);
+        expect(result.systemAnnouncements).toEqual([]);
+    });
+
     it('loads managed legal identity and contact fields from storefront branding', async () => {
         const fetchMock = mockGraphQlResponse({
             activeChannel: {

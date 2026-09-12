@@ -18,3 +18,4 @@ export { StorefrontContentBlock } from './entities/storefront-content-block.enti
 export { StorefrontContentItem } from './entities/storefront-content-item.entity';
 export { StorefrontContentChangedEvent } from './storefront-content-changed.event';
 export { StorefrontContentPlugin } from './storefront-content.plugin';
+export { StorefrontContentService } from './storefront-content.service';

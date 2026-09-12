@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, OnModuleInit } from '@nestjs/common';
 import {
     AssetListOptions,
     AssetType,
@@ -49,6 +49,8 @@ import { ProductVariant } from '../../entity/product-variant/product-variant.ent
 import { EventBus } from '../../event-bus/event-bus';
 import { AssetChannelEvent } from '../../event-bus/events/asset-channel-event';
 import { AssetEvent } from '../../event-bus/events/asset-event';
+import { JobQueue } from '../../job-queue/job-queue';
+import { JobQueueService } from '../../job-queue/job-queue.service';
 import { CustomFieldRelationService } from '../helpers/custom-field-relation/custom-field-relation.service';
 import { ListQueryBuilder } from '../helpers/list-query-builder/list-query-builder';
 import { safeImageSize } from '../helpers/safe-image-size/safe-image-size';
@@ -162,8 +164,9 @@ function peekStreamHead(stream: Readable, byteCount: number): Promise<{ head: Bu
  */
 @Injectable()
 @Instrument()
-export class AssetService {
+export class AssetService implements OnModuleInit {
     private permittedMimeTypes: Array<{ type: string; subtype: string }> = [];
+    private deletionQueue: JobQueue<{ assetId: string; paths: string[] }>;
 
     constructor(
         private connection: TransactionalConnection,
@@ -177,6 +180,7 @@ export class AssetService {
         private readonly translatableSaver: TranslatableSaver,
         private readonly translator: TranslatorService,
         private readonly transactionSubscriber?: TransactionSubscriber,
+        private readonly jobQueueService?: JobQueueService,
     ) {
         this.permittedMimeTypes = this.configService.assetOptions.permittedFileTypes
             .map(val => (/\.[\w]+/.test(val) ? mime.lookup(val) || undefined : val))
@@ -185,6 +189,32 @@ export class AssetService {
                 const [type, subtype] = val.split('/');
                 return { type, subtype };
             });
+    }
+
+    async onModuleInit(): Promise<void> {
+        if (!this.jobQueueService) return;
+        this.deletionQueue = await this.jobQueueService.createQueue({
+            name: 'delete-asset-files',
+            process: async job => {
+                // Read committed data on the primary, independently of the deleting request.
+                // SQL job records are committed atomically with the asset deletion.
+                const repository = this.connection.getRepository(undefined, Asset, {
+                    replicationMode: 'master',
+                });
+                if (await repository.findOne({ where: { id: job.data.assetId } })) {
+                    throw new Error('Asset deletion is not committed; retaining files');
+                }
+                const storage = this.configService.assetOptions.assetStorageStrategy;
+                for (const identifier of job.data.paths) {
+                    const referenced = await repository.findOne({
+                        where: [{ source: identifier }, { preview: identifier }],
+                    });
+                    if (!referenced && (await storage.fileExists(identifier))) {
+                        await storage.deleteFile(identifier);
+                    }
+                }
+            },
+        });
     }
 
     findOne(
@@ -605,22 +635,26 @@ export class AssetService {
      * Does not remove assets from channels
      */
     private async deleteUnconditional(ctx: RequestContext, assets: Asset[]): Promise<DeletionResponse> {
-        for (const asset of assets) {
-            // Create a new asset so that the id is still available
-            // after deletion (the .remove() method sets it to undefined)
-            const deletedAsset = new Asset(asset);
-            await this.connection.getRepository(ctx, Asset).remove(asset);
-            try {
-                await this.configService.assetOptions.assetStorageStrategy.deleteFile(asset.source);
-                await this.configService.assetOptions.assetStorageStrategy.deleteFile(asset.preview);
-            } catch (e: any) {
-                Logger.error('error.could-not-delete-asset-file', undefined, e.stack);
+        if (!this.deletionQueue) throw new InternalServerError('Asset deletion queue is not initialized');
+        return this.connection.withTransaction(ctx, async txCtx => {
+            for (const asset of assets) {
+                // Create a new asset so that the id is still available
+                // after deletion (the .remove() method sets it to undefined)
+                const deletedAsset = new Asset(asset);
+                await this.connection.getRepository(txCtx, Asset).remove(asset);
+                await this.eventBus.publish(new AssetEvent(txCtx, deletedAsset, 'deleted', deletedAsset.id));
+                await this.deletionQueue.add(
+                    {
+                        assetId: String(deletedAsset.id),
+                        paths: [...new Set([deletedAsset.source, deletedAsset.preview].filter(Boolean))],
+                    },
+                    { ctx: txCtx, retries: 5 },
+                );
             }
-            await this.eventBus.publish(new AssetEvent(ctx, deletedAsset, 'deleted', deletedAsset.id));
-        }
-        return {
-            result: DeletionResult.DELETED,
-        };
+            return {
+                result: DeletionResult.DELETED,
+            };
+        });
     }
 
     /**

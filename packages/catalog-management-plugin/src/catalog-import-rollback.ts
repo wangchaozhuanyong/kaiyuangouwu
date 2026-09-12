@@ -22,6 +22,7 @@ import {
     stringOrNumberValue,
     stringValue,
 } from './catalog-import-helpers';
+import { rollbackState, supportsRollbackLocks } from './catalog-import-rollback-state';
 import { CatalogOperationsService } from './catalog-operations.service';
 import { CatalogSupplierService } from './catalog-supplier.service';
 import { CatalogImportJob } from './entities/catalog-import-job.entity';
@@ -54,16 +55,30 @@ export class CatalogImportRollback {
 
         const productIds = [...latestProductRows.keys()] as ID[];
         const variantIds = [...latestVariantRows.keys()] as ID[];
-        const products = productIds.length
-            ? await this.connection.getRepository(ctx, Product).find({
-                  where: { id: In(productIds), deletedAt: IsNull() },
-              })
-            : [];
-        const variants = variantIds.length
-            ? await this.connection.getRepository(ctx, ProductVariant).find({
-                  where: { id: In(variantIds), deletedAt: IsNull() },
-              })
-            : [];
+        const productQuery = productIds.length
+            ? this.connection
+                  .getRepository(ctx, Product)
+                  .createQueryBuilder('product')
+                  .setFindOptions({
+                      where: { id: In(productIds), deletedAt: IsNull() },
+                      order: { id: 'ASC' },
+                  })
+            : undefined;
+        const variantQuery = variantIds.length
+            ? this.connection
+                  .getRepository(ctx, ProductVariant)
+                  .createQueryBuilder('variant')
+                  .setFindOptions({
+                      where: { id: In(variantIds), deletedAt: IsNull() },
+                      order: { id: 'ASC' },
+                  })
+            : undefined;
+        if (rows.length && supportsRollbackLocks(this.connection)) {
+            productQuery?.setLock('pessimistic_write');
+            variantQuery?.setLock('pessimistic_write');
+        }
+        const products = productQuery ? await productQuery.getMany() : [];
+        const variants = variantQuery ? await variantQuery.getMany() : [];
         const productById = new Map(products.map(product => [String(product.id), product]));
         const variantById = new Map(variants.map(variant => [String(variant.id), variant]));
         const conflicts: number[] = [];
@@ -78,7 +93,14 @@ export class CatalogImportRollback {
         for (const [variantId, row] of latestVariantRows) {
             const variant = variantById.get(variantId);
             const after = recordValue(row.appliedSnapshot?.afterSnapshot);
-            if (!variant || !after || dateString(variant.updatedAt) !== stringValue(after.variantUpdatedAt)) {
+            if (
+                !variant ||
+                !after ||
+                dateString(variant.updatedAt) !== stringValue(after.variantUpdatedAt) ||
+                !row.appliedSnapshot?.rollbackState ||
+                row.appliedSnapshot.rollbackState !==
+                    (await rollbackState(this.connection, ctx, variantId, true))
+            ) {
                 conflicts.push(row.rowNumber);
             }
         }
@@ -88,7 +110,7 @@ export class CatalogImportRollback {
             const preview = uniqueConflicts.slice(0, 10).join('、');
             const suffix = uniqueConflicts.length > 10 ? `等 ${uniqueConflicts.length} 行` : '';
             throw new UserInputError(
-                `导入完成后商品或 SKU 已被修改，或该历史任务缺少安全快照；为避免覆盖后续数据，已停止回滚（第 ${preview}${suffix} 行）`,
+                `导入完成后商品、SKU、库存或关联数据已被修改，或该历史任务缺少安全快照；为避免覆盖后续数据，已停止回滚（第 ${preview}${suffix} 行）`,
             );
         }
     }

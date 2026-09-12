@@ -1,6 +1,13 @@
 import { storefrontAssetUrl } from './content-image';
 import { isSharingContent } from './content-purpose';
 
+/** Content required before a customer can sign in; catalog blocks remain private. */
+export const accountContentBlockTypes = ['LEGAL', 'SUPPORT', 'AUTH_LOGIN', 'AUTH_REGISTER'] as const;
+
+export function isAccountContentBlockType(type: string): boolean {
+    return accountContentBlockTypes.some(accountType => accountType === type);
+}
+
 interface Translation {
     languageCode: string;
     title?: string;
