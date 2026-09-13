@@ -52,6 +52,16 @@ export type IcloudBatchCreateResult = {
     skippedCount: Scalars['Int']['output'];
 };
 
+export type IcloudMailHistoryResult = {
+    ambiguousCount: Scalars['Int']['output'];
+    matchedCount: Scalars['Int']['output'];
+    scannedCount: Scalars['Int']['output'];
+    skippedCount: Scalars['Int']['output'];
+    unmatchedCount: Scalars['Int']['output'];
+    unresolvedCount: Scalars['Int']['output'];
+    updatedCount: Scalars['Int']['output'];
+};
+
 export type IcloudPrimaryAccountView = Node & {
     codeExpiresAt?: Maybe<Scalars['DateTime']['output']>;
     codeResetIntervalDays: Scalars['Int']['output'];
@@ -131,6 +141,7 @@ export type Mutation = {
     deleteIcloudPrimaryAccount: Scalars['Boolean']['output'];
     deleteIcloudVirtualEmail: Scalars['Boolean']['output'];
     reassignIcloudMail: IcloudReceivedMailView;
+    reconcileIcloudMailHistory: IcloudMailHistoryResult;
     resetIcloudMasterCode: IcloudPrimaryAccountView;
     resetIcloudVirtualEmailCode: IcloudVirtualEmailView;
     syncIcloudAccount: IcloudSyncResult;
@@ -166,6 +177,11 @@ export type MutationDeleteIcloudVirtualEmailArgs = {
 export type MutationReassignIcloudMailArgs = {
     mailId: Scalars['ID']['input'];
     virtualEmailId: Scalars['ID']['input'];
+};
+
+export type MutationReconcileIcloudMailHistoryArgs = {
+    dryRun?: Scalars['Boolean']['input'];
+    primaryAccountId: Scalars['ID']['input'];
 };
 
 export type MutationResetIcloudMasterCodeArgs = {
@@ -590,6 +606,23 @@ export type UpdateIcloudVirtualEmailMutation = {
         lastQueriedIp?: string | null;
         mailCount: number;
         lastMailReceivedAt?: string | null;
+    };
+};
+
+export type ReconcileIcloudMailHistoryMutationVariables = Exact<{
+    primaryAccountId: Scalars['ID']['input'];
+    dryRun?: Scalars['Boolean']['input'];
+}>;
+
+export type ReconcileIcloudMailHistoryMutation = {
+    reconcileIcloudMailHistory: {
+        scannedCount: number;
+        matchedCount: number;
+        updatedCount: number;
+        unmatchedCount: number;
+        ambiguousCount: number;
+        unresolvedCount: number;
+        skippedCount: number;
     };
 };
 
@@ -1681,3 +1714,68 @@ export const UpdateIcloudVirtualEmailDocument = {
         },
     ],
 } as unknown as DocumentNode<UpdateIcloudVirtualEmailMutation, UpdateIcloudVirtualEmailMutationVariables>;
+export const ReconcileIcloudMailHistoryDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'mutation',
+            name: { kind: 'Name', value: 'ReconcileIcloudMailHistory' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'primaryAccountId' } },
+                    type: {
+                        kind: 'NonNullType',
+                        type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } },
+                    },
+                },
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'dryRun' } },
+                    type: {
+                        kind: 'NonNullType',
+                        type: { kind: 'NamedType', name: { kind: 'Name', value: 'Boolean' } },
+                    },
+                    defaultValue: { kind: 'BooleanValue', value: true },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'reconcileIcloudMailHistory' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'primaryAccountId' },
+                                value: {
+                                    kind: 'Variable',
+                                    name: { kind: 'Name', value: 'primaryAccountId' },
+                                },
+                            },
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'dryRun' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'dryRun' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'Field', name: { kind: 'Name', value: 'scannedCount' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'matchedCount' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'updatedCount' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'unmatchedCount' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'ambiguousCount' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'unresolvedCount' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'skippedCount' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<ReconcileIcloudMailHistoryMutation, ReconcileIcloudMailHistoryMutationVariables>;

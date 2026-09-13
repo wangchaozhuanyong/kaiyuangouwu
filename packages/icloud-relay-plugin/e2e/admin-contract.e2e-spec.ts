@@ -1,4 +1,11 @@
-import { mergeConfig, RequestContext, TransactionalConnection } from '@vendure/core';
+import { APP_INTERCEPTOR } from '@nestjs/core';
+import {
+    mergeConfig,
+    PluginCommonModule,
+    RequestContext,
+    TransactionalConnection,
+    VendurePlugin,
+} from '@vendure/core';
 import { createTestEnvironment } from '@vendure/testing';
 import gql from 'graphql-tag';
 import { ImapFlow } from 'imapflow';
@@ -6,30 +13,50 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { initialData } from '../../../e2e-common/e2e-initial-data';
 import { TEST_SETUP_TIMEOUT_MS, testConfig } from '../../../e2e-common/test-config';
+import { StorefrontCatalogAccessInterceptor } from '../../store-management-plugin/src/storefront-catalog-access.interceptor';
 import {
     BatchCreateIcloudVirtualEmailsDocument,
     CreateIcloudPrimaryAccountDocument,
     CreateIcloudVirtualEmailDocument,
     IcloudVirtualEmailsDocument,
+    ReconcileIcloudMailHistoryDocument,
     UpdateIcloudPrimaryAccountDocument,
     UpdateIcloudVirtualEmailDocument,
 } from '../src/client/admin.generated';
+import { RATE_LIMIT_LOCKOUT_MS, RATE_LIMIT_MAX_FAILED_ATTEMPTS } from '../src/constants';
 import { IcloudPrimaryAccount } from '../src/entities/icloud-primary-account.entity';
+import { IcloudQueryAuditLog } from '../src/entities/icloud-query-audit-log.entity';
+import { IcloudReceivedMail } from '../src/entities/icloud-received-mail.entity';
 import { IcloudVirtualEmail } from '../src/entities/icloud-virtual-email.entity';
 import { IcloudRelayPlugin } from '../src/icloud-relay.plugin';
 import { IcloudJobService } from '../src/jobs/icloud-job.service';
 import { IcloudAdminService } from '../src/services/icloud-admin.service';
 import { IcloudImapSyncService } from '../src/services/icloud-imap-sync.service';
+import { IcloudMailHistoryService } from '../src/services/icloud-mail-history.service';
 import { IcloudPublicQueryService } from '../src/services/icloud-public-query.service';
 import { updateIcloudRecord } from '../src/services/icloud-record-update';
-import { IcloudAccountStatus } from '../src/types';
+import {
+    IcloudAccountStatus,
+    IcloudAuditResult,
+    IcloudVirtualEmailStatus,
+    PublicMailQueryResult,
+} from '../src/types';
+
+// Exercise the same global Shop API gate used in production.
+@VendurePlugin({
+    imports: [PluginCommonModule],
+    providers: [{ provide: APP_INTERCEPTOR, useClass: StorefrontCatalogAccessInterceptor }],
+    compatibility: '^3.0.0',
+})
+class MailQueryAccessTestPlugin {}
 
 // Regression: run the same documents as both admin UIs through HTTP, GraphQL and SQL.js.
 describe('iCloud admin contract persistence', () => {
-    const { server, adminClient } = createTestEnvironment(
+    const port = Number(process.env.ICLOUD_TEST_PORT || 33551);
+    const { server, adminClient, shopClient } = createTestEnvironment(
         mergeConfig(testConfig(), {
-            apiOptions: { port: 33551 },
-            plugins: [IcloudRelayPlugin.init({ syncIntervalSeconds: 0 })],
+            apiOptions: { port },
+            plugins: [IcloudRelayPlugin.init({ syncIntervalSeconds: 0 }), MailQueryAccessTestPlugin],
         }),
     );
     let account: Awaited<ReturnType<typeof createAccount>>;
@@ -56,6 +83,245 @@ describe('iCloud admin contract persistence', () => {
     afterAll(async () => {
         await server.destroy();
         disableJobs.mockRestore();
+    });
+
+    async function publicQuery(code: string, headers: Record<string, string> = {}) {
+        const response = await fetch(`http://127.0.0.1:${port}/shop-api`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', ...headers },
+            body: JSON.stringify({
+                query: 'query ($code: String!) { icloudQueryMails(queryCode: $code) { success message targetType totalEmails items { id subject } } }',
+                variables: { code },
+            }),
+        });
+        const body = (await response.json()) as {
+            data?: { icloudQueryMails?: PublicMailQueryResult };
+            errors?: unknown[];
+        };
+        expect(response.status).toBe(200);
+        expect(body.errors).toBeUndefined();
+        if (!body.data?.icloudQueryMails) throw new Error('Missing public mail query result');
+        return body.data.icloudQueryMails;
+    }
+
+    async function publicFixture(name: string) {
+        const ctx = RequestContext.empty();
+        const admin = server.app.get(IcloudAdminService);
+        const primary = await admin.createPrimaryAccount(ctx, {
+            email: `${name}-owner@example.com`,
+            appPassword: 'isolated-test-password',
+        });
+        const masterCode = primary.masterQueryCode;
+        if (!masterCode) throw new Error('Missing fixture master query code');
+        const alias = await admin.createVirtualEmail(ctx, {
+            primaryAccountId: primary.id,
+            aliasEmail: `${name}-alias@example.com`,
+        });
+        await server.app
+            .get(TransactionalConnection)
+            .getRepository(ctx, IcloudReceivedMail)
+            .save(
+                new IcloudReceivedMail({
+                    primaryAccountId: primary.id,
+                    virtualEmailId: alias.id,
+                    messageId: name,
+                    fromAddress: 'sender@example.com',
+                    subject: name,
+                    receivedAt: new Date(),
+                }),
+            );
+        return { ctx, admin, primary, alias, masterCode };
+    }
+
+    it.each(['virtual', 'primary-master', 'primary-buyer'])(
+        'rejects disabled %s access, records the denial, and restores access after re-enabling',
+        async scenario => {
+            const { ctx, admin, primary, alias, masterCode } = await publicFixture(scenario);
+            const code = scenario === 'primary-master' ? masterCode : alias.buyerQueryCode;
+            expect(await publicQuery(code)).toMatchObject({ success: true, totalEmails: 1 });
+            if (scenario === 'virtual') {
+                await admin.updateVirtualEmail(ctx, {
+                    id: alias.id,
+                    status: IcloudVirtualEmailStatus.DISABLED,
+                });
+            } else {
+                await admin.updatePrimaryAccount(ctx, {
+                    id: primary.id,
+                    status: IcloudAccountStatus.DISABLED,
+                });
+            }
+            expect(await publicQuery(code)).toMatchObject({
+                success: false,
+                totalEmails: 0,
+                items: [],
+                message: expect.stringContaining('禁用'),
+            });
+            const audit = await server.app
+                .get(TransactionalConnection)
+                .getRepository(ctx, IcloudQueryAuditLog)
+                .findOne({
+                    where: { queryCode: code, result: IcloudAuditResult.DISABLED },
+                    order: { id: 'DESC' },
+                });
+            expect(audit).toMatchObject({
+                targetType: scenario === 'primary-master' ? 'PRIMARY' : 'VIRTUAL',
+                targetId: String(scenario === 'primary-master' ? primary.id : alias.id),
+            });
+            if (scenario === 'virtual') {
+                await admin.updateVirtualEmail(ctx, {
+                    id: alias.id,
+                    status: IcloudVirtualEmailStatus.ACTIVE,
+                });
+            } else {
+                await admin.updatePrimaryAccount(ctx, { id: primary.id, status: IcloudAccountStatus.ACTIVE });
+            }
+            expect(await publicQuery(code)).toMatchObject({ success: true, totalEmails: 1 });
+        },
+    );
+
+    it.each([IcloudAccountStatus.SYNCING, IcloudAccountStatus.AUTH_ERROR])(
+        'allows reading stored mail while the primary account is %s',
+        async status => {
+            const { ctx, admin, primary, alias, masterCode } = await publicFixture(status.toLowerCase());
+            await admin.updatePrimaryAccount(ctx, { id: primary.id, status });
+            for (const code of [masterCode, alias.buyerQueryCode]) {
+                expect(await publicQuery(code)).toMatchObject({ success: true, totalEmails: 1 });
+            }
+        },
+    );
+
+    it('allows anonymous code-based mail access through the production gate without exposing other mailboxes', async () => {
+        const service = server.app.get(IcloudAdminService);
+        const ctx = RequestContext.empty();
+        const primary = await service.createPrimaryAccount(ctx, {
+            email: 'public-access-fixture@icloud.com',
+            appPassword: 'isolated-test-password',
+        });
+        const alias = await service.createVirtualEmail(ctx, {
+            primaryAccountId: primary.id,
+            aliasEmail: 'public-alias-fixture@icloud.com',
+        });
+        const connection = server.app.get(TransactionalConnection);
+        const mails = connection.getRepository(ctx, IcloudReceivedMail);
+        await mails.save(
+            new IcloudReceivedMail({
+                primaryAccountId: primary.id,
+                virtualEmailId: alias.id,
+                messageId: 'public-own',
+                fromAddress: 'sender@example.com',
+                subject: 'own mailbox',
+                receivedAt: new Date(),
+            }),
+        );
+        await mails.save(
+            new IcloudReceivedMail({
+                primaryAccountId: primary.id,
+                virtualEmailId: null,
+                messageId: 'public-unassigned',
+                fromAddress: 'sender@example.com',
+                subject: 'master only',
+                receivedAt: new Date(),
+            }),
+        );
+        const otherPrimary = await connection
+            .getRepository(ctx, IcloudPrimaryAccount)
+            .findOneByOrFail({ email: account.email });
+        await mails.save(
+            new IcloudReceivedMail({
+                primaryAccountId: otherPrimary.id,
+                virtualEmailId: null,
+                messageId: 'public-other-account',
+                fromAddress: 'sender@example.com',
+                subject: 'another owner',
+                receivedAt: new Date(),
+            }),
+        );
+        const query = gql`
+            query ($code: String!) {
+                icloudQueryMails(queryCode: $code) {
+                    success
+                    message
+                    targetType
+                    totalEmails
+                    items {
+                        id
+                        subject
+                    }
+                }
+            }
+        `;
+        const buyer = await shopClient.query(query, { code: alias.buyerQueryCode });
+        expect(buyer.icloudQueryMails).toMatchObject({
+            success: true,
+            targetType: 'VIRTUAL',
+            totalEmails: 1,
+            items: [{ subject: 'own mailbox' }],
+        });
+        const master = await shopClient.query(query, { code: primary.masterQueryCode });
+        expect(master.icloudQueryMails).toMatchObject({
+            success: true,
+            targetType: 'PRIMARY',
+            totalEmails: 2,
+        });
+        expect(master.icloudQueryMails.items.map((item: { subject: string }) => item.subject).sort()).toEqual(
+            ['own mailbox', 'master only'].sort(),
+        );
+        const invalid = await shopClient.query(query, { code: 'DIAGNOSTIC-NONEXISTENT' });
+        expect(invalid.icloudQueryMails).toMatchObject({
+            success: false,
+            message: '无效的查询码，请检查后重试。',
+            items: [],
+        });
+        await connection
+            .getRepository(ctx, IcloudVirtualEmail)
+            .update(alias.id, { codeExpiresAt: new Date(0) });
+        const expired = await shopClient.query(query, { code: alias.buyerQueryCode });
+        expect(expired.icloudQueryMails).toMatchObject({ success: false, items: [] });
+        expect(expired.icloudQueryMails.message).toContain('过期');
+    });
+
+    it('continues to reject anonymous private operations and admin mailbox queries', async () => {
+        await expect(
+            shopClient.query(gql`
+                query {
+                    activeOrder {
+                        id
+                    }
+                }
+            `),
+        ).rejects.toThrow('not currently authorized');
+        await expect(
+            shopClient.query(gql`
+                mutation {
+                    addItemToOrder(productVariantId: "1", quantity: 1) {
+                        __typename
+                    }
+                }
+            `),
+        ).rejects.toThrow('not currently authorized');
+        await expect(
+            shopClient.query(gql`
+                query {
+                    icloudPrimaryAccounts {
+                        id
+                    }
+                }
+            `),
+        ).rejects.toThrow('Cannot query field');
+        await adminClient.asAnonymousUser();
+        try {
+            await expect(
+                adminClient.query(gql`
+                    query {
+                        icloudPrimaryAccounts {
+                            id
+                        }
+                    }
+                `),
+            ).rejects.toThrow('not currently authorized');
+        } finally {
+            await adminClient.asSuperAdmin();
+        }
     });
 
     it('saves and clears virtual notes without changing the address, code, owner or expiry', async () => {
@@ -407,4 +673,365 @@ describe('iCloud admin contract persistence', () => {
             }
         },
     );
+    async function historyOwner(label: string) {
+        const created = (
+            await adminClient.query(CreateIcloudPrimaryAccountDocument, {
+                input: { email: `${label}@icloud.com`, appPassword: 'local-history-fixture' },
+            })
+        ).createIcloudPrimaryAccount;
+        const connection = server.app.get(TransactionalConnection);
+        const owner = await connection.rawConnection
+            .getRepository(IcloudPrimaryAccount)
+            .findOneByOrFail({ email: created.email });
+        return {
+            owner,
+            created,
+            connection,
+            mails: connection.rawConnection.getRepository(IcloudReceivedMail),
+        };
+    }
+
+    function seedHistory(ownerId: string | number, alias: string, label: string, count = 1) {
+        const repo = server.app.get(TransactionalConnection).rawConnection.getRepository(IcloudReceivedMail);
+        return repo.save(
+            Array.from(
+                { length: count },
+                (_, index) =>
+                    new IcloudReceivedMail({
+                        primaryAccountId: ownerId,
+                        virtualEmailId: null,
+                        messageId: `<${label}-${index}@example.com>`,
+                        imapUid: 0,
+                        toAddressesJson: JSON.stringify([alias]),
+                        fromAddress: 'sender@example.com',
+                        fromName: 'Fixture',
+                        subject: `${label}-${index}`,
+                        bodyText: 'Local fixture body',
+                        receivedAt: new Date('2026-09-13T00:00:00Z'),
+                        isRead: false,
+                        isStarred: false,
+                    }),
+            ),
+        );
+    }
+
+    it('automatically assigns earlier mail when creating an alias, without changing other owners or credentials', async () => {
+        const { owner, created, mails } = await historyOwner('history-auto');
+        const other = await historyOwner('history-other');
+        await seedHistory(owner.id, 'Recipient <HISTORY-AUTO-ALIAS@icloud.com>', 'auto', 107);
+        const foreign = await seedHistory(other.owner.id, 'history-auto-alias@icloud.com', 'foreign');
+        const alias = (
+            await adminClient.query(CreateIcloudVirtualEmailDocument, {
+                input: { primaryAccountId: created.id, aliasEmail: 'history-auto-alias@icloud.com' },
+            })
+        ).createIcloudVirtualEmail;
+        expect(alias.mailCount).toBe(107);
+        expect(new Date(alias.lastMailReceivedAt ?? 0).toISOString()).toBe('2026-09-13T00:00:00.000Z');
+        expect((await mails.findOneByOrFail({ id: foreign[0].id })).virtualEmailId).toBeNull();
+        const storedOwner = await server.app
+            .get(TransactionalConnection)
+            .rawConnection.getRepository(IcloudPrimaryAccount)
+            .findOneByOrFail({ id: owner.id });
+        expect(storedOwner.encryptedAppPassword).toBe(owner.encryptedAppPassword);
+        expect(storedOwner.lastSyncedUid).toBe(owner.lastSyncedUid);
+    });
+
+    it('bulk creation matches once after all aliases exist and leaves ambiguous messages unassigned', async () => {
+        const { owner, created, mails } = await historyOwner('history-bulk');
+        const first = await seedHistory(owner.id, 'bulk-first@icloud.com', 'bulk-first');
+        const second = await seedHistory(owner.id, 'bulk-second@icloud.com', 'bulk-second');
+        const ambiguous = await seedHistory(
+            owner.id,
+            'bulk-first@icloud.com, bulk-second@icloud.com',
+            'bulk-conflict',
+        );
+        await adminClient.query(BatchCreateIcloudVirtualEmailsDocument, {
+            input: {
+                primaryAccountId: created.id,
+                rawInput: 'bulk-first@icloud.com\nbulk-second@icloud.com',
+            },
+        });
+        const aliases = (
+            await adminClient.query(IcloudVirtualEmailsDocument, { primaryAccountId: created.id })
+        ).icloudVirtualEmails;
+        expect(aliases.map(alias => alias.mailCount)).toEqual([1, 1]);
+        expect((await mails.findOneByOrFail({ id: first[0].id })).virtualEmailId).not.toBeNull();
+        expect((await mails.findOneByOrFail({ id: second[0].id })).virtualEmailId).not.toBeNull();
+        expect((await mails.findOneByOrFail({ id: ambiguous[0].id })).virtualEmailId).toBeNull();
+    });
+
+    it('previews by default, applies only verified matches, and is idempotent', async () => {
+        const { owner, created, mails } = await historyOwner('history-manual');
+        const alias = (
+            await adminClient.query(CreateIcloudVirtualEmailDocument, {
+                input: { primaryAccountId: created.id, aliasEmail: 'manual-alias@icloud.com' },
+            })
+        ).createIcloudVirtualEmail;
+        const records = await seedHistory(owner.id, 'manual-alias@icloud.com', 'manual', 3);
+        const missing = await seedHistory(owner.id, 'unknown@example.com', 'unverified');
+        const headerRead = vi
+            .spyOn(server.app.get(IcloudImapSyncService), 'readRecipientHeaders')
+            .mockResolvedValue(new Map());
+        try {
+            const preview = (
+                await adminClient.query(ReconcileIcloudMailHistoryDocument, { primaryAccountId: created.id })
+            ).reconcileIcloudMailHistory;
+            expect(preview).toMatchObject({
+                scannedCount: 4,
+                matchedCount: 3,
+                updatedCount: 0,
+                unresolvedCount: 1,
+            });
+            expect((await mails.findOneByOrFail({ id: records[0].id })).virtualEmailId).toBeNull();
+            const applied = (
+                await adminClient.query(ReconcileIcloudMailHistoryDocument, {
+                    primaryAccountId: created.id,
+                    dryRun: false,
+                })
+            ).reconcileIcloudMailHistory;
+            expect(applied.updatedCount).toBe(3);
+            expect((await mails.findOneByOrFail({ id: missing[0].id })).virtualEmailId).toBeNull();
+            const repeated = (
+                await adminClient.query(ReconcileIcloudMailHistoryDocument, {
+                    primaryAccountId: created.id,
+                    dryRun: false,
+                })
+            ).reconcileIcloudMailHistory;
+            expect(repeated.updatedCount).toBe(0);
+            const rows = (
+                await adminClient.query(IcloudVirtualEmailsDocument, { primaryAccountId: created.id })
+            ).icloudVirtualEmails;
+            expect(rows.find(v => v.id === alias.id)?.mailCount).toBe(3);
+        } finally {
+            headerRead.mockRestore();
+        }
+    });
+
+    it('recovers verified original headers and preserves already assigned mail', async () => {
+        const { owner, created, mails } = await historyOwner('history-headers');
+        const alias = (
+            await adminClient.query(CreateIcloudVirtualEmailDocument, {
+                input: { primaryAccountId: created.id, aliasEmail: 'headers-alias@icloud.com' },
+            })
+        ).createIcloudVirtualEmail;
+        const [assigned] = await seedHistory(owner.id, 'headers-alias@icloud.com', 'assigned-header');
+        const aliases = server.app
+            .get(TransactionalConnection)
+            .rawConnection.getRepository(IcloudVirtualEmail);
+        const aliasRow = await aliases.findOneByOrFail({ aliasEmail: 'headers-alias@icloud.com' });
+        await mails.update(assigned.id, { virtualEmailId: aliasRow.id, toAddressesJson: '[]' });
+        const [missing] = await seedHistory(owner.id, '', 'missing-header');
+        await mails.update(missing.id, { imapUid: 41, toAddressesJson: '[]' });
+        const headerRead = vi
+            .spyOn(server.app.get(IcloudImapSyncService), 'readRecipientHeaders')
+            .mockResolvedValue(new Map([[String(missing.id), ['headers-alias@icloud.com']]]));
+        try {
+            const preview = (
+                await adminClient.query(ReconcileIcloudMailHistoryDocument, { primaryAccountId: created.id })
+            ).reconcileIcloudMailHistory;
+            expect(preview).toMatchObject({ scannedCount: 1, matchedCount: 1, updatedCount: 0 });
+            expect((await mails.findOneByOrFail({ id: missing.id })).toAddressesJson).toBe('[]');
+            const applied = (
+                await adminClient.query(ReconcileIcloudMailHistoryDocument, {
+                    primaryAccountId: created.id,
+                    dryRun: false,
+                })
+            ).reconcileIcloudMailHistory;
+            expect(applied.updatedCount).toBe(1);
+            expect((await mails.findOneByOrFail({ id: missing.id })).virtualEmailId).toBe(aliasRow.id);
+            expect((await mails.findOneByOrFail({ id: assigned.id })).toAddressesJson).toBe('[]');
+            const rows = (
+                await adminClient.query(IcloudVirtualEmailsDocument, { primaryAccountId: created.id })
+            ).icloudVirtualEmails;
+            expect(rows.find(v => v.id === alias.id)?.mailCount).toBe(2);
+        } finally {
+            headerRead.mockRestore();
+        }
+    });
+
+    it.each([0, 1, 5, 6, 10])(
+        'returns at most five actual database records over the buyer HTTP API for %i mails',
+        async count => {
+            const { owner, created } = await historyOwner(`history-cap-${count}`);
+            await seedHistory(owner.id, `cap-${count}@icloud.com`, `cap-${count}`, count);
+            const alias = (
+                await adminClient.query(CreateIcloudVirtualEmailDocument, {
+                    input: { primaryAccountId: created.id, aliasEmail: `cap-${count}@icloud.com` },
+                })
+            ).createIcloudVirtualEmail;
+            const query = gql`
+                query ($code: String!) {
+                    icloudQueryMails(queryCode: $code) {
+                        totalEmails
+                        items {
+                            subject
+                        }
+                    }
+                }
+            `;
+            const response = await shopClient.query(query, { code: alias.buyerQueryCode });
+            expect(response.icloudQueryMails.totalEmails).toBe(Math.min(count, 5));
+            expect(response.icloudQueryMails.items.map((mail: { subject: string }) => mail.subject)).toEqual(
+                Array.from({ length: Math.min(count, 5) }, (_, index) => `cap-${count}-${count - index - 1}`),
+            );
+            const master = await shopClient.query(query, { code: created.masterQueryCode });
+            expect(master.icloudQueryMails.items).toHaveLength(count);
+        },
+    );
+
+    it('rejects public access to the admin repair operation', async () => {
+        await expect(
+            shopClient.query(ReconcileIcloudMailHistoryDocument, {
+                primaryAccountId: account.id,
+                dryRun: false,
+            }),
+        ).rejects.toThrow();
+    });
+
+    it.skipIf(process.env.DB !== 'mysql')(
+        'serializes simultaneous historical repairs and new-mail sync without inflating counts',
+        async () => {
+            const { owner, created, connection, mails } = await historyOwner('history-concurrent');
+            const alias = (
+                await adminClient.query(CreateIcloudVirtualEmailDocument, {
+                    input: { primaryAccountId: created.id, aliasEmail: 'concurrent-alias@icloud.com' },
+                })
+            ).createIcloudVirtualEmail;
+            await seedHistory(owner.id, alias.aliasEmail, 'concurrent-history', 3);
+            const source = Buffer.from(
+                [
+                    'Message-ID: <concurrent-new@example.com>',
+                    'To: concurrent-alias@icloud.com',
+                    'From: sender@example.com',
+                    'Subject: concurrent-new',
+                    'Date: Sun, 13 Sep 2026 12:00:00 +0000',
+                    '',
+                    'Local fixture',
+                ].join('\r\n'),
+            );
+            const connect = vi.spyOn(ImapFlow.prototype, 'connect').mockResolvedValue(undefined);
+            const imapLock = vi
+                .spyOn(ImapFlow.prototype, 'getMailboxLock')
+                .mockResolvedValue({ path: 'INBOX', release: vi.fn() });
+            const fetch = vi.spyOn(ImapFlow.prototype, 'fetch').mockImplementation(async function* () {
+                await Promise.resolve();
+                yield { uid: 20, seq: 1, source };
+            });
+            const logout = vi.spyOn(ImapFlow.prototype, 'logout').mockResolvedValue(undefined);
+            const blocker = connection.rawConnection.createQueryRunner();
+            let operations: Array<Promise<unknown>> = [];
+            await blocker.startTransaction();
+            try {
+                await blocker.manager
+                    .getRepository(IcloudPrimaryAccount)
+                    .findOne({ where: { id: owner.id }, lock: { mode: 'pessimistic_write' } });
+                const history = server.app.get(IcloudMailHistoryService);
+                const sync = server.app.get(IcloudImapSyncService);
+                operations = [
+                    history.reconcile(RequestContext.empty(), owner.id, false),
+                    history.reconcile(RequestContext.empty(), owner.id, false),
+                    sync.syncAccount(RequestContext.empty(), owner),
+                ];
+                // Observe real server-side lock waits before releasing the owner lock.
+                await vi.waitFor(
+                    async () => {
+                        const locks = await connection.rawConnection.query(
+                            'SELECT COUNT(*) AS count FROM performance_schema.data_lock_waits',
+                        );
+                        expect(Number(locks[0].count)).toBeGreaterThanOrEqual(3);
+                    },
+                    { timeout: 5000 },
+                );
+                await blocker.commitTransaction();
+                const results = await Promise.all(operations);
+                expect(results[2]).toMatchObject({ success: true, syncedCount: 1 });
+                const mailCount = await mails.count({ where: { primaryAccountId: owner.id } });
+                const stored = await connection.rawConnection
+                    .getRepository(IcloudVirtualEmail)
+                    .findOneByOrFail({ aliasEmail: alias.aliasEmail });
+                expect(mailCount).toBe(4);
+                expect(stored.mailCount).toBe(4);
+                expect(stored.lastMailReceivedAt?.toISOString()).toBe('2026-09-13T12:00:00.000Z');
+                expect(
+                    (results[0] as { updatedCount: number }).updatedCount +
+                        (results[1] as { updatedCount: number }).updatedCount,
+                ).toBe(3);
+            } finally {
+                if (blocker.isTransactionActive) await blocker.rollbackTransaction();
+                await Promise.allSettled(operations);
+                await blocker.release();
+                connect.mockRestore();
+                imapLock.mockRestore();
+                fetch.mockRestore();
+                logout.mockRestore();
+            }
+        },
+    );
+
+    it('cannot evade lockout using forged headers when proxies are untrusted, and unlocks after the timeout', async () => {
+        const { alias } = await publicFixture('untrusted-proxy');
+        const app = server.app.getHttpAdapter().getInstance();
+        const previousTrust = app.get('trust proxy');
+        app.set('trust proxy', false);
+        try {
+            expect(await publicQuery(alias.buyerQueryCode)).toMatchObject({ success: true });
+            for (let i = 0; i < RATE_LIMIT_MAX_FAILED_ATTEMPTS; i++) {
+                expect(
+                    await publicQuery('INVALID-AUDIT-CODE', {
+                        'x-forwarded-for': `203.0.113.${i + 1}`,
+                        'x-real-ip': `198.51.100.${i + 1}`,
+                    }),
+                ).toMatchObject({ success: false, message: expect.stringContaining('无效') });
+            }
+            expect(
+                await publicQuery(alias.buyerQueryCode, {
+                    'x-forwarded-for': '203.0.113.99',
+                    'x-real-ip': '198.51.100.99',
+                }),
+            ).toMatchObject({ success: false, items: [], message: expect.stringContaining('15 分钟') });
+        } finally {
+            // Advance only the rate limiter clock and clear this fixture's lockout through a real request.
+            const now = vi.spyOn(Date, 'now').mockReturnValue(Date.now() + RATE_LIMIT_LOCKOUT_MS + 1);
+            try {
+                expect(await publicQuery(alias.buyerQueryCode)).toMatchObject({ success: true });
+            } finally {
+                now.mockRestore();
+                app.set('trust proxy', previousTrust);
+            }
+        }
+    });
+
+    it('uses the trusted proxy client address, rejects a forged prefix, and isolates other clients', async () => {
+        const { ctx, primary, alias, masterCode } = await publicFixture('trusted-proxy');
+        const app = server.app.getHttpAdapter().getInstance();
+        const previousTrust = app.get('trust proxy');
+        app.set('trust proxy', 'loopback');
+        try {
+            for (let i = 0; i < RATE_LIMIT_MAX_FAILED_ATTEMPTS; i++) {
+                expect(
+                    await publicQuery('INVALID-AUDIT-CODE', {
+                        'x-forwarded-for': `203.0.113.${i + 1}, 198.51.100.60`,
+                    }),
+                ).toMatchObject({ success: false, message: expect.stringContaining('无效') });
+            }
+            expect(
+                await publicQuery(alias.buyerQueryCode, {
+                    'x-forwarded-for': '203.0.113.99, 198.51.100.60',
+                    'x-real-ip': '203.0.113.98',
+                }),
+            ).toMatchObject({ success: false, items: [], message: expect.stringContaining('15 分钟') });
+            expect(
+                await publicQuery(masterCode, {
+                    'x-forwarded-for': '203.0.113.99, 198.51.100.61',
+                }),
+            ).toMatchObject({ success: true, totalEmails: 1 });
+            const stored = await server.app
+                .get(TransactionalConnection)
+                .getRepository(ctx, IcloudPrimaryAccount)
+                .findOneByOrFail({ id: primary.id });
+            expect(stored.lastQueriedIp).toBe('198.51.100.61');
+        } finally {
+            app.set('trust proxy', previousTrust);
+        }
+    });
 });

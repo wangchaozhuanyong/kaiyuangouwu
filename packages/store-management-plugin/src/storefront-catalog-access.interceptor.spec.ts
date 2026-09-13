@@ -41,6 +41,7 @@ describe('public storefront browsing boundary', () => {
         'storefrontContentSettings',
         'storefrontProductReviews',
         'activeStoreCommerceMode',
+        'icloudQueryMails',
     ])('allows anonymous public browsing: %s', field => {
         const { run, next } = invoke(field);
         expect(run).not.toThrow();
@@ -56,10 +57,19 @@ describe('public storefront browsing boundary', () => {
         'imageStudioWallet',
         'myImageGenerationJobs',
         'previewImageGenerationPrompt',
+        'icloudPrimaryAccounts',
+        'icloudReceivedMails',
     ])('keeps private and unreviewed queries protected: %s', field => expect(invoke(field).run).toThrow());
-    it.each(['addItemToOrder', 'setCustomerAvatar', 'createAfterSalesRequest', 'createImageGeneration'])(
-        'does not make customer mutations public: %s',
-        field => expect(invoke(field, 'Mutation').run).toThrow(),
+    it.each([
+        'addItemToOrder',
+        'setCustomerAvatar',
+        'createAfterSalesRequest',
+        'createImageGeneration',
+        'resetIcloudMasterCode',
+        'createIcloudPrimaryAccount',
+        'icloudQueryMails',
+    ])('does not make customer mutations public: %s', field =>
+        expect(invoke(field, 'Mutation').run).toThrow(),
     );
     it('does not treat a mutation name used as a query alias as account access', () => {
         const { run } = invoke('futureCatalogExport');

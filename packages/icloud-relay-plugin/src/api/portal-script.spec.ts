@@ -31,15 +31,22 @@ async function portal(
         runScripts: 'outside-only',
     });
     windows.push(dom);
-    const requests: Array<{ signal: AbortSignal; resolve: (data: unknown) => void }> = [];
+    const requests: Array<{
+        signal: AbortSignal;
+        resolve: (data: unknown) => void;
+        respond: (response: Response) => void;
+        reject: (error: Error) => void;
+    }> = [];
     dom.window.fetch = vi.fn((_url, init) => {
         if (JSON.parse(String(init?.body)).query.includes('MailPortalBranding')) {
             return Promise.resolve(Response.json({ data: branding }));
         }
-        return new Promise<Response>(resolve =>
+        return new Promise<Response>((resolve, reject) =>
             requests.push({
                 signal: init?.signal as AbortSignal,
                 resolve: data => resolve(Response.json({ data: { icloudQueryMails: data } })),
+                respond: resolve,
+                reject,
             }),
         );
     });
@@ -78,6 +85,75 @@ function result(subject: string, targetType = 'PRIMARY') {
         ],
     };
 }
+
+describe('mail portal failure feedback', () => {
+    it.each([
+        [
+            Response.json({
+                data: null,
+                errors: [{ message: 'private detail', extensions: { code: 'FORBIDDEN' } }],
+            }),
+            '邮件查询暂时无法访问',
+        ],
+        [Response.json({ errors: [{ extensions: { code: 'UNAUTHENTICATED' } }] }), '邮件查询暂时无法访问'],
+        [new Response('', { status: 403 }), '邮件查询暂时无法访问'],
+        [new Response('', { status: 502 }), '邮件服务暂时不可用'],
+        [Response.json({ errors: [{ message: 'private detail' }] }), '邮件服务暂时不可用'],
+        [Response.json({ data: null }), '邮件服务暂时不可用'],
+        [new Response('<html>Bad gateway</html>'), '邮件服务暂时不可用'],
+    ])('does not describe an API failure as an invalid code', async (response, expected) => {
+        const { window, document, requests } = await portal();
+        const query = window.doQuery('MSTR-TEST-TEST');
+        requests[0].respond(response);
+        await query;
+        expect(document.getElementById('msgBox')?.textContent).toContain(expected);
+        expect(document.getElementById('msgBox')?.textContent).not.toMatch(
+            /未找到匹配|无效的查询码|private detail/,
+        );
+        expect((document.getElementById('queryBtn') as HTMLButtonElement).disabled).toBe(false);
+    });
+
+    it.each([
+        '该主查询码已过期，请联系管理员。',
+        '无效的查询码，请检查后重试。',
+        '查询过于频繁，请 15 分钟后再试。',
+        '<img src=x onerror=alert(1)>',
+    ])('preserves and safely renders the business rejection: %s', async message => {
+        const { window, document, requests } = await portal();
+        const query = window.doQuery('MSTR-TEST-TEST');
+        requests[0].resolve({ success: false, message, items: [], totalEmails: 0 });
+        await query;
+        expect(document.getElementById('msgBox')?.textContent).toContain(message);
+        expect(document.querySelector('#msgBox img')).toBeNull();
+    });
+
+    it('shows a network failure and keeps the code available for retry', async () => {
+        const { window, document, requests } = await portal();
+        const query = window.doQuery('MSTR-TEST-TEST');
+        requests[0].reject(new TypeError('Failed to fetch'));
+        await query;
+        expect(document.getElementById('msgBox')?.textContent).toContain('网络连接失败');
+        expect((document.getElementById('codeInput') as HTMLInputElement).value).toBe('MSTR-TEST-TEST');
+    });
+
+    it('keeps the previous mail list visible on a failed refresh, then clears the error on recovery', async () => {
+        const { window, document, requests } = await portal();
+        const query = window.doQuery('MSTR-TEST-TEST');
+        requests[0].resolve(result('previous mail'));
+        await query;
+        const refresh = window.refreshCurrentQuery();
+        requests[1].respond(Response.json({ errors: [{ extensions: { code: 'FORBIDDEN' } }] }));
+        await refresh;
+        expect(document.getElementById('mailList')?.textContent).toContain('previous mail');
+        expect(document.getElementById('refreshStatus')?.textContent).toContain('邮件查询暂时无法访问');
+        expect(document.getElementById('refreshStatus')?.style.display).not.toBe('none');
+        const retry = window.refreshCurrentQuery();
+        requests[2].resolve(result('new mail'));
+        await retry;
+        expect(document.getElementById('mailList')?.textContent).toContain('new mail');
+        expect(document.getElementById('refreshStatus')?.textContent).toBe('');
+    });
+});
 
 describe('mail portal request ownership', () => {
     it('ignores a late refresh after returning and querying another code', async () => {
@@ -164,5 +240,55 @@ describe('mail portal store configuration', () => {
         const { document } = await portal(data);
         expect(document.title).toBe('邮件验证码查询中心');
         expect(document.documentElement.dataset.storefrontPreset).toBeUndefined();
+    });
+});
+
+describe('buyer recent mail display and error states', () => {
+    it('replaces the five visible mails on refresh and shows an accurate limit label', async () => {
+        const { window, document, requests } = await portal();
+        const mailResult = (start: number) => ({
+            ...result('buyer', 'VIRTUAL'),
+            totalEmails: 5,
+            virtualEmailsList: [],
+            items: Array.from({ length: 5 }, (_, index) => ({
+                id: String(start - index),
+                subject: 'Mail-' + (start - index),
+                fromAddress: 'fixture@example.com',
+                bodyText: 'Fixture body',
+            })),
+        });
+        const query = window.doQuery('BUY-TEST-MAIL');
+        requests[0].resolve(mailResult(5));
+        await query;
+        expect(document.querySelectorAll('.mail-card')).toHaveLength(5);
+        expect(document.getElementById('totalMailCount')?.textContent).toBe('最近 5 封邮件，最多显示 5 封');
+        const refresh = window.refreshCurrentQuery();
+        requests[1].resolve(mailResult(6));
+        await refresh;
+        expect(document.querySelectorAll('.mail-card')).toHaveLength(5);
+        expect(document.getElementById('mailList')?.textContent).toContain('Mail-6');
+        expect(document.getElementById('mailList')?.textContent).not.toContain('Mail-1');
+        (document.querySelector('.toggle-body-btn') as HTMLButtonElement).click();
+        expect(document.querySelector('.mail-card.open')).not.toBeNull();
+    });
+    it('keeps the previous result with a visible refresh error rather than showing zero', async () => {
+        const { window, document, requests } = await portal();
+        const query = window.doQuery('BUY-TEST-MAIL');
+        requests[0].resolve(result('retained mail', 'VIRTUAL'));
+        await query;
+        const refresh = window.refreshCurrentQuery();
+        requests[1].resolve({ success: false, message: '服务暂时不可用' });
+        await refresh;
+        expect(document.getElementById('mailList')?.textContent).toContain('retained mail');
+        expect(document.getElementById('refreshStatus')?.textContent).toContain('服务暂时不可用');
+        expect(document.getElementById('refreshStatus')?.className).toContain('error');
+    });
+    it('does not promise active listening for an empty result', async () => {
+        const { window, document, requests } = await portal();
+        const query = window.doQuery('BUY-TEST-MAIL');
+        requests[0].resolve({ ...result('', 'VIRTUAL'), items: [], totalEmails: 0 });
+        await query;
+        expect(document.getElementById('mailList')?.textContent).toContain('暂未查询到此邮箱的邮件');
+        expect(document.body.textContent).not.toContain('实时监听状态');
     });
 });

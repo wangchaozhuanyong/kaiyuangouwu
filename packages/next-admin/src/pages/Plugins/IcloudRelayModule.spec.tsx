@@ -233,4 +233,31 @@ describe('iCloud admin save interactions against the server schema', () => {
         });
         expect(document.body.textContent).not.toContain('加载失败');
     });
+    it('previews mail history before applying and refreshes the mailbox count', async () => {
+        await click(button('检查历史邮件'));
+        await act(async () => {
+            await vi.waitFor(() => expect(dialog()?.textContent).toContain('可匹配'));
+        });
+        expect(fixture.state.historyRepaired).toBe(false);
+        expect(
+            fixture.state.requests.filter(r => r.name === 'ReconcileIcloudMailHistory').at(-1)?.variables,
+        ).toEqual({ primaryAccountId: '1', dryRun: true });
+        await click(button('修复匹配记录', dialog()));
+        await act(async () => {
+            await vi.waitFor(() => expect(dialog()?.textContent).toContain('历史邮件修复结果'));
+        });
+        expect(fixture.state.historyRepaired).toBe(true);
+        expect(fixture.state.virtual.mailCount).toBe(7);
+        expect(button('修复匹配记录', dialog())).toBeUndefined();
+    });
+
+    it('does not execute a repair when the preview is closed', async () => {
+        await click(button('检查历史邮件'));
+        await act(async () => {
+            await vi.waitFor(() => expect(dialog()).not.toBeNull());
+        });
+        await click(button('关闭', dialog()));
+        expect(fixture.state.historyRepaired).toBe(false);
+        expect(fixture.state.requests.filter(r => r.name === 'ReconcileIcloudMailHistory')).toHaveLength(1);
+    });
 });

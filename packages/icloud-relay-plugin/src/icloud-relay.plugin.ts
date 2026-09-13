@@ -13,6 +13,7 @@ import { IcloudAccessCodeService } from './services/icloud-access-code.service';
 import { IcloudAdminService } from './services/icloud-admin.service';
 import { IcloudCipherService } from './services/icloud-cipher.service';
 import { IcloudImapSyncService } from './services/icloud-imap-sync.service';
+import { IcloudMailHistoryService } from './services/icloud-mail-history.service';
 import { IcloudMailSanitizerService } from './services/icloud-mail-sanitizer.service';
 import { IcloudOtpExtractorService } from './services/icloud-otp-extractor.service';
 import { IcloudPublicQueryService } from './services/icloud-public-query.service';
@@ -55,6 +56,7 @@ import { IcloudRelayPluginOptions } from './types';
         IcloudOtpExtractorService,
         IcloudMailSanitizerService,
         IcloudImapSyncService,
+        IcloudMailHistoryService,
         IcloudAdminService,
         IcloudPublicQueryService,
         IcloudJobService,

@@ -18,6 +18,8 @@ import {
 import { IcloudAccessCodeService } from './icloud-access-code.service';
 import { IcloudCipherService } from './icloud-cipher.service';
 import { IcloudImapSyncService, SyncAccountResult, TestConnectionResult } from './icloud-imap-sync.service';
+import { IcloudMailHistoryService } from './icloud-mail-history.service';
+import { lockMailAccount } from './icloud-mail-storage';
 import { updateIcloudRecord } from './icloud-record-update';
 
 export interface PrimaryAccountView {
@@ -66,6 +68,7 @@ export class IcloudAdminService {
         private readonly cipher: IcloudCipherService,
         private readonly codeService: IcloudAccessCodeService,
         private readonly imapSyncService: IcloudImapSyncService,
+        private readonly mailHistory: IcloudMailHistoryService,
     ) {}
 
     private validate(input: object): void {
@@ -248,9 +251,17 @@ export class IcloudAdminService {
     }
 
     async createVirtualEmail(ctx: RequestContext, input: CreateVirtualEmailInput): Promise<VirtualEmailView> {
+        return this.connection.withTransaction(ctx, transactionCtx =>
+            this.createVirtualInTransaction(transactionCtx, input),
+        );
+    }
+
+    private async createVirtualInTransaction(
+        ctx: RequestContext,
+        input: CreateVirtualEmailInput,
+    ): Promise<VirtualEmailView> {
         this.validate(input);
-        const primaryRepo = this.connection.getRepository(ctx, IcloudPrimaryAccount);
-        const primary = await primaryRepo.findOne({ where: { id: input.primaryAccountId } });
+        const primary = await lockMailAccount(ctx, this.connection, input.primaryAccountId);
         if (!primary) {
             throw new UserInputError('所属主邮箱不存在');
         }
@@ -279,6 +290,7 @@ export class IcloudAdminService {
         });
 
         const saved = await virtualRepo.save(virtual);
+        await this.mailHistory.reconcileCreated(ctx, primary.id, [saved.id]);
         return this.toVirtualView(
             await virtualRepo.findOneOrFail({ where: { id: saved.id }, relations: ['primaryAccount'] }),
         );
@@ -288,9 +300,14 @@ export class IcloudAdminService {
         ctx: RequestContext,
         input: BatchCreateVirtualEmailsInput,
     ): Promise<{ createdCount: number; skippedCount: number; errors: string[] }> {
+        return this.connection.withTransaction(ctx, transactionCtx =>
+            this.batchCreateInTransaction(transactionCtx, input),
+        );
+    }
+
+    private async batchCreateInTransaction(ctx: RequestContext, input: BatchCreateVirtualEmailsInput) {
         this.validate(input);
-        const primaryRepo = this.connection.getRepository(ctx, IcloudPrimaryAccount);
-        const primary = await primaryRepo.findOne({ where: { id: input.primaryAccountId } });
+        const primary = await lockMailAccount(ctx, this.connection, input.primaryAccountId);
         if (!primary) {
             throw new UserInputError('所属主邮箱不存在');
         }
@@ -298,6 +315,7 @@ export class IcloudAdminService {
         const virtualRepo = this.connection.getRepository(ctx, IcloudVirtualEmail);
         const lines = input.rawInput.split(/\r\n|\r|\n/).map(l => l.trim());
 
+        const createdIds: ID[] = [];
         let createdCount = 0;
         let skippedCount = 0;
         const errors: string[] = [];
@@ -339,10 +357,12 @@ export class IcloudAdminService {
                 mailCount: 0,
             });
 
-            await virtualRepo.save(v);
+            const saved = await virtualRepo.save(v);
+            createdIds.push(saved.id);
             createdCount++;
         }
 
+        await this.mailHistory.reconcileCreated(ctx, primary.id, createdIds);
         return { createdCount, skippedCount, errors };
     }
 

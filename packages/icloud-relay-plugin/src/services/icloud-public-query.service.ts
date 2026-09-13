@@ -6,7 +6,14 @@ import { IcloudPrimaryAccount } from '../entities/icloud-primary-account.entity'
 import { IcloudQueryAuditLog } from '../entities/icloud-query-audit-log.entity';
 import { IcloudReceivedMail } from '../entities/icloud-received-mail.entity';
 import { IcloudVirtualEmail } from '../entities/icloud-virtual-email.entity';
-import { IcloudAuditResult, IcloudQueryTargetType, PublicMailItem, PublicMailQueryResult } from '../types';
+import {
+    IcloudAccountStatus,
+    IcloudAuditResult,
+    IcloudQueryTargetType,
+    IcloudVirtualEmailStatus,
+    PublicMailItem,
+    PublicMailQueryResult,
+} from '../types';
 
 import { IcloudAccessCodeService } from './icloud-access-code.service';
 
@@ -60,6 +67,27 @@ export class IcloudPublicQueryService {
         });
 
         if (virtualMatch) {
+            if (
+                virtualMatch.status === IcloudVirtualEmailStatus.DISABLED ||
+                virtualMatch.primaryAccount?.status === IcloudAccountStatus.DISABLED
+            ) {
+                await this.recordAudit(
+                    auditRepo,
+                    code,
+                    IcloudQueryTargetType.VIRTUAL,
+                    String(virtualMatch.id),
+                    clientIp,
+                    userAgent || null,
+                    IcloudAuditResult.DISABLED,
+                );
+                return {
+                    success: false,
+                    message: '该邮箱已禁用，请联系客服。',
+                    totalEmails: 0,
+                    items: [],
+                };
+            }
+
             // Check expiration
             if (this.codeService.isExpired(virtualMatch.codeExpiresAt)) {
                 await this.recordAudit(
@@ -83,8 +111,8 @@ export class IcloudPublicQueryService {
             const mailRepo = this.connection.getRepository(ctx, IcloudReceivedMail);
             const mails = await mailRepo.find({
                 where: { virtualEmailId: virtualMatch.id },
-                order: { receivedAt: 'DESC' },
-                take: 100,
+                order: { receivedAt: 'DESC', id: 'DESC' },
+                take: 5,
             });
 
             // Update query tracking
@@ -124,6 +152,24 @@ export class IcloudPublicQueryService {
         });
 
         if (primaryMatch) {
+            if (primaryMatch.status === IcloudAccountStatus.DISABLED) {
+                await this.recordAudit(
+                    auditRepo,
+                    code,
+                    IcloudQueryTargetType.PRIMARY,
+                    String(primaryMatch.id),
+                    clientIp,
+                    userAgent || null,
+                    IcloudAuditResult.DISABLED,
+                );
+                return {
+                    success: false,
+                    message: '该主邮箱已禁用，请联系管理员。',
+                    totalEmails: 0,
+                    items: [],
+                };
+            }
+
             if (this.codeService.isExpired(primaryMatch.codeExpiresAt)) {
                 await this.recordAudit(
                     auditRepo,
