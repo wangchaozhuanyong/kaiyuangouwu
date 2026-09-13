@@ -55,6 +55,33 @@ export const IMAGE_AI_USAGE_DETAIL_QUERY = gql`
             record {
                 ...ImageAiUsageRecordFields
             }
+            costAdjustments {
+                id
+                recordType
+                recordIdSnapshot
+                batchId
+                reviewer
+                authorizationRef
+                reviewedAt
+                reason
+                matchingStatus
+                previousAdjustmentId
+                oldCostMicrounits
+                oldCurrency
+                newCostMicrounits
+                newCurrency
+                sourceHash
+                supplierBills {
+                    supplierScope
+                    billId
+                    amountMicrounits
+                    currency
+                    billedAt
+                    displayedTime
+                    timeZone
+                    evidenceHash
+                }
+            }
             inputPrompt
             outputPrompt
             totalTokens
@@ -136,6 +163,33 @@ export interface ImageAiUsageRecordsQueryResult {
 export interface ImageAiUsageRecordDetailQueryResult {
     imageAiUsageRecord: {
         record: ImageAiUsageRecord;
+        costAdjustments: Array<{
+            id: string;
+            recordType: string;
+            recordIdSnapshot: string;
+            batchId: string;
+            reviewer: string;
+            authorizationRef: string;
+            reviewedAt: string;
+            reason: string;
+            matchingStatus: string;
+            previousAdjustmentId: string | null;
+            oldCostMicrounits: number | null;
+            oldCurrency: string | null;
+            newCostMicrounits: number | null;
+            newCurrency: string | null;
+            sourceHash: string;
+            supplierBills: Array<{
+                supplierScope: string;
+                billId: string;
+                amountMicrounits: number;
+                currency: string;
+                billedAt: string | null;
+                displayedTime: string;
+                timeZone: string | null;
+                evidenceHash: string;
+            }>;
+        }>;
         inputPrompt: string;
         outputPrompt?: string | null;
         totalTokens?: number | null;

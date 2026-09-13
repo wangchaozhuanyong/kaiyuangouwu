@@ -40,11 +40,17 @@ import { ImageGenerationJob } from '../src/entities/image-generation-job.entity'
 import { ImageGenerationOutput } from '../src/entities/image-generation-output.entity';
 import { ImageModelConfig } from '../src/entities/image-model-config.entity';
 import { ImagePrivateAsset } from '../src/entities/image-private-asset.entity';
+import { ImagePromptOptimizationAttempt } from '../src/entities/image-prompt-optimization-attempt.entity';
 import { ImagePromptOptimization } from '../src/entities/image-prompt-optimization.entity';
 import { ImageUsageQuotaBucket } from '../src/entities/image-usage-quota-bucket.entity';
 import { ImageUsageQuotaEvent } from '../src/entities/image-usage-quota-event.entity';
 import { ImageGenerationQueueService } from '../src/image-generation-queue.service';
 import { ImageGenerationPlugin } from '../src/image-generation.plugin';
+import {
+    applyImageBillingReview,
+    inspectImageBillingTarget,
+    type ImageBillingReview,
+} from '../src/image-provider-billing-review';
 import { ImageUsageQuotaService } from '../src/image-usage-quota.service';
 import { ImagePromptEngineService } from '../src/prompt/image-prompt-engine.service';
 import { PromptRulesService } from '../src/prompt/prompt-rules.service';
@@ -418,6 +424,16 @@ const USAGE_RECORD_DETAIL = gql`
             inputPrompt
             outputPrompt
             providerRequestIds
+            costAdjustments {
+                id
+                batchId
+                reviewer
+                matchingStatus
+                newCostMicrounits
+                supplierBills {
+                    billId
+                }
+            }
             record {
                 costCompleteness
                 missingCostCount
@@ -433,6 +449,7 @@ const USAGE_RECORD_DETAIL = gql`
                 attemptNumber
                 outcome
                 costSource
+                matchingStatus
             }
             timeline {
                 stage
@@ -1193,6 +1210,184 @@ describe('AI image generation full flow', () => {
             6,
         );
     }, 30_000);
+
+    it.runIf(config.dbConnectionOptions.type === 'mysql')(
+        'reviews historical supplier costs through the real usage API and reopens corrected unknown fees',
+        async () => {
+            const source = server.app.get(TransactionalConnection).rawConnection;
+            const prompts = source.getRepository(ImagePromptOptimization);
+            const original = (await prompts.find({ take: 1 }))[0];
+            const legacy = await prompts.save(
+                new ImagePromptOptimization({
+                    ...original,
+                    id: undefined,
+                    createdAt: undefined,
+                    updatedAt: undefined,
+                    idempotencyKey: randomUUID(),
+                    attemptLedgerVersion: null,
+                    upstreamCallCount: 2,
+                    actualCostMicrounits: null,
+                    costCurrency: null,
+                }),
+            );
+            const image = (await source.getRepository(ImageGenerationCostEvent).find({ take: 1 }))[0];
+            const makeReview = async (
+                recordType: ImageBillingReview['recordType'],
+                recordId: string,
+                channelId: string,
+            ): Promise<ImageBillingReview> => {
+                const snapshot = await inspectImageBillingTarget(source, channelId, recordType, recordId);
+                return {
+                    batchId: 'api-e2e-review',
+                    channelId,
+                    recordType,
+                    recordId,
+                    expectedSnapshotHash: snapshot.snapshotHash,
+                    previousAdjustmentId: snapshot.previousAdjustmentId,
+                    sourceHash: 'a'.repeat(64),
+                    reviewer: 'e2e-operator',
+                    authorizationRef: 'e2e-approval',
+                    reviewedAt: new Date().toISOString(),
+                    reason: 'Fixture billing review',
+                    reviewStatus: 'APPROVED',
+                    completeRange: true,
+                    newCostMicrounits: 2136,
+                    newCurrency: 'USD',
+                    bills: [
+                        {
+                            supplierScope: 'e2e',
+                            billId: `${recordType}:${recordId}`,
+                            amountMicrounits: 2136,
+                            currency: 'USD',
+                            billedAt: new Date().toISOString(),
+                            displayedTime: '2026/09/13 13:00:00',
+                            timeZone: 'UTC',
+                            evidenceHash: 'b'.repeat(64),
+                        },
+                    ],
+                };
+            };
+            const promptReview = await makeReview(
+                'LEGACY_PROMPT',
+                String(legacy.id),
+                String(legacy.channelId),
+            );
+            await applyImageBillingReview(source, promptReview, true);
+            await applyImageBillingReview(
+                source,
+                await makeReview('IMAGE_COST_EVENT', String(image.id), String(image.channelId)),
+                true,
+            );
+            const encode = (id: string | number) =>
+                server.app.get(ConfigService).entityOptions.entityIdStrategy.encodeId(id);
+            const detail = (
+                await adminClient.query(USAGE_RECORD_DETAIL, {
+                    recordType: 'PROMPT_OPTIMIZATION',
+                    id: encode(legacy.id),
+                })
+            ).imageAiUsageRecord;
+            expect(detail.record.costCompleteness).toBe('COMPLETE');
+            expect(detail.attempts).toEqual([]);
+            expect(detail.costAdjustments).toEqual([
+                expect.objectContaining({
+                    batchId: 'api-e2e-review',
+                    matchingStatus: 'CROSS_MATCH_REVIEWED',
+                }),
+            ]);
+            const imageDetail = (
+                await adminClient.query(USAGE_RECORD_DETAIL, {
+                    recordType: 'IMAGE_GENERATION',
+                    id: encode(image.jobIdSnapshot),
+                })
+            ).imageAiUsageRecord;
+            expect(imageDetail.attempts).toEqual(
+                expect.arrayContaining([
+                    expect.objectContaining({
+                        matchingStatus: 'CROSS_MATCH_REVIEWED',
+                        costSource: 'SUPPLIER_BILLING',
+                    }),
+                ]),
+            );
+            const missingIds = async () =>
+                (
+                    await adminClient.query(USAGE_RECORDS, {
+                        input: { recordType: 'PROMPT_OPTIMIZATION', missingCostOnly: true, take: 100 },
+                    })
+                ).imageAiUsageRecords.items.map((item: { id: string }) => item.id);
+            expect(await missingIds()).not.toContain(encode(legacy.id));
+            // A complete multi-currency ledger has no single aggregate currency, but is not missing cost.
+            const multi = await prompts.save(
+                new ImagePromptOptimization({
+                    ...original,
+                    id: undefined,
+                    createdAt: undefined,
+                    updatedAt: undefined,
+                    idempotencyKey: randomUUID(),
+                    attemptLedgerVersion: 1,
+                    upstreamCallCount: 2,
+                    actualCostMicrounits: null,
+                    costCurrency: null,
+                }),
+            );
+            const attemptRepo = source.getRepository(ImagePromptOptimizationAttempt);
+            const originalAttempt = (await attemptRepo.find({ take: 1 }))[0];
+            for (const [index, currency] of ['USD', 'EUR'].entries())
+                await attemptRepo.save(
+                    new ImagePromptOptimizationAttempt({
+                        ...originalAttempt,
+                        id: undefined,
+                        callId: randomUUID(),
+                        optimizationIdSnapshot: String(multi.id),
+                        attemptNumber: index + 1,
+                        actualCostMicrounits: 1000,
+                        costCurrency: currency,
+                    }),
+                );
+            const multiDetail = (
+                await adminClient.query(USAGE_RECORD_DETAIL, {
+                    recordType: 'PROMPT_OPTIMIZATION',
+                    id: encode(multi.id),
+                })
+            ).imageAiUsageRecord;
+            expect(multiDetail.record.costCompleteness).toBe('COMPLETE');
+            expect(await missingIds()).not.toContain(encode(multi.id));
+            const jobs = source.getRepository(ImageGenerationJob);
+            const existingJob = (await jobs.find({ take: 1 }))[0];
+            const noCostJob = await jobs.save(
+                new ImageGenerationJob({
+                    ...existingJob,
+                    id: undefined,
+                    idempotencyKey: randomUUID(),
+                    state: 'SUCCEEDED',
+                }),
+            );
+            const missingImages = (
+                await adminClient.query(USAGE_RECORDS, {
+                    input: { recordType: 'IMAGE_GENERATION', missingCostOnly: true, take: 100 },
+                })
+            ).imageAiUsageRecords;
+            expect(missingImages.items.map((item: { id: string }) => item.id)).toContain(
+                encode(noCostJob.id),
+            );
+            const revert = {
+                ...(await makeReview('LEGACY_PROMPT', String(legacy.id), String(legacy.channelId))),
+                batchId: 'api-e2e-revert',
+                newCostMicrounits: null,
+                newCurrency: null,
+                bills: promptReview.bills,
+            };
+            await applyImageBillingReview(source, revert, true);
+            expect(await missingIds()).toContain(encode(legacy.id));
+            const reverted = (
+                await adminClient.query(USAGE_RECORD_DETAIL, {
+                    recordType: 'PROMPT_OPTIMIZATION',
+                    id: encode(legacy.id),
+                })
+            ).imageAiUsageRecord;
+            expect(reverted.record.costCompleteness).toBe('UNKNOWN');
+            expect(reverted.costAdjustments).toHaveLength(2);
+        },
+    );
 
     it('binds private images to the database owner and channel and revokes HTTP links', async () => {
         const upload = await shopClient.fileUploadMutation({

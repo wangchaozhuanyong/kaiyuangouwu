@@ -50,6 +50,7 @@ it('真实 Apollo 缓存中同数字 ID 的生图和描述优化保持独立', a
                                 ? { imageAiUsageRecords: { items: [image, prompt], totalItems: 2 } }
                                 : {
                                       imageAiUsageRecord: {
+                                          costAdjustments: [],
                                           record: selected,
                                           inputPrompt: '',
                                           outputPrompt: null,

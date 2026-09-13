@@ -591,7 +591,38 @@ export const adminApiExtensions = gql`
         reportedCostEvidence: JSON
     }
 
+    type ImageSupplierBillAudit {
+        supplierScope: String!
+        billId: String!
+        amountMicrounits: Int!
+        currency: String!
+        billedAt: String
+        displayedTime: String!
+        timeZone: String
+        evidenceHash: String!
+    }
+
+    type ImageProviderCostAdjustmentAudit {
+        id: ID!
+        recordType: String!
+        recordIdSnapshot: String!
+        batchId: String!
+        reviewer: String!
+        authorizationRef: String!
+        reviewedAt: DateTime!
+        reason: String!
+        matchingStatus: String!
+        previousAdjustmentId: String
+        oldCostMicrounits: Int
+        oldCurrency: String
+        newCostMicrounits: Int
+        newCurrency: String
+        sourceHash: String!
+        supplierBills: [ImageSupplierBillAudit!]!
+    }
+
     type ImageAiUsageRecordDetail {
+        costAdjustments: [ImageProviderCostAdjustmentAudit!]!
         attempts: [ImageProviderAttemptAudit!]!
         record: ImageAiUsageRecord!
         inputPrompt: String!

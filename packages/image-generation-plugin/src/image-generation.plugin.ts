@@ -18,6 +18,8 @@ import { ImagePromptOptimizationAttempt } from './entities/image-prompt-optimiza
 import { ImagePromptOptimization } from './entities/image-prompt-optimization.entity';
 import { ImagePromptRoutingConfig } from './entities/image-prompt-routing-config.entity';
 import { ImagePromptSkillRelease } from './entities/image-prompt-skill-release.entity';
+import { ImageProviderBillingLink } from './entities/image-provider-billing-link.entity';
+import { ImageProviderCostAdjustment } from './entities/image-provider-cost-adjustment.entity';
 import { ImageProviderCredentialModel } from './entities/image-provider-credential-model.entity';
 import { ImageProviderCredential } from './entities/image-provider-credential.entity';
 import { ImageUsageQuotaBucket } from './entities/image-usage-quota-bucket.entity';
@@ -48,6 +50,8 @@ import { ImageGenerationPluginOptions } from './types';
     imports: [PluginCommonModule, StoreManagementPlugin, ContentTranslationPlugin],
     entities: [
         ImageGenerationConfig,
+        ImageProviderCostAdjustment,
+        ImageProviderBillingLink,
         ImageComplianceAuditEvent,
         ImageGenerationCostEvent,
         ImageGenerationDispatch,
