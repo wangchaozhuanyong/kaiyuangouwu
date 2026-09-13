@@ -43,7 +43,7 @@ export function ProviderAttemptDetails({ detail }: { detail: Detail }) {
                         <dt>阶段 / 耗时</dt>
                         <dd>
                             {attempt.stage} / {attempt.latencyMs} ms
-                            {attempt.httpStatus ? ` / HTTP ${attempt.httpStatus}` : ''}
+                            {attempt.httpStatus ? ` / 响应状态 ${attempt.httpStatus}` : ''}
                         </dd>
                         <dt>本地调用编号</dt>
                         <dd>{attempt.callId ?? '历史未保存'}</dd>

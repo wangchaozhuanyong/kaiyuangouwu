@@ -57,7 +57,8 @@ describe('admin channel request routing', () => {
                 accept: 'text/event-stream',
             },
         });
-        expect(localStorage.getItem('vendure-active-channel-token')).toBe('store-a');
+        expect(sessionStorage.getItem('vendure-active-channel-token')).toBe('store-a');
+        expect(localStorage.getItem('vendure-active-channel-token')).toBe('legacy-shared-store');
     });
 
     it('uses Simplified Chinese as the display language for all Admin API requests', () => {
