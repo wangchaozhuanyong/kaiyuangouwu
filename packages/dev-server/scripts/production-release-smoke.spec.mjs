@@ -67,7 +67,6 @@ async function startFixtureServer({
                 }
                 response.writeHead(303, {
                     location: '/',
-                    'set-cookie': 'storefront-entry=signed-cookie; Path=/; HttpOnly; SameSite=Lax',
                 });
                 response.end();
             });
@@ -139,7 +138,7 @@ async function startFixtureServer({
     };
 }
 
-test('verifies the direct storefront, optional promotion entry and production public surfaces', async t => {
+test('verifies public browsing and optional promotion navigation without requiring an entry cookie', async t => {
     const fixture = await startFixtureServer();
     t.after(fixture.close);
 
