@@ -691,7 +691,7 @@ describe('iCloud admin contract persistence', () => {
         };
     }
 
-    async function seedHistory(ownerId: string | number, alias: string, label: string, count = 1) {
+    function seedHistory(ownerId: string | number, alias: string, label: string, count = 1) {
         const repo = server.app.get(TransactionalConnection).rawConnection.getRepository(IcloudReceivedMail);
         return repo.save(
             Array.from(
