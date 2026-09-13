@@ -40,6 +40,19 @@ fail() {
     exit 1
 }
 
+check_production_disk_usage() {
+    local usage maximum="${VENDURE_MAXIMUM_DISK_USAGE_PERCENT:-85}"
+    [[ "${maximum}" =~ ^([1-9][0-9]?|100)$ ]] || fail 'invalid production disk usage limit'
+    if ! usage="$(df --output=pcent / | tail -n 1 | tr -d '[:space:]%')"; then
+        fail 'could not read production disk usage'
+    fi
+    [[ "${usage}" =~ ^(0|[1-9][0-9]?|100)$ ]] || fail 'invalid production disk usage reading'
+    if ((usage >= maximum)); then
+        fail "root disk usage ${usage}% reaches the ${maximum}% health limit; review Production Operations retention before another release"
+    fi
+    printf 'DEPLOY_DISK_OK usage_percent=%s limit_percent=%s\n' "${usage}" "${maximum}"
+}
+
 if [[ ! "${target_sha}" =~ ^[0-9a-f]{40}$ ]]; then
     fail 'target SHA must be a full lowercase Git SHA'
 fi
@@ -571,6 +584,9 @@ NODE_ENV=production READINESS_PROCESS_ROLE=migration RUN_MIGRATIONS=true RUN_JOB
 readonly usdt_guard="${repository}/deploy/usdt-migration-guard.cjs"
 readonly usdt_snapshot="${releases_dir}/usdt-migration-${deployment_id}.json"
 node "${usdt_guard}" plan "${candidate}"
+# Check after staging the verified artifact, while the healthy runtime still serves traffic.
+# Retention must be reviewed separately; do not lower the health threshold or delete releases here.
+check_production_disk_usage
 # Both writers must be stopped before either phase; a normal rolling restart is unsafe.
 rollback_needed=1
 pm2 stop vendure-worker vendure-api 9>&-

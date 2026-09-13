@@ -7,6 +7,47 @@ import { fileURLToPath } from 'node:url';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 
+void test('checks staged disk usage before stopping the healthy runtime', async () => {
+    const script = await readFile(path.join(repositoryRoot, 'deploy/deploy-production-from-s3.sh'), 'utf8');
+    const guard = script.match(/check_production_disk_usage\(\) \{[\s\S]*?\n\}/u)?.[0];
+    assert.ok(guard);
+    const call = script.indexOf('\ncheck_production_disk_usage\n');
+    assert.ok(call > script.indexOf('node "${candidate}/verify-runtime.mjs"'));
+    assert.ok(call < script.indexOf('\npm2 stop vendure-worker vendure-api'));
+    const health = await readFile(
+        path.join(repositoryRoot, 'deploy/systemd/vendure-production-healthcheck'),
+        'utf8',
+    );
+    assert.ok(guard.includes('${VENDURE_MAXIMUM_DISK_USAGE_PERCENT:-85}'));
+    assert.ok(health.includes('${VENDURE_MAXIMUM_DISK_USAGE_PERCENT:-85}'));
+    const stub = `set -Eeuo pipefail
+        fail() { printf '%s\\n' "$1" >&2; exit 1; }
+        df() { printf 'Use%%\\n %s%%\\n' "$FIXTURE_DISK_USAGE"; return "$FIXTURE_DF_STATUS"; }`;
+    for (const [usage, maximum, dfStatus, passes] of [
+        ['84', '', '0', true],
+        ['85', '', '0', false],
+        ['100', '', '0', false],
+        ['79', '80', '0', true],
+        ['80', '80', '0', false],
+        ['invalid', '', '0', false],
+        ['20', 'invalid', '0', false],
+        ['20', '', '1', false],
+    ]) {
+        const result = spawnSync('bash', ['-c', `${stub}\n${guard}\ncheck_production_disk_usage`], {
+            encoding: 'utf8',
+            env: {
+                ...process.env,
+                FIXTURE_DISK_USAGE: usage,
+                FIXTURE_DF_STATUS: dfStatus,
+                VENDURE_MAXIMUM_DISK_USAGE_PERCENT: maximum,
+            },
+        });
+        assert.equal(result.status, passes ? 0 : 1, `${usage}/${maximum}: ${result.stderr}`);
+        if (passes) assert.match(result.stdout, /DEPLOY_DISK_OK/u);
+        else assert.doesNotMatch(result.stdout, /DEPLOY_DISK_OK/u);
+    }
+});
+
 void test('reused CI skips do not skip deployment, and skipped deployment cannot pass the release', async () => {
     const workflow = await readFile(
         path.join(repositoryRoot, '.github/workflows/production_release.yml'),
