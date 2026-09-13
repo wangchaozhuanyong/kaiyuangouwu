@@ -917,3 +917,7 @@ printf 'deployment_id=%s\n' "${deployment_id}"
 printf 'previous_runtime=%s\n' "${previous_runtime}"
 printf 'target_runtime=%s\n' "${candidate}"
 printf 'PRODUCTION_DEPLOY_OK\n'
+jq -cn --arg targetSha "${target_sha}" --arg runId "${GITHUB_RUN_ID}" \
+    --argjson checks "${release_affected_checks}" \
+    '{version:1,targetSha:$targetSha,runId:$runId,affectedChecks:$checks}' |
+    sed 's/^/PRODUCTION_DEPLOY_RECEIPT /'

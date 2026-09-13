@@ -6,6 +6,9 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { STATIC_APPS } from '../scripts/ci-impact.mjs';
+import { hasTrustedPullRequest, isTrustedRun } from '../scripts/release-evidence.mjs';
+
+import { artifactSourceHash } from './artifact-inputs.mjs';
 
 const hash = value => createHash('sha256').update(value).digest('hex');
 const git = (...args) => execFileSync('git', args, { encoding: 'utf8' }).trim();
@@ -13,13 +16,14 @@ const output = (key, value) => {
     if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `${key}=${value}\n`);
     process.stdout.write(`${key}=${value}\n`);
 };
-export function frontendFingerprint({ component, tree, node, bun, platform, environment = {} }) {
+export function frontendFingerprint({ component, tree, sourceHash, node, bun, platform, environment = {} }) {
     assert.ok(STATIC_APPS.includes(component));
-    assert.match(tree, /^[a-f0-9]{40}$/u);
+    if (sourceHash) assert.match(sourceHash, /^[a-f0-9]{64}$/u);
+    else assert.match(tree, /^[a-f0-9]{40}$/u);
     return hash(
         JSON.stringify({
             component,
-            tree,
+            source: sourceHash || tree,
             node,
             bun,
             platform,
@@ -30,10 +34,14 @@ export function frontendFingerprint({ component, tree, node, bun, platform, envi
     );
 }
 export function validateFrontendArtifact(metadata, expected, archive) {
-    assert.equal(metadata.version, 1);
+    assert.ok([1, 2].includes(metadata.version));
     assert.equal(metadata.fingerprint, expected.fingerprint, 'Frontend build inputs differ');
     assert.equal(metadata.component, expected.component);
-    assert.equal(metadata.tree, expected.tree);
+    if (metadata.version === 1) assert.equal(metadata.tree, expected.tree);
+    else {
+        assert.match(expected.sourceHash, /^[a-f0-9]{64}$/u);
+        assert.equal(metadata.sourceHash, expected.sourceHash);
+    }
     assert.equal(metadata.archiveSha256, hash(archive), 'Frontend archive checksum differs');
     assert.match(metadata.sourceSha, /^[a-f0-9]{40}$/u);
 }
@@ -49,8 +57,9 @@ function inputs(component) {
     const environment = Object.fromEntries(
         Object.entries(process.env).filter(([key]) => key.startsWith('VITE_') || key === 'NODE_ENV'),
     );
-    const fingerprint = frontendFingerprint({ component, tree, node, bun, platform, environment });
-    return { component, tree, fingerprint };
+    const sourceHash = artifactSourceHash({ component });
+    const fingerprint = frontendFingerprint({ component, sourceHash, node, bun, platform, environment });
+    return { component, tree, sourceHash, fingerprint };
 }
 
 export const safeExtractPython = `import pathlib,sys,tarfile
@@ -78,7 +87,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
         writeFileSync(
             resolve(directory, 'metadata.json'),
             JSON.stringify({
-                version: 1,
+                version: 2,
                 ...expected,
                 sourceSha: git('rev-parse', 'HEAD'),
                 archiveSha256: hash(readFileSync(archive)),
@@ -91,21 +100,38 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
             assert.match(runId, /^\d+$/u);
             const repository = process.env.GITHUB_REPOSITORY;
             assert.match(repository ?? '', /^[\w.-]+\/[\w.-]+$/u);
-            const data = JSON.parse(
+            const api = endpoint => JSON.parse(execFileSync('gh', ['api', endpoint], { encoding: 'utf8' }));
+            function* candidates() {
+                yield runId;
+                // The exact-tree proof may be a control-only PR with no frontend
+                // artifact. Search matching successful frontend inputs, not SHA equality.
+                const runs = api(
+                    `repos/${repository}/actions/workflows/build_and_test.yml/runs?status=success&per_page=30`,
+                ).workflow_runs;
+                for (const run of runs) {
+                    if (String(run.id) === runId || !isTrustedRun(run, repository)) continue;
+                    try {
+                        if (artifactSourceHash({ component, ref: run.head_sha }) !== expected.sourceHash)
+                            continue;
+                    } catch {
+                        continue;
+                    }
+                    if (!hasTrustedPullRequest(run, repository, api)) continue;
+                    yield String(run.id);
+                }
+            }
+            for (const candidate of candidates()) {
+                const data = api(`repos/${repository}/actions/runs/${candidate}/artifacts?per_page=100`);
+                if (!data.artifacts.some(artifact => !artifact.expired && artifact.name === name)) continue;
+                const download = resolve(directory, candidate);
+                mkdirSync(download, { recursive: true });
                 execFileSync(
                     'gh',
-                    ['api', `repos/${repository}/actions/runs/${runId}/artifacts?per_page=100`],
-                    { encoding: 'utf8' },
-                ),
-            );
-            if (data.artifacts.some(artifact => !artifact.expired && artifact.name === name)) {
-                execFileSync(
-                    'gh',
-                    ['run', 'download', runId, '--repo', repository, '--name', name, '--dir', directory],
+                    ['run', 'download', candidate, '--repo', repository, '--name', name, '--dir', download],
                     { stdio: 'inherit' },
                 );
-                const metadata = JSON.parse(readFileSync(resolve(directory, 'metadata.json'), 'utf8'));
-                const archive = resolve(directory, 'frontend.tar.gz');
+                const metadata = JSON.parse(readFileSync(resolve(download, 'metadata.json'), 'utf8'));
+                const archive = resolve(download, 'frontend.tar.gz');
                 validateFrontendArtifact(metadata, expected, readFileSync(archive));
                 execFileSync('python3', [
                     '-c',
@@ -113,7 +139,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
                     archive,
                     resolve('packages', component, 'dist'),
                 ]);
+                output('frontend_source_run', candidate);
                 restored = true;
+                break;
             }
         }
         output('restored', restored);

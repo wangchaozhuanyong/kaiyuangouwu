@@ -15,6 +15,15 @@ Headless e-commerce framework. Lerna monorepo with fixed versioning.
 - If GitHub starts full CI automatically, let it run in the background. Do not repeatedly poll or rerun it, and do not block an otherwise authorized merge or deployment solely because unrelated full-suite jobs are still running.
 - Report any failed check that is relevant to the changed path. Never describe an unrun or still-running check as passed.
 
+## Release execution
+
+- Keep one release ledger: target revision, production component revisions, changed files, required checks, reused evidence, artifact, and acceptance result. Use `scripts/release-evidence.mjs` and `deploy/release-route.mjs`; do not improvise another full test or deployment sequence.
+- Finish the selected local checks and consolidate their fixes before pushing a release candidate. A failed local gate is a reason to fix locally, not to push successive incomplete candidates and use CI as the debugger.
+- Reuse successful checks when their inputs match. Do not rerun passed business/DB checks after a control-only fix, manually start full CI, or run the same acceptance again after its committed receipt is verified. Perform additional checks only for changed inputs, a failure, or a specific unresolved concern.
+- CI-only files and test fixtures require control checks, not a website deployment. Frontend-only changes use the static lane; they must not rebuild/restart the backend or repeat database backup/restore checks.
+- Use Production Release once per target SHA. Diagnose a failed run before a new action. Only the existing recovery policy can permit one proven transient failed-job retry; never re-dispatch an unchanged failed SHA or create an empty commit to retry.
+- Distinguish tests, compilation, packaging, backup/restore, server switching and browser acceptance in timing reports. Do not claim the entire release problem is fixed from local tests alone; state which live workflow paths have actually run.
+
 ## Scoped Production Releases and Recovery
 
 - Scope changes with `node scripts/ci-impact.mjs --base <base> --target <target>`; the CI and release workflows use the same classifier. Production compares the active backend SHA with the complete target tree, including every undeployed change.

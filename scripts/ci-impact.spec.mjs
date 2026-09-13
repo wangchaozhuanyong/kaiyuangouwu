@@ -115,3 +115,24 @@ test('shared frontend inputs require whole affected app tests without enabling r
     assert.equal(classifyChanges(['packages/storefront/vite.config.ts'], inventory).frontendFull, true);
     assert.equal(classifyChanges(['packages/storefront/src/index.css'], inventory).frontendFull, false);
 });
+
+test('CI-only changes are checked without deploying, and cannot accumulate into a later frontend rebuild', () => {
+    const files = [
+        'scripts/ci-check-inputs.mjs',
+        '.github/workflows/production_release.yml',
+        'packages/dev-server/scripts/production-release-smoke.spec.mjs',
+    ];
+    const controls = classifyChanges(files, inventory);
+    assert.equal(controls.lane, 'none');
+    assert.equal(controls.controls, true);
+    assert.deepEqual(controls.packages, []);
+    const frontend = classifyChanges([...files, 'packages/storefront/src/page.css'], inventory);
+    assert.equal(frontend.lane, 'frontend');
+    assert.deepEqual(frontend.frontends, ['storefront']);
+    for (const file of [
+        'deploy/nginx/damatong.conf',
+        'deploy/deploy-production-from-s3.sh',
+        'packages/core/src/order.ts',
+    ])
+        assert.equal(classifyChanges([...files, file], inventory).lane, 'runtime', file);
+});
