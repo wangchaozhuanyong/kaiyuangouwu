@@ -1,6 +1,6 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { DataSource, Table } from 'typeorm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -90,7 +90,7 @@ describe.skipIf(process.env.DB !== 'mysql')('image billing review transactions (
             const bytes = JSON.stringify({ version: 1, reviews: [review] });
             const manifest = path.join(directory, 'review.json');
             writeFileSync(manifest, bytes);
-            const script = path.resolve('../image-generation-plugin/scripts/apply-billing-review.mjs');
+            const script = path.resolve('../image-generation-plugin/dist/image-provider-billing-cli.js');
             const dbOptions = source.options as { database: string };
             const environment = {
                 ...process.env,
@@ -119,9 +119,102 @@ describe.skipIf(process.env.DB !== 'mysql')('image billing review transactions (
             expect(execute('apply.json', flags).results[0].status).toBe('APPLIED');
             expect(execute('repeat.json', flags).results[0].status).toBe('ALREADY_APPLIED');
             expect(await rows(source, 'image_provider_cost_adjustment')).toHaveLength(1);
+            expect(statSync(path.join(directory, 'apply.json')).mode % 0o1000).toBe(0o600);
+            const journal = readFileSync(path.join(directory, 'apply.json.journal.jsonl'), 'utf8')
+                .trim()
+                .split('\n')
+                .map(line => JSON.parse(line));
+            expect(journal[0]).toMatchObject({ status: 'RUNNING', results: [] });
+            expect(journal.at(-1)).toMatchObject({ status: 'COMPLETE', activeTarget: null });
+            expect(journal.some(item => item.activeTarget?.recordId === review.recordId)).toBe(true);
         } finally {
             rmSync(directory, { recursive: true });
         }
+    });
+
+    it('rejects unavailable or already-owned receipt paths before applying any costs', async () => {
+        await withCliFixture(source, [await reviewFor(source)], async ({ directory, execute }) => {
+            const reserved = path.join(directory, 'reserved.json');
+            writeFileSync(reserved, 'original receipt');
+            const target = path.join(directory, 'symlink.json');
+            symlinkSync(reserved, target);
+            writeFileSync(path.join(directory, 'journal-conflict.json.journal.jsonl'), 'original journal');
+            for (const name of [
+                'missing-parent/result.json',
+                'reserved.json',
+                'symlink.json',
+                'journal-conflict.json',
+            ]) {
+                expect(execute(name).status).not.toBe(0);
+                expect(await rows(source, 'image_provider_cost_adjustment')).toEqual([]);
+                expect(await rows(source, 'image_provider_billing_link')).toEqual([]);
+                expect(
+                    (await rows(source, 'image_generation_cost_event'))[0].actualCostMicrounits,
+                ).toBeNull();
+            }
+            expect(readFileSync(reserved, 'utf8')).toBe('original receipt');
+            expect(readFileSync(path.join(directory, 'journal-conflict.json.journal.jsonl'), 'utf8')).toBe(
+                'original journal',
+            );
+        });
+    });
+
+    it('keeps partial receipts when a later transaction fails and resumes without duplicate bills', async () => {
+        const first = await reviewFor(source, '1');
+        const second = await reviewFor(source, '2');
+        second.bills[0].billId = 'client:second-fixture-bill';
+        await source.query(`CREATE TRIGGER billing_cli_failure BEFORE UPDATE ON image_generation_cost_event
+            FOR EACH ROW BEGIN IF NEW.id = 2 THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'fixture failure'; END IF; END`);
+        await withCliFixture(source, [first, second], async ({ directory, execute }) => {
+            expect(execute('partial.json').status).toBe(1);
+            const report = JSON.parse(readFileSync(path.join(directory, 'partial.json'), 'utf8'));
+            expect(report).toMatchObject({
+                status: 'FAILED',
+                error: 'ER_SIGNAL_EXCEPTION',
+                activeTarget: { recordId: '2' },
+            });
+            expect(report.results).toHaveLength(1);
+            expect(report.results[0].status).toBe('APPLIED');
+            const journal = readFileSync(path.join(directory, 'partial.json.journal.jsonl'), 'utf8')
+                .trim()
+                .split('\n')
+                .map(line => JSON.parse(line));
+            expect(
+                journal.some(
+                    item =>
+                        item.status === 'RUNNING' && item.results.length === 1 && item.activeTarget === null,
+                ),
+            ).toBe(true);
+            expect(await rows(source, 'image_provider_cost_adjustment')).toHaveLength(1);
+            expect(await rows(source, 'image_provider_billing_link')).toHaveLength(1);
+            await source.query('DROP TRIGGER billing_cli_failure');
+            expect(execute('resumed.json').status).toBe(0);
+            const resumed = JSON.parse(readFileSync(path.join(directory, 'resumed.json'), 'utf8'));
+            expect(resumed.results.map((item: { status: string }) => item.status)).toEqual([
+                'ALREADY_APPLIED',
+                'APPLIED',
+            ]);
+            expect(await rows(source, 'image_provider_cost_adjustment')).toHaveLength(2);
+            expect(await rows(source, 'image_provider_billing_link')).toHaveLength(2);
+        });
+    });
+
+    it('records a database connection failure without losing the startup receipt', async () => {
+        await withCliFixture(source, [await reviewFor(source)], async ({ directory, execute }) => {
+            const result = execute('connection-failure.json', {
+                DB_NAME: `missing_billing_fixture_${randomUUID().replaceAll('-', '')}`,
+            });
+            expect(result.status).toBe(1);
+            const receipt = JSON.parse(readFileSync(path.join(directory, 'connection-failure.json'), 'utf8'));
+            expect(receipt).toMatchObject({
+                status: 'FAILED',
+                error: 'ER_BAD_DB_ERROR',
+                activeTarget: null,
+                results: [],
+            });
+            expect(receipt.completedAt).toBeTruthy();
+            expect(await rows(source, 'image_provider_cost_adjustment')).toEqual([]);
+        });
     });
 
     it('rejects changed evidence, cross-channel targeting, changed batch content and reused bills', async () => {
@@ -310,6 +403,50 @@ async function reviewFor(
 }
 async function rows(source: DataSource, table: string) {
     return source.createQueryBuilder().select('*').from(table, 'item').orderBy('item.id', 'ASC').getRawMany();
+}
+async function withCliFixture(
+    source: DataSource,
+    reviews: ImageBillingReview[],
+    check: (fixture: {
+        directory: string;
+        execute: (name: string, environment?: NodeJS.ProcessEnv) => ReturnType<typeof spawnSync>;
+    }) => Promise<void>,
+) {
+    const directory = mkdtempSync(path.join(process.cwd(), '.billing-cli-fixture-'));
+    try {
+        const bytes = JSON.stringify({ version: 1, reviews });
+        const manifest = path.join(directory, 'review.json');
+        writeFileSync(manifest, bytes);
+        const execute = (name: string, environment: NodeJS.ProcessEnv = {}) =>
+            spawnSync(
+                process.execPath,
+                [
+                    path.resolve('../image-generation-plugin/dist/image-provider-billing-cli.js'),
+                    '--manifest',
+                    manifest,
+                    '--output',
+                    path.join(directory, name),
+                    '--apply',
+                    '--confirm-manifest-sha',
+                    createHash('sha256').update(bytes).digest('hex'),
+                ],
+                {
+                    env: {
+                        ...process.env,
+                        DB_HOST: '127.0.0.1',
+                        DB_PORT: String(process.env.E2E_MYSQL_PORT ?? 13370),
+                        DB_USERNAME: 'root',
+                        DB_PASSWORD: 'password',
+                        DB_NAME: source.options.database as string,
+                        ...environment,
+                    },
+                    encoding: 'utf8',
+                },
+            );
+        await check({ directory, execute });
+    } finally {
+        rmSync(directory, { recursive: true });
+    }
 }
 async function createFixture(type: string) {
     const database = `image_billing_test_${randomUUID().replaceAll('-', '')}`;
